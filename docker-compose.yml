@@ -1,0 +1,49 @@
+services:
+  monie_db:
+    image: postgres:17-alpine
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    networks:
+      - monie-network
+
+  monie_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: monie_api
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    networks:
+      - monie-network
+    depends_on:
+      - monie_db
+
+  monie_ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000/api
+    env_file:
+      - .env
+    ports:
+      - "3000:80"
+    networks:
+      - monie-network
+    depends_on:
+      - monie_api
+
+volumes:
+  postgres_data:
+
+networks:
+  monie-network:
+    driver: bridge

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/erikmoroz/budget-tracker/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: Documentation
+    url: https://github.com/erikmoroz/budget-tracker/tree/main/docs
+    about: View the project documentation

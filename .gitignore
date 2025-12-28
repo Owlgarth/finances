@@ -1,0 +1,28 @@
+# Project
+.env
+.venv
+backend/.venv
+backend/.env
+.env
+*.env
+!example.env
+
+# IDE
+.idea/
+
+# AI Tools
+.claude
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Node
+frontend/node_modules/
+node_modules/
+dist/
+build/
+*.log
