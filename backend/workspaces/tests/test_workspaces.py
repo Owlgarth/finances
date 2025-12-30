@@ -79,13 +79,13 @@ class TestListWorkspaces(WorkspaceTestCase):
 
     def test_list_returns_all_user_workspaces(self):
         """Test listing all workspaces the user has access to."""
-        data = self.get('/backend/workspaces', **self.auth_headers())
+        data = self.get('/api/workspaces', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)  # User is member of 2 workspaces
 
     def test_list_without_auth_returns_401(self):
         """Test that listing workspaces without authentication fails."""
-        data = self.get('/backend/workspaces')
+        data = self.get('/api/workspaces')
         self.assertStatus(401)
 
 
@@ -99,14 +99,14 @@ class TestGetCurrentWorkspace(WorkspaceTestCase):
 
     def test_get_current_workspace_success(self):
         """Test getting current workspace details."""
-        data = self.get('/backend/workspaces/current', **self.auth_headers())
+        data = self.get('/api/workspaces/current', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['id'], self.workspace.id)
         self.assertEqual(data['name'], self.workspace_name)
 
     def test_get_current_workspace_without_auth_fails(self):
         """Test that getting current workspace without authentication fails."""
-        data = self.get('/backend/workspaces/current')
+        data = self.get('/api/workspaces/current')
         self.assertStatus(401)
 
 
@@ -121,7 +121,7 @@ class TestUpdateCurrentWorkspace(WorkspaceTestCase):
     def test_update_workspace_as_owner_success(self):
         """Test updating workspace name as owner."""
         payload = {'name': 'Updated Workspace Name'}
-        data = self.put('/backend/workspaces/current', payload, **self.auth_headers())
+        data = self.put('/api/workspaces/current', payload, **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['name'], 'Updated Workspace Name')
 
@@ -134,7 +134,7 @@ class TestUpdateCurrentWorkspace(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'name': 'Admin Updated Name'}
-        data = self.put('/backend/workspaces/current', payload, **headers)
+        data = self.put('/api/workspaces/current', payload, **headers)
         self.assertStatus(200)
         self.assertEqual(data['name'], 'Admin Updated Name')
 
@@ -147,13 +147,13 @@ class TestUpdateCurrentWorkspace(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'name': 'Should Not Work'}
-        data = self.put('/backend/workspaces/current', payload, **headers)
+        data = self.put('/api/workspaces/current', payload, **headers)
         self.assertStatus(403)
 
     def test_update_workspace_without_auth_fails(self):
         """Test that updating workspace without authentication fails."""
         payload = {'name': 'Should Not Work'}
-        data = self.put('/backend/workspaces/current', payload)
+        data = self.put('/api/workspaces/current', payload)
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -173,7 +173,7 @@ class TestSwitchWorkspace(WorkspaceTestCase):
 
     def test_switch_workspace_success(self):
         """Test switching to another workspace."""
-        data = self.post(f'/backend/workspaces/{self.other_workspace.id}/switch', {}, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{self.other_workspace.id}/switch', {}, **self.auth_headers())
         self.assertStatus(200)
         self.assertIn('message', data)
 
@@ -186,12 +186,12 @@ class TestSwitchWorkspace(WorkspaceTestCase):
         # Create a workspace the user is not a member of
         forbidden_workspace = Workspace.objects.create(name='Forbidden Workspace')
 
-        data = self.post(f'/backend/workspaces/{forbidden_workspace.id}/switch', {}, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{forbidden_workspace.id}/switch', {}, **self.auth_headers())
         self.assertStatus(403)
 
     def test_switch_workspace_without_auth_fails(self):
         """Test that switching workspace without authentication fails."""
-        data = self.post(f'/backend/workspaces/{self.other_workspace.id}/switch', {})
+        data = self.post(f'/api/workspaces/{self.other_workspace.id}/switch', {})
         self.assertStatus(401)
 
 
@@ -205,13 +205,13 @@ class TestListWorkspaceMembers(WorkspaceTestCase):
 
     def test_list_members_success(self):
         """Test listing all members in workspace."""
-        data = self.get(f'/backend/workspaces/{self.workspace.id}/members', **self.auth_headers())
+        data = self.get(f'/api/workspaces/{self.workspace.id}/members', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 4)  # owner, admin, member, viewer
 
     def test_list_members_ordered_by_role(self):
         """Test that members are ordered by role (alphabetically, then email)."""
-        data = self.get(f'/backend/workspaces/{self.workspace.id}/members', **self.auth_headers())
+        data = self.get(f'/api/workspaces/{self.workspace.id}/members', **self.auth_headers())
         self.assertStatus(200)
         # Ordering is alphabetical descending on role name (viewer > owner > member > admin)
         roles = [m['role'] for m in data]
@@ -229,12 +229,12 @@ class TestListWorkspaceMembers(WorkspaceTestCase):
         token = self.create_token_for_user(non_member)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.get(f'/backend/workspaces/{self.workspace.id}/members', **headers)
+        data = self.get(f'/api/workspaces/{self.workspace.id}/members', **headers)
         self.assertStatus(403)
 
     def test_list_members_without_auth_fails(self):
         """Test that listing members without authentication fails."""
-        data = self.get(f'/backend/workspaces/{self.workspace.id}/members')
+        data = self.get(f'/api/workspaces/{self.workspace.id}/members')
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -262,7 +262,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'full_name': 'New User',
             'role': 'member',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertTrue(data['is_new_user'])
@@ -289,7 +289,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'full_name': 'Existing User',
             'role': 'viewer',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertFalse(data['is_new_user'])
@@ -308,7 +308,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'full_name': 'Admin User',
             'role': 'member',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_add_member_as_admin_succeeds(self):
@@ -324,7 +324,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'pass1234',  # Must be at least 8 characters
             'role': 'member',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload, **headers)
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
         self.assertStatus(201)
 
     def test_add_member_as_member_fails(self):
@@ -340,7 +340,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'pass1234',  # Must be at least 8 characters
             'role': 'viewer',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload, **headers)
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
         self.assertStatus(403)
 
     def test_add_member_without_auth_fails(self):
@@ -350,7 +350,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'password123',
             'role': 'viewer',
         }
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/add', payload)
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload)
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -372,7 +372,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         """Test updating member role as owner."""
         payload = {'role': 'viewer'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **self.auth_headers()
+            f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **self.auth_headers()
         )
         self.assertStatus(200)
         self.assertEqual(data['new_role'], 'viewer')
@@ -381,7 +381,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         """Test that updating your own role fails."""
         payload = {'role': 'admin'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
+            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
         )
         self.assertStatus(400)
 
@@ -389,7 +389,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         """Test that changing owner role fails."""
         payload = {'role': 'admin'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
+            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
         )
         self.assertStatus(400)
 
@@ -410,7 +410,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'role': 'member'}
-        data = self.put(f'/backend/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **headers)
+        data = self.put(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **headers)
         self.assertStatus(403)
 
     def test_update_role_as_member_fails(self):
@@ -422,7 +422,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'role': 'viewer'}
-        data = self.put(f'/backend/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
+        data = self.put(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
         self.assertStatus(403)
 
     def create_token_for_user(self, user):
@@ -444,7 +444,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         """Test removing a member as owner."""
         initial_count = WorkspaceMember.objects.filter(workspace_id=self.workspace.id).count()
 
-        self.delete(f'/backend/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **self.auth_headers())
+        self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify member was removed
@@ -455,12 +455,12 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
 
     def test_remove_yourself_fails(self):
         """Test that removing yourself fails."""
-        data = self.delete(f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
+        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
 
     def test_remove_owner_fails(self):
         """Test that removing owner fails."""
-        data = self.delete(f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
+        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
 
     def test_admin_cannot_remove_other_admin(self):
@@ -479,7 +479,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         token = self.create_token_for_user(self.admin_user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.delete(f'/backend/workspaces/{self.workspace.id}/members/{self.member_user.id}', **headers)
+        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}', **headers)
         self.assertStatus(403)
 
     def test_remove_member_as_member_fails(self):
@@ -490,7 +490,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         token = self.create_token_for_user(self.member_user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.delete(f'/backend/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **headers)
+        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **headers)
         self.assertStatus(403)
 
     def create_token_for_user(self, user):
@@ -518,7 +518,7 @@ class TestLeaveWorkspace(WorkspaceTestCase):
 
         initial_count = WorkspaceMember.objects.filter(workspace_id=self.workspace.id).count()
 
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/leave', {}, **headers)
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **headers)
         self.assertStatus(200)
 
         # Verify membership was removed
@@ -533,12 +533,12 @@ class TestLeaveWorkspace(WorkspaceTestCase):
 
     def test_leave_workspace_as_owner_fails(self):
         """Test that owner cannot leave workspace."""
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/leave', {}, **self.auth_headers())
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **self.auth_headers())
         self.assertStatus(400)
 
     def test_leave_workspace_without_auth_fails(self):
         """Test that leaving workspace without authentication fails."""
-        data = self.post(f'/backend/workspaces/{self.workspace.id}/members/leave', {})
+        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {})
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -560,7 +560,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
         """Test resetting member password as owner."""
         payload = {'new_password': 'newpassword123'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password',
+            f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password',
             payload,
             **self.auth_headers(),
         )
@@ -575,7 +575,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
         """Test that resetting your own password fails."""
         payload = {'new_password': 'newpassword123'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
+            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
 
@@ -583,7 +583,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
         """Test that resetting owner's password fails."""
         payload = {'new_password': 'newpassword123'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
+            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
 
@@ -605,7 +605,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
 
         payload = {'new_password': 'newpassword123'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password', payload, **headers
+            f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)
 
@@ -619,7 +619,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
 
         payload = {'new_password': 'newpassword123'}
         data = self.put(
-            f'/backend/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/reset-password', payload, **headers
+            f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)
 

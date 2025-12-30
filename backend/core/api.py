@@ -1,35 +1,21 @@
-"""Django-Ninja API configuration and endpoints."""
+"""Django-Ninja API endpoints for authentication (register, login)."""
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from ninja import NinjaAPI
+from ninja import Router
 
 from budget_accounts.models import BudgetAccount
-from common.auth import JWTAuth, create_access_token, user_to_schema
+from common.auth import create_access_token
 from core.demo_fixtures import create_demo_fixtures
-from core.schemas import (
-    DetailOut,
-    ErrorOut,
-    LoginIn,
-    MessageOut,
-    RegisterIn,
-    Token,
-    UserOut,
-    UserPasswordUpdate,
-    UserUpdate,
-)
+from core.schemas import DetailOut, ErrorOut, LoginIn, RegisterIn, Token
 from workspaces.models import Workspace, WorkspaceMember
 
-api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
+router = Router(tags=['Auth'])
+User = get_user_model()
 
 
-# =============================================================================
-# Auth Endpoints
-# =============================================================================
-
-
-@api.post('/auth/register', response={201: Token, 400: ErrorOut, 403: DetailOut}, tags=['Auth'])
+@router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut})
 def register(request, data: RegisterIn):
     """
     Register a new user with workspace and default data.
@@ -46,7 +32,7 @@ def register(request, data: RegisterIn):
     if settings.DEMO_MODE:
         return 403, {'detail': 'Registration is disabled in demo mode'}
 
-    if get_user_model().objects.filter(email=data.email).exists():
+    if User.objects.filter(email=data.email).exists():
         return 400, {'error': 'User with this email already exists'}
 
     with transaction.atomic():
@@ -54,7 +40,7 @@ def register(request, data: RegisterIn):
         workspace = Workspace.objects.create(name=data.workspace_name)
 
         # Create user
-        user = get_user_model().objects.create_user(
+        user = User.objects.create_user(
             email=data.email,
             password=data.password,
             full_name=data.full_name,
@@ -98,7 +84,7 @@ def register(request, data: RegisterIn):
     }
 
 
-@api.post('/auth/login', response={200: Token, 401: DetailOut}, tags=['Auth'])
+@router.post('/login', response={200: Token, 401: DetailOut})
 def login(request, data: LoginIn):
     """
     Login user and return JWT token.
@@ -108,7 +94,6 @@ def login(request, data: LoginIn):
     - email
     - current_workspace_id
     """
-    User = get_user_model()
     try:
         user = User.objects.get(email=data.email)
     except User.DoesNotExist:
@@ -126,44 +111,3 @@ def login(request, data: LoginIn):
         'access_token': access_token,
         'token_type': 'bearer',
     }
-
-
-@api.get('/auth/me', auth=JWTAuth(), response={200: UserOut, 401: DetailOut}, tags=['Auth'])
-def get_me(request):
-    """Get current authenticated user's information."""
-    return 200, user_to_schema(request.auth)
-
-
-@api.patch('/auth/me', auth=JWTAuth(), response={200: UserOut, 401: DetailOut}, tags=['Auth'])
-def update_me(request, data: UserUpdate):
-    """Update current user's profile information."""
-    user = request.auth
-
-    if data.email is not None:
-        user.email = data.email
-    if data.full_name is not None:
-        user.full_name = data.full_name
-    if data.is_active is not None:
-        user.is_active = data.is_active
-
-    user.save()
-
-    return 200, user_to_schema(user)
-
-
-@api.put('/auth/me/password', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut}, tags=['Auth'])
-def update_my_password(request, data: UserPasswordUpdate):
-    """
-    Change current user's password.
-
-    User must provide current password to set new password.
-    """
-    user = request.auth
-
-    if not user.check_password(data.current_password):
-        return 401, {'detail': 'Invalid current password'}
-
-    user.set_password(data.new_password)
-    user.save()
-
-    return 200, {'message': 'Password updated successfully'}

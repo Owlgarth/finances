@@ -1,6 +1,6 @@
 """Tests for user profile management."""
 
-from .base import AuthTestCase
+from core.tests.base import AuthTestCase
 
 
 class TestUserUpdate(AuthTestCase):
@@ -10,7 +10,7 @@ class TestUserUpdate(AuthTestCase):
         """Test updating user email."""
         token = self.register_and_login('update_test@example.com', 'password123', 'Update Test')
 
-        data = self.patch('/backend/auth/me', {'email': 'newemail@example.com'}, **self.auth_headers(token))
+        data = self.patch('/api/users/me', {'email': 'newemail@example.com'}, **self.auth_headers(token))
         self.assertStatus(200)
         self.assertEqual(data['email'], 'newemail@example.com')
 
@@ -18,7 +18,7 @@ class TestUserUpdate(AuthTestCase):
         """Test updating user full name."""
         token = self.register_and_login('name_test@example.com', 'password123', 'Name Test')
 
-        data = self.patch('/backend/auth/me', {'full_name': 'Updated Name'}, **self.auth_headers(token))
+        data = self.patch('/api/users/me', {'full_name': 'Updated Name'}, **self.auth_headers(token))
         self.assertStatus(200)
         self.assertEqual(data['full_name'], 'Updated Name')
 
@@ -27,7 +27,7 @@ class TestUserUpdate(AuthTestCase):
         token = self.register_and_login('multi_test@example.com', 'password123', 'Multi Test')
 
         data = self.patch(
-            '/backend/auth/me',
+            '/api/users/me',
             {
                 'email': 'multi_new@example.com',
                 'full_name': 'Multi Updated',
@@ -40,7 +40,7 @@ class TestUserUpdate(AuthTestCase):
 
     def test_update_without_auth(self):
         """Test that update requires authentication."""
-        self.patch('/backend/auth/me', {'full_name': 'Should Not Work'})
+        self.patch('/api/users/me', {'full_name': 'Should Not Work'})
         self.assertStatus(401)
 
 
@@ -52,7 +52,7 @@ class TestPasswordChange(AuthTestCase):
         token = self.register_and_login('change_pass@example.com', 'oldpassword123', 'Password Test')
 
         data = self.put(
-            '/backend/auth/me/password',
+            '/api/users/me/password',
             {
                 'current_password': 'oldpassword123',
                 'new_password': 'newpassword456',
@@ -64,7 +64,7 @@ class TestPasswordChange(AuthTestCase):
 
         # Verify new password works
         self.post(
-            '/backend/auth/login',
+            '/api/auth/login',
             {
                 'email': 'change_pass@example.com',
                 'password': 'newpassword456',
@@ -77,7 +77,7 @@ class TestPasswordChange(AuthTestCase):
         token = self.register_and_login('wrong_current@example.com', 'correctpassword', 'Password Test')
 
         self.put(
-            '/backend/auth/me/password',
+            '/api/users/me/password',
             {
                 'current_password': 'wrongpassword',
                 'new_password': 'newpassword456',
@@ -89,7 +89,7 @@ class TestPasswordChange(AuthTestCase):
     def test_change_password_without_auth(self):
         """Test that password change requires authentication."""
         self.put(
-            '/backend/auth/me/password',
+            '/api/users/me/password',
             {
                 'current_password': 'oldpassword',
                 'new_password': 'newpassword',
@@ -102,7 +102,7 @@ class TestPasswordChange(AuthTestCase):
         token = self.register_and_login('short_pass@example.com', 'oldpassword123', 'Password Test')
 
         self.put(
-            '/backend/auth/me/password',
+            '/api/users/me/password',
             {
                 'current_password': 'oldpassword123',
                 'new_password': 'short',

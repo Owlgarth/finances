@@ -2,9 +2,8 @@
 
 from django.contrib.auth import get_user_model
 
+from core.tests.base import AuthTestCase
 from workspaces.models import WorkspaceMember
-
-from .base import AuthTestCase
 
 
 class TestWorkspaceAccess(AuthTestCase):
@@ -15,8 +14,8 @@ class TestWorkspaceAccess(AuthTestCase):
         user1_token = self.register_and_login('user1@example.com', 'password123', 'Workspace 1')
         user2_token = self.register_and_login('user2@example.com', 'password123', 'Workspace 2')
 
-        user1_data = self.get('/backend/auth/me', **self.auth_headers(user1_token))
-        user2_data = self.get('/backend/auth/me', **self.auth_headers(user2_token))
+        user1_data = self.get('/api/users/me', **self.auth_headers(user1_token))
+        user2_data = self.get('/api/users/me', **self.auth_headers(user2_token))
 
         self.assertNotEqual(user1_data['current_workspace_id'], user2_data['current_workspace_id'])
 

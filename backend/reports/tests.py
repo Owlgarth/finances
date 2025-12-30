@@ -142,7 +142,7 @@ class TestBudgetSummary(ReportsTestCase):
 
     def test_budget_summary_success(self):
         """Test getting budget summary for a period."""
-        data = self.get(f'/backend/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
+        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['period']['id'], self.period.id)
         self.assertEqual(data['period']['name'], 'January 2025')
@@ -184,7 +184,7 @@ class TestBudgetSummary(ReportsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
+        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
         self.assertStatus(200)
 
         # Check that actual spending is included
@@ -198,7 +198,7 @@ class TestBudgetSummary(ReportsTestCase):
 
     def test_budget_summary_period_not_found(self):
         """Test budget summary with non-existent period."""
-        data = self.get('/backend/reports/budget-summary?budget_period_id=99999', **self.auth_headers())
+        data = self.get('/api/reports/budget-summary?budget_period_id=99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_budget_summary_from_other_workspace_fails(self):
@@ -233,12 +233,12 @@ class TestBudgetSummary(ReportsTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/backend/reports/budget-summary?budget_period_id={other_period.id}', **self.auth_headers())
+        data = self.get(f'/api/reports/budget-summary?budget_period_id={other_period.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_budget_summary_without_auth_fails(self):
         """Test that getting budget summary without authentication fails."""
-        data = self.get(f'/backend/reports/budget-summary?budget_period_id={self.period.id}')
+        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}')
         self.assertStatus(401)
 
 
@@ -252,7 +252,7 @@ class TestCurrentBalances(ReportsTestCase):
 
     def test_current_balances_success(self):
         """Test getting current balances for all currencies."""
-        data = self.get('/backend/reports/current-balances', **self.auth_headers())
+        data = self.get('/api/reports/current-balances', **self.auth_headers())
         self.assertStatus(200)
 
         # PLN should have the latest balance (period2)
@@ -270,7 +270,7 @@ class TestCurrentBalances(ReportsTestCase):
         # Delete all balances for the current workspace
         PeriodBalance.objects.filter(budget_period__budget_account__workspace=self.workspace).delete()
 
-        data = self.get('/backend/reports/current-balances', **self.auth_headers())
+        data = self.get('/api/reports/current-balances', **self.auth_headers())
         self.assertStatus(200)
 
         # All currencies should be 0
@@ -281,7 +281,7 @@ class TestCurrentBalances(ReportsTestCase):
 
     def test_current_balances_without_auth_fails(self):
         """Test that getting current balances without authentication fails."""
-        data = self.get('/backend/reports/current-balances')
+        data = self.get('/api/reports/current-balances')
         self.assertStatus(401)
 
     def test_current_balances_returns_latest_by_date(self):
@@ -299,7 +299,7 @@ class TestCurrentBalances(ReportsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/reports/current-balances', **self.auth_headers())
+        data = self.get('/api/reports/current-balances', **self.auth_headers())
         self.assertStatus(200)
 
         # Should return the period2 balance for USD (latest)
