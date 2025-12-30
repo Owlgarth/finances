@@ -95,7 +95,7 @@ class TestListCategories(CategoriesTestCase):
 
     def test_list_categories_with_period_id(self):
         """Test listing categories filtered by budget period."""
-        data = self.get(f'/backend/categories?budget_period_id={self.period1.id}', **self.auth_headers())
+        data = self.get(f'/api/categories?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)
         category_names = {c['name'] for c in data}
@@ -103,7 +103,7 @@ class TestListCategories(CategoriesTestCase):
 
     def test_list_categories_with_current_date(self):
         """Test listing categories using current_date to find period."""
-        data = self.get('/backend/categories?current_date=2025-01-15', **self.auth_headers())
+        data = self.get('/api/categories?current_date=2025-01-15', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)
         category_names = {c['name'] for c in data}
@@ -111,13 +111,13 @@ class TestListCategories(CategoriesTestCase):
 
     def test_list_categories_with_current_date_no_period(self):
         """Test listing categories with date that has no period."""
-        data = self.get('/backend/categories?current_date=2025-05-15', **self.auth_headers())
+        data = self.get('/api/categories?current_date=2025-05-15', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data, [])
 
     def test_list_categories_without_filters_fails(self):
         """Test that listing without budget_period_id or current_date fails."""
-        data = self.get('/backend/categories', **self.auth_headers())
+        data = self.get('/api/categories', **self.auth_headers())
         self.assertStatus(400)
 
     def test_list_categories_from_other_workspace_fails(self):
@@ -162,12 +162,12 @@ class TestListCategories(CategoriesTestCase):
         )
 
         # Try to access with current user
-        data = self.get(f'/backend/categories?budget_period_id={other_period.id}', **self.auth_headers())
+        data = self.get(f'/api/categories?budget_period_id={other_period.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_list_categories_without_auth_fails(self):
         """Test that listing categories without authentication fails."""
-        data = self.get(f'/backend/categories?budget_period_id={self.period1.id}')
+        data = self.get(f'/api/categories?budget_period_id={self.period1.id}')
         self.assertStatus(401)
 
 
@@ -181,14 +181,14 @@ class TestGetCategory(CategoriesTestCase):
 
     def test_get_category_by_id(self):
         """Test getting a category by ID."""
-        data = self.get(f'/backend/categories/{self.category1.id}', **self.auth_headers())
+        data = self.get(f'/api/categories/{self.category1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['id'], self.category1.id)
         self.assertEqual(data['name'], 'Groceries')
 
     def test_get_category_not_found(self):
         """Test getting a non-existent category."""
-        data = self.get('/backend/categories/99999', **self.auth_headers())
+        data = self.get('/api/categories/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_category_from_other_workspace_fails(self):
@@ -231,12 +231,12 @@ class TestGetCategory(CategoriesTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/backend/categories/{other_category.id}', **self.auth_headers())
+        data = self.get(f'/api/categories/{other_category.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_category_requires_auth(self):
         """Test that getting a category requires authentication."""
-        data = self.get(f'/backend/categories/{self.category1.id}')
+        data = self.get(f'/api/categories/{self.category1.id}')
         self.assertStatus(401)
 
 
@@ -254,7 +254,7 @@ class TestCreateCategory(CategoriesTestCase):
             'name': 'Healthcare',
             'budget_period_id': self.period1.id,
         }
-        data = self.post('/backend/categories', payload, **self.auth_headers())
+        data = self.post('/api/categories', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['name'], 'Healthcare')
         self.assertEqual(data['budget_period_id'], self.period1.id)
@@ -273,7 +273,7 @@ class TestCreateCategory(CategoriesTestCase):
             'name': 'Dining Out',
             'budget_period_id': self.period2.id,
         }
-        data = self.post('/backend/categories', payload, **self.auth_headers())
+        data = self.post('/api/categories', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['name'], 'Dining Out')
 
@@ -283,7 +283,7 @@ class TestCreateCategory(CategoriesTestCase):
             'name': 'Groceries',  # Already exists in period1
             'budget_period_id': self.period1.id,
         }
-        data = self.post('/backend/categories', payload, **self.auth_headers())
+        data = self.post('/api/categories', payload, **self.auth_headers())
         # Should get a 400 error for duplicate name
         self.assertStatus(400)
         self.assertIn('already exists', data['detail'])
@@ -326,7 +326,7 @@ class TestCreateCategory(CategoriesTestCase):
             'name': 'Some Category',
             'budget_period_id': other_period.id,
         }
-        data = self.post('/backend/categories', payload, **self.auth_headers())
+        data = self.post('/api/categories', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_create_category_without_auth_fails(self):
@@ -335,7 +335,7 @@ class TestCreateCategory(CategoriesTestCase):
             'name': 'Healthcare',
             'budget_period_id': self.period1.id,
         }
-        data = self.post('/backend/categories', payload)
+        data = self.post('/api/categories', payload)
         self.assertStatus(401)
 
 
@@ -352,7 +352,7 @@ class TestUpdateCategory(CategoriesTestCase):
         payload = {
             'name': 'Food & Groceries',
         }
-        data = self.put(f'/backend/categories/{self.category1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/categories/{self.category1.id}', payload, **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['name'], 'Food & Groceries')
 
@@ -363,7 +363,7 @@ class TestUpdateCategory(CategoriesTestCase):
     def test_update_category_not_found(self):
         """Test updating a non-existent category."""
         payload = {'name': 'New Name'}
-        data = self.put('/backend/categories/99999', payload, **self.auth_headers())
+        data = self.put('/api/categories/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_category_from_other_workspace_fails(self):
@@ -407,13 +407,13 @@ class TestUpdateCategory(CategoriesTestCase):
         )
 
         payload = {'name': 'Changed Name'}
-        data = self.put(f'/backend/categories/{other_category.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/categories/{other_category.id}', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_category_without_auth_fails(self):
         """Test that updating a category without authentication fails."""
         payload = {'name': 'New Name'}
-        data = self.put(f'/backend/categories/{self.category1.id}', payload)
+        data = self.put(f'/api/categories/{self.category1.id}', payload)
         self.assertStatus(401)
 
 
@@ -428,7 +428,7 @@ class TestDeleteCategory(CategoriesTestCase):
     def test_delete_category_success(self):
         """Test deleting a category."""
         category_id = self.category1.id
-        self.delete(f'/backend/categories/{category_id}', **self.auth_headers())
+        self.delete(f'/api/categories/{category_id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify category is deleted
@@ -436,7 +436,7 @@ class TestDeleteCategory(CategoriesTestCase):
 
     def test_delete_category_not_found(self):
         """Test deleting a non-existent category."""
-        self.delete('/backend/categories/99999', **self.auth_headers())
+        self.delete('/api/categories/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_category_from_other_workspace_fails(self):
@@ -479,12 +479,12 @@ class TestDeleteCategory(CategoriesTestCase):
             created_by=other_user,
         )
 
-        self.delete(f'/backend/categories/{other_category.id}', **self.auth_headers())
+        self.delete(f'/api/categories/{other_category.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_category_without_auth_fails(self):
         """Test that deleting a category without authentication fails."""
-        self.delete(f'/backend/categories/{self.category1.id}')
+        self.delete(f'/api/categories/{self.category1.id}')
         self.assertStatus(401)
 
 
@@ -498,7 +498,7 @@ class TestExportCategories(CategoriesTestCase):
 
     def test_export_categories_success(self):
         """Test exporting categories from a budget period."""
-        data = self.get(f'/backend/categories/export/?budget_period_id={self.period1.id}', **self.auth_headers())
+        data = self.get(f'/api/categories/export/?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)
         self.assertIn('Groceries', data)
@@ -514,7 +514,7 @@ class TestExportCategories(CategoriesTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/categories/export/?budget_period_id={empty_period.id}', **self.auth_headers())
+        data = self.get(f'/api/categories/export/?budget_period_id={empty_period.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data, [])
 
@@ -558,12 +558,12 @@ class TestExportCategories(CategoriesTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/backend/categories/export/?budget_period_id={other_period.id}', **self.auth_headers())
+        data = self.get(f'/api/categories/export/?budget_period_id={other_period.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_export_categories_without_auth_fails(self):
         """Test that exporting categories without authentication fails."""
-        data = self.get(f'/backend/categories/export/?budget_period_id={self.period1.id}')
+        data = self.get(f'/api/categories/export/?budget_period_id={self.period1.id}')
         self.assertStatus(401)
 
 
@@ -591,7 +591,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period2.id},
             **self.auth_headers(),
         )
@@ -612,7 +612,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
             **self.auth_headers(),
         )
@@ -633,7 +633,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
             **self.auth_headers(),
         )
@@ -649,7 +649,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
             **self.auth_headers(),
         )
@@ -665,7 +665,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
             **self.auth_headers(),
         )
@@ -680,7 +680,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
             **self.auth_headers(),
         )
@@ -728,7 +728,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': other_period.id},
             **self.auth_headers(),
         )
@@ -744,7 +744,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period1.id},
         )
         self.assertStatus(401)
@@ -759,7 +759,7 @@ class TestImportCategories(CategoriesTestCase):
         )
 
         data = self.post_file(
-            '/backend/categories/import',
+            '/api/categories/import',
             {'file': file, 'budget_period_id': self.period2.id},
             **self.auth_headers(),
         )

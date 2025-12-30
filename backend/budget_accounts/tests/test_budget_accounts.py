@@ -51,7 +51,7 @@ class TestListBudgetAccounts(BudgetAccountTestCase):
         self.create_budget_account(name='Account 1')
         self.create_budget_account(name='Account 2')
 
-        data = self.get('/backend/budget-accounts', **self.auth_headers())
+        data = self.get('/api/budget-accounts', **self.auth_headers())
 
         self.assertStatus(200)
         self.assertEqual(len(data), 3)  # 2 created + 1 from AuthMixin
@@ -65,7 +65,7 @@ class TestListBudgetAccounts(BudgetAccountTestCase):
         self.create_budget_account(name='Active Account', is_active=True)
         self.create_budget_account(name='Inactive Account', is_active=False)
 
-        data = self.get('/backend/budget-accounts', **self.auth_headers())
+        data = self.get('/api/budget-accounts', **self.auth_headers())
 
         self.assertStatus(200)
         account_names = {acc['name'] for acc in data}
@@ -77,7 +77,7 @@ class TestListBudgetAccounts(BudgetAccountTestCase):
         self.create_budget_account(name='Active Account', is_active=True)
         self.create_budget_account(name='Inactive Account', is_active=False)
 
-        data = self.get('/backend/budget-accounts?include_inactive=true', **self.auth_headers())
+        data = self.get('/api/budget-accounts?include_inactive=true', **self.auth_headers())
 
         self.assertStatus(200)
         account_names = {acc['name'] for acc in data}
@@ -90,7 +90,7 @@ class TestListBudgetAccounts(BudgetAccountTestCase):
         self.create_budget_account(name='Apple', display_order=1)
         self.create_budget_account(name='Banana', display_order=1)
 
-        data = self.get('/backend/budget-accounts', **self.auth_headers())
+        data = self.get('/api/budget-accounts', **self.auth_headers())
 
         self.assertStatus(200)
         names = [acc['name'] for acc in data]
@@ -101,7 +101,7 @@ class TestListBudgetAccounts(BudgetAccountTestCase):
 
     def test_list_requires_auth(self):
         """Test listing requires authentication."""
-        self.get('/backend/budget-accounts')
+        self.get('/api/budget-accounts')
         self.assertStatus(401)
 
 
@@ -117,7 +117,7 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
         """Test getting a specific account."""
         account = self.create_budget_account(name='Test Account')
 
-        data = self.get(f'/backend/budget-accounts/{account.id}', **self.auth_headers())
+        data = self.get(f'/api/budget-accounts/{account.id}', **self.auth_headers())
 
         self.assertStatus(200)
         self.assertEqual(data['id'], account.id)
@@ -128,7 +128,7 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
     def test_get_account_not_found(self):
         """Test getting non-existent account returns 404."""
         fake_id = 999999
-        self.get(f'/backend/budget-accounts/{fake_id}', **self.auth_headers())
+        self.get(f'/api/budget-accounts/{fake_id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_account_from_other_workspace(self):
@@ -149,13 +149,13 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
         )
 
         # Try to access with first user
-        self.get(f'/backend/budget-accounts/{other_account.id}', **self.auth_headers())
+        self.get(f'/api/budget-accounts/{other_account.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_account_requires_auth(self):
         """Test getting account requires authentication."""
         account = self.create_budget_account()
-        self.get(f'/backend/budget-accounts/{account.id}')
+        self.get(f'/api/budget-accounts/{account.id}')
         self.assertStatus(401)
 
 
@@ -170,7 +170,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
     def test_create_account_success(self):
         """Test creating a budget account."""
         data = self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'New Account',
                 'description': 'My new account',
@@ -198,7 +198,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
     def test_create_account_with_minimal_data(self):
         """Test creating account with only required fields."""
         data = self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'Minimal Account',
             },
@@ -216,7 +216,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
         self.create_budget_account(name='Duplicate')
 
         data = self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'Duplicate',
             },
@@ -234,7 +234,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
         member.save()
 
         self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'Should Fail',
             },
@@ -250,7 +250,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
         member.save()
 
         self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'Should Fail',
             },
@@ -266,7 +266,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
         member.save()
 
         data = self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'Admin Account',
             },
@@ -279,7 +279,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
     def test_create_requires_auth(self):
         """Test creating account requires authentication."""
         self.post(
-            '/backend/budget-accounts',
+            '/api/budget-accounts',
             {
                 'name': 'No Auth',
             },
@@ -300,7 +300,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         account = self.create_budget_account(name='Original Name')
 
         data = self.put(
-            f'/backend/budget-accounts/{account.id}',
+            f'/api/budget-accounts/{account.id}',
             {
                 'name': 'Updated Name',
                 'description': 'Updated description',
@@ -328,7 +328,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         )
 
         data = self.put(
-            f'/backend/budget-accounts/{account.id}',
+            f'/api/budget-accounts/{account.id}',
             {
                 'name': 'New Name',
             },
@@ -346,7 +346,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         account2 = self.create_budget_account(name='Account 2')
 
         self.put(
-            f'/backend/budget-accounts/{account1.id}',
+            f'/api/budget-accounts/{account1.id}',
             {
                 'name': 'Account 2',
             },
@@ -359,7 +359,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         """Test updating non-existent account returns 404."""
         fake_id = 999999
         self.put(
-            f'/backend/budget-accounts/{fake_id}',
+            f'/api/budget-accounts/{fake_id}',
             {
                 'name': 'New Name',
             },
@@ -377,7 +377,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         member.save()
 
         self.put(
-            f'/backend/budget-accounts/{account.id}',
+            f'/api/budget-accounts/{account.id}',
             {
                 'name': 'Should Fail',
             },
@@ -395,7 +395,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         member.save()
 
         data = self.put(
-            f'/backend/budget-accounts/{account.id}',
+            f'/api/budget-accounts/{account.id}',
             {
                 'name': 'Admin Update',
             },
@@ -409,7 +409,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
         """Test updating account requires authentication."""
         account = self.create_budget_account()
         self.put(
-            f'/backend/budget-accounts/{account.id}',
+            f'/api/budget-accounts/{account.id}',
             {
                 'name': 'No Auth',
             },
@@ -429,7 +429,7 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
         """Test deleting a budget account."""
         account = self.create_budget_account(name='To Delete')
 
-        self.delete(f'/backend/budget-accounts/{account.id}', **self.auth_headers())
+        self.delete(f'/api/budget-accounts/{account.id}', **self.auth_headers())
 
         self.assertStatus(204)
 
@@ -439,7 +439,7 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
     def test_delete_account_not_found(self):
         """Test deleting non-existent account returns 404."""
         fake_id = 999999
-        self.delete(f'/backend/budget-accounts/{fake_id}', **self.auth_headers())
+        self.delete(f'/api/budget-accounts/{fake_id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_requires_owner_or_admin_role(self):
@@ -451,7 +451,7 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
         member.role = 'viewer'
         member.save()
 
-        self.delete(f'/backend/budget-accounts/{account.id}', **self.auth_headers())
+        self.delete(f'/api/budget-accounts/{account.id}', **self.auth_headers())
         self.assertStatus(403)
 
         # Account should still exist
@@ -465,13 +465,13 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
         member.role = 'admin'
         member.save()
 
-        self.delete(f'/backend/budget-accounts/{account.id}', **self.auth_headers())
+        self.delete(f'/api/budget-accounts/{account.id}', **self.auth_headers())
         self.assertStatus(204)
 
     def test_delete_requires_auth(self):
         """Test deleting account requires authentication."""
         account = self.create_budget_account()
-        self.delete(f'/backend/budget-accounts/{account.id}')
+        self.delete(f'/api/budget-accounts/{account.id}')
         self.assertStatus(401)
 
 
@@ -487,7 +487,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         """Test archiving an active account."""
         account = self.create_budget_account(is_active=True)
 
-        data = self.patch(f'/backend/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
 
         self.assertStatus(200)
         self.assertFalse(data['is_active'])
@@ -499,7 +499,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         """Test unarchiving an inactive account."""
         account = self.create_budget_account(is_active=False)
 
-        data = self.patch(f'/backend/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
 
         self.assertStatus(200)
         self.assertTrue(data['is_active'])
@@ -512,7 +512,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         account = self.create_budget_account(is_active=True)
         original_updated_by = account.updated_by
 
-        self.patch(f'/backend/budget-accounts/{account.id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
 
         account.refresh_from_db()
         self.assertEqual(account.updated_by, self.user)
@@ -520,7 +520,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
     def test_archive_account_not_found(self):
         """Test archiving non-existent account returns 404."""
         fake_id = 999999
-        self.patch(f'/backend/budget-accounts/{fake_id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{fake_id}/archive', **self.auth_headers())
         self.assertStatus(404)
 
     def test_archive_requires_owner_or_admin_role(self):
@@ -532,7 +532,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         member.role = 'viewer'
         member.save()
 
-        self.patch(f'/backend/budget-accounts/{account.id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
         self.assertStatus(403)
 
         # Account should still be active
@@ -547,12 +547,12 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         member.role = 'admin'
         member.save()
 
-        data = self.patch(f'/backend/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
         self.assertStatus(200)
         self.assertFalse(data['is_active'])
 
     def test_archive_requires_auth(self):
         """Test archiving account requires authentication."""
         account = self.create_budget_account()
-        self.patch(f'/backend/budget-accounts/{account.id}/archive')
+        self.patch(f'/api/budget-accounts/{account.id}/archive')
         self.assertStatus(401)

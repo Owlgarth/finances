@@ -114,29 +114,29 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
 
     def test_list_budgets_returns_all_budgets_in_workspace(self):
         """Test listing all budgets in the workspace."""
-        data = self.get('/backend/budgets', **self.auth_headers())
+        data = self.get('/api/budgets', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 3)  # All 3 budgets created in setUp
 
     def test_list_budgets_filtered_by_period(self):
         """Test listing budgets filtered by budget period."""
-        data = self.get('/backend/budgets?budget_period_id=' + str(self.period1.id), **self.auth_headers())
+        data = self.get('/api/budgets?budget_period_id=' + str(self.period1.id), **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)  # Only budgets in period1
 
-        data = self.get('/backend/budgets?budget_period_id=' + str(self.period2.id), **self.auth_headers())
+        data = self.get('/api/budgets?budget_period_id=' + str(self.period2.id), **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)  # Only budget in period2
 
     def test_list_budgets_filtered_by_period_no_results(self):
         """Test listing budgets with a period that has no budgets."""
-        data = self.get('/backend/budgets?budget_period_id=' + str(self.other_period.id), **self.auth_headers())
+        data = self.get('/api/budgets?budget_period_id=' + str(self.other_period.id), **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 0)
 
     def test_list_budgets_without_auth_returns_401(self):
         """Test that listing budgets without authentication fails."""
-        data = self.get('/backend/budgets')
+        data = self.get('/api/budgets')
         self.assertStatus(401)
 
     # =============================================================================
@@ -151,7 +151,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'USD',
             'amount': '300.00',
         }
-        data = self.post('/backend/budgets', payload, **self.auth_headers())
+        data = self.post('/api/budgets', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['currency'], 'USD')
         self.assertEqual(data['amount'], '300.00')
@@ -175,7 +175,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'EUR',
             'amount': '500.00',
         }
-        data1 = self.post('/backend/budgets', payload1, **self.auth_headers())
+        data1 = self.post('/api/budgets', payload1, **self.auth_headers())
         self.assertStatus(201)
 
         payload2 = {
@@ -184,7 +184,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'USD',
             'amount': '300.00',
         }
-        data2 = self.post('/backend/budgets', payload2, **self.auth_headers())
+        data2 = self.post('/api/budgets', payload2, **self.auth_headers())
         self.assertStatus(201)
 
         # Both should exist
@@ -243,7 +243,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'PLN',
             'amount': '100.00',
         }
-        data = self.post('/backend/budgets', payload, **self.auth_headers())
+        data = self.post('/api/budgets', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_create_budget_with_category_from_different_period_fails(self):
@@ -254,7 +254,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'PLN',
             'amount': '100.00',
         }
-        data = self.post('/backend/budgets', payload, **self.auth_headers())
+        data = self.post('/api/budgets', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_budget_with_zero_amount_fails(self):
@@ -265,7 +265,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'PLN',
             'amount': '-50.00',  # Negative amount
         }
-        data = self.post('/backend/budgets', payload, **self.auth_headers())
+        data = self.post('/api/budgets', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
     def test_create_budget_without_auth_fails(self):
@@ -276,7 +276,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'PLN',
             'amount': '100.00',
         }
-        data = self.post('/backend/budgets', payload)
+        data = self.post('/api/budgets', payload)
         self.assertStatus(401)
 
     # =============================================================================
@@ -291,7 +291,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
             'currency': 'EUR',
             'amount': '750.00',
         }
-        data = self.put(f'/backend/budgets/{self.budget1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/budgets/{self.budget1.id}', payload, **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['amount'], '750.00')
         self.assertEqual(data['currency'], 'PLN')
@@ -306,7 +306,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
         payload = {
             'amount': '2000.00',
         }
-        data = self.put(f'/backend/budgets/{self.budget1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/budgets/{self.budget1.id}', payload, **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['amount'], '2000.00')
         # Other fields should remain unchanged
@@ -316,13 +316,13 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
     def test_update_budget_not_found(self):
         """Test updating a budget that doesn't exist."""
         payload = {'amount': '500.00'}
-        data = self.put('/backend/budgets/99999', payload, **self.auth_headers())
+        data = self.put('/api/budgets/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_budget_without_auth_fails(self):
         """Test that updating a budget without authentication fails."""
         payload = {'amount': '500.00'}
-        data = self.put(f'/backend/budgets/{self.budget1.id}', payload)
+        data = self.put(f'/api/budgets/{self.budget1.id}', payload)
         self.assertStatus(401)
 
     # =============================================================================
@@ -332,7 +332,7 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
     def test_delete_budget_success(self):
         """Test deleting a budget."""
         budget_id = self.budget1.id
-        self.delete(f'/backend/budgets/{budget_id}', **self.auth_headers())
+        self.delete(f'/api/budgets/{budget_id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify budget is deleted
@@ -340,12 +340,12 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
 
     def test_delete_budget_not_found(self):
         """Test deleting a budget that doesn't exist."""
-        data = self.delete('/backend/budgets/99999', **self.auth_headers())
+        data = self.delete('/api/budgets/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_budget_without_auth_fails(self):
         """Test that deleting a budget without authentication fails."""
-        data = self.delete(f'/backend/budgets/{self.budget1.id}')
+        data = self.delete(f'/api/budgets/{self.budget1.id}')
         self.assertStatus(401)
 
     # =============================================================================
