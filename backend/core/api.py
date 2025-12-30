@@ -51,7 +51,7 @@ api.add_router('/workspaces', workspaces_router)
 # =============================================================================
 
 
-@api.post('/auth/register', response={201: UserOut, 400: ErrorOut, 403: DetailOut}, tags=['Auth'])
+@api.post('/auth/register', response={201: Token, 400: ErrorOut, 403: DetailOut}, tags=['Auth'])
 def register(request, data: RegisterIn):
     """
     Register a new user with workspace and default data.
@@ -63,7 +63,7 @@ def register(request, data: RegisterIn):
     - Default budget account
     - Demo data for the previous month
 
-    Returns the created user.
+    Returns JWT token for automatic login.
     """
     if settings.DEMO_MODE:
         return 403, {'detail': 'Registration is disabled in demo mode'}
@@ -111,7 +111,13 @@ def register(request, data: RegisterIn):
             user_id=user.id,
         )
 
-    return 201, user_to_schema(user)
+    # Generate JWT token for automatic login
+    access_token = create_access_token(user)
+
+    return 201, {
+        'access_token': access_token,
+        'token_type': 'bearer',
+    }
 
 
 @api.post('/auth/login', response={200: Token, 401: DetailOut}, tags=['Auth'])
