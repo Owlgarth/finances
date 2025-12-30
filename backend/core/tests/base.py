@@ -27,12 +27,12 @@ class AuthTestCase(APIClientMixin, TestCase):
             'password': password,
             'workspace_name': workspace_name,
         }
-        self.post('/backend/auth/register', register_data)
+        self.post('/api/auth/register', register_data)
         self.assertStatus(201)
 
         # Login to get token
         login_data = {'email': email, 'password': password}
-        return self.post('/backend/auth/login', login_data)['access_token']
+        return self.post('/api/auth/login', login_data)['access_token']
 
     @staticmethod
     def auth_headers(token: str) -> dict:

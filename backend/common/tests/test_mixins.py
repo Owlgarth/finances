@@ -27,7 +27,7 @@ class TestAuthMixin(AuthMixin, APIClientMixin, TestCase):
 
     def test_auth_mixin_headers_work(self):
         """Test that auth_headers() produces valid headers."""
-        data = self.get('/backend/auth/me', **self.auth_headers())
+        data = self.get('/api/users/me', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['email'], 'test@example.com')
 

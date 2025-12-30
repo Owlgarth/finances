@@ -125,17 +125,17 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
 
     def test_list_returns_all_exchanges_in_workspace(self):
         """Test listing all exchanges in the workspace."""
-        data = self.get('/backend/currency-exchanges', **self.auth_headers())
+        data = self.get('/api/currency-exchanges', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 3)  # All 3 exchanges created in setUp
 
     def test_list_filtered_by_period(self):
         """Test listing exchanges filtered by budget period."""
-        data = self.get(f'/backend/currency-exchanges?budget_period_id={self.period1.id}', **self.auth_headers())
+        data = self.get(f'/api/currency-exchanges?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)  # Only exchanges in period1
 
-        data = self.get(f'/backend/currency-exchanges?budget_period_id={self.period2.id}', **self.auth_headers())
+        data = self.get(f'/api/currency-exchanges?budget_period_id={self.period2.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)  # Only exchange in period2
 
@@ -153,7 +153,7 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
             updated_by=self.user,
         )
 
-        data = self.get('/backend/currency-exchanges', **self.auth_headers())
+        data = self.get('/api/currency-exchanges', **self.auth_headers())
         self.assertStatus(200)
         # Check dates are in descending order
         dates = [exchange['date'] for exchange in data]
@@ -161,7 +161,7 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
 
     def test_list_without_auth_returns_401(self):
         """Test that listing exchanges without authentication fails."""
-        data = self.get('/backend/currency-exchanges')
+        data = self.get('/api/currency-exchanges')
         self.assertStatus(401)
 
 
@@ -175,7 +175,7 @@ class TestGetCurrencyExchange(CurrencyExchangeTestCase):
 
     def test_get_exchange_success(self):
         """Test getting a specific exchange."""
-        data = self.get(f'/backend/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
+        data = self.get(f'/api/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['id'], self.exchange1.id)
         self.assertEqual(data['from_currency'], 'USD')
@@ -184,12 +184,12 @@ class TestGetCurrencyExchange(CurrencyExchangeTestCase):
 
     def test_get_exchange_not_found(self):
         """Test getting non-existent exchange returns 404."""
-        data = self.get('/backend/currency-exchanges/99999', **self.auth_headers())
+        data = self.get('/api/currency-exchanges/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_exchange_without_auth_fails(self):
         """Test that getting an exchange without authentication fails."""
-        data = self.get(f'/backend/currency-exchanges/{self.exchange1.id}')
+        data = self.get(f'/api/currency-exchanges/{self.exchange1.id}')
         self.assertStatus(401)
 
 
@@ -213,7 +213,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '138.00',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertEqual(data['from_currency'], 'USD')
@@ -239,7 +239,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.50',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
 
         self.assertStatus(201)
         # 92.50 / 100.00 = 0.925
@@ -256,7 +256,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
 
         self.assertStatus(201)
         # budget_period_id should be None
@@ -271,7 +271,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
     def test_create_exchange_without_auth_fails(self):
@@ -283,7 +283,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/backend/currency-exchanges', payload)
+        data = self.post('/api/currency-exchanges', payload)
         self.assertStatus(401)
 
     def test_create_as_viewer_fails(self):
@@ -300,7 +300,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_create_as_member_succeeds(self):
@@ -317,7 +317,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/backend/currency-exchanges', payload, **self.auth_headers())
+        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(201)
 
 
@@ -345,7 +345,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '110.00',
         }
-        data = self.put(f'/backend/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
 
         self.assertStatus(200)
         self.assertEqual(data['description'], 'Updated exchange')
@@ -368,7 +368,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put('/backend/currency-exchanges/99999', payload, **self.auth_headers())
+        data = self.put('/api/currency-exchanges/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_exchange_without_auth_fails(self):
@@ -380,7 +380,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put(f'/backend/currency-exchanges/{self.exchange1.id}', payload)
+        data = self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload)
         self.assertStatus(401)
 
     def test_update_as_viewer_fails(self):
@@ -397,7 +397,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put(f'/backend/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
 
@@ -418,7 +418,7 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
         original_eur_in = balance_eur.exchanges_in
 
         exchange_id = self.exchange1.id
-        self.delete(f'/backend/currency-exchanges/{exchange_id}', **self.auth_headers())
+        self.delete(f'/api/currency-exchanges/{exchange_id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify exchange is deleted
@@ -434,12 +434,12 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
 
     def test_delete_exchange_not_found(self):
         """Test deleting non-existent exchange returns 404."""
-        data = self.delete('/backend/currency-exchanges/99999', **self.auth_headers())
+        data = self.delete('/api/currency-exchanges/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_exchange_without_auth_fails(self):
         """Test that deleting exchange without authentication fails."""
-        data = self.delete(f'/backend/currency-exchanges/{self.exchange1.id}')
+        data = self.delete(f'/api/currency-exchanges/{self.exchange1.id}')
         self.assertStatus(401)
 
     def test_delete_as_viewer_fails(self):
@@ -449,7 +449,7 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
         member.role = 'viewer'
         member.save()
 
-        data = self.delete(f'/backend/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
+        data = self.delete(f'/api/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
         self.assertStatus(403)
 
 
@@ -464,7 +464,7 @@ class TestExportCurrencyExchanges(CurrencyExchangeTestCase):
     def test_export_exchanges_success(self):
         """Test exporting exchanges from a budget period."""
         response = self.client.get(
-            f'/backend/currency-exchanges/export/?budget_period_id={self.period1.id}',
+            f'/api/currency-exchanges/export/?budget_period_id={self.period1.id}',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 200)
@@ -512,7 +512,7 @@ class TestExportCurrencyExchanges(CurrencyExchangeTestCase):
 
         # Try to export with first user
         response = self.client.get(
-            f'/backend/currency-exchanges/export/?budget_period_id={other_period.id}',
+            f'/api/currency-exchanges/export/?budget_period_id={other_period.id}',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 404)
@@ -520,7 +520,7 @@ class TestExportCurrencyExchanges(CurrencyExchangeTestCase):
     def test_export_exchanges_without_auth_fails(self):
         """Test exporting without authentication fails."""
         response = self.client.get(
-            f'/backend/currency-exchanges/export/?budget_period_id={self.period1.id}',
+            f'/api/currency-exchanges/export/?budget_period_id={self.period1.id}',
         )
         self.assertEqual(response.status_code, 401)
 
@@ -564,8 +564,8 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/currency-exchanges/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    '/api/currency-exchanges/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -589,8 +589,8 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/currency-exchanges/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    '/api/currency-exchanges/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -617,8 +617,8 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/currency-exchanges/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    '/api/currency-exchanges/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -634,8 +634,8 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/currency-exchanges/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    '/api/currency-exchanges/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                 )
 
         self.assertEqual(response.status_code, 401)
@@ -656,8 +656,8 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/currency-exchanges/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    '/api/currency-exchanges/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 

@@ -89,7 +89,7 @@ class AuthMixin:
             def test_something(self):
                 # self.user is available
                 # self.auth_token is available
-                # self.get('/backend/endpoint', **self.auth_headers())
+                # self.get('/api/endpoint', **self.auth_headers())
     """
 
     # Default user attributes - override in subclasses as needed

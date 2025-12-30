@@ -8,12 +8,9 @@ from ninja.errors import HttpError
 from budget_accounts.models import BudgetAccount
 from budget_accounts.schemas import BudgetAccountCreate, BudgetAccountOut, BudgetAccountUpdate
 from common.auth import JWTAuth
-from core.api import api as core_api
 from workspaces.models import WorkspaceMember
 
 router = Router(tags=['Budget Accounts'])
-core_api.add_router('/budget-accounts', router)
-
 User = get_user_model()
 
 

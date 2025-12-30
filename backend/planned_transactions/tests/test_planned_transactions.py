@@ -136,17 +136,17 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
 
     def test_list_returns_all_planned_in_workspace(self):
         """Test listing all planned transactions in the workspace."""
-        data = self.get('/backend/planned-transactions', **self.auth_headers())
+        data = self.get('/api/planned-transactions', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 3)  # All 3 planned transactions created in setUp
 
     def test_list_filtered_by_period(self):
         """Test listing planned transactions filtered by budget period."""
-        data = self.get(f'/backend/planned-transactions?budget_period_id={self.period1.id}', **self.auth_headers())
+        data = self.get(f'/api/planned-transactions?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)  # Only planned transactions in period1
 
-        data = self.get(f'/backend/planned-transactions?budget_period_id={self.period2.id}', **self.auth_headers())
+        data = self.get(f'/api/planned-transactions?budget_period_id={self.period2.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)  # Only planned transaction in period2
 
@@ -156,17 +156,17 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         self.planned1.status = 'done'
         self.planned1.save()
 
-        data = self.get('/backend/planned-transactions?status=pending', **self.auth_headers())
+        data = self.get('/api/planned-transactions?status=pending', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)  # Only pending transactions
 
-        data = self.get('/backend/planned-transactions?status=done', **self.auth_headers())
+        data = self.get('/api/planned-transactions?status=done', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)  # Only done transactions
 
     def test_list_ordered_by_planned_date(self):
         """Test that planned transactions are ordered by planned_date."""
-        data = self.get('/backend/planned-transactions', **self.auth_headers())
+        data = self.get('/api/planned-transactions', **self.auth_headers())
         self.assertStatus(200)
         # Check dates are in ascending order
         dates = [pt['planned_date'] for pt in data]
@@ -174,7 +174,7 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
 
     def test_list_without_auth_returns_401(self):
         """Test that listing planned transactions without authentication fails."""
-        data = self.get('/backend/planned-transactions')
+        data = self.get('/api/planned-transactions')
         self.assertStatus(401)
 
 
@@ -188,7 +188,7 @@ class TestGetPlannedTransaction(PlannedTransactionTestCase):
 
     def test_get_planned_success(self):
         """Test getting a specific planned transaction."""
-        data = self.get(f'/backend/planned-transactions/{self.planned1.id}', **self.auth_headers())
+        data = self.get(f'/api/planned-transactions/{self.planned1.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['id'], self.planned1.id)
         self.assertEqual(data['name'], 'Monthly Rent')
@@ -196,12 +196,12 @@ class TestGetPlannedTransaction(PlannedTransactionTestCase):
 
     def test_get_planned_not_found(self):
         """Test getting non-existent planned transaction returns 404."""
-        data = self.get('/backend/planned-transactions/99999', **self.auth_headers())
+        data = self.get('/api/planned-transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_planned_without_auth_fails(self):
         """Test that getting a planned transaction without authentication fails."""
-        data = self.get(f'/backend/planned-transactions/{self.planned1.id}')
+        data = self.get(f'/api/planned-transactions/{self.planned1.id}')
         self.assertStatus(401)
 
 
@@ -225,7 +225,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'planned_date': '2025-01-25',
             'status': 'pending',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertEqual(data['name'], 'Electric Bill')
@@ -244,7 +244,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'budget_period_id': self.period1.id,
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertEqual(data['budget_period_id'], self.period1.id)
@@ -257,7 +257,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-02-10',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
 
         self.assertStatus(201)
         self.assertEqual(data['budget_period_id'], self.period2.id)
@@ -271,7 +271,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-03-15',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_planned_with_invalid_category_fails(self):
@@ -291,7 +291,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'category_id': category_period2.id,  # Category from period2
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_planned_with_zero_amount_fails(self):
@@ -302,7 +302,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
     def test_create_planned_without_auth_fails(self):
@@ -313,7 +313,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload)
+        data = self.post('/api/planned-transactions', payload)
         self.assertStatus(401)
 
     def test_create_as_viewer_fails(self):
@@ -329,7 +329,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_create_as_member_succeeds(self):
@@ -345,7 +345,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/backend/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(201)
 
 
@@ -367,7 +367,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'planned_date': '2025-01-10',
             'status': 'pending',
         }
-        data = self.put(f'/backend/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
 
         self.assertStatus(200)
         self.assertEqual(data['name'], 'Updated Rent')
@@ -381,7 +381,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put('/backend/planned-transactions/99999', payload, **self.auth_headers())
+        data = self.put('/api/planned-transactions/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_planned_without_auth_fails(self):
@@ -392,7 +392,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put(f'/backend/planned-transactions/{self.planned1.id}', payload)
+        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload)
         self.assertStatus(401)
 
     def test_update_as_viewer_fails(self):
@@ -408,7 +408,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put(f'/backend/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_update_status_to_done(self):
@@ -420,7 +420,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'planned_date': '2025-01-05',
             'status': 'done',
         }
-        data = self.put(f'/backend/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
 
         self.assertStatus(200)
         self.assertEqual(data['status'], 'done')
@@ -439,7 +439,7 @@ class TestDeletePlannedTransaction(PlannedTransactionTestCase):
         planned_id = self.planned1.id
         initial_count = PlannedTransaction.objects.count()
 
-        self.delete(f'/backend/planned-transactions/{planned_id}', **self.auth_headers())
+        self.delete(f'/api/planned-transactions/{planned_id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify planned transaction is deleted
@@ -448,12 +448,12 @@ class TestDeletePlannedTransaction(PlannedTransactionTestCase):
 
     def test_delete_planned_not_found(self):
         """Test deleting non-existent planned transaction returns 404."""
-        data = self.delete('/backend/planned-transactions/99999', **self.auth_headers())
+        data = self.delete('/api/planned-transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_planned_without_auth_fails(self):
         """Test that deleting planned transaction without authentication fails."""
-        data = self.delete(f'/backend/planned-transactions/{self.planned1.id}')
+        data = self.delete(f'/api/planned-transactions/{self.planned1.id}')
         self.assertStatus(401)
 
     def test_delete_as_viewer_fails(self):
@@ -463,7 +463,7 @@ class TestDeletePlannedTransaction(PlannedTransactionTestCase):
         member.role = 'viewer'
         member.save()
 
-        data = self.delete(f'/backend/planned-transactions/{self.planned1.id}', **self.auth_headers())
+        data = self.delete(f'/api/planned-transactions/{self.planned1.id}', **self.auth_headers())
         self.assertStatus(403)
 
 
@@ -481,7 +481,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency='USD').total_expenses
 
         data = self.post(
-            f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
+            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
         )
 
         self.assertStatus(200)
@@ -500,12 +500,12 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         """Test that executing an already executed planned transaction fails."""
         # Execute once
         self.post(
-            f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
+            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
         )
 
         # Try to execute again
         data = self.post(
-            f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-06', {}, **self.auth_headers()
+            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-06', {}, **self.auth_headers()
         )
         self.assertStatus(400)
 
@@ -513,18 +513,18 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         """Test executing with payment date outside any period fails."""
         # Payment date in March, but we only have Jan and Feb periods
         data = self.post(
-            f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-03-15', {}, **self.auth_headers()
+            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-03-15', {}, **self.auth_headers()
         )
         self.assertStatus(400)
 
     def test_execute_planned_not_found(self):
         """Test executing non-existent planned transaction returns 404."""
-        data = self.post('/backend/planned-transactions/99999/execute?payment_date=2025-01-05', {}, **self.auth_headers())
+        data = self.post('/api/planned-transactions/99999/execute?payment_date=2025-01-05', {}, **self.auth_headers())
         self.assertStatus(404)
 
     def test_execute_without_auth_fails(self):
         """Test that executing without authentication fails."""
-        data = self.post(f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {})
+        data = self.post(f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {})
         self.assertStatus(401)
 
     def test_execute_as_viewer_fails(self):
@@ -535,7 +535,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         member.save()
 
         data = self.post(
-            f'/backend/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
+            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
         )
         self.assertStatus(403)
 
@@ -551,7 +551,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
     def test_export_planned_success(self):
         """Test exporting planned transactions from a budget period."""
         response = self.client.get(
-            f'/backend/planned-transactions/export/?budget_period_id={self.period1.id}',
+            f'/api/planned-transactions/export/?budget_period_id={self.period1.id}',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 200)
@@ -572,7 +572,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
         self.planned1.save()
 
         response = self.client.get(
-            f'/backend/planned-transactions/export/?budget_period_id={self.period1.id}&status=done',
+            f'/api/planned-transactions/export/?budget_period_id={self.period1.id}&status=done',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 200)
@@ -616,7 +616,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
 
         # Try to export with first user
         response = self.client.get(
-            f'/backend/planned-transactions/export/?budget_period_id={other_period.id}',
+            f'/api/planned-transactions/export/?budget_period_id={other_period.id}',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 404)
@@ -624,7 +624,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
     def test_export_planned_without_auth_fails(self):
         """Test exporting without authentication fails."""
         response = self.client.get(
-            f'/backend/planned-transactions/export/?budget_period_id={self.period1.id}',
+            f'/api/planned-transactions/export/?budget_period_id={self.period1.id}',
         )
         self.assertEqual(response.status_code, 401)
 
@@ -666,8 +666,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -702,8 +702,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -732,8 +732,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -749,8 +749,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -776,8 +776,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 
@@ -793,8 +793,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                 )
 
         self.assertEqual(response.status_code, 401)
@@ -815,8 +815,8 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/backend/planned-transactions/import?budget_period_id={self.period1.id}',
-                    data={'file': file},
+                    f'/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
 

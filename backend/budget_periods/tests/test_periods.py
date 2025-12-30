@@ -41,7 +41,7 @@ class TestListPeriods(BudgetPeriodsTestCase):
 
     def test_list_empty_periods(self):
         """Test listing periods when none exist."""
-        data = self.get('/backend/budget-periods', **self.auth_headers())
+        data = self.get('/api/budget-periods', **self.auth_headers())
         self.assertEqual(data, [])
 
     def test_list_periods_returns_all(self):
@@ -64,7 +64,7 @@ class TestListPeriods(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/budget-periods', **self.auth_headers())
+        data = self.get('/api/budget-periods', **self.auth_headers())
         self.assertEqual(len(data), 2)
 
     def test_list_periods_ordered_by_start_date_desc(self):
@@ -91,14 +91,14 @@ class TestListPeriods(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/budget-periods', **self.auth_headers())
+        data = self.get('/api/budget-periods', **self.auth_headers())
         self.assertEqual(data[0]['name'], 'March')
         self.assertEqual(data[1]['name'], 'February')
         self.assertEqual(data[2]['name'], 'January')
 
     def test_list_requires_auth(self):
         """Test listing requires authentication."""
-        self.get('/backend/budget-periods')
+        self.get('/api/budget-periods')
         self.assertStatus(401)
 
 
@@ -120,7 +120,7 @@ class TestGetCurrentPeriod(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/budget-periods/current?current_date=2025-01-15', **self.auth_headers())
+        data = self.get('/api/budget-periods/current?current_date=2025-01-15', **self.auth_headers())
         self.assertEqual(data['name'], 'January 2025')
         self.assertStatus(200)
 
@@ -134,17 +134,17 @@ class TestGetCurrentPeriod(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/budget-periods/current?current_date=2025-01-01', **self.auth_headers())
+        data = self.get('/api/budget-periods/current?current_date=2025-01-01', **self.auth_headers())
         self.assertEqual(data['name'], 'January 2025')
 
     def test_get_current_period_not_found(self):
         """Test getting current period when none exists for the date."""
-        data = self.get('/backend/budget-periods/current?current_date=2025-06-15', **self.auth_headers())
+        data = self.get('/api/budget-periods/current?current_date=2025-06-15', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_current_period_requires_auth(self):
         """Test getting current period requires authentication."""
-        self.get('/backend/budget-periods/current?current_date=2025-01-15')
+        self.get('/api/budget-periods/current?current_date=2025-01-15')
         self.assertStatus(401)
 
 
@@ -166,13 +166,13 @@ class TestGetPeriod(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/budget-periods/{period.id}', **self.auth_headers())
+        data = self.get(f'/api/budget-periods/{period.id}', **self.auth_headers())
         self.assertEqual(data['id'], period.id)
         self.assertEqual(data['name'], 'Test Period')
 
     def test_get_period_not_found(self):
         """Test getting a non-existent period."""
-        data = self.get('/backend/budget-periods/99999', **self.auth_headers())
+        data = self.get('/api/budget-periods/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_period_requires_auth(self):
@@ -184,7 +184,7 @@ class TestGetPeriod(BudgetPeriodsTestCase):
             end_date=date(2025, 1, 31),
             created_by=self.user,
         )
-        self.get(f'/backend/budget-periods/{period.id}')
+        self.get(f'/api/budget-periods/{period.id}')
         self.assertStatus(401)
 
 
@@ -200,7 +200,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         """Test successful period creation."""
         account = self.workspace.budget_accounts.first()
         data = self.post(
-            '/backend/budget-periods',
+            '/api/budget-periods',
             {
                 'budget_account_id': account.id,
                 'name': 'March 2025',
@@ -218,7 +218,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         """Test that creating a period creates balances for all currencies."""
         account = self.workspace.budget_accounts.first()
         self.post(
-            '/backend/budget-periods',
+            '/api/budget-periods',
             {
                 'budget_account_id': account.id,
                 'name': 'March 2025',
@@ -238,7 +238,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
     def test_create_period_with_invalid_account(self):
         """Test creating period with non-existent budget account."""
         data = self.post(
-            '/backend/budget-periods',
+            '/api/budget-periods',
             {
                 'budget_account_id': 99999,
                 'name': 'March 2025',
@@ -253,7 +253,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         """Test creating period without weeks field."""
         account = self.workspace.budget_accounts.first()
         data = self.post(
-            '/backend/budget-periods',
+            '/api/budget-periods',
             {
                 'budget_account_id': account.id,
                 'name': 'March 2025',
@@ -269,7 +269,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         """Test creating period requires authentication."""
         account = self.workspace.budget_accounts.first()
         self.post(
-            '/backend/budget-periods',
+            '/api/budget-periods',
             {
                 'budget_account_id': account.id,
                 'name': 'March 2025',
@@ -299,7 +299,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
         )
 
         data = self.put(
-            f'/backend/budget-periods/{period.id}',
+            f'/api/budget-periods/{period.id}',
             {
                 'name': 'New Name',
             },
@@ -319,7 +319,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
         )
 
         data = self.put(
-            f'/backend/budget-periods/{period.id}',
+            f'/api/budget-periods/{period.id}',
             {
                 'start_date': '2025-02-01',
                 'end_date': '2025-02-28',
@@ -341,7 +341,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
         )
 
         data = self.put(
-            f'/backend/budget-periods/{period.id}',
+            f'/api/budget-periods/{period.id}',
             {
                 'budget_account_id': self.secondary_account.id,
             },
@@ -361,7 +361,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
         )
 
         data = self.put(
-            f'/backend/budget-periods/{period.id}',
+            f'/api/budget-periods/{period.id}',
             {
                 'budget_account_id': 99999,
             },
@@ -372,7 +372,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
     def test_update_period_not_found(self):
         """Test updating a non-existent period."""
         data = self.put(
-            '/backend/budget-periods/99999',
+            '/api/budget-periods/99999',
             {
                 'name': 'New Name',
             },
@@ -389,7 +389,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
             end_date=date(2025, 1, 31),
             created_by=self.user,
         )
-        self.put(f'/backend/budget-periods/{period.id}', {'name': 'New Name'})
+        self.put(f'/api/budget-periods/{period.id}', {'name': 'New Name'})
         self.assertStatus(401)
 
 
@@ -411,7 +411,7 @@ class TestDeletePeriod(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        self.delete(f'/backend/budget-periods/{period.id}', **self.auth_headers())
+        self.delete(f'/api/budget-periods/{period.id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify period is deleted
@@ -419,7 +419,7 @@ class TestDeletePeriod(BudgetPeriodsTestCase):
 
     def test_delete_period_not_found(self):
         """Test deleting a non-existent period."""
-        self.delete('/backend/budget-periods/99999', **self.auth_headers())
+        self.delete('/api/budget-periods/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_period_requires_auth(self):
@@ -431,7 +431,7 @@ class TestDeletePeriod(BudgetPeriodsTestCase):
             end_date=date(2025, 1, 31),
             created_by=self.user,
         )
-        self.delete(f'/backend/budget-periods/{period.id}')
+        self.delete(f'/api/budget-periods/{period.id}')
         self.assertStatus(401)
 
 
@@ -505,7 +505,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_success(self):
         """Test successful period copy."""
         data = self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -522,7 +522,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_creates_new_categories(self):
         """Test that copying creates new categories."""
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -540,7 +540,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_creates_new_budgets(self):
         """Test that copying creates new budgets."""
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -555,7 +555,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_adjusts_planned_dates(self):
         """Test that copying adjusts planned transaction dates."""
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -579,7 +579,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
         source_planned.save()
 
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -595,7 +595,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_creates_balances(self):
         """Test that copying creates period balances."""
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -611,7 +611,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_not_found(self):
         """Test copying a non-existent period."""
         data = self.post(
-            '/backend/budget-periods/99999/copy',
+            '/api/budget-periods/99999/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',
@@ -624,7 +624,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
     def test_copy_period_requires_auth(self):
         """Test copying period requires authentication."""
         self.post(
-            f'/backend/budget-periods/{self.source_period.id}/copy',
+            f'/api/budget-periods/{self.source_period.id}/copy',
             {
                 'name': 'February 2025',
                 'start_date': '2025-02-01',

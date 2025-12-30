@@ -121,7 +121,7 @@ class TestListTransactions(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/transactions?budget_period_id={self.period.id}', **self.auth_headers())
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 2)
 
@@ -138,7 +138,7 @@ class TestListTransactions(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get('/backend/transactions?current_date=2025-01-15', **self.auth_headers())
+        data = self.get('/api/transactions?current_date=2025-01-15', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)
 
@@ -166,7 +166,7 @@ class TestListTransactions(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/transactions?budget_period_id={self.period.id}&type=expense', **self.auth_headers())
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&type=expense', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]['type'], 'expense')
@@ -195,7 +195,7 @@ class TestListTransactions(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/transactions?budget_period_id={self.period.id}&search=grocery', **self.auth_headers())
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&search=grocery', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)
         self.assertIn('Grocery', data[0]['description'])
@@ -224,14 +224,14 @@ class TestListTransactions(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/transactions?budget_period_id={self.period.id}&amount_gte=100', **self.auth_headers())
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&amount_gte=100', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]['amount'], '500.00')
 
     def test_list_transactions_without_auth_fails(self):
         """Test that listing transactions without authentication fails."""
-        data = self.get(f'/backend/transactions?budget_period_id={self.period.id}')
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}')
         self.assertStatus(401)
 
 
@@ -256,14 +256,14 @@ class TestGetTransaction(TransactionsTestCase):
             created_by=self.user,
         )
 
-        data = self.get(f'/backend/transactions/{trans.id}', **self.auth_headers())
+        data = self.get(f'/api/transactions/{trans.id}', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['id'], trans.id)
         self.assertEqual(data['description'], 'Grocery shopping')
 
     def test_get_transaction_not_found(self):
         """Test getting a non-existent transaction."""
-        data = self.get('/backend/transactions/99999', **self.auth_headers())
+        data = self.get('/api/transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_transaction_from_other_workspace_fails(self):
@@ -308,7 +308,7 @@ class TestGetTransaction(TransactionsTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/backend/transactions/{other_trans.id}', **self.auth_headers())
+        data = self.get(f'/api/transactions/{other_trans.id}', **self.auth_headers())
         self.assertStatus(404)
 
 
@@ -331,7 +331,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['description'], 'Grocery shopping')
         self.assertEqual(data['amount'], '250.00')
@@ -351,7 +351,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'income',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['type'], 'income')
 
@@ -370,7 +370,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': None,  # Auto-assign
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['budget_period_id'], self.period.id)
 
@@ -385,7 +385,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'income',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(201)
         # Category should be ignored (set to None) for income transactions
         self.assertIsNone(data['category_id'])
@@ -401,7 +401,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload)
+        data = self.post('/api/transactions', payload)
         self.assertStatus(401)
 
 
@@ -435,7 +435,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.put(f'/backend/transactions/{trans.id}', payload, **self.auth_headers())
+        data = self.put(f'/api/transactions/{trans.id}', payload, **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['description'], 'Grocery shopping - Updated')
         self.assertEqual(data['amount'], '300.00')
@@ -449,7 +449,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             'currency': 'PLN',
             'type': 'expense',
         }
-        data = self.put('/backend/transactions/99999', payload, **self.auth_headers())
+        data = self.put('/api/transactions/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_transaction_balance_reverted_and_applied(self):
@@ -464,7 +464,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         trans_id = data['id']
 
         # Get balance after creation
@@ -480,7 +480,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        self.put(f'/backend/transactions/{trans_id}', payload, **self.auth_headers())
+        self.put(f'/api/transactions/{trans_id}', payload, **self.auth_headers())
 
         # Verify balance was updated correctly
         balance.refresh_from_db()
@@ -509,7 +509,7 @@ class TestDeleteTransaction(TransactionsTestCase):
         )
 
         trans_id = trans.id
-        self.delete(f'/backend/transactions/{trans_id}', **self.auth_headers())
+        self.delete(f'/api/transactions/{trans_id}', **self.auth_headers())
         self.assertStatus(204)
 
         # Verify transaction is deleted
@@ -517,7 +517,7 @@ class TestDeleteTransaction(TransactionsTestCase):
 
     def test_delete_transaction_not_found(self):
         """Test deleting a non-existent transaction."""
-        self.delete('/backend/transactions/99999', **self.auth_headers())
+        self.delete('/api/transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_transaction_balance_reverted(self):
@@ -532,14 +532,14 @@ class TestDeleteTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/backend/transactions', payload, **self.auth_headers())
+        data = self.post('/api/transactions', payload, **self.auth_headers())
         trans_id = data['id']
 
         # Get balance after creation
         balance = PeriodBalance.objects.get(budget_period=self.period, currency='PLN')
         self.assertEqual(balance.total_expenses, Decimal('3250.00'))  # 3000 + 250
 
-        self.delete(f'/backend/transactions/{trans_id}', **self.auth_headers())
+        self.delete(f'/api/transactions/{trans_id}', **self.auth_headers())
 
         # Verify balance was reverted
         balance.refresh_from_db()
@@ -568,7 +568,7 @@ class TestExportTransactions(TransactionsTestCase):
         )
 
         response = self.client.get(
-            f'/backend/transactions/export/?budget_period_id={self.period.id}',
+            f'/api/transactions/export/?budget_period_id={self.period.id}',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 200)
@@ -600,7 +600,7 @@ class TestExportTransactions(TransactionsTestCase):
         )
 
         response = self.client.get(
-            f'/backend/transactions/export/?budget_period_id={self.period.id}&type=expense',
+            f'/api/transactions/export/?budget_period_id={self.period.id}&type=expense',
             **self.auth_headers(),
         )
         self.assertEqual(response.status_code, 200)
@@ -651,7 +651,7 @@ class TestImportTransactions(TransactionsTestCase):
         )
 
         data = self.post_file(
-            '/backend/transactions/import',
+            '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
         )
@@ -681,7 +681,7 @@ class TestImportTransactions(TransactionsTestCase):
         )
 
         data = self.post_file(
-            '/backend/transactions/import',
+            '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
         )
@@ -712,7 +712,7 @@ class TestImportTransactions(TransactionsTestCase):
         )
 
         data = self.post_file(
-            '/backend/transactions/import',
+            '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
         )
@@ -731,7 +731,7 @@ class TestImportTransactions(TransactionsTestCase):
         )
 
         data = self.post_file(
-            '/backend/transactions/import',
+            '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
         )
@@ -759,7 +759,7 @@ class TestImportTransactions(TransactionsTestCase):
         )
 
         data = self.post_file(
-            '/backend/transactions/import',
+            '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
         )

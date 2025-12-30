@@ -7,19 +7,28 @@ The `urlpatterns` list routes URLs to views. For more information please see:
 
 from django.contrib import admin
 from django.urls import path
+from ninja import NinjaAPI
 
+from budget_accounts.api import router as budget_accounts_router
 from budget_periods.api import router as budget_periods_router
 from budgets.api import router as budgets_router
 from categories.api import router as categories_router
-from core.api import api
+from core.api import router as auth_router
 from currency_exchanges.api import router as currency_exchanges_router
 from period_balances.api import router as period_balances_router
 from planned_transactions.api import router as planned_transactions_router
 from reports.api import router as reports_router
 from transactions.api import router as transactions_router
+from users.api import router as users_router
 from workspaces.api import router as workspaces_router
 
-# Register all routers to the API (single entry point for routing)
+# Create main API instance (single entry point for routing)
+api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
+
+# Register all routers to the API
+api.add_router('/auth', auth_router)
+api.add_router('/users', users_router)
+api.add_router('/budget-accounts', budget_accounts_router)
 api.add_router('/budget-periods', budget_periods_router)
 api.add_router('/budgets', budgets_router)
 api.add_router('/categories', categories_router)
