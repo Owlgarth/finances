@@ -267,13 +267,13 @@ export const authApi = {
     api.post<Token>('/auth/login', data, { headers: { Authorization: '' } }).then(res => res.data),
 
   getCurrentUser: (): Promise<User> =>
-    api.get<User>('/auth/me').then(res => res.data),
+    api.get<User>('/users/me').then(res => res.data),
 
   updateProfile: (data: { full_name?: string; email?: string }): Promise<User> =>
-    api.patch<User>('/auth/me', data).then(res => res.data),
+    api.patch<User>('/users/me', data).then(res => res.data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
-    api.put('/auth/me/password', { current_password: currentPassword, new_password: newPassword }),
+    api.put('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
 };
 
 // ============= Workspaces API =============
