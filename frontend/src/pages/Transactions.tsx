@@ -16,6 +16,7 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [dateOrdering, setDateOrdering] = useState<'date' | '-date'>('-date')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Applied filters (used in actual query)
@@ -142,7 +143,7 @@ export default function Transactions() {
   }, [])
 
   const { data: apiTransactions, isLoading, error } = useQuery({
-    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedAmountMin, appliedAmountMax],
+    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedAmountMin, appliedAmountMax, dateOrdering],
     queryFn: async () => {
       if (!selectedPeriodId) return []
       const response = await transactionsApi.getAll({
@@ -153,12 +154,21 @@ export default function Transactions() {
         type: appliedTypes.length > 0 ? appliedTypes : undefined,
         category_id: appliedCategories.length > 0 ? appliedCategories : undefined,
         amount_gte: appliedAmountMin ? parseFloat(appliedAmountMin) : undefined,
-        amount_lte: appliedAmountMax ? parseFloat(appliedAmountMax) : undefined
+        amount_lte: appliedAmountMax ? parseFloat(appliedAmountMax) : undefined,
+        ordering: dateOrdering
       })
       return response.data as Transaction[]
     },
-    enabled: !!selectedPeriodId
+    enabled: !!selectedPeriodId,
+    staleTime: 0 // Force refetch when query key changes
   })
+
+  // Explicitly refetch when date ordering changes
+  useEffect(() => {
+    if (selectedPeriodId) {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    }
+  }, [dateOrdering, selectedPeriodId, queryClient])
 
   // Merge API transactions with offline transactions from display cache
   const transactions = useMemo(() => {
@@ -717,6 +727,8 @@ export default function Transactions() {
       ) : (
         <TransactionList
           transactions={transactions || []}
+          dateOrdering={dateOrdering}
+          onToggleDateSort={() => setDateOrdering(prev => prev === '-date' ? 'date' : '-date')}
           onEdit={canManageBudgetData ? handleEdit : undefined}
           onDelete={canManageBudgetData ? handleDelete : undefined}
         />

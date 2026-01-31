@@ -2,14 +2,20 @@ import type { Transaction } from '../../types'
 import { isOfflineItem } from '../../utils/optimisticUpdates'
 import { useLayout } from '../../contexts/LayoutContext'
 
+type DateOrdering = 'date' | '-date'
+
 interface Props {
   transactions: Transaction[]
+  dateOrdering: DateOrdering
+  onToggleDateSort: () => void
   onEdit?: (transaction: Transaction) => void
   onDelete?: (id: number) => void
 }
 
-export default function TransactionList({ transactions, onEdit, onDelete }: Props) {
+export default function TransactionList({ transactions, dateOrdering, onToggleDateSort, onEdit, onDelete }: Props) {
   const { isCardsView } = useLayout()
+
+  const isDesc = dateOrdering === '-date'
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -18,7 +24,26 @@ export default function TransactionList({ transactions, onEdit, onDelete }: Prop
         <table className="w-full">
         <thead>
           <tr className="border-b border-gray-200">
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <button
+                onClick={onToggleDateSort}
+                className="flex items-center gap-1 hover:text-gray-900 transition-colors cursor-pointer group"
+              >
+                Date
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`h-4 w-4 transition-transform ${isDesc ? '' : 'rotate-180'}`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
             <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
