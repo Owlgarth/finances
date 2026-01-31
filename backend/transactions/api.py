@@ -125,6 +125,7 @@ def list_transactions(
     end_date: Optional[date] = Query(None),
     amount_gte: Optional[Decimal] = Query(None),
     amount_lte: Optional[Decimal] = Query(None),
+    ordering: Optional[str] = Query(None, pattern=r'^(date|-date)$'),
 ):
     """List transactions for the current workspace with optional filters."""
     workspace = request.auth.current_workspace
@@ -167,7 +168,9 @@ def list_transactions(
     if amount_lte is not None:
         queryset = queryset.filter(amount__lte=amount_lte)
 
-    return list(queryset.order_by('-date', '-created_at'))
+    # Default to descending date order if not specified
+    sort_order = ordering or '-date'
+    return list(queryset.order_by(sort_order, '-created_at'))
 
 
 # Specific routes must come before parameterized routes
