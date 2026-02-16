@@ -12,6 +12,7 @@ from budget_periods.models import BudgetPeriod
 from budgets.models import Budget
 from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
+from workspaces.models import WorkspaceMember
 
 User = get_user_model()
 
@@ -347,6 +348,54 @@ class BudgetsAPITestCase(AuthMixin, APIClientMixin, TestCase):
         """Test that deleting a budget without authentication fails."""
         data = self.delete(f'/api/budgets/{self.budget1.id}')
         self.assertStatus(401)
+
+    # =============================================================================
+    # Role Permission Tests
+    # =============================================================================
+
+    def test_viewer_cannot_create_budget(self):
+        """Test that a viewer cannot create a budget."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {
+            'budget_period_id': self.period1.id,
+            'category_id': self.category1.id,
+            'currency': 'USD',
+            'amount': '300.00',
+        }
+        data = self.post('/api/budgets', payload, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_cannot_update_budget(self):
+        """Test that a viewer cannot update a budget."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {'amount': '750.00'}
+        data = self.put(f'/api/budgets/{self.budget1.id}', payload, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_cannot_delete_budget(self):
+        """Test that a viewer cannot delete a budget."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        data = self.delete(f'/api/budgets/{self.budget1.id}', **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_can_list_budgets(self):
+        """Test that a viewer can list budgets (read-only)."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        data = self.get('/api/budgets', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data), 3)
+
+    def test_member_can_create_budget(self):
+        """Test that a member can create a budget."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='member')
+        payload = {
+            'budget_period_id': self.period1.id,
+            'category_id': self.category1.id,
+            'currency': 'USD',
+            'amount': '300.00',
+        }
+        data = self.post('/api/budgets', payload, **self.auth_headers())
+        self.assertStatus(201)
 
     # =============================================================================
     # Helper Methods

@@ -9,6 +9,8 @@ from budgets.models import Budget
 from budgets.schemas import BudgetCreate, BudgetOut, BudgetUpdate
 from categories.models import Category
 from common.auth import JWTAuth
+from common.permissions import require_role
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budgets'])
 
@@ -79,6 +81,8 @@ def create_budget(request, data: BudgetCreate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
+    require_role(user, workspace.id, WRITE_ROLES)
+
     # Verify the budget period belongs to current workspace
     period = get_workspace_period(data.budget_period_id, workspace.id)
     if not period:
@@ -110,6 +114,8 @@ def update_budget(request, budget_id: int, data: BudgetUpdate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
+    require_role(user, workspace.id, WRITE_ROLES)
+
     budget = get_workspace_budget(budget_id, workspace.id)
     if not budget:
         raise HttpError(404, 'Budget not found')
@@ -126,10 +132,13 @@ def update_budget(request, budget_id: int, data: BudgetUpdate):
 @router.delete('/{budget_id}', response={204: None}, auth=JWTAuth())
 def delete_budget(request, budget_id: int):
     """Delete a budget entry."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
 
     if not workspace:
         raise HttpError(404, 'No workspace selected')
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     budget = get_workspace_budget(budget_id, workspace.id)
     if not budget:

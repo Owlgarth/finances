@@ -11,6 +11,7 @@ from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
+from workspaces.models import WorkspaceMember
 
 
 class BudgetPeriodsTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -279,6 +280,38 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         )
         self.assertStatus(401)
 
+    def test_viewer_cannot_create_period(self):
+        """Test that a viewer cannot create a period."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        account = self.workspace.budget_accounts.first()
+        self.post(
+            '/api/budget-periods',
+            {
+                'budget_account_id': account.id,
+                'name': 'March 2025',
+                'start_date': '2025-03-01',
+                'end_date': '2025-03-31',
+            },
+            **self.auth_headers(),
+        )
+        self.assertStatus(403)
+
+    def test_member_can_create_period(self):
+        """Test that a member can create a period."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='member')
+        account = self.workspace.budget_accounts.first()
+        self.post(
+            '/api/budget-periods',
+            {
+                'budget_account_id': account.id,
+                'name': 'March 2025',
+                'start_date': '2025-03-01',
+                'end_date': '2025-03-31',
+            },
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
 
 # =============================================================================
 # Update Period Tests
@@ -392,6 +425,19 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
         self.put(f'/api/budget-periods/{period.id}', {'name': 'New Name'})
         self.assertStatus(401)
 
+    def test_viewer_cannot_update_period(self):
+        """Test that a viewer cannot update a period."""
+        period = BudgetPeriod.objects.create(
+            budget_account=self.workspace.budget_accounts.first(),
+            name='Test Period',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+            created_by=self.user,
+        )
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.put(f'/api/budget-periods/{period.id}', {'name': 'New Name'}, **self.auth_headers())
+        self.assertStatus(403)
+
 
 # =============================================================================
 # Delete Period Tests
@@ -433,6 +479,19 @@ class TestDeletePeriod(BudgetPeriodsTestCase):
         )
         self.delete(f'/api/budget-periods/{period.id}')
         self.assertStatus(401)
+
+    def test_viewer_cannot_delete_period(self):
+        """Test that a viewer cannot delete a period."""
+        period = BudgetPeriod.objects.create(
+            budget_account=self.workspace.budget_accounts.first(),
+            name='Test Period',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+            created_by=self.user,
+        )
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.delete(f'/api/budget-periods/{period.id}', **self.auth_headers())
+        self.assertStatus(403)
 
 
 # =============================================================================
@@ -632,3 +691,17 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
             },
         )
         self.assertStatus(401)
+
+    def test_viewer_cannot_copy_period(self):
+        """Test that a viewer cannot copy a period."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.post(
+            f'/api/budget-periods/{self.source_period.id}/copy',
+            {
+                'name': 'February 2025',
+                'start_date': '2025-02-01',
+                'end_date': '2025-02-28',
+            },
+            **self.auth_headers(),
+        )
+        self.assertStatus(403)

@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from ninja.security import HttpBearer
 
 from core.schemas import UserOut
+from workspaces.models import ROLE_HIERARCHY, Role
 
 User = get_user_model()
 
@@ -80,17 +81,15 @@ def can_reset_password(admin_role: str, target_role: str, is_same_user: bool) ->
     if is_same_user:
         return False
 
-    role_hierarchy = {'owner': 4, 'admin': 3, 'member': 2, 'viewer': 1}
-
-    if admin_role not in role_hierarchy or target_role not in role_hierarchy:
+    if admin_role not in ROLE_HIERARCHY or target_role not in ROLE_HIERARCHY:
         return False
 
     # Owner can reset admin, member, viewer
-    if admin_role == 'owner' and target_role in ('admin', 'member', 'viewer'):
+    if admin_role == Role.OWNER and target_role in (Role.ADMIN, Role.MEMBER, Role.VIEWER):
         return True
 
     # Admin can reset member, viewer
-    if admin_role == 'admin' and target_role in ('member', 'viewer'):
+    if admin_role == Role.ADMIN and target_role in (Role.MEMBER, Role.VIEWER):
         return True
 
     return False

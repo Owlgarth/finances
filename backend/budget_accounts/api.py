@@ -8,31 +8,12 @@ from ninja.errors import HttpError
 from budget_accounts.models import BudgetAccount
 from budget_accounts.schemas import BudgetAccountCreate, BudgetAccountOut, BudgetAccountUpdate
 from common.auth import JWTAuth
-from workspaces.models import WorkspaceMember
+from common.permissions import require_role
+from workspaces.models import ADMIN_ROLES
 
 router = Router(tags=['Budget Accounts'])
 User = get_user_model()
 
-
-# =============================================================================
-# Auth Helpers
-# =============================================================================
-
-
-def get_workspace_role(user: User, workspace_id: int) -> str:
-    """Get user's role in workspace."""
-    try:
-        member = WorkspaceMember.objects.get(workspace_id=workspace_id, user=user)
-        return member.role
-    except WorkspaceMember.DoesNotExist:
-        return 'viewer'
-
-
-def require_role(user: User, workspace_id: int, allowed_roles: list[str]) -> None:
-    """Raise error if user's role is not in allowed_roles."""
-    role = get_workspace_role(user, workspace_id)
-    if role not in allowed_roles:
-        raise HttpError(403, f'Insufficient permissions. Required: {", ".join(allowed_roles)}. Your role: {role}')
 
 
 # =============================================================================
@@ -84,7 +65,7 @@ def create_budget_account(request: HttpRequest, data: BudgetAccountCreate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin'])
+    require_role(user, workspace.id, ADMIN_ROLES)
 
     # Check for duplicate name
     if BudgetAccount.objects.filter(workspace=workspace, name=data.name).exists():
@@ -115,7 +96,7 @@ def update_budget_account(request: HttpRequest, account_id: int, data: BudgetAcc
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin'])
+    require_role(user, workspace.id, ADMIN_ROLES)
 
     try:
         account = BudgetAccount.objects.get(id=account_id, workspace=workspace)
@@ -147,7 +128,7 @@ def delete_budget_account(request: HttpRequest, account_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin'])
+    require_role(user, workspace.id, ADMIN_ROLES)
 
     try:
         account = BudgetAccount.objects.get(id=account_id, workspace=workspace)
@@ -168,7 +149,7 @@ def toggle_archive_budget_account(request: HttpRequest, account_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin'])
+    require_role(user, workspace.id, ADMIN_ROLES)
 
     try:
         account = BudgetAccount.objects.get(id=account_id, workspace=workspace)
