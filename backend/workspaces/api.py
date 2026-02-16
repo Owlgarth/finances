@@ -7,7 +7,7 @@ from ninja.errors import HttpError
 
 from common.auth import JWTAuth
 from core.schemas import MessageOut
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import ADMIN_ROLES, Role, Workspace, WorkspaceMember
 from workspaces.schemas import (
     MemberPasswordReset,
     WorkspaceMemberAdd,
@@ -101,7 +101,7 @@ def update_current_workspace(request: HttpRequest, data: WorkspaceUpdate):
         raise HttpError(404, 'No current workspace selected')
 
     # Check user has admin or owner role
-    require_role(user, workspace.id, ['owner', 'admin'])
+    require_role(user, workspace.id, ADMIN_ROLES)
 
     if data.name is not None:
         workspace.name = data.name
@@ -186,7 +186,7 @@ def add_member_to_workspace(request: HttpRequest, workspace_id: int, data: Works
     workspace = validate_workspace_access(workspace_id, user)
 
     # Check current user has admin/owner role
-    require_role(user, workspace_id, ['owner', 'admin'])
+    require_role(user, workspace_id, ADMIN_ROLES)
 
     # Check workspace member limit (15 members maximum)
     current_member_count = WorkspaceMember.objects.filter(workspace_id=workspace_id).count()
@@ -269,7 +269,7 @@ def leave_workspace(request: HttpRequest, workspace_id: int):
         raise HttpError(404, 'You are not a member of this workspace')
 
     # Owner cannot leave
-    if member.role == 'owner':
+    if member.role == Role.OWNER:
         raise HttpError(400, 'Workspace owner cannot leave. Transfer ownership first or delete the workspace.')
 
     # Remove membership
@@ -304,7 +304,7 @@ def update_member_role(
     validate_workspace_access(workspace_id, user)
 
     # Check current user has admin/owner role
-    current_role = require_role(user, workspace_id, ['owner', 'admin'])
+    current_role = require_role(user, workspace_id, ADMIN_ROLES)
 
     # Get the member record
     member = WorkspaceMember.objects.filter(
@@ -320,11 +320,11 @@ def update_member_role(
         raise HttpError(400, 'Cannot change your own role')
 
     # Cannot change owner role
-    if member.role == 'owner':
+    if member.role == Role.OWNER:
         raise HttpError(400, "Cannot change the owner's role")
 
     # Admin cannot change other admin's role
-    if current_role == 'admin' and member.role == 'admin':
+    if current_role == Role.ADMIN and member.role == Role.ADMIN:
         raise HttpError(403, "Admin cannot change another admin's role. Owner required.")
 
     # Update the role
@@ -356,7 +356,7 @@ def remove_member_from_workspace(request: HttpRequest, workspace_id: int, member
     validate_workspace_access(workspace_id, user)
 
     # Check current user has admin/owner role
-    current_role = require_role(user, workspace_id, ['owner', 'admin'])
+    current_role = require_role(user, workspace_id, ADMIN_ROLES)
 
     # Get the member record
     member = WorkspaceMember.objects.filter(
@@ -372,11 +372,11 @@ def remove_member_from_workspace(request: HttpRequest, workspace_id: int, member
         raise HttpError(400, 'Cannot remove yourself. Use the leave endpoint instead.')
 
     # Cannot remove owner
-    if member.role == 'owner':
+    if member.role == Role.OWNER:
         raise HttpError(400, 'Cannot remove the workspace owner')
 
     # Admin cannot remove other admin
-    if current_role == 'admin' and member.role == 'admin':
+    if current_role == Role.ADMIN and member.role == Role.ADMIN:
         raise HttpError(403, 'Admin cannot remove another admin. Owner required.')
 
     # Remove the member
@@ -409,7 +409,7 @@ def reset_member_password(
     validate_workspace_access(workspace_id, user)
 
     # Check current user has admin/owner role
-    current_role = require_role(user, workspace_id, ['owner', 'admin'])
+    current_role = require_role(user, workspace_id, ADMIN_ROLES)
 
     # Get the target member's record
     target_member = WorkspaceMember.objects.filter(
@@ -425,11 +425,11 @@ def reset_member_password(
         raise HttpError(400, 'Cannot reset your own password. Use the change password feature instead.')
 
     # Cannot reset owner's password
-    if target_member.role == 'owner':
+    if target_member.role == Role.OWNER:
         raise HttpError(400, "Cannot reset the owner's password")
 
     # Admin cannot reset another admin's password
-    if current_role == 'admin' and target_member.role == 'admin':
+    if current_role == Role.ADMIN and target_member.role == Role.ADMIN:
         raise HttpError(403, "Admin cannot reset another admin's password. Owner required.")
 
     # Get the target user and update password

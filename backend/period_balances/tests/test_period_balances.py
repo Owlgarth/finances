@@ -278,6 +278,13 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload)
         self.assertStatus(401)
 
+    def test_viewer_cannot_update_balance(self):
+        """Test that a viewer cannot update a balance."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {'opening_balance': '2000.00'}
+        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.assertStatus(403)
+
     # =============================================================================
     # Recalculate Balance Tests
     # =============================================================================
@@ -440,6 +447,16 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         data = self.post('/api/period-balances/recalculate', payload)
         self.assertStatus(401)
 
+    def test_viewer_cannot_recalculate_balance(self):
+        """Test that a viewer cannot recalculate a balance."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {
+            'budget_period_id': self.period1.id,
+            'currency': 'PLN',
+        }
+        data = self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
+        self.assertStatus(403)
+
     # =============================================================================
     # Recalculate All Balances Tests
     # =============================================================================
@@ -500,3 +517,19 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         }
         data = self.post('/api/period-balances/recalculate-all', payload)
         self.assertStatus(401)
+
+    def test_viewer_cannot_recalculate_all(self):
+        """Test that a viewer cannot recalculate all balances."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {
+            'budget_period_id': self.period1.id,
+        }
+        data = self.post('/api/period-balances/recalculate-all', payload, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_can_list_balances(self):
+        """Test that a viewer can list balances (read-only)."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        data = self.get('/api/period-balances', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data), 4)

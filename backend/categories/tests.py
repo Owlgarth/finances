@@ -11,6 +11,7 @@ from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
+from workspaces.models import WorkspaceMember
 
 User = get_user_model()
 
@@ -338,6 +339,26 @@ class TestCreateCategory(CategoriesTestCase):
         data = self.post('/api/categories', payload)
         self.assertStatus(401)
 
+    def test_viewer_cannot_create_category(self):
+        """Test that a viewer cannot create a category."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {
+            'name': 'Healthcare',
+            'budget_period_id': self.period1.id,
+        }
+        data = self.post('/api/categories', payload, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_member_can_create_category(self):
+        """Test that a member can create a category."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='member')
+        payload = {
+            'name': 'Healthcare',
+            'budget_period_id': self.period1.id,
+        }
+        data = self.post('/api/categories', payload, **self.auth_headers())
+        self.assertStatus(201)
+
 
 # =============================================================================
 # Update Category Tests
@@ -416,6 +437,13 @@ class TestUpdateCategory(CategoriesTestCase):
         data = self.put(f'/api/categories/{self.category1.id}', payload)
         self.assertStatus(401)
 
+    def test_viewer_cannot_update_category(self):
+        """Test that a viewer cannot update a category."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        payload = {'name': 'New Name'}
+        data = self.put(f'/api/categories/{self.category1.id}', payload, **self.auth_headers())
+        self.assertStatus(403)
+
 
 # =============================================================================
 # Delete Category Tests
@@ -486,6 +514,12 @@ class TestDeleteCategory(CategoriesTestCase):
         """Test that deleting a category without authentication fails."""
         self.delete(f'/api/categories/{self.category1.id}')
         self.assertStatus(401)
+
+    def test_viewer_cannot_delete_category(self):
+        """Test that a viewer cannot delete a category."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.delete(f'/api/categories/{self.category1.id}', **self.auth_headers())
+        self.assertStatus(403)
 
 
 # =============================================================================
@@ -748,6 +782,23 @@ class TestImportCategories(CategoriesTestCase):
             {'file': file, 'budget_period_id': self.period1.id},
         )
         self.assertStatus(401)
+
+    def test_viewer_cannot_import_categories(self):
+        """Test that a viewer cannot import categories."""
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        categories_data = json.dumps(['New Category'])
+        file = SimpleUploadedFile(
+            'categories.json',
+            categories_data.encode('utf-8'),
+            content_type='application/json',
+        )
+
+        self.post_file(
+            '/api/categories/import',
+            {'file': file, 'budget_period_id': self.period1.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(403)
 
     def test_import_categories_duplicates_within_file(self):
         """Test that importing handles duplicates within the file itself."""
