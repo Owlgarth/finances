@@ -18,9 +18,11 @@ from budget_periods.schemas import (
 from budgets.models import Budget
 from categories.models import Category
 from common.auth import JWTAuth
+from common.permissions import require_role
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budget Periods'])
 
@@ -86,7 +88,10 @@ def get_period(request, period_id: int):
 @router.post('', response={201: BudgetPeriodOut, 404: DetailOut}, auth=JWTAuth())
 def create_period(request, data: BudgetPeriodCreate):
     """Create a new budget period. The budget_account_id must belong to the current workspace."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Verify the budget account belongs to the current workspace
     budget_account = BudgetAccount.objects.filter(id=data.budget_account_id, workspace_id=workspace.id).first()
@@ -100,8 +105,8 @@ def create_period(request, data: BudgetPeriodCreate):
             start_date=data.start_date,
             end_date=data.end_date,
             weeks=data.weeks,
-            created_by=request.auth,
-            updated_by=request.auth,
+            created_by=user,
+            updated_by=user,
         )
 
         # Automatically create period balances for all currencies
@@ -128,7 +133,11 @@ def create_period(request, data: BudgetPeriodCreate):
 @router.put('{period_id}', response={200: BudgetPeriodOut, 404: DetailOut}, auth=JWTAuth())
 def update_period(request, period_id: int, data: BudgetPeriodUpdate):
     """Update a budget period."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
+
+    require_role(user, workspace.id, WRITE_ROLES)
+
     period = get_workspace_period(period_id, workspace.id)
     if not period:
         return 404, {'detail': 'Period not found'}
@@ -149,7 +158,7 @@ def update_period(request, period_id: int, data: BudgetPeriodUpdate):
     if data.weeks is not None:
         period.weeks = data.weeks
 
-    period.updated_by = request.auth
+    period.updated_by = user
     period.save()
 
     return 200, period
@@ -158,7 +167,11 @@ def update_period(request, period_id: int, data: BudgetPeriodUpdate):
 @router.delete('{period_id}', response={204: None, 404: DetailOut}, auth=JWTAuth())
 def delete_period(request, period_id: int):
     """Delete a budget period."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
+
+    require_role(user, workspace.id, WRITE_ROLES)
+
     period = get_workspace_period(period_id, workspace.id)
     if not period:
         return 404, {'detail': 'Period not found'}
@@ -173,7 +186,10 @@ def copy_period(request, period_id: int, data: BudgetPeriodCopy):
     Copy a budget period with all categories, budgets, and planned transactions.
     Planned transactions will have their dates adjusted and status set to pending.
     """
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Get source period and verify it belongs to current workspace
     source_period = get_workspace_period(period_id, workspace.id)
@@ -188,8 +204,8 @@ def copy_period(request, period_id: int, data: BudgetPeriodCopy):
             start_date=data.start_date,
             end_date=data.end_date,
             weeks=data.weeks,
-            created_by=request.auth,
-            updated_by=request.auth,
+            created_by=user,
+            updated_by=user,
         )
 
         # Create period balances for all currencies
@@ -219,7 +235,7 @@ def copy_period(request, period_id: int, data: BudgetPeriodCopy):
             new_category = Category.objects.create(
                 budget_period=new_period,
                 name=source_category.name,
-                created_by=request.auth,
+                created_by=user,
             )
             category_mapping[source_category.id] = new_category
 
@@ -260,7 +276,7 @@ def copy_period(request, period_id: int, data: BudgetPeriodCopy):
                     payment_date=None,
                     status='pending',
                     transaction_id=None,
-                    created_by=request.auth,
+                    created_by=user,
                 )
             )
 

@@ -8,6 +8,7 @@ from ninja import Query, Router
 
 from budget_periods.models import BudgetPeriod
 from common.auth import JWTAuth
+from common.permissions import require_role
 from core.schemas import DetailOut
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
@@ -18,6 +19,7 @@ from period_balances.schemas import (
     RecalculateRequest,
 )
 from transactions.models import Transaction
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Period Balances'])
 
@@ -174,10 +176,13 @@ def list_balances(
 @router.post('/recalculate', response={200: PeriodBalanceOut, 404: DetailOut}, auth=JWTAuth())
 def recalculate_balance(request, data: RecalculateRequest):
     """Recalculate a specific period balance."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
 
     if not workspace:
         return 404, {'detail': 'No workspace selected'}
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Verify the budget period belongs to current workspace
     period = get_workspace_period(data.budget_period_id, workspace.id)
@@ -191,10 +196,13 @@ def recalculate_balance(request, data: RecalculateRequest):
 @router.post('/recalculate-all', response={200: list[PeriodBalanceOut], 404: DetailOut}, auth=JWTAuth())
 def recalculate_all(request, data: RecalculateAllRequest):
     """Recalculate all currency balances for a period."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
 
     if not workspace:
         return 404, {'detail': 'No workspace selected'}
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Verify the budget period belongs to current workspace
     period = get_workspace_period(data.budget_period_id, workspace.id)
@@ -228,10 +236,13 @@ def get_balance(request, balance_id: int):
 @router.put('/{balance_id}', response={200: PeriodBalanceOut, 404: DetailOut}, auth=JWTAuth())
 def update_balance(request, balance_id: int, data: PeriodBalanceUpdate):
     """Update a period balance (opening balance)."""
-    workspace = request.auth.current_workspace
+    user = request.auth
+    workspace = user.current_workspace
 
     if not workspace:
         return 404, {'detail': 'No workspace selected'}
+
+    require_role(user, workspace.id, WRITE_ROLES)
 
     balance = get_workspace_balance(balance_id, workspace.id)
     if not balance:
@@ -249,7 +260,7 @@ def update_balance(request, balance_id: int, data: PeriodBalanceUpdate):
         - balance.exchanges_out
     )
 
-    balance.updated_by = request.auth
+    balance.updated_by = user
     balance.save()
 
     return 200, balance
