@@ -14,6 +14,7 @@ from ninja.files import UploadedFile
 from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.auth import JWTAuth
+from common.permissions import require_role
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
 from transactions.models import Transaction
@@ -22,7 +23,7 @@ from transactions.schemas import (
     TransactionImport,
     TransactionOut,
 )
-from workspaces.models import WorkspaceMember
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Transactions'])
 
@@ -95,17 +96,6 @@ def update_period_balance(period_id: int, currency: str, trans_type: str, amount
         - balance.exchanges_out
     )
     balance.save()
-
-
-def require_role(user, workspace_id: int, allowed_roles: list[str]) -> None:
-    """Raise error if user's role is not in allowed_roles."""
-    try:
-        member = WorkspaceMember.objects.get(workspace_id=workspace_id, user=user)
-        role = member.role
-    except WorkspaceMember.DoesNotExist:
-        role = 'viewer'
-    if role not in allowed_roles:
-        raise HttpError(403, f'Insufficient permissions. Required: {", ".join(allowed_roles)}. Your role: {role}')
 
 
 # =============================================================================
@@ -232,7 +222,7 @@ def import_transactions(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin', 'member'])
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Verify the budget period belongs to current workspace
     period = get_workspace_period(budget_period_id, workspace.id)
@@ -321,7 +311,7 @@ def create_transaction(request: HttpRequest, data: TransactionCreate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin', 'member'])
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Income transactions should not have a category
     category_id = None if data.type == 'income' else data.category_id
@@ -385,7 +375,7 @@ def update_transaction(request: HttpRequest, transaction_id: int, data: Transact
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin', 'member'])
+    require_role(user, workspace.id, WRITE_ROLES)
 
     # Income transactions should not have a category
     category_id = None if data.type == 'income' else data.category_id
@@ -456,7 +446,7 @@ def delete_transaction(request: HttpRequest, transaction_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, ['owner', 'admin', 'member'])
+    require_role(user, workspace.id, WRITE_ROLES)
 
     trans = get_workspace_transaction(transaction_id, workspace.id)
     if not trans:
