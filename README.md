@@ -2,6 +2,7 @@
 
 A modern, full-stack personal finance tracking application with multi-currency support, period-based budgeting, multi-account workspaces, and collaborative team features.
 
+[![CI](https://github.com/erikmoroz/monie/actions/workflows/ci.yml/badge.svg)](https://github.com/erikmoroz/monie/actions/workflows/ci.yml)
 ![Tech Stack](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
