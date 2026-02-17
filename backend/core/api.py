@@ -7,6 +7,7 @@ from ninja import Router
 
 from budget_accounts.models import BudgetAccount
 from common.auth import create_access_token
+from common.throttle import rate_limit
 from core.demo_fixtures import create_demo_fixtures
 from core.schemas import DetailOut, ErrorOut, LoginIn, RegisterIn, Token
 from workspaces.models import Workspace, WorkspaceMember
@@ -15,7 +16,8 @@ router = Router(tags=['Auth'])
 User = get_user_model()
 
 
-@router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut})
+@router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
+@rate_limit('register', limit=5, period=60)
 def register(request, data: RegisterIn):
     """
     Register a new user with workspace and default data.
@@ -84,7 +86,8 @@ def register(request, data: RegisterIn):
     }
 
 
-@router.post('/login', response={200: Token, 401: DetailOut})
+@router.post('/login', response={200: Token, 401: DetailOut, 429: DetailOut})
+@rate_limit('login', limit=10, period=60)
 def login(request, data: LoginIn):
     """
     Login user and return JWT token.

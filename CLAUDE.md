@@ -23,9 +23,12 @@ python manage.py migrate
 python manage.py runserver
 
 # Testing
-pytest                          # Run all tests
-pytest -v                       # Verbose output
-pytest budget_accounts/tests/  # Run specific app tests
+pytest                                      # Run all tests
+pytest -v                                   # Verbose output
+pytest budget_accounts/tests/               # Run specific app tests
+pytest budget_accounts/tests/test_api.py   # Run single test file
+pytest -k "test_create"                     # Run tests matching pattern
+pytest --cov=. --cov-report=html            # Run with coverage report
 
 # Linting & Formatting
 uv run ruff check .             # Lint
@@ -60,7 +63,7 @@ npm run lint                    # ESLint check
 docker-compose up -d            # Start all services
 ```
 
-Access: Frontend at http://localhost:3000, Backend API at http://localhost:8000, API Docs at http://localhost:8000/docs
+Access: Frontend at http://localhost:3000, Backend API at http://localhost:8000/api, API Docs at http://localhost:8000/api/docs
 
 ## Architecture
 
@@ -98,6 +101,13 @@ All data operations must respect this hierarchy. For example, when adding a tran
 | `reports` | Budget summaries and current balances |
 | `core` | Main API endpoints, schemas |
 | `common` | JWT auth utilities, test mixins |
+
+### API Routing
+
+All API routes are registered in `backend/config/urls.py`:
+- Base URL: `/api/`
+- Each Django app has its own `api.py` with a Router that's added to the main NinjaAPI instance
+- Interactive docs: `/api/docs`
 
 ### Frontend Structure
 
@@ -146,7 +156,7 @@ from common.tests.mixins import AuthMixin
 class MyTestCase(AuthMixin, TestCase):
     def test_something(self):
         # User and workspace auto-created
-        response = self.client.get('/backend/endpoint')
+        response = self.client.get('/api/endpoint')
 ```
 
 Tests use SQLite in-memory with `--reuse-db` for faster runs (configured in pyproject.toml).
@@ -154,10 +164,10 @@ Tests use SQLite in-memory with `--reuse-db` for faster runs (configured in pypr
 ## Import/Export
 
 Several endpoints support bulk import/export via JSON (FormData multipart):
-- Categories: `POST /backend/categories/import`, `GET /backend/categories/export/`
-- Transactions: `POST /backend/transactions/import`, `GET /backend/transactions/export/`
-- Planned Transactions: `POST /backend/planned-transactions/import`, `GET /backend/planned-transactions/export/`
-- Currency Exchanges: `POST /backend/currency-exchanges/import`, `GET /backend/currency-exchanges/export/`
+- Categories: `POST /api/categories/import`, `GET /api/categories/export/`
+- Transactions: `POST /api/transactions/import`, `GET /api/transactions/export/`
+- Planned Transactions: `POST /api/planned-transactions/import`, `GET /api/planned-transactions/export/`
+- Currency Exchanges: `POST /api/currency-exchanges/import`, `GET /api/currency-exchanges/export/`
 
 ## Offline Support
 
@@ -172,7 +182,7 @@ Frontend queues mutations (POST/PUT/DELETE) when offline using `SyncQueueManager
 - `DEMO_MODE`: Disable registration when true
 
 **Frontend** (frontend/.env or defaults):
-- `VITE_API_URL`: Backend API URL (default: http://localhost:8000/backend)
+- `VITE_API_URL`: Backend API URL (default: http://localhost:8000/api)
 - `VITE_DEMO_MODE`: Hide registration link when true
 
 ## Code Style
