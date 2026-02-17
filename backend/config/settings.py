@@ -142,6 +142,19 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# File upload limits
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+
+# Cache configuration (used for rate limiting)
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,
+    }
+}
+
 # Production security settings
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
