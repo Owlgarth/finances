@@ -15,6 +15,7 @@ from categories.models import Category
 from categories.schemas import CategoryCreate, CategoryOut, CategoryUpdate
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.throttle import validate_file_size
 from core.schemas import DetailOut
 from workspaces.models import WRITE_ROLES
 
@@ -137,6 +138,8 @@ def import_categories(
         raise HttpError(404, 'No workspace selected')
 
     require_role(user, workspace.id, WRITE_ROLES)
+    # Validate file size (max 5MB)
+    validate_file_size(file, max_size_mb=5)
 
     # Verify the budget period belongs to current workspace
     period = get_workspace_period(budget_period_id, workspace.id)

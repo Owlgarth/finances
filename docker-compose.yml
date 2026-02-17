@@ -10,6 +10,16 @@ services:
     networks:
       - monie-network
 
+  monie_redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - monie-network
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
   monie_api:
     build:
       context: ./backend
@@ -23,6 +33,7 @@ services:
       - DEBUG=${DEBUG:-false}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - REDIS_URL=redis://monie_redis:6379
     volumes:
       - ./backend:/app
     ports:
@@ -31,6 +42,7 @@ services:
       - monie-network
     depends_on:
       - monie_db
+      - monie_redis
 
   monie_ui:
     build:
@@ -49,6 +61,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   monie-network:
