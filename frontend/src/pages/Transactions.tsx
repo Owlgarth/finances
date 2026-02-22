@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { transactionsApi, categoriesApi } from '../api/client'
@@ -10,7 +10,6 @@ import TransactionFormModal from '../components/modals/transactions/TransactionF
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
-import { OfflineDisplayCache } from '../utils/offlineDisplayCache'
 
 export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -170,33 +169,7 @@ export default function Transactions() {
     }
   }, [dateOrdering, selectedPeriodId, queryClient])
 
-  // Merge API transactions with offline transactions from display cache
-  const transactions = useMemo(() => {
-    const apiData = apiTransactions || []
-
-    // Get offline transactions for the current budget period
-    const offlineTransactions = OfflineDisplayCache.getItemsByType('transaction', selectedPeriodId)
-
-    // For offline transactions, look up category from categories cache if needed
-    const offlineWithCategories = offlineTransactions.map(item => {
-      // If category is missing but category_id exists, try to find it
-      if (!item.category && item.category_id && categories) {
-        const category = categories.find(c => c.id === item.category_id)
-        return { ...item, category: category || null }
-      }
-      return item
-    })
-
-    // Deduplicate: remove items from apiData that are already in offlineWithCategories
-    // (identified by _tempId - these are optimistic updates that exist in both caches)
-    const offlineTempIds = new Set(offlineWithCategories.map(item => item._tempId).filter(Boolean))
-    const dedupedApiData = apiData.filter((item: any) => !item._tempId || !offlineTempIds.has(item._tempId))
-
-    console.log('[Transactions Page] Merging data - API:', apiData.length, 'Offline:', offlineWithCategories.length, 'Deduped API:', dedupedApiData.length)
-
-    // Merge: offline transactions first (most recent), then deduplicated API transactions
-    return [...offlineWithCategories, ...dedupedApiData]
-  }, [apiTransactions, selectedPeriodId, categories])
+  const transactions = apiTransactions || []
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => transactionsApi.delete(id),

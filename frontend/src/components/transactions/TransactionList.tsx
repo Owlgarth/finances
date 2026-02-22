@@ -1,5 +1,4 @@
 import type { Transaction } from '../../types'
-import { isOfflineItem } from '../../utils/optimisticUpdates'
 import { useLayout } from '../../contexts/LayoutContext'
 
 type DateOrdering = 'date' | '-date'
@@ -54,14 +53,10 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
           </tr>
         </thead>
         <tbody>
-          {transactions.map(transaction => {
-            const offline = isOfflineItem(transaction);
-            return (
+          {transactions.map(transaction => (
             <tr
               key={transaction.id}
-              className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${
-                offline ? 'bg-gray-50 opacity-60' : ''
-              }`}
+              className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
             >
               <td className="px-6 py-4 text-sm text-gray-600">{transaction.date}</td>
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{transaction.description}</td>
@@ -104,20 +99,17 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
                 </td>
               )}
             </tr>
-          );
-          })}
+          ))}
         </tbody>
       </table>
       </div>
 
       {/* Mobile Cards */}
       <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
-        {transactions.map(transaction => {
-          const offline = isOfflineItem(transaction);
-          return (
+        {transactions.map(transaction => (
             <div
               key={transaction.id}
-              className={`p-4 ${offline ? 'bg-gray-50 opacity-60' : ''}`}
+              className="p-4"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
@@ -167,8 +159,7 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
                 </div>
               )}
             </div>
-          );
-        })}
+        ))}
       </div>
 
       {transactions.length === 0 && (
