@@ -415,7 +415,7 @@ Can run in parallel with Phase 4 (sidebar).
 
 ---
 
-### Issue 9: Extract shared helpers to `common/services/`
+### ~~Issue 9: Extract shared helpers to `common/services/`~~ ✅ Done
 
 **Labels:** `backend`, `refactor`
 

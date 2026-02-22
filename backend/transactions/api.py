@@ -15,9 +15,9 @@ from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_or_create_period_balance, get_workspace_period
 from common.throttle import validate_file_size
 from core.schemas import DetailOut
-from period_balances.models import PeriodBalance
 from transactions.models import Transaction
 from transactions.schemas import (
     TransactionCreate,
@@ -34,16 +34,6 @@ router = Router(tags=['Transactions'])
 # =============================================================================
 
 
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod | None:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    return period
-
-
 def get_workspace_transaction(transaction_id: int, workspace_id: int) -> Transaction | None:
     """Helper to get a transaction and verify it belongs to the current workspace."""
     trans = (
@@ -55,28 +45,6 @@ def get_workspace_transaction(transaction_id: int, workspace_id: int) -> Transac
         .first()
     )
     return trans
-
-
-def get_or_create_period_balance(period_id: int, currency: str) -> PeriodBalance:
-    """Get existing or create new period balance record."""
-    balance = PeriodBalance.objects.filter(
-        budget_period_id=period_id,
-        currency=currency,
-    ).first()
-
-    if not balance:
-        balance = PeriodBalance.objects.create(
-            budget_period_id=period_id,
-            currency=currency,
-            opening_balance=Decimal('0'),
-            total_income=Decimal('0'),
-            total_expenses=Decimal('0'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('0'),
-        )
-
-    return balance
 
 
 def update_period_balance(period_id: int, currency: str, trans_type: str, amount: Decimal, operation: str) -> None:

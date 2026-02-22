@@ -4,12 +4,12 @@ from django.contrib.auth import get_user_model
 from ninja import Query, Router
 from ninja.errors import HttpError
 
-from budget_periods.models import BudgetPeriod
 from budgets.models import Budget
 from budgets.schemas import BudgetCreate, BudgetOut, BudgetUpdate
 from categories.models import Category
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_workspace_period
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budgets'])
@@ -20,18 +20,6 @@ User = get_user_model()
 # =============================================================================
 # Auth Helpers
 # =============================================================================
-
-
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not period:
-        return None
-    return period
 
 
 def get_workspace_budget(budget_id: int, workspace_id: int) -> Budget:

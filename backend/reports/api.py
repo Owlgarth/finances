@@ -6,9 +6,9 @@ from django.db.models import Sum
 from ninja import Query, Router
 from ninja.errors import HttpError
 
-from budget_periods.models import BudgetPeriod
 from budgets.models import Budget
 from common.auth import JWTAuth
+from common.services.base import get_workspace_period
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
 from reports.schemas import (
@@ -27,16 +27,6 @@ router = Router(tags=['Reports'])
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod | None:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    return period
 
 
 def get_budget_summary(budget_period_id: int) -> list[BudgetSummaryCategoryItem]:
