@@ -183,7 +183,7 @@ def add_member_to_workspace(request: HttpRequest, workspace_id: int, data: Works
     user = request.auth
 
     # Validate workspace access
-    workspace = validate_workspace_access(workspace_id, user)
+    validate_workspace_access(workspace_id, user)
 
     # Check current user has admin/owner role
     require_role(user, workspace_id, ADMIN_ROLES)

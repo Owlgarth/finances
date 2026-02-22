@@ -343,7 +343,7 @@ class TestUpdateBudgetAccount(BudgetAccountTestCase):
     def test_update_duplicate_name_returns_error(self):
         """Test updating to duplicate name returns error."""
         account1 = self.create_budget_account(name='Account 1')
-        account2 = self.create_budget_account(name='Account 2')
+        self.create_budget_account(name='Account 2')
 
         self.put(
             f'/api/budget-accounts/{account1.id}',
@@ -510,7 +510,6 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
     def test_archive_updates_updated_by(self):
         """Test archiving updates the updated_by field."""
         account = self.create_budget_account(is_active=True)
-        original_updated_by = account.updated_by
 
         self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
 

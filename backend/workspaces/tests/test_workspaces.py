@@ -85,7 +85,7 @@ class TestListWorkspaces(WorkspaceTestCase):
 
     def test_list_without_auth_returns_401(self):
         """Test that listing workspaces without authentication fails."""
-        data = self.get('/api/workspaces')
+        self.get('/api/workspaces')
         self.assertStatus(401)
 
 
@@ -106,7 +106,7 @@ class TestGetCurrentWorkspace(WorkspaceTestCase):
 
     def test_get_current_workspace_without_auth_fails(self):
         """Test that getting current workspace without authentication fails."""
-        data = self.get('/api/workspaces/current')
+        self.get('/api/workspaces/current')
         self.assertStatus(401)
 
 
@@ -147,13 +147,13 @@ class TestUpdateCurrentWorkspace(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'name': 'Should Not Work'}
-        data = self.put('/api/workspaces/current', payload, **headers)
+        self.put('/api/workspaces/current', payload, **headers)
         self.assertStatus(403)
 
     def test_update_workspace_without_auth_fails(self):
         """Test that updating workspace without authentication fails."""
         payload = {'name': 'Should Not Work'}
-        data = self.put('/api/workspaces/current', payload)
+        self.put('/api/workspaces/current', payload)
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -186,12 +186,12 @@ class TestSwitchWorkspace(WorkspaceTestCase):
         # Create a workspace the user is not a member of
         forbidden_workspace = Workspace.objects.create(name='Forbidden Workspace')
 
-        data = self.post(f'/api/workspaces/{forbidden_workspace.id}/switch', {}, **self.auth_headers())
+        self.post(f'/api/workspaces/{forbidden_workspace.id}/switch', {}, **self.auth_headers())
         self.assertStatus(403)
 
     def test_switch_workspace_without_auth_fails(self):
         """Test that switching workspace without authentication fails."""
-        data = self.post(f'/api/workspaces/{self.other_workspace.id}/switch', {})
+        self.post(f'/api/workspaces/{self.other_workspace.id}/switch', {})
         self.assertStatus(401)
 
 
@@ -229,12 +229,12 @@ class TestListWorkspaceMembers(WorkspaceTestCase):
         token = self.create_token_for_user(non_member)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.get(f'/api/workspaces/{self.workspace.id}/members', **headers)
+        self.get(f'/api/workspaces/{self.workspace.id}/members', **headers)
         self.assertStatus(403)
 
     def test_list_members_without_auth_fails(self):
         """Test that listing members without authentication fails."""
-        data = self.get(f'/api/workspaces/{self.workspace.id}/members')
+        self.get(f'/api/workspaces/{self.workspace.id}/members')
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -276,7 +276,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
 
     def test_add_existing_user_as_member(self):
         """Test adding an existing user to workspace."""
-        existing_user = User.objects.create_user(
+        User.objects.create_user(
             email='existing@example.com',
             password='pass123',
         )
@@ -308,7 +308,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'full_name': 'Admin User',
             'role': 'member',
         }
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
+        self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_add_member_as_admin_succeeds(self):
@@ -324,7 +324,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'pass1234',  # Must be at least 8 characters
             'role': 'member',
         }
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
+        self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
         self.assertStatus(201)
 
     def test_add_member_as_member_fails(self):
@@ -340,7 +340,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'pass1234',  # Must be at least 8 characters
             'role': 'viewer',
         }
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
+        self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **headers)
         self.assertStatus(403)
 
     def test_add_member_without_auth_fails(self):
@@ -350,7 +350,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
             'password': 'password123',
             'role': 'viewer',
         }
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload)
+        self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload)
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -380,17 +380,13 @@ class TestUpdateMemberRole(WorkspaceTestCase):
     def test_update_own_role_fails(self):
         """Test that updating your own role fails."""
         payload = {'role': 'admin'}
-        data = self.put(
-            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
-        )
+        self.put(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_update_owner_role_fails(self):
         """Test that changing owner role fails."""
         payload = {'role': 'admin'}
-        data = self.put(
-            f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers()
-        )
+        self.put(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_admin_cannot_update_other_admin(self):
@@ -410,7 +406,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'role': 'member'}
-        data = self.put(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **headers)
+        self.put(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **headers)
         self.assertStatus(403)
 
     def test_update_role_as_member_fails(self):
@@ -422,7 +418,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'role': 'viewer'}
-        data = self.put(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
+        self.put(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
         self.assertStatus(403)
 
     def create_token_for_user(self, user):
@@ -455,12 +451,12 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
 
     def test_remove_yourself_fails(self):
         """Test that removing yourself fails."""
-        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
+        self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
 
     def test_remove_owner_fails(self):
         """Test that removing owner fails."""
-        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
+        self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
 
     def test_admin_cannot_remove_other_admin(self):
@@ -479,7 +475,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         token = self.create_token_for_user(self.admin_user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}', **headers)
+        self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}', **headers)
         self.assertStatus(403)
 
     def test_remove_member_as_member_fails(self):
@@ -490,7 +486,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         token = self.create_token_for_user(self.member_user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        data = self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **headers)
+        self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **headers)
         self.assertStatus(403)
 
     def create_token_for_user(self, user):
@@ -518,7 +514,7 @@ class TestLeaveWorkspace(WorkspaceTestCase):
 
         initial_count = WorkspaceMember.objects.filter(workspace_id=self.workspace.id).count()
 
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **headers)
+        self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **headers)
         self.assertStatus(200)
 
         # Verify membership was removed
@@ -533,12 +529,12 @@ class TestLeaveWorkspace(WorkspaceTestCase):
 
     def test_leave_workspace_as_owner_fails(self):
         """Test that owner cannot leave workspace."""
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **self.auth_headers())
+        self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **self.auth_headers())
         self.assertStatus(400)
 
     def test_leave_workspace_without_auth_fails(self):
         """Test that leaving workspace without authentication fails."""
-        data = self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {})
+        self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {})
         self.assertStatus(401)
 
     def create_token_for_user(self, user):
@@ -574,7 +570,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
     def test_reset_own_password_fails(self):
         """Test that resetting your own password fails."""
         payload = {'new_password': 'newpassword123'}
-        data = self.put(
+        self.put(
             f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
@@ -582,7 +578,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
     def test_reset_owner_password_fails(self):
         """Test that resetting owner's password fails."""
         payload = {'new_password': 'newpassword123'}
-        data = self.put(
+        self.put(
             f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
@@ -604,7 +600,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'new_password': 'newpassword123'}
-        data = self.put(
+        self.put(
             f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)
@@ -618,7 +614,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
         payload = {'new_password': 'newpassword123'}
-        data = self.put(
+        self.put(
             f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)

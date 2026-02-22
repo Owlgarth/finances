@@ -174,7 +174,7 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
 
     def test_list_without_auth_returns_401(self):
         """Test that listing planned transactions without authentication fails."""
-        data = self.get('/api/planned-transactions')
+        self.get('/api/planned-transactions')
         self.assertStatus(401)
 
 
@@ -196,12 +196,12 @@ class TestGetPlannedTransaction(PlannedTransactionTestCase):
 
     def test_get_planned_not_found(self):
         """Test getting non-existent planned transaction returns 404."""
-        data = self.get('/api/planned-transactions/99999', **self.auth_headers())
+        self.get('/api/planned-transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_planned_without_auth_fails(self):
         """Test that getting a planned transaction without authentication fails."""
-        data = self.get(f'/api/planned-transactions/{self.planned1.id}')
+        self.get(f'/api/planned-transactions/{self.planned1.id}')
         self.assertStatus(401)
 
 
@@ -271,7 +271,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-03-15',
         }
-        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+        self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_planned_with_invalid_category_fails(self):
@@ -291,7 +291,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'category_id': category_period2.id,  # Category from period2
             'planned_date': '2025-01-20',
         }
-        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+        self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_planned_with_zero_amount_fails(self):
@@ -302,7 +302,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+        self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
     def test_create_planned_without_auth_fails(self):
@@ -313,7 +313,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/api/planned-transactions', payload)
+        self.post('/api/planned-transactions', payload)
         self.assertStatus(401)
 
     def test_create_as_viewer_fails(self):
@@ -329,7 +329,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+        self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_create_as_member_succeeds(self):
@@ -345,7 +345,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+        self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(201)
 
 
@@ -381,7 +381,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put('/api/planned-transactions/99999', payload, **self.auth_headers())
+        self.put('/api/planned-transactions/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_planned_without_auth_fails(self):
@@ -392,7 +392,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload)
+        self.put(f'/api/planned-transactions/{self.planned1.id}', payload)
         self.assertStatus(401)
 
     def test_update_as_viewer_fails(self):
@@ -408,7 +408,7 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
             'currency': 'USD',
             'planned_date': '2025-01-20',
         }
-        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+        self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_update_status_to_done(self):
@@ -448,12 +448,12 @@ class TestDeletePlannedTransaction(PlannedTransactionTestCase):
 
     def test_delete_planned_not_found(self):
         """Test deleting non-existent planned transaction returns 404."""
-        data = self.delete('/api/planned-transactions/99999', **self.auth_headers())
+        self.delete('/api/planned-transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_planned_without_auth_fails(self):
         """Test that deleting planned transaction without authentication fails."""
-        data = self.delete(f'/api/planned-transactions/{self.planned1.id}')
+        self.delete(f'/api/planned-transactions/{self.planned1.id}')
         self.assertStatus(401)
 
     def test_delete_as_viewer_fails(self):
@@ -463,7 +463,7 @@ class TestDeletePlannedTransaction(PlannedTransactionTestCase):
         member.role = 'viewer'
         member.save()
 
-        data = self.delete(f'/api/planned-transactions/{self.planned1.id}', **self.auth_headers())
+        self.delete(f'/api/planned-transactions/{self.planned1.id}', **self.auth_headers())
         self.assertStatus(403)
 
 
@@ -504,7 +504,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         )
 
         # Try to execute again
-        data = self.post(
+        self.post(
             f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-06', {}, **self.auth_headers()
         )
         self.assertStatus(400)
@@ -512,19 +512,19 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
     def test_execute_planned_with_invalid_payment_date_fails(self):
         """Test executing with payment date outside any period fails."""
         # Payment date in March, but we only have Jan and Feb periods
-        data = self.post(
+        self.post(
             f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-03-15', {}, **self.auth_headers()
         )
         self.assertStatus(400)
 
     def test_execute_planned_not_found(self):
         """Test executing non-existent planned transaction returns 404."""
-        data = self.post('/api/planned-transactions/99999/execute?payment_date=2025-01-05', {}, **self.auth_headers())
+        self.post('/api/planned-transactions/99999/execute?payment_date=2025-01-05', {}, **self.auth_headers())
         self.assertStatus(404)
 
     def test_execute_without_auth_fails(self):
         """Test that executing without authentication fails."""
-        data = self.post(f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {})
+        self.post(f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {})
         self.assertStatus(401)
 
     def test_execute_as_viewer_fails(self):
@@ -534,7 +534,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         member.role = 'viewer'
         member.save()
 
-        data = self.post(
+        self.post(
             f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
         )
         self.assertStatus(403)
@@ -666,7 +666,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
@@ -702,7 +702,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
@@ -732,7 +732,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
@@ -749,7 +749,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
@@ -776,7 +776,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
@@ -793,7 +793,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                 )
 
@@ -815,7 +815,7 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
 
             with open(f.name, 'rb') as file:
                 response = self.client.post(
-                    f'/api/planned-transactions/import',
+                    '/api/planned-transactions/import',
                     data={'file': file, 'budget_period_id': self.period1.id},
                     **self.auth_headers(),
                 )
