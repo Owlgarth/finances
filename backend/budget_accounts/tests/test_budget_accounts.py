@@ -29,7 +29,7 @@ class BudgetAccountTestCase(APIClientMixin, AuthMixin, TestCase):
             'workspace': self.workspace,
             'name': 'Test Account',
             'description': 'Test description',
-            'default_currency': 'PLN',
+            'default_currency': self.workspace.currencies.get(symbol='PLN'),
             'is_active': True,
             'display_order': 0,
             'created_by': self.user,
@@ -133,10 +133,10 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
 
     def test_get_account_from_other_workspace(self):
         """Test getting account from another workspace returns 404."""
-        from workspaces.models import Workspace
+        from workspaces.factories import WorkspaceFactory
 
         # Create another workspace with account
-        other_workspace = Workspace.objects.create(name='Other Workspace')
+        other_workspace = WorkspaceFactory(name='Other Workspace')
         other_user = User.objects.create_user(
             email='other@example.com',
             password='pass123',
@@ -145,6 +145,7 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
         other_account = BudgetAccount.objects.create(
             workspace=other_workspace,
             name='Other Account',
+            default_currency=other_workspace.currencies.get(symbol='PLN'),
             created_by=other_user,
         )
 

@@ -75,6 +75,14 @@ class PlannedTransactionOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+    @field_validator('currency', mode='before')
+    @classmethod
+    def validate_currency(cls, value: Any) -> str:
+        """Extract symbol string from Currency FK object."""
+        if hasattr(value, 'symbol'):
+            return value.symbol
+        return value
+
     @field_validator('created_by', 'updated_by', mode='before')
     @classmethod
     def validate_user_id(cls, value: Any) -> Optional[int]:

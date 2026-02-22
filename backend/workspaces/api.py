@@ -18,7 +18,7 @@ from workspaces.schemas import (
     WorkspaceOut,
     WorkspaceUpdate,
 )
-from workspaces.services import CurrencyService, WorkspaceCurrencyService
+from workspaces.services import CurrencyService
 
 router = Router(tags=['Workspaces'])
 User = get_user_model()
@@ -31,68 +31,43 @@ User = get_user_model()
 
 @router.get('/currencies', response=list[CurrencyOut], auth=JWTAuth())
 def list_currencies(request: HttpRequest):
-    """List all available currencies."""
-    return CurrencyService.list_currencies()
+    """List all currencies for the current workspace."""
+    user = request.auth
+    workspace = user.current_workspace
+
+    if not workspace:
+        raise HttpError(404, 'No current workspace selected')
+
+    return CurrencyService.list_currencies(workspace)
 
 
 @router.post('/currencies', response={201: CurrencyOut, 400: dict}, auth=JWTAuth())
 def create_currency(request: HttpRequest, data: CurrencyCreate):
-    """Create a new currency."""
+    """Create a new currency for the current workspace."""
     user = request.auth
-    require_role(user, user.current_workspace_id, ADMIN_ROLES)
+    workspace = user.current_workspace
 
-    currency = CurrencyService.create_currency(data)
+    if not workspace:
+        raise HttpError(404, 'No current workspace selected')
+
+    require_role(user, workspace.id, ADMIN_ROLES)
+
+    currency = CurrencyService.create_currency(workspace, data)
     return 201, currency
 
 
 @router.delete('/currencies/{currency_id}', response={204: None}, auth=JWTAuth())
 def delete_currency(request: HttpRequest, currency_id: int):
-    """Delete a currency."""
-    user = request.auth
-    require_role(user, user.current_workspace_id, ADMIN_ROLES)
-
-    CurrencyService.delete_currency(currency_id)
-    return 204, None
-
-
-@router.get('/current/currencies', response=list[CurrencyOut], auth=JWTAuth())
-def list_workspace_currencies(request: HttpRequest):
-    """List currencies for the current workspace."""
+    """Delete a currency from the current workspace."""
     user = request.auth
     workspace = user.current_workspace
 
     if not workspace:
         raise HttpError(404, 'No current workspace selected')
 
-    return WorkspaceCurrencyService.list_workspace_currencies(workspace)
+    require_role(user, workspace.id, ADMIN_ROLES)
 
-
-@router.post('/current/currencies/{currency_id}', response={201: dict, 400: dict}, auth=JWTAuth())
-def add_currency_to_workspace(request: HttpRequest, currency_id: int):
-    """Add a currency to the current workspace."""
-    user = request.auth
-    workspace = user.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No current workspace selected')
-
-    WorkspaceCurrencyService.add_currency_to_workspace(user, workspace, currency_id)
-    return 201, {
-        'message': 'Currency added to workspace',
-        'currency_id': currency_id,
-    }
-
-
-@router.delete('/current/currencies/{currency_id}', response={204: None}, auth=JWTAuth())
-def remove_currency_from_workspace(request: HttpRequest, currency_id: int):
-    """Remove a currency from the current workspace."""
-    user = request.auth
-    workspace = user.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No current workspace selected')
-
-    WorkspaceCurrencyService.remove_currency_from_workspace(user, workspace, currency_id)
+    CurrencyService.delete_currency(currency_id, workspace)
     return 204, None
 
 

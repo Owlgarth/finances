@@ -15,6 +15,7 @@ from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
+from workspaces.models import Currency
 
 
 def get_previous_month_name() -> str:
@@ -53,13 +54,17 @@ def create_demo_fixtures(
     - Sample currency exchanges
     - Period balances
     """
+    # Load workspace currencies into a symbol -> Currency map
+    currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
+
     # Get or create budget account
     if budget_account is None:
+        pln_currency = currency_map.get('PLN')
         budget_account = BudgetAccount.objects.create(
             workspace_id=workspace_id,
             name='Example Account',
             description='Example budget account with demo data',
-            default_currency='PLN',
+            default_currency=pln_currency,
             color='#10B981',
             icon='📊',
             is_active=True,
@@ -117,11 +122,11 @@ def create_demo_fixtures(
         ('Health & Fitness', 'PLN', Decimal('300.00')),
     ]
 
-    for cat_name, currency, amount in budgets_data:
+    for cat_name, currency_symbol, amount in budgets_data:
         Budget.objects.create(
             budget_period=budget_period,
             category=category_map[cat_name],
-            currency=currency,
+            currency=currency_map[currency_symbol],
             amount=amount,
             created_by_id=user_id,
         )
@@ -156,14 +161,14 @@ def create_demo_fixtures(
         (mid_month + timedelta(days=7), 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'PLN', 'expense'),
     ]
 
-    for trans_date, description, cat_name, amount, currency, trans_type in transactions_data:
+    for trans_date, description, cat_name, amount, currency_symbol, trans_type in transactions_data:
         Transaction.objects.create(
             budget_period=budget_period,
             date=trans_date,
             description=description,
             category=category_map[cat_name],
             amount=amount,
-            currency=currency,
+            currency=currency_map[currency_symbol],
             type=trans_type,
             created_by_id=user_id,
         )
@@ -191,12 +196,12 @@ def create_demo_fixtures(
         ('Car Insurance', Decimal('450.00'), 'PLN', 'Transportation', start_date + timedelta(days=28), None, 'pending'),
     ]
 
-    for name, amount, currency, cat_name, planned_date, payment_date, status in planned_data:
+    for name, amount, currency_symbol, cat_name, planned_date, payment_date, status in planned_data:
         PlannedTransaction.objects.create(
             budget_period=budget_period,
             name=name,
             amount=amount,
-            currency=currency,
+            currency=currency_map[currency_symbol],
             category=category_map[cat_name],
             planned_date=planned_date,
             payment_date=payment_date,
@@ -231,9 +236,9 @@ def create_demo_fixtures(
             budget_period=budget_period,
             date=ex_date,
             description=description,
-            from_currency=from_curr,
+            from_currency=currency_map[from_curr],
             from_amount=from_amt,
-            to_currency=to_curr,
+            to_currency=currency_map[to_curr],
             to_amount=to_amt,
             exchange_rate=rate,
             created_by_id=user_id,
@@ -271,10 +276,10 @@ def create_demo_fixtures(
 
     now = datetime.now()
 
-    for currency, opening, income, expenses, ex_in, ex_out, closing in balances_data:
+    for currency_symbol, opening, income, expenses, ex_in, ex_out, closing in balances_data:
         PeriodBalance.objects.create(
             budget_period=budget_period,
-            currency=currency,
+            currency=currency_map[currency_symbol],
             opening_balance=opening,
             total_income=income,
             total_expenses=expenses,

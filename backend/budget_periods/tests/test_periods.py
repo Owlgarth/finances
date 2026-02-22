@@ -20,12 +20,13 @@ class BudgetPeriodsTestCase(AuthMixin, APIClientMixin, TestCase):
     def setUp(self):
         """Set up authenticated user and create additional budget account for testing."""
         super().setUp()
+        self.currencies = {c.symbol: c for c in self.workspace.currencies.all()}
         # Create an additional budget account for testing
         self.secondary_account = BudgetAccount.objects.create(
             workspace=self.workspace,
             name='Secondary Account',
             description='Secondary budget account for testing',
-            default_currency='USD',
+            default_currency=self.currencies['USD'],
             is_active=True,
             display_order=1,
             created_by=self.user,
@@ -233,7 +234,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
         balances = PeriodBalance.objects.filter(budget_period=period)
         self.assertEqual(balances.count(), 4)
 
-        currencies = {b.currency for b in balances}
+        currencies = {b.currency.symbol for b in balances}
         self.assertEqual(currencies, {'PLN', 'USD', 'EUR', 'UAH'})
 
     def test_create_period_with_invalid_account(self):
@@ -531,13 +532,13 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
         Budget.objects.create(
             budget_period=self.source_period,
             category=self.cat1,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             amount=1500,
         )
         Budget.objects.create(
             budget_period=self.source_period,
             category=self.cat2,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             amount=2000,
         )
 
@@ -546,7 +547,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
             budget_period=self.source_period,
             name='Monthly Rent',
             amount=2000,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             category=self.cat2,
             planned_date=date(2025, 1, 5),
             status='pending',
@@ -555,7 +556,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
             budget_period=self.source_period,
             name='Weekly Groceries',
             amount=400,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             category=self.cat1,
             planned_date=date(2025, 1, 10),
             status='pending',
