@@ -2,7 +2,6 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { currencyExchangesApi } from '../api/client'
-import { isOfflineItem } from '../utils/optimisticUpdates'
 import { useLayout } from '../contexts/LayoutContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
@@ -163,14 +162,10 @@ export default function CurrencyExchangesPage() {
               </tr>
             </thead>
             <tbody>
-              {exchanges?.map(exchange => {
-                const offline = isOfflineItem(exchange);
-                return (
+              {exchanges?.map(exchange => (
                 <tr
                   key={exchange.id}
-                  className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${
-                    offline ? 'bg-gray-50 opacity-60' : ''
-                  }`}
+                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
                 >
                   <td className="px-6 py-4 text-sm text-gray-600">{exchange.date}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{exchange.description || '-'}</td>
@@ -205,20 +200,17 @@ export default function CurrencyExchangesPage() {
                     </td>
                   )}
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
 
         {/* Mobile Cards */}
         <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
-          {exchanges?.map(exchange => {
-            const offline = isOfflineItem(exchange);
-            return (
+          {exchanges?.map(exchange => (
               <div
                 key={exchange.id}
-                className={`p-4 ${offline ? 'bg-gray-50 opacity-60' : ''}`}
+                className="p-4"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
@@ -267,8 +259,7 @@ export default function CurrencyExchangesPage() {
                   </div>
                 )}
               </div>
-            );
-          })}
+          ))}
         </div>
 
         {exchanges?.length === 0 && (
