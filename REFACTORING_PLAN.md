@@ -489,7 +489,7 @@ from common.services.base import get_workspace_period, require_role
 
 ---
 
-### Issue 10: Extract transaction service
+### ~~Issue 10: Extract transaction service~~ ✅ Done
 
 **Labels:** `backend`, `refactor`
 **Depends on:** Issue 9
