@@ -33,3 +33,8 @@ def get_or_create_period_balance(period_id: int, currency: str, user=None) -> Pe
         },
     )
     return balance
+
+
+def get_workspace_currencies(workspace) -> list[str]:
+    """Get list of currency symbols for a workspace."""
+    return list(workspace.currencies.values_list('symbol', flat=True))

@@ -9,14 +9,13 @@ from budget_periods.schemas import BudgetPeriodCopy
 from budgets.models import Budget
 from categories.models import Category
 from common.permissions import require_role
-from common.services.base import get_workspace_period
+from common.services.base import get_workspace_currencies, get_workspace_period
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from workspaces.models import WRITE_ROLES
 
 
 class BudgetPeriodService:
-
     @staticmethod
     def get_period(period_id: int, workspace_id: int) -> BudgetPeriod | None:
         """Get a period and verify it belongs to the workspace."""
@@ -44,7 +43,7 @@ class BudgetPeriodService:
         )
 
         # Create period balances for all currencies
-        currencies = ['PLN', 'USD', 'EUR', 'UAH']
+        currencies = get_workspace_currencies(workspace)
         PeriodBalance.objects.bulk_create(
             [
                 PeriodBalance(

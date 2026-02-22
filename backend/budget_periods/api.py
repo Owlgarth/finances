@@ -17,7 +17,7 @@ from budget_periods.schemas import (
 from budget_periods.services import BudgetPeriodService
 from common.auth import JWTAuth
 from common.permissions import require_role
-from common.services.base import get_workspace_period
+from common.services.base import get_workspace_currencies, get_workspace_period
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
 from workspaces.models import WRITE_ROLES
@@ -96,7 +96,7 @@ def create_period(request, data: BudgetPeriodCreate):
         )
 
         # Automatically create period balances for all currencies
-        currencies = ['PLN', 'USD', 'EUR', 'UAH']
+        currencies = get_workspace_currencies(workspace)
         PeriodBalance.objects.bulk_create(
             [
                 PeriodBalance(

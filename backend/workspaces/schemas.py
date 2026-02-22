@@ -6,6 +6,24 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+class CurrencyCreate(BaseModel):
+    """Schema for creating a currency."""
+
+    name: str = Field(..., max_length=50)
+    symbol: str = Field(..., min_length=3, max_length=3, pattern=r'^[A-Z]{3}$')
+
+
+class CurrencyOut(BaseModel):
+    """Schema for currency response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    symbol: str
+    created_at: datetime
+
+
 class WorkspaceUpdate(BaseModel):
     """Schema for updating a workspace."""
 

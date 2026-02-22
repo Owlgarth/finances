@@ -11,7 +11,6 @@ from workspaces.models import WRITE_ROLES
 
 
 class CategoryService:
-
     @staticmethod
     def get_category(category_id: int, workspace_id: int) -> Category | None:
         """Get a category and verify it belongs to the workspace."""
@@ -86,9 +85,7 @@ class CategoryService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
-        existing_names = set(
-            Category.objects.filter(budget_period_id=period_id).values_list('name', flat=True)
-        )
+        existing_names = set(Category.objects.filter(budget_period_id=period_id).values_list('name', flat=True))
 
         new_categories = []
         for name in data:
