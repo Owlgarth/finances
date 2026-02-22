@@ -140,7 +140,7 @@ class TestGetCurrentPeriod(BudgetPeriodsTestCase):
 
     def test_get_current_period_not_found(self):
         """Test getting current period when none exists for the date."""
-        data = self.get('/api/budget-periods/current?current_date=2025-06-15', **self.auth_headers())
+        self.get('/api/budget-periods/current?current_date=2025-06-15', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_current_period_requires_auth(self):
@@ -173,7 +173,7 @@ class TestGetPeriod(BudgetPeriodsTestCase):
 
     def test_get_period_not_found(self):
         """Test getting a non-existent period."""
-        data = self.get('/api/budget-periods/99999', **self.auth_headers())
+        self.get('/api/budget-periods/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_period_requires_auth(self):
@@ -238,7 +238,7 @@ class TestCreatePeriod(BudgetPeriodsTestCase):
 
     def test_create_period_with_invalid_account(self):
         """Test creating period with non-existent budget account."""
-        data = self.post(
+        self.post(
             '/api/budget-periods',
             {
                 'budget_account_id': 99999,
@@ -393,7 +393,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
             created_by=self.user,
         )
 
-        data = self.put(
+        self.put(
             f'/api/budget-periods/{period.id}',
             {
                 'budget_account_id': 99999,
@@ -404,7 +404,7 @@ class TestUpdatePeriod(BudgetPeriodsTestCase):
 
     def test_update_period_not_found(self):
         """Test updating a non-existent period."""
-        data = self.put(
+        self.put(
             '/api/budget-periods/99999',
             {
                 'name': 'New Name',
@@ -669,7 +669,7 @@ class TestCopyPeriod(BudgetPeriodsTestCase):
 
     def test_copy_period_not_found(self):
         """Test copying a non-existent period."""
-        data = self.post(
+        self.post(
             '/api/budget-periods/99999/copy',
             {
                 'name': 'February 2025',

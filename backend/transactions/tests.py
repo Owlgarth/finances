@@ -231,7 +231,7 @@ class TestListTransactions(TransactionsTestCase):
 
     def test_list_transactions_without_auth_fails(self):
         """Test that listing transactions without authentication fails."""
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}')
+        self.get(f'/api/transactions?budget_period_id={self.period.id}')
         self.assertStatus(401)
 
 
@@ -263,7 +263,7 @@ class TestGetTransaction(TransactionsTestCase):
 
     def test_get_transaction_not_found(self):
         """Test getting a non-existent transaction."""
-        data = self.get('/api/transactions/99999', **self.auth_headers())
+        self.get('/api/transactions/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_transaction_from_other_workspace_fails(self):
@@ -308,7 +308,7 @@ class TestGetTransaction(TransactionsTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/api/transactions/{other_trans.id}', **self.auth_headers())
+        self.get(f'/api/transactions/{other_trans.id}', **self.auth_headers())
         self.assertStatus(404)
 
 
@@ -401,7 +401,7 @@ class TestCreateTransaction(TransactionsTestCase):
             'type': 'expense',
             'budget_period_id': self.period.id,
         }
-        data = self.post('/api/transactions', payload)
+        self.post('/api/transactions', payload)
         self.assertStatus(401)
 
 
@@ -449,7 +449,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             'currency': 'PLN',
             'type': 'expense',
         }
-        data = self.put('/api/transactions/99999', payload, **self.auth_headers())
+        self.put('/api/transactions/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_transaction_balance_reverted_and_applied(self):
@@ -680,7 +680,7 @@ class TestImportTransactions(TransactionsTestCase):
             content_type='application/json',
         )
 
-        data = self.post_file(
+        self.post_file(
             '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
@@ -711,7 +711,7 @@ class TestImportTransactions(TransactionsTestCase):
             content_type='application/json',
         )
 
-        data = self.post_file(
+        self.post_file(
             '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
@@ -730,7 +730,7 @@ class TestImportTransactions(TransactionsTestCase):
             content_type='application/json',
         )
 
-        data = self.post_file(
+        self.post_file(
             '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),
@@ -758,7 +758,7 @@ class TestImportTransactions(TransactionsTestCase):
             content_type='application/json',
         )
 
-        data = self.post_file(
+        self.post_file(
             '/api/transactions/import',
             {'file': file, 'budget_period_id': self.period.id},
             **self.auth_headers(),

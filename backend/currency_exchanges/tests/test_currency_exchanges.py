@@ -161,7 +161,7 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
 
     def test_list_without_auth_returns_401(self):
         """Test that listing exchanges without authentication fails."""
-        data = self.get('/api/currency-exchanges')
+        self.get('/api/currency-exchanges')
         self.assertStatus(401)
 
 
@@ -184,12 +184,12 @@ class TestGetCurrencyExchange(CurrencyExchangeTestCase):
 
     def test_get_exchange_not_found(self):
         """Test getting non-existent exchange returns 404."""
-        data = self.get('/api/currency-exchanges/99999', **self.auth_headers())
+        self.get('/api/currency-exchanges/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_exchange_without_auth_fails(self):
         """Test that getting an exchange without authentication fails."""
-        data = self.get(f'/api/currency-exchanges/{self.exchange1.id}')
+        self.get(f'/api/currency-exchanges/{self.exchange1.id}')
         self.assertStatus(401)
 
 
@@ -271,7 +271,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
+        self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
     def test_create_exchange_without_auth_fails(self):
@@ -283,7 +283,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/api/currency-exchanges', payload)
+        self.post('/api/currency-exchanges', payload)
         self.assertStatus(401)
 
     def test_create_as_viewer_fails(self):
@@ -300,7 +300,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
+        self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_create_as_member_succeeds(self):
@@ -317,7 +317,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
+        self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(201)
 
 
@@ -368,7 +368,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put('/api/currency-exchanges/99999', payload, **self.auth_headers())
+        self.put('/api/currency-exchanges/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_exchange_without_auth_fails(self):
@@ -380,7 +380,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload)
+        self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload)
         self.assertStatus(401)
 
     def test_update_as_viewer_fails(self):
@@ -397,7 +397,7 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
             'to_currency': 'EUR',
             'to_amount': '92.00',
         }
-        data = self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
+        self.put(f'/api/currency-exchanges/{self.exchange1.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
 
@@ -434,12 +434,12 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
 
     def test_delete_exchange_not_found(self):
         """Test deleting non-existent exchange returns 404."""
-        data = self.delete('/api/currency-exchanges/99999', **self.auth_headers())
+        self.delete('/api/currency-exchanges/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_exchange_without_auth_fails(self):
         """Test that deleting exchange without authentication fails."""
-        data = self.delete(f'/api/currency-exchanges/{self.exchange1.id}')
+        self.delete(f'/api/currency-exchanges/{self.exchange1.id}')
         self.assertStatus(401)
 
     def test_delete_as_viewer_fails(self):
@@ -449,7 +449,7 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
         member.role = 'viewer'
         member.save()
 
-        data = self.delete(f'/api/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
+        self.delete(f'/api/currency-exchanges/{self.exchange1.id}', **self.auth_headers())
         self.assertStatus(403)
 
 

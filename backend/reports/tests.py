@@ -198,7 +198,7 @@ class TestBudgetSummary(ReportsTestCase):
 
     def test_budget_summary_period_not_found(self):
         """Test budget summary with non-existent period."""
-        data = self.get('/api/reports/budget-summary?budget_period_id=99999', **self.auth_headers())
+        self.get('/api/reports/budget-summary?budget_period_id=99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_budget_summary_from_other_workspace_fails(self):
@@ -233,12 +233,12 @@ class TestBudgetSummary(ReportsTestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/api/reports/budget-summary?budget_period_id={other_period.id}', **self.auth_headers())
+        self.get(f'/api/reports/budget-summary?budget_period_id={other_period.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_budget_summary_without_auth_fails(self):
         """Test that getting budget summary without authentication fails."""
-        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}')
+        self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}')
         self.assertStatus(401)
 
 
@@ -281,7 +281,7 @@ class TestCurrentBalances(ReportsTestCase):
 
     def test_current_balances_without_auth_fails(self):
         """Test that getting current balances without authentication fails."""
-        data = self.get('/api/reports/current-balances')
+        self.get('/api/reports/current-balances')
         self.assertStatus(401)
 
     def test_current_balances_returns_latest_by_date(self):
