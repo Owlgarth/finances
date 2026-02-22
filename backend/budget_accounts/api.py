@@ -9,6 +9,7 @@ from budget_accounts.models import BudgetAccount
 from budget_accounts.schemas import BudgetAccountCreate, BudgetAccountOut, BudgetAccountUpdate
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import resolve_currency
 from workspaces.models import ADMIN_ROLES
 
 router = Router(tags=['Budget Accounts'])
@@ -70,11 +71,15 @@ def create_budget_account(request: HttpRequest, data: BudgetAccountCreate):
     if BudgetAccount.objects.filter(workspace=workspace, name=data.name).exists():
         return 400, {'error': 'Budget account with this name already exists'}
 
+    default_currency = resolve_currency(workspace, data.default_currency)
+    if not default_currency:
+        raise HttpError(400, f'Currency {data.default_currency} not found in workspace')
+
     account = BudgetAccount.objects.create(
         workspace=workspace,
         name=data.name,
         description=data.description,
-        default_currency=data.default_currency,
+        default_currency=default_currency,
         color=data.color,
         icon=data.icon,
         is_active=data.is_active,
@@ -109,6 +114,13 @@ def update_budget_account(request: HttpRequest, account_id: int, data: BudgetAcc
 
     # Update fields
     update_data = data.model_dump(exclude_unset=True)
+    if 'default_currency' in update_data:
+        currency_symbol = update_data.pop('default_currency')
+        currency = resolve_currency(workspace, currency_symbol)
+        if not currency:
+            raise HttpError(400, f'Currency {currency_symbol} not found in workspace')
+        account.default_currency = currency
+
     for field, value in update_data.items():
         setattr(account, field, value)
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class PeriodBalanceUpdate(BaseModel):
@@ -30,6 +30,14 @@ class PeriodBalanceOut(BaseModel):
     updated_by: Optional[Any] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    @field_validator('currency', mode='before')
+    @classmethod
+    def validate_currency(cls, value: Any) -> str:
+        """Extract symbol string from Currency FK object."""
+        if hasattr(value, 'symbol'):
+            return value.symbol
+        return value
 
     @field_serializer('created_by', 'updated_by')
     def serialize_user(self, value: Any, _info) -> Optional[int]:
