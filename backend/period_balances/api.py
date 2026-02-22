@@ -9,6 +9,7 @@ from ninja import Query, Router
 from budget_periods.models import BudgetPeriod
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_or_create_period_balance, get_workspace_period
 from core.schemas import DetailOut
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
@@ -29,16 +30,6 @@ router = Router(tags=['Period Balances'])
 # =============================================================================
 
 
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod | None:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    return period
-
-
 def get_workspace_balance(balance_id: int, workspace_id: int) -> PeriodBalance | None:
     """Helper to get a balance and verify it belongs to the current workspace."""
     balance = (
@@ -49,28 +40,6 @@ def get_workspace_balance(balance_id: int, workspace_id: int) -> PeriodBalance |
         )
         .first()
     )
-    return balance
-
-
-def get_or_create_period_balance(period_id: int, currency: str) -> PeriodBalance:
-    """Get existing or create new period balance record."""
-    balance = PeriodBalance.objects.filter(
-        budget_period_id=period_id,
-        currency=currency,
-    ).first()
-
-    if not balance:
-        balance = PeriodBalance.objects.create(
-            budget_period_id=period_id,
-            currency=currency,
-            opening_balance=Decimal('0'),
-            total_income=Decimal('0'),
-            total_expenses=Decimal('0'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('0'),
-        )
-
     return balance
 
 

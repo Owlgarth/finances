@@ -15,6 +15,7 @@ from categories.models import Category
 from categories.schemas import CategoryCreate, CategoryOut, CategoryUpdate
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_workspace_period
 from common.throttle import validate_file_size
 from core.schemas import DetailOut
 from workspaces.models import WRITE_ROLES
@@ -25,18 +26,6 @@ router = Router(tags=['Categories'])
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not period:
-        return None
-    return period
 
 
 def get_workspace_category(category_id: int, workspace_id: int) -> Category:
