@@ -8,7 +8,7 @@ from ninja.errors import HttpError
 from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.permissions import require_role
-from common.services.base import get_or_create_period_balance, get_workspace_period
+from common.services.base import get_or_create_period_balance, get_workspace_period, resolve_currency
 from transactions.models import Transaction
 from transactions.schemas import TransactionCreate, TransactionImport
 from workspaces.models import WRITE_ROLES
@@ -19,7 +19,7 @@ class TransactionService:
     def get_transaction(transaction_id: int, workspace_id: int) -> Transaction | None:
         """Get a transaction and verify it belongs to the workspace."""
         return (
-            Transaction.objects.select_related('category', 'budget_period__budget_account')
+            Transaction.objects.select_related('category', 'budget_period__budget_account', 'currency')
             .filter(
                 id=transaction_id,
                 budget_period__budget_account__workspace_id=workspace_id,
@@ -28,7 +28,7 @@ class TransactionService:
         )
 
     @staticmethod
-    def update_period_balance(period_id: int, currency: str, trans_type: str, amount: Decimal, operation: str) -> None:
+    def update_period_balance(period_id: int, currency, trans_type: str, amount: Decimal, operation: str) -> None:
         """Add or subtract a transaction amount from the period balance."""
         balance = get_or_create_period_balance(period_id, currency)
         amount_value = amount if operation == 'add' else -amount
@@ -83,6 +83,10 @@ class TransactionService:
         """Create a transaction and update the period balance."""
         require_role(user, workspace.id, WRITE_ROLES)
 
+        currency = resolve_currency(workspace, data.currency)
+        if not currency:
+            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+
         category_id = None if data.type == 'income' else data.category_id
         period_id = TransactionService._resolve_period(workspace, data.date, data.budget_period_id)
         TransactionService._validate_category(category_id, period_id)
@@ -92,13 +96,13 @@ class TransactionService:
             description=data.description,
             category_id=category_id,
             amount=data.amount,
-            currency=data.currency,
+            currency=currency,
             type=data.type,
             budget_period_id=period_id,
             created_by=user,
             updated_by=user,
         )
-        TransactionService.update_period_balance(period_id, data.currency, data.type, data.amount, 'add')
+        TransactionService.update_period_balance(period_id, currency, data.type, data.amount, 'add')
         return trans
 
     @staticmethod
@@ -110,6 +114,10 @@ class TransactionService:
         trans = TransactionService.get_transaction(transaction_id, workspace.id)
         if not trans:
             raise HttpError(404, 'Transaction not found')
+
+        new_currency = resolve_currency(workspace, data.currency)
+        if not new_currency:
+            raise HttpError(400, f'Currency {data.currency} not found in workspace')
 
         category_id = None if data.type == 'income' else data.category_id
 
@@ -126,13 +134,13 @@ class TransactionService:
         trans.description = data.description
         trans.category_id = category_id
         trans.amount = data.amount
-        trans.currency = data.currency
+        trans.currency = new_currency
         trans.type = data.type
         trans.budget_period_id = period_id
         trans.updated_by = user
         trans.save()
 
-        TransactionService.update_period_balance(period_id, data.currency, data.type, data.amount, 'add')
+        TransactionService.update_period_balance(period_id, new_currency, data.type, data.amount, 'add')
         return trans
 
     @staticmethod
@@ -158,7 +166,7 @@ class TransactionService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
-        queryset = Transaction.objects.select_related('category').filter(budget_period_id=period_id)
+        queryset = Transaction.objects.select_related('category', 'currency').filter(budget_period_id=period_id)
         if trans_type:
             queryset = queryset.filter(type=trans_type)
 
@@ -168,7 +176,7 @@ class TransactionService:
                 'description': t.description,
                 'category_name': t.category.name if t.category else None,
                 'amount': str(t.amount),
-                'currency': t.currency,
+                'currency': t.currency.symbol,
                 'type': t.type,
             }
             for t in queryset.order_by('-date')
@@ -184,12 +192,19 @@ class TransactionService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
+        # Pre-load currencies for this workspace
+        currency_map = {c.symbol: c for c in workspace.currencies.all()}
+
         new_transactions = []
         for item in data:
             try:
                 import_item = TransactionImport(**item)
             except Exception as e:
                 raise HttpError(400, f'Invalid data format: {e}')
+
+            currency = currency_map.get(import_item.currency)
+            if not currency:
+                raise HttpError(400, f'Currency {import_item.currency} not found in workspace')
 
             if import_item.type == 'income':
                 category_id = None
@@ -209,7 +224,7 @@ class TransactionService:
                     description=import_item.description,
                     category_id=category_id,
                     amount=import_item.amount,
-                    currency=import_item.currency,
+                    currency=currency,
                     type=import_item.type,
                     budget_period_id=period_id,
                     created_by=user,

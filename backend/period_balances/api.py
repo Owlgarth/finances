@@ -45,7 +45,7 @@ def list_balances(
         queryset = queryset.filter(budget_period_id=budget_period_id)
 
     if currency:
-        queryset = queryset.filter(currency=currency)
+        queryset = queryset.filter(currency__symbol=currency)
 
     return queryset
 
@@ -85,7 +85,7 @@ def recalculate_all(request, data: RecalculateAllRequest):
         return 404, {'detail': 'Budget period not found'}
 
     currencies = get_workspace_currencies(workspace)
-    results = [PeriodBalanceService.recalculate(data.budget_period_id, currency) for currency in currencies]
+    results = [PeriodBalanceService.recalculate(data.budget_period_id, currency.symbol) for currency in currencies]
     return 200, results
 
 

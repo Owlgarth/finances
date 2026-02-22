@@ -8,7 +8,7 @@ from ninja.errors import HttpError
 from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.permissions import require_role
-from common.services.base import get_or_create_period_balance, get_workspace_period
+from common.services.base import get_or_create_period_balance, get_workspace_period, resolve_currency
 from planned_transactions.models import PlannedTransaction
 from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, PlannedTransactionUpdate
 from transactions.models import Transaction
@@ -20,7 +20,7 @@ class PlannedTransactionService:
     def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction | None:
         """Get a planned transaction and verify it belongs to the workspace."""
         return (
-            PlannedTransaction.objects.select_related('budget_period__budget_account', 'category')
+            PlannedTransaction.objects.select_related('budget_period__budget_account', 'category', 'currency')
             .filter(
                 id=planned_id,
                 budget_period__budget_account__workspace_id=workspace_id,
@@ -63,6 +63,10 @@ class PlannedTransactionService:
         """Create a planned transaction."""
         require_role(user, workspace.id, WRITE_ROLES)
 
+        currency = resolve_currency(workspace, data.currency)
+        if not currency:
+            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+
         period_id = PlannedTransactionService._resolve_period(workspace, data.planned_date, data.budget_period_id)
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
@@ -70,7 +74,7 @@ class PlannedTransactionService:
             budget_period_id=period_id,
             name=data.name,
             amount=data.amount,
-            currency=data.currency,
+            currency=currency,
             category_id=data.category_id,
             planned_date=data.planned_date,
             status=data.status,
@@ -87,13 +91,17 @@ class PlannedTransactionService:
         if not planned:
             raise HttpError(404, 'Planned transaction not found')
 
+        currency = resolve_currency(workspace, data.currency)
+        if not currency:
+            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+
         period_id = PlannedTransactionService._resolve_period(workspace, data.planned_date, data.budget_period_id)
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
         planned.budget_period_id = period_id
         planned.name = data.name
         planned.amount = data.amount
-        planned.currency = data.currency
+        planned.currency = currency
         planned.category_id = data.category_id
         planned.planned_date = data.planned_date
         planned.status = data.status
@@ -177,7 +185,7 @@ class PlannedTransactionService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
-        queryset = PlannedTransaction.objects.select_related('category').filter(budget_period_id=period_id)
+        queryset = PlannedTransaction.objects.select_related('category', 'currency').filter(budget_period_id=period_id)
         if status:
             queryset = queryset.filter(status=status)
 
@@ -185,7 +193,7 @@ class PlannedTransactionService:
             {
                 'name': pt.name,
                 'amount': str(pt.amount),
-                'currency': pt.currency,
+                'currency': pt.currency.symbol,
                 'category_name': pt.category.name if pt.category else None,
                 'planned_date': pt.planned_date.isoformat(),
             }
@@ -201,12 +209,18 @@ class PlannedTransactionService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
+        currency_map = {c.symbol: c for c in workspace.currencies.all()}
+
         new_transactions = []
         for item in data:
             try:
                 import_item = PlannedTransactionImport(**item)
             except Exception as e:
                 raise HttpError(400, f'Invalid data format: {e}')
+
+            currency = currency_map.get(import_item.currency)
+            if not currency:
+                raise HttpError(400, f'Currency {import_item.currency} not found in workspace')
 
             category_id = None
             if import_item.category_name:
@@ -221,7 +235,7 @@ class PlannedTransactionService:
                 PlannedTransaction(
                     name=import_item.name,
                     amount=import_item.amount,
-                    currency=import_item.currency,
+                    currency=currency,
                     planned_date=import_item.planned_date,
                     category_id=category_id,
                     budget_period_id=period_id,

@@ -2,9 +2,9 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CurrencyExchangeCreate(BaseModel):
@@ -58,3 +58,11 @@ class CurrencyExchangeOut(BaseModel):
     to_amount: Decimal
     exchange_rate: Optional[Decimal]
     created_at: datetime
+
+    @field_validator('from_currency', 'to_currency', mode='before')
+    @classmethod
+    def validate_currency(cls, value: Any) -> str:
+        """Extract symbol string from Currency FK object."""
+        if hasattr(value, 'symbol'):
+            return value.symbol
+        return value

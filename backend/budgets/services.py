@@ -6,7 +6,7 @@ from budgets.models import Budget
 from budgets.schemas import BudgetCreate, BudgetUpdate
 from categories.models import Category
 from common.permissions import require_role
-from common.services.base import get_workspace_period
+from common.services.base import get_workspace_period, resolve_currency
 from workspaces.models import WRITE_ROLES
 
 
@@ -15,7 +15,7 @@ class BudgetService:
     def get_budget(budget_id: int, workspace_id: int) -> Budget | None:
         """Get a budget and verify it belongs to the workspace."""
         return (
-            Budget.objects.select_related('category')
+            Budget.objects.select_related('category', 'currency')
             .filter(id=budget_id, budget_period__budget_account__workspace_id=workspace_id)
             .first()
         )
@@ -33,10 +33,14 @@ class BudgetService:
         if not category:
             raise HttpError(400, 'Category not found or does not belong to the specified budget period')
 
+        currency = resolve_currency(workspace, data.currency)
+        if not currency:
+            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+
         return Budget.objects.create(
             budget_period_id=data.budget_period_id,
             category_id=data.category_id,
-            currency=data.currency,
+            currency=currency,
             amount=data.amount,
             created_by=user,
             updated_by=user,

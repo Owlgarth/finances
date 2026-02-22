@@ -23,7 +23,7 @@ class ReportService:
         if not period:
             raise HttpError(404, 'Budget period not found')
 
-        budgets = Budget.objects.filter(budget_period_id=period_id).select_related('category')
+        budgets = Budget.objects.filter(budget_period_id=period_id).select_related('category', 'currency')
 
         summary = []
         for budget in budgets:
@@ -38,27 +38,27 @@ class ReportService:
                     id=budget.id,
                     category_id=budget.category_id,
                     category=budget.category.name,
-                    currency=budget.currency,
+                    currency=budget.currency.symbol,
                     budget=budget.amount,
                     actual=actual,
                     difference=budget.amount - actual,
                 )
             )
 
-        balances = list(PeriodBalance.objects.filter(budget_period_id=period_id))
+        balances = list(PeriodBalance.objects.filter(budget_period_id=period_id).select_related('currency'))
         return period, summary, balances
 
     @staticmethod
     def get_current_balances(workspace, currencies: list[str]) -> dict[str, Decimal]:
         """Return the latest closing balance per currency for the workspace."""
         result = {}
-        for currency in currencies:
+        for currency_symbol in currencies:
             latest_balance = (
-                PeriodBalance.objects.filter(currency=currency)
-                .select_related('budget_period__budget_account')
+                PeriodBalance.objects.filter(currency__symbol=currency_symbol)
+                .select_related('budget_period__budget_account', 'currency')
                 .filter(budget_period__budget_account__workspace_id=workspace.id)
                 .order_by('-budget_period__end_date')
                 .first()
             )
-            result[currency] = latest_balance.closing_balance if latest_balance else Decimal('0')
+            result[currency_symbol] = latest_balance.closing_balance if latest_balance else Decimal('0')
         return result

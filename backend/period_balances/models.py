@@ -8,7 +8,7 @@ class PeriodBalance(models.Model):
     budget_period = models.ForeignKey(
         'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='period_balances'
     )
-    currency = models.CharField(max_length=3)
+    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='period_balances')
     opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_income = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -38,4 +38,4 @@ class PeriodBalance(models.Model):
         unique_together = [['budget_period', 'currency']]
 
     def __str__(self):
-        return f'{self.budget_period.name} - {self.currency}: {self.closing_balance}'
+        return f'{self.budget_period.name} - {self.currency.symbol}: {self.closing_balance}'

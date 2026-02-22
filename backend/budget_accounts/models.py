@@ -8,7 +8,9 @@ class BudgetAccount(models.Model):
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='budget_accounts')
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
-    default_currency = models.CharField(max_length=3, default='PLN')
+    default_currency = models.ForeignKey(
+        'workspaces.Currency', on_delete=models.PROTECT, related_name='budget_accounts'
+    )
     color = models.CharField(max_length=7, blank=True, null=True)  # Hex color like #3B82F6
     icon = models.CharField(max_length=50, blank=True, null=True)  # Icon identifier
     is_active = models.BooleanField(default=True)
