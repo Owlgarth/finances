@@ -3,7 +3,6 @@
 from datetime import date
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from ninja import Query, Router
 
@@ -15,14 +14,12 @@ from budget_periods.schemas import (
     BudgetPeriodOut,
     BudgetPeriodUpdate,
 )
-from budgets.models import Budget
-from categories.models import Category
+from budget_periods.services import BudgetPeriodService
 from common.auth import JWTAuth
 from common.permissions import require_role
 from common.services.base import get_workspace_period
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
-from planned_transactions.models import PlannedTransaction
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budget Periods'])
@@ -178,97 +175,5 @@ def copy_period(request, period_id: int, data: BudgetPeriodCopy):
     user = request.auth
     workspace = user.current_workspace
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    # Get source period and verify it belongs to current workspace
-    source_period = get_workspace_period(period_id, workspace.id)
-    if not source_period:
-        return 404, {'detail': 'Period not found'}
-
-    with transaction.atomic():
-        # Create new period (must be in same budget account as source)
-        new_period = BudgetPeriod.objects.create(
-            budget_account_id=source_period.budget_account_id,
-            name=data.name,
-            start_date=data.start_date,
-            end_date=data.end_date,
-            weeks=data.weeks,
-            created_by=user,
-            updated_by=user,
-        )
-
-        # Create period balances for all currencies
-        currencies = ['PLN', 'USD', 'EUR', 'UAH']
-        PeriodBalance.objects.bulk_create(
-            [
-                PeriodBalance(
-                    budget_period=new_period,
-                    currency=currency,
-                    opening_balance=0,
-                    total_income=0,
-                    total_expenses=0,
-                    exchanges_in=0,
-                    exchanges_out=0,
-                    closing_balance=0,
-                )
-                for currency in currencies
-            ]
-        )
-
-        # Calculate date offset between periods
-        date_offset = relativedelta(new_period.start_date, source_period.start_date)
-
-        # Copy categories and keep mapping
-        category_mapping = {}  # old_id -> new_category
-        for source_category in source_period.categories.all():
-            new_category = Category.objects.create(
-                budget_period=new_period,
-                name=source_category.name,
-                created_by=user,
-            )
-            category_mapping[source_category.id] = new_category
-
-        # Copy budgets
-        Budget.objects.bulk_create(
-            [
-                Budget(
-                    budget_period=new_period,
-                    category_id=category_mapping[source_budget.category_id].id,
-                    currency=source_budget.currency,
-                    amount=source_budget.amount,
-                )
-                for source_budget in source_period.budgets.all()
-                if source_budget.category_id in category_mapping
-            ]
-        )
-
-        # Copy planned transactions with adjusted dates and status
-        planned_transactions_to_create = []
-        for source_planned in source_period.planned_transactions.all():
-            new_category_id = None
-            if source_planned.category_id:
-                new_category = category_mapping.get(source_planned.category_id)
-                if new_category:
-                    new_category_id = new_category.id
-
-            # Adjust the planned date
-            new_planned_date = source_planned.planned_date + date_offset
-
-            planned_transactions_to_create.append(
-                PlannedTransaction(
-                    budget_period=new_period,
-                    name=source_planned.name,
-                    amount=source_planned.amount,
-                    currency=source_planned.currency,
-                    category_id=new_category_id,
-                    planned_date=new_planned_date,
-                    payment_date=None,
-                    status='pending',
-                    transaction_id=None,
-                    created_by=user,
-                )
-            )
-
-        PlannedTransaction.objects.bulk_create(planned_transactions_to_create)
-
+    new_period = BudgetPeriodService.copy(user, workspace, period_id, data)
     return 201, new_period

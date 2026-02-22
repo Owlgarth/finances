@@ -2,62 +2,21 @@
 
 from decimal import Decimal
 
-from django.db.models import Sum
 from ninja import Query, Router
 from ninja.errors import HttpError
 
-from budgets.models import Budget
 from common.auth import JWTAuth
-from common.services.base import get_workspace_period
 from core.schemas import DetailOut
-from period_balances.models import PeriodBalance
 from reports.schemas import (
-    BudgetSummaryCategoryItem,
     BudgetSummaryOut,
     BudgetSummaryResponse,
     CurrencyBalances,
     CurrencySummary,
     CurrentBalancesResponse,
 )
-from transactions.models import Transaction
+from reports.services import ReportService
 
 router = Router(tags=['Reports'])
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def get_budget_summary(budget_period_id: int) -> list[BudgetSummaryCategoryItem]:
-    """Get budget summary with actual spending for a period."""
-    # Get all budgets for the period
-    budgets = Budget.objects.filter(budget_period_id=budget_period_id).select_related('category')
-
-    summary = []
-    for budget in budgets:
-        # Calculate actual spending for this category and currency
-        actual_result = Transaction.objects.filter(
-            budget_period_id=budget_period_id,
-            category_id=budget.category_id,
-            currency=budget.currency,
-            type='expense',
-        ).aggregate(total=Sum('amount'))
-        actual = actual_result['total'] or Decimal('0')
-
-        summary.append(
-            BudgetSummaryCategoryItem(
-                id=budget.id,
-                category_id=budget.category_id,
-                category=budget.category.name,
-                currency=budget.currency,
-                budget=budget.amount,
-                actual=actual,
-                difference=budget.amount - actual,
-            )
-        )
-
-    return summary
 
 
 # =============================================================================
@@ -73,16 +32,7 @@ def budget_summary(request, budget_period_id: int = Query(...)):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(budget_period_id, workspace.id)
-    if not period:
-        return 404, {'detail': 'Budget period not found'}
-
-    # Get budget summary
-    summary = get_budget_summary(budget_period_id)
-
-    # Get balances
-    balances = PeriodBalance.objects.filter(budget_period_id=budget_period_id)
+    period, summary, balances = ReportService.get_budget_summary(workspace, budget_period_id)
 
     # Group by currency
     by_currency: dict[str, CurrencySummary] = {}
@@ -129,17 +79,5 @@ def current_balances(request):
         raise HttpError(404, 'No workspace selected')
 
     currencies = ['PLN', 'USD', 'EUR', 'UAH']
-    result = {}
-
-    for currency in currencies:
-        latest_balance = (
-            PeriodBalance.objects.filter(currency=currency)
-            .select_related('budget_period__budget_account')
-            .filter(budget_period__budget_account__workspace_id=workspace.id)
-            .order_by('-budget_period__end_date')
-            .first()
-        )
-
-        result[currency] = latest_balance.closing_balance if latest_balance else Decimal('0')
-
+    result = ReportService.get_current_balances(workspace, currencies)
     return CurrentBalancesResponse(**result)

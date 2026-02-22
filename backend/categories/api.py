@@ -4,40 +4,19 @@ import json
 from datetime import date
 from typing import List
 
-from django.db import IntegrityError
 from ninja import File, Form, Query, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
-from pydantic import BaseModel
 
 from budget_periods.models import BudgetPeriod
-from categories.models import Category
 from categories.schemas import CategoryCreate, CategoryOut, CategoryUpdate
+from categories.services import CategoryService
 from common.auth import JWTAuth
-from common.permissions import require_role
 from common.services.base import get_workspace_period
 from common.throttle import validate_file_size
 from core.schemas import DetailOut
-from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Categories'])
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def get_workspace_category(category_id: int, workspace_id: int) -> Category:
-    """Helper to get a category and verify it belongs to the current workspace."""
-    category = (
-        Category.objects.select_related('budget_period__budget_account')
-        .filter(id=category_id, budget_period__budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not category:
-        return None
-    return category
 
 
 # =============================================================================
@@ -71,10 +50,11 @@ def list_categories(
     if budget_period_id is None:
         raise HttpError(400, 'Either budget_period_id or current_date must be provided')
 
-    # Verify the period belongs to current workspace
     period = get_workspace_period(budget_period_id, workspace.id)
     if not period:
         raise HttpError(404, 'Budget period not found')
+
+    from categories.models import Category
 
     return Category.objects.filter(budget_period_id=budget_period_id)
 
@@ -82,13 +62,6 @@ def list_categories(
 # =============================================================================
 # Export/Import Endpoints (specific routes must come before /{category_id})
 # =============================================================================
-
-
-class CategoryExportOut(BaseModel):
-    """Schema for category export response."""
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 @router.get('/export/', response={200: List[str]}, auth=JWTAuth())
@@ -102,15 +75,7 @@ def export_categories(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(budget_period_id, workspace.id)
-    if not period:
-        raise HttpError(404, 'Budget period not found')
-
-    categories = Category.objects.filter(budget_period_id=budget_period_id)
-    category_names = [category.name for category in categories]
-
-    return category_names
+    return CategoryService.export(workspace, budget_period_id)
 
 
 @router.post('/import', response={201: dict, 400: dict, 404: dict}, auth=JWTAuth())
@@ -126,16 +91,8 @@ def import_categories(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-    # Validate file size (max 5MB)
     validate_file_size(file, max_size_mb=5)
 
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(budget_period_id, workspace.id)
-    if not period:
-        return 404, {'detail': 'Budget period not found'}
-
-    # Read file contents - Django Ninja's UploadedFile has .read() method directly
     try:
         contents = file.read()
         data = json.loads(contents)
@@ -144,23 +101,10 @@ def import_categories(
     except json.JSONDecodeError:
         return 400, {'detail': 'Invalid JSON file.'}
 
-    # Get existing category names for the budget period to avoid duplicates
-    existing_category_names = set(
-        Category.objects.filter(budget_period_id=budget_period_id).values_list('name', flat=True)
-    )
-
-    new_categories_to_add = []
-    for category_name in data:
-        if category_name not in existing_category_names:
-            new_categories_to_add.append(Category(name=category_name, budget_period_id=budget_period_id))
-            existing_category_names.add(category_name)
-
-    if not new_categories_to_add:
+    count = CategoryService.import_data(user, workspace, budget_period_id, data)
+    if count == 0:
         return 201, {'message': 'No new categories to import.'}
-
-    Category.objects.bulk_create(new_categories_to_add)
-
-    return 201, {'message': f'Successfully imported {len(new_categories_to_add)} new categories.'}
+    return 201, {'message': f'Successfully imported {count} new categories.'}
 
 
 # =============================================================================
@@ -176,7 +120,7 @@ def get_category(request, category_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    category = get_workspace_category(category_id, workspace.id)
+    category = CategoryService.get_category(category_id, workspace.id)
     if not category:
         return 404, {'detail': 'Category not found'}
 
@@ -192,23 +136,7 @@ def create_category(request, data: CategoryCreate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(data.budget_period_id, workspace.id)
-    if not period:
-        return 404, {'detail': 'Budget period not found'}
-
-    try:
-        category = Category.objects.create(
-            budget_period_id=data.budget_period_id,
-            name=data.name,
-            created_by=user,
-            updated_by=user,
-        )
-    except IntegrityError:
-        return 400, {'detail': 'A category with this name already exists in this budget period.'}
-
+    category = CategoryService.create(user, workspace, data)
     return 201, category
 
 
@@ -221,18 +149,7 @@ def update_category(request, category_id: int, data: CategoryUpdate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    category = get_workspace_category(category_id, workspace.id)
-    if not category:
-        return 404, {'detail': 'Category not found'}
-
-    if data.name is not None:
-        category.name = data.name
-
-    category.updated_by = user
-    category.save()
-
+    category = CategoryService.update(user, workspace, category_id, data)
     return 200, category
 
 
@@ -245,12 +162,5 @@ def delete_category(request, category_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    category = get_workspace_category(category_id, workspace.id)
-    if not category:
-        return 404, {'detail': 'Category not found'}
-
-    category.delete()
-
+    CategoryService.delete(user, workspace, category_id)
     return 204, None
