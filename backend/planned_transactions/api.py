@@ -14,8 +14,8 @@ from budget_periods.models import BudgetPeriod
 from categories.models import Category
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_or_create_period_balance, get_workspace_period
 from common.throttle import validate_file_size
-from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
@@ -34,18 +34,6 @@ router = Router(tags=['Planned Transactions'])
 # =============================================================================
 
 
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not period:
-        return None
-    return period
-
-
 def get_workspace_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
     """Helper to get a planned transaction and verify it belongs to the current workspace."""
     planned = (
@@ -59,28 +47,6 @@ def get_workspace_planned(planned_id: int, workspace_id: int) -> PlannedTransact
     if not planned:
         return None
     return planned
-
-
-def get_or_create_period_balance(period_id: int, currency: str) -> PeriodBalance:
-    """Get existing or create new period balance record."""
-    balance = PeriodBalance.objects.filter(
-        budget_period_id=period_id,
-        currency=currency,
-    ).first()
-
-    if not balance:
-        balance = PeriodBalance.objects.create(
-            budget_period_id=period_id,
-            currency=currency,
-            opening_balance=Decimal('0'),
-            total_income=Decimal('0'),
-            total_expenses=Decimal('0'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('0'),
-        )
-
-    return balance
 
 
 def update_period_balance_expense(period_id: int, currency: str, amount: Decimal) -> None:

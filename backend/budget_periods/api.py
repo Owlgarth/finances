@@ -19,6 +19,7 @@ from budgets.models import Budget
 from categories.models import Category
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_workspace_period
 from core.schemas import DetailOut
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
@@ -30,18 +31,6 @@ router = Router(tags=['Budget Periods'])
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not period:
-        return None
-    return period
 
 
 # =============================================================================
