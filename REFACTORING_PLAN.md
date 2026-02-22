@@ -573,7 +573,7 @@ def create_transaction_endpoint(request, data: TransactionCreate):
 
 ---
 
-### Issue 11: Extract budget period service (copy logic)
+### ~~Issue 11: Extract budget period service (copy logic)~~
 
 **Labels:** `backend`, `refactor`
 **Depends on:** Issue 9
@@ -613,7 +613,7 @@ def copy_period(user, workspace, source_period_id: int, data) -> BudgetPeriod:
 
 ---
 
-### Issue 12: Extract remaining services
+### ~~Issue 12: Extract remaining services~~
 
 **Labels:** `backend`, `refactor`
 **Depends on:** Issue 9

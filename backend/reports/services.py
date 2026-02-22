@@ -13,7 +13,6 @@ from transactions.models import Transaction
 
 
 class ReportService:
-
     @staticmethod
     def get_budget_summary(workspace, period_id: int) -> tuple:
         """Return (period, summary_items, balances) for a period budget summary.
@@ -28,15 +27,12 @@ class ReportService:
 
         summary = []
         for budget in budgets:
-            actual = (
-                Transaction.objects.filter(
-                    budget_period_id=period_id,
-                    category_id=budget.category_id,
-                    currency=budget.currency,
-                    type='expense',
-                ).aggregate(total=Sum('amount'))['total']
-                or Decimal('0')
-            )
+            actual = Transaction.objects.filter(
+                budget_period_id=period_id,
+                category_id=budget.category_id,
+                currency=budget.currency,
+                type='expense',
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
             summary.append(
                 BudgetSummaryCategoryItem(
                     id=budget.id,

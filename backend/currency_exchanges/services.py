@@ -13,7 +13,6 @@ from workspaces.models import WRITE_ROLES
 
 
 class CurrencyExchangeService:
-
     @staticmethod
     def get_exchange(exchange_id: int, workspace_id: int) -> CurrencyExchange | None:
         """Get an exchange and verify it belongs to the workspace."""
