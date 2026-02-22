@@ -11,6 +11,7 @@ from ninja.files import UploadedFile
 from budget_periods.models import BudgetPeriod
 from common.auth import JWTAuth
 from common.permissions import require_role
+from common.services.base import get_or_create_period_balance, get_workspace_period
 from common.throttle import validate_file_size
 from currency_exchanges.models import CurrencyExchange
 from currency_exchanges.schemas import (
@@ -30,18 +31,6 @@ router = Router(tags=['Currency Exchanges'])
 # =============================================================================
 
 
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod:
-    """Helper to get a period and verify it belongs to the current workspace."""
-    period = (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-    if not period:
-        return None
-    return period
-
-
 def get_workspace_exchange(exchange_id: int, workspace_id: int) -> CurrencyExchange:
     """Helper to get an exchange and verify it belongs to the current workspace."""
     exchange = (
@@ -55,23 +44,6 @@ def get_workspace_exchange(exchange_id: int, workspace_id: int) -> CurrencyExcha
     if not exchange:
         return None
     return exchange
-
-
-def get_or_create_period_balance(period_id: int, currency: str) -> PeriodBalance:
-    """Get or create a period balance for a given currency."""
-    balance, created = PeriodBalance.objects.get_or_create(
-        budget_period_id=period_id,
-        currency=currency,
-        defaults={
-            'opening_balance': 0,
-            'total_income': 0,
-            'total_expenses': 0,
-            'exchanges_in': 0,
-            'exchanges_out': 0,
-            'closing_balance': 0,
-        },
-    )
-    return balance
 
 
 def update_period_balance(balance: PeriodBalance) -> None:
