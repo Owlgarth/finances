@@ -2,66 +2,22 @@
 
 import json
 from datetime import date
-from decimal import Decimal
 
-from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Form, Query, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 
-from budget_periods.models import BudgetPeriod
-from categories.models import Category
 from common.auth import JWTAuth
-from common.permissions import require_role
-from common.services.base import get_or_create_period_balance, get_workspace_period
 from common.throttle import validate_file_size
-from planned_transactions.models import PlannedTransaction
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
-    PlannedTransactionImport,
     PlannedTransactionOut,
     PlannedTransactionUpdate,
 )
-from transactions.models import Transaction
-from workspaces.models import WRITE_ROLES
+from planned_transactions.services import PlannedTransactionService
 
 router = Router(tags=['Planned Transactions'])
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def get_workspace_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
-    """Helper to get a planned transaction and verify it belongs to the current workspace."""
-    planned = (
-        PlannedTransaction.objects.select_related('budget_period__budget_account', 'category')
-        .filter(
-            id=planned_id,
-            budget_period__budget_account__workspace_id=workspace_id,
-        )
-        .first()
-    )
-    if not planned:
-        return None
-    return planned
-
-
-def update_period_balance_expense(period_id: int, currency: str, amount: Decimal) -> None:
-    """Update period balance for an expense transaction."""
-    balance = get_or_create_period_balance(period_id, currency)
-    balance.total_expenses += amount
-    balance.closing_balance = (
-        balance.opening_balance
-        + balance.total_income
-        - balance.total_expenses
-        + balance.exchanges_in
-        - balance.exchanges_out
-    )
-    balance.save(update_fields=['total_expenses', 'closing_balance'])
-
 
 
 # =============================================================================
@@ -80,6 +36,8 @@ def list_planned(
 
     if not workspace:
         raise HttpError(404, 'No workspace selected')
+
+    from planned_transactions.models import PlannedTransaction
 
     queryset = PlannedTransaction.objects.select_related('category').filter(
         budget_period__budget_account__workspace_id=workspace.id
@@ -102,50 +60,7 @@ def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    period_id = data.budget_period_id
-    if period_id:
-        # Verify the period belongs to current workspace
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(400, 'Budget period not found')
-    else:
-        # Auto-assign period within current workspace
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace.id,
-                start_date__lte=data.planned_date,
-                end_date__gte=data.planned_date,
-            )
-            .first()
-        )
-        if not period:
-            raise HttpError(400, 'No active budget period for the planned transaction date')
-        period_id = period.id
-
-    # Validate category_id belongs to budget_period_id (only if category is provided)
-    if data.category_id:
-        category = Category.objects.filter(
-            id=data.category_id,
-            budget_period_id=period_id,
-        ).first()
-        if not category:
-            raise HttpError(400, 'Category not found or does not belong to the specified budget period')
-
-    planned = PlannedTransaction.objects.create(
-        budget_period_id=period_id,
-        name=data.name,
-        amount=data.amount,
-        currency=data.currency,
-        category_id=data.category_id,
-        planned_date=data.planned_date,
-        status=data.status,
-        created_by=user,
-        updated_by=user,
-    )
-
+    planned = PlannedTransactionService.create(user, workspace, data)
     return 201, planned
 
 
@@ -162,30 +77,7 @@ def export_planned_transactions(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(budget_period_id, workspace.id)
-    if not period:
-        raise HttpError(404, 'Budget period not found')
-
-    queryset = PlannedTransaction.objects.select_related('category').filter(budget_period_id=budget_period_id)
-
-    if status:
-        queryset = queryset.filter(status=status)
-
-    planned_transactions = queryset.order_by('planned_date')
-
-    export_data = []
-    for pt in planned_transactions:
-        export_data.append(
-            {
-                'name': pt.name,
-                'amount': str(pt.amount),
-                'currency': pt.currency,
-                'category_name': pt.category.name if pt.category else None,
-                'planned_date': pt.planned_date.isoformat(),
-            }
-        )
-
+    export_data = PlannedTransactionService.export(workspace, budget_period_id, status)
     response = HttpResponse(
         json.dumps(export_data, indent=2),
         content_type='application/json',
@@ -207,62 +99,19 @@ def import_planned_transactions(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    # Validate file size (max 5MB)
     validate_file_size(file, max_size_mb=5)
 
-    # Verify the budget period belongs to current workspace
-    period = get_workspace_period(budget_period_id, workspace.id)
-    if not period:
-        raise HttpError(404, 'Budget period not found')
-
-    # Read and parse file
     try:
-        contents = file.read()
-        data = json.loads(contents)
+        data = json.loads(file.read())
     except json.JSONDecodeError:
         return 400, {'error': 'Invalid JSON file.'}
     except Exception as e:
         return 400, {'error': f'Invalid data format: {e}'}
 
-    new_transactions = []
-    for item in data:
-        # Create import schema instance for validation
-        try:
-            import_item = PlannedTransactionImport(**item)
-        except Exception as e:
-            return 400, {'error': f'Invalid data format: {e}'}
-
-        # Find category by name if provided
-        category_id = None
-        if import_item.category_name:
-            category = Category.objects.filter(
-                name=import_item.category_name,
-                budget_period_id=budget_period_id,
-            ).first()
-            if category:
-                category_id = category.id
-
-        new_trans = PlannedTransaction(
-            name=import_item.name,
-            amount=import_item.amount,
-            currency=import_item.currency,
-            planned_date=import_item.planned_date,
-            category_id=category_id,
-            budget_period_id=budget_period_id,
-            status='pending',
-            created_by=user,
-            updated_by=user,
-        )
-        new_transactions.append(new_trans)
-
-    if not new_transactions:
+    count = PlannedTransactionService.import_data(user, workspace, budget_period_id, data)
+    if count == 0:
         return 201, {'message': 'No new planned transactions to import.'}
-
-    PlannedTransaction.objects.bulk_create(new_transactions)
-
-    return 201, {'message': f'Successfully imported {len(new_transactions)} new planned transactions.'}
+    return 201, {'message': f'Successfully imported {count} new planned transactions.'}
 
 
 # Parameterized routes must come after specific routes
@@ -274,7 +123,7 @@ def get_planned(request: HttpRequest, planned_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    planned = get_workspace_planned(planned_id, workspace.id)
+    planned = PlannedTransactionService.get_planned(planned_id, workspace.id)
     if not planned:
         raise HttpError(404, 'Planned transaction not found')
 
@@ -290,53 +139,7 @@ def update_planned(request: HttpRequest, planned_id: int, data: PlannedTransacti
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    planned = get_workspace_planned(planned_id, workspace.id)
-    if not planned:
-        raise HttpError(404, 'Planned transaction not found')
-
-    period_id = data.budget_period_id
-    if period_id:
-        # Verify the period belongs to current workspace
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(400, 'Budget period not found')
-    else:
-        # Auto-assign period within current workspace
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace.id,
-                start_date__lte=data.planned_date,
-                end_date__gte=data.planned_date,
-            )
-            .first()
-        )
-        if not period:
-            raise HttpError(400, 'No active budget period for the planned transaction date')
-        period_id = period.id
-
-    # Validate category_id belongs to budget_period_id (only if category is provided)
-    if data.category_id:
-        category = Category.objects.filter(
-            id=data.category_id,
-            budget_period_id=period_id,
-        ).first()
-        if not category:
-            raise HttpError(400, 'Category not found or does not belong to the specified budget period')
-
-    # Update fields
-    planned.budget_period_id = period_id
-    planned.name = data.name
-    planned.amount = data.amount
-    planned.currency = data.currency
-    planned.category_id = data.category_id
-    planned.planned_date = data.planned_date
-    planned.status = data.status
-    planned.updated_by = user
-    planned.save()
-
+    planned = PlannedTransactionService.update(user, workspace, planned_id, data)
     return planned
 
 
@@ -349,14 +152,7 @@ def delete_planned(request: HttpRequest, planned_id: int):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    planned = get_workspace_planned(planned_id, workspace.id)
-    if not planned:
-        raise HttpError(404, 'Planned transaction not found')
-
-    planned.delete()
-
+    PlannedTransactionService.delete(user, workspace, planned_id)
     return 204, None
 
 
@@ -373,50 +169,5 @@ def execute_planned(
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    require_role(user, workspace.id, WRITE_ROLES)
-
-    planned = get_workspace_planned(planned_id, workspace.id)
-    if not planned:
-        raise HttpError(404, 'Planned transaction not found')
-
-    if planned.status == 'done':
-        raise HttpError(400, 'Already executed')
-
-    with transaction.atomic():
-        # Find period within current workspace
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace.id,
-                start_date__lte=payment_date,
-                end_date__gte=payment_date,
-            )
-            .first()
-        )
-        if not period:
-            raise HttpError(400, 'No active budget period for the payment date')
-
-        # Create actual transaction
-        transaction_obj = Transaction.objects.create(
-            budget_period_id=period.id,
-            date=payment_date,
-            description=planned.name,
-            category_id=planned.category_id,
-            amount=planned.amount,
-            currency=planned.currency,
-            type='expense',
-            created_by=user,
-            updated_by=user,
-        )
-
-        # Update balance
-        update_period_balance_expense(period.id, planned.currency, planned.amount)
-
-        # Update planned transaction
-        planned.transaction_id = transaction_obj.id
-        planned.status = 'done'
-        planned.payment_date = payment_date
-        planned.updated_by = user
-        planned.save()
-
+    planned = PlannedTransactionService.execute(user, workspace, planned_id, payment_date)
     return planned
