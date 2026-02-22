@@ -20,7 +20,6 @@ import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage'
-import { OfflineIndicator } from './components/common/OfflineIndicator'
 import { HiViewGrid, HiViewList, HiLogout, HiUser, HiArrowsExpand, HiCalendar } from 'react-icons/hi'
 
 function NavigationPeriodSelector() {
@@ -133,9 +132,9 @@ function UserMenu() {
               Profile
             </button>
             <button
-              onClick={async () => {
+              onClick={() => {
                 setIsOpen(false)
-                await logout()
+                logout()
               }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
             >
@@ -267,8 +266,6 @@ function AppContent() {
         </Routes>
       </main>
 
-      {/* Offline mode indicator */}
-      <OfflineIndicator />
     </div>
   )
 }
