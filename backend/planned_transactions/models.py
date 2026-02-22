@@ -20,7 +20,7 @@ class PlannedTransaction(models.Model):
     )
     name = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
-    currency = models.CharField(max_length=3)
+    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='planned_transactions')
     category = models.ForeignKey(
         'categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='planned_transactions'
     )

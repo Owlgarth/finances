@@ -3,88 +3,54 @@
 from django.db import transaction as db_transaction
 from ninja.errors import HttpError
 
-from common.permissions import require_role
-from workspaces.models import ADMIN_ROLES, Currency, Workspace, WorkspaceCurrency
+from workspaces.models import ADMIN_ROLES, Currency, Workspace  # noqa: F401
+
+DEFAULT_CURRENCIES = [
+    ('USD', 'US Dollar'),
+    ('UAH', 'Ukrainian Hryvnia'),
+    ('PLN', 'Polish Zloty'),
+    ('EUR', 'Euro'),
+]
 
 
 class CurrencyService:
     @staticmethod
-    def list_currencies():
-        """List all available currencies."""
-        return Currency.objects.all()
+    def list_currencies(workspace: Workspace) -> list[Currency]:
+        """List all currencies for a workspace."""
+        return list(Currency.objects.filter(workspace=workspace))
 
     @staticmethod
-    def get_currency(currency_id: int) -> Currency | None:
-        """Get a currency by ID."""
-        return Currency.objects.filter(id=currency_id).first()
+    def get_currency(currency_id: int, workspace: Workspace) -> Currency | None:
+        """Get a currency by ID within a workspace."""
+        return Currency.objects.filter(id=currency_id, workspace=workspace).first()
 
     @staticmethod
     @db_transaction.atomic
-    def create_currency(data) -> Currency:
-        """Create a new currency."""
-        if Currency.objects.filter(symbol=data.symbol).exists():
-            raise HttpError(400, f'Currency with symbol {data.symbol} already exists')
-        if Currency.objects.filter(name=data.name).exists():
-            raise HttpError(400, f'Currency with name {data.name} already exists')
+    def create_currency(workspace: Workspace, data) -> Currency:
+        """Create a new currency for a workspace."""
+        if Currency.objects.filter(workspace=workspace, symbol=data.symbol).exists():
+            raise HttpError(400, f'Currency with symbol {data.symbol} already exists in this workspace')
 
-        currency = Currency.objects.create(
+        return Currency.objects.create(
+            workspace=workspace,
             name=data.name,
             symbol=data.symbol,
         )
-        return currency
 
     @staticmethod
     @db_transaction.atomic
-    def delete_currency(currency_id: int) -> None:
-        """Delete a currency."""
-        currency = CurrencyService.get_currency(currency_id)
+    def delete_currency(currency_id: int, workspace: Workspace) -> None:
+        """Delete a currency from a workspace."""
+        currency = CurrencyService.get_currency(currency_id, workspace)
         if not currency:
             raise HttpError(404, 'Currency not found')
         currency.delete()
 
-
-class WorkspaceCurrencyService:
-    @staticmethod
-    def list_workspace_currencies(workspace: Workspace) -> list[Currency]:
-        """List all currencies for a workspace."""
-        return list(workspace.currencies.all())
-
-    @staticmethod
-    def get_workspace_currency_symbols(workspace: Workspace) -> list[str]:
-        """Get list of currency symbols for a workspace."""
-        return list(workspace.currencies.values_list('symbol', flat=True))
-
     @staticmethod
     @db_transaction.atomic
-    def add_currency_to_workspace(user, workspace: Workspace, currency_id: int) -> WorkspaceCurrency:
-        """Add a currency to a workspace."""
-        require_role(user, workspace.id, ADMIN_ROLES)
-
-        currency = CurrencyService.get_currency(currency_id)
-        if not currency:
-            raise HttpError(404, 'Currency not found')
-
-        if workspace.currencies.filter(id=currency_id).exists():
-            raise HttpError(400, f'Currency {currency.symbol} is already added to this workspace')
-
-        workspace_currency = WorkspaceCurrency.objects.create(
-            workspace=workspace,
-            currency=currency,
-        )
-        return workspace_currency
-
-    @staticmethod
-    @db_transaction.atomic
-    def remove_currency_from_workspace(user, workspace: Workspace, currency_id: int) -> None:
-        """Remove a currency from a workspace."""
-        require_role(user, workspace.id, ADMIN_ROLES)
-
-        workspace_currency = WorkspaceCurrency.objects.filter(
-            workspace=workspace,
-            currency_id=currency_id,
-        ).first()
-
-        if not workspace_currency:
-            raise HttpError(404, 'Currency not found in workspace')
-
-        workspace_currency.delete()
+    def create_default_currencies(workspace: Workspace) -> list[Currency]:
+        """Create the four default currencies for a new workspace."""
+        return [
+            Currency.objects.create(workspace=workspace, symbol=symbol, name=name)
+            for symbol, name in DEFAULT_CURRENCIES
+        ]
