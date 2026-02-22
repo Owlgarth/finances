@@ -161,7 +161,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
     def test_list_balances_without_auth_returns_401(self):
         """Test that listing balances without authentication fails."""
-        data = self.get('/api/period-balances')
+        self.get('/api/period-balances')
         self.assertStatus(401)
 
     # =============================================================================
@@ -178,7 +178,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
     def test_get_balance_not_found(self):
         """Test getting a balance that doesn't exist."""
-        data = self.get('/api/period-balances/99999', **self.auth_headers())
+        self.get('/api/period-balances/99999', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_balance_from_other_workspace_fails(self):
@@ -226,12 +226,12 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=other_user,
         )
 
-        data = self.get(f'/api/period-balances/{other_balance.id}', **self.auth_headers())
+        self.get(f'/api/period-balances/{other_balance.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_get_balance_without_auth_fails(self):
         """Test that getting a balance without authentication fails."""
-        data = self.get(f'/api/period-balances/{self.balance1_pln.id}')
+        self.get(f'/api/period-balances/{self.balance1_pln.id}')
         self.assertStatus(401)
 
     # =============================================================================
@@ -269,20 +269,20 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def test_update_balance_not_found(self):
         """Test updating a balance that doesn't exist."""
         payload = {'opening_balance': '100.00'}
-        data = self.put('/api/period-balances/99999', payload, **self.auth_headers())
+        self.put('/api/period-balances/99999', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_update_balance_without_auth_fails(self):
         """Test that updating a balance without authentication fails."""
         payload = {'opening_balance': '100.00'}
-        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload)
+        self.put(f'/api/period-balances/{self.balance1_pln.id}', payload)
         self.assertStatus(401)
 
     def test_viewer_cannot_update_balance(self):
         """Test that a viewer cannot update a balance."""
         WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
         payload = {'opening_balance': '2000.00'}
-        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
     # =============================================================================
@@ -304,7 +304,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             'budget_period_id': new_period.id,
             'currency': 'PLN',
         }
-        data = self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
+        self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
         self.assertStatus(200)
 
         # Verify balance was created
@@ -372,11 +372,14 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         )
 
         # Recalculate PLN balance
-        payload_pln = {
-            'budget_period_id': self.period1.id,
-            'currency': 'PLN',
-        }
-        data_pln = self.post('/api/period-balances/recalculate', payload_pln, **self.auth_headers())
+        data_pln = self.post(
+            '/api/period-balances/recalculate',
+            {
+                'budget_period_id': self.period1.id,
+                'currency': 'PLN',
+            },
+            **self.auth_headers(),
+        )
         self.assertStatus(200)
         # exchanges_out = 500 (only the new PLN->EUR exchange)
         self.assertEqual(float(data_pln['exchanges_out']), 500.00)
@@ -435,7 +438,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             'budget_period_id': 99999,
             'currency': 'PLN',
         }
-        data = self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
+        self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_recalculate_balance_without_auth_fails(self):
@@ -444,7 +447,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             'budget_period_id': self.period1.id,
             'currency': 'PLN',
         }
-        data = self.post('/api/period-balances/recalculate', payload)
+        self.post('/api/period-balances/recalculate', payload)
         self.assertStatus(401)
 
     def test_viewer_cannot_recalculate_balance(self):
@@ -454,7 +457,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             'budget_period_id': self.period1.id,
             'currency': 'PLN',
         }
-        data = self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
+        self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
         self.assertStatus(403)
 
     # =============================================================================
@@ -507,7 +510,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         payload = {
             'budget_period_id': 99999,
         }
-        data = self.post('/api/period-balances/recalculate-all', payload, **self.auth_headers())
+        self.post('/api/period-balances/recalculate-all', payload, **self.auth_headers())
         self.assertStatus(404)
 
     def test_recalculate_all_without_auth_fails(self):
@@ -515,7 +518,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         payload = {
             'budget_period_id': self.period1.id,
         }
-        data = self.post('/api/period-balances/recalculate-all', payload)
+        self.post('/api/period-balances/recalculate-all', payload)
         self.assertStatus(401)
 
     def test_viewer_cannot_recalculate_all(self):
@@ -524,7 +527,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         payload = {
             'budget_period_id': self.period1.id,
         }
-        data = self.post('/api/period-balances/recalculate-all', payload, **self.auth_headers())
+        self.post('/api/period-balances/recalculate-all', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_can_list_balances(self):
