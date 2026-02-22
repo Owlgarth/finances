@@ -11,7 +11,6 @@ from workspaces.models import WRITE_ROLES
 
 
 class BudgetService:
-
     @staticmethod
     def get_budget(budget_id: int, workspace_id: int) -> Budget | None:
         """Get a budget and verify it belongs to the workspace."""

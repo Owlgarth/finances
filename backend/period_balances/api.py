@@ -4,7 +4,7 @@ from ninja import Query, Router
 
 from common.auth import JWTAuth
 from common.permissions import require_role
-from common.services.base import get_workspace_period
+from common.services.base import get_workspace_currencies, get_workspace_period
 from core.schemas import DetailOut
 from period_balances.schemas import (
     PeriodBalanceOut,
@@ -84,7 +84,7 @@ def recalculate_all(request, data: RecalculateAllRequest):
     if not period:
         return 404, {'detail': 'Budget period not found'}
 
-    currencies = ['PLN', 'USD', 'EUR', 'UAH']
+    currencies = get_workspace_currencies(workspace)
     results = [PeriodBalanceService.recalculate(data.budget_period_id, currency) for currency in currencies]
     return 200, results
 

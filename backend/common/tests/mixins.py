@@ -9,8 +9,8 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import Client
 
-from budget_accounts.models import BudgetAccount
 from common.auth import create_access_token
+from common.tests.factories import BudgetAccountFactory, UserFactory, WorkspaceFactory
 from workspaces.models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -103,16 +103,17 @@ class AuthMixin:
 
     def setUp(self):
         """Set up authenticated user."""
-        # Create workspace
-        self.workspace = Workspace.objects.create(name=self.workspace_name)
+        # Create workspace with currencies (handled by WorkspaceFactory post_generation)
+        self.workspace = WorkspaceFactory(name=self.workspace_name)
 
         # Create user
-        self.user = User.objects.create_user(
+        self.user = UserFactory(
             email=self.user_email,
-            password=self.user_password,
             full_name=self.user_full_name,
             current_workspace=self.workspace,
         )
+        self.user.set_password(self.user_password)
+        self.user.save()
 
         # Update workspace owner
         self.workspace.owner = self.user
@@ -126,7 +127,7 @@ class AuthMixin:
         )
 
         # Create default budget account
-        BudgetAccount.objects.create(
+        BudgetAccountFactory(
             workspace=self.workspace,
             name='General',
             description='General budget account',
