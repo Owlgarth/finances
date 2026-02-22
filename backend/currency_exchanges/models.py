@@ -14,9 +14,9 @@ class CurrencyExchange(models.Model):
     )
     date = models.DateField()
     description = models.TextField(blank=True, null=True)
-    from_currency = models.CharField(max_length=3)
+    from_currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='exchanges_from')
     from_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    to_currency = models.CharField(max_length=3)
+    to_currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='exchanges_to')
     to_amount = models.DecimalField(max_digits=15, decimal_places=2)
     exchange_rate = models.DecimalField(max_digits=15, decimal_places=6, blank=True, null=True)
     created_by = models.ForeignKey(
@@ -40,4 +40,6 @@ class CurrencyExchange(models.Model):
         db_table = 'currency_exchanges'
 
     def __str__(self):
-        return f'{self.date} - {self.from_amount} {self.from_currency} → {self.to_amount} {self.to_currency}'
+        return (
+            f'{self.date} - {self.from_amount} {self.from_currency.symbol} → {self.to_amount} {self.to_currency.symbol}'
+        )

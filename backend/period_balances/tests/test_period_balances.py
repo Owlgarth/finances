@@ -24,13 +24,14 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def setUp(self):
         """Set up test data for period_balances API tests."""
         super().setUp()
+        self.currencies = {c.symbol: c for c in self.workspace.currencies.all()}
 
         # Create an additional budget account for testing
         self.other_account = BudgetAccount.objects.create(
             workspace=self.workspace,
             name='Other Account',
             description='Another budget account',
-            default_currency='USD',
+            default_currency=self.currencies['USD'],
             is_active=True,
             display_order=1,
             created_by=self.user,
@@ -67,7 +68,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         # Create period balances
         self.balance1_pln = PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             opening_balance=Decimal('1000.00'),
             total_income=Decimal('5000.00'),
             total_expenses=Decimal('3000.00'),
@@ -79,7 +80,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
         self.balance1_usd = PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='USD',
+            currency=self.currencies['USD'],
             opening_balance=Decimal('500.00'),
             total_income=Decimal('2000.00'),
             total_expenses=Decimal('1500.00'),
@@ -91,7 +92,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
         self.balance2_pln = PeriodBalance.objects.create(
             budget_period=self.period2,
-            currency='PLN',
+            currency=self.currencies['PLN'],
             opening_balance=Decimal('3050.00'),
             total_income=Decimal('4000.00'),
             total_expenses=Decimal('3500.00'),
@@ -103,7 +104,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
         self.other_balance = PeriodBalance.objects.create(
             budget_period=self.other_period,
-            currency='EUR',
+            currency=self.currencies['EUR'],
             opening_balance=Decimal('0'),
             total_income=Decimal('1000.00'),
             total_expenses=Decimal('800.00'),
@@ -199,10 +200,11 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             role='owner',
         )
 
+        other_pln_currency = self.currencies['PLN']
         other_account = BudgetAccount.objects.create(
             workspace=other_workspace,
             name='Other Account',
-            default_currency='PLN',
+            default_currency=other_pln_currency,
             created_by=other_user,
         )
 
@@ -216,7 +218,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
 
         other_balance = PeriodBalance.objects.create(
             budget_period=other_period,
-            currency='PLN',
+            currency=other_pln_currency,
             opening_balance=Decimal('500.00'),
             total_income=Decimal('1000.00'),
             total_expenses=Decimal('800.00'),
@@ -308,8 +310,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(200)
 
         # Verify balance was created
-        balance = PeriodBalance.objects.get(budget_period_id=new_period.id, currency='PLN')
-        self.assertEqual(balance.currency, 'PLN')
+        balance = PeriodBalance.objects.get(budget_period_id=new_period.id, currency__symbol='PLN')
+        self.assertEqual(balance.currency.symbol, 'PLN')
         self.assertEqual(balance.budget_period_id, new_period.id)
 
     def test_recalculate_balance_with_transactions(self):
@@ -320,7 +322,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             date=date(2025, 1, 15),
             description='Salary',
             amount=Decimal('5000.00'),
-            currency='USD',
+            currency=self.currencies['USD'],
             type='income',
             created_by=self.user,
         )
@@ -330,7 +332,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             date=date(2025, 1, 20),
             description='Rent',
             amount=Decimal('2000.00'),
-            currency='USD',
+            currency=self.currencies['USD'],
             type='expense',
             created_by=self.user,
         )
@@ -353,9 +355,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             budget_period=self.period1,
             date=date(2025, 1, 10),
             description='Buy EUR',
-            from_currency='PLN',
+            from_currency=self.currencies['PLN'],
             from_amount=Decimal('500.00'),
-            to_currency='EUR',
+            to_currency=self.currencies['EUR'],
             to_amount=Decimal('100.00'),
             created_by=self.user,
         )
@@ -364,9 +366,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             budget_period=self.period1,
             date=date(2025, 1, 15),
             description='Buy PLN',
-            from_currency='EUR',
+            from_currency=self.currencies['EUR'],
             from_amount=Decimal('50.00'),
-            to_currency='PLN',
+            to_currency=self.currencies['PLN'],
             to_amount=Decimal('250.00'),
             created_by=self.user,
         )
@@ -495,13 +497,13 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         self.assertTrue(
             PeriodBalance.objects.filter(
                 budget_period_id=self.period1.id,
-                currency='EUR',
+                currency__symbol='EUR',
             ).exists()
         )
         self.assertTrue(
             PeriodBalance.objects.filter(
                 budget_period_id=self.period1.id,
-                currency='UAH',
+                currency__symbol='UAH',
             ).exists()
         )
 

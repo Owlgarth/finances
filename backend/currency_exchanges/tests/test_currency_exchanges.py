@@ -29,6 +29,7 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
         """Set up test data for currency exchange API tests."""
         APIClientMixin.setUp(self)
         AuthMixin.setUp(self)
+        self.currencies = {c.symbol: c for c in self.workspace.currencies.all()}
 
         # Get or create the general budget account
         self.account = BudgetAccount.objects.filter(workspace=self.workspace, name='General').first()
@@ -55,7 +56,7 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
         # Create period balances for testing
         PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='USD',
+            currency=self.currencies['USD'],
             opening_balance=Decimal('1000.00'),
             total_income=0,
             total_expenses=0,
@@ -65,7 +66,7 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
         )
         PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='EUR',
+            currency=self.currencies['EUR'],
             opening_balance=Decimal('500.00'),
             total_income=0,
             total_expenses=0,
@@ -79,9 +80,9 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period1,
             date=date(2025, 1, 15),
             description='USD to EUR exchange',
-            from_currency='USD',
+            from_currency=self.currencies['USD'],
             from_amount=Decimal('100.00'),
-            to_currency='EUR',
+            to_currency=self.currencies['EUR'],
             to_amount=Decimal('92.00'),
             exchange_rate=Decimal('0.92'),
             created_by=self.user,
@@ -92,9 +93,9 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period1,
             date=date(2025, 1, 20),
             description='EUR to USD exchange',
-            from_currency='EUR',
+            from_currency=self.currencies['EUR'],
             from_amount=Decimal('50.00'),
-            to_currency='USD',
+            to_currency=self.currencies['USD'],
             to_amount=Decimal('54.50'),
             exchange_rate=Decimal('1.09'),
             created_by=self.user,
@@ -105,9 +106,9 @@ class CurrencyExchangeTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period2,
             date=date(2025, 2, 10),
             description='USD to PLN exchange',
-            from_currency='USD',
+            from_currency=self.currencies['USD'],
             from_amount=Decimal('200.00'),
-            to_currency='PLN',
+            to_currency=self.currencies['PLN'],
             to_amount=Decimal('800.00'),
             exchange_rate=Decimal('4.00'),
             created_by=self.user,
@@ -145,9 +146,9 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
         CurrencyExchange.objects.create(
             budget_period=self.period1,
             date=date(2025, 1, 5),
-            from_currency='USD',
+            from_currency=self.currencies['USD'],
             from_amount=Decimal('10.00'),
-            to_currency='EUR',
+            to_currency=self.currencies['EUR'],
             to_amount=Decimal('9.00'),
             created_by=self.user,
             updated_by=self.user,
@@ -225,8 +226,8 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
         self.assertEqual(CurrencyExchange.objects.count(), initial_count + 1)
 
         # Verify period balances were updated
-        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency='USD')
-        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency='EUR')
+        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='EUR')
         self.assertEqual(balance_usd.exchanges_out, Decimal('150.00'))
         self.assertEqual(balance_eur.exchanges_in, Decimal('138.00'))
 
@@ -332,8 +333,8 @@ class TestUpdateCurrencyExchange(CurrencyExchangeTestCase):
     def test_update_exchange_success(self):
         """Test updating an existing exchange."""
         # Refresh balances before update
-        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency='USD')
-        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency='EUR')
+        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='EUR')
         original_usd_out = balance_usd.exchanges_out
         original_eur_in = balance_eur.exchanges_in
 
@@ -412,8 +413,8 @@ class TestDeleteCurrencyExchange(CurrencyExchangeTestCase):
     def test_delete_exchange_success(self):
         """Test deleting a currency exchange."""
         # Get initial balances
-        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency='USD')
-        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency='EUR')
+        balance_usd = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        balance_eur = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='EUR')
         original_usd_out = balance_usd.exchanges_out
         original_eur_in = balance_eur.exchanges_in
 
@@ -499,6 +500,7 @@ class TestExportCurrencyExchanges(CurrencyExchangeTestCase):
         other_account = BudgetAccount.objects.create(
             workspace=other_workspace,
             name='Other Account',
+            default_currency=self.currencies['PLN'],
             created_by=other_user,
         )
 

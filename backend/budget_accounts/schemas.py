@@ -1,8 +1,9 @@
 """Pydantic schemas for budget_accounts API."""
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BudgetAccountCreate(BaseModel):
@@ -42,6 +43,14 @@ class BudgetAccountOut(BaseModel):
     is_active: bool
     display_order: int
     created_at: datetime
+
+    @field_validator('default_currency', mode='before')
+    @classmethod
+    def validate_currency(cls, value: Any) -> str:
+        """Extract symbol string from Currency FK object."""
+        if hasattr(value, 'symbol'):
+            return value.symbol
+        return value
 
     class Config:
         from_attributes = True

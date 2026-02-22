@@ -19,7 +19,7 @@ class Transaction(models.Model):
         'categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions'
     )
     amount = models.DecimalField(max_digits=15, decimal_places=2)
-    currency = models.CharField(max_length=3)
+    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='transactions')
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_transactions'
@@ -34,4 +34,4 @@ class Transaction(models.Model):
         db_table = 'transactions'
 
     def __str__(self):
-        return f'{self.date} - {self.description} ({self.amount} {self.currency})'
+        return f'{self.date} - {self.description} ({self.amount} {self.currency.symbol})'

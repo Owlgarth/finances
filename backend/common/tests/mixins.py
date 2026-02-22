@@ -10,7 +10,8 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 
 from common.auth import create_access_token
-from common.tests.factories import BudgetAccountFactory, UserFactory, WorkspaceFactory
+from common.tests.factories import BudgetAccountFactory, UserFactory
+from workspaces.factories import WorkspaceFactory
 from workspaces.models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -127,11 +128,12 @@ class AuthMixin:
         )
 
         # Create default budget account
+        pln_currency = self.workspace.currencies.filter(symbol='PLN').first()
         BudgetAccountFactory(
             workspace=self.workspace,
             name='General',
             description='General budget account',
-            default_currency='PLN',
+            default_currency=pln_currency,
             is_active=True,
             display_order=0,
             created_by=self.user,

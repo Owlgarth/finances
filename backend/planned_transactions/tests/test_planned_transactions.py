@@ -31,6 +31,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
         """Set up test data for planned transaction API tests."""
         APIClientMixin.setUp(self)
         AuthMixin.setUp(self)
+        self.currencies = {c.symbol: c for c in self.workspace.currencies.all()}
 
         # Get or create the general budget account
         self.account = BudgetAccount.objects.filter(workspace=self.workspace, name='General').first()
@@ -70,7 +71,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
         # Create period balances for testing
         PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='USD',
+            currency=self.currencies['USD'],
             opening_balance=Decimal('1000.00'),
             total_income=0,
             total_expenses=0,
@@ -80,7 +81,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
         )
         PeriodBalance.objects.create(
             budget_period=self.period1,
-            currency='EUR',
+            currency=self.currencies['EUR'],
             opening_balance=Decimal('500.00'),
             total_income=0,
             total_expenses=0,
@@ -94,7 +95,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period1,
             name='Monthly Rent',
             amount=Decimal('1200.00'),
-            currency='USD',
+            currency=self.currencies['USD'],
             category=self.category2,
             planned_date=date(2025, 1, 5),
             status='pending',
@@ -106,7 +107,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period1,
             name='Grocery Shopping',
             amount=Decimal('150.00'),
-            currency='USD',
+            currency=self.currencies['USD'],
             category=self.category1,
             planned_date=date(2025, 1, 15),
             status='pending',
@@ -118,7 +119,7 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
             budget_period=self.period2,
             name='February Rent',
             amount=Decimal('1200.00'),
-            currency='USD',
+            currency=self.currencies['USD'],
             planned_date=date(2025, 2, 5),
             status='pending',
             created_by=self.user,
@@ -478,7 +479,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
     def test_execute_planned_success(self):
         """Test executing a planned transaction creates an actual transaction."""
         initial_transaction_count = Transaction.objects.count()
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency='USD').total_expenses
+        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
 
         data = self.post(
             f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
@@ -493,7 +494,7 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
 
         # Verify balance was updated
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency='USD')
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
         self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
 
     def test_execute_planned_twice_fails(self):
@@ -603,6 +604,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
         other_account = BudgetAccount.objects.create(
             workspace=other_workspace,
             name='Other Account',
+            default_currency=self.currencies['PLN'],
             created_by=other_user,
         )
 

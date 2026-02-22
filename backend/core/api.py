@@ -11,6 +11,7 @@ from common.throttle import rate_limit
 from core.demo_fixtures import create_demo_fixtures
 from core.schemas import DetailOut, ErrorOut, LoginIn, RegisterIn, Token
 from workspaces.models import Workspace, WorkspaceMember
+from workspaces.services import CurrencyService
 
 router = Router(tags=['Auth'])
 User = get_user_model()
@@ -60,12 +61,16 @@ def register(request, data: RegisterIn):
             role='owner',
         )
 
+        # Create default currencies for the workspace
+        CurrencyService.create_default_currencies(workspace)
+
         # Create default budget account
+        pln_currency = workspace.currencies.get(symbol='PLN')
         BudgetAccount.objects.create(
             workspace=workspace,
             name='General',
             description='General budget account',
-            default_currency='PLN',
+            default_currency=pln_currency,
             is_active=True,
             display_order=0,
             created_by=user,

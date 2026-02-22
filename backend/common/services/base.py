@@ -16,8 +16,15 @@ def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod | No
     )
 
 
-def get_or_create_period_balance(period_id: int, currency: str, user=None) -> PeriodBalance:
-    """Get or create a period balance for a given period and currency."""
+def resolve_currency(workspace, symbol: str):
+    """Look up a Currency by symbol for a workspace. Returns None if not found."""
+    from workspaces.models import Currency
+
+    return Currency.objects.filter(workspace=workspace, symbol=symbol).first()
+
+
+def get_or_create_period_balance(period_id: int, currency, user=None) -> PeriodBalance:
+    """Get or create a period balance for a given period and currency FK."""
     balance, _ = PeriodBalance.objects.get_or_create(
         budget_period_id=period_id,
         currency=currency,
@@ -35,6 +42,6 @@ def get_or_create_period_balance(period_id: int, currency: str, user=None) -> Pe
     return balance
 
 
-def get_workspace_currencies(workspace) -> list[str]:
-    """Get list of currency symbols for a workspace."""
-    return list(workspace.currencies.values_list('symbol', flat=True))
+def get_workspace_currencies(workspace):
+    """Get list of Currency objects for a workspace."""
+    return list(workspace.currencies.all())
