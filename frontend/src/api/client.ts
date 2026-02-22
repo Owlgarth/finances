@@ -1,9 +1,5 @@
 import axios from 'axios';
-import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import type { QueryClient } from '@tanstack/react-query';
-import { SyncQueueManager } from '../utils/syncQueue';
-import { performOptimisticUpdate } from '../utils/optimisticUpdates';
-import toast from 'react-hot-toast';
+import type { AxiosError } from 'axios';
 import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse } from '../types';
 
 const api = axios.create({
@@ -36,143 +32,17 @@ if (savedToken) {
   api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
 }
 
-// Custom error class for offline requests
-class OfflineError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'OfflineError';
-  }
-}
-
-// Keys for localStorage context
-const SELECTED_ACCOUNT_KEY = 'monie_selected_account';
-
-/**
- * Get current workspace/account context for offline queue
- * Uses localStorage since this runs outside React context
- */
-function getOfflineContext(): { workspaceId?: number; accountId?: number } {
-  // Get workspace ID from JWT token payload
-  let workspaceId: number | undefined;
-  const token = getAuthToken();
-  if (token) {
-    try {
-      // Decode JWT payload (base64)
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      workspaceId = payload.current_workspace_id;
-    } catch (e) {
-      console.warn('Failed to decode JWT for offline context:', e);
-    }
-  }
-
-  // Get selected account ID from localStorage
-  let accountId: number | undefined;
-  const savedAccountId = localStorage.getItem(SELECTED_ACCOUNT_KEY);
-  if (savedAccountId) {
-    accountId = Number(savedAccountId);
-  }
-
-  return { workspaceId, accountId };
-}
-
-// Store QueryClient reference
-let queryClientRef: QueryClient | null = null;
-
-/**
- * Initialize offline interceptors with QueryClient
- * Must be called after QueryClient is created
- */
-export function initializeOfflineInterceptors(queryClient: QueryClient): void {
-  queryClientRef = queryClient;
-}
-
-// Request interceptor - queue requests when offline
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Check if we're offline and this is a mutation (POST, PUT, DELETE)
-    const isMutation = ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '');
-
-    if (!navigator.onLine && isMutation) {
-      // Generate a description for the queued request
-      const method = config.method?.toUpperCase();
-      const path = config.url?.split('/').pop() || 'unknown';
-      const description = `${method} ${path}`;
-
-      // Perform optimistic update if QueryClient is available
-      let optimisticData = null;
-      if (queryClientRef) {
-        optimisticData = performOptimisticUpdate(queryClientRef, config);
-      }
-
-      // Get current workspace/account context for validation during sync
-      const context = getOfflineContext();
-
-      // Add to sync queue with optimistic data and context
-      SyncQueueManager.addToQueue(config, description, optimisticData || undefined, context);
-
-      // Show notification
-      toast.success('Change saved offline - will sync when online', {
-        duration: 3000,
-      });
-
-      // Throw offline error to prevent the request from executing
-      throw new OfflineError('Request queued for offline sync');
-    }
-
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor - handle network errors and 401
+// Response interceptor - handle 401
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    // Handle 401 Unauthorized - token expired or invalid
     if (error.response?.status === 401) {
-      // Don't redirect if already on login/register page
       const isAuthRoute = window.location.pathname === '/login' || window.location.pathname === '/register';
       if (!isAuthRoute) {
         clearAuthToken();
         window.location.href = '/login';
       }
-      return Promise.reject(error);
     }
-
-    // Check if it's a network error (offline)
-    if (!error.response && error.message === 'Network Error') {
-      // Queue the request if it was a mutation
-      const config = error.config;
-      if (config) {
-        const isMutation = ['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '');
-
-        if (isMutation) {
-          const method = config.method?.toUpperCase();
-          const path = config.url?.split('/').pop() || 'unknown';
-          const description = `${method} ${path}`;
-
-          // Perform optimistic update if QueryClient is available
-          let optimisticData = null;
-          if (queryClientRef) {
-            optimisticData = performOptimisticUpdate(queryClientRef, config);
-          }
-
-          // Get current workspace/account context for validation during sync
-          const context = getOfflineContext();
-
-          SyncQueueManager.addToQueue(config, description, optimisticData || undefined, context);
-
-          toast.success('Change saved offline - will sync when online', {
-            duration: 3000,
-          });
-
-          return Promise.reject(new OfflineError('Request queued for offline sync'));
-        }
-      }
-    }
-
     return Promise.reject(error);
   }
 );

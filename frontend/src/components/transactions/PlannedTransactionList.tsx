@@ -1,5 +1,4 @@
 import type { PlannedTransaction } from '../../types'
-import { isOfflineItem } from '../../utils/optimisticUpdates'
 import { useLayout } from '../../contexts/LayoutContext'
 
 interface Props {
@@ -31,14 +30,10 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
             </tr>
           </thead>
           <tbody>
-            {transactions.map(planned => {
-              const offline = isOfflineItem(planned);
-              return (
+            {transactions.map(planned => (
               <tr
                 key={planned.id}
-                className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${
-                  offline ? 'bg-gray-50 opacity-60' : ''
-                }`}
+                className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
               >
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{planned.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{planned.category?.name || '-'}</td>
@@ -96,20 +91,17 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                   </td>
                 )}
               </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
       </div>
 
       {/* Mobile Cards */}
       <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
-        {transactions.map(planned => {
-          const offline = isOfflineItem(planned);
-          return (
+        {transactions.map(planned => (
             <div
               key={planned.id}
-              className={`p-4 ${offline ? 'bg-gray-50 opacity-60' : ''}`}
+              className="p-4"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
@@ -176,8 +168,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                 </div>
               )}
             </div>
-          );
-        })}
+        ))}
       </div>
 
       {transactions.length === 0 && (

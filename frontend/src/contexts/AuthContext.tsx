@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi, setAuthToken, clearAuthToken, getAuthToken } from '../api/client';
-import { queryClient, persister } from '../main';
+import { queryClient } from '../main';
 import type { User, LoginRequest, RegisterRequest } from '../types';
 import toast from 'react-hot-toast';
 
@@ -11,7 +11,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
   updateUser: (userData: Partial<User>) => void;
 }
 
@@ -50,9 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { access_token } = await authApi.login(credentials);
       setAuthToken(access_token);
 
-      // Clear any stale cached data before fetching new user data
       queryClient.clear();
-      await persister.removeClient();
 
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
@@ -72,9 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { access_token } = await authApi.register(data);
       setAuthToken(access_token);
 
-      // Clear any stale cached data before fetching new user data
       queryClient.clear();
-      await persister.removeClient();
 
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
@@ -89,17 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
-    // Clear authentication token
+  const logout = () => {
     clearAuthToken();
     setUser(null);
-
-    // Clear all React Query cache
     queryClient.clear();
-
-    // Clear persisted cache in IndexedDB
-    await persister.removeClient();
-
     toast.success('Logged out successfully');
     navigate('/login');
   };
