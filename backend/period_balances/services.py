@@ -15,7 +15,6 @@ from transactions.models import Transaction
 
 
 class PeriodBalanceService:
-
     @staticmethod
     def get_balance(balance_id: int, workspace_id: int) -> PeriodBalance | None:
         """Get a balance and verify it belongs to the workspace."""
@@ -54,33 +53,21 @@ class PeriodBalanceService:
             if prev_balance:
                 opening = prev_balance.closing_balance
 
-        income = (
-            Transaction.objects.filter(
-                budget_period_id=period_id, currency=currency, type='income'
-            ).aggregate(total=Sum('amount'))['total']
-            or Decimal('0')
-        )
+        income = Transaction.objects.filter(budget_period_id=period_id, currency=currency, type='income').aggregate(
+            total=Sum('amount')
+        )['total'] or Decimal('0')
 
-        expenses = (
-            Transaction.objects.filter(
-                budget_period_id=period_id, currency=currency, type='expense'
-            ).aggregate(total=Sum('amount'))['total']
-            or Decimal('0')
-        )
+        expenses = Transaction.objects.filter(budget_period_id=period_id, currency=currency, type='expense').aggregate(
+            total=Sum('amount')
+        )['total'] or Decimal('0')
 
-        exchanges_in = (
-            CurrencyExchange.objects.filter(
-                budget_period_id=period_id, to_currency=currency
-            ).aggregate(total=Sum('to_amount'))['total']
-            or Decimal('0')
-        )
+        exchanges_in = CurrencyExchange.objects.filter(budget_period_id=period_id, to_currency=currency).aggregate(
+            total=Sum('to_amount')
+        )['total'] or Decimal('0')
 
-        exchanges_out = (
-            CurrencyExchange.objects.filter(
-                budget_period_id=period_id, from_currency=currency
-            ).aggregate(total=Sum('from_amount'))['total']
-            or Decimal('0')
-        )
+        exchanges_out = CurrencyExchange.objects.filter(budget_period_id=period_id, from_currency=currency).aggregate(
+            total=Sum('from_amount')
+        )['total'] or Decimal('0')
 
         balance = get_or_create_period_balance(period_id, currency)
         # Preserve manually set opening balances

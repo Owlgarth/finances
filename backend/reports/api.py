@@ -6,6 +6,7 @@ from ninja import Query, Router
 from ninja.errors import HttpError
 
 from common.auth import JWTAuth
+from common.services.base import get_workspace_currencies
 from core.schemas import DetailOut
 from reports.schemas import (
     BudgetSummaryOut,
@@ -78,6 +79,6 @@ def current_balances(request):
     if not workspace:
         raise HttpError(404, 'No workspace selected')
 
-    currencies = ['PLN', 'USD', 'EUR', 'UAH']
+    currencies = get_workspace_currencies(workspace)
     result = ReportService.get_current_balances(workspace, currencies)
     return CurrentBalancesResponse(**result)

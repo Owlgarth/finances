@@ -15,7 +15,6 @@ from workspaces.models import WRITE_ROLES
 
 
 class TransactionService:
-
     @staticmethod
     def get_transaction(transaction_id: int, workspace_id: int) -> Transaction | None:
         """Get a transaction and verify it belongs to the workspace."""
@@ -29,9 +28,7 @@ class TransactionService:
         )
 
     @staticmethod
-    def update_period_balance(
-        period_id: int, currency: str, trans_type: str, amount: Decimal, operation: str
-    ) -> None:
+    def update_period_balance(period_id: int, currency: str, trans_type: str, amount: Decimal, operation: str) -> None:
         """Add or subtract a transaction amount from the period balance."""
         balance = get_or_create_period_balance(period_id, currency)
         amount_value = amount if operation == 'add' else -amount

@@ -16,7 +16,6 @@ from workspaces.models import WRITE_ROLES
 
 
 class PlannedTransactionService:
-
     @staticmethod
     def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction | None:
         """Get a planned transaction and verify it belongs to the workspace."""
