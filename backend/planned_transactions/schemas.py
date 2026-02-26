@@ -18,6 +18,13 @@ class PlannedTransactionCreate(BaseModel):
     status: str = Field(default='pending', pattern=r'^(pending|done|cancelled)$')
     budget_period_id: Optional[int] = None
 
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
+
 
 class PlannedTransactionUpdate(BaseModel):
     """Schema for updating a planned transaction."""
@@ -30,6 +37,13 @@ class PlannedTransactionUpdate(BaseModel):
     status: str = Field(default='pending', pattern=r'^(pending|done|cancelled)$')
     budget_period_id: Optional[int] = None
 
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
+
 
 class PlannedTransactionImport(BaseModel):
     """Schema for importing a planned transaction."""
@@ -39,6 +53,13 @@ class PlannedTransactionImport(BaseModel):
     currency: str = Field(..., pattern=r'^[A-Z]{3}$')
     category_name: Optional[str] = Field(None, max_length=100)
     planned_date: date
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
 
 
 class CategoryOut(BaseModel):

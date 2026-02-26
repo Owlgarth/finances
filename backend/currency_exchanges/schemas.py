@@ -7,37 +7,34 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class CurrencyExchangeCreate(BaseModel):
+class CurrencyExchangeBase(BaseModel):
+    """Base schema for currency exchange with shared validation."""
+
+    date: date
+    description: Optional[str] = None
+    from_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
+    from_amount: Decimal = Field(..., gt=0)
+    to_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
+    to_amount: Decimal = Field(..., gt=0)
+
+    @field_validator('to_currency')
+    @classmethod
+    def currencies_differ(cls, v, info):
+        if 'from_currency' in info.data and v == info.data['from_currency']:
+            raise ValueError('from_currency and to_currency must be different')
+        return v
+
+
+class CurrencyExchangeCreate(CurrencyExchangeBase):
     """Schema for creating a currency exchange."""
 
-    date: date
-    description: Optional[str] = None
-    from_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    from_amount: Decimal = Field(..., gt=0)
-    to_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    to_amount: Decimal = Field(..., gt=0)
 
-
-class CurrencyExchangeUpdate(BaseModel):
+class CurrencyExchangeUpdate(CurrencyExchangeBase):
     """Schema for updating a currency exchange."""
 
-    date: date
-    description: Optional[str] = None
-    from_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    from_amount: Decimal = Field(..., gt=0)
-    to_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    to_amount: Decimal = Field(..., gt=0)
 
-
-class CurrencyExchangeImport(BaseModel):
+class CurrencyExchangeImport(CurrencyExchangeBase):
     """Schema for importing a currency exchange."""
-
-    date: date
-    description: Optional[str] = None
-    from_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    from_amount: Decimal = Field(..., gt=0)
-    to_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    to_amount: Decimal = Field(..., gt=0)
 
 
 class CurrencyExchangeOut(BaseModel):

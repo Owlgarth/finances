@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class BudgetPeriodBase(BaseModel):
@@ -14,11 +14,18 @@ class BudgetPeriodBase(BaseModel):
     end_date: date
     weeks: Optional[int] = None
 
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
+
     @field_validator('end_date')
     @classmethod
     def end_date_after_start_date(cls, v, info):
-        if 'start_date' in info.data and v < info.data['start_date']:
-            raise ValueError('end_date must be on or after start_date')
+        if 'start_date' in info.data and v <= info.data['start_date']:
+            raise ValueError('end_date must be after start_date')
         return v
 
 
@@ -28,13 +35,8 @@ class BudgetPeriodCreate(BudgetPeriodBase):
     budget_account_id: int
 
 
-class BudgetPeriodCopy(BaseModel):
+class BudgetPeriodCopy(BudgetPeriodBase):
     """Schema for copying a budget period."""
-
-    name: str = Field(..., max_length=100)
-    start_date: date
-    end_date: date
-    weeks: Optional[int] = None
 
 
 class BudgetPeriodUpdate(BaseModel):
@@ -45,6 +47,19 @@ class BudgetPeriodUpdate(BaseModel):
     end_date: Optional[date] = None
     weeks: Optional[int] = None
     budget_account_id: Optional[int] = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip() if v is not None else v
+
+    @model_validator(mode='after')
+    def end_date_after_start_date(self):
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValueError('end_date must be after start_date')
+        return self
 
 
 class BudgetPeriodOut(BaseModel):

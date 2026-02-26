@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class CurrencyCreate(BaseModel):
@@ -11,6 +11,13 @@ class CurrencyCreate(BaseModel):
 
     name: str = Field(..., max_length=50)
     symbol: str = Field(..., min_length=3, max_length=3, pattern=r'^[A-Z]{3}$')
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
 
 
 class CurrencyOut(BaseModel):
@@ -28,6 +35,13 @@ class WorkspaceUpdate(BaseModel):
     """Schema for updating a workspace."""
 
     name: Optional[str] = Field(None, max_length=100)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip() if v is not None else v
 
 
 class WorkspaceOut(BaseModel):
