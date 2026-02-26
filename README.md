@@ -28,10 +28,9 @@ Monie is a comprehensive financial management tool designed for individuals and 
 
 - **Multi-Account Architecture** - Workspaces, budget accounts, and time-based periods
 - **Role-Based Access Control** - Owner, Admin, Member, and Viewer roles
-- **Multi-Currency Support** - PLN, USD, EUR, UAH with exchange tracking
+- **Multi-Currency Support** - Configurable per-workspace currencies with exchange tracking
 - **Budget Management** - Category budgets with actual vs planned tracking
 - **Planned Transactions** - Schedule and execute future transactions
-- **Offline Support** - Queue changes offline and sync when reconnected
 
 ## Quick Start
 
@@ -83,7 +82,7 @@ VITE_DEMO_MODE=true
 ```
 budget-tracker/
 ├── backend/           # Django Ninja REST API
-├── frontend/          # React SPA with offline support
+├── frontend/          # React SPA
 ├── docs/              # Architecture and specifications
 └── docker-compose.yml
 ```
@@ -93,7 +92,7 @@ budget-tracker/
 | Document | Description |
 |----------|-------------|
 | **[Backend README](backend/README.md)** | API endpoints, setup, testing, Django apps structure |
-| **[Frontend README](frontend/README.md)** | Components, contexts, hooks, offline support, API client |
+| **[Frontend README](frontend/README.md)** | Components, contexts, hooks, API client |
 | [Architecture](docs/architecture.md) | System architecture and data hierarchy |
 | [Workflow](docs/workflow.md) | Application workflows and user flows |
 | [Permissions](docs/permissions.md) | Role-based permissions matrix |
