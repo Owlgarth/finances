@@ -18,6 +18,13 @@ class TransactionCreate(BaseModel):
     type: str = Field(..., pattern=r'^(income|expense)$')
     budget_period_id: Optional[int] = None
 
+    @field_validator('description')
+    @classmethod
+    def description_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Description cannot be empty')
+        return v.strip()
+
 
 class TransactionUpdate(BaseModel):
     """Schema for updating a transaction."""
@@ -30,6 +37,13 @@ class TransactionUpdate(BaseModel):
     type: str = Field(..., pattern=r'^(income|expense)$')
     budget_period_id: Optional[int] = None
 
+    @field_validator('description')
+    @classmethod
+    def description_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Description cannot be empty')
+        return v.strip()
+
 
 class TransactionImport(BaseModel):
     """Schema for importing a transaction."""
@@ -37,9 +51,16 @@ class TransactionImport(BaseModel):
     date: date
     description: str = Field(..., max_length=500)
     category_name: Optional[str] = Field(None, max_length=100)
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
     currency: str = Field(..., pattern=r'^[A-Z]{3}$')
     type: str = Field(..., pattern=r'^(income|expense)$')
+
+    @field_validator('description')
+    @classmethod
+    def description_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Description cannot be empty')
+        return v.strip()
 
 
 class CategoryOut(BaseModel):
