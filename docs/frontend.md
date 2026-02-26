@@ -1,6 +1,6 @@
 # Frontend Application
 
-React SPA for budget tracking with offline support.
+React SPA for budget tracking.
 
 ## Tech Stack
 
@@ -17,8 +17,9 @@ React SPA for budget tracking with offline support.
 ```
 frontend/src/
 ├── api/
-│   └── client.ts         # Axios instance, API functions, offline interceptors
+│   └── client.ts         # Axios instance, API functions
 ├── components/
+│   ├── layout/           # MainLayout, Sidebar, UserMenu
 │   ├── common/           # Shared components (Loading, ErrorMessage, etc.)
 │   ├── balance/          # Balance display components
 │   ├── budget/           # Budget table components
@@ -28,19 +29,13 @@ frontend/src/
 │   ├── AuthContext.tsx          # Authentication state
 │   ├── WorkspaceContext.tsx     # Current workspace and role
 │   ├── BudgetAccountContext.tsx # Selected budget account
-│   ├── BudgetPeriodContext.tsx  # Selected period
-│   └── LayoutContext.tsx        # Layout mode (auto/cards)
+│   └── BudgetPeriodContext.tsx  # Selected period
 ├── hooks/
 │   ├── usePermissions.ts        # Role-based permission checks
-│   ├── useOnlineStatus.ts       # Online/offline detection
-│   └── useOfflineSync.ts        # Sync queue processing
+│   └── useMediaQuery.ts         # Responsive breakpoint detection
 ├── pages/                # Route page components
-├── types/
-│   └── index.ts          # TypeScript interfaces
-└── utils/
-    ├── syncQueue.ts             # Offline request queue
-    ├── optimisticUpdates.ts     # Optimistic UI updates
-    └── offlineDisplayCache.ts   # Cached display data
+└── types/
+    └── index.ts          # TypeScript interfaces
 ```
 
 ## Pages
@@ -61,12 +56,16 @@ frontend/src/
 
 ## Components
 
+### Layout Components
+- `MainLayout` - Responsive wrapper: mobile drawer, tablet auto-collapsed, desktop persistent sidebar
+- `Sidebar` - Navigation links, account/period selectors, user menu; supports collapsed/expanded
+- `UserMenu` - User profile and logout at sidebar bottom
+
 ### Common Components
 - `Loading` - Spinner
 - `ErrorMessage` - Error display
 - `EmptyState` - Empty state with action
 - `ConfirmDialog` - Delete confirmation
-- `OfflineIndicator` - Sync status
 - `PeriodSelector` - Period dropdown
 - `BudgetAccountSelector` - Account dropdown
 - `ProtectedRoute` - Auth route wrapper
@@ -142,19 +141,6 @@ interface BudgetPeriodContextType {
 
 Auto-selects latest period on load.
 
-### LayoutContext
-Layout mode toggle (auto/cards view).
-
-```typescript
-interface LayoutContextType {
-  layoutMode: 'auto' | 'cards';
-  setLayoutMode: (mode: LayoutMode) => void;
-  isCardsView: boolean;
-}
-```
-
-Persisted to localStorage.
-
 ## API Client
 
 ### Configuration
@@ -178,25 +164,6 @@ const api = axios.create({
 - `periodBalancesApi` - Balances with recalculate
 - `reportsApi` - Budget summary, balances
 
-## Offline Support
-
-### Request Interceptor
-Mutations (POST/PUT/DELETE) when offline:
-1. Add to sync queue
-2. Perform optimistic update
-3. Show toast notification
-4. Throw `OfflineError` to prevent request
-
-### Sync Queue
-- Stored in localStorage via `SyncQueueManager`
-- Processed sequentially when back online
-- Removes optimistic items on sync completion
-
-### useOfflineSync Hook
-```typescript
-const { isSyncing, syncProgress, syncQueue, hasPendingChanges, pendingCount } = useOfflineSync();
-```
-
 ## Types
 
 ```typescript
@@ -219,7 +186,6 @@ interface PeriodBalance { id, budget_period_id, currency, opening_balance, total
 2. **Data Fetching**: React Query with `queryKey` including `periodId`
 3. **Mutations**: Create/update/delete via React Query mutations
 4. **Cache Invalidation**: Automatic on mutation success
-5. **Offline**: Queue mutations, apply optimistic updates, sync when online
 
 ## Running
 

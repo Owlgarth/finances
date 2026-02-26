@@ -49,9 +49,29 @@ Shared utilities used across the project:
   - `user_to_schema()` - Converts User model to API schema
   - `can_reset_password()` - Role-based password reset rules
 
+- **`services/base.py`**: Shared service helpers
+  - `get_workspace_period(period_id, workspace_id)` - Validates period belongs to workspace
+  - `require_role(user, workspace_id, allowed_roles)` - Raises 403 if role not allowed
+  - `get_or_create_period_balance(period_id, currency, user)` - Gets or creates balance record
+  - `update_period_balance(period_id, currency, trans_type, amount, operation)` - Updates balance incrementally
+
 - **`tests/mixins.py`**: Test utilities
   - `AuthMixin` - Provides authenticated test client with user/workspace setup
   - `APIClientMixin` - HTTP client helpers for API testing
+
+## Service Layer Convention
+
+Business logic is extracted from endpoints into `<app>/services.py` files:
+
+```
+transactions/
+├── api.py        # Thin wrapper: parse request → call service → return response
+└── services.py   # Business logic: create_transaction, update_transaction, delete_transaction
+```
+
+Endpoints should not contain database operations beyond workspace validation. All logic that involves multiple model writes, balance updates, or atomic operations lives in services.
+
+Apps with service files: `transactions`, `budget_periods`, `categories`, `budgets`, `currency_exchanges`, `planned_transactions`, `period_balances`, `reports`, `workspaces`.
 
 ## JWT Authentication
 

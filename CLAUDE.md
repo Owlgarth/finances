@@ -100,7 +100,7 @@ All data operations must respect this hierarchy. For example, when adding a tran
 | `period_balances` | Pre-calculated balances per period/currency |
 | `reports` | Budget summaries and current balances |
 | `core` | Main API endpoints, schemas |
-| `common` | JWT auth utilities, test mixins |
+| `common` | JWT auth utilities, test mixins, shared services (`common/services/base.py`) |
 
 ### API Routing
 
@@ -111,10 +111,11 @@ All API routes are registered in `backend/config/urls.py`:
 
 ### Frontend Structure
 
-- **`api/client.ts`**: Axios instance with offline support interceptors
+- **`api/client.ts`**: Axios instance with auth interceptors (401 → redirect to login)
+- **`components/layout/`**: `MainLayout`, `Sidebar`, `UserMenu` — responsive sidebar navigation
 - **`contexts/`**: Global state (Auth, Workspace, BudgetAccount, BudgetPeriod)
 - **`hooks/usePermissions.ts`**: Role-based permission checks
-- **`utils/syncQueue.ts`**: Offline request queue for localStorage
+- **`hooks/useMediaQuery.ts`**: Responsive breakpoint detection
 
 ## Security Model
 
@@ -169,9 +170,21 @@ Several endpoints support bulk import/export via JSON (FormData multipart):
 - Planned Transactions: `POST /api/planned-transactions/import`, `GET /api/planned-transactions/export/`
 - Currency Exchanges: `POST /api/currency-exchanges/import`, `GET /api/currency-exchanges/export/`
 
-## Offline Support
+## Service Layer
 
-Frontend queues mutations (POST/PUT/DELETE) when offline using `SyncQueueManager`. Requests are stored in localStorage and processed when connectivity returns. See `frontend/src/utils/syncQueue.ts`.
+Business logic lives in `<app>/services.py` files — endpoints in `<app>/api.py` are thin wrappers that parse the request and call the service. Shared helpers (`get_workspace_period`, `require_role`, `get_or_create_period_balance`, `update_period_balance`) live in `common/services/base.py`.
+
+Example structure:
+```python
+# transactions/services.py
+@db_transaction.atomic
+def create_transaction(user, workspace, data) -> Transaction: ...
+
+# transactions/api.py
+@router.post('', response={201: TransactionOut}, auth=JWTAuth())
+def create_transaction_endpoint(request, data: TransactionCreate):
+    return 201, services.create_transaction(request.auth, workspace, data)
+```
 
 ## Environment Variables
 

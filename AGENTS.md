@@ -85,8 +85,9 @@ from ninja.errors import HttpError
 
 # Local apps (alphabetically)
 from common.auth import JWTAuth
-from common.permissions import require_role
+from common.services.base import get_workspace_period, require_role
 from core.schemas import DetailOut
+from transactions import services
 ```
 
 ### Naming Conventions
@@ -99,7 +100,11 @@ from core.schemas import DetailOut
 
 ### Django Ninja Endpoints
 
+Endpoints are thin wrappers — parse the request, call the service, return the response. Business logic belongs in `services.py`.
+
 ```python
+from transactions import services
+
 router = Router(tags=['Transactions'])
 
 @router.get('', response=list[TransactionOut], auth=JWTAuth())
@@ -108,13 +113,33 @@ def list_transactions(request: HttpRequest, budget_period_id: Optional[int] = Qu
     workspace = request.auth.current_workspace
     if not workspace:
         raise HttpError(404, 'No workspace selected')
-    # ... implementation
+    return services.list_transactions(request.auth, workspace, budget_period_id)
 
-@router.post('', response={201: TransactionOut, 400: dict}, auth=JWTAuth())
+@router.post('', response={201: TransactionOut}, auth=JWTAuth())
 def create_transaction(request: HttpRequest, data: TransactionCreate):
-    """Create endpoint requires write access."""
-    require_role(request.auth, workspace.id, WRITE_ROLES)
-    # ... implementation
+    workspace = request.auth.current_workspace
+    if not workspace:
+        raise HttpError(404, 'No workspace selected')
+    return 201, services.create_transaction(request.auth, workspace, data)
+```
+
+### Service Layer
+
+Business logic lives in `<app>/services.py`. Services handle role checks, DB operations, and balance updates. Shared helpers are in `common/services/base.py`.
+
+```python
+# transactions/services.py
+from common.services.base import get_workspace_period, require_role, update_period_balance
+
+@db_transaction.atomic
+def create_transaction(user, workspace, data) -> Transaction:
+    require_role(user, workspace.id, WRITE_ROLES)
+    period = get_workspace_period(data.budget_period_id, workspace.id)
+    if not period:
+        raise HttpError(404, 'Budget period not found')
+    txn = Transaction.objects.create(budget_period=period, ..., created_by=user, updated_by=user)
+    update_period_balance(period.id, txn.currency, txn.type, txn.amount, 'add')
+    return txn
 ```
 
 ### Pydantic Schemas
@@ -257,12 +282,16 @@ queryset = Transaction.objects.filter(
 )
 ```
 
-### Backend: Update Balance in Transaction
+### Backend: Call a Service from an Endpoint
 
 ```python
-with transaction.atomic():
-    trans = Transaction.objects.create(...)
-    update_period_balance(period_id, currency, trans_type, amount, 'add')
+# In api.py — no business logic, just wire up
+@router.post('', response={201: TransactionOut}, auth=JWTAuth())
+def create_transaction_endpoint(request, data: TransactionCreate):
+    workspace = request.auth.current_workspace
+    if not workspace:
+        raise HttpError(404, 'No workspace selected')
+    return 201, services.create_transaction(request.auth, workspace, data)
 ```
 
 ### Frontend: Use Context
