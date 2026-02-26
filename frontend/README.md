@@ -1,6 +1,6 @@
 # Frontend Application
 
-React SPA for budget tracking with offline support, multi-workspace collaboration, and role-based access control.
+React SPA for budget tracking with multi-workspace collaboration and role-based access control.
 
 ## Tech Stack
 
@@ -22,8 +22,9 @@ React SPA for budget tracking with offline support, multi-workspace collaboratio
 frontend/
 ├── src/
 │   ├── api/
-│   │   └── client.ts         # Axios instance, API functions, offline interceptors
+│   │   └── client.ts         # Axios instance, API functions
 │   ├── components/
+│   │   ├── layout/           # MainLayout, Sidebar, UserMenu
 │   │   ├── common/           # Shared components (Loading, Error, etc.)
 │   │   ├── balance/          # Balance display components
 │   │   ├── budget/           # Budget table components
@@ -39,19 +40,13 @@ frontend/
 │   │   ├── AuthContext.tsx          # Authentication state
 │   │   ├── WorkspaceContext.tsx     # Current workspace and role
 │   │   ├── BudgetAccountContext.tsx # Selected budget account
-│   │   ├── BudgetPeriodContext.tsx  # Selected period
-│   │   └── LayoutContext.tsx        # Layout mode toggle
+│   │   └── BudgetPeriodContext.tsx  # Selected period
 │   ├── hooks/
 │   │   ├── usePermissions.ts        # Role-based permission checks
-│   │   ├── useOnlineStatus.ts       # Online/offline detection
-│   │   └── useOfflineSync.ts        # Sync queue processing
+│   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
-│   ├── types/
-│   │   └── index.ts          # TypeScript interfaces
-│   └── utils/
-│       ├── syncQueue.ts             # Offline request queue
-│       ├── optimisticUpdates.ts     # Optimistic UI updates
-│       └── offlineDisplayCache.ts   # Cached display data
+│   └── types/
+│       └── index.ts          # TypeScript interfaces
 ├── package.json
 ├── vite.config.ts
 ├── tailwind.config.js
@@ -78,13 +73,22 @@ frontend/
 
 ### Common Components
 
+**Layout Components** (`components/layout/`):
+
+| Component | Description |
+|-----------|-------------|
+| `MainLayout` | Responsive wrapper (mobile drawer / tablet collapsed / desktop persistent) |
+| `Sidebar` | Navigation, account/period selectors, user menu; collapsed/expanded |
+| `UserMenu` | User profile and logout |
+
+**Common Components** (`components/common/`):
+
 | Component | Description |
 |-----------|-------------|
 | `Loading` | Loading spinner |
 | `ErrorMessage` | Error display with retry |
 | `EmptyState` | Empty state with action button |
 | `ConfirmDialog` | Delete/action confirmation |
-| `OfflineIndicator` | Sync status indicator |
 | `PeriodSelector` | Period dropdown |
 | `BudgetAccountSelector` | Account dropdown |
 | `ProtectedRoute` | Auth route wrapper |
@@ -192,28 +196,6 @@ const {
 } = usePermissions();
 ```
 
-### useOnlineStatus
-
-Detects network connectivity.
-
-```typescript
-const isOnline = useOnlineStatus();
-```
-
-### useOfflineSync
-
-Processes offline sync queue.
-
-```typescript
-const {
-  isSyncing,
-  syncProgress,
-  syncQueue,
-  hasPendingChanges,
-  pendingCount,
-} = useOfflineSync();
-```
-
 ## API Client
 
 ### Configuration
@@ -252,37 +234,6 @@ clearAuthToken();
 
 // Get saved token
 const token = getAuthToken();
-```
-
-## Offline Support
-
-### How It Works
-
-1. **Detection**: `useOnlineStatus` monitors `navigator.onLine`
-2. **Queueing**: Mutations (POST/PUT/DELETE) queued when offline
-3. **Optimistic Updates**: UI updated immediately
-4. **Sync**: Queue processed when back online
-5. **Indicator**: `OfflineIndicator` shows sync status
-
-### Sync Queue
-
-```typescript
-// Queue structure
-interface QueuedRequest {
-  id: string;
-  url: string;
-  method: string;
-  data?: any;
-  timestamp: number;
-  retryCount: number;
-  workspaceId?: number;
-  accountId?: number;
-}
-
-// Usage
-SyncQueueManager.add(request);
-SyncQueueManager.remove(id);
-SyncQueueManager.getAll();
 ```
 
 ## Data Types

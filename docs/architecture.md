@@ -61,7 +61,9 @@ Workspace (top-level container)
 ```
 backend/
 ├── config/                 # Django project configuration (settings, urls, wsgi)
-├── common/                 # Shared utilities (JWT auth, test mixins)
+├── common/                 # Shared utilities (JWT auth, test mixins, services)
+│   └── services/
+│       └── base.py         # get_workspace_period, require_role, update_period_balance
 ├── core/                   # Main API endpoints, schemas, demo data
 ├── users/                  # Custom user model (email-based auth)
 ├── workspaces/             # Multi-tenant workspace management
@@ -75,6 +77,8 @@ backend/
 ├── period_balances/        # Calculated balances per period
 └── reports/                # Budget summaries and current balances
 ```
+
+Each app with business logic has a `services.py` (e.g., `transactions/services.py`, `budget_periods/services.py`). The `api.py` files are thin wrappers that parse requests and delegate to services.
 
 ### Request Flow
 
@@ -91,9 +95,11 @@ backend/
    ├── Role permission check
    └── Resource ownership validation
    │
-5. Endpoint handler executes
+5. Endpoint handler delegates to service (services.py)
    │
-6. Response returned
+6. Service executes business logic (atomic DB operations)
+   │
+7. Response returned
 ```
 
 ### Authentication Flow
@@ -137,6 +143,7 @@ frontend/src/
 ├── api/
 │   └── client.ts         # Axios instance, API functions
 ├── components/
+│   ├── layout/           # MainLayout, Sidebar, UserMenu
 │   ├── common/           # Shared (Loading, Error, Empty)
 │   ├── balance/          # Balance display
 │   ├── budget/           # Budget table
@@ -149,15 +156,10 @@ frontend/src/
 │   └── BudgetPeriodContext.tsx # Selected period
 ├── hooks/
 │   ├── usePermissions.ts       # Permission checks
-│   ├── useOnlineStatus.ts      # Online/offline detection
-│   └── useOfflineSync.ts       # Sync queue processing
+│   └── useMediaQuery.ts        # Responsive breakpoint detection
 ├── pages/                # Route page components
-├── types/
-│   └── index.ts          # TypeScript interfaces
-└── utils/
-    ├── syncQueue.ts           # Offline request queue
-    ├── optimisticUpdates.ts   # Optimistic UI
-    └── offlineDisplayCache.ts # Cached display data
+└── types/
+    └── index.ts          # TypeScript interfaces
 ```
 
 ### State Management
@@ -216,37 +218,6 @@ workspaces ──┬── users (via workspace_members)
                                                      ├── planned_transactions
                                                      ├── currency_exchanges
                                                      └── period_balances
-```
-
-## Offline Support Architecture
-
-### Offline Detection
-
-```typescript
-// useOnlineStatus hook
-const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-window.addEventListener('online', () => setIsOnline(true));
-window.addEventListener('offline', () => setIsOnline(false));
-```
-
-### Request Queue
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   User Action   │────►│  Offline Check  │────►│   API Request   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │ offline              │ online
-                               ▼                      │
-                        ┌─────────────────┐           │
-                        │   Sync Queue    │           │
-                        │  (localStorage) │           │
-                        └─────────────────┘           │
-                               │ when online          │
-                               ▼                      ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │  Process Queue  │────►│    Backend      │
-                        └─────────────────┘     └─────────────────┘
 ```
 
 ## Security Architecture

@@ -212,29 +212,6 @@ Balances are updated incrementally on:
 6. New member can access workspace
 ```
 
-## Offline Support Workflow
-
-### Going Offline
-
-```
-1. Network connection lost
-2. User continues working
-3. Mutations (create/update/delete) queued locally
-4. Optimistic updates applied to UI
-5. Offline indicator shown
-```
-
-### Coming Back Online
-
-```
-1. Network connection restored
-2. Sync process starts automatically
-3. Queued requests sent sequentially
-4. On success: optimistic items removed
-5. On failure: retry with backoff
-6. UI updated with server state
-```
-
 ## Report Generation
 
 ### Budget Summary Report
