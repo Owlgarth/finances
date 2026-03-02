@@ -52,7 +52,7 @@ def budget_summary(request, budget_period_id: int = Query(...)):
     # Format balances
     balances_dict: dict[str, CurrencyBalances] = {}
     for balance in balances:
-        balances_dict[balance.currency] = CurrencyBalances(
+        balances_dict[balance.currency.symbol] = CurrencyBalances(
             opening=balance.opening_balance,
             income=balance.total_income,
             expenses=balance.total_expenses,
