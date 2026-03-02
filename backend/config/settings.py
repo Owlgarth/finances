@@ -25,8 +25,12 @@ DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
+# Django Ninja manages its own URL routing without trailing slashes
+APPEND_SLASH = False
+
 # CORS settings for React frontend
-cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '').strip()
+cors_origins = _cors_env.split(',') if _cors_env else []
 CSRF_TRUSTED_ORIGINS = cors_origins.copy()
 CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_CREDENTIALS = True
