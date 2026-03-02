@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { budgetPeriodsApi } from '../../../api/client'
 import type { BudgetPeriod } from '../../../types'
+import DatePicker from '../../DatePicker'
 
 interface Props {
   isOpen: boolean
@@ -92,10 +93,9 @@ export default function CopyBudgetPeriodModal({ isOpen, onClose, sourcePeriod }:
 
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Start Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(value) => setStartDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />
@@ -103,10 +103,9 @@ export default function CopyBudgetPeriodModal({ isOpen, onClose, sourcePeriod }:
 
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">End Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(value) => setEndDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />

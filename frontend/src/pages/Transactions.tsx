@@ -10,6 +10,7 @@ import TransactionFormModal from '../components/modals/transactions/TransactionF
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
+import DatePicker from '../components/DatePicker'
 
 export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -611,23 +612,19 @@ export default function Transactions() {
                 <div className="space-y-3">
                   <div>
                     <label htmlFor="start-date" className="block text-xs text-gray-600 mb-1">From</label>
-                    <input
+                    <DatePicker
                       id="start-date"
-                      type="date"
                       value={tempStartDate}
-                      onChange={(e) => setTempStartDate(e.target.value)}
-                      max={tempEndDate || undefined}
+                      onChange={(value) => setTempStartDate(value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
                     />
                   </div>
                   <div>
                     <label htmlFor="end-date" className="block text-xs text-gray-600 mb-1">To</label>
-                    <input
+                    <DatePicker
                       id="end-date"
-                      type="date"
                       value={tempEndDate}
-                      onChange={(e) => setTempEndDate(e.target.value)}
-                      min={tempStartDate || undefined}
+                      onChange={(value) => setTempEndDate(value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
                     />
                   </div>

@@ -86,6 +86,10 @@ export interface User {
   created_at: string;
 }
 
+export interface UserPreferences {
+  calendar_start_day: number;
+}
+
 export interface Workspace {
   id: number;
   name: string;
