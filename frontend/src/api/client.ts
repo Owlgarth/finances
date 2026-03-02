@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -144,6 +144,12 @@ export const authApi = {
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.put('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
+
+  getPreferences: (): Promise<UserPreferences> =>
+    api.get<UserPreferences>('/users/me/preferences').then(res => res.data),
+
+  updatePreferences: (data: { calendar_start_day: number }): Promise<UserPreferences> =>
+    api.patch<UserPreferences>('/users/me/preferences', data).then(res => res.data),
 };
 
 // ============= Workspaces API =============

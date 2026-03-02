@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { currencyExchangesApi } from '../../../api/client'
 import type { CurrencyExchange } from '../../../types'
 import { format } from 'date-fns'
+import DatePicker from '../../DatePicker'
 
 interface Props {
   isOpen: boolean
@@ -105,10 +106,9 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(value) => setDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />

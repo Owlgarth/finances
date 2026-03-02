@@ -4,6 +4,7 @@ import { BudgetAccountProvider } from './contexts/BudgetAccountContext'
 import { LayoutProvider } from './contexts/LayoutContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { WorkspaceProvider } from './contexts/WorkspaceContext'
+import { UserPreferencesProvider } from './contexts/UserPreferencesContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
@@ -42,13 +43,15 @@ function ProtectedApp() {
   return (
     <ProtectedRoute>
       <WorkspaceProvider>
-        <LayoutProvider>
-          <BudgetAccountProvider>
-            <BudgetPeriodProvider>
-              <AppContent />
-            </BudgetPeriodProvider>
-          </BudgetAccountProvider>
-        </LayoutProvider>
+        <UserPreferencesProvider>
+          <LayoutProvider>
+            <BudgetAccountProvider>
+              <BudgetPeriodProvider>
+                <AppContent />
+              </BudgetPeriodProvider>
+            </BudgetAccountProvider>
+          </LayoutProvider>
+        </UserPreferencesProvider>
       </WorkspaceProvider>
     </ProtectedRoute>
   )

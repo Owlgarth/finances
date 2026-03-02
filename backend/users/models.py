@@ -1,5 +1,16 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.db.models import IntegerChoices
+
+
+class WeekdayChoices(IntegerChoices):
+    MONDAY = 1, 'Monday'
+    TUESDAY = 2, 'Tuesday'
+    WEDNESDAY = 3, 'Wednesday'
+    THURSDAY = 4, 'Thursday'
+    FRIDAY = 5, 'Friday'
+    SATURDAY = 6, 'Saturday'
+    SUNDAY = 7, 'Sunday'
 
 
 class UserManager(BaseUserManager):
@@ -45,3 +56,20 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+
+class UserPreferences(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
+    calendar_start_day = models.IntegerField(
+        choices=WeekdayChoices,
+        default=WeekdayChoices.SUNDAY,
+        help_text='First day of the week for calendars (1=Monday, 7=Sunday)',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_preferences'
+
+    def __str__(self):
+        return f'Preferences for {self.user.email}'
