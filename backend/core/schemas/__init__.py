@@ -35,6 +35,8 @@ from core.schemas.common import (
 from core.schemas.users import (
     UserBase,
     UserOut,
+    UserPreferencesOut,
+    UserPreferencesUpdate,
     UserUpdate,
 )
 
@@ -59,6 +61,8 @@ __all__ = [
     'UserBase',
     'UserOut',
     'UserUpdate',
+    'UserPreferencesOut',
+    'UserPreferencesUpdate',
     # Workspaces
     'WorkspaceOut',
     'WorkspaceMemberOut',
