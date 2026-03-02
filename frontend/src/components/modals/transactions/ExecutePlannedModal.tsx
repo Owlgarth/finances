@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { plannedTransactionsApi } from '../../../api/client'
+import DatePicker from '../../DatePicker'
 
 interface Props {
   isOpen: boolean
@@ -50,10 +51,9 @@ export default function ExecutePlannedModal({ isOpen, onClose, plannedId }: Prop
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Payment Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(value) => setPaymentDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />
