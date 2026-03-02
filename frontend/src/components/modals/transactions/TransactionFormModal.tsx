@@ -5,6 +5,7 @@ import { transactionsApi, categoriesApi } from '../../../api/client'
 import type { Transaction, Category } from '../../../types'
 import { useBudgetPeriod } from '../../../contexts/BudgetPeriodContext'
 import { format } from 'date-fns'
+import DatePicker from '../../DatePicker'
 
 interface Props {
   isOpen: boolean
@@ -104,10 +105,9 @@ export default function TransactionFormModal({ isOpen, onClose, transaction }: P
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(value) => setDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />

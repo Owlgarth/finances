@@ -5,6 +5,7 @@ import { plannedTransactionsApi, categoriesApi } from '../../../api/client'
 import type { PlannedTransaction, Category } from '../../../types'
 import { useBudgetPeriod } from '../../../contexts/BudgetPeriodContext'
 import { format } from 'date-fns'
+import DatePicker from '../../DatePicker'
 
 interface Props {
   isOpen: boolean
@@ -100,10 +101,9 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Planned Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={plannedDate}
-              onChange={(e) => setPlannedDate(e.target.value)}
+              onChange={(value) => setPlannedDate(value)}
               className="w-full border rounded px-3 py-2"
               required
             />

@@ -41,3 +41,15 @@ class UserUpdate(BaseModel):
             except DjangoValidationError:
                 raise ValueError('Enter a valid email address')
         return v
+
+
+class UserPreferencesOut(BaseModel):
+    """User preferences output schema."""
+
+    calendar_start_day: int
+
+
+class UserPreferencesUpdate(BaseModel):
+    """User preferences update schema."""
+
+    calendar_start_day: int
