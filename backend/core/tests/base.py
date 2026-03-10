@@ -26,6 +26,8 @@ class AuthTestCase(APIClientMixin, TestCase):
             'email': email,
             'password': password,
             'workspace_name': workspace_name,
+            'accepted_terms_version': '1.0',
+            'accepted_privacy_version': '1.0',
         }
         self.post('/api/auth/register', register_data)
         self.assertStatus(201)

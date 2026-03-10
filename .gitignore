@@ -12,6 +12,7 @@ backend/.env
 
 # AI Tools
 .claude
+.ipm
 
 # Python
 __pycache__/
@@ -22,6 +23,7 @@ __pycache__/
 
 # Node
 frontend/node_modules/
+frontend/yarn.lock
 node_modules/
 dist/
 build/

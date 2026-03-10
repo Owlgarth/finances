@@ -6,6 +6,8 @@ Schemas are organized by domain in separate modules:
 - users: UserBase, UserOut, UserUpdate
 - workspaces: WorkspaceOut, WorkspaceMemberOut, WorkspaceMemberAdd, MemberPasswordReset
 - common: MessageOut, ErrorOut, DetailOut
+- consent: ConsentIn, ConsentOut
+- gdpr: AccountDeleteIn, AccountDeleteCheckOut, AccountDeleteOut
 """
 
 # =============================================================================
@@ -28,6 +30,16 @@ from core.schemas.common import (
     ErrorOut,
     MessageOut,
 )
+
+# =============================================================================
+# Consent Schemas
+# =============================================================================
+from core.schemas.consent import ConsentIn, ConsentOut, ConsentStatusOut
+
+# =============================================================================
+# GDPR Schemas
+# =============================================================================
+from core.schemas.gdpr import AccountDeleteCheckOut, AccountDeleteIn, AccountDeleteOut
 
 # =============================================================================
 # User Schemas
@@ -72,4 +84,12 @@ __all__ = [
     'MessageOut',
     'ErrorOut',
     'DetailOut',
+    # Consent
+    'ConsentIn',
+    'ConsentOut',
+    'ConsentStatusOut',
+    # GDPR
+    'AccountDeleteIn',
+    'AccountDeleteCheckOut',
+    'AccountDeleteOut',
 ]

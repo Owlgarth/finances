@@ -272,6 +272,36 @@ import { useAuth } from '../contexts/AuthContext'
 3. **Role-Based Permissions**: `require_role(user, workspace_id, WRITE_ROLES)`
 4. **Resource Ownership**: Filter queries by workspace ID
 
+## GDPR & Data Integrity Rules
+
+> **When adding or removing a Django model**, always check `backend/users/services.py`:
+> - `UserService.delete_account()` — ensure the new model's rows are deleted (or cascade
+>   correctly) before parent objects are removed. `on_delete=PROTECT` fields must be deleted
+>   in dependency order; otherwise account deletion will raise an `OperationalError`.
+> - `UserService.export_all_data()` — include the new model's data in the JSON export so
+>   users receive a complete copy of their personal data (GDPR Art. 20).
+
+> **When adding new data fields, processing purposes, or third-party integrations**, update
+> the legal pages to keep them accurate:
+> - `backend/core/templates/legal/privacy-policy.md` — reflect new data collected or how it is used
+> - `backend/core/templates/legal/terms-of-service.md` — reflect new features or usage rules
+>
+> These files use Django template syntax with variables from environment settings:
+> - `{{ operator_name }}` — Company or individual name (LEGAL_OPERATOR_NAME)
+> - `{{ contact_email }}` — Contact email (LEGAL_CONTACT_EMAIL)
+> - `{{ jurisdiction }}` — Legal jurisdiction (LEGAL_JURISDICTION)
+> - `{% if is_individual %}...{% endif %}` — Conditional for individuals vs companies
+>
+> After editing, bump the `version` in the YAML frontmatter to trigger re-consent prompts.
+>
+> **Deploying legal document updates**: The database is the runtime source of truth for legal
+> documents. After bumping template versions, run:
+> ```bash
+> python manage.py seed_legal_documents          # Seeds from templates if version changed
+> python manage.py seed_legal_documents --force  # Force update even if version matches
+> ```
+> Alternatively, use Django admin to create/edit `LegalDocument` records directly.
+
 ## Common Patterns
 
 ### Backend: Workspace-scoped Query
