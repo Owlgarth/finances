@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from users.models import User
+from users.models import User, UserConsent
 
 
 @admin.register(User)
@@ -35,3 +35,20 @@ class UserAdmin(BaseUserAdmin):
     )
 
     ordering = ('email',)
+
+
+@admin.register(UserConsent)
+class UserConsentAdmin(admin.ModelAdmin):
+    """Admin interface for UserConsent records."""
+
+    list_display = ('user', 'consent_type', 'version', 'granted_at', 'withdrawn_at', 'ip_address')
+    list_filter = ('consent_type', 'version')
+    search_fields = ('user__email',)
+    readonly_fields = ('user', 'consent_type', 'version', 'granted_at', 'ip_address')
+    date_hierarchy = 'granted_at'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

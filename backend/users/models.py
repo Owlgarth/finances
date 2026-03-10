@@ -73,3 +73,36 @@ class UserPreferences(models.Model):
 
     def __str__(self):
         return f'Preferences for {self.user.email}'
+
+
+class ConsentType(models.TextChoices):
+    TERMS_OF_SERVICE = 'terms_of_service', 'Terms of Service'
+    PRIVACY_POLICY = 'privacy_policy', 'Privacy Policy'
+
+
+class UserConsent(models.Model):
+    """Tracks user consent for legal documents (GDPR Articles 6, 7).
+
+    Each record represents a single consent grant. When a user withdraws
+    consent, withdrawn_at is set rather than deleting the record, preserving
+    the audit trail. When legal documents are updated (new version), users
+    must re-consent — creating a new record with the new version.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='consents')
+    consent_type = models.CharField(max_length=50, choices=ConsentType.choices)
+    version = models.CharField(max_length=20)  # e.g., '1.0', '2.0'
+    granted_at = models.DateTimeField(auto_now_add=True)
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_consents'
+        indexes = [
+            models.Index(fields=['user', 'consent_type']),
+        ]
+
+    def __str__(self):
+        status = 'withdrawn' if self.withdrawn_at else 'active'
+        email = self.user.email if self.user else '[deleted]'
+        return f'{email} - {self.consent_type} v{self.version} ({status})'

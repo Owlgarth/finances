@@ -120,6 +120,32 @@ export interface RegisterRequest {
   password: string;
   full_name?: string;
   workspace_name: string;
+  accepted_terms_version: string;
+  accepted_privacy_version: string;
+}
+
+export interface LegalDoc {
+  version: string;
+  effective_date: string;
+  content: string;
+}
+
+export interface ConsentStatus {
+  terms_current: boolean;
+  privacy_current: boolean;
+  terms_version_required: string;
+  privacy_version_required: string;
+  needs_reconsent: boolean;
+}
+
+export interface AccountDeleteCheck {
+  can_delete: boolean;
+  blocking_workspaces: Array<{ id: number; name: string; member_count: number }> | null;
+  solo_workspaces: string[];
+  shared_workspace_memberships: number;
+  total_transactions: number;
+  total_planned_transactions: number;
+  total_currency_exchanges: number;
 }
 
 export interface Token {
