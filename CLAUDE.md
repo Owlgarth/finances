@@ -210,10 +210,42 @@ def create_transaction_endpoint(request, data: TransactionCreate):
 - React hooks and refresh plugins
 - See eslint.config.js for rules
 
+## GDPR & Data Integrity Rules
+
+> **When adding or removing a Django model**, always check `backend/users/services.py` →
+> `UserService.delete_account()` and `UserService.export_all_data()`:
+> - `delete_account`: ensure the new model's data is deleted (or cascades correctly) before
+>   parent objects are removed. Pay attention to `on_delete=PROTECT` fields — they must be
+>   deleted in the right order or they will block deletion.
+> - `export_all_data`: include the new model's data in the JSON export so users receive a
+>   complete copy of their personal data.
+
+> **When adding new data fields, processing purposes, or third-party integrations**, update
+> the legal pages to keep them accurate:
+> - `backend/core/templates/legal/privacy-policy.md` — reflect any new data collected or how it is used
+> - `backend/core/templates/legal/terms-of-service.md` — reflect any new features or usage rules
+>
+> These files use Django template syntax with variables from environment settings:
+> - `{{ operator_name }}` — Company or individual name (LEGAL_OPERATOR_NAME)
+> - `{{ contact_email }}` — Contact email (LEGAL_CONTACT_EMAIL)
+> - `{{ jurisdiction }}` — Legal jurisdiction (LEGAL_JURISDICTION)
+> - `{% if is_individual %}...{% endif %}` — Conditional for individuals vs companies
+>
+> After editing, bump the `version` in the YAML frontmatter to trigger re-consent prompts.
+>
+> **Deploying legal document updates**: The database is the runtime source of truth for legal
+> documents. After bumping template versions, run:
+> ```bash
+> python manage.py seed_legal_documents          # Seeds from templates if version changed
+> python manage.py seed_legal_documents --force  # Force update even if version matches
+> ```
+> Alternatively, use Django admin to create/edit `LegalDocument` records directly.
+
 ## Documentation
 
 - [README.md](./README.md) - Project overview
 - [docs/architecture.md](./docs/architecture.md) - System architecture
 - [docs/permissions.md](./docs/permissions.md) - Role-based permissions matrix
+- [docs/gdpr/README.md](./docs/gdpr/README.md) - GDPR compliance index
 - [backend/README.md](./backend/README.md) - API endpoints and setup
 - [frontend/README.md](./frontend/README.md) - Components and structure

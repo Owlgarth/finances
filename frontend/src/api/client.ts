@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -46,6 +46,15 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ============= Legal API =============
+export const legalApi = {
+  getTerms: (): Promise<LegalDoc> =>
+    api.get<LegalDoc>('/legal/terms').then(res => res.data),
+
+  getPrivacy: (): Promise<LegalDoc> =>
+    api.get<LegalDoc>('/legal/privacy').then(res => res.data),
+};
 
 export const budgetPeriodsApi = {
   getAll: (budgetAccountId?: number) => api.get('/budget-periods', { params: budgetAccountId ? { budget_account_id: budgetAccountId } : undefined }),
@@ -150,6 +159,21 @@ export const authApi = {
 
   updatePreferences: (data: { calendar_start_day: number }): Promise<UserPreferences> =>
     api.patch<UserPreferences>('/users/me/preferences', data).then(res => res.data),
+
+  checkDeletion: (): Promise<AccountDeleteCheck> =>
+    api.get<AccountDeleteCheck>('/users/me/deletion-check').then(res => res.data),
+
+  deleteAccount: (password: string): Promise<{ message: string; deleted_workspaces: string[] }> =>
+    api.delete('/users/me', { data: { password } }).then(res => res.data),
+
+  exportData: (): Promise<Blob> =>
+    api.get('/users/me/export', { responseType: 'blob' }).then(res => res.data),
+
+  getConsentStatus: (): Promise<ConsentStatus> =>
+    api.get<ConsentStatus>('/users/me/consent-status').then(res => res.data),
+
+  grantConsent: (consentType: string, version: string) =>
+    api.post('/users/me/consents', { consent_type: consentType, version }).then(res => res.data),
 };
 
 // ============= Workspaces API =============

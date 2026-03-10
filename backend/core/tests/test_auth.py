@@ -20,6 +20,8 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'New User',
                 'workspace_name': 'My Workspace',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(201)
@@ -39,6 +41,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'workspace_test@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Test Workspace',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(201)
@@ -79,6 +83,8 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'Demo User',
                 'workspace_name': 'Demo Workspace',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(201)
@@ -128,7 +134,7 @@ class TestAuthRegister(AuthTestCase):
 
         balances = PeriodBalance.objects.filter(budget_period=period)
         self.assertEqual(balances.count(), 3)
-        currencies = {bal.currency for bal in balances}
+        currencies = {bal.currency.symbol for bal in balances}
         self.assertEqual(currencies, {'PLN', 'EUR', 'USD'})
 
     def test_register_duplicate_email(self):
@@ -139,6 +145,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 1',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(201)
@@ -149,6 +157,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 2',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(400)
@@ -297,6 +307,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'demouser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Demo Workspace',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(403)
@@ -311,6 +323,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'normaluser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Normal Workspace',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
             },
         )
         self.assertStatus(201)
