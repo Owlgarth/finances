@@ -5,6 +5,8 @@ from functools import wraps
 from django.core.cache import cache
 from ninja.errors import HttpError
 
+from common.utils import get_client_ip
+
 
 def rate_limit(key_prefix: str, limit: int = 10, period: int = 60):
     """
@@ -25,12 +27,7 @@ def rate_limit(key_prefix: str, limit: int = 10, period: int = 60):
     def decorator(func):
         @wraps(func)
         def wrapper(request, *args, **kwargs):
-            # Get client IP address
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                ip = x_forwarded_for.split(',')[0].strip()
-            else:
-                ip = request.META.get('REMOTE_ADDR', 'unknown')
+            ip = get_client_ip(request) or 'unknown'
 
             cache_key = f'ratelimit:{key_prefix}:{ip}'
             count = cache.get(cache_key, 0)

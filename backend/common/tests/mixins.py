@@ -22,6 +22,9 @@ class APIClientMixin:
 
     def setUp(self):
         """Set up test client."""
+        from django.core.cache import cache
+
+        cache.clear()
         self.client = Client()
 
     def post(self, path: str, data: dict, **kwargs) -> object:
@@ -104,6 +107,10 @@ class AuthMixin:
 
     def setUp(self):
         """Set up authenticated user."""
+        from django.core.cache import cache
+
+        cache.clear()
+
         # Create workspace with currencies (handled by WorkspaceFactory post_generation)
         self.workspace = WorkspaceFactory(name=self.workspace_name)
 

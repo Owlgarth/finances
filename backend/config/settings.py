@@ -159,6 +159,31 @@ CACHES = {
     }
 }
 
+# Email configuration
+# In development, emails are printed to the console.
+# In production, set EMAIL_HOST (and optionally EMAIL_PORT, EMAIL_HOST_USER,
+# EMAIL_HOST_PASSWORD, EMAIL_USE_TLS) via environment variables.
+_email_host = os.getenv('EMAIL_HOST', '')
+if _email_host:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = _email_host
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@monie.app')
+
+# Legal document operator settings (for privacy policy, terms of service)
+# Supports both individuals and companies as data controllers
+LEGAL_OPERATOR_NAME = os.getenv('LEGAL_OPERATOR_NAME', 'Your Company Name')
+LEGAL_OPERATOR_TYPE = os.getenv('LEGAL_OPERATOR_TYPE', 'company')  # 'individual' or 'company'
+LEGAL_CONTACT_EMAIL = os.getenv('LEGAL_CONTACT_EMAIL', 'legal@example.com')
+LEGAL_CONTACT_ADDRESS = os.getenv('LEGAL_CONTACT_ADDRESS', '')
+LEGAL_JURISDICTION = os.getenv('LEGAL_JURISDICTION', 'Your Jurisdiction')
+
 # Production security settings
 if not DEBUG:
     SECURE_SSL_REDIRECT = True

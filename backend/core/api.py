@@ -8,6 +8,7 @@ from ninja import Router
 from budget_accounts.models import BudgetAccount
 from common.auth import create_access_token
 from common.throttle import rate_limit
+from common.utils import get_client_ip
 from core.demo_fixtures import create_demo_fixtures
 from core.schemas import DetailOut, ErrorOut, LoginIn, RegisterIn, Token
 from workspaces.models import Workspace, WorkspaceMember
@@ -60,6 +61,15 @@ def register(request, data: RegisterIn):
             user=user,
             role='owner',
         )
+
+        # Record GDPR consents
+        # Imported inline to avoid circular import: users.services → core.schemas → core.api
+        from users.models import ConsentType
+        from users.services import UserService
+
+        ip = get_client_ip(request)
+        UserService.record_consent(user, ConsentType.TERMS_OF_SERVICE, data.accepted_terms_version, ip)
+        UserService.record_consent(user, ConsentType.PRIVACY_POLICY, data.accepted_privacy_version, ip)
 
         # Create default currencies for the workspace
         CurrencyService.create_default_currencies(workspace)

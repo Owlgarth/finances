@@ -365,6 +365,31 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 DEMO_MODE=false
 ```
 
+Legal document operator settings (optional, customize for your deployment):
+```bash
+LEGAL_OPERATOR_NAME=Your Company Name    # Company or individual name
+LEGAL_OPERATOR_TYPE=company              # 'company' or 'individual'
+LEGAL_CONTACT_EMAIL=legal@example.com    # Contact email
+LEGAL_CONTACT_ADDRESS=                   # Physical address (optional)
+LEGAL_JURISDICTION=Your Jurisdiction     # Legal jurisdiction
+```
+
+These settings customize the operator information in the Privacy Policy and Terms of Service pages. Supports both companies and individuals as data controllers (GDPR compliant).
+
+### Legal Documents
+
+The database is the runtime source of truth for legal documents. Templates serve as a one-time seed.
+
+```bash
+# Seed legal documents from templates (idempotent)
+python manage.py seed_legal_documents
+
+# Force update even if version matches
+python manage.py seed_legal_documents --force
+```
+
+For self-hosted deployments, you can also edit legal documents directly via Django Admin at `/admin/core/legaldocument/`. Old versions are preserved for GDPR audit trail.
+
 ### Database Setup
 
 ```bash
@@ -387,7 +412,7 @@ Interactive docs at `http://127.0.0.1:8000/backend/docs`
 
 ## Docker Support
 
-A Dockerfile is provided for containerized deployment:
+A Dockerfile is provided for containerized deployment. The container automatically runs migrations and seeds legal documents on startup:
 
 ```bash
 # Build image
@@ -396,6 +421,11 @@ docker build -t budget-tracker-backend .
 # Run container
 docker run -p 8000:8000 --env-file .env budget-tracker-backend
 ```
+
+The entrypoint script (`docker-entrypoint.sh`) executes:
+1. `python manage.py migrate` — Run database migrations
+2. `python manage.py seed_legal_documents` — Seed legal documents from templates
+3. `uvicorn config.asgi:application` — Start the server
 
 ## Admin Access
 
