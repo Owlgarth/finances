@@ -7,14 +7,36 @@ import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
+import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 
-type Tab = 'profile' | 'password' | 'preferences'
+type Tab = 'profile' | 'password' | 'preferences' | 'account'
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
   const { preferences } = useUserPreferences()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const queryClient = useQueryClient()
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExportData = async () => {
+    setIsExporting(true)
+    try {
+      const blob = await authApi.exportData()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `monie_data_export_${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.success('Data exported successfully!')
+    } catch {
+      toast.error('Failed to export data. Please try again later.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: { full_name?: string; email?: string }) =>
@@ -99,6 +121,16 @@ export default function ProfilePage() {
             >
               Preferences
             </button>
+            <button
+              onClick={() => setActiveTab('account')}
+              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'account'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Account
+            </button>
           </nav>
         </div>
 
@@ -126,6 +158,29 @@ export default function ProfilePage() {
               onSubmit={(data) => updatePreferencesMutation.mutate(data)}
               isLoading={updatePreferencesMutation.isPending}
             />
+          )}
+
+          {activeTab === 'account' && (
+            <div className="space-y-10">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Export Your Data</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Download a complete copy of all your personal data in JSON format.
+                  This includes your profile, preferences, all transactions, budgets, and workspace data.
+                </p>
+                <button
+                  onClick={handleExportData}
+                  disabled={isExporting}
+                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 text-sm font-medium"
+                >
+                  {isExporting ? 'Exporting...' : 'Export All My Data'}
+                </button>
+              </div>
+
+              <hr className="border-gray-200" />
+
+              <DeleteAccountSection />
+            </div>
           )}
         </div>
       </div>

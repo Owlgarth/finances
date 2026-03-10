@@ -14,6 +14,7 @@ from budget_periods.api import router as budget_periods_router
 from budgets.api import router as budgets_router
 from categories.api import router as categories_router
 from core.api import router as auth_router
+from core.legal_api import router as legal_router
 from currency_exchanges.api import router as currency_exchanges_router
 from period_balances.api import router as period_balances_router
 from planned_transactions.api import router as planned_transactions_router
@@ -27,6 +28,7 @@ api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
 
 # Register all routers to the API
 api.add_router('/auth', auth_router)
+api.add_router('/legal', legal_router)
 api.add_router('/users', users_router)
 api.add_router('/budget-accounts', budget_accounts_router)
 api.add_router('/budget-periods', budget_periods_router)
