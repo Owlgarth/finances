@@ -225,7 +225,7 @@ class TestCreateBudgetAccount(BudgetAccountTestCase):
         )
 
         self.assertStatus(400)
-        self.assertIn('already exists', data['error'].lower())
+        self.assertIn('already exists', data['detail'].lower())
 
     def test_create_requires_owner_or_admin_role(self):
         """Test creating account requires owner or admin role."""
@@ -488,7 +488,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         """Test archiving an active account."""
         account = self.create_budget_account(is_active=True)
 
-        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', {'is_active': False}, **self.auth_headers())
 
         self.assertStatus(200)
         self.assertFalse(data['is_active'])
@@ -500,7 +500,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         """Test unarchiving an inactive account."""
         account = self.create_budget_account(is_active=False)
 
-        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', {'is_active': True}, **self.auth_headers())
 
         self.assertStatus(200)
         self.assertTrue(data['is_active'])
@@ -512,7 +512,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         """Test archiving updates the updated_by field."""
         account = self.create_budget_account(is_active=True)
 
-        self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{account.id}/archive', {'is_active': False}, **self.auth_headers())
 
         account.refresh_from_db()
         self.assertEqual(account.updated_by, self.user)
@@ -520,22 +520,20 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
     def test_archive_account_not_found(self):
         """Test archiving non-existent account returns 404."""
         fake_id = 999999
-        self.patch(f'/api/budget-accounts/{fake_id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{fake_id}/archive', {'is_active': False}, **self.auth_headers())
         self.assertStatus(404)
 
     def test_archive_requires_owner_or_admin_role(self):
         """Test archiving account requires owner or admin role."""
         account = self.create_budget_account(is_active=True)
 
-        # Change to viewer
         member = WorkspaceMember.objects.get(workspace=self.workspace, user=self.user)
         member.role = 'viewer'
         member.save()
 
-        self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
+        self.patch(f'/api/budget-accounts/{account.id}/archive', {'is_active': False}, **self.auth_headers())
         self.assertStatus(403)
 
-        # Account should still be active
         account.refresh_from_db()
         self.assertTrue(account.is_active)
 
@@ -547,7 +545,7 @@ class TestArchiveBudgetAccount(BudgetAccountTestCase):
         member.role = 'admin'
         member.save()
 
-        data = self.patch(f'/api/budget-accounts/{account.id}/archive', **self.auth_headers())
+        data = self.patch(f'/api/budget-accounts/{account.id}/archive', {'is_active': False}, **self.auth_headers())
         self.assertStatus(200)
         self.assertFalse(data['is_active'])
 

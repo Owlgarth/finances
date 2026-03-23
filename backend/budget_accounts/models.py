@@ -1,9 +1,14 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class BudgetAccount(models.Model):
     """Budget account model for organizing budgets within workspaces."""
+
+    WORKSPACE_FILTER = 'workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='budget_accounts')
     name = models.CharField(max_length=100)

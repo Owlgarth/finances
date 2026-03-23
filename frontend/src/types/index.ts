@@ -90,11 +90,14 @@ export interface UserPreferences {
   calendar_start_day: number;
 }
 
+export type Role = 'owner' | 'admin' | 'member' | 'viewer';
+
 export interface Workspace {
   id: number;
   name: string;
   owner_id?: number;
   created_at: string;
+  user_role?: Role;
 }
 
 export interface BudgetAccount {
@@ -160,7 +163,7 @@ export interface WorkspaceMember {
   user_id: number;
   email: string;
   full_name?: string;
-  role: 'owner' | 'admin' | 'member' | 'viewer';
+  role: Role;
   is_active: boolean;
   created_at: string;
 }

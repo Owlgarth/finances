@@ -189,6 +189,12 @@ export const workspacesApi = {
 
   switch: (workspaceId: number) =>
     api.post(`/workspaces/${workspaceId}/switch`).then(res => res.data),
+
+  create: (data: { name: string }): Promise<Workspace> =>
+    api.post<Workspace>('/workspaces/', data).then(res => res.data),
+
+  delete: (id: number): Promise<void> =>
+    api.delete(`/workspaces/${id}`).then(() => undefined),
 };
 
 // ============= Budget Accounts API =============
