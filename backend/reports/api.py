@@ -3,9 +3,8 @@
 from decimal import Decimal
 
 from ninja import Query, Router
-from ninja.errors import HttpError
 
-from common.auth import JWTAuth
+from common.auth import WorkspaceJWTAuth
 from common.services.base import get_workspace_currencies
 from core.schemas import DetailOut
 from reports.schemas import (
@@ -25,15 +24,12 @@ router = Router(tags=['Reports'])
 # =============================================================================
 
 
-@router.get('/budget-summary', response={200: BudgetSummaryResponse, 404: DetailOut}, auth=JWTAuth())
+@router.get('/budget-summary', response={200: BudgetSummaryResponse, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def budget_summary(request, budget_period_id: int = Query(...)):
     """Get a budget summary for a specific period."""
-    workspace = request.auth.current_workspace
+    workspace_id = request.auth.current_workspace_id
 
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    period, summary, balances = ReportService.get_budget_summary(workspace, budget_period_id)
+    period, summary, balances = ReportService.get_budget_summary(workspace_id, budget_period_id)
 
     # Group by currency
     by_currency: dict[str, CurrencySummary] = {}
@@ -71,14 +67,11 @@ def budget_summary(request, budget_period_id: int = Query(...)):
     )
 
 
-@router.get('/current-balances', response=CurrentBalancesResponse, auth=JWTAuth())
+@router.get('/current-balances', response=CurrentBalancesResponse, auth=WorkspaceJWTAuth())
 def current_balances(request):
     """Get the current balances for all currencies in the workspace."""
-    workspace = request.auth.current_workspace
+    workspace_id = request.auth.current_workspace_id
 
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    currencies = get_workspace_currencies(workspace)
-    result = ReportService.get_current_balances(workspace, currencies)
+    currencies = get_workspace_currencies(workspace_id)
+    result = ReportService.get_current_balances(workspace_id, currencies)
     return CurrentBalancesResponse(**result)

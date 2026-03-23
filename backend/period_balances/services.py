@@ -1,14 +1,17 @@
 """Business logic for the period_balances app."""
 
+from __future__ import annotations
+
 from decimal import Decimal
 
 from django.db.models import Sum
 from django.utils import timezone
-from ninja.errors import HttpError
 
 from budget_periods.models import BudgetPeriod
-from common.services.base import get_or_create_period_balance
+from common.exceptions import CurrencyNotFoundInWorkspaceError
+from common.services.base import get_or_create_period_balance, get_workspace_currencies
 from currency_exchanges.models import CurrencyExchange
+from period_balances.exceptions import PeriodBalanceNotFoundError, PeriodBalancePeriodNotFoundError
 from period_balances.models import PeriodBalance
 from period_balances.schemas import PeriodBalanceUpdate
 from transactions.models import Transaction
@@ -16,16 +19,48 @@ from transactions.models import Transaction
 
 class PeriodBalanceService:
     @staticmethod
-    def get_balance(balance_id: int, workspace_id: int) -> PeriodBalance | None:
-        """Get a balance and verify it belongs to the workspace."""
-        return (
+    def list(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        currency: str | None = None,
+    ) -> list[PeriodBalance]:
+        """List period balances for a workspace with optional filters."""
+        queryset = PeriodBalance.objects.select_related('budget_period').for_workspace(workspace_id)
+
+        if budget_period_id:
+            queryset = queryset.filter(budget_period_id=budget_period_id)
+
+        if currency:
+            queryset = queryset.filter(currency__symbol=currency)
+
+        return list(queryset)
+
+    @staticmethod
+    def get(balance_id: int, workspace_id: int) -> PeriodBalance:
+        """Get a balance and verify it belongs to the workspace. Raises if not found."""
+        balance = (
             PeriodBalance.objects.select_related('budget_period__budget_account', 'currency')
-            .filter(
-                id=balance_id,
-                budget_period__budget_account__workspace_id=workspace_id,
-            )
+            .for_workspace(workspace_id)
+            .filter(id=balance_id)
             .first()
         )
+        if not balance:
+            raise PeriodBalanceNotFoundError()
+        return balance
+
+    @staticmethod
+    def get_validated_period(period_id: int, workspace_id: int) -> BudgetPeriod:
+        """Validate period belongs to workspace. Raises PeriodBalancePeriodNotFoundError if not."""
+        from budget_periods.models import BudgetPeriod
+
+        period = (
+            BudgetPeriod.objects.select_related('budget_account')
+            .filter(id=period_id, budget_account__workspace_id=workspace_id)
+            .first()
+        )
+        if not period:
+            raise PeriodBalancePeriodNotFoundError()
+        return period
 
     @staticmethod
     def recalculate(period_id: int, currency_symbol: str) -> PeriodBalance:
@@ -34,12 +69,12 @@ class PeriodBalanceService:
 
         current_period = BudgetPeriod.objects.select_related('budget_account__workspace').filter(id=period_id).first()
         if not current_period:
-            raise HttpError(404, 'Budget period not found')
+            raise PeriodBalancePeriodNotFoundError()
 
         workspace = current_period.budget_account.workspace
         currency = Currency.objects.filter(workspace=workspace, symbol=currency_symbol).first()
         if not currency:
-            raise HttpError(400, f'Currency {currency_symbol} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(currency_symbol)
 
         # Opening balance comes from the previous period's closing balance
         prev_period = (
@@ -91,16 +126,16 @@ class PeriodBalanceService:
         return balance
 
     @staticmethod
-    def update_opening_balance(user, workspace, balance_id: int, data: PeriodBalanceUpdate) -> PeriodBalance:
+    def recalculate_all(workspace_id: int, period_id: int) -> list[PeriodBalance]:
+        """Recalculate all currency balances for a period."""
+        PeriodBalanceService.get_validated_period(period_id, workspace_id)
+        currencies = get_workspace_currencies(workspace_id)
+        return [PeriodBalanceService.recalculate(period_id, currency.symbol) for currency in currencies]
+
+    @staticmethod
+    def update_opening_balance(user, workspace_id: int, balance_id: int, data: PeriodBalanceUpdate) -> PeriodBalance:
         """Update the opening balance and recalculate closing balance."""
-        from common.permissions import require_role
-        from workspaces.models import WRITE_ROLES
-
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        balance = PeriodBalanceService.get_balance(balance_id, workspace.id)
-        if not balance:
-            raise HttpError(404, 'Period balance not found')
+        balance = PeriodBalanceService.get(balance_id, workspace_id)
 
         balance.opening_balance = data.opening_balance
         balance.closing_balance = (

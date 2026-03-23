@@ -5,6 +5,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from ninja.errors import HttpError
 
 from common.tests.mixins import APIClientMixin
+from core.factories import LegalDocumentFactory
 from core.legal import _get_legal_context, get_privacy, get_terms, render_from_template
 from core.models import LegalDocument
 
@@ -158,14 +159,15 @@ class LegalDBTests(TestCase):
     """Tests for legal document database reads."""
 
     def setUp(self):
-        LegalDocument.objects.create(
+        LegalDocument.objects.all().delete()
+        LegalDocumentFactory(
             doc_type='terms_of_service',
             version='9.9',
             effective_date='2099-01-01',
             content='Custom terms content',
             is_active=True,
         )
-        LegalDocument.objects.create(
+        LegalDocumentFactory(
             doc_type='privacy_policy',
             version='9.9',
             effective_date='2099-01-01',
@@ -193,14 +195,15 @@ class LegalAPITests(APIClientMixin, TestCase):
     """Tests for legal document API endpoints."""
 
     def setUp(self):
-        LegalDocument.objects.create(
+        LegalDocument.objects.all().delete()
+        LegalDocumentFactory(
             doc_type='terms_of_service',
             version='1.0',
             effective_date='2024-01-01',
             content='Terms content from database',
             is_active=True,
         )
-        LegalDocument.objects.create(
+        LegalDocumentFactory(
             doc_type='privacy_policy',
             version='1.0',
             effective_date='2024-01-01',

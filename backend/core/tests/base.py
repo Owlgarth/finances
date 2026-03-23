@@ -1,6 +1,7 @@
 """Base test case for core tests."""
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 
 from common.tests.mixins import APIClientMixin
@@ -10,6 +11,11 @@ User = get_user_model()
 
 class AuthTestCase(APIClientMixin, TestCase):
     """Base test case for auth tests with common setup."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up data for all tests in this class."""
+        call_command('seed_legal_documents', verbosity=0)
 
     @staticmethod
     def create_user(email='test@example.com', password='testpass123', full_name='Test User'):

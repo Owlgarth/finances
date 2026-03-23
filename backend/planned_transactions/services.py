@@ -3,71 +3,74 @@
 from datetime import date
 
 from django.db import transaction as db_transaction
-from ninja.errors import HttpError
 
 from budget_periods.models import BudgetPeriod
+from budget_periods.services import BudgetPeriodService
 from categories.models import Category
-from common.permissions import require_role
-from common.services.base import get_or_create_period_balance, get_workspace_period, resolve_currency
+from common.exceptions import CurrencyNotFoundInWorkspaceError
+from common.services.base import get_or_create_period_balance, resolve_currency
+from planned_transactions.exceptions import (
+    PlannedTransactionAlreadyExecutedError,
+    PlannedTransactionCategoryNotFoundError,
+    PlannedTransactionImportError,
+    PlannedTransactionNoActivePeriodError,
+    PlannedTransactionNotFoundError,
+)
 from planned_transactions.models import PlannedTransaction
 from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, PlannedTransactionUpdate
 from transactions.models import Transaction
-from workspaces.models import WRITE_ROLES
 
 
 class PlannedTransactionService:
     @staticmethod
-    def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction | None:
+    def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
         """Get a planned transaction and verify it belongs to the workspace."""
-        return (
+        planned = (
             PlannedTransaction.objects.select_related('budget_period__budget_account', 'category', 'currency')
-            .filter(
-                id=planned_id,
-                budget_period__budget_account__workspace_id=workspace_id,
-            )
+            .for_workspace(workspace_id)
+            .filter(id=planned_id)
             .first()
         )
+        if not planned:
+            raise PlannedTransactionNotFoundError()
+        return planned
 
     @staticmethod
-    def _resolve_period(workspace, planned_date: date, period_id: int | None) -> int:
-        """Return the period_id for the planned date, raising HttpError when not found."""
+    def _resolve_period(workspace_id: int, planned_date: date, period_id: int | None) -> int:
+        """Return the period_id for the planned date, raising when not found."""
         if period_id:
-            period = get_workspace_period(period_id, workspace.id)
-            if not period:
-                raise HttpError(400, 'Budget period not found')
+            BudgetPeriodService.get(period_id, workspace_id)
             return period_id
         period = (
             BudgetPeriod.objects.select_related('budget_account')
             .filter(
-                budget_account__workspace_id=workspace.id,
+                budget_account__workspace_id=workspace_id,
                 start_date__lte=planned_date,
                 end_date__gte=planned_date,
             )
             .first()
         )
         if not period:
-            raise HttpError(400, 'No active budget period for the planned transaction date')
+            raise PlannedTransactionNoActivePeriodError()
         return period.id
 
     @staticmethod
     def _validate_category(category_id: int | None, period_id: int) -> None:
-        """Raise HttpError if category does not belong to the period."""
+        """Raise if category does not belong to the period."""
         if not category_id:
             return
         category = Category.objects.filter(id=category_id, budget_period_id=period_id).first()
         if not category:
-            raise HttpError(400, 'Category not found or does not belong to the specified budget period')
+            raise PlannedTransactionCategoryNotFoundError()
 
     @staticmethod
-    def create(user, workspace, data: PlannedTransactionCreate) -> PlannedTransaction:
+    def create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
         """Create a planned transaction."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        currency = resolve_currency(workspace, data.currency)
+        currency = resolve_currency(workspace_id, data.currency)
         if not currency:
-            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.currency)
 
-        period_id = PlannedTransactionService._resolve_period(workspace, data.planned_date, data.budget_period_id)
+        period_id = PlannedTransactionService._resolve_period(workspace_id, data.planned_date, data.budget_period_id)
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
         return PlannedTransaction.objects.create(
@@ -83,19 +86,15 @@ class PlannedTransactionService:
         )
 
     @staticmethod
-    def update(user, workspace, planned_id: int, data: PlannedTransactionUpdate) -> PlannedTransaction:
+    def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionUpdate) -> PlannedTransaction:
         """Update a planned transaction."""
-        require_role(user, workspace.id, WRITE_ROLES)
+        planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
-        planned = PlannedTransactionService.get_planned(planned_id, workspace.id)
-        if not planned:
-            raise HttpError(404, 'Planned transaction not found')
-
-        currency = resolve_currency(workspace, data.currency)
+        currency = resolve_currency(workspace_id, data.currency)
         if not currency:
-            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.currency)
 
-        period_id = PlannedTransactionService._resolve_period(workspace, data.planned_date, data.budget_period_id)
+        period_id = PlannedTransactionService._resolve_period(workspace_id, data.planned_date, data.budget_period_id)
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
         planned.budget_period_id = period_id
@@ -111,40 +110,31 @@ class PlannedTransactionService:
         return planned
 
     @staticmethod
-    def delete(user, workspace, planned_id: int) -> None:
+    def delete(workspace_id: int, planned_id: int) -> None:
         """Delete a planned transaction."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        planned = PlannedTransactionService.get_planned(planned_id, workspace.id)
-        if not planned:
-            raise HttpError(404, 'Planned transaction not found')
-
+        planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
         planned.delete()
 
     @staticmethod
     @db_transaction.atomic
-    def execute(user, workspace, planned_id: int, payment_date: date) -> PlannedTransaction:
+    def execute(user, workspace_id: int, planned_id: int, payment_date: date) -> PlannedTransaction:
         """Execute a planned transaction, creating an actual transaction."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        planned = PlannedTransactionService.get_planned(planned_id, workspace.id)
-        if not planned:
-            raise HttpError(404, 'Planned transaction not found')
+        planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
         if planned.status == 'done':
-            raise HttpError(400, 'Already executed')
+            raise PlannedTransactionAlreadyExecutedError()
 
         period = (
             BudgetPeriod.objects.select_related('budget_account')
             .filter(
-                budget_account__workspace_id=workspace.id,
+                budget_account__workspace_id=workspace_id,
                 start_date__lte=payment_date,
                 end_date__gte=payment_date,
             )
             .first()
         )
         if not period:
-            raise HttpError(400, 'No active budget period for the payment date')
+            raise PlannedTransactionNoActivePeriodError()
 
         transaction_obj = Transaction.objects.create(
             budget_period_id=period.id,
@@ -158,7 +148,6 @@ class PlannedTransactionService:
             updated_by=user,
         )
 
-        # Update period balance for the expense
         balance = get_or_create_period_balance(period.id, planned.currency)
         balance.total_expenses += planned.amount
         balance.closing_balance = (
@@ -179,11 +168,9 @@ class PlannedTransactionService:
         return planned
 
     @staticmethod
-    def export(workspace, period_id: int, status: str | None = None) -> list[dict]:
+    def export(workspace_id: int, period_id: int, status: str | None = None) -> list[dict]:
         """Return serialisable planned transaction data for a period."""
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+        BudgetPeriodService.get(period_id, workspace_id)
 
         queryset = PlannedTransaction.objects.select_related('category', 'currency').filter(budget_period_id=period_id)
         if status:
@@ -201,26 +188,24 @@ class PlannedTransactionService:
         ]
 
     @staticmethod
-    def import_data(user, workspace, period_id: int, data: list) -> int:
+    def import_data(user, workspace_id: int, period_id: int, data: list) -> int:
         """Bulk-create planned transactions from parsed JSON data. Returns count of created records."""
-        require_role(user, workspace.id, WRITE_ROLES)
+        BudgetPeriodService.get(period_id, workspace_id)
 
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+        from workspaces.models import Currency
 
-        currency_map = {c.symbol: c for c in workspace.currencies.all()}
+        currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
 
         new_transactions = []
         for item in data:
             try:
                 import_item = PlannedTransactionImport(**item)
             except Exception as e:
-                raise HttpError(400, f'Invalid data format: {e}')
+                raise PlannedTransactionImportError(f'Invalid data format: {e}')
 
             currency = currency_map.get(import_item.currency)
             if not currency:
-                raise HttpError(400, f'Currency {import_item.currency} not found in workspace')
+                raise CurrencyNotFoundInWorkspaceError(import_item.currency)
 
             category_id = None
             if import_item.category_name:

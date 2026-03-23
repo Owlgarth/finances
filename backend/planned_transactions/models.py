@@ -1,9 +1,14 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class PlannedTransaction(models.Model):
     """Planned transaction model for future transactions."""
+
+    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),

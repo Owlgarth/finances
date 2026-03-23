@@ -5,14 +5,11 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from ninja import Router
 
-from budget_accounts.models import BudgetAccount
 from common.auth import create_access_token
 from common.throttle import rate_limit
 from common.utils import get_client_ip
-from core.demo_fixtures import create_demo_fixtures
 from core.schemas import DetailOut, ErrorOut, LoginIn, RegisterIn, Token
-from workspaces.models import Workspace, WorkspaceMember
-from workspaces.services import CurrencyService
+from workspaces.services import WorkspaceService
 
 router = Router(tags=['Auth'])
 User = get_user_model()
@@ -40,30 +37,14 @@ def register(request, data: RegisterIn):
         return 400, {'error': 'User with this email already exists'}
 
     with transaction.atomic():
-        # Create workspace
-        workspace = Workspace.objects.create(name=data.workspace_name)
-
-        # Create user
         user = User.objects.create_user(
             email=data.email,
             password=data.password,
             full_name=data.full_name,
-            current_workspace=workspace,
         )
 
-        # Update workspace owner
-        workspace.owner = user
-        workspace.save(update_fields=['owner'])
+        WorkspaceService.create_workspace(user=user, name=data.workspace_name, create_demo=True)
 
-        # Create workspace membership with owner role
-        WorkspaceMember.objects.create(
-            workspace=workspace,
-            user=user,
-            role='owner',
-        )
-
-        # Record GDPR consents
-        # Imported inline to avoid circular import: users.services → core.schemas → core.api
         from users.models import ConsentType
         from users.services import UserService
 
@@ -71,28 +52,6 @@ def register(request, data: RegisterIn):
         UserService.record_consent(user, ConsentType.TERMS_OF_SERVICE, data.accepted_terms_version, ip)
         UserService.record_consent(user, ConsentType.PRIVACY_POLICY, data.accepted_privacy_version, ip)
 
-        # Create default currencies for the workspace
-        CurrencyService.create_default_currencies(workspace)
-
-        # Create default budget account
-        pln_currency = workspace.currencies.get(symbol='PLN')
-        BudgetAccount.objects.create(
-            workspace=workspace,
-            name='General',
-            description='General budget account',
-            default_currency=pln_currency,
-            is_active=True,
-            display_order=0,
-            created_by=user,
-        )
-
-        # Create demo fixtures (creates its own "Example Account")
-        create_demo_fixtures(
-            workspace_id=workspace.id,
-            user_id=user.id,
-        )
-
-    # Generate JWT token for automatic login
     access_token = create_access_token(user)
 
     return 201, {

@@ -88,8 +88,8 @@ All data operations must respect this hierarchy. For example, when adding a tran
 
 | App | Purpose |
 |-----|---------|
-| `users` | Custom User model with email authentication (no username) |
-| `workspaces` | Multi-tenant workspaces with role-based access |
+| `users` | Custom User model, `UserPreferences`, `UserConsent`; profile, password, GDPR endpoints at `/api/users/` |
+| `workspaces` | Multi-tenant workspaces with role-based access; Currency model (FK to Workspace) |
 | `budget_accounts` | Budget accounts within workspaces |
 | `budget_periods` | Time-bound periods for budget tracking |
 | `categories` | Transaction categories |
@@ -99,8 +99,8 @@ All data operations must respect this hierarchy. For example, when adding a tran
 | `currency_exchanges` | Multi-currency exchange records |
 | `period_balances` | Pre-calculated balances per period/currency |
 | `reports` | Budget summaries and current balances |
-| `core` | Main API endpoints, schemas |
-| `common` | JWT auth utilities, test mixins, shared services (`common/services/base.py`) |
+| `core` | Auth endpoints (register, login) at `/api/auth/`; legal document seeding |
+| `common` | Shared utilities: `auth.py` (JWT), `permissions.py` (`require_role`), `querysets.py` (`WorkspaceScopedQuerySet`), `throttle.py` (rate limiting), `services/base.py`, test mixins/factories |
 
 ### API Routing
 
@@ -146,18 +146,21 @@ JWT-based authentication with token payload containing:
 }
 ```
 
-Protected endpoints use `auth=JWTAuth()` in Django Ninja. The token is stored in localStorage on the frontend.
+Most endpoints use `auth=WorkspaceJWTAuth()` (validates token + requires active workspace). Use `auth=JWTAuth()` only for endpoints that don't need a workspace (e.g., listing workspaces, creating a workspace). The token is stored in localStorage on the frontend.
 
 ## Testing Utilities
 
-**`AuthMixin`**: Sets up authenticated user with workspace automatically
+**`AuthMixin`**: Sets up authenticated user with workspace automatically. Override `user_role` to test as different roles:
 ```python
-from common.tests.mixins import AuthMixin
+from common.tests.mixins import AuthMixin, APIClientMixin
 
-class MyTestCase(AuthMixin, TestCase):
+class MyTestCase(AuthMixin, APIClientMixin, TestCase):
+    user_role = 'member'  # default: 'owner'; also: 'admin', 'viewer'
+
     def test_something(self):
-        # User and workspace auto-created
-        response = self.client.get('/api/endpoint')
+        # self.user, self.workspace, self.auth_token available
+        self.get('/api/endpoint', **self.auth_headers())
+        self.assertStatus(200)
 ```
 
 Tests use SQLite in-memory with `--reuse-db` for faster runs (configured in pyproject.toml).
@@ -172,7 +175,12 @@ Several endpoints support bulk import/export via JSON (FormData multipart):
 
 ## Service Layer
 
-Business logic lives in `<app>/services.py` files — endpoints in `<app>/api.py` are thin wrappers that parse the request and call the service. Shared helpers (`get_workspace_period`, `require_role`, `get_or_create_period_balance`, `update_period_balance`) live in `common/services/base.py`.
+Business logic lives in `<app>/services.py` files — endpoints in `<app>/api.py` are thin wrappers that parse the request and call the service.
+
+- **`common/permissions.py`**: `require_role(user, workspace_id, allowed_roles)` — raises 403 if role not in list, returns the role string
+- **`common/services/base.py`**: `get_or_create_period_balance`, `update_period_balance`, `resolve_currency`
+- **`users/services.py`**: `UserService` — profile updates, preferences, consent management, account deletion, GDPR data export
+- **`workspaces/services.py`**: `WorkspaceService`, `WorkspaceMemberService`, `CurrencyService`
 
 Example structure:
 ```python

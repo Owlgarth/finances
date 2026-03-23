@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useBudgetPeriod } from '../../contexts/BudgetPeriodContext'
 import { useLayout } from '../../contexts/LayoutContext'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
 import BudgetAccountSelector from '../BudgetAccountSelector'
 import BudgetPeriodSelectorModal from '../modals/periods/BudgetPeriodSelectorModal'
 import UserMenu from './UserMenu'
+import WorkspaceSelector from './WorkspaceSelector'
+import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import {
   HiHome,
   HiCurrencyDollar,
@@ -114,66 +117,92 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse, onClose }: SidebarProps) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const { workspace } = useWorkspace()
+
+  const handleOpenSettings = () => setIsSettingsOpen(true)
+
   return (
-    <aside
-      className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-200
-        ${collapsed ? 'w-16' : 'w-64'}`}
-    >
-      {/* Logo + collapse toggle */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-        {!collapsed && (
-          <span className="text-xl font-bold text-gray-900">Monie</span>
-        )}
-        <button
-          onClick={onClose ?? onToggleCollapse}
-          className={`p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors
-            ${collapsed ? 'mx-auto' : ''}`}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? (
-            <HiChevronRight className="h-5 w-5" />
-          ) : (
-            <HiChevronLeft className="h-5 w-5" />
+    <>
+      <aside
+        className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-200
+          ${collapsed ? 'w-16' : 'w-64'}`}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+          {!collapsed && (
+            <span className="text-xl font-bold text-gray-900">Monie</span>
           )}
-        </button>
-      </div>
-
-      {/* Account & Period selectors */}
-      {!collapsed && (
-        <div className="p-3 space-y-2 border-b border-gray-200 flex-shrink-0">
-          <BudgetAccountSelector />
-          <NavigationPeriodSelector collapsed={collapsed} />
-        </div>
-      )}
-
-      {/* Nav links */}
-      <nav className="flex-1 overflow-y-auto p-2">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.exact}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mb-0.5
-              ${isActive
-                ? 'bg-gray-100 text-gray-900 font-medium'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`
-            }
-            title={collapsed ? item.label : undefined}
+          <button
+            onClick={onClose ?? onToggleCollapse}
+            className={`p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors
+              ${collapsed ? 'mx-auto' : ''}`}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
-          </NavLink>
-        ))}
-      </nav>
+            {collapsed ? (
+              <HiChevronRight className="h-5 w-5" />
+            ) : (
+              <HiChevronLeft className="h-5 w-5" />
+            )}
+          </button>
+        </div>
 
-      {/* Bottom: layout toggle + user menu */}
-      <div className="p-2 border-t border-gray-200 flex-shrink-0 space-y-1">
-        <LayoutToggle collapsed={collapsed} />
-        <UserMenu collapsed={collapsed} />
-      </div>
-    </aside>
+        {!collapsed && (
+          <div className="p-3 space-y-2 border-b border-gray-200 flex-shrink-0">
+            <WorkspaceSelector onOpenSettings={handleOpenSettings} />
+            {workspace && (
+              <>
+                <BudgetAccountSelector />
+                <NavigationPeriodSelector collapsed={collapsed} />
+              </>
+            )}
+          </div>
+        )}
+
+        {workspace ? (
+          <nav className="flex-1 overflow-y-auto p-2">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mb-0.5
+                  ${isActive
+                    ? 'bg-gray-100 text-gray-900 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`
+                }
+                title={collapsed ? item.label : undefined}
+              >
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </NavLink>
+            ))}
+          </nav>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="text-center">
+              <p className="text-sm text-gray-500 mb-2">No workspace selected</p>
+              <p className="text-xs text-gray-400">
+                Create or join a workspace to get started
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="p-2 border-t border-gray-200 flex-shrink-0 space-y-1">
+          <LayoutToggle collapsed={collapsed} />
+          <UserMenu collapsed={collapsed} />
+        </div>
+      </aside>
+
+      {workspace && (
+        <WorkspaceSettingsPanel
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+    </>
   )
 }

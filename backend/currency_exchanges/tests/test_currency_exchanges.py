@@ -275,6 +275,18 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
         self.post('/api/currency-exchanges', payload, **self.auth_headers())
         self.assertStatus(422)  # Pydantic validation error
 
+    def test_create_exchange_with_negative_amount_fails(self):
+        """Test that creating exchange with negative amount fails."""
+        payload = {
+            'date': '2025-01-25',
+            'from_currency': 'USD',
+            'from_amount': '-5.00',  # Negative amount
+            'to_currency': 'EUR',
+            'to_amount': '92.00',
+        }
+        self.post('/api/currency-exchanges', payload, **self.auth_headers())
+        self.assertStatus(422)  # Pydantic validation error
+
     def test_create_exchange_without_auth_fails(self):
         """Test that creating exchange without authentication fails."""
         payload = {
