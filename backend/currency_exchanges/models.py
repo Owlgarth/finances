@@ -1,9 +1,18 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class CurrencyExchange(models.Model):
     """Currency exchange model for multi-currency transactions."""
+
+    # NOTE: This filter only matches exchanges linked to a budget_period.
+    # Standalone exchanges (budget_period=NULL) are linked to the workspace
+    # through from_currency__workspace_id. The for_workspace() queryset
+    # will NOT include them. Use direct filtering for standalone exchanges.
+    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     budget_period = models.ForeignKey(
         'budget_periods.BudgetPeriod',
