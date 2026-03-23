@@ -47,7 +47,9 @@ class APIClientMixin:
         """Helper for GET requests."""
         response = self.client.get(path, **kwargs)
         self.response = response
-        return response.json() if response.content else {}
+        if response.content and 'application/json' in response.get('Content-Type', ''):
+            return response.json()
+        return {}
 
     def patch(self, path: str, data: dict | None = None, **kwargs) -> object:
         """Helper for PATCH requests with JSON."""
@@ -105,6 +107,9 @@ class AuthMixin:
     # Set to True to create demo fixtures (default: False for faster tests)
     with_demo_fixtures = False
 
+    # Override in subclasses to test as member, viewer, or admin
+    user_role = 'owner'
+
     def setUp(self):
         """Set up authenticated user."""
         from django.core.cache import cache
@@ -123,15 +128,16 @@ class AuthMixin:
         self.user.set_password(self.user_password)
         self.user.save()
 
-        # Update workspace owner
-        self.workspace.owner = self.user
-        self.workspace.save()
+        # Set workspace owner only if test user is owner
+        if self.user_role == 'owner':
+            self.workspace.owner = self.user
+            self.workspace.save()
 
-        # Create workspace membership with owner role
+        # Create workspace membership with configured role
         WorkspaceMember.objects.create(
             workspace=self.workspace,
             user=self.user,
-            role='owner',
+            role=self.user_role,
         )
 
         # Create default budget account
@@ -148,7 +154,7 @@ class AuthMixin:
 
         # Optionally create demo fixtures
         if self.with_demo_fixtures:
-            from core.demo_fixtures import create_demo_fixtures
+            from workspaces.demo_fixtures import create_demo_fixtures
 
             create_demo_fixtures(
                 workspace_id=self.workspace.id,

@@ -1,7 +1,6 @@
 """Schemas for workspaces app."""
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -34,7 +33,7 @@ class CurrencyOut(BaseModel):
 class WorkspaceUpdate(BaseModel):
     """Schema for updating a workspace."""
 
-    name: Optional[str] = Field(None, max_length=100)
+    name: str | None = Field(None, max_length=100)
 
     @field_validator('name')
     @classmethod
@@ -51,17 +50,42 @@ class WorkspaceOut(BaseModel):
 
     id: int
     name: str
-    owner_id: Optional[int] = None
+    owner_id: int | None = None
     created_at: datetime
+    user_role: str | None = None
+
+
+class WorkspaceCreate(BaseModel):
+    """Schema for creating a workspace."""
+
+    name: str = Field(..., max_length=100)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
 
 
 class WorkspaceMemberAdd(BaseModel):
-    """Request to add a new member to workspace with direct account creation."""
+    """Request to add a new member to workspace with direct account creation.
+
+    password is required when adding a user who does not yet exist in the system.
+    When adding an existing user, password is ignored.
+    """
 
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=255)
+    password: str | None = Field(None, min_length=8, max_length=255)
     role: str = Field(..., pattern=r'^(admin|member|viewer)$')
-    full_name: Optional[str] = Field(None, max_length=100)
+    full_name: str | None = Field(None, max_length=100)
+
+    @field_validator('password')
+    @classmethod
+    def password_not_blank(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Password cannot be blank')
+        return v
 
 
 class WorkspaceMemberRoleUpdate(BaseModel):
@@ -88,7 +112,7 @@ class WorkspaceMemberOut(BaseModel):
     workspace_id: int
     user_id: int
     email: str
-    full_name: Optional[str]
+    full_name: str | None
     role: str
     is_active: bool
     created_at: datetime
