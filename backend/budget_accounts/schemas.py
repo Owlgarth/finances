@@ -59,6 +59,12 @@ class BudgetAccountUpdate(BaseModel):
         return v
 
 
+class BudgetAccountArchive(BaseModel):
+    """Schema for archiving/unarchiving a budget account."""
+
+    is_active: bool
+
+
 class BudgetAccountOut(BaseModel):
     """Schema for budget account output - matches frontend BudgetAccount interface."""
 

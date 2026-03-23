@@ -130,33 +130,48 @@ Layer 4: Resource Ownership Validation
 | Update workspace name | ✓ | ✓ | ✗ | ✗ |
 | Delete workspace | ✓ | ✗ | ✗ | ✗ |
 
+### Workspace Management
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| Create new workspace | ✓ | ✓ | ✓ | ✓ |
+| Switch between workspaces | ✓ | ✓ | ✓ | ✓ |
+| Leave workspace (non-owner) | ✗ | ✓ | ✓ | ✓ |
+| Delete workspace (owner only) | ✓ | ✗ | ✗ | ✗ |
+
 ## Backend Enforcement
 
 All permissions are enforced server-side in Django Ninja endpoints:
 
 ```python
-from common.auth import JWTAuth
-from core.dependencies import require_workspace_access, require_role
+from common.auth import JWTAuth, WorkspaceJWTAuth
+from common.permissions import require_role
+from workspaces.models import ADMIN_ROLES, WRITE_ROLES
 
-# Authentication required
-@router.get('/endpoint', auth=JWTAuth())
+# Authentication + workspace validation (for workspace-scoped endpoints)
+@router.get('/endpoint', auth=WorkspaceJWTAuth())
 def endpoint(request):
     user = request.auth  # Authenticated User instance
+    workspace_id = request.auth.current_workspace_id  # Guaranteed to be set
+    
+    # Use for_workspace() for queries
+    transactions = Transaction.objects.for_workspace(workspace_id)
 
-# Workspace access and role validation
-# Checked within endpoint handlers via WorkspaceMember queries
+# Authentication only (for non-workspace endpoints)
+@router.get('/workspaces', auth=JWTAuth())
+def list_workspaces(request):
+    return Workspace.objects.filter(members__user=request.auth)
 
-# Example: Owner/Admin only actions
+# Role validation
 membership = WorkspaceMember.objects.get(
-    workspace=workspace,
+    workspace_id=workspace_id,
     user=request.auth
 )
-if membership.role not in ['owner', 'admin']:
+if membership.role not in ADMIN_ROLES:
     raise HttpError(403, 'Insufficient permissions')
 
-# Example: Write access (owner, admin, member)
-if membership.role == 'viewer':
-    raise HttpError(403, 'Viewers cannot modify data')
+# Or use require_role helper
+require_role(request.auth, workspace_id, WRITE_ROLES)
 ```
 
 ## Frontend Visibility

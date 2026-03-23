@@ -1,41 +1,51 @@
 """Business logic for the budgets app."""
 
-from ninja.errors import HttpError
-
+from budget_periods.services import BudgetPeriodService
+from budgets.exceptions import (
+    BudgetCategoryNotFoundError,
+    BudgetNotFoundError,
+)
 from budgets.models import Budget
 from budgets.schemas import BudgetCreate, BudgetUpdate
 from categories.models import Category
-from common.permissions import require_role
-from common.services.base import get_workspace_period, resolve_currency
-from workspaces.models import WRITE_ROLES
+from common.exceptions import CurrencyNotFoundInWorkspaceError
+from common.services.base import resolve_currency
 
 
 class BudgetService:
     @staticmethod
-    def get_budget(budget_id: int, workspace_id: int) -> Budget | None:
+    def get_budget(budget_id: int, workspace_id: int) -> Budget:
         """Get a budget and verify it belongs to the workspace."""
-        return (
+        budget = (
             Budget.objects.select_related('category', 'currency')
-            .filter(id=budget_id, budget_period__budget_account__workspace_id=workspace_id)
+            .for_workspace(workspace_id)
+            .filter(id=budget_id)
             .first()
         )
+        if not budget:
+            raise BudgetNotFoundError()
+        return budget
 
     @staticmethod
-    def create(user, workspace, data: BudgetCreate) -> Budget:
-        """Create a budget entry, validating period and category membership."""
-        require_role(user, workspace.id, WRITE_ROLES)
+    def list(workspace_id: int, budget_period_id: int | None = None) -> list[Budget]:
+        """List budgets for a workspace, optionally filtered by period."""
+        queryset = Budget.objects.select_related('category').for_workspace(workspace_id)
+        if budget_period_id:
+            queryset = queryset.filter(budget_period_id=budget_period_id)
+        return list(queryset)
 
-        period = get_workspace_period(data.budget_period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+    @staticmethod
+    def create(user, workspace_id: int, data: BudgetCreate) -> Budget:
+        """Create a budget entry, validating period and category membership."""
+        BudgetPeriodService.get(data.budget_period_id, workspace_id)
 
         category = Category.objects.filter(id=data.category_id, budget_period_id=data.budget_period_id).first()
         if not category:
-            raise HttpError(400, 'Category not found or does not belong to the specified budget period')
+            raise BudgetCategoryNotFoundError()
 
-        currency = resolve_currency(workspace, data.currency)
+        currency = resolve_currency(workspace_id, data.currency)
         if not currency:
-            raise HttpError(400, f'Currency {data.currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.currency)
 
         return Budget.objects.create(
             budget_period_id=data.budget_period_id,
@@ -47,13 +57,9 @@ class BudgetService:
         )
 
     @staticmethod
-    def update(user, workspace, budget_id: int, data: BudgetUpdate) -> Budget:
+    def update(user, workspace_id: int, budget_id: int, data: BudgetUpdate) -> Budget:
         """Update a budget entry."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        budget = BudgetService.get_budget(budget_id, workspace.id)
-        if not budget:
-            raise HttpError(404, 'Budget not found')
+        budget = BudgetService.get_budget(budget_id, workspace_id)
 
         if data.amount is not None:
             budget.amount = data.amount
@@ -64,12 +70,7 @@ class BudgetService:
         return budget
 
     @staticmethod
-    def delete(user, workspace, budget_id: int) -> None:
+    def delete(workspace_id: int, budget_id: int) -> None:
         """Delete a budget entry."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        budget = BudgetService.get_budget(budget_id, workspace.id)
-        if not budget:
-            raise HttpError(404, 'Budget not found')
-
+        budget = BudgetService.get_budget(budget_id, workspace_id)
         budget.delete()

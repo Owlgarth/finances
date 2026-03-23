@@ -184,15 +184,62 @@ Balances are updated incrementally on:
 
 ## Workspace Management
 
+### Creating a Workspace
+
+```
+1. User clicks workspace selector in sidebar
+2. User clicks "Create workspace" option
+3. User enters workspace name
+4. System creates:
+   - New workspace with user as owner
+   - Default "General" budget account
+   - Default currencies (USD, UAH, PLN, EUR)
+5. System auto-switches user to new workspace
+6. All data views refresh to empty workspace
+```
+
 ### Switching Workspaces
 
 ```
 1. User belongs to multiple workspaces
-2. User clicks workspace switcher
-3. User selects different workspace
-4. System updates current_workspace_id
-5. All data views refresh to new workspace
-6. Budget accounts show for new workspace
+2. User clicks workspace selector in sidebar
+3. User selects different workspace from dropdown
+4. System updates current_workspace_id in token
+5. All data views refresh to new workspace:
+   - Budget accounts list updates
+   - Selected account/period cleared
+   - Transactions, categories, budgets reload
+```
+
+### Deleting a Workspace (Owner Only)
+
+```
+1. Owner clicks workspace selector → settings gear
+2. WorkspaceSettingsPanel opens
+3. Owner clicks "Delete workspace"
+4. Confirmation dialog appears (requires multiple workspaces)
+5. Owner confirms deletion
+6. System:
+   - Deletes all workspace data (cascade)
+   - Removes all memberships
+   - Auto-switches user to another workspace
+7. All data views refresh
+```
+
+**Restrictions:**
+- Only owner can delete
+- Cannot delete if it's the only workspace
+- Deletion is permanent (all budget data lost)
+
+### Leaving a Workspace (Non-Owner)
+
+```
+1. Non-owner clicks workspace selector → settings gear
+2. WorkspaceSettingsPanel opens (no delete option)
+3. Non-owner cannot delete, only owner sees delete button
+4. To leave, member uses Members page "Leave" action
+5. System removes membership
+6. If this was current workspace, auto-switches to another
 ```
 
 ### Adding Members

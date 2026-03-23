@@ -1,9 +1,21 @@
+from datetime import date
+
 from django.conf import settings
 from django.db import models
+
+from common.querysets import WorkspaceScopedQuerySet
+
+
+class BudgetPeriodQuerySet(WorkspaceScopedQuerySet):
+    def containing(self, target_date: date):
+        return self.filter(start_date__lte=target_date, end_date__gte=target_date)
 
 
 class BudgetPeriod(models.Model):
     """Budget period model for time-based budget tracking."""
+
+    WORKSPACE_FILTER = 'budget_account__workspace_id'
+    objects = BudgetPeriodQuerySet.as_manager()
 
     budget_account = models.ForeignKey(
         'budget_accounts.BudgetAccount', on_delete=models.CASCADE, related_name='budget_periods'

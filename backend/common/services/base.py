@@ -2,25 +2,14 @@
 
 from decimal import Decimal
 
-from budget_periods.models import BudgetPeriod
-from common.permissions import require_role  # noqa: F401 — re-exported for convenience
 from period_balances.models import PeriodBalance
 
 
-def get_workspace_period(period_id: int, workspace_id: int) -> BudgetPeriod | None:
-    """Get a period and verify it belongs to the workspace."""
-    return (
-        BudgetPeriod.objects.select_related('budget_account')
-        .filter(id=period_id, budget_account__workspace_id=workspace_id)
-        .first()
-    )
-
-
-def resolve_currency(workspace, symbol: str):
+def resolve_currency(workspace_id: int, symbol: str):
     """Look up a Currency by symbol for a workspace. Returns None if not found."""
     from workspaces.models import Currency
 
-    return Currency.objects.filter(workspace=workspace, symbol=symbol).first()
+    return Currency.objects.filter(workspace_id=workspace_id, symbol=symbol).first()
 
 
 def get_or_create_period_balance(period_id: int, currency, user=None) -> PeriodBalance:
@@ -42,6 +31,47 @@ def get_or_create_period_balance(period_id: int, currency, user=None) -> PeriodB
     return balance
 
 
-def get_workspace_currencies(workspace):
+def get_workspace_currencies(workspace_id: int) -> list:
     """Get list of Currency objects for a workspace."""
-    return list(workspace.currencies.all())
+    from workspaces.models import Currency
+
+    return list(Currency.objects.filter(workspace_id=workspace_id))
+
+
+def delete_workspace_financial_records(workspace_id: int) -> None:
+    """Delete records that have PROTECT FKs on Currency and are NOT cascade-deleted
+    through BudgetAccount.
+
+    Call this BEFORE deleting BudgetAccounts. The deletion order matters:
+    1. This function: Transaction, PlannedTransaction, CurrencyExchange (PROTECT on Currency)
+    2. Caller deletes BudgetAccount (CASCADE: BudgetPeriod -> Budget, PeriodBalance, Category)
+    3. Caller deletes Workspace (CASCADE: Currency, WorkspaceMember)
+
+    Budget and PeriodBalance also have PROTECT FKs on Currency, but they cascade
+    from BudgetPeriod (step 2), so they don't need explicit deletion here.
+    """
+    from currency_exchanges.models import CurrencyExchange
+    from planned_transactions.models import PlannedTransaction
+    from transactions.models import Transaction
+
+    Transaction.objects.filter(budget_period__budget_account__workspace_id=workspace_id).delete()
+    PlannedTransaction.objects.filter(budget_period__budget_account__workspace_id=workspace_id).delete()
+    CurrencyExchange.objects.filter(budget_period__budget_account__workspace_id=workspace_id).delete()
+
+    # Orphaned records (budget_period was deleted before this fix).
+    # Linked to workspace only through their currency FK.
+    Transaction.objects.filter(
+        budget_period__isnull=True,
+        currency__workspace_id=workspace_id,
+    ).delete()
+    PlannedTransaction.objects.filter(
+        budget_period__isnull=True,
+        currency__workspace_id=workspace_id,
+    ).delete()
+
+    # CurrencyExchange records can exist without a budget_period (standalone exchanges).
+    # These are linked to the workspace only through their from_currency FK.
+    CurrencyExchange.objects.filter(
+        budget_period__isnull=True,
+        from_currency__workspace_id=workspace_id,
+    ).delete()

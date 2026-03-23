@@ -4,8 +4,10 @@ This module provides functionality to populate new workspaces with example data
 to help users understand how Monie works.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
+
+from django.utils import timezone
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
@@ -274,7 +276,7 @@ def create_demo_fixtures(
         ),
     ]
 
-    now = datetime.now()
+    now = timezone.now()
 
     for currency_symbol, opening, income, expenses, ex_in, ex_out, closing in balances_data:
         PeriodBalance.objects.create(

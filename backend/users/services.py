@@ -3,9 +3,15 @@
 import logging
 
 from django.db import transaction as db_transaction
-from ninja.errors import HttpError
 
 from core.schemas import UserPreferencesUpdate, UserUpdate
+from users.exceptions import (
+    UserConsentNotFoundError,
+    UserDeletionBlockedError,
+    UserInvalidConsentTypeError,
+    UserInvalidPasswordError,
+    UserValidationError,
+)
 from users.models import ConsentType, User, UserConsent, UserPreferences, WeekdayChoices
 
 logger = logging.getLogger(__name__)
@@ -24,7 +30,7 @@ class UserService:
     def update_preferences(user: User, data: UserPreferencesUpdate) -> UserPreferences:
         """Update user preferences with validation."""
         if data.calendar_start_day < 1 or data.calendar_start_day > 7:
-            raise HttpError(400, 'calendar_start_day must be between 1 and 7')
+            raise UserValidationError('calendar_start_day must be between 1 and 7')
 
         preferences = UserService.get_or_create_preferences(user)
         preferences.calendar_start_day = data.calendar_start_day
@@ -48,7 +54,7 @@ class UserService:
     def change_password(user: User, current_password: str, new_password: str) -> None:
         """Change user password with validation."""
         if not user.check_password(current_password):
-            raise HttpError(401, 'Invalid current password')
+            raise UserInvalidPasswordError()
 
         user.set_password(new_password)
         user.save()
@@ -71,7 +77,7 @@ class UserService:
             HttpError(400): If consent_type is invalid
         """
         if consent_type not in ConsentType.values:
-            raise HttpError(400, f'Invalid consent type: {consent_type}')
+            raise UserInvalidConsentTypeError(consent_type)
         return UserConsent.objects.create(
             user=user,
             consent_type=consent_type,
@@ -97,7 +103,7 @@ class UserService:
             .first()
         )
         if not consent:
-            raise HttpError(404, 'No active consent found for this type')
+            raise UserConsentNotFoundError()
         consent.withdrawn_at = timezone.now()
         consent.save(update_fields=['withdrawn_at'])
         return consent
@@ -202,7 +208,7 @@ class UserService:
             HttpError(400): User owns workspaces with other members
         """
         if not user.check_password(password):
-            raise HttpError(401, 'Invalid password')
+            raise UserInvalidPasswordError('Invalid password')
 
         from django.core.mail import send_mail
 
@@ -222,26 +228,15 @@ class UserService:
                 blocking_workspaces.append(ws.name)
 
         if blocking_workspaces:
-            raise HttpError(
-                400,
-                'Cannot delete account. You own workspaces with other members: '
-                f'{", ".join(blocking_workspaces)}. '
-                'Transfer ownership or remove all members first.',
-            )
+            raise UserDeletionBlockedError(blocking_workspaces)
 
         # Delete solo-owned workspaces and all their data
         deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
 
-        # Delete financial records with PROTECT on Currency but SET_NULL on BudgetPeriod.
-        # These survive BudgetAccount deletion (via budget_period SET_NULL) but block
-        # Currency deletion (via currency PROTECT).
-        from currency_exchanges.models import CurrencyExchange
-        from planned_transactions.models import PlannedTransaction
-        from transactions.models import Transaction
+        from common.services.base import delete_workspace_financial_records
 
-        Transaction.objects.filter(currency__workspace__in=owned_workspaces).delete()
-        PlannedTransaction.objects.filter(currency__workspace__in=owned_workspaces).delete()
-        CurrencyExchange.objects.filter(from_currency__workspace__in=owned_workspaces).delete()
+        for ws in owned_workspaces:
+            delete_workspace_financial_records(ws.id)
 
         # Delete BudgetAccounts (CASCADEs: BudgetPeriod, Category, Budget, PeriodBalance)
         # BudgetAccount.default_currency has PROTECT, but currencies are deleted with workspace.
@@ -309,7 +304,7 @@ class UserService:
         from period_balances.models import PeriodBalance
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
-        from workspaces.models import WorkspaceMember
+        from workspaces.models import Currency, WorkspaceMember
 
         # 1. Profile
         profile = {
@@ -357,6 +352,7 @@ class UserService:
                 'role': membership.role,
                 'joined_at': membership.created_at.isoformat(),
                 'budget_accounts': [],
+                'currencies': list(Currency.objects.filter(workspace_id=ws.id).values('symbol', 'name')),
             }
 
             accounts = BudgetAccount.objects.filter(workspace=ws).select_related('default_currency')
@@ -421,6 +417,45 @@ class UserService:
                     account_entry['periods'].append(period_entry)
 
                 ws_entry['budget_accounts'].append(account_entry)
+
+            orphaned_transactions = list(
+                Transaction.objects.filter(
+                    budget_period__isnull=True,
+                    currency__workspace_id=ws.id,
+                )
+                .select_related('category', 'currency')
+                .values('date', 'description', 'amount', 'type', 'category__name', 'currency__symbol')
+            )
+            orphaned_planned = list(
+                PlannedTransaction.objects.filter(
+                    budget_period__isnull=True,
+                    currency__workspace_id=ws.id,
+                )
+                .select_related('currency')
+                .values('name', 'amount', 'planned_date', 'payment_date', 'status', 'currency__symbol')
+            )
+            orphaned_exchanges = list(
+                CurrencyExchange.objects.filter(
+                    budget_period__isnull=True,
+                    from_currency__workspace_id=ws.id,
+                )
+                .select_related('from_currency', 'to_currency')
+                .values(
+                    'date',
+                    'description',
+                    'from_amount',
+                    'to_amount',
+                    'exchange_rate',
+                    'from_currency__symbol',
+                    'to_currency__symbol',
+                )
+            )
+            if orphaned_transactions or orphaned_planned or orphaned_exchanges:
+                ws_entry['orphaned_records'] = {
+                    'transactions': orphaned_transactions,
+                    'planned_transactions': orphaned_planned,
+                    'currency_exchanges': orphaned_exchanges,
+                }
 
             workspace_data.append(ws_entry)
 

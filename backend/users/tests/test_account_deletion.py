@@ -29,7 +29,7 @@ class AccountDeletionTests(AuthMixin, TestCase):
         self.assertFalse(Workspace.objects.filter(id=workspace_id).exists())
 
     def test_delete_account_wrong_password(self):
-        """Deletion with wrong password should return 401."""
+        """Deletion with wrong password should return 401 (authentication error)."""
         response = self.client.delete(
             '/api/users/me',
             {'password': 'wrongpassword'},

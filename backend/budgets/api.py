@@ -1,77 +1,50 @@
 """Django-Ninja API endpoints for budgets app."""
 
+from django.http import HttpRequest
 from ninja import Query, Router
-from ninja.errors import HttpError
 
 from budgets.schemas import BudgetCreate, BudgetOut, BudgetUpdate
 from budgets.services import BudgetService
-from common.auth import JWTAuth
+from common.auth import WorkspaceJWTAuth
+from common.permissions import require_role
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budgets'])
 
 
-# =============================================================================
-# Budget Endpoints
-# =============================================================================
-
-
-@router.get('', response=list[BudgetOut], auth=JWTAuth())
+@router.get('', response=list[BudgetOut], auth=WorkspaceJWTAuth())
 def list_budgets(
-    request,
+    request: HttpRequest,
     budget_period_id: int | None = Query(None),
 ):
     """List budgets for the current workspace, optionally filtered by period."""
-    workspace = request.auth.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    from budgets.models import Budget
-
-    queryset = Budget.objects.select_related('category').filter(
-        budget_period__budget_account__workspace_id=workspace.id
-    )
-
-    if budget_period_id:
-        queryset = queryset.filter(budget_period_id=budget_period_id)
-
-    return queryset
+    workspace_id = request.auth.current_workspace_id
+    return BudgetService.list(workspace_id, budget_period_id)
 
 
-@router.post('', response={201: BudgetOut, 400: dict}, auth=JWTAuth())
-def create_budget(request, data: BudgetCreate):
+@router.post('', response={201: BudgetOut}, auth=WorkspaceJWTAuth())
+def create_budget(request: HttpRequest, data: BudgetCreate):
     """Create a new budget entry."""
     user = request.auth
-    workspace = user.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    budget = BudgetService.create(user, workspace, data)
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    budget = BudgetService.create(user, workspace_id, data)
     return 201, budget
 
 
-@router.put('/{budget_id}', response=BudgetOut, auth=JWTAuth())
-def update_budget(request, budget_id: int, data: BudgetUpdate):
+@router.put('/{budget_id}', response=BudgetOut, auth=WorkspaceJWTAuth())
+def update_budget(request: HttpRequest, budget_id: int, data: BudgetUpdate):
     """Update a budget entry."""
     user = request.auth
-    workspace = user.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    budget = BudgetService.update(user, workspace, budget_id, data)
-    return budget
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return BudgetService.update(user, workspace_id, budget_id, data)
 
 
-@router.delete('/{budget_id}', response={204: None}, auth=JWTAuth())
-def delete_budget(request, budget_id: int):
+@router.delete('/{budget_id}', response={204: None}, auth=WorkspaceJWTAuth())
+def delete_budget(request: HttpRequest, budget_id: int):
     """Delete a budget entry."""
-    user = request.auth
-    workspace = user.current_workspace
-
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-
-    BudgetService.delete(user, workspace, budget_id)
+    workspace_id = request.auth.current_workspace_id
+    require_role(request.auth, workspace_id, WRITE_ROLES)
+    BudgetService.delete(workspace_id, budget_id)
     return 204, None

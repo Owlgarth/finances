@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class Role(models.TextChoices):
     """User roles for workspace access control."""
@@ -38,6 +40,9 @@ class Workspace(models.Model):
 
 class Currency(models.Model):
     """Currency model scoped to a workspace."""
+
+    WORKSPACE_FILTER = 'workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='currencies')
     name = models.CharField(max_length=50)

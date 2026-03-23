@@ -135,16 +135,21 @@ interface AuthContextType {
 
 ### WorkspaceContext
 
-Provides current workspace and user role.
+Provides current workspace, user role, and workspace management operations.
 
 ```typescript
 interface WorkspaceContextType {
   workspace: Workspace | null;
+  workspaces: Workspace[];
   currentMembership: WorkspaceMember | null;
   userRole: 'owner' | 'admin' | 'member' | 'viewer' | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  switchWorkspace: (id: number) => Promise<void>;
+  createWorkspace: (name: string) => Promise<Workspace>;
+  deleteWorkspace: (id: number) => Promise<void>;
+  updateWorkspace: (data: { name: string }) => Promise<Workspace>;
 }
 ```
 
@@ -202,7 +207,7 @@ const {
 
 ```typescript
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/backend',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
 });
 ```
 
@@ -351,7 +356,7 @@ docker-compose up monie_ui
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_URL` | Backend API base URL | `http://localhost:8000/backend` |
+| `VITE_API_URL` | Backend API base URL | `http://localhost:8000/api` |
 | `VITE_DEMO_MODE` | Disable registration (optional) | `false` |
 
 ## Development Notes

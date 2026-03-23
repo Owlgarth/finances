@@ -10,6 +10,12 @@ Monie is a personal finance tracking application built with Django 6, Django Nin
 
 ### Backend (Django)
 
+When running Python commands, always use the virtual environment:
+
+```bash
+backend/.venv/bin/python
+```
+
 ```bash
 cd backend
 
@@ -75,19 +81,21 @@ Every endpoint must verify resources belong to the user's workspace.
 # Standard library
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 # Django/Django Ninja
-from django.db import transaction
+from django.db import transaction as db_transaction
 from django.http import HttpRequest
 from ninja import Router
-from ninja.errors import HttpError
+
+# Common utilities
+from common.auth import WorkspaceJWTAuth
+from common.exceptions import NotFoundError, ValidationError
+from common.permissions import require_role
 
 # Local apps (alphabetically)
-from common.auth import JWTAuth
-from common.services.base import get_workspace_period, require_role
-from core.schemas import DetailOut
-from transactions import services
+from transactions.schemas import TransactionCreate, TransactionOut
+from transactions.services import TransactionService
+from workspaces.models import WRITE_ROLES
 ```
 
 ### Naming Conventions
@@ -98,48 +106,102 @@ from transactions import services
 - **Constants**: UPPER_SNAKE_CASE (`WRITE_ROLES`, `TOKEN_KEY`)
 - **Schemas**: Suffix with purpose (`TransactionCreate`, `TransactionOut`, `TransactionImport`)
 
-### Django Ninja Endpoints
+### Return Early Pattern
 
-Endpoints are thin wrappers — parse the request, call the service, return the response. Business logic belongs in `services.py`.
+Use guard clauses and early returns to reduce nesting and improve readability:
 
 ```python
-from transactions import services
+# Bad: deeply nested
+def process_transaction(data):
+    if data:
+        if data.amount > 0:
+            if data.currency:
+                return create_transaction(data)
+    return None
+
+# Good: return early
+def process_transaction(data):
+    if not data:
+        return None
+    if data.amount <= 0:
+        return None
+    if not data.currency:
+        return None
+    return create_transaction(data)
+```
+
+### Django Ninja Endpoints
+
+Endpoints are thin wrappers — parse the request, call the service, return the response. Business logic belongs in service classes.
+
+For workspace-scoped endpoints, use `WorkspaceJWTAuth` which automatically validates that the user has an active workspace:
+
+```python
+from common.auth import WorkspaceJWTAuth
+from common.permissions import require_role
+from transactions.services import TransactionService
+from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Transactions'])
 
-@router.get('', response=list[TransactionOut], auth=JWTAuth())
-def list_transactions(request: HttpRequest, budget_period_id: Optional[int] = Query(None)):
+@router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
+def list_transactions(request: HttpRequest, budget_period_id: int | None = Query(None)):
     """Docstring describing the endpoint."""
-    workspace = request.auth.current_workspace
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-    return services.list_transactions(request.auth, workspace, budget_period_id)
+    workspace_id = request.auth.current_workspace_id
+    return TransactionService.list(workspace_id, budget_period_id)
 
-@router.post('', response={201: TransactionOut}, auth=JWTAuth())
+@router.post('', response={201: TransactionOut}, auth=WorkspaceJWTAuth())
 def create_transaction(request: HttpRequest, data: TransactionCreate):
-    workspace = request.auth.current_workspace
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-    return 201, services.create_transaction(request.auth, workspace, data)
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return 201, TransactionService.create(user, workspace_id, data)
+```
+
+For endpoints that don't require an active workspace (e.g., listing all workspaces), use `JWTAuth`:
+
+```python
+from common.auth import JWTAuth
+
+@router.get('', response=list[WorkspaceOut], auth=JWTAuth())
+def list_workspaces(request: HttpRequest):
+    return WorkspaceService.list(request.auth)
 ```
 
 ### Service Layer
 
-Business logic lives in `<app>/services.py`. Services handle role checks, DB operations, and balance updates. Shared helpers are in `common/services/base.py`.
+Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation, DB operations, and balance updates. Domain-specific exceptions are defined in `<app>/exceptions.py`.
+
+Shared helpers:
+- `common/permissions.py` — `require_role(user, workspace_id, allowed_roles)` — raises 403, returns the role
+- `common/services/base.py` — `resolve_currency`, `get_or_create_period_balance`, `update_period_balance`
 
 ```python
 # transactions/services.py
-from common.services.base import get_workspace_period, require_role, update_period_balance
+from django.db import transaction as db_transaction
 
-@db_transaction.atomic
-def create_transaction(user, workspace, data) -> Transaction:
-    require_role(user, workspace.id, WRITE_ROLES)
-    period = get_workspace_period(data.budget_period_id, workspace.id)
-    if not period:
-        raise HttpError(404, 'Budget period not found')
-    txn = Transaction.objects.create(budget_period=period, ..., created_by=user, updated_by=user)
-    update_period_balance(period.id, txn.currency, txn.type, txn.amount, 'add')
-    return txn
+from common.exceptions import CurrencyNotFoundInWorkspaceError
+from common.services.base import get_or_create_period_balance, resolve_currency
+from transactions.exceptions import TransactionNoActivePeriodError, TransactionNotFoundError
+from transactions.models import Transaction
+
+class TransactionService:
+    @staticmethod
+    def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
+        trans = Transaction.objects.for_workspace(workspace_id).filter(id=transaction_id).first()
+        if not trans:
+            raise TransactionNotFoundError()
+        return trans
+
+    @staticmethod
+    @db_transaction.atomic
+    def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
+        currency = resolve_currency(workspace_id, data.currency)
+        if not currency:
+            raise CurrencyNotFoundInWorkspaceError(data.currency)
+        trans = Transaction.objects.create(..., created_by=user, updated_by=user)
+        TransactionService.update_period_balance(...)
+        return trans
 ```
 
 ### Pydantic Schemas
@@ -164,9 +226,25 @@ class TransactionOut(BaseModel):
 
 ### Error Handling
 
-- Use `HttpError(status, 'message')` for API errors
-- Return `{404: {'detail': 'Not found'}}` for response tuples
-- Use `transaction.atomic()` for database operations that update balances
+- **Domain Exceptions**: Services raise domain exceptions inheriting from `ServiceError` (in `common/exceptions.py`)
+- **Global Handler**: A Django Ninja exception handler in `config/urls.py` converts `ServiceError` to HTTP responses automatically
+- **Exception Types**: `NotFoundError` (404), `ValidationError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403)
+- **App Exceptions**: Each app defines specific exceptions in `<app>/exceptions.py` (e.g., `TransactionNotFoundError`)
+- **Transactions**: Use `@db_transaction.atomic` for database operations that update balances
+
+```python
+# common/exceptions.py
+class ServiceError(Exception):
+    http_status: int = 500
+    default_message: str = 'An unexpected error occurred'
+
+class NotFoundError(ServiceError):
+    http_status = 404
+
+# transactions/exceptions.py
+class TransactionNotFoundError(NotFoundError):
+    default_message = 'Transaction not found'
+```
 
 ### Testing
 
@@ -175,9 +253,15 @@ from common.tests.mixins import AuthMixin, APIClientMixin
 from django.test import TestCase
 
 class TestTransactions(AuthMixin, APIClientMixin, TestCase):
+    user_role = 'member'  # default: 'owner'; also: 'admin', 'viewer'
+
     def test_create_transaction(self):
         data = self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(201)
+
+    def test_viewer_cannot_create(self):
+        # self.user, self.workspace, self.auth_token are available
+        self.assertStatus(403)
 ```
 
 ## Frontend Code Style (TypeScript/React)
@@ -267,10 +351,49 @@ import { useAuth } from '../contexts/AuthContext'
 
 ## Security Model (Four Layers)
 
-1. **Authentication**: `auth=JWTAuth()` on endpoints
-2. **Workspace Membership**: Verify `request.auth.current_workspace`
+1. **Authentication**: `auth=JWTAuth()` on endpoints (or `auth=WorkspaceJWTAuth()` for workspace-scoped endpoints)
+2. **Workspace Membership**: Guaranteed by `WorkspaceJWTAuth` — raises 400 if `current_workspace_id` is unset
 3. **Role-Based Permissions**: `require_role(user, workspace_id, WRITE_ROLES)`
-4. **Resource Ownership**: Filter queries by workspace ID
+4. **Resource Ownership**: Filter queries by workspace ID using `Model.objects.for_workspace(workspace_id)`
+
+### Workspace-Scoped Endpoints
+
+For endpoints that require an active workspace, use `WorkspaceJWTAuth`:
+
+```python
+from common.auth import WorkspaceJWTAuth
+
+@router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
+def list_transactions(request: HttpRequest):
+    workspace_id = request.auth.current_workspace_id
+    return Transaction.objects.for_workspace(workspace_id)
+```
+
+`WorkspaceJWTAuth` returns 400 (not 401) if no workspace is selected, because the token is valid — the workspace state is missing.
+
+### Workspace-Scoped Queries
+
+Use the `for_workspace()` queryset method:
+
+```python
+# Instead of:
+Transaction.objects.filter(budget_period__budget_account__workspace_id=workspace_id)
+
+# Use:
+Transaction.objects.for_workspace(workspace_id)
+```
+
+All workspace-scoped models have `WORKSPACE_FILTER` defined.
+
+### List Endpoints Return Empty Arrays for Cross-Workspace Resources
+
+When a list endpoint receives a `budget_period_id` or similar filter that references a resource in another workspace, it returns an empty array (`[]`) rather than 404. This is a deliberate security choice to prevent leaking whether resource IDs exist in other workspaces.
+
+Examples:
+- `GET /api/transactions?current_date=...` returns `[]` when no period matches
+- `GET /api/categories?budget_period_id=...` returns `[]` when the period belongs to another workspace
+
+Do not "fix" these to return 404 — the empty array behavior is intentional.
 
 ## GDPR & Data Integrity Rules
 
@@ -307,6 +430,10 @@ import { useAuth } from '../contexts/AuthContext'
 ### Backend: Workspace-scoped Query
 
 ```python
+# Using the for_workspace() queryset method (preferred)
+queryset = Transaction.objects.for_workspace(workspace_id)
+
+# Direct filter (alternative)
 queryset = Transaction.objects.filter(
     budget_period__budget_account__workspace_id=workspace.id
 )
@@ -316,17 +443,30 @@ queryset = Transaction.objects.filter(
 
 ```python
 # In api.py — no business logic, just wire up
-@router.post('', response={201: TransactionOut}, auth=JWTAuth())
+@router.post('', response={201: TransactionOut}, auth=WorkspaceJWTAuth())
 def create_transaction_endpoint(request, data: TransactionCreate):
-    workspace = request.auth.current_workspace
-    if not workspace:
-        raise HttpError(404, 'No workspace selected')
-    return 201, services.create_transaction(request.auth, workspace, data)
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return 201, TransactionService.create(user, workspace_id, data)
+```
+
+### Backend: Workspace Management
+
+```python
+from workspaces.services import WorkspaceService
+
+# Create a new workspace (auto-switches user to it)
+workspace = WorkspaceService.create_workspace(user=user, name='New Workspace', create_demo=True)
+
+# Delete a workspace (switches all affected users to another workspace)
+WorkspaceService.delete_workspace(user=user, workspace_id=workspace.id)
 ```
 
 ### Frontend: Use Context
 
 ```typescript
 const { user, isAuthenticated } = useAuth()
-const { currentPeriod } = useBudgetPeriod()
+const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace } = useWorkspace()
+const { selectedPeriod, selectedPeriodId } = useBudgetPeriod()
 ```

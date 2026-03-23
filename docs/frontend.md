@@ -60,6 +60,8 @@ frontend/src/
 - `MainLayout` - Responsive wrapper: mobile drawer, tablet auto-collapsed, desktop persistent sidebar
 - `Sidebar` - Navigation links, account/period selectors, user menu; supports collapsed/expanded
 - `UserMenu` - User profile and logout at sidebar bottom
+- `WorkspaceSelector` - Dropdown to switch/create workspaces, with settings gear to open settings panel
+- `WorkspaceSettingsPanel` - Modal for workspace name editing (owner/admin) and deletion (owner only, requires multiple workspaces)
 
 ### Common Components
 - `Loading` - Spinner
@@ -100,18 +102,29 @@ interface AuthContextType {
 ```
 
 ### WorkspaceContext
-Provides current workspace and user role.
+Provides current workspace, user role, and workspace management operations.
 
 ```typescript
 interface WorkspaceContextType {
   workspace: Workspace | null;
+  workspaces: Workspace[];
   currentMembership: WorkspaceMember | null;
   userRole: 'owner' | 'admin' | 'member' | 'viewer' | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  switchWorkspace: (id: number) => Promise<void>;
+  createWorkspace: (name: string) => Promise<Workspace>;
+  deleteWorkspace: (id: number) => Promise<void>;
+  updateWorkspace: (data: { name: string }) => Promise<Workspace>;
 }
 ```
+
+**Operations:**
+- `switchWorkspace(id)` - Switch to a different workspace (auto-switches to first available on deletion)
+- `createWorkspace(name)` - Create a new workspace (auto-switches to it)
+- `deleteWorkspace(id)` - Delete workspace (owner only, must have multiple workspaces)
+- `updateWorkspace(data)` - Update workspace name (owner/admin only)
 
 ### BudgetAccountContext
 Manages selected budget account.

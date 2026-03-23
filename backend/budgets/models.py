@@ -1,9 +1,14 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class Budget(models.Model):
     """Budget model for allocating amounts to categories within periods."""
+
+    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     budget_period = models.ForeignKey('budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='budgets')
     category = models.ForeignKey('categories.Category', on_delete=models.CASCADE, related_name='budgets')

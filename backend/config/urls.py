@@ -13,6 +13,7 @@ from budget_accounts.api import router as budget_accounts_router
 from budget_periods.api import router as budget_periods_router
 from budgets.api import router as budgets_router
 from categories.api import router as categories_router
+from common.exceptions import ServiceError
 from core.api import router as auth_router
 from core.legal_api import router as legal_router
 from currency_exchanges.api import router as currency_exchanges_router
@@ -25,6 +26,12 @@ from workspaces.api import router as workspaces_router
 
 # Create main API instance (single entry point for routing)
 api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
+
+
+@api.exception_handler(ServiceError)
+def service_error_handler(request, exc: ServiceError):
+    return api.create_response(request, {'detail': exc.message}, status=exc.http_status)
+
 
 # Register all routers to the API
 api.add_router('/auth', auth_router)

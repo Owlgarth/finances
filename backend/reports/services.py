@@ -3,25 +3,20 @@
 from decimal import Decimal
 
 from django.db.models import Sum
-from ninja.errors import HttpError
 
+from budget_periods.services import BudgetPeriodService
 from budgets.models import Budget
-from common.services.base import get_workspace_period
 from period_balances.models import PeriodBalance
 from reports.schemas import BudgetSummaryCategoryItem
 from transactions.models import Transaction
+from workspaces.models import Currency
 
 
 class ReportService:
     @staticmethod
-    def get_budget_summary(workspace, period_id: int) -> tuple:
-        """Return (period, summary_items, balances) for a period budget summary.
-
-        Raises HttpError 404 if the period does not belong to the workspace.
-        """
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+    def get_budget_summary(workspace_id: int, period_id: int) -> tuple:
+        """Return (period, summary_items, balances) for a period budget summary."""
+        period = BudgetPeriodService.get(period_id, workspace_id)
 
         budgets = Budget.objects.filter(budget_period_id=period_id).select_related('category', 'currency')
 
@@ -49,16 +44,16 @@ class ReportService:
         return period, summary, balances
 
     @staticmethod
-    def get_current_balances(workspace, currencies: list[str]) -> dict[str, Decimal]:
+    def get_current_balances(workspace_id: int, currencies: list[Currency]) -> dict[str, Decimal]:
         """Return the latest closing balance per currency for the workspace."""
         result = {}
-        for currency_symbol in currencies:
+        for currency in currencies:
             latest_balance = (
-                PeriodBalance.objects.filter(currency__symbol=currency_symbol)
+                PeriodBalance.objects.filter(currency__symbol=currency.symbol)
                 .select_related('budget_period__budget_account', 'currency')
-                .filter(budget_period__budget_account__workspace_id=workspace.id)
+                .filter(budget_period__budget_account__workspace_id=workspace_id)
                 .order_by('-budget_period__end_date')
                 .first()
             )
-            result[currency_symbol] = latest_balance.closing_balance if latest_balance else Decimal('0')
+            result[currency.symbol] = latest_balance.closing_balance if latest_balance else Decimal('0')
         return result

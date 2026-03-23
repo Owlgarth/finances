@@ -1,29 +1,35 @@
 """Business logic for the currency_exchanges app."""
 
+from __future__ import annotations
+
 from django.db import transaction as db_transaction
-from ninja.errors import HttpError
 
 from budget_periods.models import BudgetPeriod
-from common.permissions import require_role
-from common.services.base import get_or_create_period_balance, get_workspace_period, resolve_currency
+from budget_periods.services import BudgetPeriodService
+from common.exceptions import CurrencyNotFoundInWorkspaceError
+from common.services.base import get_or_create_period_balance, resolve_currency
+from currency_exchanges.exceptions import (
+    CurrencyExchangeImportError,
+    CurrencyExchangeNotFoundError,
+)
 from currency_exchanges.models import CurrencyExchange
 from currency_exchanges.schemas import CurrencyExchangeCreate, CurrencyExchangeImport, CurrencyExchangeUpdate
 from period_balances.models import PeriodBalance
-from workspaces.models import WRITE_ROLES
 
 
 class CurrencyExchangeService:
     @staticmethod
-    def get_exchange(exchange_id: int, workspace_id: int) -> CurrencyExchange | None:
+    def get_exchange(exchange_id: int, workspace_id: int) -> CurrencyExchange:
         """Get an exchange and verify it belongs to the workspace."""
-        return (
+        exchange = (
             CurrencyExchange.objects.select_related('budget_period__budget_account', 'from_currency', 'to_currency')
-            .filter(
-                id=exchange_id,
-                budget_period__budget_account__workspace_id=workspace_id,
-            )
+            .for_workspace(workspace_id)
+            .filter(id=exchange_id)
             .first()
         )
+        if not exchange:
+            raise CurrencyExchangeNotFoundError()
+        return exchange
 
     @staticmethod
     def _update_balance(balance: PeriodBalance) -> None:
@@ -52,20 +58,31 @@ class CurrencyExchangeService:
         return period.id if period else None
 
     @staticmethod
+    def list(workspace_id: int, budget_period_id: int | None = None) -> list[CurrencyExchange]:
+        """List currency exchanges for a workspace, optionally filtered by period.
+
+        NOTE: Standalone exchanges (budget_period=NULL) are NOT included because
+        for_workspace() filters via budget_period__budget_account__workspace_id.
+        See CurrencyExchange.WORKSPACE_FILTER for details.
+        """
+        queryset = CurrencyExchange.objects.select_related('from_currency', 'to_currency').for_workspace(workspace_id)
+        if budget_period_id:
+            queryset = queryset.filter(budget_period_id=budget_period_id)
+        return list(queryset.order_by('-date'))
+
+    @staticmethod
     @db_transaction.atomic
-    def create(user, workspace, data: CurrencyExchangeCreate) -> CurrencyExchange:
+    def create(user, workspace_id: int, data: CurrencyExchangeCreate) -> CurrencyExchange:
         """Create an exchange record and update period balances."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        from_currency = resolve_currency(workspace, data.from_currency)
+        from_currency = resolve_currency(workspace_id, data.from_currency)
         if not from_currency:
-            raise HttpError(400, f'Currency {data.from_currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.from_currency)
 
-        to_currency = resolve_currency(workspace, data.to_currency)
+        to_currency = resolve_currency(workspace_id, data.to_currency)
         if not to_currency:
-            raise HttpError(400, f'Currency {data.to_currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.to_currency)
 
-        period_id = CurrencyExchangeService._find_period_for_date(workspace.id, data.date)
+        period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
         exchange_rate = data.to_amount / data.from_amount
 
         exchange = CurrencyExchange.objects.create(
@@ -94,23 +111,18 @@ class CurrencyExchangeService:
 
     @staticmethod
     @db_transaction.atomic
-    def update(user, workspace, exchange_id: int, data: CurrencyExchangeUpdate) -> CurrencyExchange:
+    def update(user, workspace_id: int, exchange_id: int, data: CurrencyExchangeUpdate) -> CurrencyExchange:
         """Update an exchange, reversing old balances and applying new ones."""
-        require_role(user, workspace.id, WRITE_ROLES)
+        exchange = CurrencyExchangeService.get_exchange(exchange_id, workspace_id)
 
-        exchange = CurrencyExchangeService.get_exchange(exchange_id, workspace.id)
-        if not exchange:
-            raise HttpError(404, 'Exchange not found')
-
-        new_from_currency = resolve_currency(workspace, data.from_currency)
+        new_from_currency = resolve_currency(workspace_id, data.from_currency)
         if not new_from_currency:
-            raise HttpError(400, f'Currency {data.from_currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.from_currency)
 
-        new_to_currency = resolve_currency(workspace, data.to_currency)
+        new_to_currency = resolve_currency(workspace_id, data.to_currency)
         if not new_to_currency:
-            raise HttpError(400, f'Currency {data.to_currency} not found in workspace')
+            raise CurrencyNotFoundInWorkspaceError(data.to_currency)
 
-        # Revert old balances
         if exchange.budget_period_id:
             balance_from = get_or_create_period_balance(exchange.budget_period_id, exchange.from_currency)
             balance_from.exchanges_out -= exchange.from_amount
@@ -120,7 +132,7 @@ class CurrencyExchangeService:
             balance_to.exchanges_in -= exchange.to_amount
             CurrencyExchangeService._update_balance(balance_to)
 
-        new_period_id = CurrencyExchangeService._find_period_for_date(workspace.id, data.date)
+        new_period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
         exchange_rate = data.to_amount / data.from_amount
 
         exchange.date = data.date
@@ -147,13 +159,9 @@ class CurrencyExchangeService:
 
     @staticmethod
     @db_transaction.atomic
-    def delete(user, workspace, exchange_id: int) -> None:
+    def delete(workspace_id: int, exchange_id: int) -> None:
         """Delete an exchange and revert period balances."""
-        require_role(user, workspace.id, WRITE_ROLES)
-
-        exchange = CurrencyExchangeService.get_exchange(exchange_id, workspace.id)
-        if not exchange:
-            raise HttpError(404, 'Exchange not found')
+        exchange = CurrencyExchangeService.get_exchange(exchange_id, workspace_id)
 
         if exchange.budget_period_id:
             balance_from = get_or_create_period_balance(exchange.budget_period_id, exchange.from_currency)
@@ -167,11 +175,9 @@ class CurrencyExchangeService:
         exchange.delete()
 
     @staticmethod
-    def export(workspace, period_id: int) -> list[dict]:
+    def export(workspace_id: int, period_id: int) -> list[dict]:
         """Return serialisable exchange data for a period."""
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+        BudgetPeriodService.get(period_id, workspace_id)
 
         exchanges = (
             CurrencyExchange.objects.select_related('from_currency', 'to_currency')
@@ -193,30 +199,28 @@ class CurrencyExchangeService:
 
     @staticmethod
     @db_transaction.atomic
-    def import_data(user, workspace, period_id: int, data: list) -> int:
+    def import_data(user, workspace_id: int, period_id: int, data: list) -> int:
         """Bulk-create exchanges from parsed JSON data. Returns count of created records."""
-        require_role(user, workspace.id, WRITE_ROLES)
+        BudgetPeriodService.get(period_id, workspace_id)
 
-        period = get_workspace_period(period_id, workspace.id)
-        if not period:
-            raise HttpError(404, 'Budget period not found')
+        from workspaces.models import Currency
 
-        currency_map = {c.symbol: c for c in workspace.currencies.all()}
+        currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
 
         new_exchanges = []
         for item in data:
             try:
                 import_item = CurrencyExchangeImport(**item)
             except Exception as e:
-                raise HttpError(400, f'Invalid data format: {e}')
+                raise CurrencyExchangeImportError(f'Invalid data format: {e}')
 
             from_currency = currency_map.get(import_item.from_currency)
             if not from_currency:
-                raise HttpError(400, f'Currency {import_item.from_currency} not found in workspace')
+                raise CurrencyNotFoundInWorkspaceError(import_item.from_currency)
 
             to_currency = currency_map.get(import_item.to_currency)
             if not to_currency:
-                raise HttpError(400, f'Currency {import_item.to_currency} not found in workspace')
+                raise CurrencyNotFoundInWorkspaceError(import_item.to_currency)
 
             exchange_rate = import_item.to_amount / import_item.from_amount
             new_exchanges.append(

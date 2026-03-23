@@ -4,6 +4,8 @@ import { useLocation } from 'react-router-dom'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import Sidebar from './Sidebar'
 import { HiMenu } from 'react-icons/hi'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
+import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
 
 const SIDEBAR_COLLAPSED_KEY = 'monie-sidebar-collapsed'
 
@@ -11,9 +13,29 @@ interface MainLayoutProps {
   children: ReactNode
 }
 
+function NoWorkspaceMessage() {
+  const [showForm, setShowForm] = useState(false)
+
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">No workspace selected</h2>
+        <p className="text-gray-500 mb-4">Create a workspace or ask to be added to one.</p>
+        
+        {!showForm ? (
+          <CreateWorkspaceButton onClick={() => setShowForm(true)} />
+        ) : (
+          <CreateWorkspaceForm onCancel={() => setShowForm(false)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function MainLayout({ children }: MainLayoutProps) {
   const isMobile = useMediaQuery('(max-width: 767px)')
   const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)')
+  const { workspace, isLoading } = useWorkspace()
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -89,7 +111,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
         {/* Main content with top padding for the fixed bar */}
         <main className="pt-14 px-4 py-6">
-          {children}
+          {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
         </main>
       </div>
     )
@@ -104,7 +126,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         />
       </div>
       <main className="flex-1 overflow-y-auto p-6">
-        {children}
+        {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
       </main>
     </div>
   )

@@ -1,9 +1,14 @@
 from django.conf import settings
 from django.db import models
 
+from common.querysets import WorkspaceScopedQuerySet
+
 
 class Transaction(models.Model):
     """Transaction model for tracking income and expenses."""
+
+    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
+    objects = WorkspaceScopedQuerySet.as_manager()
 
     TYPE_CHOICES = [
         ('income', 'Income'),

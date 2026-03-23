@@ -47,10 +47,8 @@ Shared utilities used across the project:
   - `create_access_token()` - Generates JWT with user_id, email, current_workspace_id
   - `decode_access_token()` - Validates and decodes JWT
   - `user_to_schema()` - Converts User model to API schema
-  - `can_reset_password()` - Role-based password reset rules
 
 - **`services/base.py`**: Shared service helpers
-  - `get_workspace_period(period_id, workspace_id)` - Validates period belongs to workspace
   - `require_role(user, workspace_id, allowed_roles)` - Raises 403 if role not allowed
   - `get_or_create_period_balance(period_id, currency, user)` - Gets or creates balance record
   - `update_period_balance(period_id, currency, trans_type, amount, operation)` - Updates balance incrementally
@@ -141,13 +139,13 @@ Set `DEMO_MODE=true` in `.env` to disable new user registration.
 
 **Use cases**: Public demos, showcases, production environments with controlled user access.
 
-When enabled, `/backend/auth/register` returns 403 Forbidden.
+When enabled, `/api/auth/register` returns 403 Forbidden.
 
 ## API Endpoints
 
-**Base URL**: `http://127.0.0.1:8000/backend`
+**Base URL**: `http://127.0.0.1:8000/api`
 
-**Interactive Documentation**: Visit `/backend/docs` for Swagger UI
+**Interactive Documentation**: Visit `/api/docs` for Swagger UI
 
 All endpoints (except auth endpoints) require `Authorization: Bearer <token>` header.
 
@@ -155,135 +153,166 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/backend/auth/register` | Register new user with workspace (disabled in DEMO_MODE) |
-| POST | `/backend/auth/login` | Login and receive JWT token |
-| GET | `/backend/auth/me` | Get current user info |
-| PATCH | `/backend/auth/me` | Update user profile |
-| PUT | `/backend/auth/me/password` | Change password |
+| POST | `/api/auth/register` | Register new user with workspace (disabled in DEMO_MODE) |
+| POST | `/api/auth/login` | Login and receive JWT token |
+
+### Users
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users/me` | Get current user info |
+| PATCH | `/api/users/me` | Update user profile |
+| PUT | `/api/users/me/password` | Change password |
+| GET | `/api/users/me/preferences` | Get user preferences |
+| PATCH | `/api/users/me/preferences` | Update user preferences |
+| GET | `/api/users/me/consents` | List active consents |
+| POST | `/api/users/me/consents` | Record consent (terms/privacy) |
+| GET | `/api/users/me/consent-status` | Check if re-consent is needed |
+| DELETE | `/api/users/me/consents/{consent_type}` | Withdraw consent |
+| GET | `/api/users/me/deletion-check` | Pre-check account deletion impact |
+| DELETE | `/api/users/me` | Permanently delete account and all data |
+| GET | `/api/users/me/export` | Export all personal data as JSON (rate limited) |
+
+### Legal
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/legal/terms` | Get current Terms of Service |
+| GET | `/api/legal/privacy` | Get current Privacy Policy |
 
 ### Workspaces
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/backend/workspaces` | List user's workspaces |
-| GET | `/backend/workspaces/current` | Get current workspace |
-| PUT | `/backend/workspaces/current` | Update current workspace |
-| POST | `/backend/workspaces/{workspaceId}/switch` | Switch to another workspace |
+| GET | `/api/workspaces` | List user's workspaces |
+| POST | `/api/workspaces/` | Create new workspace |
+| GET | `/api/workspaces/current` | Get current workspace |
+| PUT | `/api/workspaces/current` | Update current workspace name |
+| DELETE | `/api/workspaces/{id}` | Delete workspace (owner only) |
+| POST | `/api/workspaces/{workspaceId}/switch` | Switch to another workspace |
+
+### Workspace Currencies
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/workspaces/currencies` | List currencies for current workspace |
+| POST | `/api/workspaces/currencies` | Create a new currency (admin+) |
+| DELETE | `/api/workspaces/currencies/{id}` | Delete a currency (admin+) |
 
 ### Workspace Members
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/backend/workspaces/{workspaceId}/members` | List workspace members |
-| POST | `/backend/workspaces/{workspaceId}/members/add` | Add new member |
-| PUT | `/backend/workspaces/{workspaceId}/members/{userId}/role` | Update member role |
-| DELETE | `/backend/workspaces/{workspaceId}/members/{userId}` | Remove member |
-| POST | `/backend/workspaces/{workspaceId}/members/leave` | Leave workspace |
-| PUT | `/backend/workspaces/{workspaceId}/members/{userId}/reset-password` | Reset member password |
+| GET | `/api/workspaces/{workspaceId}/members` | List workspace members |
+| POST | `/api/workspaces/{workspaceId}/members/add` | Add new member |
+| PUT | `/api/workspaces/{workspaceId}/members/{userId}/role` | Update member role |
+| DELETE | `/api/workspaces/{workspaceId}/members/{userId}` | Remove member |
+| POST | `/api/workspaces/{workspaceId}/members/leave` | Leave workspace |
+| PUT | `/api/workspaces/{workspaceId}/members/{userId}/reset-password` | Reset member password |
 
 ### Budget Accounts
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/budget-accounts` | `include_inactive` | List budget accounts |
-| GET | `/backend/budget-accounts/{id}` | - | Get specific account |
-| POST | `/backend/budget-accounts` | - | Create new account |
-| PUT | `/backend/budget-accounts/{id}` | - | Update account |
-| DELETE | `/backend/budget-accounts/{id}` | - | Delete account |
-| PATCH | `/backend/budget-accounts/{id}/archive` | - | Toggle archive status |
+| GET | `/api/budget-accounts` | `include_inactive` | List budget accounts |
+| GET | `/api/budget-accounts/{id}` | - | Get specific account |
+| POST | `/api/budget-accounts` | - | Create new account |
+| PUT | `/api/budget-accounts/{id}` | - | Update account |
+| DELETE | `/api/budget-accounts/{id}` | - | Delete account |
+| PATCH | `/api/budget-accounts/{id}/archive` | - | Toggle archive status |
 
 ### Budget Periods
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/budget-periods` | `budget_account_id` | List all budget periods |
-| GET | `/backend/budget-periods/{id}` | - | Get specific period |
-| GET | `/backend/budget-periods/current` | `current_date` | Get current period |
-| POST | `/backend/budget-periods` | - | Create new period |
-| PUT | `/backend/budget-periods/{id}` | - | Update period |
-| DELETE | `/backend/budget-periods/{id}` | - | Delete period |
-| POST | `/backend/budget-periods/{id}/copy` | - | Copy period with budgets/categories |
+| GET | `/api/budget-periods` | `budget_account_id` | List all budget periods |
+| GET | `/api/budget-periods/{id}` | - | Get specific period |
+| GET | `/api/budget-periods/current` | `current_date` | Get current period |
+| POST | `/api/budget-periods` | - | Create new period |
+| PUT | `/api/budget-periods/{id}` | - | Update period |
+| DELETE | `/api/budget-periods/{id}` | - | Delete period |
+| POST | `/api/budget-periods/{id}/copy` | - | Copy period with budgets/categories |
 
 ### Categories
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/categories` | `budget_period_id`, `current_date` | List categories |
-| GET | `/backend/categories/{id}` | - | Get specific category |
-| POST | `/backend/categories` | - | Create category |
-| PUT | `/backend/categories/{id}` | - | Update category |
-| DELETE | `/backend/categories/{id}` | - | Delete category |
-| POST | `/backend/categories/import` | - | Import categories (FormData) |
-| GET | `/backend/categories/export/` | `budget_period_id` | Export categories to JSON |
+| GET | `/api/categories` | `budget_period_id`, `current_date` | List categories |
+| GET | `/api/categories/{id}` | - | Get specific category |
+| POST | `/api/categories` | - | Create category |
+| PUT | `/api/categories/{id}` | - | Update category |
+| DELETE | `/api/categories/{id}` | - | Delete category |
+| POST | `/api/categories/import` | - | Import categories (FormData) |
+| GET | `/api/categories/export/` | `budget_period_id` | Export categories to JSON |
 
 ### Budgets
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/budgets` | `budget_period_id` | List budgets |
-| POST | `/backend/budgets` | - | Create budget |
-| PUT | `/backend/budgets/{id}` | - | Update budget |
-| DELETE | `/backend/budgets/{id}` | - | Delete budget |
+| GET | `/api/budgets` | `budget_period_id` | List budgets |
+| POST | `/api/budgets` | - | Create budget |
+| PUT | `/api/budgets/{id}` | - | Update budget |
+| DELETE | `/api/budgets/{id}` | - | Delete budget |
 
 ### Transactions
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/transactions` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `type[]`, `category_id[]`, `amount_gte`, `amount_lte` | List transactions |
-| POST | `/backend/transactions` | - | Create transaction |
-| PUT | `/backend/transactions/{id}` | - | Update transaction |
-| DELETE | `/backend/transactions/{id}` | - | Delete transaction |
-| POST | `/backend/transactions/import` | - | Import transactions (FormData) |
-| GET | `/backend/transactions/export/` | `budget_period_id`, `type` | Export transactions to JSON |
+| GET | `/api/transactions` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `type[]`, `category_id[]`, `amount_gte`, `amount_lte` | List transactions |
+| POST | `/api/transactions` | - | Create transaction |
+| PUT | `/api/transactions/{id}` | - | Update transaction |
+| DELETE | `/api/transactions/{id}` | - | Delete transaction |
+| POST | `/api/transactions/import` | - | Import transactions (FormData) |
+| GET | `/api/transactions/export/` | `budget_period_id`, `type` | Export transactions to JSON |
 
 ### Planned Transactions
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/planned-transactions` | `status`, `budget_period_id` | List planned transactions |
-| POST | `/backend/planned-transactions` | - | Create planned transaction |
-| PUT | `/backend/planned-transactions/{id}` | - | Update planned transaction |
-| DELETE | `/backend/planned-transactions/{id}` | - | Delete planned transaction |
-| POST | `/backend/planned-transactions/{id}/execute` | `payment_date` | Execute planned transaction |
-| POST | `/backend/planned-transactions/import` | - | Import planned transactions (FormData) |
-| GET | `/backend/planned-transactions/export/` | `budget_period_id`, `status` | Export planned transactions to JSON |
+| GET | `/api/planned-transactions` | `status`, `budget_period_id` | List planned transactions |
+| POST | `/api/planned-transactions` | - | Create planned transaction |
+| PUT | `/api/planned-transactions/{id}` | - | Update planned transaction |
+| DELETE | `/api/planned-transactions/{id}` | - | Delete planned transaction |
+| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute planned transaction |
+| POST | `/api/planned-transactions/import` | - | Import planned transactions (FormData) |
+| GET | `/api/planned-transactions/export/` | `budget_period_id`, `status` | Export planned transactions to JSON |
 
 ### Period Balances
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/period-balances` | `budget_period_id` | List period balances |
-| PUT | `/backend/period-balances/{id}` | - | Update period balance |
-| POST | `/backend/period-balances/recalculate` | - | Recalculate period balances |
+| GET | `/api/period-balances` | `budget_period_id` | List period balances |
+| PUT | `/api/period-balances/{id}` | - | Update period balance |
+| POST | `/api/period-balances/recalculate` | - | Recalculate period balances |
 
 ### Currency Exchanges
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/currency-exchanges` | `budget_period_id` | List currency exchanges |
-| POST | `/backend/currency-exchanges` | - | Create currency exchange |
-| PUT | `/backend/currency-exchanges/{id}` | - | Update currency exchange |
-| DELETE | `/backend/currency-exchanges/{id}` | - | Delete currency exchange |
-| POST | `/backend/currency-exchanges/import` | - | Import currency exchanges (FormData) |
-| GET | `/backend/currency-exchanges/export/` | `budget_period_id` | Export currency exchanges to JSON |
+| GET | `/api/currency-exchanges` | `budget_period_id` | List currency exchanges |
+| POST | `/api/currency-exchanges` | - | Create currency exchange |
+| PUT | `/api/currency-exchanges/{id}` | - | Update currency exchange |
+| DELETE | `/api/currency-exchanges/{id}` | - | Delete currency exchange |
+| POST | `/api/currency-exchanges/import` | - | Import currency exchanges (FormData) |
+| GET | `/api/currency-exchanges/export/` | `budget_period_id` | Export currency exchanges to JSON |
 
 ### Reports
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/backend/reports/budget-summary` | `budget_period_id` | Get budget vs actual summary |
-| GET | `/backend/reports/current-balances` | - | Get current balances across currencies |
+| GET | `/api/reports/budget-summary` | `budget_period_id` | Get budget vs actual summary |
+| GET | `/api/reports/current-balances` | - | Get current balances across currencies |
 
 ## Import/Export
 
 Several endpoints support bulk import/export via JSON files using FormData (multipart/form-data):
 
 | Feature | Import Endpoint | Export Endpoint |
-|---------|----------------|-----------------|
-| Categories | `POST /backend/categories/import` | `GET /backend/categories/export/?budget_period_id={id}` |
-| Transactions | `POST /backend/transactions/import` | `GET /backend/transactions/export/?budget_period_id={id}` |
-| Planned Transactions | `POST /backend/planned-transactions/import` | `GET /backend/planned-transactions/export/?budget_period_id={id}` |
-| Currency Exchanges | `POST /backend/currency-exchanges/import` | `GET /backend/currency-exchanges/export/?budget_period_id={id}` |
+|---------|-----------------|-----------------|
+| Categories | `POST /api/categories/import` | `GET /api/categories/export/?budget_period_id={id}` |
+| Transactions | `POST /api/transactions/import` | `GET /api/transactions/export/?budget_period_id={id}` |
+| Planned Transactions | `POST /api/planned-transactions/import` | `GET /api/planned-transactions/export/?budget_period_id={id}` |
+| Currency Exchanges | `POST /api/currency-exchanges/import` | `GET /api/currency-exchanges/export/?budget_period_id={id}` |
 
 ## Testing
 
@@ -309,7 +338,7 @@ pytest -v
 ```python
 class MyTestCase(APIClientMixin, TestCase):
     def test_something(self):
-        self.get('/backend/endpoint', **self.auth_headers())
+        self.get('/api/endpoint', **self.auth_headers())
         self.assertStatus(200)
 ```
 
@@ -318,7 +347,7 @@ class MyTestCase(APIClientMixin, TestCase):
 class MyTestCase(AuthMixin, TestCase):
     def test_something(self):
         # User and workspace auto-created
-        response = self.client.get('/backend/endpoint')
+        response = self.client.get('/api/endpoint')
 ```
 
 ## Setup
@@ -406,9 +435,9 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-API will be available at `http://127.0.0.1:8000/backend`
+API will be available at `http://127.0.0.1:8000/api`
 
-Interactive docs at `http://127.0.0.1:8000/backend/docs`
+Interactive docs at `http://127.0.0.1:8000/api/docs`
 
 ## Docker Support
 
