@@ -25,23 +25,26 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
   const totalDifference = totalBudget - totalActual
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Budget {currency}</h3>
+    <div 
+      className="bg-surface-container-lowest rounded-xl overflow-hidden mb-8"
+      style={{ boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="px-4 sm:px-6 py-4">
+        <h3 className="font-headline font-bold text-on-surface">Budget {currency}</h3>
       </div>
 
       {/* Desktop Table */}
       <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
         <table className="w-full">
         <thead>
-          <tr className="border-b border-gray-200">
-            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Budget</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actual</th>
-            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Difference</th>
-            <th className="px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Progress</th>
+          <tr className="bg-surface-container-low">
+            <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Category</th>
+            <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Budget</th>
+            <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Actual</th>
+            <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Difference</th>
+            <th className="px-6 py-2 font-mono text-[9px] font-bold text-outline uppercase tracking-widest text-center">Progress</th>
             {(onEdit || onDelete) && (
-              <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Actions</th>
             )}
           </tr>
         </thead>
@@ -54,12 +57,12 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
               onDelete={onDelete}
             />
           ))}
-          <tr className="bg-gray-50 border-t border-gray-200">
-            <td className="px-6 py-4 font-semibold text-gray-900">Total</td>
-            <td className="px-6 py-4 text-right font-semibold text-gray-900">{totalBudget.toFixed(2)}</td>
-            <td className="px-6 py-4 text-right font-semibold text-gray-900">{totalActual.toFixed(2)}</td>
+          <tr className="bg-surface-container-low">
+            <td className="px-6 py-4 font-mono font-bold text-on-surface">Total</td>
+            <td className="px-6 py-4 text-right font-mono font-bold text-on-surface">{totalBudget.toFixed(2)}</td>
+            <td className="px-6 py-4 text-right font-mono font-bold text-on-surface">{totalActual.toFixed(2)}</td>
             <td className="px-6 py-4 text-right">
-              <span className={`font-semibold ${totalDifference < 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <span className={`font-mono font-bold ${totalDifference < 0 ? 'text-negative' : 'text-positive'}`}>
                 {totalDifference.toFixed(2)}
               </span>
             </td>
@@ -71,7 +74,7 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
       </div>
 
       {/* Mobile Cards */}
-      <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
+      <div className={isCardsView ? '' : 'md:hidden'}>
         {categories.map(cat => {
           const budgetNum = Number(cat.budget) || 0
           const actualNum = Number(cat.actual) || 0
@@ -80,34 +83,34 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
           const isOverBudget = actualNum > budgetNum
 
           return (
-            <div key={cat.category} className={`p-4 ${isOverBudget ? 'bg-red-50' : ''}`}>
+            <div key={cat.category} className={`p-4 ${isOverBudget ? 'bg-[rgba(225,29,72,0.04)]' : ''}`}>
               <div className="flex justify-between items-start mb-3">
-                <h4 className="font-semibold text-gray-900">{cat.category}</h4>
-                <span className={`text-sm font-semibold ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                <h4 className="font-headline font-bold text-on-surface">{cat.category}</h4>
+                <span className={`font-mono font-bold ${isOverBudget ? 'text-negative' : 'text-positive'}`}>
                   {difference.toFixed(2)}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mb-3 text-sm">
+              <div className="grid grid-cols-2 gap-2 mb-3 text-sm font-mono">
                 <div>
-                  <span className="text-gray-600">Budget:</span>
-                  <span className="ml-1 font-medium">{budgetNum.toFixed(2)}</span>
+                  <span className="text-on-surface-variant text-[10px] uppercase tracking-wider">Budget:</span>
+                  <span className="ml-1 font-bold text-on-surface">{budgetNum.toFixed(2)}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Actual:</span>
-                  <span className="ml-1 font-medium">{actualNum.toFixed(2)}</span>
+                  <span className="text-on-surface-variant text-[10px] uppercase tracking-wider">Actual:</span>
+                  <span className="ml-1 font-bold text-on-surface">{actualNum.toFixed(2)}</span>
                 </div>
               </div>
 
               <div className="mb-3">
                 <div className="flex items-center space-x-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                  <div className="flex-1 bg-surface-container-high rounded-full h-1.5">
                     <div
-                      className={`h-2 rounded-full ${isOverBudget ? 'bg-red-600' : 'bg-green-600'}`}
+                      className={`h-1.5 rounded-full ${percentage >= 75 ? 'bg-negative' : 'bg-primary'}`}
                       style={{ width: `${Math.min(percentage, 100)}%` }}
                     />
                   </div>
-                  <span className="text-xs text-gray-600 font-medium">{percentage.toFixed(0)}%</span>
+                  <span className="font-mono text-[9px] text-outline w-10 text-right select-none">{percentage.toFixed(0)}%</span>
                 </div>
               </div>
 
@@ -116,7 +119,7 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
                   {onEdit && (
                     <button
                       onClick={() => onEdit(cat)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-on-surface bg-surface-container-high rounded hover:bg-surface-container transition-colors"
                     >
                       Edit
                     </button>
@@ -124,7 +127,7 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
                   {onDelete && (
                     <button
                       onClick={() => onDelete(cat.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded hover:bg-red-100"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-negative bg-[rgba(225,29,72,0.08)] rounded hover:bg-[rgba(225,29,72,0.12)] transition-colors"
                     >
                       Delete
                     </button>
@@ -136,21 +139,21 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
         })}
 
         {/* Mobile Total */}
-        <div className="p-4 bg-gray-50 font-semibold">
+        <div className="p-4 bg-surface-container-low font-bold">
           <div className="flex justify-between items-center mb-2">
-            <span className="text-gray-900">Total</span>
-            <span className={totalDifference < 0 ? 'text-red-600' : 'text-green-600'}>
+            <span className="text-on-surface font-headline uppercase tracking-tight text-sm select-none">Total</span>
+            <span className={`font-mono ${totalDifference < 0 ? 'text-negative' : 'text-positive'}`}>
               {totalDifference.toFixed(2)}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm font-mono">
             <div>
-              <span className="text-gray-600">Budget:</span>
-              <span className="ml-1">{totalBudget.toFixed(2)}</span>
+              <span className="text-on-surface-variant text-[10px] uppercase tracking-wider select-none">Budget:</span>
+              <span className="ml-1 text-on-surface">{totalBudget.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-gray-600">Actual:</span>
-              <span className="ml-1">{totalActual.toFixed(2)}</span>
+              <span className="text-on-surface-variant text-[10px] uppercase tracking-wider select-none">Actual:</span>
+              <span className="ml-1 text-on-surface">{totalActual.toFixed(2)}</span>
             </div>
           </div>
         </div>

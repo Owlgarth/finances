@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { HiUser, HiLogout } from 'react-icons/hi'
 
 interface UserMenuProps {
   collapsed?: boolean
@@ -16,10 +15,10 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-on-surface/70 hover:bg-white/50 hover:text-primary transition-all"
         title={collapsed ? (user?.full_name || user?.email) : undefined}
       >
-        <HiUser className="h-5 w-5 flex-shrink-0" />
+        <span className="material-symbols-outlined text-xl flex-shrink-0 select-none">person</span>
         {!collapsed && (
           <span className="text-sm font-medium truncate">
             {user?.full_name || user?.email}
@@ -33,8 +32,11 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-            <div className="px-4 py-2 text-sm text-gray-500 border-b border-gray-100 truncate">
+          <div 
+            className="absolute bottom-full left-0 mb-2 w-48 bg-surface-container-lowest rounded-lg py-1 z-20"
+            style={{ boxShadow: 'var(--shadow-float)' }}
+          >
+            <div className="px-4 py-2 text-sm text-on-surface-variant mb-1 truncate">
               {user?.email}
             </div>
             <button
@@ -42,9 +44,9 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
                 setIsOpen(false)
                 navigate('/profile')
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2"
             >
-              <HiUser className="h-4 w-4" />
+              <span className="material-symbols-outlined text-base select-none">person</span>
               Profile
             </button>
             <button
@@ -52,9 +54,9 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
                 setIsOpen(false)
                 logout()
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+              className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2"
             >
-              <HiLogout className="h-4 w-4" />
+              <span className="material-symbols-outlined text-base select-none">logout</span>
               Logout
             </button>
           </div>

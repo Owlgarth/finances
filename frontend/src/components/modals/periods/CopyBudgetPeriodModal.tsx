@@ -66,13 +66,28 @@ export default function CopyBudgetPeriodModal({ isOpen, onClose, sourcePeriod }:
   if (!isOpen || !sourcePeriod) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Copy Budget Period</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Copying from: <span className="font-medium">{sourcePeriod.name}</span>
-        </p>
-        <p className="text-sm text-gray-500 mb-6">
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
+      <div 
+        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
+        style={{ boxShadow: 'var(--shadow-float)' }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          aria-label="Close modal"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-4">Copy Budget Period</h2>
+        
+        <div className="mb-4 p-3 bg-surface-container-low rounded-lg">
+          <p className="text-xs text-on-surface-variant uppercase font-mono tracking-wider">
+            Copying from: <span className="font-bold text-primary">{sourcePeriod.name}</span>
+          </p>
+        </div>
+
+        <p className="text-sm text-on-surface-variant mb-6 font-headline leading-relaxed">
           This will copy all categories, budgets, and planned transactions.
           Planned transaction dates will be adjusted to the new period, and all
           statuses will be reset to "pending".
@@ -80,54 +95,54 @@ export default function CopyBudgetPeriodModal({ isOpen, onClose, sourcePeriod }:
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">New Period Name *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">New Period Name *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               placeholder="November 2025"
               required
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Start Date *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Start Date *</label>
             <DatePicker
               value={startDate}
               onChange={(value) => setStartDate(value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full"
               required
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">End Date *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">End Date *</label>
             <DatePicker
               value={endDate}
               onChange={(value) => setEndDate(value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full"
               required
             />
           </div>
 
           {startDate && endDate && (
-            <div className="mb-4 text-sm text-gray-600">
-              Period length: {calculateWeeks()} weeks
+            <div className="mb-6 font-mono text-[10px] text-on-surface-variant uppercase tracking-wider">
+              Period length: <span className="font-bold text-on-surface">{calculateWeeks()} weeks</span>
             </div>
           )}
 
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end space-x-3 mt-8">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-50"
+              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
               disabled={copyMutation.isPending}
             >
               {copyMutation.isPending ? 'Copying...' : 'Copy Period'}

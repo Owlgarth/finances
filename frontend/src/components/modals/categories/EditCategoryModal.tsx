@@ -23,6 +23,7 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
       const response = await budgetPeriodsApi.getAll();
       return response.data;
     },
+    enabled: isOpen,
   });
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
       setName(category.name);
       setSelectedPeriodId(category.budget_period_id);
     }
-  }, [category]);
+  }, [category, isOpen]);
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; name: string; budget_period_id: number }) =>
@@ -42,8 +43,6 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
       onClose();
     },
     onError: (error: any) => {
-      // Don't show error for offline mode - the interceptor already shows a success toast
-      // and performs the optimistic update
       if (error?.name === 'OfflineError') {
         onClose();
         return;
@@ -67,60 +66,75 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
 
   if (!isOpen) return null;
 
-  if (isLoadingPeriods) return <Loading />;
-  if (periodsError) return <ErrorMessage message="Failed to load budget periods." />;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Edit Category</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="categoryName" className="block text-sm font-medium mb-1">Category Name</label>
-            <input
-              type="text"
-              id="categoryName"
-              className="w-full border rounded px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
+      <div 
+        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
+        style={{ boxShadow: 'var(--shadow-float)' }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          aria-label="Close modal"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
 
-          <div className="mb-4">
-            <label htmlFor="budgetPeriod" className="block text-sm font-medium mb-1">Budget Period</label>
-            <select
-              id="budgetPeriod"
-              className="w-full border rounded px-3 py-2"
-              value={selectedPeriodId}
-              onChange={(e) => setSelectedPeriodId(Number(e.target.value))}
-              required
-            >
-              {budgetPeriods?.map((period) => (
-                <option key={period.id} value={period.id}>
-                  {period.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">Edit Category</h2>
 
-          <div className="flex justify-end space-x-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              disabled={updateMutation.isPending}
-            >
-              {updateMutation.isPending ? 'Updating...' : 'Update Category'}
-            </button>
-          </div>
-        </form>
+        {isLoadingPeriods ? (
+          <div className="py-12"><Loading /></div>
+        ) : periodsError ? (
+          <ErrorMessage message="Failed to load budget periods." />
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="mb-4">
+              <label htmlFor="categoryName" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Category Name</label>
+              <input
+                type="text"
+                id="categoryName"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="budgetPeriod" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Budget Period</label>
+              <select
+                id="budgetPeriod"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                value={selectedPeriodId}
+                onChange={(e) => setSelectedPeriodId(Number(e.target.value))}
+                required
+              >
+                {budgetPeriods?.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {period.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-8">
+              <button
+                type="button"
+                onClick={onClose}
+                className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? 'Updating...' : 'Update Category'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

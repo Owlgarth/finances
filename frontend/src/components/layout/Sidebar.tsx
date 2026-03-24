@@ -8,30 +8,16 @@ import BudgetPeriodSelectorModal from '../modals/periods/BudgetPeriodSelectorMod
 import UserMenu from './UserMenu'
 import WorkspaceSelector from './WorkspaceSelector'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
-import {
-  HiHome,
-  HiCurrencyDollar,
-  HiCalendar,
-  HiSwitchHorizontal,
-  HiTag,
-  HiClock,
-  HiBriefcase,
-  HiUserGroup,
-  HiChevronLeft,
-  HiChevronRight,
-  HiViewGrid,
-  HiViewList,
-} from 'react-icons/hi'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: HiHome, exact: true },
-  { to: '/transactions', label: 'Transactions', icon: HiCurrencyDollar },
-  { to: '/planned', label: 'Planned', icon: HiCalendar },
-  { to: '/exchanges', label: 'Exchanges', icon: HiSwitchHorizontal },
-  { to: '/categories', label: 'Categories', icon: HiTag },
-  { to: '/budget-periods', label: 'Periods', icon: HiClock },
-  { to: '/budget-accounts', label: 'Accounts', icon: HiBriefcase },
-  { to: '/members', label: 'Members', icon: HiUserGroup },
+  { to: '/', label: 'Dashboard', icon: 'home', exact: true },
+  { to: '/transactions', label: 'Transactions', icon: 'payments' },
+  { to: '/planned', label: 'Planned', icon: 'today' },
+  { to: '/exchanges', label: 'Exchanges', icon: 'currency_exchange' },
+  { to: '/categories', label: 'Categories', icon: 'label' },
+  { to: '/budget-periods', label: 'Periods', icon: 'schedule' },
+  { to: '/budget-accounts', label: 'Accounts', icon: 'account_balance' },
+  { to: '/members', label: 'Members', icon: 'group' },
 ]
 
 function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
@@ -47,7 +33,7 @@ function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
 
   if (periods.length === 0) {
     return (
-      <span className="text-sm text-gray-500 px-3 py-1.5">
+      <span className="text-sm text-on-surface-variant px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider">
         No periods
       </span>
     )
@@ -55,30 +41,19 @@ function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
 
   return (
     <>
-      <div className="flex items-center gap-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors">
+      <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg hover:bg-surface-container-high transition-colors">
         <div className="px-3 py-1.5 flex items-center gap-2 flex-1 min-w-0">
-          <HiCalendar className="h-4 w-4 text-gray-600 flex-shrink-0" />
-          <span className="text-sm font-medium text-gray-700 truncate">
+          <span className="material-symbols-outlined text-base text-on-surface-variant flex-shrink-0 select-none">today</span>
+          <span className="text-sm font-medium text-on-surface truncate">
             {selectedPeriod?.name || 'Select period'}
           </span>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-2 py-1.5 hover:bg-gray-100 rounded-r-lg transition-colors border-l border-gray-200"
+          className="px-2 py-1.5 hover:bg-surface-container transition-colors rounded-r-lg flex items-center justify-center"
           aria-label="Change budget period"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4 text-gray-500"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <span className="material-symbols-outlined text-base text-on-surface-variant select-none">expand_more</span>
         </button>
       </div>
       <BudgetPeriodSelectorModal
@@ -97,15 +72,15 @@ function LayoutToggle({ collapsed }: { collapsed: boolean }) {
   return (
     <button
       onClick={() => setLayoutMode(layoutMode === 'auto' ? 'cards' : 'auto')}
-      className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors text-sm"
+      className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-on-surface/70 hover:bg-white/50 hover:text-primary transition-all text-sm group"
       title={layoutMode === 'cards' ? 'Switch to auto layout' : 'Switch to cards layout'}
     >
-      {layoutMode === 'cards' ? (
-        <HiViewList className="h-5 w-5 flex-shrink-0" />
-      ) : (
-        <HiViewGrid className="h-5 w-5 flex-shrink-0" />
-      )}
-      <span>Layout: {layoutMode === 'cards' ? 'Cards' : 'Auto'}</span>
+      <span className="material-symbols-outlined text-xl flex-shrink-0 select-none">
+        {layoutMode === 'cards' ? 'view_list' : 'grid_view'}
+      </span>
+      <span className="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">
+        Layout: {layoutMode === 'cards' ? 'Cards' : 'Auto'}
+      </span>
     </button>
   )
 }
@@ -125,29 +100,29 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
   return (
     <>
       <aside
-        className={`flex flex-col h-full bg-white border-r border-gray-200 transition-all duration-200
-          ${collapsed ? 'w-16' : 'w-64'}`}
+        className={`flex flex-col h-full bg-surface-container-low transition-all duration-300 z-50
+          ${collapsed ? 'w-16' : 'w-60'}`}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+        {/* Logo + collapse toggle */}
+        <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
           {!collapsed && (
-            <span className="text-xl font-bold text-gray-900">Monie</span>
+            <span className="font-headline font-black text-primary text-2xl tracking-tight select-none">Monie</span>
           )}
           <button
             onClick={onClose ?? onToggleCollapse}
-            className={`p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors
+            className={`p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-white/50 transition-colors
               ${collapsed ? 'mx-auto' : ''}`}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? (
-              <HiChevronRight className="h-5 w-5" />
-            ) : (
-              <HiChevronLeft className="h-5 w-5" />
-            )}
+            <span className="material-symbols-outlined select-none">
+              {collapsed ? 'chevron_right' : 'chevron_left'}
+            </span>
           </button>
         </div>
 
+        {/* Workspace, Account & Period selectors */}
         {!collapsed && (
-          <div className="p-3 space-y-2 border-b border-gray-200 flex-shrink-0">
+          <div className="p-3 space-y-3 flex-shrink-0 mt-3">
             <WorkspaceSelector onOpenSettings={handleOpenSettings} />
             {workspace && (
               <>
@@ -158,6 +133,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
           </div>
         )}
 
+        {/* Nav links */}
         {workspace ? (
           <nav className="flex-1 overflow-y-auto p-2">
             {navItems.map((item) => (
@@ -167,31 +143,38 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
                 end={item.exact}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mb-0.5
+                  `flex items-center gap-3 px-3 py-2 rounded-lg transition-all mb-1 group
                   ${isActive
-                    ? 'bg-gray-100 text-gray-900 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-white shadow-sm text-primary font-bold translate-x-1'
+                    : 'text-on-surface/70 hover:bg-white/50 hover:text-primary'
                   }`
                 }
                 title={collapsed ? item.label : undefined}
               >
-                <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
+                <span className="material-symbols-outlined text-xl flex-shrink-0 select-none">
+                  {item.icon}
+                </span>
+                {!collapsed && (
+                  <span className="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">
+                    {item.label}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">
-              <p className="text-sm text-gray-500 mb-2">No workspace selected</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm text-on-surface-variant mb-2">No workspace selected</p>
+              <p className="text-xs text-on-surface-variant/70">
                 Create or join a workspace to get started
               </p>
             </div>
           </div>
         )}
 
-        <div className="p-2 border-t border-gray-200 flex-shrink-0 space-y-1">
+        {/* Bottom: layout toggle + user menu */}
+        <div className="p-2 flex-shrink-0 space-y-1 py-3 mt-3">
           <LayoutToggle collapsed={collapsed} />
           <UserMenu collapsed={collapsed} />
         </div>

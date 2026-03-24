@@ -67,9 +67,9 @@ export default function BudgetPeriod() {
     <div className="max-w-screen-2xl mx-auto">
 
       {period && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 md:p-8 mb-8 sm:mb-12">
-          <h1 className="text-3xl font-semibold mb-3 text-gray-900">{period.name}</h1>
-          <p className="text-gray-500">
+        <div className="bg-surface-container-lowest rounded-xl p-4 sm:p-6 md:p-8 mb-8 sm:mb-12" style={{ boxShadow: 'var(--shadow-card)' }}>
+          <h1 className="font-headline font-extrabold tracking-tight text-3xl mb-3 text-on-surface">{period.name}</h1>
+          <p className="text-on-surface-variant font-mono">
             {period.start_date} - {period.end_date} • {period.weeks} weeks
           </p>
         </div>
@@ -78,10 +78,10 @@ export default function BudgetPeriod() {
       <BalanceSection periodId={periodId} />
 
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 mt-8 sm:mt-12">
-        <h2 className="text-2xl font-semibold text-gray-900">Budget vs Actual</h2>
+        <h2 className="font-headline font-extrabold tracking-tight text-2xl text-on-surface">Budget vs Actual</h2>
         <button
           onClick={() => setIsBudgetModalOpen(true)}
-          className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium"
+          className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
         >
           Add Budget
         </button>

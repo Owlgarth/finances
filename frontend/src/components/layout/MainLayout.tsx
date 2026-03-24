@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import Sidebar from './Sidebar'
-import { HiMenu } from 'react-icons/hi'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
 
@@ -79,24 +78,24 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-surface">
         {/* Mobile top bar */}
-        <div className="fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-200 flex items-center gap-3 px-4 py-3">
+        <div className="fixed top-0 left-0 right-0 z-30 bg-[rgba(250,249,248,0.80)] backdrop-blur-md flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-white/50 transition-colors flex items-center justify-center"
             aria-label="Open navigation menu"
           >
-            <HiMenu className="h-6 w-6" />
+            <span className="material-symbols-outlined text-2xl select-none">menu</span>
           </button>
-          <span className="text-lg font-bold text-gray-900">Monie</span>
+          <span className="font-headline font-black text-primary text-xl tracking-tight">Monie</span>
         </div>
 
         {/* Mobile drawer overlay */}
         {mobileOpen && (
           <>
             <div
-              className="fixed inset-0 z-40 bg-black/40"
+              className="fixed inset-0 z-40 bg-[rgba(47,51,51,0.5)] transition-opacity"
               onClick={() => setMobileOpen(false)}
             />
             <div className="fixed inset-y-0 left-0 z-50 flex">
@@ -118,7 +117,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-surface">
       <div className="flex-shrink-0">
         <Sidebar
           collapsed={collapsed}

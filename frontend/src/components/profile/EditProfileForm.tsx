@@ -27,7 +27,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
     }
 
     if (Object.keys(changedData).length === 0) {
-      return // No changes to submit
+      return
     }
 
     onSubmit(changedData)
@@ -36,7 +36,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="full_name" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
           Full Name
         </label>
         <input
@@ -44,13 +44,13 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           id="full_name"
           value={formData.full_name}
           onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors"
+          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
           placeholder="Enter your full name"
         />
       </div>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
           Email Address
         </label>
         <input
@@ -58,7 +58,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           id="email"
           value={formData.email}
           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors"
+          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
           placeholder="Enter your email address"
         />
       </div>
@@ -67,7 +67,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
         <button
           type="submit"
           disabled={isLoading}
-          className="px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary-container focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98]"
         >
           {isLoading ? 'Saving...' : 'Save Changes'}
         </button>
