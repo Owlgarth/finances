@@ -259,13 +259,13 @@ export default function Transactions() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="text-3xl font-semibold text-gray-900">Transactions</h1>
+        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Transactions</h1>
         <div className="flex flex-wrap gap-3">
           {canManageBudgetData && (
             <>
               <button
                 onClick={handleExport}
-                className="bg-white text-gray-900 px-6 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId}
               >
                 Export
@@ -279,7 +279,7 @@ export default function Transactions() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="bg-white text-gray-900 px-6 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId || importMutation.isPending}
               >
                 {importMutation.isPending ? 'Importing...' : 'Import'}
@@ -289,7 +289,7 @@ export default function Transactions() {
                   setEditingTransaction(null)
                   setIsModalOpen(true)
                 }}
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId}
               >
                 Add Transaction
@@ -300,7 +300,6 @@ export default function Transactions() {
       </div>
 
       <div className="mb-8">
-        {/* Search Bar and Filter Toggle */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">
             <input
@@ -308,12 +307,12 @@ export default function Transactions() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search transactions..."
-              className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
+              className="w-full px-4 py-2.5 pr-10 bg-surface-container-highest border-none rounded-full focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant transition-colors duration-200"
                 aria-label="Clear search"
               >
                 <svg
@@ -334,11 +333,11 @@ export default function Transactions() {
 
           <button
             onClick={() => isFilterPanelOpen ? setIsFilterPanelOpen(false) : openFilterPanel()}
-            className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out flex items-center justify-center gap-2 sm:w-auto"
+            className="px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-center gap-2 sm:w-auto"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-gray-600"
+              className="h-5 w-5 text-on-surface-variant"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -348,15 +347,15 @@ export default function Transactions() {
                 clipRule="evenodd"
               />
             </svg>
-            <span className="font-medium text-gray-700">Filters</span>
+            <span className="font-medium text-on-surface">Filters</span>
             {getActiveFilterCount() > 0 && (
-              <span className="bg-gray-900 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center">
+              <span className="bg-primary text-on-primary text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center">
                 {getActiveFilterCount()}
               </span>
             )}
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isFilterPanelOpen ? 'rotate-180' : ''}`}
+              className={`h-4 w-4 text-outline transition-transform duration-200 ${isFilterPanelOpen ? 'rotate-180' : ''}`}
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -369,19 +368,18 @@ export default function Transactions() {
           </button>
         </div>
 
-        {/* Active Filters Chips */}
         {getActiveFilterCount() > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {appliedTypes.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
-                <span className="font-medium">Type:</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+                <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Type:</span>
                 <span>{appliedTypes.map(t => transactionTypes.find(type => type.value === t)?.label).join(', ')}</span>
                 <button
                   onClick={() => {
                     setAppliedTypes([])
                     setTempTypes([])
                   }}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-outline hover:text-on-surface-variant transition-colors"
                   aria-label="Clear type filter"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -395,8 +393,8 @@ export default function Transactions() {
               </div>
             )}
             {appliedCategories.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
-                <span className="font-medium">Categories:</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+                <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Categories:</span>
                 <span>
                   {appliedCategories.length === 1
                     ? categories?.find(c => c.id === appliedCategories[0])?.name
@@ -407,7 +405,7 @@ export default function Transactions() {
                     setAppliedCategories([])
                     setTempCategories([])
                   }}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-outline hover:text-on-surface-variant transition-colors"
                   aria-label="Clear category filter"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -421,9 +419,9 @@ export default function Transactions() {
               </div>
             )}
             {(appliedStartDate || appliedEndDate) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
-                <span className="font-medium">Date:</span>
-                <span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+                <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Date:</span>
+                <span className="font-mono">
                   {appliedStartDate && appliedEndDate ? `${appliedStartDate} to ${appliedEndDate}` : appliedStartDate ? `From ${appliedStartDate}` : `Until ${appliedEndDate}`}
                 </span>
                 <button
@@ -433,7 +431,7 @@ export default function Transactions() {
                     setTempStartDate('')
                     setTempEndDate('')
                   }}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-outline hover:text-on-surface-variant transition-colors"
                   aria-label="Clear date filter"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -447,9 +445,9 @@ export default function Transactions() {
               </div>
             )}
             {(appliedAmountMin || appliedAmountMax) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
-                <span className="font-medium">Amount:</span>
-                <span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+                <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Amount:</span>
+                <span className="font-mono">
                   {appliedAmountMin && appliedAmountMax ? `${appliedAmountMin} - ${appliedAmountMax}` : appliedAmountMin ? `Min ${appliedAmountMin}` : `Max ${appliedAmountMax}`}
                 </span>
                 <button
@@ -459,7 +457,7 @@ export default function Transactions() {
                     setTempAmountMin('')
                     setTempAmountMax('')
                   }}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-outline hover:text-on-surface-variant transition-colors"
                   aria-label="Clear amount filter"
                 >
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -474,26 +472,24 @@ export default function Transactions() {
             )}
             <button
               onClick={clearAllFilters}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
             >
               Clear all
             </button>
           </div>
         )}
 
-        {/* Collapsible Filter Panel */}
         {isFilterPanelOpen && (
-          <div className="bg-white border border-gray-300 rounded-lg p-6 mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="bg-surface-container-lowest rounded-lg p-6 mb-4 animate-in fade-in slide-in-from-top-2 duration-200" style={{ boxShadow: 'var(--shadow-card)' }}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Transaction Type Filter */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Transaction Type</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Transaction Type</label>
                 <div className="relative" ref={typeDropdownRef}>
                   <button
                     onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out flex items-center justify-between"
+                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
                   >
-                    <span className="text-gray-700">
+                    <span className="text-on-surface">
                       {tempTypes.length === 0
                         ? 'All Types'
                         : tempTypes.length === transactionTypes.length
@@ -502,7 +498,7 @@ export default function Transactions() {
                     </span>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isTypeDropdownOpen ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isTypeDropdownOpen ? 'rotate-180' : ''}`}
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -515,25 +511,25 @@ export default function Transactions() {
                   </button>
 
                   {isTypeDropdownOpen && (
-                    <div className="absolute top-full mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg z-10 overflow-hidden animate-in fade-in duration-200">
+                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
                       {transactionTypes.map((type) => (
                         <label
                           key={type.value}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
                         >
                           <input
                             type="checkbox"
                             checked={tempTypes.includes(type.value)}
                             onChange={() => toggleType(type.value)}
-                            className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-2 focus:ring-gray-900"
+                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
                           />
-                          <span className="text-gray-700">{type.label}</span>
+                          <span className="text-on-surface">{type.label}</span>
                         </label>
                       ))}
                       {tempTypes.length > 0 && (
                         <button
                           onClick={() => setTempTypes([])}
-                          className="w-full px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-t border-gray-200 transition-colors duration-150"
+                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
                         >
                           Clear Selection
                         </button>
@@ -543,16 +539,15 @@ export default function Transactions() {
                 </div>
               </div>
 
-              {/* Category Filter */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Category</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Category</label>
                 <div className="relative" ref={categoryDropdownRef}>
                   <button
                     onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out flex items-center justify-between"
+                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
                     disabled={!categories || categories.length === 0}
                   >
-                    <span className="text-gray-700 truncate">
+                    <span className="text-on-surface truncate">
                       {!categories || categories.length === 0
                         ? 'No Categories'
                         : tempCategories.length === 0
@@ -565,7 +560,7 @@ export default function Transactions() {
                     </span>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`}
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -578,25 +573,25 @@ export default function Transactions() {
                   </button>
 
                   {isCategoryDropdownOpen && categories && categories.length > 0 && (
-                    <div className="absolute top-full mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg z-10 overflow-hidden animate-in fade-in duration-200 max-h-64 overflow-y-auto">
+                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200 max-h-64 overflow-y-auto" style={{ boxShadow: 'var(--shadow-float)' }}>
                       {categories.map((category) => (
                         <label
                           key={category.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
                         >
                           <input
                             type="checkbox"
                             checked={tempCategories.includes(category.id)}
                             onChange={() => toggleCategory(category.id)}
-                            className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-2 focus:ring-gray-900"
+                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
                           />
-                          <span className="text-gray-700 truncate">{category.name}</span>
+                          <span className="text-on-surface truncate">{category.name}</span>
                         </label>
                       ))}
                       {tempCategories.length > 0 && (
                         <button
                           onClick={() => setTempCategories([])}
-                          className="w-full px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-t border-gray-200 transition-colors duration-150"
+                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
                         >
                           Clear Selection
                         </button>
@@ -606,37 +601,35 @@ export default function Transactions() {
                 </div>
               </div>
 
-              {/* Date Range Filter */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Date Range</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Date Range</label>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="start-date" className="block text-xs text-gray-600 mb-1">From</label>
+                    <label htmlFor="start-date" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">From</label>
                     <DatePicker
                       id="start-date"
                       value={tempStartDate}
                       onChange={(value) => setTempStartDate(value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
                     />
                   </div>
                   <div>
-                    <label htmlFor="end-date" className="block text-xs text-gray-600 mb-1">To</label>
+                    <label htmlFor="end-date" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">To</label>
                     <DatePicker
                       id="end-date"
                       value={tempEndDate}
                       onChange={(value) => setTempEndDate(value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Amount Range Filter */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Amount Range</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Amount Range</label>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="amount-min" className="block text-xs text-gray-600 mb-1">Minimum</label>
+                    <label htmlFor="amount-min" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Minimum</label>
                     <input
                       id="amount-min"
                       type="number"
@@ -646,11 +639,11 @@ export default function Transactions() {
                       min="0"
                       step="0.01"
                       max={tempAmountMax || undefined}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out font-mono"
                     />
                   </div>
                   <div>
-                    <label htmlFor="amount-max" className="block text-xs text-gray-600 mb-1">Maximum</label>
+                    <label htmlFor="amount-max" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Maximum</label>
                     <input
                       id="amount-max"
                       type="number"
@@ -659,24 +652,23 @@ export default function Transactions() {
                       placeholder="0.00"
                       min={tempAmountMin || "0"}
                       step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out font-mono"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Filter Actions */}
-            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
+            <div className="flex justify-end gap-3 mt-6 pt-6">
               <button
                 onClick={clearAllFilters}
-                className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+                className="px-4 py-2 text-on-surface-variant hover:text-on-surface font-medium transition-colors"
               >
                 Clear All
               </button>
               <button
                 onClick={applyFilters}
-                className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                className="px-6 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all font-medium"
               >
                 Apply Filters
               </button>

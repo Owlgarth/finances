@@ -14,19 +14,19 @@ export default function Loading({ message, size = 'md', fullPage = false }: Prop
   const content = (
     <div className="flex flex-col justify-center items-center gap-3">
       <div
-        className={`animate-spin rounded-full border-blue-600 border-b-transparent ${sizeClasses[size]}`}
+        className={`animate-spin rounded-full border-primary border-b-transparent ${sizeClasses[size]}`}
         role="status"
         aria-label="Loading"
       />
       {message && (
-        <p className="text-sm text-gray-600">{message}</p>
+        <p className="text-sm text-on-surface-variant font-headline">{message}</p>
       )}
     </div>
   )
 
   if (fullPage) {
     return (
-      <div className="fixed inset-0 bg-white bg-opacity-80 flex justify-center items-center z-50">
+      <div className="fixed inset-0 bg-surface/80 flex justify-center items-center z-50 backdrop-blur-[2px]">
         {content}
       </div>
     )

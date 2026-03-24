@@ -2,19 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
-
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.6;
-  font-weight: 400;
+  --shadow-card: 0 4px 24px rgba(47, 51, 51, 0.06), 0 1px 4px rgba(47, 51, 51, 0.04);
+  --shadow-float: 0 8px 32px rgba(75, 87, 170, 0.12), 0 2px 8px rgba(47, 51, 51, 0.06);
+  --font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
-  color-scheme: light;
-  color: #1f2937;
-  background-color: #f9fafb;
+  font-family: var(--font-family);
+  line-height: 1.5;
+  font-weight: 500;
+
+  color: #2f3333;
+  background-color: #faf9f8;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -26,10 +24,27 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f9fafb;
+  background-color: #faf9f8;
+  color: #2f3333;
 }
 
-/* Remove default button styles */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
 button {
   font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #dfe0ff;
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+@media (forced-colors: active) {
+  .card, .input, .nav-item, button, input, select, textarea {
+    border: 1px solid ButtonText;
+  }
 }
