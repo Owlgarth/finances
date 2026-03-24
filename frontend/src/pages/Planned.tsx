@@ -147,12 +147,12 @@ export default function Planned() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="text-3xl font-semibold text-gray-900">Planned Transactions</h1>
+        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Planned Transactions</h1>
         {canManageBudgetData && (
           <div className="flex flex-col sm:flex-row gap-2">
             <button
               onClick={handleImportClick}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId}
             >
               Import
@@ -166,14 +166,14 @@ export default function Planned() {
             />
             <button
               onClick={handleExport}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId || !planned || planned.length === 0}
             >
               Export
             </button>
             <button
               onClick={handleAddNew}
-              className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
             >
               Add Planned Transaction
             </button>
@@ -184,40 +184,40 @@ export default function Planned() {
       <div className="mb-8 flex flex-wrap gap-3">
         <button
           onClick={() => setStatusFilter('pending')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-colors ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             statusFilter === 'pending'
-              ? 'bg-gray-900 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
+              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
           }`}
         >
           Pending
         </button>
         <button
           onClick={() => setStatusFilter('done')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-colors ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             statusFilter === 'done'
-              ? 'bg-gray-900 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
+              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
           }`}
         >
           Done
         </button>
         <button
           onClick={() => setStatusFilter('cancelled')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-colors ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             statusFilter === 'cancelled'
-              ? 'bg-gray-900 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
+              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
           }`}
         >
           Cancelled
         </button>
         <button
           onClick={() => setStatusFilter('')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-colors ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             statusFilter === ''
-              ? 'bg-gray-900 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
+              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
           }`}
         >
           All

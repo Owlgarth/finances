@@ -97,41 +97,52 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
+      <div 
+        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
+        style={{ boxShadow: 'var(--shadow-float)' }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          aria-label="Close modal"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">
           {exchange ? 'Edit Currency Exchange' : 'New Currency Exchange'}
         </h2>
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Date *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Date *</label>
             <DatePicker
               value={date}
               onChange={(value) => setDate(value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full"
               required
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Description</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               placeholder="Optional description"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">From Currency *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">From Currency *</label>
               <select
                 value={fromCurrency}
                 onChange={(e) => setFromCurrency(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               >
                 {CURRENCIES.map(cur => (
                   <option key={cur} value={cur}>{cur}</option>
@@ -140,13 +151,13 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">From Amount *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">From Amount *</label>
               <input
                 type="number"
                 step="0.01"
                 value={fromAmount}
                 onChange={(e) => setFromAmount(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
                 placeholder="100.00"
                 required
               />
@@ -155,11 +166,11 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">To Currency *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">To Currency *</label>
               <select
                 value={toCurrency}
                 onChange={(e) => setToCurrency(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               >
                 {CURRENCIES.map(cur => (
                   <option key={cur} value={cur}>{cur}</option>
@@ -168,13 +179,13 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">To Amount *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">To Amount *</label>
               <input
                 type="number"
                 step="0.01"
                 value={toAmount}
                 onChange={(e) => setToAmount(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
                 placeholder="25.00"
                 required
               />
@@ -182,24 +193,24 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
           </div>
 
           {fromAmount && toAmount && (
-            <div className="mb-4 p-3 bg-gray-50 rounded">
-              <p className="text-sm text-gray-600">
-                Exchange Rate: <span className="font-semibold">{calculateRate()}</span>
+            <div className="mb-6 p-3 bg-surface-container-low rounded-lg">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-on-surface-variant">
+                Exchange Rate: <span className="font-bold text-on-surface">{calculateRate()}</span>
               </p>
             </div>
           )}
 
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end space-x-3 mt-8">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-50"
+              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
               disabled={mutation.isPending}
             >
               {mutation.isPending ? 'Saving...' : 'Save'}
