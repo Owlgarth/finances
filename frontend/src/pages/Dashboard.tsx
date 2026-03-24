@@ -70,11 +70,11 @@ export default function Dashboard() {
             <BalanceSection periodId={period.id}/>
 
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 mt-8 sm:mt-12">
-                <h2 className="text-2xl font-semibold text-gray-900">Budget vs Actual</h2>
+                <h2 className="font-headline font-extrabold tracking-tight text-2xl text-on-surface">Budget vs Actual</h2>
                 {canManageBudgetData && (
                     <button
                         onClick={() => setIsBudgetModalOpen(true)}
-                        className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                        className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
                     >
                         Add Budget
                     </button>

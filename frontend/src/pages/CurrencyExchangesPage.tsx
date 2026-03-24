@@ -110,12 +110,12 @@ export default function CurrencyExchangesPage() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900">Currency Exchanges</h1>
+        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Currency Exchanges</h1>
         {canManageBudgetData && (
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleExport}
-              className="bg-white text-gray-900 px-6 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId}
             >
               Export
@@ -129,14 +129,14 @@ export default function CurrencyExchangesPage() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="bg-white text-gray-900 px-6 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId || importMutation.isPending}
             >
               {importMutation.isPending ? 'Importing...' : 'Import'}
             </button>
             <button
               onClick={handleAddNew}
-              className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
             >
               Add Exchange
             </button>
@@ -144,20 +144,19 @@ export default function CurrencyExchangesPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* Desktop Table */}
+      <div className="bg-surface-container-lowest rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
         <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
           <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">From</th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">→</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">To</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Rate</th>
+            <thead className="bg-surface-container-low">
+              <tr>
+                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-outline">Date</th>
+                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-outline">Description</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">From</th>
+                <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-outline">→</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">To</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">Rate</th>
                 {canManageBudgetData && (
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                  <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-outline">Actions</th>
                 )}
               </tr>
             </thead>
@@ -165,35 +164,35 @@ export default function CurrencyExchangesPage() {
               {exchanges?.map(exchange => (
                 <tr
                   key={exchange.id}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+                  className="hover:bg-surface-container-low transition-colors"
                 >
-                  <td className="px-6 py-4 text-sm text-gray-600">{exchange.date}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{exchange.description || '-'}</td>
+                  <td className="px-6 py-4 text-sm text-on-surface-variant font-mono">{exchange.date}</td>
+                  <td className="px-6 py-4 text-sm text-on-surface">{exchange.description || '-'}</td>
                   <td className="px-6 py-4 text-right">
-                    <span className="text-sm font-semibold text-red-600">
+                    <span className="text-sm font-mono font-bold text-negative">
                       -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center text-gray-400">→</td>
+                  <td className="px-6 py-4 text-center text-outline">→</td>
                   <td className="px-6 py-4 text-right">
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="text-sm font-mono font-bold text-positive">
                       +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-600">
+                  <td className="px-6 py-4 text-right text-sm text-on-surface-variant font-mono">
                     {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
                   </td>
                   {canManageBudgetData && (
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => handleEdit(exchange)}
-                        className="text-gray-600 hover:text-gray-900 mr-4 text-sm font-medium transition-colors"
+                        className="text-on-surface-variant hover:text-on-surface mr-4 text-sm font-medium transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(exchange.id)}
-                        className="text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
+                        className="text-negative hover:opacity-80 text-sm font-medium transition-colors"
                       >
                         Delete
                       </button>
@@ -205,39 +204,38 @@ export default function CurrencyExchangesPage() {
           </table>
         </div>
 
-        {/* Mobile Cards */}
-        <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
+        <div className={isCardsView ? '' : 'md:hidden'}>
           {exchanges?.map(exchange => (
               <div
                 key={exchange.id}
-                className="p-4"
+                className="p-4 hover:bg-surface-container-low transition-colors"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900">{exchange.description || 'Currency Exchange'}</h4>
-                    <p className="text-sm text-gray-500 mt-1">{exchange.date}</p>
+                    <h4 className="font-semibold text-on-surface">{exchange.description || 'Currency Exchange'}</h4>
+                    <p className="text-sm text-on-surface-variant mt-1 font-mono">{exchange.date}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-3 py-2 border-t border-b border-gray-100">
+                <div className="flex items-center justify-between mb-3 py-2">
                   <div className="flex-1">
-                    <span className="text-xs text-gray-500 block mb-1">From</span>
-                    <span className="text-sm font-semibold text-red-600">
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-outline block mb-1">From</span>
+                    <span className="text-sm font-mono font-bold text-negative">
                       -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
                     </span>
                   </div>
-                  <div className="px-3 text-gray-400">→</div>
+                  <div className="px-3 text-outline">→</div>
                   <div className="flex-1 text-right">
-                    <span className="text-xs text-gray-500 block mb-1">To</span>
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-outline block mb-1">To</span>
+                    <span className="text-sm font-mono font-bold text-positive">
                       +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
                     </span>
                   </div>
                 </div>
 
                 <div className="mb-3">
-                  <span className="text-xs text-gray-500">Exchange Rate: </span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Exchange Rate: </span>
+                  <span className="text-sm font-medium text-on-surface font-mono">
                     {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
                   </span>
                 </div>
@@ -246,13 +244,13 @@ export default function CurrencyExchangesPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(exchange)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-on-surface bg-surface-container-high rounded-lg hover:bg-surface-container transition-all"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(exchange.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded hover:bg-red-100"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-negative rounded-lg hover:opacity-80 transition-all"
                     >
                       Delete
                     </button>
@@ -263,7 +261,7 @@ export default function CurrencyExchangesPage() {
         </div>
 
         {exchanges?.length === 0 && (
-          <p className="text-center py-8 text-gray-500">No currency exchanges yet</p>
+          <p className="text-center py-8 text-on-surface-variant">No currency exchanges yet</p>
         )}
       </div>
 

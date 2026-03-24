@@ -9,7 +9,6 @@ import Loading from '../components/common/Loading'
 import EmptyState from '../components/common/EmptyState'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import type { WorkspaceMember, AddMemberRequest } from '../types'
-import { HiUserAdd, HiTrash, HiPencil, HiShieldCheck, HiUser, HiEye, HiStar, HiKey } from 'react-icons/hi'
 
 export default function WorkspaceMembersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -97,30 +96,30 @@ export default function WorkspaceMembersPage() {
   })
 
   if (workspaceLoading || membersLoading) return <Loading />
-  if (error) return <div className="text-red-600 p-4">Failed to load workspace members</div>
+  if (error) return <div className="text-negative p-4">Failed to load workspace members</div>
 
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900">Workspace Members</h1>
-          <p className="text-gray-600 mt-1">{workspace?.name}</p>
+          <h1 className="font-headline font-extrabold tracking-tight text-2xl sm:text-3xl text-on-surface">Workspace Members</h1>
+          <p className="text-on-surface-variant mt-1">{workspace?.name}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setIsChangeMyPasswordModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
             title="Change My Password"
           >
-            <HiKey className="h-5 w-5" />
+            <span className="material-symbols-outlined text-lg">key</span>
             <span className="hidden sm:inline">Change My Password</span>
           </button>
           {canManageMembers && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all"
             >
-              <HiUserAdd className="h-5 w-5" />
+              <span className="material-symbols-outlined text-lg">person_add</span>
               <span className="hidden sm:inline">Add Member</span>
             </button>
           )}
@@ -132,27 +131,27 @@ export default function WorkspaceMembersPage() {
           message="No members in this workspace yet."
         />
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-surface-container-lowest rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+          <table className="min-w-full">
+            <thead className="bg-surface-container-low">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-outline">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-outline">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-outline">
                   Status
                 </th>
                 {canManageMembers && (
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right font-mono text-[9px] uppercase tracking-widest text-outline">
                     Actions
                   </th>
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {members?.map((member) => (
                 <MemberRow
                   key={member.id}
@@ -230,30 +229,30 @@ export default function WorkspaceMembersPage() {
 function getRoleIcon(role: string) {
   switch (role) {
     case 'owner':
-      return <HiStar className="h-4 w-4 text-yellow-500" />
+      return <span className="material-symbols-outlined text-base text-[#92400e]">star</span>
     case 'admin':
-      return <HiShieldCheck className="h-4 w-4 text-blue-500" />
+      return <span className="material-symbols-outlined text-base text-on-primary-container">admin_panel_settings</span>
     case 'member':
-      return <HiUser className="h-4 w-4 text-green-500" />
+      return <span className="material-symbols-outlined text-base text-on-secondary-container">person</span>
     case 'viewer':
-      return <HiEye className="h-4 w-4 text-gray-500" />
+      return <span className="material-symbols-outlined text-base text-on-surface-variant">visibility</span>
     default:
-      return <HiUser className="h-4 w-4 text-gray-500" />
+      return <span className="material-symbols-outlined text-base text-on-surface-variant">person</span>
   }
 }
 
 function getRoleBadgeColor(role: string) {
   switch (role) {
     case 'owner':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-[#fef3c7] text-[#92400e]'
     case 'admin':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-primary-container text-on-primary-container'
     case 'member':
-      return 'bg-green-100 text-green-800'
+      return 'bg-secondary-container text-on-secondary-container'
     case 'viewer':
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-surface-container-low text-on-surface-variant'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-surface-container-low text-on-surface-variant'
   }
 }
 
@@ -273,36 +272,36 @@ function MemberRow({ member, isCurrentUser, canManage, canResetPassword, isOwner
   const showActions = canEditThisMember || canResetPassword
 
   return (
-    <tr className={isCurrentUser ? 'bg-blue-50' : ''}>
+    <tr className={isCurrentUser ? 'bg-primary-container/20' : ''}>
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center">
-          <div className="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-            <span className="text-gray-600 font-medium">
+          <div className="flex-shrink-0 h-10 w-10 bg-surface-container rounded-full flex items-center justify-center">
+            <span className="text-on-surface-variant font-medium">
               {member.email[0].toUpperCase()}
             </span>
           </div>
           <div className="ml-4">
-            <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+            <div className="text-sm font-medium text-on-surface flex items-center gap-2">
               {member.full_name || member.email}
               {isCurrentUser && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">You</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-primary-container text-on-primary-container px-2 py-0.5 rounded-full">You</span>
               )}
             </div>
             {member.full_name && (
-              <div className="text-sm text-gray-500">{member.email}</div>
+              <div className="text-sm text-on-surface-variant">{member.email}</div>
             )}
           </div>
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(member.role)}`}>
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider ${getRoleBadgeColor(member.role)}`}>
           {getRoleIcon(member.role)}
           {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
         </span>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-          member.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        <span className={`inline-flex px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider rounded-full ${
+          member.is_active ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-error-container text-[#6b1728]'
         }`}>
           {member.is_active ? 'Active' : 'Inactive'}
         </span>
@@ -314,28 +313,28 @@ function MemberRow({ member, isCurrentUser, canManage, canResetPassword, isOwner
               {canEditThisMember && (
                 <button
                   onClick={onEditRole}
-                  className="p-1.5 text-gray-500 hover:text-blue-600 transition-colors"
+                  className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
                   title="Edit Role"
                 >
-                  <HiPencil className="h-4 w-4" />
+                  <span className="material-symbols-outlined text-base">edit</span>
                 </button>
               )}
               {canResetPassword && (
                 <button
                   onClick={onResetPassword}
-                  className="p-1.5 text-gray-500 hover:text-yellow-600 transition-colors"
+                  className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
                   title="Reset Password"
                 >
-                  <HiKey className="h-4 w-4" />
+                  <span className="material-symbols-outlined text-base">key</span>
                 </button>
               )}
               {canEditThisMember && (
                 <button
                   onClick={onRemove}
-                  className="p-1.5 text-gray-500 hover:text-red-600 transition-colors"
+                  className="p-1.5 text-on-surface-variant hover:text-negative transition-colors"
                   title="Remove"
                 >
-                  <HiTrash className="h-4 w-4" />
+                  <span className="material-symbols-outlined text-base">delete</span>
                 </button>
               )}
             </div>
@@ -369,12 +368,12 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-semibold mb-4">Add Member</h2>
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
+      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full" style={{ boxShadow: 'var(--shadow-float)' }}>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-4">Add Member</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Email Address *
             </label>
             <input
@@ -382,13 +381,13 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="user@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Password *
             </label>
             <input
@@ -397,35 +396,35 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Minimum 8 characters"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-on-surface-variant mt-1">
               User can change this password after first login
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Full Name
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="John Doe (optional)"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Role *
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as 'admin' | 'member' | 'viewer')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
             >
               <option value="viewer">Viewer - Can view all data</option>
               <option value="member">Member - Can view and edit data</option>
@@ -433,7 +432,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
             </select>
           </div>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-on-surface-variant">
             If a user with this email already exists, they will be added to the workspace (password ignored).
           </p>
 
@@ -441,14 +440,14 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Adding...' : 'Add Member'}
@@ -476,21 +475,21 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-semibold mb-4">Change Role</h2>
-        <p className="text-gray-600 mb-4">
-          Update role for <strong>{member.full_name || member.email}</strong>
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
+      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full" style={{ boxShadow: 'var(--shadow-float)' }}>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-4">Change Role</h2>
+        <p className="text-on-surface-variant mb-4">
+          Update role for <strong className="text-on-surface">{member.full_name || member.email}</strong>
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Role
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as 'admin' | 'member' | 'viewer')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
             >
               <option value="viewer">Viewer - Can view all data</option>
               <option value="member">Member - Can view and edit data</option>
@@ -502,14 +501,14 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               disabled={isSubmitting || role === member.role}
             >
               {isSubmitting ? 'Updating...' : 'Update Role'}
@@ -551,16 +550,16 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-semibold mb-2">Reset Password</h2>
-        <p className="text-gray-600 mb-4">
-          Resetting password for <strong>{member.full_name || member.email}</strong>
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
+      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full" style={{ boxShadow: 'var(--shadow-float)' }}>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-2">Reset Password</h2>
+        <p className="text-on-surface-variant mb-4">
+          Resetting password for <strong className="text-on-surface">{member.full_name || member.email}</strong>
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               New Password *
             </label>
             <input
@@ -569,13 +568,13 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Enter new password"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Confirm Password *
             </label>
             <input
@@ -584,17 +583,17 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Confirm new password"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="text-sm text-negative">{error}</p>
           )}
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-[#fef3c7] text-[#92400e] rounded-lg p-3">
+            <p className="text-sm">
               The user will need to log in with this new password. Please share it with them securely.
             </p>
           </div>
@@ -603,14 +602,14 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Resetting...' : 'Reset Password'}
@@ -662,16 +661,16 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-semibold mb-2">Change My Password</h2>
-        <p className="text-gray-600 mb-4">
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
+      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full" style={{ boxShadow: 'var(--shadow-float)' }}>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-2">Change My Password</h2>
+        <p className="text-on-surface-variant mb-4">
           Update your account password
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Current Password *
             </label>
             <input
@@ -679,14 +678,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Enter current password"
               autoComplete="current-password"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               New Password *
             </label>
             <input
@@ -695,17 +694,17 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Enter new password"
               autoComplete="new-password"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-on-surface-variant mt-1">
               Minimum 8 characters
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Confirm New Password *
             </label>
             <input
@@ -714,18 +713,18 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Confirm new password"
               autoComplete="new-password"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="text-sm text-negative">{error}</p>
           )}
 
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p className="text-sm text-blue-800">
+          <div className="bg-primary-container/20 rounded-lg p-3">
+            <p className="text-sm text-on-primary-container">
               You will remain logged in after changing your password.
             </p>
           </div>
@@ -734,14 +733,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Changing...' : 'Change Password'}

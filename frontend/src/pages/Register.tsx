@@ -24,12 +24,10 @@ export default function Register() {
     });
   }, []);
 
-  // Redirect if demo mode is enabled
   if (import.meta.env.VITE_DEMO_MODE === 'true') {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect if already authenticated
   if (!isLoading && isAuthenticated) {
     return <Navigate to="/" replace />;
   }
@@ -58,108 +56,106 @@ export default function Register() {
         accepted_terms_version: termsVersion,
         accepted_privacy_version: privacyVersion,
       });
-    } catch {
-      // Error handled in AuthContext
+    } catch (error) {
+      console.error(error)
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-surface py-12 px-4 sm:px-6 lg:px-8">
+      <div className="bg-surface-container-lowest rounded-xl p-8 w-full max-w-md" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="text-center mb-8">
+          <h2 className="font-headline font-black text-primary text-3xl tracking-tight">
             Create your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-sm text-on-surface-variant">
             Start tracking your budget today
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address *
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="full-name" className="block text-sm font-medium text-gray-700">
-                Full name
-              </label>
-              <input
-                id="full-name"
-                name="full-name"
-                type="text"
-                autoComplete="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="workspace-name" className="block text-sm font-medium text-gray-700">
-                Workspace name *
-              </label>
-              <input
-                id="workspace-name"
-                name="workspace-name"
-                type="text"
-                required
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                placeholder="My Budget"
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password * (min 8 characters)
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">
-                Confirm password *
-              </label>
-              <input
-                id="confirm-password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              Email address *
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+            />
           </div>
 
-          <div className="space-y-2">
+          <div>
+            <label htmlFor="full-name" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              Full name
+            </label>
+            <input
+              id="full-name"
+              name="full-name"
+              type="text"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              Workspace name *
+            </label>
+            <input
+              id="workspace-name"
+              name="workspace-name"
+              type="text"
+              required
+              value={workspaceName}
+              onChange={(e) => setWorkspaceName(e.target.value)}
+              placeholder="My Budget"
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all placeholder:text-outline"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              Password * (min 8 characters)
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="confirm-password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              Confirm password *
+            </label>
+            <input
+              id="confirm-password"
+              name="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+            />
+          </div>
+
+          <div className="space-y-2 pt-2">
             <div className="flex items-start gap-2">
               <input
                 id="accept-terms"
@@ -169,9 +165,9 @@ export default function Register() {
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 className="mt-1"
               />
-              <label htmlFor="accept-terms" className="text-sm text-gray-600">
+              <label htmlFor="accept-terms" className="text-sm text-on-surface-variant">
                 I accept the{' '}
-                <Link to="/terms" className="text-blue-600 hover:underline">Terms of Service</Link>
+                <Link to="/terms" className="text-primary hover:text-primary-dim">Terms of Service</Link>
                 {' '}*
               </label>
             </div>
@@ -184,19 +180,19 @@ export default function Register() {
                 onChange={(e) => setAcceptedPrivacy(e.target.checked)}
                 className="mt-1"
               />
-              <label htmlFor="accept-privacy" className="text-sm text-gray-600">
+              <label htmlFor="accept-privacy" className="text-sm text-on-surface-variant">
                 I accept the{' '}
-                <Link to="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
+                <Link to="/privacy" className="text-primary hover:text-primary-dim">Privacy Policy</Link>
                 {' '}*
               </label>
             </div>
           </div>
 
-          <div>
+          <div className="pt-2">
             <button
               type="submit"
               disabled={isSubmitting || !acceptedTerms || !acceptedPrivacy || !termsVersion || !privacyVersion}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-2 px-4 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creating account...' : 'Create account'}
             </button>
@@ -205,16 +201,16 @@ export default function Register() {
           <div className="text-center">
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary hover:text-primary-dim"
             >
               Already have an account? Sign in
             </Link>
           </div>
 
-          <div className="text-center text-xs text-gray-500">
-            <Link to="/privacy" className="hover:underline">Privacy Policy</Link>
+          <div className="text-center text-xs text-outline">
+            <Link to="/privacy" className="hover:text-on-surface-variant">Privacy Policy</Link>
             {' · '}
-            <Link to="/terms" className="hover:underline">Terms of Service</Link>
+            <Link to="/terms" className="hover:text-on-surface-variant">Terms of Service</Link>
           </div>
         </form>
       </div>

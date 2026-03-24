@@ -157,7 +157,7 @@ export const authApi = {
   getPreferences: (): Promise<UserPreferences> =>
     api.get<UserPreferences>('/users/me/preferences').then(res => res.data),
 
-  updatePreferences: (data: { calendar_start_day: number }): Promise<UserPreferences> =>
+  updatePreferences: (data: { calendar_start_day?: number; font_family?: string }): Promise<UserPreferences> =>
     api.patch<UserPreferences>('/users/me/preferences', data).then(res => res.data),
 
   checkDeletion: (): Promise<AccountDeleteCheck> =>

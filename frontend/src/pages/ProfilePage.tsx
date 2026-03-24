@@ -42,7 +42,6 @@ export default function ProfilePage() {
     mutationFn: (data: { full_name?: string; email?: string }) =>
       authApi.updateProfile(data),
     onSuccess: (updatedUser) => {
-      // Update user state in context with returned data
       updateUser(updatedUser)
       toast.success('Profile updated successfully!')
     },
@@ -57,7 +56,6 @@ export default function ProfilePage() {
       authApi.changePassword(currentPassword, newPassword),
     onSuccess: () => {
       toast.success('Password changed successfully!')
-      // Clear password form fields
       const form = document.getElementById('change-password-form') as HTMLFormElement
       if (form) form.reset()
     },
@@ -68,7 +66,7 @@ export default function ProfilePage() {
   })
 
   const updatePreferencesMutation = useMutation({
-    mutationFn: (data: { calendar_start_day: number }) =>
+    mutationFn: (data: { calendar_start_day: number; font_family: string }) =>
       authApi.updatePreferences(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-preferences'] })
@@ -86,47 +84,47 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-semibold text-gray-900 mb-8">Profile Settings</h1>
+      <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface mb-8">Profile Settings</h1>
 
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
+      <div className="bg-surface-container-lowest rounded-xl" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="py-3 px-3">
+          <nav className="flex flex-wrap gap-1">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'profile'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-surface-container-high text-on-surface'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
               }`}
             >
-              Profile Information
+              Profile
             </button>
             <button
               onClick={() => setActiveTab('password')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'password'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-surface-container-high text-on-surface'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
               }`}
             >
-              Change Password
+              Password
             </button>
             <button
               onClick={() => setActiveTab('preferences')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'preferences'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-surface-container-high text-on-surface'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
               }`}
             >
               Preferences
             </button>
             <button
               onClick={() => setActiveTab('account')}
-              className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'account'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-surface-container-high text-on-surface'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
               }`}
             >
               Account
@@ -163,23 +161,23 @@ export default function ProfilePage() {
           {activeTab === 'account' && (
             <div className="space-y-10">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Export Your Data</h3>
-                <p className="text-sm text-gray-600 mb-4">
+                <h3 className="font-headline font-bold text-on-surface text-lg mb-2">Export Your Data</h3>
+                <p className="text-sm text-on-surface-variant mb-4">
                   Download a complete copy of all your personal data in JSON format.
                   This includes your profile, preferences, all transactions, budgets, and workspace data.
                 </p>
                 <button
                   onClick={handleExportData}
                   disabled={isExporting}
-                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 text-sm font-medium"
+                  className="px-4 py-2 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim disabled:opacity-50 active:scale-[0.98] transition-all"
                 >
                   {isExporting ? 'Exporting...' : 'Export All My Data'}
                 </button>
               </div>
 
-              <hr className="border-gray-200" />
-
-              <DeleteAccountSection />
+              <div className="bg-[rgba(158,63,78,0.04)] rounded-xl p-6">
+                <DeleteAccountSection />
+              </div>
             </div>
           )}
         </div>
