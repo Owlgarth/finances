@@ -1,12 +1,21 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '../api/client'
 import { useAuth } from './AuthContext'
 import type { UserPreferences } from '../types'
 
+const FONT_MAP: Record<string, string> = {
+  geist: "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  roboto: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  lato: "'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+}
+
 interface UserPreferencesContextType {
   preferences: UserPreferences | null
   calendarStartDay: number
+  fontFamily: string
   isLoading: boolean
 }
 
@@ -23,12 +32,20 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   })
 
   const calendarStartDay = preferences?.calendar_start_day ?? 7
+  const fontFamily = preferences?.font_family ?? 'geist'
+
+  useEffect(() => {
+    const fontStack = FONT_MAP[fontFamily] || FONT_MAP.geist
+    document.documentElement.style.setProperty('--font-family', fontStack)
+    document.body.style.fontFamily = fontStack
+  }, [fontFamily])
 
   return (
     <UserPreferencesContext.Provider
       value={{
         preferences: preferences || null,
         calendarStartDay,
+        fontFamily,
         isLoading,
       }}
     >

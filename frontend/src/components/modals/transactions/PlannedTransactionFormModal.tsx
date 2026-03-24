@@ -66,8 +66,6 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
       onClose()
     },
     onError: (error: any) => {
-      // Don't show error for offline mode - the interceptor already shows a success toast
-      // and performs the optimistic update
       if (error?.name === 'OfflineError') {
         onClose()
         return
@@ -92,53 +90,64 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
+      <div 
+        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
+        style={{ boxShadow: 'var(--shadow-float)' }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          aria-label="Close modal"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">
           {plannedTransaction ? 'Edit Planned Transaction' : 'New Planned Transaction'}
         </h2>
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Planned Date *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Planned Date *</label>
             <DatePicker
               value={plannedDate}
               onChange={(value) => setPlannedDate(value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full"
               required
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Name *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Name *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               placeholder="Monthly subscription"
               required
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Category</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Category</label>
             {selectedPeriod && (
-              <p className="text-xs text-gray-500 mb-1">
+              <p className="font-mono text-[8px] text-on-surface-variant/60 uppercase mb-1">
                 Period: {selectedPeriod.name}
               </p>
             )}
             {isLoadingCategories ? (
-              <p className="text-sm text-gray-500">Loading categories...</p>
+              <p className="text-sm text-on-surface-variant italic">Loading categories...</p>
             ) : categoriesError ? (
-              <p className="text-red-500 text-sm">Error loading categories</p>
+              <p className="text-error text-sm">Error loading categories</p>
             ) : !selectedPeriodId ? (
-              <p className="text-yellow-600 text-sm">No budget period selected</p>
+              <p className="text-on-secondary-container bg-secondary-container/20 px-3 py-1 rounded-lg text-sm">No budget period selected</p>
             ) : (
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               >
                 <option value="">Select category (optional)</option>
                 {categories?.map(cat => (
@@ -150,24 +159,24 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Amount *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Amount *</label>
               <input
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
                 placeholder="100.00"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Currency *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Currency *</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full border rounded px-3 py-2"
+                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
               >
                 {CURRENCIES.map(cur => (
                   <option key={cur} value={cur}>{cur}</option>
@@ -176,12 +185,12 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Status *</label>
+          <div className="mb-6">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Status *</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as 'pending' | 'done' | 'cancelled')}
-              className="w-full border rounded px-3 py-2"
+              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
             >
               <option value="pending">Pending</option>
               <option value="done">Done</option>
@@ -189,20 +198,20 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
             </select>
           </div>
 
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end space-x-3 mt-8">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-50"
+              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
               disabled={mutation.isPending || isLoadingCategories || !!categoriesError}
             >
-              {mutation.isPending ? 'Saving...' : 'Save'}
+              {mutation.isPending ? 'Saving...' : 'Save Planned Transaction'}
             </button>
           </div>
         </form>

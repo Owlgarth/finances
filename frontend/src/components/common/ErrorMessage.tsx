@@ -9,27 +9,27 @@ const errorConfigs = {
   401: {
     title: 'Session Expired',
     description: 'Your session has expired. Please log in again.',
-    icon: '🔒',
+    icon: 'lock',
   },
   403: {
     title: 'Access Denied',
     description: 'You do not have permission to access this resource.',
-    icon: '🚫',
+    icon: 'block',
   },
   404: {
     title: 'Not Found',
     description: 'The requested resource could not be found.',
-    icon: '🔍',
+    icon: 'search',
   },
   500: {
     title: 'Server Error',
     description: 'An unexpected error occurred. Please try again later.',
-    icon: '⚠️',
+    icon: 'warning',
   },
   network: {
     title: 'Connection Error',
     description: 'Unable to connect to the server. Check your internet connection.',
-    icon: '📡',
+    icon: 'wifi_off',
   },
 }
 
@@ -45,42 +45,42 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
       : null
 
   const bgColors = {
-    error: 'bg-red-50 border-red-200',
-    warning: 'bg-yellow-50 border-yellow-200',
-    info: 'bg-blue-50 border-blue-200',
+    error: 'bg-error-container/20',
+    warning: 'bg-[#fef3c7]',
+    info: 'bg-secondary-container/40',
   }
 
   const textColors = {
-    error: 'text-red-800',
-    warning: 'text-yellow-800',
-    info: 'text-blue-800',
+    error: 'text-error',
+    warning: 'text-[#92400e]',
+    info: 'text-on-secondary-container',
   }
 
   const buttonColors = {
-    error: 'bg-red-100 hover:bg-red-200 text-red-800',
-    warning: 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800',
-    info: 'bg-blue-100 hover:bg-blue-200 text-blue-800',
+    error: 'bg-error-container/40 hover:bg-error-container/60 text-error',
+    warning: 'bg-[#fde68a] hover:bg-[#fcd34d] text-[#92400e]',
+    info: 'bg-secondary-container hover:bg-secondary-container/80 text-on-secondary-container',
   }
 
   return (
-    <div className={`${bgColors[type]} border rounded-lg p-4 mb-4`}>
+    <div className={`${bgColors[type]} rounded-lg p-4 mb-4 transition-all duration-200`}>
       <div className="flex items-start">
-        <span className="text-xl mr-3 flex-shrink-0">
-          {config?.icon || '⚠️'}
+        <span className="material-symbols-outlined text-xl mr-3 flex-shrink-0 select-none">
+          {config?.icon || 'warning'}
         </span>
         <div className="flex-1">
           {config && (
-            <h4 className={`font-semibold ${textColors[type]} mb-1`}>
+            <h4 className={`font-headline font-semibold ${textColors[type]} mb-1`}>
               {config.title}
             </h4>
           )}
-          <p className={textColors[type]}>
+          <p className={`${textColors[type]} text-sm`}>
             {message || config?.description}
           </p>
           {onRetry && (
             <button
               onClick={onRetry}
-              className={`mt-3 px-4 py-2 rounded-md text-sm font-medium ${buttonColors[type]} transition-colors`}
+              className={`mt-3 px-4 py-2 rounded-lg text-sm font-bold font-mono uppercase tracking-wider ${buttonColors[type]} transition-all active:scale-[0.98] shadow-sm`}
             >
               Try Again
             </button>

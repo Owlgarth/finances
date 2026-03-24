@@ -57,14 +57,14 @@ def update_my_password(request, data: UserPasswordUpdate):
 def get_preferences(request):
     """Get current user's preferences."""
     preferences = services.UserService.get_or_create_preferences(request.auth)
-    return 200, {'calendar_start_day': preferences.calendar_start_day}
+    return 200, {'calendar_start_day': preferences.calendar_start_day, 'font_family': preferences.font_family}
 
 
 @router.patch('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 401: DetailOut})
 def update_preferences(request, data: UserPreferencesUpdate):
     """Update current user's preferences."""
     preferences = services.UserService.update_preferences(request.auth, data)
-    return 200, {'calendar_start_day': preferences.calendar_start_day}
+    return 200, {'calendar_start_day': preferences.calendar_start_day, 'font_family': preferences.font_family}
 
 
 @router.get('/me/consents', auth=JWTAuth(), response={200: list[ConsentOut]})

@@ -8,7 +8,6 @@ import Loading from '../components/common/Loading'
 import EmptyState from '../components/common/EmptyState'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import type { BudgetAccount } from '../types'
-import { HiPencil, HiTrash, HiArchive, HiPlus, HiCheck } from 'react-icons/hi'
 
 export default function BudgetAccountsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -73,28 +72,28 @@ export default function BudgetAccountsPage() {
   })
 
   if (isLoading) return <Loading />
-  if (error) return <div className="text-red-600 p-4">Failed to load budget accounts</div>
+  if (error) return <div className="text-negative p-4">Failed to load budget accounts</div>
 
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900">Budget Accounts</h1>
+        <h1 className="font-headline font-extrabold tracking-tight text-2xl sm:text-3xl text-on-surface">Budget Accounts</h1>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex items-center gap-2 text-sm text-on-surface-variant">
             <input
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-outline focus:ring-primary-container"
             />
             Show archived
           </label>
           {canManageBudgetAccounts && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all"
             >
-              <HiPlus className="h-5 w-5" />
+              <span className="material-symbols-outlined text-lg">add</span>
               <span className="hidden sm:inline">New Account</span>
             </button>
           )}
@@ -178,51 +177,51 @@ function BudgetAccountCard({
 }: BudgetAccountCardProps) {
   return (
     <div
-      className={`bg-white p-6 rounded-lg shadow border-l-4 transition-all ${
+      className={`bg-surface-container-lowest p-6 rounded-lg transition-all ${
         !account.is_active ? 'opacity-60' : ''
-      } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
-      style={{ borderLeftColor: account.color || '#3B82F6' }}
+      } ${isSelected ? 'ring-2 ring-primary' : ''}`}
+      style={{ boxShadow: 'var(--shadow-card)', borderLeftColor: account.color || '#3B82F6', borderLeftWidth: 4 }}
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           {account.icon && <span className="text-2xl">{account.icon}</span>}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
               {account.name}
               {isSelected && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Active</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-primary-container text-on-primary-container px-2 py-0.5 rounded-full">Active</span>
               )}
             </h3>
             {!account.is_active && (
-              <span className="text-xs text-gray-500">Archived</span>
+              <span className="text-xs text-on-surface-variant">Archived</span>
             )}
           </div>
         </div>
       </div>
 
       {account.description && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{account.description}</p>
+        <p className="text-sm text-on-surface-variant mb-4 line-clamp-2">{account.description}</p>
       )}
 
       <div className="flex items-center gap-2 mb-4">
-        <span className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">
+        <span className="px-2 py-1 bg-surface-container-low rounded text-sm font-medium font-mono text-on-surface">
           {account.default_currency}
         </span>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+      <div className="flex items-center justify-between pt-4">
         <button
           onClick={onSelect}
           disabled={isSelected || !account.is_active}
           className={`flex items-center gap-1 text-sm ${
             isSelected
-              ? 'text-blue-600 cursor-default'
+              ? 'text-primary cursor-default'
               : account.is_active
-              ? 'text-gray-600 hover:text-blue-600'
-              : 'text-gray-400 cursor-not-allowed'
+              ? 'text-on-surface-variant hover:text-primary'
+              : 'text-outline cursor-not-allowed'
           }`}
         >
-          <HiCheck className="h-4 w-4" />
+          <span className="material-symbols-outlined text-base">check</span>
           {isSelected ? 'Selected' : 'Select'}
         </button>
 
@@ -230,24 +229,24 @@ function BudgetAccountCard({
           <div className="flex items-center gap-2">
             <button
               onClick={onArchive}
-              className="p-1.5 text-gray-500 hover:text-amber-600 transition-colors"
+              className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
               title={account.is_active ? 'Archive' : 'Restore'}
             >
-              <HiArchive className="h-4 w-4" />
+              <span className="material-symbols-outlined text-base">archive</span>
             </button>
             <button
               onClick={onEdit}
-              className="p-1.5 text-gray-500 hover:text-blue-600 transition-colors"
+              className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
               title="Edit"
             >
-              <HiPencil className="h-4 w-4" />
+              <span className="material-symbols-outlined text-base">edit</span>
             </button>
             <button
               onClick={onDelete}
-              className="p-1.5 text-gray-500 hover:text-red-600 transition-colors"
+              className="p-1.5 text-on-surface-variant hover:text-negative transition-colors"
               title="Delete"
             >
-              <HiTrash className="h-4 w-4" />
+              <span className="material-symbols-outlined text-base">delete</span>
             </button>
           </div>
         )}
@@ -291,14 +290,14 @@ function BudgetAccountFormModal({
   const iconOptions = ['', '💰', '💳', '🏠', '🚗', '💼', '🎯', '🛒', '✈️', '📱', '🎓', '📊']
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold mb-4">
+    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
+      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ boxShadow: 'var(--shadow-float)' }}>
+        <h2 className="font-headline font-bold text-on-surface text-xl mb-4">
           {account ? 'Edit Budget Account' : 'Create Budget Account'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Name *
             </label>
             <input
@@ -306,19 +305,19 @@ function BudgetAccountFormModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               placeholder="Personal, Business, etc."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Description
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               rows={2}
               placeholder="Optional description..."
             />
@@ -326,13 +325,13 @@ function BudgetAccountFormModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
                 Icon
               </label>
               <select
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
               >
                 {iconOptions.map((opt) => (
                   <option key={opt} value={opt}>
@@ -343,26 +342,26 @@ function BudgetAccountFormModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
                 Color
               </label>
               <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-full h-10 border border-gray-300 rounded-md cursor-pointer"
+                className="w-full h-10 border-none rounded-lg cursor-pointer bg-surface-container-highest"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
               Default Currency
             </label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
             >
               <option value="PLN">PLN - Polish Zloty</option>
               <option value="USD">USD - US Dollar</option>
@@ -376,14 +375,14 @@ function BudgetAccountFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Saving...' : account ? 'Save Changes' : 'Create'}

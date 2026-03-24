@@ -38,11 +38,11 @@ export default function BudgetPeriodsPage() {
   return (
     <div className="max-w-screen-2xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="text-3xl font-semibold text-gray-900">Budget Periods</h1>
+        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Budget Periods</h1>
         {canManageBudgetData && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium"
+            className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
           >
             Create Period
           </button>
@@ -56,14 +56,15 @@ export default function BudgetPeriodsPage() {
               setSelectedPeriodId(period.id)
               navigate(`/period/${period.id}`)
             }}
-            className="bg-white p-4 sm:p-6 md:p-8 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all relative group cursor-pointer"
+            className="bg-surface-container-lowest p-4 sm:p-6 md:p-8 rounded-xl transition-all relative group cursor-pointer"
+            style={{ boxShadow: 'var(--shadow-card)' }}
           >
-            <h2 className="text-lg font-semibold mb-3 text-gray-900">{period.name}</h2>
-            <p className="text-gray-500 text-sm mb-1">
+            <h2 className="font-headline font-semibold text-lg mb-3 text-on-surface">{period.name}</h2>
+            <p className="text-on-surface-variant text-sm mb-1 font-mono">
               {period.start_date} - {period.end_date}
             </p>
             {period.weeks && (
-              <p className="text-gray-400 text-sm">{period.weeks} weeks</p>
+              <p className="text-outline text-sm font-mono">{period.weeks} weeks</p>
             )}
             {canManageBudgetData && (
               <>
@@ -73,7 +74,7 @@ export default function BudgetPeriodsPage() {
                     setSelectedPeriodToEdit(period)
                     setIsEditModalOpen(true)
                   }}
-                  className="absolute top-4 right-20 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 text-sm font-medium"
+                  className="absolute top-4 right-20 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-surface-container-high text-on-surface px-3 py-1.5 rounded-lg hover:bg-surface-container text-sm font-medium"
                   title="Edit period"
                 >
                   Edit
@@ -84,7 +85,7 @@ export default function BudgetPeriodsPage() {
                     setSelectedPeriodToCopy(period)
                     setIsCopyModalOpen(true)
                   }}
-                  className="absolute top-4 right-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 text-sm font-medium"
+                  className="absolute top-4 right-4 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-gradient-to-br from-primary to-primary-dim text-on-primary px-3 py-1.5 rounded-lg hover:opacity-90 text-sm font-medium"
                   title="Copy as base"
                 >
                   Copy

@@ -12,20 +12,38 @@ interface Props {
 export default function PlannedTransactionList({ transactions, onEdit, onExecute, onCancel, onDelete }: Props) {
   const { isCardsView } = useLayout()
 
+  const getStatusChipClass = (status: string) => {
+    const base = "px-3 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider select-none";
+    switch (status) {
+      case 'done':
+        return `${base} bg-tertiary-container text-on-tertiary-container`;
+      case 'pending':
+        return `${base} bg-secondary-container text-on-secondary-container`;
+      case 'cancelled':
+      case 'error':
+        return `${base} bg-error-container text-[#6b1728]`;
+      default:
+        return `${base} bg-surface-container-high text-on-surface-variant`;
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div 
+      className="bg-surface-container-lowest rounded-xl overflow-hidden"
+      style={{ boxShadow: 'var(--shadow-card)' }}
+    >
       {/* Desktop Table */}
       <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200">
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Planned Date</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+            <tr className="bg-surface-container-low">
+              <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Name</th>
+              <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Category</th>
+              <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Amount</th>
+              <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Planned Date</th>
+              <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Status</th>
               {(onEdit || onExecute || onCancel || onDelete) && (
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Actions</th>
               )}
             </tr>
           </thead>
@@ -33,33 +51,25 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
             {transactions.map(planned => (
               <tr
                 key={planned.id}
-                className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+                className="hover:bg-surface-container-low transition-colors"
               >
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{planned.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{planned.category?.name || '-'}</td>
-                <td className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
+                <td className="px-6 py-3 text-sm font-medium text-on-surface">{planned.name}</td>
+                <td className="px-6 py-3 text-sm text-on-surface-variant">{planned.category?.name || '-'}</td>
+                <td className="px-6 py-3 text-right font-mono text-sm font-bold text-on-surface">
                   {Number(planned.amount).toFixed(2)} {planned.currency}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">{planned.planned_date}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    planned.status === 'done'
-                      ? 'bg-green-50 text-green-700'
-                      : planned.status === 'pending'
-                      ? 'bg-yellow-50 text-yellow-700'
-                      : planned.status === 'cancelled'
-                      ? 'bg-red-50 text-red-700'
-                      : 'bg-gray-50 text-gray-700'
-                  }`}>
+                <td className="px-6 py-3 font-mono text-sm text-on-surface-variant">{planned.planned_date}</td>
+                <td className="px-6 py-3">
+                  <span className={getStatusChipClass(planned.status)}>
                     {planned.status}
                   </span>
                 </td>
                 {(onEdit || onExecute || onCancel || onDelete) && (
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-6 py-3 text-center">
                     {onEdit && (
                       <button
                         onClick={() => onEdit(planned)}
-                        className="text-gray-600 hover:text-gray-900 mr-4 text-sm font-medium transition-colors"
+                        className="text-on-surface-variant hover:text-primary mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
                       >
                         Edit
                       </button>
@@ -67,15 +77,15 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                     {onExecute && planned.status === 'pending' && (
                       <button
                         onClick={() => onExecute(planned.id)}
-                        className="text-green-600 hover:text-green-700 mr-4 text-sm font-medium transition-colors"
+                        className="text-positive hover:text-tertiary mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
                       >
-                        Mark Done
+                        Execute
                       </button>
                     )}
                     {onCancel && planned.status === 'pending' && (
                       <button
                         onClick={() => onCancel(planned)}
-                        className="text-orange-600 hover:text-orange-700 mr-4 text-sm font-medium transition-colors"
+                        className="text-outline hover:text-on-surface-variant mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
                       >
                         Cancel
                       </button>
@@ -83,7 +93,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                     {onDelete && (
                       <button
                         onClick={() => onDelete(planned.id)}
-                        className="text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
+                        className="text-negative hover:text-error font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
                       >
                         Delete
                       </button>
@@ -97,35 +107,27 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
       </div>
 
       {/* Mobile Cards */}
-      <div className={isCardsView ? 'divide-y divide-gray-100' : 'md:hidden divide-y divide-gray-100'}>
+      <div className={isCardsView ? 'p-2 space-y-2' : 'md:hidden p-2 space-y-2'}>
         {transactions.map(planned => (
             <div
               key={planned.id}
-              className="p-4"
+              className="p-4 bg-surface-container rounded-lg hover:bg-surface-container-high transition-colors"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900">{planned.name}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{planned.category?.name || 'No category'}</p>
+                  <h4 className="font-headline font-bold text-on-surface">{planned.name}</h4>
+                  <p className="text-sm text-on-surface-variant mt-1">{planned.category?.name || 'No category'}</p>
                 </div>
-                <span className="text-lg font-bold text-gray-900 ml-3">
+                <span className="font-mono font-bold text-lg text-on-surface ml-3">
                   {Number(planned.amount).toFixed(2)}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-sm text-gray-500">{planned.planned_date}</span>
+              <div className="flex justify-between items-center mb-4">
+                <span className="font-mono text-sm text-on-surface-variant">{planned.planned_date}</span>
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-500">{planned.currency}</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    planned.status === 'done'
-                      ? 'bg-green-50 text-green-700'
-                      : planned.status === 'pending'
-                      ? 'bg-yellow-50 text-yellow-700'
-                      : planned.status === 'cancelled'
-                      ? 'bg-red-50 text-red-700'
-                      : 'bg-gray-50 text-gray-700'
-                  }`}>
+                  <span className="font-mono text-sm text-on-surface-variant">{planned.currency}</span>
+                  <span className={getStatusChipClass(planned.status)}>
                     {planned.status}
                   </span>
                 </div>
@@ -136,7 +138,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                   {onEdit && (
                     <button
                       onClick={() => onEdit(planned)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-on-surface bg-surface-container-high rounded hover:bg-surface-container-highest transition-colors"
                     >
                       Edit
                     </button>
@@ -144,15 +146,15 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                   {onExecute && planned.status === 'pending' && (
                     <button
                       onClick={() => onExecute(planned.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 rounded hover:bg-green-100"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-on-tertiary-container bg-tertiary-container rounded hover:opacity-90 transition-colors"
                     >
-                      Mark Done
+                      Execute
                     </button>
                   )}
                   {onCancel && planned.status === 'pending' && (
                     <button
                       onClick={() => onCancel(planned)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-orange-600 bg-orange-50 rounded hover:bg-orange-100"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-on-surface bg-surface-container-high rounded hover:bg-surface-container-highest transition-colors"
                     >
                       Cancel
                     </button>
@@ -160,7 +162,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                   {onDelete && (
                     <button
                       onClick={() => onDelete(planned.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded hover:bg-red-100"
+                      className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-negative bg-[rgba(225,29,72,0.08)] rounded hover:bg-[rgba(225,29,72,0.12)] transition-colors"
                     >
                       Delete
                     </button>
@@ -172,7 +174,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
       </div>
 
       {transactions.length === 0 && (
-        <p className="text-center py-8 text-gray-500">No planned transactions</p>
+        <p className="text-center py-8 text-on-surface-variant font-headline">No planned transactions</p>
       )}
     </div>
   )
