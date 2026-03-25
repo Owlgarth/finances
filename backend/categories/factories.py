@@ -11,5 +11,6 @@ class CategoryFactory(DjangoModelFactory):
         model = Category
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.workspace)
     name = factory.Faker('word')
     created_by = factory.SubFactory('common.tests.factories.UserFactory')

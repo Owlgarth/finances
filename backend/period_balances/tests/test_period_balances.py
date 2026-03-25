@@ -3,16 +3,16 @@
 from datetime import date
 from decimal import Decimal
 
-# Import User model at module level for use in tests
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
-from budget_periods.models import BudgetPeriod
+from budget_periods.factories import BudgetPeriodFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
-from currency_exchanges.models import CurrencyExchange
+from currency_exchanges.factories import CurrencyExchangeFactory
+from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
-from transactions.models import Transaction
+from transactions.factories import TransactionFactory
 from workspaces.models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -38,8 +38,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         )
 
         # Create budget periods
-        self.period1 = BudgetPeriod.objects.create(
+        self.period1 = BudgetPeriodFactory(
             budget_account=self.workspace.budget_accounts.first(),
+            workspace=self.workspace,
             name='January 2025',
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 31),
@@ -47,8 +48,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.period2 = BudgetPeriod.objects.create(
+        self.period2 = BudgetPeriodFactory(
             budget_account=self.workspace.budget_accounts.first(),
+            workspace=self.workspace,
             name='February 2025',
             start_date=date(2025, 2, 1),
             end_date=date(2025, 2, 28),
@@ -56,8 +58,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.other_period = BudgetPeriod.objects.create(
+        self.other_period = BudgetPeriodFactory(
             budget_account=self.other_account,
+            workspace=self.workspace,
             name='March 2025',
             start_date=date(2025, 3, 1),
             end_date=date(2025, 3, 31),
@@ -66,7 +69,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         )
 
         # Create period balances
-        self.balance1_pln = PeriodBalance.objects.create(
+        self.balance1_pln = PeriodBalanceFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             currency=self.currencies['PLN'],
             opening_balance=Decimal('1000.00'),
@@ -78,7 +82,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.balance1_usd = PeriodBalance.objects.create(
+        self.balance1_usd = PeriodBalanceFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             currency=self.currencies['USD'],
             opening_balance=Decimal('500.00'),
@@ -90,7 +95,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.balance2_pln = PeriodBalance.objects.create(
+        self.balance2_pln = PeriodBalanceFactory(
+            workspace=self.workspace,
             budget_period=self.period2,
             currency=self.currencies['PLN'],
             opening_balance=Decimal('3050.00'),
@@ -102,7 +108,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.other_balance = PeriodBalance.objects.create(
+        self.other_balance = PeriodBalanceFactory(
+            workspace=self.workspace,
             budget_period=self.other_period,
             currency=self.currencies['EUR'],
             opening_balance=Decimal('0'),
@@ -208,15 +215,17 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=other_user,
         )
 
-        other_period = BudgetPeriod.objects.create(
+        other_period = BudgetPeriodFactory(
             budget_account=other_account,
+            workspace=other_workspace,
             name='Other Period',
             start_date=date(2025, 4, 1),
             end_date=date(2025, 4, 30),
             created_by=other_user,
         )
 
-        other_balance = PeriodBalance.objects.create(
+        other_balance = PeriodBalanceFactory(
+            workspace=other_workspace,
             budget_period=other_period,
             currency=other_pln_currency,
             opening_balance=Decimal('500.00'),
@@ -294,8 +303,9 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def test_recalculate_balance_creates_new_balance(self):
         """Test recalculating creates balance if it doesn't exist."""
         # Create a new period with no balances
-        new_period = BudgetPeriod.objects.create(
+        new_period = BudgetPeriodFactory(
             budget_account=self.workspace.budget_accounts.first(),
+            workspace=self.workspace,
             name='April 2025',
             start_date=date(2025, 4, 1),
             end_date=date(2025, 4, 30),
@@ -317,7 +327,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def test_recalculate_balance_with_transactions(self):
         """Test recalculation includes transaction totals."""
         # Create transactions for period1
-        Transaction.objects.create(
+        TransactionFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             date=date(2025, 1, 15),
             description='Salary',
@@ -327,7 +338,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        Transaction.objects.create(
+        TransactionFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             date=date(2025, 1, 20),
             description='Rent',
@@ -351,7 +363,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def test_recalculate_balance_with_exchanges(self):
         """Test recalculation includes currency exchange totals."""
         # Create currency exchanges for period1
-        CurrencyExchange.objects.create(
+        CurrencyExchangeFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             date=date(2025, 1, 10),
             description='Buy EUR',
@@ -362,7 +375,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        CurrencyExchange.objects.create(
+        CurrencyExchangeFactory(
+            workspace=self.workspace,
             budget_period=self.period1,
             date=date(2025, 1, 15),
             description='Buy PLN',

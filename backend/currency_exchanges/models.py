@@ -1,18 +1,31 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
-class CurrencyExchange(models.Model):
+class CurrencyExchange(WorkspaceScopedModel):
     """Currency exchange model for multi-currency transactions."""
 
-    # NOTE: This filter only matches exchanges linked to a budget_period.
-    # Standalone exchanges (budget_period=NULL) are linked to the workspace
-    # through from_currency__workspace_id. The for_workspace() queryset
-    # will NOT include them. Use direct filtering for standalone exchanges.
-    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='currency_exchanges',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_currency_exchanges',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_currency_exchanges',
+    )
 
     budget_period = models.ForeignKey(
         'budget_periods.BudgetPeriod',
@@ -28,22 +41,6 @@ class CurrencyExchange(models.Model):
     to_currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='exchanges_to')
     to_amount = models.DecimalField(max_digits=15, decimal_places=2)
     exchange_rate = models.DecimalField(max_digits=15, decimal_places=6, blank=True, null=True)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='created_currency_exchanges',
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='updated_currency_exchanges',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
         db_table = 'currency_exchanges'

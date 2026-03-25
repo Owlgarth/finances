@@ -13,6 +13,7 @@ class TransactionFactory(DjangoModelFactory):
         model = Transaction
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace)
     date = factory.Faker('date_this_year')
     description = factory.Faker('sentence')
     category = factory.SubFactory('categories.factories.CategoryFactory')

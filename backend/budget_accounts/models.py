@@ -1,25 +1,13 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
-class BudgetAccount(models.Model):
+class BudgetAccount(WorkspaceScopedModel):
     """Budget account model for organizing budgets within workspaces."""
 
-    WORKSPACE_FILTER = 'workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
-
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='budget_accounts')
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True, null=True)
-    default_currency = models.ForeignKey(
-        'workspaces.Currency', on_delete=models.PROTECT, related_name='budget_accounts'
-    )
-    color = models.CharField(max_length=7, blank=True, null=True)  # Hex color like #3B82F6
-    icon = models.CharField(max_length=50, blank=True, null=True)  # Icon identifier
-    is_active = models.BooleanField(default=True)
-    display_order = models.IntegerField(default=0)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -34,8 +22,15 @@ class BudgetAccount(models.Model):
         blank=True,
         related_name='updated_budget_accounts',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    default_currency = models.ForeignKey(
+        'workspaces.Currency', on_delete=models.PROTECT, related_name='budget_accounts'
+    )
+    color = models.CharField(max_length=7, blank=True, null=True)
+    icon = models.CharField(max_length=50, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
 
     class Meta:
         db_table = 'budget_accounts'

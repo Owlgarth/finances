@@ -64,6 +64,7 @@ class CategoryService:
         try:
             return Category.objects.create(
                 budget_period_id=data.budget_period_id,
+                workspace_id=workspace_id,
                 name=data.name,
                 created_by=user,
                 updated_by=user,
@@ -107,7 +108,15 @@ class CategoryService:
         new_categories = []
         for name in data:
             if name not in existing_names:
-                new_categories.append(Category(name=name, budget_period_id=period_id, created_by=user, updated_by=user))
+                new_categories.append(
+                    Category(
+                        name=name,
+                        budget_period_id=period_id,
+                        workspace_id=workspace_id,
+                        created_by=user,
+                        updated_by=user,
+                    )
+                )
                 existing_names.add(name)
 
         if not new_categories:
