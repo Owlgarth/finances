@@ -74,6 +74,7 @@ class PlannedTransactionService:
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
         return PlannedTransaction.objects.create(
+            workspace_id=workspace_id,
             budget_period_id=period_id,
             name=data.name,
             amount=data.amount,
@@ -137,6 +138,7 @@ class PlannedTransactionService:
             raise PlannedTransactionNoActivePeriodError()
 
         transaction_obj = Transaction.objects.create(
+            workspace_id=workspace_id,
             budget_period_id=period.id,
             date=payment_date,
             description=planned.name,
@@ -218,6 +220,7 @@ class PlannedTransactionService:
 
             new_transactions.append(
                 PlannedTransaction(
+                    workspace_id=workspace_id,
                     name=import_item.name,
                     amount=import_item.amount,
                     currency=currency,

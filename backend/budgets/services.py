@@ -49,6 +49,7 @@ class BudgetService:
 
         return Budget.objects.create(
             budget_period_id=data.budget_period_id,
+            workspace_id=workspace_id,
             category_id=data.category_id,
             currency=currency,
             amount=data.amount,

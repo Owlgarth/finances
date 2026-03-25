@@ -13,6 +13,7 @@ class CurrencyExchangeFactory(DjangoModelFactory):
         model = CurrencyExchange
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace)
     date = factory.Faker('date_this_year')
     description = factory.Faker('sentence')
     from_currency = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace.currencies.first())

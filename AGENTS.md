@@ -204,6 +204,55 @@ class TransactionService:
         return trans
 ```
 
+### Workspace-Scoped Models
+
+All models that belong to a workspace must inherit from `WorkspaceScopedModel`. This provides:
+- Direct `workspace` FK for efficient filtering
+- Audit fields: `created_by`, `updated_by`, `created_at`, `updated_at`
+- `for_workspace()` queryset method via `WorkspaceScopedQuerySet`
+- Validation preventing `workspace_id` changes after creation
+
+```python
+# categories/models.py
+from common.models import WorkspaceScopedModel
+
+class Category(WorkspaceScopedModel):
+    """Category model scoped to a workspace."""
+
+    budget_period = models.ForeignKey(
+        'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='categories'
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        db_table = 'categories'
+        unique_together = [['name', 'budget_period']]
+
+# Service usage - always set workspace_id on creation:
+Category.objects.create(
+    budget_period_id=period_id,
+    workspace_id=workspace_id,
+    name='Food',
+    created_by=user,
+)
+```
+
+For models with custom querysets (e.g., with additional filter methods):
+
+```python
+# budget_periods/models.py
+from common.models import WorkspaceScopedModel
+from common.querysets import WorkspaceScopedQuerySet
+
+class BudgetPeriodQuerySet(WorkspaceScopedQuerySet):
+    def containing(self, target_date: date):
+        return self.filter(start_date__lte=target_date, end_date__gte=target_date)
+
+class BudgetPeriod(WorkspaceScopedModel):
+    objects = BudgetPeriodQuerySet.as_manager()
+    # ... fields
+```
+
 ### Pydantic Schemas
 
 ```python
@@ -383,7 +432,7 @@ Transaction.objects.filter(budget_period__budget_account__workspace_id=workspace
 Transaction.objects.for_workspace(workspace_id)
 ```
 
-All workspace-scoped models have `WORKSPACE_FILTER` defined.
+All workspace-scoped models inherit from `WorkspaceScopedModel` which provides the direct `workspace_id` FK.
 
 ### List Endpoints Return Empty Arrays for Cross-Workspace Resources
 

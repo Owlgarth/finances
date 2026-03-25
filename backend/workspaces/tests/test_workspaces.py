@@ -1,7 +1,12 @@
 """Tests for workspaces and workspace_members API endpoints."""
 
+from datetime import date
+
 from django.test import TestCase
 
+from budget_periods.factories import BudgetPeriodFactory
+from budgets.factories import BudgetFactory
+from categories.factories import CategoryFactory
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
@@ -1079,11 +1084,7 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
     """Tests verifying viewer role is rejected on write endpoints."""
 
     def setUp(self):
-        from datetime import date
-
         from budget_accounts.models import BudgetAccount
-        from budget_periods.models import BudgetPeriod
-        from categories.models import Category
         from common.auth import create_access_token
         from workspaces.models import Currency
 
@@ -1112,16 +1113,17 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
             created_by=self.viewer_user,
             updated_by=self.viewer_user,
         )
-        self.period = BudgetPeriod.objects.create(
+        self.period = BudgetPeriodFactory(
             budget_account=self.account,
+            workspace=self.workspace,
             name='Jan 2025',
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 31),
             created_by=self.viewer_user,
-            updated_by=self.viewer_user,
         )
-        self.category = Category.objects.create(
+        self.category = CategoryFactory(
             budget_period=self.period,
+            workspace=self.workspace,
             name='Groceries',
             created_by=self.viewer_user,
         )
@@ -1165,10 +1167,9 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
         self.assertStatus(403)
 
     def test_viewer_cannot_create_budget(self):
-        from budgets.models import Budget
-
-        budget = Budget.objects.create(
+        budget = BudgetFactory(
             budget_period=self.period,
+            workspace=self.workspace,
             category=self.category,
             currency=self.pln,
             amount=100,
@@ -1186,10 +1187,9 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
         budget.delete()
 
     def test_viewer_cannot_delete_budget(self):
-        from budgets.models import Budget
-
-        budget = Budget.objects.create(
+        budget = BudgetFactory(
             budget_period=self.period,
+            workspace=self.workspace,
             category=self.category,
             currency=self.pln,
             amount=100,

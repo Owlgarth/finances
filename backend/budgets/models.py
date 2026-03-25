@@ -1,27 +1,35 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
-class Budget(models.Model):
+class Budget(WorkspaceScopedModel):
     """Budget model for allocating amounts to categories within periods."""
 
-    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
-
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='budgets',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_budgets',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_budgets',
+    )
     budget_period = models.ForeignKey('budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='budgets')
     category = models.ForeignKey('categories.Category', on_delete=models.CASCADE, related_name='budgets')
     currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='budgets')
     amount = models.DecimalField(max_digits=15, decimal_places=2)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_budgets'
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_budgets'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
         db_table = 'budgets'

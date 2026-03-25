@@ -58,6 +58,7 @@ class BudgetPeriodService:
 
         period = BudgetPeriod.objects.create(
             budget_account_id=data.budget_account_id,
+            workspace_id=workspace_id,
             name=data.name,
             start_date=data.start_date,
             end_date=data.end_date,
@@ -71,6 +72,7 @@ class BudgetPeriodService:
             [
                 PeriodBalance(
                     budget_period=period,
+                    workspace_id=workspace_id,
                     currency=currency,
                     opening_balance=0,
                     total_income=0,
@@ -138,6 +140,7 @@ class BudgetPeriodService:
 
         new_period = BudgetPeriod.objects.create(
             budget_account_id=source_period.budget_account_id,
+            workspace_id=workspace_id,
             name=data.name,
             start_date=data.start_date,
             end_date=data.end_date,
@@ -151,6 +154,7 @@ class BudgetPeriodService:
             [
                 PeriodBalance(
                     budget_period=new_period,
+                    workspace_id=workspace_id,
                     currency=currency,
                     opening_balance=0,
                     total_income=0,
@@ -169,6 +173,7 @@ class BudgetPeriodService:
         for source_category in source_period.categories.all():
             new_category = Category.objects.create(
                 budget_period=new_period,
+                workspace_id=workspace_id,
                 name=source_category.name,
                 created_by=user,
             )
@@ -178,6 +183,7 @@ class BudgetPeriodService:
             [
                 Budget(
                     budget_period=new_period,
+                    workspace_id=workspace_id,
                     category_id=category_mapping[source_budget.category_id].id,
                     currency=source_budget.currency,
                     amount=source_budget.amount,
@@ -198,6 +204,7 @@ class BudgetPeriodService:
             planned_to_create.append(
                 PlannedTransaction(
                     budget_period=new_period,
+                    workspace_id=workspace_id,
                     name=source_planned.name,
                     amount=source_planned.amount,
                     currency=source_planned.currency,

@@ -1,14 +1,31 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
-class Transaction(models.Model):
+class Transaction(WorkspaceScopedModel):
     """Transaction model for tracking income and expenses."""
 
-    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='transactions',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_transactions',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_transactions',
+    )
 
     TYPE_CHOICES = [
         ('income', 'Income'),
@@ -26,14 +43,6 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='transactions')
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_transactions'
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_transactions'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
         db_table = 'transactions'
