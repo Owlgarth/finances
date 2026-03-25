@@ -1,26 +1,17 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
-class PeriodBalance(models.Model):
+class PeriodBalance(WorkspaceScopedModel):
     """Period balance model for tracking balances within budget periods."""
 
-    WORKSPACE_FILTER = 'budget_period__budget_account__workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
-
-    budget_period = models.ForeignKey(
-        'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='period_balances'
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='period_balances',
     )
-    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='period_balances')
-    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_income = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    exchanges_in = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    exchanges_out = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    closing_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    last_calculated_at = models.DateTimeField(blank=True, null=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -35,8 +26,18 @@ class PeriodBalance(models.Model):
         blank=True,
         related_name='updated_period_balances',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    budget_period = models.ForeignKey(
+        'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='period_balances'
+    )
+    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='period_balances')
+    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_income = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    exchanges_in = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    exchanges_out = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    closing_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    last_calculated_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'period_balances'

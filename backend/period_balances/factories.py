@@ -13,6 +13,7 @@ class PeriodBalanceFactory(DjangoModelFactory):
         model = PeriodBalance
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace)
     currency = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace.currencies.first())
     opening_balance = Decimal('1000.00')
     total_income = Decimal('500.00')

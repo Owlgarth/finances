@@ -15,6 +15,8 @@ from core.schemas import (
     ConsentOut,
     ConsentStatusOut,
     DetailOut,
+    FullImportIn,
+    ImportResultOut,
     MessageOut,
     UserOut,
     UserPasswordUpdate,
@@ -157,3 +159,16 @@ def export_my_data(request):
     )
     response['Content-Disposition'] = f'attachment; filename="monie_data_export_{request.auth.id}.json"'
     return response
+
+
+@router.post('/me/import', auth=JWTAuth(), response={200: ImportResultOut, 400: DetailOut})
+@rate_limit('data_import', limit=3, period=3600)
+def import_my_data(request, data: FullImportIn):
+    """
+    Import all data from GDPR export.
+
+    Restores workspaces, accounts, periods, and all financial records.
+    Rate limited to 3 imports per hour.
+    """
+    result = services.UserService.import_all_data(request.auth, data)
+    return 200, result

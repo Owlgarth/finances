@@ -13,6 +13,7 @@ class PlannedTransactionFactory(DjangoModelFactory):
         model = PlannedTransaction
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace)
     name = factory.Faker('sentence')
     amount = Decimal('100.00')
     currency = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace.currencies.first())

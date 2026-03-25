@@ -13,6 +13,7 @@ class BudgetFactory(DjangoModelFactory):
         model = Budget
 
     budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.workspace)
     category = factory.SubFactory('categories.factories.CategoryFactory')
     currency = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace.currencies.first())
     amount = Decimal('100.00')
