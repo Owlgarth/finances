@@ -3,13 +3,20 @@
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
-from budget_periods.models import BudgetPeriod
+from budget_periods.factories import BudgetPeriodFactory
+from budgets.factories import BudgetFactory
 from budgets.models import Budget
+from categories.factories import CategoryFactory
 from categories.models import Category
 from common.exceptions import ValidationError
 from common.tests.factories import UserFactory
+from currency_exchanges.factories import CurrencyExchangeFactory
 from currency_exchanges.models import CurrencyExchange
+from period_balances.factories import PeriodBalanceFactory
+from period_balances.models import PeriodBalance
+from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
+from transactions.factories import TransactionFactory
 from transactions.models import Transaction
 from workspaces.exceptions import (
     CurrencyDuplicateSymbolError,
@@ -123,17 +130,18 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
 
         account = BudgetAccount.objects.filter(workspace=workspace).first()
         pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriod.objects.create(
+        period = BudgetPeriodFactory(
             budget_account=account,
+            workspace=workspace,
             name='Jan',
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 31),
             created_by=user,
-            updated_by=user,
         )
 
-        transaction = Transaction.objects.create(
+        transaction = TransactionFactory(
             budget_period=period,
+            workspace=workspace,
             date=date(2025, 1, 15),
             description='Test Transaction',
             amount=100,
@@ -142,8 +150,9 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             created_by=user,
             updated_by=user,
         )
-        planned = PlannedTransaction.objects.create(
+        planned = PlannedTransactionFactory(
             budget_period=period,
+            workspace=workspace,
             name='Test Planned',
             amount=50,
             currency=pln,
@@ -152,8 +161,9 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             created_by=user,
             updated_by=user,
         )
-        exchange = CurrencyExchange.objects.create(
+        exchange = CurrencyExchangeFactory(
             budget_period=period,
+            workspace=workspace,
             date=date(2025, 1, 10),
             description='Test Exchange',
             from_currency=pln,
@@ -253,17 +263,18 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
 
         account = BudgetAccount.objects.filter(workspace=workspace).first()
         pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriod.objects.create(
+        period = BudgetPeriodFactory(
             budget_account=account,
+            workspace=workspace,
             name='Jan',
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 31),
             created_by=user,
-            updated_by=user,
         )
 
-        exchange = CurrencyExchange.objects.create(
+        exchange = CurrencyExchangeFactory(
             budget_period=period,
+            workspace=workspace,
             date=date(2025, 1, 10),
             description='Test Exchange',
             from_currency=pln,
@@ -286,37 +297,38 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         """Test that delete_workspace cascades to Category, Budget, and PeriodBalance."""
         from datetime import date
 
-        from period_balances.models import PeriodBalance
-
         user = UserFactory()
         WorkspaceService.create_workspace(user=user, name='Fallback', create_demo=False)
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
         account = BudgetAccount.objects.filter(workspace=workspace).first()
         pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriod.objects.create(
+        period = BudgetPeriodFactory(
             budget_account=account,
+            workspace=workspace,
             name='Jan',
             start_date=date(2025, 1, 1),
             end_date=date(2025, 1, 31),
             created_by=user,
-            updated_by=user,
         )
-        category = Category.objects.create(
+        category = CategoryFactory(
             budget_period=period,
+            workspace=workspace,
             name='Groceries',
             created_by=user,
         )
-        budget = Budget.objects.create(
+        budget = BudgetFactory(
             budget_period=period,
+            workspace=workspace,
             category=category,
             currency=pln,
             amount=100,
             created_by=user,
             updated_by=user,
         )
-        period_balance = PeriodBalance.objects.create(
+        period_balance = PeriodBalanceFactory(
             budget_period=period,
+            workspace=workspace,
             currency=pln,
             opening_balance=0,
             total_income=0,

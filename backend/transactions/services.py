@@ -150,13 +150,14 @@ class TransactionService:
         TransactionService._validate_category(category_id, period_id)
 
         trans = Transaction.objects.create(
+            workspace_id=workspace_id,
+            budget_period_id=period_id,
             date=data.date,
             description=data.description,
             category_id=category_id,
             amount=data.amount,
             currency=currency,
             type=data.type,
-            budget_period_id=period_id,
             created_by=user,
             updated_by=user,
         )
@@ -261,13 +262,14 @@ class TransactionService:
 
             new_transactions.append(
                 Transaction(
+                    workspace_id=workspace_id,
+                    budget_period_id=period_id,
                     date=import_item.date,
                     description=import_item.description,
                     category_id=category_id,
                     amount=import_item.amount,
                     currency=currency,
                     type=import_item.type,
-                    budget_period_id=period_id,
                     created_by=user,
                     updated_by=user,
                 )

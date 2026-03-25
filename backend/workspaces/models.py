@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models
 
-from common.querysets import WorkspaceScopedQuerySet
+from common.models import WorkspaceScopedModel
 
 
 class Role(models.TextChoices):
@@ -38,17 +38,12 @@ class Workspace(models.Model):
         return self.name
 
 
-class Currency(models.Model):
+class Currency(WorkspaceScopedModel):
     """Currency model scoped to a workspace."""
-
-    WORKSPACE_FILTER = 'workspace_id'
-    objects = WorkspaceScopedQuerySet.as_manager()
 
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='currencies')
     name = models.CharField(max_length=50)
     symbol = models.CharField(max_length=3)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
         db_table = 'currencies'
