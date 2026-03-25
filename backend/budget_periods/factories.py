@@ -13,6 +13,7 @@ class BudgetPeriodFactory(DjangoModelFactory):
         model = BudgetPeriod
 
     budget_account = factory.SubFactory('common.tests.factories.BudgetAccountFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget_account.workspace)
     name = factory.Faker('word')
     start_date = factory.Faker('date_this_year')
     end_date = factory.LazyAttribute(lambda obj: obj.start_date + timedelta(days=30))
