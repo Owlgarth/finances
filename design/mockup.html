@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monie — Design Mockup</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet"/>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            "primary":                   "#4b57aa",
+            "primary-dim":               "#3f4b9d",
+            "primary-container":         "#dfe0ff",
+            "on-primary":                "#f9f6ff",
+            "on-primary-container":      "#3e4a9c",
+            "secondary-container":       "#c9e7f7",
+            "on-secondary-container":    "#395663",
+            "surface":                   "#faf9f8",
+            "surface-lowest":            "#ffffff",
+            "surface-low":               "#f3f4f3",
+            "surface-mid":               "#edeeed",
+            "surface-high":              "#e6e9e8",
+            "surface-highest":           "#dfe3e2",
+            "on-surface":                "#2f3333",
+            "on-surface-2":              "#5b605f",
+            "muted":                     "#777c7b",
+            "ghost":                     "#aeb3b2",
+            "positive":                  "#10b981",
+            "negative":                  "#e11d48",
+          },
+          fontFamily: {
+            sans:  ["Geist", "sans-serif"],
+            mono:  ["JetBrains Mono", "monospace"],
+          },
+          borderRadius: {
+            DEFAULT: "8px",
+            md:      "12px",
+            lg:      "16px",
+            full:    "9999px",
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: 'Geist', sans-serif;
+      background: #faf9f8;
+      color: #2f3333;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .font-mono { font-family: 'JetBrains Mono', monospace !important; }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #dfe3e2; border-radius: 4px; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(47,51,51,0.45);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    /* Card shadow */
+    .card { box-shadow: 0 2px 16px rgba(47,51,51,0.06), 0 1px 3px rgba(47,51,51,0.04); }
+    .card:hover { box-shadow: 0 4px 20px rgba(47,51,51,0.08), 0 2px 6px rgba(47,51,51,0.05); }
+    .card { transition: box-shadow 0.2s; }
+
+    /* Button */
+    .btn-primary {
+      background: linear-gradient(135deg, #4b57aa, #3f4b9d);
+      color: #f9f6ff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      transition: opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:active { transform: scale(0.98); }
+
+    .btn-secondary {
+      background: #e6e9e8;
+      color: #2f3333;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #dfe3e2; }
+
+    /* Nav item */
+    .nav-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      background: transparent;
+      color: #5b605f;
+      transition: all 0.15s;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .nav-item:hover:not(.active) { background: rgba(255,255,255,0.65); color: #4b57aa; }
+    .nav-item.active {
+      background: #ffffff;
+      color: #4b57aa;
+      font-weight: 700;
+      transform: translateX(2px);
+      box-shadow: 0 1px 4px rgba(47,51,51,0.07);
+    }
+    .nav-item.active .material-symbols-outlined { color: #4b57aa; }
+
+    /* Input */
+    .field-input {
+      width: 100%;
+      background: #dfe3e2;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 13px;
+      color: #2f3333;
+      outline: none;
+      transition: all 0.15s;
+      font-family: 'Geist', sans-serif;
+    }
+    .field-input:focus {
+      background: #ffffff;
+      box-shadow: 0 0 0 2px #dfe0ff;
+    }
+    .field-input.mono { font-family: 'JetBrains Mono', monospace !important; }
+    .field-label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #777c7b;
+      margin-bottom: 5px;
+    }
+
+    /* Table row */
+    .tx-row { height: 40px; transition: background 0.1s; border-top: 1px solid rgba(174,179,178,0.1); }
+    .tx-row:hover { background: #ffffff; }
+
+    /* Segmented control */
+    .seg-track {
+      background: #f3f4f3;
+      border-radius: 8px;
+      padding: 3px;
+      display: flex;
+      gap: 2px;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 7px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+      background: transparent;
+      color: #5b605f;
+      font-family: 'Geist', sans-serif;
+    }
+    .seg-btn.active-expense { background: white; color: #e11d48; box-shadow: 0 1px 3px rgba(47,51,51,0.1); }
+    .seg-btn.active-income  { background: white; color: #10b981; box-shadow: 0 1px 3px rgba(47,51,51,0.1); }
+
+    /* Chips */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .chip-category { background: #c9e7f7; color: #395663; }
+    .chip-expense  { background: #ffe4e8; color: #9e3f4e; }
+    .chip-income   { background: #d1fae5; color: #065f46; }
+
+    /* Context selectors */
+    .ctx-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .ctx-btn:hover { background: rgba(255,255,255,0.65); }
+    .ctx-btn.ctx-active { background: rgba(75,87,170,0.08); }
+
+    /* Demo toolbar */
+    #demo-toolbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 9999;
+      background: #1a1f2e;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #64748b;
+    }
+    #demo-toolbar button {
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: monospace;
+      background: #334155;
+      color: #94a3b8;
+      transition: all 0.1s;
+    }
+    #demo-toolbar button.active { background: #4b57aa; color: white; }
+
+    /* Sidebar responsive */
+    @media (max-width: 1024px) and (min-width: 641px) {
+      #sidebar { width: 56px !important; }
+      .sidebar-text { display: none !important; }
+      .sidebar-brand-label { display: none !important; }
+      #main-area { margin-left: 56px !important; }
+      .ctx-btn { justify-content: center; padding: 8px 0; }
+    }
+
+    @media (max-width: 640px) {
+      #sidebar { display: none !important; }
+      #main-area { margin-left: 0 !important; padding-bottom: 72px; }
+      #bottom-nav { display: flex !important; }
+      .page-content { padding: 20px 16px 48px !important; }
+      .page-header { flex-wrap: wrap; gap: 12px; }
+      .page-header-actions { flex-wrap: wrap; }
+    }
+
+    @media (min-width: 641px) {
+      #bottom-nav { display: none !important; }
+    }
+
+    :focus-visible {
+      outline: 2px solid #dfe0ff;
+      outline-offset: 2px;
+      border-radius: inherit;
+    }
+
+    /* Balance card micro grid */
+    .balance-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
+    .meta-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aeb3b2;
+      margin-bottom: 1px;
+    }
+    .meta-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ─── DEMO TOOLBAR ─────────────────────────────────────────────── -->
+<div id="demo-toolbar">
+  <span style="color:#475569;margin-right:2px">MOCKUP</span>
+  <button id="btn-dashboard"     onclick="showScreen('dashboard')">Dashboard</button>
+  <button id="btn-transactions"  onclick="showScreen('transactions')">Transactions</button>
+  <button id="btn-modal"         onclick="openModal()">New Tx Modal</button>
+  <span style="margin-left:auto;color:#334155">↔ resize window to test responsive</span>
+</div>
+
+<!-- ─── APP SHELL ──────────────────────────────────────────────────── -->
+<div style="padding-top:32px;height:100vh;display:flex;overflow:hidden;position:relative">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" style="width:240px;background:#f3f4f3;display:flex;flex-direction:column;position:fixed;top:32px;left:0;bottom:0;z-index:50;transition:width 0.2s;flex-shrink:0;">
+
+    <!-- Brand -->
+    <div style="padding:18px 20px 12px;flex-shrink:0;display:flex;align-items:center;gap:8px;">
+      <div style="font-family:'Geist',sans-serif;font-size:20px;font-weight:900;color:#4b57aa;letter-spacing:-0.04em;" class="sidebar-brand-label">Monie</div>
+      <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4b57aa,#3f4b9d);display:flex;align-items:center;justify-content:center;display:none;" id="brand-icon">
+        <span style="font-size:14px;font-weight:900;color:#f9f6ff;">M</span>
+      </div>
+    </div>
+
+    <!-- Context Selectors -->
+    <div style="padding:0 10px 12px;flex-shrink:0;" id="ctx-selectors">
+
+      <!-- Workspace -->
+      <button class="ctx-btn" title="Switch Workspace">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#777c7b;">home</span>
+        <div style="flex:1;min-width:0;" class="sidebar-text">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:#aeb3b2;line-height:1.3">Workspace</div>
+          <div style="font-size:12px;font-weight:600;color:#2f3333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Home</div>
+        </div>
+        <span class="material-symbols-outlined sidebar-text" style="font-size:14px;color:#aeb3b2;">unfold_more</span>
+      </button>
+
+      <!-- Account -->
+      <button class="ctx-btn ctx-active" title="Switch Account" style="margin-top:2px">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#4b57aa;">account_balance</span>
+        <div style="flex:1;min-width:0;" class="sidebar-text">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:#aeb3b2;line-height:1.3">Account</div>
+          <div style="font-size:12px;font-weight:600;color:#4b57aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Example Account</div>
+        </div>
+        <span class="material-symbols-outlined sidebar-text" style="font-size:14px;color:#aeb3b2;">unfold_more</span>
+      </button>
+
+      <!-- Period -->
+      <button class="ctx-btn" title="Switch Period" style="margin-top:2px">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#777c7b;">calendar_month</span>
+        <div style="flex:1;min-width:0;" class="sidebar-text">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.1em;color:#aeb3b2;line-height:1.3">Period</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#2f3333;">Feb 2026</div>
+        </div>
+        <span class="material-symbols-outlined sidebar-text" style="font-size:14px;color:#aeb3b2;">unfold_more</span>
+      </button>
+    </div>
+
+    <!-- Nav divider via bg shift -->
+    <div style="height:1px;background:rgba(174,179,178,0.15);margin:0 14px 10px;"></div>
+
+    <!-- Nav Items -->
+    <nav style="flex:1;padding:0 10px;overflow-y:auto;" id="nav-container">
+      <!-- rendered by JS -->
+    </nav>
+
+    <!-- User -->
+    <div style="padding:10px;flex-shrink:0;border-top:1px solid rgba(174,179,178,0.12);">
+      <button class="ctx-btn" style="gap:10px">
+        <div style="width:28px;height:28px;border-radius:50%;background:#4b57aa;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <span style="font-size:12px;font-weight:700;color:#f9f6ff">D</span>
+        </div>
+        <div style="flex:1;min-width:0" class="sidebar-text">
+          <div style="font-size:13px;font-weight:600;color:#2f3333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Demo</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#777c7b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">demo@monie.watch</div>
+        </div>
+        <span class="material-symbols-outlined sidebar-text" style="font-size:14px;color:#aeb3b2;">more_vert</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <main id="main-area" style="margin-left:240px;flex:1;overflow-y:auto;overflow-x:hidden;min-height:0">
+
+    <!-- ═══════════════════════════════════════════ DASHBOARD -->
+    <div class="screen active page-content" id="screen-dashboard" style="padding:28px 32px 56px;max-width:1100px">
+
+      <!-- Page header -->
+      <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#aeb3b2;margin-bottom:5px">Feb 2026 · Example Account</div>
+          <h1 style="font-size:20px;font-weight:800;letter-spacing:-0.025em;color:#2f3333;line-height:1">Dashboard</h1>
+        </div>
+        <div class="page-header-actions" style="display:flex;gap:8px;align-items:center">
+          <button class="btn-primary" style="padding:8px 16px" onclick="openModal()">
+            <span class="material-symbols-outlined" style="font-size:16px">add</span>
+            Add Transaction
+          </button>
+        </div>
+      </div>
+
+      <!-- Balances strip -->
+      <section style="margin-bottom:32px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#aeb3b2;margin-bottom:10px">Balances</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px" id="balance-cards">
+          <!-- rendered by JS -->
+        </div>
+      </section>
+
+      <!-- Budget vs Actual -->
+      <section>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#aeb3b2">Budget vs Actual — PLN</div>
+          <button class="btn-primary" style="padding:6px 12px;font-size:12px">Add Budget</button>
+        </div>
+
+        <div class="card" style="background:white;border-radius:12px;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:#f3f4f3">
+                <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600">Category</th>
+                <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:right;font-weight:600">Budget</th>
+                <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:right;font-weight:600">Actual</th>
+                <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:right;font-weight:600">Diff</th>
+                <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600;min-width:160px">Progress</th>
+                <th style="padding:9px 16px;width:80px"></th>
+              </tr>
+            </thead>
+            <tbody id="budget-tbody"></tbody>
+            <tfoot>
+              <tr style="background:#f3f4f3">
+                <td style="font-size:13px;font-weight:700;color:#2f3333;padding:9px 16px">Total</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#2f3333;padding:9px 16px;text-align:right">4,100.00</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#2f3333;padding:9px 16px;text-align:right">6,968.80</td>
+                <td style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#e11d48;padding:9px 16px;text-align:right">-2,868.80</td>
+                <td colspan="2" style="padding:9px 16px"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ TRANSACTIONS -->
+    <div class="screen page-content" id="screen-transactions" style="padding:28px 32px 56px;max-width:1100px">
+
+      <!-- Page header -->
+      <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#aeb3b2;margin-bottom:5px">Feb 2026 · Example Account</div>
+          <h1 style="font-size:20px;font-weight:800;letter-spacing:-0.025em;color:#2f3333;line-height:1">Transactions</h1>
+        </div>
+        <div class="page-header-actions" style="display:flex;gap:8px;align-items:center">
+          <button class="btn-secondary" style="padding:7px 14px">Export</button>
+          <button class="btn-secondary" style="padding:7px 14px">Import</button>
+          <button class="btn-primary" style="padding:8px 16px" onclick="openModal()">
+            <span class="material-symbols-outlined" style="font-size:16px">add</span>
+            Add Transaction
+          </button>
+        </div>
+      </div>
+
+      <!-- Search + Filters -->
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div style="flex:1;background:#f3f4f3;border-radius:9999px;display:flex;align-items:center;padding:0 14px;gap:8px;transition:background 0.15s" id="search-wrap">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#aeb3b2">search</span>
+          <input placeholder="Search transactions…"
+            style="flex:1;border:none;background:transparent;font-size:13px;color:#2f3333;outline:none;padding:9px 0;font-family:'Geist',sans-serif"
+            onfocus="document.getElementById('search-wrap').style.background='white'"
+            onblur="document.getElementById('search-wrap').style.background='#f3f4f3'"/>
+        </div>
+        <button class="btn-secondary" style="padding:0 14px;border-radius:9999px;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;display:flex;align-items:center;gap:6px">
+          <span class="material-symbols-outlined" style="font-size:16px">filter_list</span>
+          <span>Filters</span>
+        </button>
+      </div>
+
+      <!-- Transactions table -->
+      <div class="card" style="background:white;border-radius:12px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f3f4f3">
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600;cursor:pointer;white-space:nowrap">Date ↓</th>
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600">Description</th>
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600">Category</th>
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:right;font-weight:600">Amount</th>
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:left;font-weight:600">Type</th>
+              <th style="font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:#777c7b;padding:9px 16px;text-align:right;font-weight:600"></th>
+            </tr>
+          </thead>
+          <tbody id="tx-tbody"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- ─── BOTTOM NAV (mobile) ────────────────────────────────────────── -->
+<nav id="bottom-nav" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(250,249,248,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid rgba(174,179,178,0.15);padding:6px 0 8px;justify-content:space-around;align-items:flex-start">
+
+  <button onclick="showScreen('dashboard')" id="bnav-dashboard" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:4px 0;color:#4b57aa">
+    <span class="material-symbols-outlined" style="font-size:22px">dashboard</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Home</span>
+  </button>
+
+  <button onclick="showScreen('transactions')" id="bnav-transactions" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:4px 0;color:#777c7b">
+    <span class="material-symbols-outlined" style="font-size:22px">receipt_long</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Txns</span>
+  </button>
+
+  <!-- FAB -->
+  <button onclick="openModal()" style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:0;margin-top:-18px">
+    <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#4b57aa,#3f4b9d);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(75,87,170,0.32)">
+      <span class="material-symbols-outlined" style="font-size:24px;color:white">add</span>
+    </div>
+  </button>
+
+  <button style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:4px 0;color:#777c7b">
+    <span class="material-symbols-outlined" style="font-size:22px">event_note</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Planned</span>
+  </button>
+
+  <button style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:4px 0;color:#777c7b">
+    <span class="material-symbols-outlined" style="font-size:22px">grid_view</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700">More</span>
+  </button>
+</nav>
+
+<!-- ─── MODAL: New Transaction ─────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div style="background:white;border-radius:16px;width:100%;max-width:460px;box-shadow:0 24px 64px rgba(47,51,51,0.18),0 4px 16px rgba(47,51,51,0.08)" onclick="event.stopPropagation()">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0">
+      <h2 style="font-size:16px;font-weight:700;letter-spacing:-0.02em;color:#2f3333">New Transaction</h2>
+      <button onclick="closeModal()" style="width:28px;height:28px;border-radius:50%;background:#f3f4f3;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#5b605f;transition:background 0.15s" onmouseover="this.style.background='#e6e9e8'" onmouseout="this.style.background='#f3f4f3'">
+        <span class="material-symbols-outlined" style="font-size:16px">close</span>
+      </button>
+    </div>
+
+    <!-- Segmented type toggle -->
+    <div style="padding:16px 24px 0">
+      <div class="seg-track">
+        <button id="seg-expense" class="seg-btn active-expense" onclick="setType('expense')">Expense</button>
+        <button id="seg-income"  class="seg-btn"                onclick="setType('income')">Income</button>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <form style="padding:16px 24px 24px;display:flex;flex-direction:column;gap:14px" onsubmit="return false">
+
+      <!-- Date -->
+      <div>
+        <label class="field-label">Date *</label>
+        <input type="date" value="2026-03-27" class="field-input mono"/>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="field-label">Description *</label>
+        <input type="text" placeholder="e.g. Grocery shopping" class="field-input"/>
+      </div>
+
+      <!-- Category -->
+      <div>
+        <label class="field-label">
+          Category
+          <span style="color:#aeb3b2;font-size:8px;margin-left:6px;letter-spacing:0;text-transform:none">Period: Feb 2026</span>
+        </label>
+        <div style="position:relative">
+          <select class="field-input" style="appearance:none;cursor:pointer;padding-right:32px">
+            <option value="">— No category —</option>
+            <option>Food &amp; Groceries</option>
+            <option>Entertainment</option>
+            <option>Transportation</option>
+            <option>Health &amp; Fitness</option>
+            <option>Shopping</option>
+            <option>Bills &amp; Utilities</option>
+            <option>Salary</option>
+          </select>
+          <span class="material-symbols-outlined" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#777c7b;pointer-events:none">unfold_more</span>
+        </div>
+      </div>
+
+      <!-- Amount + Currency -->
+      <div style="display:grid;grid-template-columns:1fr 96px;gap:8px">
+        <div>
+          <label class="field-label">Amount *</label>
+          <input type="number" placeholder="0.00" step="0.01" class="field-input mono"/>
+        </div>
+        <div>
+          <label class="field-label">Currency *</label>
+          <select class="field-input mono" style="appearance:none;cursor:pointer;font-weight:700">
+            <option>PLN</option>
+            <option>EUR</option>
+            <option>USD</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:8px;padding-top:2px">
+        <button type="button" onclick="closeModal()" class="btn-secondary" style="flex:1;padding:10px">Cancel</button>
+        <button type="submit" class="btn-primary" style="flex:2;padding:10px;justify-content:center">Save Transaction</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<script>
+  // ─── Data ───────────────────────────────────────────────────
+  const NAV_ITEMS = [
+    { icon: 'dashboard',        label: 'Dashboard',    screen: 'dashboard' },
+    { icon: 'receipt_long',     label: 'Transactions', screen: 'transactions' },
+    { icon: 'event_note',       label: 'Planned',      screen: null },
+    { icon: 'currency_exchange',label: 'Exchanges',    screen: null },
+    { icon: 'category',         label: 'Categories',   screen: null },
+    { icon: 'calendar_month',   label: 'Periods',      screen: null },
+    { icon: 'account_balance',  label: 'Accounts',     screen: null },
+    { icon: 'group',            label: 'Members',      screen: null },
+  ];
+
+  const BALANCES = [
+    { currency: 'PLN', closing: 1786.20, income: 6500, expenses: -6968, opening: 1000,  exchIn: 1255,  exchOut: null },
+    { currency: 'EUR', closing: 300.00,  income: 0,    expenses: 0,     opening: 500,   exchIn: null,  exchOut: -200 },
+    { currency: 'USD', closing: 150.00,  income: 0,    expenses: 0,     opening: 250,   exchIn: null,  exchOut: -100 },
+  ];
+
+  const BUDGETS = [
+    { cat: 'Health & Fitness', budget: 300,  actual: 235,    pct: 78   },
+    { cat: 'Shopping',          budget: 600,  actual: 749,    pct: 125  },
+    { cat: 'Bills & Utilities', budget: 800,  actual: 409.9,  pct: 51   },
+    { cat: 'Entertainment',     budget: 400,  actual: 4674.9, pct: 1169 },
+    { cat: 'Transportation',    budget: 500,  actual: 370,    pct: 74   },
+    { cat: 'Food & Groceries',  budget: 1500, actual: 530,    pct: 35   },
+  ];
+
+  const TRANSACTIONS = [
+    { date: '2026-03-25', desc: 'hjfgghfg',             cat: 'Entertainment',   amount: -4545,  cur: 'PLN', type: 'expense' },
+    { date: '2026-02-23', desc: 'Pharmacy',              cat: 'Health & Fitness',amount: -85,    cur: 'PLN', type: 'expense' },
+    { date: '2026-02-21', desc: 'Streaming Subscription',cat: 'Entertainment',   amount: -49.9,  cur: 'PLN', type: 'expense' },
+    { date: '2026-02-19', desc: 'Electronics',           cat: 'Shopping',        amount: -450,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-18', desc: 'Gas Station',           cat: 'Transportation',  amount: -250,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-16', desc: 'Restaurant Dinner',     cat: 'Food & Groceries',amount: -180,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-16', desc: 'Freelance Project',     cat: 'Salary',          amount: 1500,   cur: 'PLN', type: 'income'  },
+    { date: '2026-02-13', desc: 'Gym Membership',        cat: 'Health & Fitness',amount: -150,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-11', desc: 'Movie Tickets',         cat: 'Entertainment',   amount: -80,    cur: 'PLN', type: 'expense' },
+    { date: '2026-02-08', desc: 'Clothing Store',        cat: 'Shopping',        amount: -299,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-06', desc: 'Weekly Groceries',      cat: 'Food & Groceries',amount: -350,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-04', desc: 'Public Transport Card', cat: 'Transportation',  amount: -120,   cur: 'PLN', type: 'expense' },
+    { date: '2026-02-03', desc: 'Internet Bill',         cat: 'Bills & Utilities',amount: -89.9, cur: 'PLN', type: 'expense' },
+    { date: '2026-02-02', desc: 'Electricity Bill',      cat: 'Bills & Utilities',amount: -320,  cur: 'PLN', type: 'expense' },
+    { date: '2026-02-01', desc: 'Monthly Salary',        cat: 'Salary',          amount: 5000,   cur: 'PLN', type: 'income'  },
+  ];
+
+  // ─── Renderers ──────────────────────────────────────────────
+  function renderNav(active) {
+    document.getElementById('nav-container').innerHTML = NAV_ITEMS.map(item => `
+      <button
+        class="nav-item ${item.screen === active ? 'active' : ''}"
+        onclick="${item.screen ? `showScreen('${item.screen}')` : ''}"
+        title="${item.label}"
+      >
+        <span class="material-symbols-outlined" style="font-size:18px">${item.icon}</span>
+        <span class="sidebar-text">${item.label}</span>
+      </button>
+    `).join('');
+  }
+
+  function renderBalances() {
+    document.getElementById('balance-cards').innerHTML = BALANCES.map(b => {
+      const closingColor = b.closing > 0 ? '#10b981' : '#e11d48';
+      const rows = [
+        { label: 'Income',   val: b.income,   color: b.income  > 0 ? '#10b981' : '#aeb3b2', prefix: b.income > 0 ? '+' : '' },
+        { label: 'Expenses', val: b.expenses, color: b.expenses < 0 ? '#e11d48' : '#aeb3b2', prefix: '' },
+        { label: 'Opening',  val: b.opening,  color: '#5b605f', prefix: '' },
+        b.exchIn  ? { label: 'Exch In',  val: b.exchIn,  color: '#10b981', prefix: '+' } : null,
+        b.exchOut ? { label: 'Exch Out', val: b.exchOut, color: '#e11d48', prefix: '' } : null,
+      ].filter(Boolean);
+
+      return `
+        <div class="card" style="background:white;border-radius:12px;padding:14px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#5b605f">${b.currency}</span>
+            <button style="font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:0.06em;color:#aeb3b2;background:#f3f4f3;border:none;padding:2px 7px;border-radius:99px;cursor:pointer;transition:color 0.15s" onmouseover="this.style.color='#5b605f'" onmouseout="this.style.color='#aeb3b2'">Recalc</button>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${closingColor};letter-spacing:-0.02em;margin-bottom:10px;line-height:1">${b.closing.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+          <div class="balance-meta">
+            ${rows.map(r => `
+              <div>
+                <div class="meta-label">${r.label}</div>
+                <div class="meta-value" style="color:${r.color}">${r.prefix}${Math.abs(r.val).toLocaleString('en', {minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderBudget() {
+    document.getElementById('budget-tbody').innerHTML = BUDGETS.map(row => {
+      const isOver = row.pct > 100;
+      const isNear = !isOver && row.pct >= 75;
+      const barColor  = (isOver || isNear) ? '#e11d48' : '#4b57aa';
+      const barW      = Math.min(row.pct, 100);
+      const diff      = row.budget - row.actual;
+      const diffColor = diff >= 0 ? '#10b981' : '#e11d48';
+      const rowBg     = isOver ? '#fff7f8' : 'transparent';
+
+      return `
+        <tr class="tx-row" style="background:${rowBg}">
+          <td style="font-size:13px;color:#2f3333;padding:0 16px">${row.cat}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#5b605f;padding:0 16px;text-align:right">${row.budget.toFixed(2)}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#2f3333;font-weight:600;padding:0 16px;text-align:right">${row.actual.toFixed(2)}</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:${diffColor};font-weight:600;padding:0 16px;text-align:right">${diff >= 0 ? '+' : ''}${diff.toFixed(2)}</td>
+          <td style="padding:0 16px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1;height:4px;background:#f3f4f3;border-radius:99px;overflow:hidden;min-width:60px">
+                <div style="height:100%;background:${barColor};border-radius:99px;width:${barW}%"></div>
+              </div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#777c7b;min-width:36px">${row.pct > 999 ? '>999' : row.pct}%</span>
+            </div>
+          </td>
+          <td style="padding:0 16px;text-align:right;white-space:nowrap">
+            <button style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#777c7b;background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;padding:2px 4px" onmouseover="this.style.color='#2f3333'" onmouseout="this.style.color='#777c7b'">Edit</button>
+            <button style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#e11d48;background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;padding:2px 4px;margin-left:4px;opacity:0.6" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Del</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function renderTransactions() {
+    document.getElementById('tx-tbody').innerHTML = TRANSACTIONS.map(tx => {
+      const isIncome    = tx.type === 'income';
+      const amtColor    = isIncome ? '#10b981' : '#e11d48';
+      const amtStr      = (isIncome ? '+' : '') + Math.abs(tx.amount).toFixed(2) + ' ' + tx.cur;
+      const badge       = isIncome
+        ? `<span class="chip chip-income">Income</span>`
+        : `<span class="chip chip-expense">Expense</span>`;
+
+      return `
+        <tr class="tx-row">
+          <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#aeb3b2;padding:0 16px;white-space:nowrap">${tx.date}</td>
+          <td style="font-size:13px;color:#2f3333;padding:0 16px;font-weight:500">${tx.desc}</td>
+          <td style="padding:0 16px">
+            ${tx.cat ? `<span class="chip chip-category">${tx.cat}</span>` : `<span style="color:#aeb3b2;font-size:12px">—</span>`}
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:${amtColor};padding:0 16px;text-align:right;white-space:nowrap">${amtStr}</td>
+          <td style="padding:0 16px">${badge}</td>
+          <td style="padding:0 16px;text-align:right;white-space:nowrap">
+            <button style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#777c7b;background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em" onmouseover="this.style.color='#2f3333'" onmouseout="this.style.color='#777c7b'">Edit</button>
+            <button style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#e11d48;background:none;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;margin-left:10px;opacity:0.6" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ─── Screen switching ────────────────────────────────────────
+  let activeScreen = 'dashboard';
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('screen-' + name);
+    if (el) el.classList.add('active');
+    activeScreen = name;
+    renderNav(name);
+
+    // Toolbar
+    document.querySelectorAll('#demo-toolbar button').forEach(b => b.classList.remove('active'));
+    const tb = document.getElementById('btn-' + name);
+    if (tb) tb.classList.add('active');
+
+    // Bottom nav
+    document.querySelectorAll('#bottom-nav button[id^="bnav"]').forEach(b => {
+      b.style.color = '#777c7b';
+    });
+    const bnav = document.getElementById('bnav-' + name);
+    if (bnav) bnav.style.color = '#4b57aa';
+  }
+
+  // ─── Modal ───────────────────────────────────────────────────
+  function openModal() {
+    document.getElementById('modal-overlay').classList.add('open');
+    document.getElementById('btn-modal').classList.add('active');
+  }
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    document.getElementById('btn-modal').classList.remove('active');
+  }
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // ─── Type toggle ─────────────────────────────────────────────
+  function setType(type) {
+    const exp = document.getElementById('seg-expense');
+    const inc = document.getElementById('seg-income');
+    exp.className = 'seg-btn' + (type === 'expense' ? ' active-expense' : '');
+    inc.className = 'seg-btn' + (type === 'income'  ? ' active-income'  : '');
+  }
+
+  // ─── Init ────────────────────────────────────────────────────
+  renderNav('dashboard');
+  renderBalances();
+  renderBudget();
+  renderTransactions();
+  document.getElementById('btn-dashboard').classList.add('active');
+</script>
+
+</body>
+</html>
