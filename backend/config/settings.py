@@ -3,11 +3,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from config.utils import get_int_env
+
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+TOKEN_MAX_AGE = get_int_env('TOKEN_MAX_AGE', 7 * 24 * 60 * 60)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ['SECRET_KEY']
@@ -77,7 +82,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

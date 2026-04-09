@@ -1,0 +1,12 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+You were removed from {{ workspace_name }} by {{ admin_name }}.
+
+If you believe this was a mistake, please contact the workspace administrator.
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

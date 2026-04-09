@@ -31,3 +31,23 @@ class UserDeletionBlockedError(ValidationError):
             'Transfer ownership or remove all members first.'
         )
         super().__init__(message, code='deletion_blocked')
+
+
+class UserAlreadyVerifiedError(ValidationError):
+    default_message = 'Email is already verified'
+
+
+class UserInvalidVerificationTokenError(ValidationError):
+    default_message = 'Invalid or expired verification token'
+
+
+class UserEmailAlreadyInUseError(ValidationError):
+    default_message = 'This email is already in use'
+
+
+class UserInvalidEmailChangeTokenError(ValidationError):
+    default_message = 'Invalid or expired email change token'
+
+
+class UserSameEmailError(ValidationError):
+    default_message = 'New email must be different from current email'
