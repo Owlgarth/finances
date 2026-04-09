@@ -4,7 +4,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
+from budget_periods.factories import BudgetPeriodFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
+from currency_exchanges.factories import CurrencyExchangeFactory
+from currency_exchanges.models import CurrencyExchange
+from planned_transactions.factories import PlannedTransactionFactory
+from planned_transactions.models import PlannedTransaction
+from transactions.factories import TransactionFactory
+from transactions.models import Transaction
 from workspaces.models import WorkspaceMember
 
 User = get_user_model()
@@ -468,6 +475,44 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
 
         self.delete(f'/api/budget-accounts/{account.id}', **self.auth_headers())
         self.assertStatus(204)
+
+    def test_delete_account_removes_financial_records(self):
+        """Test deleting an account removes all related financial records."""
+        account = self.create_budget_account(name='With Records')
+        period = BudgetPeriodFactory(
+            budget_account=account,
+            start_date='2025-01-01',
+            end_date='2025-01-31',
+            created_by=self.user,
+        )
+        pln = self.workspace.currencies.get(symbol='PLN')
+        transaction = TransactionFactory(
+            budget_period=period,
+            currency=pln,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        planned = PlannedTransactionFactory(
+            budget_period=period,
+            currency=pln,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        exchange = CurrencyExchangeFactory(
+            budget_period=period,
+            from_currency=pln,
+            to_currency=pln,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.delete(f'/api/budget-accounts/{account.id}', **self.auth_headers())
+
+        self.assertStatus(204)
+        self.assertFalse(BudgetAccount.objects.filter(id=account.id).exists())
+        self.assertEqual(Transaction.objects.filter(id=transaction.id).count(), 0)
+        self.assertEqual(PlannedTransaction.objects.filter(id=planned.id).count(), 0)
+        self.assertEqual(CurrencyExchange.objects.filter(id=exchange.id).count(), 0)
 
     def test_delete_requires_auth(self):
         """Test deleting account requires authentication."""
