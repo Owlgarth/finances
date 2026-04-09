@@ -1,0 +1,13 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+{{ admin_name }} added you as a {{ role }} to {{ workspace_name }}.
+
+Open Monie
+{{ frontend_url }}
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

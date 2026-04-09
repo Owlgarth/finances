@@ -1,36 +1,47 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import type { User } from '../../types'
+import { authApi } from '../../api/client'
+import EmailVerificationBadge from './EmailVerificationBadge'
 
 interface Props {
   user: User
-  onSubmit: (data: { full_name?: string; email?: string }) => void
+  onSubmit: (data: { full_name?: string }) => void
   isLoading: boolean
 }
 
 export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
-  const [formData, setFormData] = useState({
-    full_name: user.full_name || '',
-    email: user.email || ''
-  })
+  const [fullName, setFullName] = useState(user.full_name || '')
+  const [showChangeEmail, setShowChangeEmail] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isChangingEmail, setIsChangingEmail] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const changedData: { full_name?: string; email?: string } = {}
-
-    if (formData.full_name !== user.full_name) {
-      changedData.full_name = formData.full_name
+    if (fullName !== user.full_name) {
+      onSubmit({ full_name: fullName })
     }
+  }
 
-    if (formData.email !== user.email) {
-      changedData.email = formData.email
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newEmail || !password) return
+
+    setIsChangingEmail(true)
+    try {
+      await authApi.requestEmailChange(password, newEmail)
+      toast.success('Check your new email for confirmation')
+      setShowChangeEmail(false)
+      setNewEmail('')
+      setPassword('')
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } }
+      toast.error(err.response?.data?.detail || 'Failed to request email change')
+    } finally {
+      setIsChangingEmail(false)
     }
-
-    if (Object.keys(changedData).length === 0) {
-      return
-    }
-
-    onSubmit(changedData)
   }
 
   return (
@@ -42,25 +53,74 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
         <input
           type="text"
           id="full_name"
-          value={formData.full_name}
-          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
           className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
           placeholder="Enter your full name"
         />
       </div>
 
       <div>
-        <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
-          Email Address
-        </label>
-        <input
-          type="email"
-          id="email"
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
-          placeholder="Enter your email address"
-        />
+        <div className="flex items-center justify-between mb-2">
+          <label className="block font-mono text-[9px] uppercase tracking-widest text-outline">
+            Email Address
+          </label>
+          <EmailVerificationBadge verified={user.email_verified} email={user.email} />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex-1 bg-surface-container-highest rounded-lg px-3 py-2 font-mono text-sm text-on-surface">
+            {user.email}
+          </span>
+          {!showChangeEmail && (
+            <button
+              type="button"
+              onClick={() => setShowChangeEmail(true)}
+              className="text-sm font-medium text-primary hover:text-primary-dim whitespace-nowrap"
+            >
+              Change Email
+            </button>
+          )}
+        </div>
+
+        {showChangeEmail && (
+          <div className="mt-3 p-4 bg-surface-container-highest rounded-lg space-y-3">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="w-full bg-surface-container-lowest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              placeholder="New email address"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-surface-container-lowest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              placeholder="Current password"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleChangeEmail}
+                disabled={isChangingEmail}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {isChangingEmail ? 'Sending...' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChangeEmail(false)
+                  setNewEmail('')
+                  setPassword('')
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">

@@ -1,8 +1,23 @@
 """Authentication and authorization schemas."""
 
+from typing import Annotated
+
 from django.core.validators import EmailValidator
 from django.core.validators import ValidationError as DjangoValidationError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
+
+
+def _validate_email(v: str) -> str:
+    v = v.lower().strip()
+    validator = EmailValidator()
+    try:
+        validator(v)
+    except DjangoValidationError:
+        raise ValueError('Enter a valid email address')
+    return v
+
+
+ValidatedEmail = Annotated[str, BeforeValidator(_validate_email)]
 
 
 class Token(BaseModel):
@@ -23,25 +38,14 @@ class RefreshToken(BaseModel):
 class LoginIn(BaseModel):
     """User login input schema."""
 
-    email: str
+    email: ValidatedEmail
     password: str
-
-    @field_validator('email')
-    @classmethod
-    def validate_email(cls, v: str) -> str:
-        """Validate email format using Django's email validator."""
-        validator = EmailValidator()
-        try:
-            validator(v)
-        except DjangoValidationError:
-            raise ValueError('Enter a valid email address')
-        return v
 
 
 class RegisterIn(BaseModel):
     """User registration input schema."""
 
-    email: str
+    email: ValidatedEmail
     password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     workspace_name: str
@@ -68,16 +72,32 @@ class RegisterIn(BaseModel):
             raise ValueError(f'Must accept current Privacy Policy version ({required})')
         return v
 
-    @field_validator('email')
-    @classmethod
-    def validate_email(cls, v: str) -> str:
-        """Validate email format using Django's email validator."""
-        validator = EmailValidator()
-        try:
-            validator(v)
-        except DjangoValidationError:
-            raise ValueError('Enter a valid email address')
-        return v
+
+class VerifyEmailIn(BaseModel):
+    token: str
+
+
+class ResendVerificationIn(BaseModel):
+    email: ValidatedEmail
+
+
+class ForgotPasswordIn(BaseModel):
+    email: ValidatedEmail
+
+
+class ResetPasswordIn(BaseModel):
+    uidb64: str
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmailChangeRequestIn(BaseModel):
+    password: str
+    new_email: ValidatedEmail
+
+
+class EmailChangeConfirmIn(BaseModel):
+    token: str
 
 
 class UserPasswordUpdate(BaseModel):

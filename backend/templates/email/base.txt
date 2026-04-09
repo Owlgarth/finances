@@ -1,0 +1,11 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+{% block content %}{% endblock %}
+
+{% block cta_text %}{% endblock %}
+{% block cta_url %}{{ cta_url }}{% endblock %}
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

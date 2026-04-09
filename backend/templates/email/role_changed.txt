@@ -1,0 +1,13 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Your role in {{ workspace_name }} was changed from {{ old_role }} to {{ new_role }} by {{ admin_name }}.
+
+Open Monie
+{{ frontend_url }}
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

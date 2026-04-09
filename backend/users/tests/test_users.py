@@ -6,13 +6,13 @@ from core.tests.base import AuthTestCase
 class TestUserUpdate(AuthTestCase):
     """Tests for user profile update."""
 
-    def test_update_email(self):
-        """Test updating user email."""
+    def test_update_email_ignored(self):
+        """Test that email field is ignored on profile update."""
         token = self.register_and_login('update_test@example.com', 'password123', 'Update Test')
 
         data = self.patch('/api/users/me', {'email': 'newemail@example.com'}, **self.auth_headers(token))
         self.assertStatus(200)
-        self.assertEqual(data['email'], 'newemail@example.com')
+        self.assertEqual(data['email'], 'update_test@example.com')
 
     def test_update_full_name(self):
         """Test updating user full name."""
@@ -23,7 +23,7 @@ class TestUserUpdate(AuthTestCase):
         self.assertEqual(data['full_name'], 'Updated Name')
 
     def test_update_multiple_fields(self):
-        """Test updating multiple fields at once."""
+        """Test updating multiple fields at once (email is ignored)."""
         token = self.register_and_login('multi_test@example.com', 'password123', 'Multi Test')
 
         data = self.patch(
@@ -35,7 +35,7 @@ class TestUserUpdate(AuthTestCase):
             **self.auth_headers(token),
         )
         self.assertStatus(200)
-        self.assertEqual(data['email'], 'multi_new@example.com')
+        self.assertEqual(data['email'], 'multi_test@example.com')
         self.assertEqual(data['full_name'], 'Multi Updated')
 
     def test_update_without_auth(self):

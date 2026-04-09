@@ -83,6 +83,7 @@ export interface User {
   full_name?: string;
   current_workspace_id?: number;
   is_active: boolean;
+  email_verified: boolean;
   created_at: string;
 }
 

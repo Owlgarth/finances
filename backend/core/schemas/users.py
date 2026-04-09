@@ -1,7 +1,5 @@
 """User-related schemas."""
 
-from django.core.validators import EmailValidator
-from django.core.validators import ValidationError as DjangoValidationError
 from pydantic import BaseModel, field_validator
 
 from users.models import FontChoices
@@ -22,27 +20,15 @@ class UserOut(BaseModel):
     full_name: str | None = None
     current_workspace_id: int | None = None
     is_active: bool
+    email_verified: bool = False
     created_at: str
 
 
 class UserUpdate(BaseModel):
     """User update schema."""
 
-    email: str | None = None
     full_name: str | None = None
     is_active: bool | None = None
-
-    @field_validator('email')
-    @classmethod
-    def validate_email(cls, v: str | None) -> str | None:
-        """Validate email format using Django's email validator."""
-        if v is not None:
-            validator = EmailValidator()
-            try:
-                validator(v)
-            except DjangoValidationError:
-                raise ValueError('Enter a valid email address')
-        return v
 
 
 class UserPreferencesOut(BaseModel):

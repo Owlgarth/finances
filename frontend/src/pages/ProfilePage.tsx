@@ -39,7 +39,7 @@ export default function ProfilePage() {
   }
 
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { full_name?: string; email?: string }) =>
+    mutationFn: (data: { full_name?: string }) =>
       authApi.updateProfile(data),
     onSuccess: (updatedUser) => {
       updateUser(updatedUser)

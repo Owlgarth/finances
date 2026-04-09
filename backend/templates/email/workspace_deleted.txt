@@ -1,0 +1,12 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+{{ workspace_name }} was deleted by {{ deleter_name }}.
+
+All data associated with this workspace has been permanently removed.
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

@@ -98,6 +98,10 @@ class AccountDeletionTests(AuthMixin, TestCase):
         sent = mail.outbox[0]
         self.assertIn(user_email, sent.to)
         self.assertIn('deleted', sent.subject.lower())
+        self.assertIn('permanently deleted', sent.body)
+        self.assertTrue(len(sent.alternatives) > 0)
+        self.assertEqual(sent.alternatives[0][1], 'text/html')
+        self.assertIn('permanently deleted', sent.alternatives[0][0])
 
     def test_deletion_check_blocked_when_shared_workspace(self):
         """Pre-deletion check shows blocked when user owns shared workspace."""
