@@ -1,0 +1,13 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Please confirm that {{ new_email }} is your new email address.
+
+Confirm Email Change
+{{ confirm_url }}
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

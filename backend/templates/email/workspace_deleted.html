@@ -1,0 +1,15 @@
+{% extends "email/base.html" %}
+
+{% block preheader %}
+<tr>
+  <td style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{{ workspace_name }} was deleted</td>
+</tr>
+{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Hi {{ user_name }},</p>
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;"><strong>{{ workspace_name }}</strong> was deleted by {{ deleter_name }}.</p>
+<p style="margin:0;font-size:14px;color:#6b7280;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">All data associated with this workspace has been permanently removed.</p>
+{% endblock %}
+
+{% block cta_url %}{% endblock %}

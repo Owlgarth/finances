@@ -87,5 +87,6 @@ def user_to_schema(user: User) -> UserOut:
         full_name=user.full_name,
         current_workspace_id=user.current_workspace_id if user.current_workspace_id else None,
         is_active=user.is_active,
+        email_verified=user.email_verified,
         created_at=user.created_at.isoformat(),
     )

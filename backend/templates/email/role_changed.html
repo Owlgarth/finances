@@ -1,0 +1,22 @@
+{% extends "email/base.html" %}
+
+{% block preheader %}
+<tr>
+  <td style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Your role was changed in {{ workspace_name }}</td>
+</tr>
+{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Hi {{ user_name }},</p>
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Your role in <strong>{{ workspace_name }}</strong> was changed from <strong>{{ old_role }}</strong> to <strong>{{ new_role }}</strong> by {{ admin_name }}.</p>
+{% endblock %}
+
+{% block cta_url %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+  <tr>
+    <td align="center">
+      <a href="{{ frontend_url }}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;padding:16px 32px;font-size:16px;font-weight:600;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">{% block cta_text %}Open Monie{% endblock %}</a>
+    </td>
+  </tr>
+</table>
+{% endblock %}
