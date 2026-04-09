@@ -154,8 +154,29 @@ export interface AccountDeleteCheck {
 }
 
 export interface Token {
-  access_token: string;
+  access_token?: string;
   token_type: string;
+  requires_2fa?: boolean;
+  temp_token?: string;
+}
+
+export interface TwoFAStatus {
+  enabled: boolean;
+  remaining_recovery_codes: number;
+  last_used_at: string | null;
+}
+
+export interface TwoFASetupResponse {
+  qr_code_svg: string;
+  secret_key: string;
+}
+
+export interface TwoFAVerifySetupResponse {
+  recovery_codes: string[];
+}
+
+export interface TwoFARegenerateResponse {
+  recovery_codes: string[];
 }
 
 // ============= Workspace Member Types =============

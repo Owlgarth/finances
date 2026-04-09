@@ -105,3 +105,46 @@ class UserPasswordUpdate(BaseModel):
 
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class LoginOut(BaseModel):
+    access_token: str | None = None
+    token_type: str = 'bearer'
+    requires_2fa: bool = False
+    temp_token: str | None = None
+
+
+class Verify2FAIn(BaseModel):
+    temp_token: str
+    code: str = Field(min_length=6, max_length=9)
+
+
+class TwoFAStatusOut(BaseModel):
+    enabled: bool
+    remaining_recovery_codes: int
+    last_used_at: str | None = None
+
+
+class TwoFASetupOut(BaseModel):
+    qr_code_svg: str
+    secret_key: str
+
+
+class TwoFAVerifySetupIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+class TwoFAVerifySetupOut(BaseModel):
+    recovery_codes: list[str]
+
+
+class TwoFADisableIn(BaseModel):
+    password: str
+
+
+class TwoFARegenerateIn(BaseModel):
+    password: str
+
+
+class TwoFARegenerateOut(BaseModel):
+    recovery_codes: list[str]

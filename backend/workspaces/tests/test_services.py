@@ -32,6 +32,7 @@ from workspaces.exceptions import (
     WorkspaceOwnerPasswordResetError,
     WorkspaceOwnerRemoveError,
     WorkspaceOwnerRoleChangeError,
+    WorkspacePermissionDeniedError,
 )
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Currency, Workspace, WorkspaceMember
@@ -347,6 +348,25 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         self.assertFalse(Category.objects.filter(id=category_id).exists())
         self.assertFalse(Budget.objects.filter(id=budget_id).exists())
         self.assertFalse(PeriodBalance.objects.filter(id=period_balance_id).exists())
+
+    def test_delete_workspace_rejects_non_owner(self):
+        """Non-owner member cannot delete workspace."""
+        owner = UserFactory()
+        member = UserFactory()
+        workspace = WorkspaceService.create_workspace(user=owner, name='Test', create_demo=False)
+        WorkspaceMemberFactory(workspace=workspace, user=member, role='member')
+
+        with self.assertRaises(WorkspacePermissionDeniedError):
+            WorkspaceService.delete_workspace(user=member, workspace_id=workspace.id)
+
+    def test_delete_workspace_rejects_non_member(self):
+        """Non-member cannot delete workspace."""
+        owner = UserFactory()
+        outsider = UserFactory()
+        workspace = WorkspaceService.create_workspace(user=owner, name='Test', create_demo=False)
+
+        with self.assertRaises(WorkspacePermissionDeniedError):
+            WorkspaceService.delete_workspace(user=outsider, workspace_id=workspace.id)
 
 
 class TestCurrencyService(TestCase):

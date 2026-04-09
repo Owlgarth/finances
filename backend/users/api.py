@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from django.conf import settings
 from ninja import Router
 
 from common.auth import JWTAuth, user_to_schema
@@ -18,6 +19,13 @@ from core.schemas import (
     FullImportIn,
     ImportResultOut,
     MessageOut,
+    TwoFADisableIn,
+    TwoFARegenerateIn,
+    TwoFARegenerateOut,
+    TwoFASetupOut,
+    TwoFAStatusOut,
+    TwoFAVerifySetupIn,
+    TwoFAVerifySetupOut,
     UserOut,
     UserPasswordUpdate,
     UserPreferencesOut,
@@ -25,6 +33,7 @@ from core.schemas import (
     UserUpdate,
 )
 from users import services
+from users.two_factor import TwoFactorService
 
 router = Router(tags=['Users'])
 
@@ -135,7 +144,7 @@ def delete_account(request, data: AccountDeleteIn):
 
 
 @router.get('/me/export', auth=JWTAuth())
-@rate_limit('data_export', limit=3, period=3600)
+@rate_limit('data_export', limit=settings.RATE_LIMIT_DATA_EXPORT, period=settings.RATE_LIMIT_DATA_EXPORT_PERIOD)
 def export_my_data(request):
     """
     Export all personal data as a JSON file (GDPR Articles 15 & 20).
@@ -172,3 +181,37 @@ def import_my_data(request, data: FullImportIn):
     """
     result = services.UserService.import_all_data(request.auth, data)
     return 200, result
+
+
+@router.get('/me/2fa', auth=JWTAuth(), response={200: TwoFAStatusOut})
+def get_2fa_status(request):
+    return 200, TwoFactorService.get_status(request.auth)
+
+
+@router.post('/me/2fa/setup', auth=JWTAuth(), response={200: TwoFASetupOut, 400: DetailOut})
+def setup_2fa(request):
+    return 200, TwoFactorService.setup(request.auth)
+
+
+@router.post(
+    '/me/2fa/verify-setup', auth=JWTAuth(), response={200: TwoFAVerifySetupOut, 401: DetailOut, 404: DetailOut}
+)
+def verify_setup_2fa(request, data: TwoFAVerifySetupIn):
+    return 200, TwoFactorService.verify_and_enable(request.auth, data.code)
+
+
+@router.post('/me/2fa/disable', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut, 404: DetailOut})
+def disable_2fa(request, data: TwoFADisableIn):
+    if not request.auth.check_password(data.password):
+        return 401, {'detail': 'Invalid current password'}
+    TwoFactorService.disable(request.auth)
+    return 200, {'message': 'Two-factor authentication has been disabled'}
+
+
+@router.post(
+    '/me/2fa/regenerate-codes', auth=JWTAuth(), response={200: TwoFARegenerateOut, 401: DetailOut, 404: DetailOut}
+)
+def regenerate_2fa_codes(request, data: TwoFARegenerateIn):
+    if not request.auth.check_password(data.password):
+        return 401, {'detail': 'Invalid current password'}
+    return 200, TwoFactorService.regenerate_codes(request.auth)
