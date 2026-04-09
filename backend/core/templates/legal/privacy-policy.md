@@ -1,5 +1,5 @@
 ---
-version: "1.0"
+version: "1.1"
 effective_date: "2025-01-01"
 ---
 
@@ -33,6 +33,11 @@ By registering for Monie, you agree to the collection and use of information in 
 **Preferences:**
 
 - Calendar start day preference
+
+**Security data:**
+
+- Two-factor authentication (2FA) status and usage metadata (enabled/disabled, last used timestamp)
+- 2FA secret is stored encrypted and never exported or shared in any form
 
 ## 3. How We Use Your Data
 
@@ -76,6 +81,8 @@ We use `localStorage` to store your authentication token. This is strictly funct
 
 - All data is transmitted over HTTPS/TLS
 - Passwords are hashed using industry-standard algorithms
+- Two-factor authentication (TOTP) available for additional account protection
+- 2FA secrets are encrypted at rest and recovery codes are stored as hashes
 - Role-based access control for shared workspaces
 - Rate limiting to prevent brute-force attacks
 

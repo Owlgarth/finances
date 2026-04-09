@@ -67,6 +67,11 @@ class WorkspaceOwnerPasswordResetError(ValidationError):
     default_message = "Cannot reset the owner's password"
 
 
+class WorkspacePermissionDeniedError(PermissionDeniedError):
+    default_message = 'Only the workspace owner can perform this action.'
+    default_code = 'workspace_permission_denied'
+
+
 class WorkspaceMemberAdminInsufficientError(PermissionDeniedError):
     def __init__(self, action: str = 'modify'):
         super().__init__(f'Admin cannot {action} another admin. Owner required.')

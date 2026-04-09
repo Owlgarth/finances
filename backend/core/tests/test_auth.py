@@ -1,8 +1,13 @@
 """Tests for authentication endpoints."""
 
+import time
+from unittest.mock import patch
+
+import pyotp
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
+from users.two_factor import TwoFactorService
 from workspaces.models import Workspace
 
 from .base import AuthTestCase
@@ -347,3 +352,209 @@ class TestDemoMode(AuthTestCase):
         )
         self.assertStatus(200)
         self.assertIn('access_token', data)
+
+
+class TestLoginWith2FA(AuthTestCase):
+    """Tests for two-step login flow with 2FA enabled."""
+
+    def _enable_2fa(self, user):
+        setup = TwoFactorService.setup(user)
+        secret = setup['secret_key']
+        code = pyotp.TOTP(secret).now()
+        TwoFactorService.verify_and_enable(user, code)
+        return secret
+
+    def _register_with_2fa(self, email, password='securepassword123', workspace_name='2FA WS'):
+        self.register_and_login(email, password, workspace_name)
+        user = get_user_model().objects.get(email=email)
+        secret = self._enable_2fa(user)
+        return user, secret
+
+    def test_login_returns_temp_token_when_2fa_enabled(self):
+        self._register_with_2fa('2fa_login@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': '2fa_login@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        self.assertTrue(data['requires_2fa'])
+        self.assertIsNotNone(data['temp_token'])
+        self.assertIsNone(data['access_token'])
+
+    def test_login_returns_jwt_when_2fa_disabled(self):
+        self.register_and_login('no2fa@example.com', 'securepassword123', 'No 2FA')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'no2fa@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+        self.assertFalse(data.get('requires_2fa', False))
+
+    def test_verify_2fa_with_valid_totp_code(self):
+        user, secret = self._register_with_2fa('verify2fa@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'verify2fa@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        temp_token = data['temp_token']
+
+        code = pyotp.TOTP(secret).now()
+        data = self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': code},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+        self.assertEqual(data['token_type'], 'bearer')
+
+    def test_verify_2fa_with_invalid_code(self):
+        self._register_with_2fa('invalid2fa@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'invalid2fa@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        temp_token = data['temp_token']
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': '000000'},
+        )
+        self.assertStatus(401)
+
+    def test_verify_2fa_with_expired_temp_token(self):
+        self._register_with_2fa('expired2fa@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'expired2fa@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        temp_token = data['temp_token']
+
+        future_time = time.time() + 360
+        with patch('time.time', return_value=future_time):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': temp_token, 'code': '000000'},
+            )
+        self.assertStatus(401)
+
+    def test_verify_2fa_with_recovery_code(self):
+        self.register_and_login('recovery2fa@example.com', 'securepassword123', 'Recovery 2FA')
+        user = get_user_model().objects.get(email='recovery2fa@example.com')
+        setup = TwoFactorService.setup(user)
+        secret = setup['secret_key']
+        code = pyotp.TOTP(secret).now()
+        result = TwoFactorService.verify_and_enable(user, code)
+        recovery_codes = result['recovery_codes']
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'recovery2fa@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        temp_token = data['temp_token']
+
+        data = self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': recovery_codes[0]},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
+    def test_verify_2fa_recovery_code_single_use(self):
+        self.register_and_login('singleuse@example.com', 'securepassword123', 'Single Use')
+        user = get_user_model().objects.get(email='singleuse@example.com')
+        setup = TwoFactorService.setup(user)
+        code = pyotp.TOTP(setup['secret_key']).now()
+        result = TwoFactorService.verify_and_enable(user, code)
+        recovery_code = result['recovery_codes'][0]
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'singleuse@example.com', 'password': 'securepassword123'},
+        )
+        temp_token = data['temp_token']
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': recovery_code},
+        )
+        self.assertStatus(200)
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'singleuse@example.com', 'password': 'securepassword123'},
+        )
+        temp_token = data['temp_token']
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': recovery_code},
+        )
+        self.assertStatus(401)
+
+    def test_verify_2fa_rate_limited(self):
+        self._register_with_2fa('ratelimit@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'ratelimit@example.com', 'password': 'securepassword123'},
+        )
+        temp_token = data['temp_token']
+
+        for _ in range(10):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': temp_token, 'code': '000000'},
+            )
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': '000000'},
+        )
+        self.assertStatus(429)
+
+    def test_temp_token_cannot_access_protected_endpoints(self):
+        self._register_with_2fa('temponly@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'temponly@example.com', 'password': 'securepassword123'},
+        )
+        temp_token = data['temp_token']
+
+        self.get('/api/users/me', HTTP_AUTHORIZATION=f'Bearer {temp_token}')
+        self.assertStatus(401)
+
+    def test_verify_2fa_temp_token_single_use(self):
+        user, secret = self._register_with_2fa('tokensingleuse@example.com')
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'tokensingleuse@example.com', 'password': 'securepassword123'},
+        )
+        self.assertStatus(200)
+        temp_token = data['temp_token']
+
+        code = pyotp.TOTP(secret).now()
+        data = self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': code},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
+        code = pyotp.TOTP(secret).now()
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': temp_token, 'code': code},
+        )
+        self.assertStatus(401)

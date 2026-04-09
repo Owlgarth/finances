@@ -16,3 +16,8 @@ class CurrencyExchangePeriodNotFoundError(NotFoundError):
 class CurrencyExchangeImportError(ValidationError):
     def __init__(self, message: str):
         super().__init__(message, code='import_error')
+
+
+class CurrencyExchangeNoPeriodError(ValidationError):
+    default_message = 'No budget period covers the given date. Create a period first.'
+    default_code = 'currency_exchange_no_period'

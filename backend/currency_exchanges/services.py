@@ -10,6 +10,7 @@ from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
 from currency_exchanges.exceptions import (
     CurrencyExchangeImportError,
+    CurrencyExchangeNoPeriodError,
     CurrencyExchangeNotFoundError,
 )
 from currency_exchanges.models import CurrencyExchange
@@ -78,6 +79,9 @@ class CurrencyExchangeService:
             raise CurrencyNotFoundInWorkspaceError(data.to_currency)
 
         period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+        if not period_id:
+            raise CurrencyExchangeNoPeriodError()
+
         exchange_rate = data.to_amount / data.from_amount
 
         exchange = CurrencyExchange.objects.create(
@@ -94,14 +98,13 @@ class CurrencyExchangeService:
             updated_by=user,
         )
 
-        if period_id:
-            balance_from = get_or_create_period_balance(period_id, from_currency)
-            balance_from.exchanges_out += data.from_amount
-            CurrencyExchangeService._update_balance(balance_from)
+        balance_from = get_or_create_period_balance(period_id, from_currency)
+        balance_from.exchanges_out += data.from_amount
+        CurrencyExchangeService._update_balance(balance_from)
 
-            balance_to = get_or_create_period_balance(period_id, to_currency)
-            balance_to.exchanges_in += data.to_amount
-            CurrencyExchangeService._update_balance(balance_to)
+        balance_to = get_or_create_period_balance(period_id, to_currency)
+        balance_to.exchanges_in += data.to_amount
+        CurrencyExchangeService._update_balance(balance_to)
 
         return exchange
 
@@ -129,6 +132,9 @@ class CurrencyExchangeService:
             CurrencyExchangeService._update_balance(balance_to)
 
         new_period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+        if not new_period_id:
+            raise CurrencyExchangeNoPeriodError()
+
         exchange_rate = data.to_amount / data.from_amount
 
         exchange.date = data.date
@@ -142,14 +148,13 @@ class CurrencyExchangeService:
         exchange.updated_by = user
         exchange.save()
 
-        if new_period_id:
-            balance_from = get_or_create_period_balance(new_period_id, new_from_currency)
-            balance_from.exchanges_out += data.from_amount
-            CurrencyExchangeService._update_balance(balance_from)
+        balance_from = get_or_create_period_balance(new_period_id, new_from_currency)
+        balance_from.exchanges_out += data.from_amount
+        CurrencyExchangeService._update_balance(balance_from)
 
-            balance_to = get_or_create_period_balance(new_period_id, new_to_currency)
-            balance_to.exchanges_in += data.to_amount
-            CurrencyExchangeService._update_balance(balance_to)
+        balance_to = get_or_create_period_balance(new_period_id, new_to_currency)
+        balance_to.exchanges_in += data.to_amount
+        CurrencyExchangeService._update_balance(balance_to)
 
         return exchange
 

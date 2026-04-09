@@ -82,7 +82,7 @@ class UserPreferences(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
     calendar_start_day = models.IntegerField(
         choices=WeekdayChoices,
-        default=WeekdayChoices.SUNDAY,
+        default=WeekdayChoices.MONDAY,
         help_text='First day of the week for calendars (1=Monday, 7=Sunday)',
     )
     font_family = models.CharField(
@@ -132,3 +132,16 @@ class UserConsent(models.Model):
         status = 'withdrawn' if self.withdrawn_at else 'active'
         email = self.user.email if self.user else '[deleted]'
         return f'{email} - {self.consent_type} v{self.version} ({status})'
+
+
+class UserTwoFactor(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='two_factor')
+    is_enabled = models.BooleanField(default=False)
+    encrypted_secret = models.BinaryField()
+    backup_codes = models.JSONField(default=list)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_two_factor'

@@ -257,8 +257,7 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
         self.assertEqual(Decimal(str(data['exchange_rate'])), expected_rate)
 
     def test_create_exchange_with_date_outside_period(self):
-        """Test creating exchange with date outside any period."""
-        # Date in March, but we only have Jan and Feb periods
+        """Test creating exchange with date outside any period returns 400."""
         payload = {
             'date': '2025-03-15',
             'from_currency': 'USD',
@@ -268,9 +267,9 @@ class TestCreateCurrencyExchange(CurrencyExchangeTestCase):
         }
         data = self.post('/api/currency-exchanges', payload, **self.auth_headers())
 
-        self.assertStatus(201)
-        # budget_period_id should be None
-        self.assertIsNone(data['budget_period_id'])
+        self.assertStatus(400)
+        self.assertIn('detail', data)
+        self.assertEqual(data['code'], 'currency_exchange_no_period')
 
     def test_create_exchange_with_zero_amount_fails(self):
         """Test that creating exchange with zero amount fails."""

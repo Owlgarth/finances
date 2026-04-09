@@ -9,6 +9,7 @@ from ninja.files import UploadedFile
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
+from core.schemas.common import DetailOut
 from currency_exchanges.schemas import (
     CurrencyExchangeCreate,
     CurrencyExchangeOut,
@@ -30,7 +31,7 @@ def list_exchanges(
     return CurrencyExchangeService.list(workspace_id, budget_period_id)
 
 
-@router.post('', response={201: CurrencyExchangeOut}, auth=WorkspaceJWTAuth())
+@router.post('', response={201: CurrencyExchangeOut, 400: DetailOut}, auth=WorkspaceJWTAuth())
 def create_exchange(request: HttpRequest, data: CurrencyExchangeCreate):
     """Create a new currency exchange (requires write access)."""
     user = request.auth

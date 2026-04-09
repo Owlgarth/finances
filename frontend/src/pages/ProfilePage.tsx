@@ -8,8 +8,9 @@ import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
+import TwoFactorSection from '../components/profile/TwoFactorSection'
 
-type Tab = 'profile' | 'password' | 'preferences' | 'account'
+type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
@@ -110,6 +111,16 @@ export default function ProfilePage() {
               Password
             </button>
             <button
+              onClick={() => setActiveTab('security')}
+              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+                activeTab === 'security'
+                  ? 'bg-surface-container-high text-on-surface'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`}
+            >
+              Security
+            </button>
+            <button
               onClick={() => setActiveTab('preferences')}
               className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === 'preferences'
@@ -149,6 +160,10 @@ export default function ProfilePage() {
               isLoading={changePasswordMutation.isPending}
             />
           )}
+
+          <div className={activeTab === 'security' ? '' : 'hidden'}>
+            <TwoFactorSection />
+          </div>
 
           {activeTab === 'preferences' && (
             <PreferencesForm

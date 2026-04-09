@@ -1,5 +1,7 @@
 """Django-Ninja API endpoints for authentication (register, login)."""
 
+import uuid
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -8,8 +10,8 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from ninja import Router
 
-from common.auth import JWTAuth, create_access_token
-from common.throttle import rate_limit
+from common.auth import JWTAuth, consume_temp_token, create_access_token, create_temp_token, decode_temp_token
+from common.throttle import rate_limit, rate_limit_by_key
 from common.utils import get_client_ip
 from core.schemas import (
     DetailOut,
@@ -18,13 +20,17 @@ from core.schemas import (
     ErrorOut,
     ForgotPasswordIn,
     LoginIn,
+    LoginOut,
     MessageOut,
     RegisterIn,
     ResendVerificationIn,
     ResetPasswordIn,
     Token,
+    Verify2FAIn,
     VerifyEmailIn,
 )
+from users.exceptions import TwoFactorNotEnabledError
+from users.models import UserTwoFactor
 from workspaces.services import WorkspaceService
 
 router = Router(tags=['Auth'])
@@ -32,7 +38,7 @@ User = get_user_model()
 
 
 @router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
-@rate_limit('register', limit=5, period=60)
+@rate_limit('register', limit=settings.RATE_LIMIT_REGISTER, period=settings.RATE_LIMIT_REGISTER_PERIOD)
 def register(request, data: RegisterIn):
     """
     Register a new user with workspace and default data.
@@ -78,16 +84,14 @@ def register(request, data: RegisterIn):
     }
 
 
-@router.post('/login', response={200: Token, 401: DetailOut, 429: DetailOut})
-@rate_limit('login', limit=10, period=60)
+@router.post('/login', response={200: LoginOut, 401: DetailOut, 429: DetailOut})
+@rate_limit('login', limit=settings.RATE_LIMIT_LOGIN, period=settings.RATE_LIMIT_LOGIN_PERIOD)
 def login(request, data: LoginIn):
     """
     Login user and return JWT token.
 
-    The token includes:
-    - user_id
-    - email
-    - current_workspace_id
+    If the user has 2FA enabled, returns a temporary token
+    that must be verified before issuing a full JWT.
     """
     user = User.objects.filter(email=data.email).first()
     if not user:
@@ -97,12 +101,53 @@ def login(request, data: LoginIn):
     if not user.is_active:
         return 401, {'detail': 'User account is disabled'}
 
+    if UserTwoFactor.objects.filter(user=user, is_enabled=True).exists():
+        return 200, LoginOut(requires_2fa=True, temp_token=create_temp_token(user))
+
     access_token = create_access_token(user)
 
-    return 200, {
-        'access_token': access_token,
-        'token_type': 'bearer',
-    }
+    return 200, LoginOut(access_token=access_token)
+
+
+def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
+    """Extract a per-user rate-limit key from the temp token.
+
+    For valid tokens, returns the user_id so attempts are bucketed per (IP, user).
+    For invalid tokens, returns a random UUID per request to avoid a shared bucket —
+    a fixed key like 'invalid' would let an attacker exhaust it from a shared IP,
+    blocking legitimate 2FA verification for other users on that IP.
+    """
+    payload = decode_temp_token(data.temp_token)
+    return str(payload.get('user_id', 'unknown')) if payload else str(uuid.uuid4())
+
+
+@router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut, 429: DetailOut})
+@rate_limit_by_key(
+    'verify_2fa',
+    _extract_2fa_rate_key,
+    limit=settings.RATE_LIMIT_VERIFY_2FA,
+    period=settings.RATE_LIMIT_VERIFY_2FA_PERIOD,
+)
+def verify_2fa(request, data: Verify2FAIn):
+    payload = consume_temp_token(data.temp_token)
+    if not payload:
+        return 401, {'detail': 'Invalid or expired verification token'}
+
+    user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
+    if not user:
+        return 401, {'detail': 'User not found'}
+
+    tf = UserTwoFactor.objects.filter(user=user).first()
+    if not tf or not tf.is_enabled:
+        raise TwoFactorNotEnabledError()
+
+    from users.two_factor import TwoFactorService
+
+    if not TwoFactorService.verify_code(user, data.code):
+        return 401, {'detail': 'Invalid verification code'}
+
+    access_token = create_access_token(user)
+    return 200, {'access_token': access_token, 'token_type': 'bearer'}
 
 
 @router.post('/verify-email', response={200: MessageOut, 400: DetailOut})

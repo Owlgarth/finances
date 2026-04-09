@@ -443,6 +443,11 @@ class UserService:
             # Remove memberships from non-owned workspaces (if any remain)
             WorkspaceMember.objects.filter(user=user).delete()
 
+            # Delete 2FA records (CASCADE handles this, but explicit for defense-in-depth)
+            from users.models import UserTwoFactor
+
+            UserTwoFactor.objects.filter(user=user).delete()
+
             # Delete user — CASCADE: UserPreferences
             # SET_NULL: UserConsent (retained for GDPR audit), created_by/updated_by on financial models
             user.delete()
@@ -483,6 +488,7 @@ class UserService:
         from period_balances.models import PeriodBalance
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
+        from users.models import UserTwoFactor
         from workspaces.models import Currency, WorkspaceMember
 
         # 1. Profile
@@ -511,14 +517,22 @@ class UserService:
         except UserPreferences.DoesNotExist:
             pass
 
-        # 3. Consents (all, including withdrawn — full audit trail)
+        # 3. Two-Factor Authentication
+        two_factor = UserTwoFactor.objects.filter(user=user).first()
+        two_factor_data = {
+            'is_enabled': two_factor.is_enabled if two_factor else False,
+            'last_used_at': str(two_factor.last_used_at) if two_factor and two_factor.last_used_at else None,
+            'created_at': str(two_factor.created_at) if two_factor else None,
+        }
+
+        # 4. Consents (all, including withdrawn — full audit trail)
         consents = list(
             UserConsent.objects.filter(user=user)
             .order_by('-granted_at')
             .values('consent_type', 'version', 'granted_at', 'withdrawn_at', 'ip_address')
         )
 
-        # 4. Workspace data
+        # 5. Workspace data
         memberships = WorkspaceMember.objects.filter(user=user).select_related('workspace')
         workspace_data = []
 
@@ -649,6 +663,7 @@ class UserService:
             'exported_at': timezone.now().isoformat(),
             'profile': profile,
             'preferences': preferences,
+            'two_factor': two_factor_data,
             'consents': consents,
             'workspaces': workspace_data,
         }

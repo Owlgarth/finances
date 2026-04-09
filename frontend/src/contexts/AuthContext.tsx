@@ -10,11 +10,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   needsReconsent: boolean;
-  login: (credentials: LoginRequest) => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<{ requires_2fa?: boolean; temp_token?: string } | void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
   checkConsentStatus: () => Promise<boolean>;
+  verify2FA: (tempToken: string, code: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -65,17 +66,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginRequest) => {
     try {
-      const { access_token } = await authApi.login(credentials);
-      setAuthToken(access_token);
+      const response = await authApi.login(credentials);
 
-      queryClient.clear();
+      if (response.requires_2fa && response.temp_token) {
+        return { requires_2fa: true, temp_token: response.temp_token };
+      }
 
-      const currentUser = await authApi.getCurrentUser();
-      setUser(currentUser);
-
-      toast.success('Logged in successfully');
-      const reconsent = await checkConsentStatus();
-      if (!reconsent) navigate('/');
+      if (response.access_token) {
+        setAuthToken(response.access_token);
+        queryClient.clear();
+        const currentUser = await authApi.getCurrentUser();
+        setUser(currentUser);
+        toast.success('Logged in successfully');
+        const reconsent = await checkConsentStatus();
+        if (!reconsent) navigate('/');
+      } else {
+        toast.error('Unexpected response from server. Please try again.');
+      }
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } } };
       const message = err.response?.data?.detail || 'Login failed';
@@ -86,8 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: RegisterRequest) => {
     try {
-      const { access_token } = await authApi.register(data);
-      setAuthToken(access_token);
+      const response = await authApi.register(data);
+      if (response.access_token) {
+        setAuthToken(response.access_token);
+      } else {
+        toast.error('Unexpected response from server. Please try again.');
+        return;
+      }
 
       queryClient.clear();
 
@@ -99,6 +111,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } } };
       const message = err.response?.data?.detail || 'Registration failed';
+      toast.error(message);
+      throw error;
+    }
+  };
+
+  const verify2FA = async (tempToken: string, code: string) => {
+    try {
+      const response = await authApi.verify2FA(tempToken, code);
+      if (response.access_token) {
+        setAuthToken(response.access_token);
+        queryClient.clear();
+        const currentUser = await authApi.getCurrentUser();
+        setUser(currentUser);
+        toast.success('Logged in successfully');
+        const reconsent = await checkConsentStatus();
+        if (!reconsent) navigate('/');
+      } else {
+        toast.error('Unexpected response from server. Please try again.');
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } } };
+      const message = err.response?.data?.detail || 'Verification failed';
       toast.error(message);
       throw error;
     }
@@ -131,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         updateUser,
         checkConsentStatus,
+        verify2FA,
       }}
     >
       {children}

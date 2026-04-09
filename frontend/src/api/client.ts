@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -174,6 +174,24 @@ export const authApi = {
 
   grantConsent: (consentType: string, version: string) =>
     api.post('/users/me/consents', { consent_type: consentType, version }).then(res => res.data),
+
+  verify2FA: (tempToken: string, code: string): Promise<Token> =>
+    api.post<Token>('/auth/verify-2fa', { temp_token: tempToken, code }, { headers: { Authorization: '' } }).then(res => res.data),
+
+  get2FAStatus: (): Promise<TwoFAStatus> =>
+    api.get<TwoFAStatus>('/users/me/2fa').then(res => res.data),
+
+  setup2FA: (): Promise<TwoFASetupResponse> =>
+    api.post<TwoFASetupResponse>('/users/me/2fa/setup').then(res => res.data),
+
+  verifySetup2FA: (code: string): Promise<TwoFAVerifySetupResponse> =>
+    api.post<TwoFAVerifySetupResponse>('/users/me/2fa/verify-setup', { code }).then(res => res.data),
+
+  disable2FA: (password: string): Promise<{ message: string }> =>
+    api.post('/users/me/2fa/disable', { password }).then(res => res.data),
+
+  regenerateRecoveryCodes: (password: string): Promise<TwoFARegenerateResponse> =>
+    api.post<TwoFARegenerateResponse>('/users/me/2fa/regenerate-codes', { password }).then(res => res.data),
 
   verifyEmail: (token: string) =>
     api.post('/auth/verify-email', { token }),

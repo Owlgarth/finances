@@ -24,6 +24,7 @@ from workspaces.exceptions import (
     WorkspaceOwnerPasswordResetError,
     WorkspaceOwnerRemoveError,
     WorkspaceOwnerRoleChangeError,
+    WorkspacePermissionDeniedError,
 )
 from workspaces.models import Currency, Role, Workspace, WorkspaceMember
 
@@ -82,37 +83,42 @@ class WorkspaceService:
         from common.services.base import delete_workspace_financial_records
         from users.models import User as UserModel
 
-        try:
-            workspace = Workspace.objects.select_for_update().get(id=workspace_id)
-        except Workspace.DoesNotExist:
-            raise WorkspaceNotFoundError()
-
-        affected_user_ids = list(
-            UserModel.objects.filter(current_workspace_id=workspace_id).exclude(id=user.id).values_list('id', flat=True)
-        )
-        all_affected_ids = affected_user_ids + [user.id]
-
-        list(UserModel.objects.filter(id__in=all_affected_ids).select_for_update())
-
-        affected_users = list(UserModel.objects.filter(id__in=affected_user_ids))
-
-        memberships = (
-            WorkspaceMember.objects.filter(user_id__in=all_affected_ids)
-            .exclude(workspace_id=workspace_id)
-            .order_by('-updated_at')
-            .values_list('user_id', 'workspace_id')
-        )
-        next_ws_map: dict[int, int] = {}
-        for uid, wid in memberships:
-            if uid not in next_ws_map:
-                next_ws_map[uid] = wid
-
-        workspace_name = workspace.name
-        deleter_name = user.full_name or user.email
-
-        email_recipients = [(au.email, au.full_name or au.email) for au in affected_users]
-
         with db_transaction.atomic():
+            try:
+                workspace = Workspace.objects.select_for_update().get(id=workspace_id)
+            except Workspace.DoesNotExist:
+                raise WorkspaceNotFoundError()
+
+            membership = WorkspaceMember.objects.filter(user=user, workspace=workspace).select_for_update().first()
+            if not membership or membership.role != Role.OWNER:
+                raise WorkspacePermissionDeniedError()
+            affected_user_ids = list(
+                UserModel.objects.filter(current_workspace_id=workspace_id)
+                .exclude(id=user.id)
+                .values_list('id', flat=True)
+            )
+            all_affected_ids = affected_user_ids + [user.id]
+
+            list(UserModel.objects.filter(id__in=all_affected_ids).select_for_update())
+
+            affected_users = list(UserModel.objects.filter(id__in=affected_user_ids))
+
+            memberships = (
+                WorkspaceMember.objects.filter(user_id__in=all_affected_ids)
+                .exclude(workspace_id=workspace_id)
+                .order_by('-updated_at')
+                .values_list('user_id', 'workspace_id')
+            )
+            next_ws_map: dict[int, int] = {}
+            for uid, wid in memberships:
+                if uid not in next_ws_map:
+                    next_ws_map[uid] = wid
+
+            workspace_name = workspace.name
+            deleter_name = user.full_name or user.email
+
+            email_recipients = [(au.email, au.full_name or au.email) for au in affected_users]
+
             delete_workspace_financial_records(workspace_id)
 
             from budget_accounts.models import BudgetAccount

@@ -10,6 +10,9 @@ from budget_accounts.models import BudgetAccount
 from budget_accounts.schemas import BudgetAccountArchive, BudgetAccountCreate, BudgetAccountUpdate
 from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import resolve_currency
+from currency_exchanges.models import CurrencyExchange
+from planned_transactions.models import PlannedTransaction
+from transactions.models import Transaction
 
 
 class BudgetAccountService:
@@ -84,8 +87,18 @@ class BudgetAccountService:
     @staticmethod
     @db_transaction.atomic
     def delete(workspace_id: int, account_id: int) -> None:
-        """Delete a budget account."""
+        """Delete a budget account and all its financial records.
+
+        Transaction, PlannedTransaction, and CurrencyExchange have
+        on_delete=SET_NULL on budget_period. Django would orphan them
+        (set budget_period=NULL) rather than cascade-delete them.
+        We delete them explicitly to avoid orphaned records.
+        """
         account = BudgetAccountService.get(account_id, workspace_id)
+        period_ids = list(account.budget_periods.values_list('id', flat=True))
+        Transaction.objects.filter(budget_period_id__in=period_ids).delete()
+        PlannedTransaction.objects.filter(budget_period_id__in=period_ids).delete()
+        CurrencyExchange.objects.filter(budget_period_id__in=period_ids).delete()
         account.delete()
 
     @staticmethod

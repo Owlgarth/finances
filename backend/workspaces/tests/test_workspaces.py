@@ -4,13 +4,16 @@ from datetime import date
 
 from django.test import TestCase
 
+from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from budgets.factories import BudgetFactory
 from categories.factories import CategoryFactory
+from common.auth import create_access_token
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import Currency, Workspace, WorkspaceMember
+from workspaces.services import WorkspaceService
 
 # =============================================================================
 # Base Test Class
@@ -64,8 +67,6 @@ class WorkspaceTestCase(APIClientMixin, AuthMixin, TestCase):
 
     def create_token_for_user(self, user):
         """Helper to create JWT token for a user."""
-        from common.auth import create_access_token
-
         return create_access_token(user)
 
 
@@ -117,8 +118,6 @@ class TestGetCurrentWorkspace(WorkspaceTestCase):
 
     def test_get_current_workspace_returns_403_when_not_a_member(self):
         """A user with current_workspace_id set but no membership should get 403."""
-        from common.auth import create_access_token
-
         user = UserFactory(current_workspace=self.workspace)
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -702,8 +701,6 @@ class TestCreateWorkspace(APIClientMixin, TestCase):
         """Set up test data."""
         APIClientMixin.setUp(self)
         self.user = UserFactory()
-        from common.auth import create_access_token
-
         self.auth_token = create_access_token(self.user)
 
     def auth_headers(self):
@@ -760,8 +757,6 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
         APIClientMixin.setUp(self)
         AuthMixin.setUp(self)
 
-        from workspaces.services import WorkspaceService
-
         self.second_workspace = WorkspaceService.create_workspace(
             user=self.user, name='Second Workspace', create_demo=False
         )
@@ -789,8 +784,6 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
             role='admin',
         )
 
-        from common.auth import create_access_token
-
         token = create_access_token(non_owner)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
@@ -804,8 +797,6 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
 
     def test_delete_non_member_returns_404(self):
         """Test that deleting a workspace where user is not a member returns 404."""
-        from common.auth import create_access_token
-
         non_member = UserFactory()
         token = create_access_token(non_member)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -826,8 +817,6 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
             user=single_ws_user,
             role='owner',
         )
-
-        from common.auth import create_access_token
 
         token = create_access_token(single_ws_user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -931,8 +920,6 @@ class TestCurrencyEndpoints(WorkspaceTestCase):
 
     def test_delete_currency_success(self):
         """Test deleting currency as owner returns 204."""
-        from workspaces.models import Currency
-
         gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
         self.delete(f'/api/workspaces/currencies/{gbp.id}', **self.auth_headers())
         self.assertStatus(204)
@@ -940,16 +927,12 @@ class TestCurrencyEndpoints(WorkspaceTestCase):
     def test_delete_currency_wrong_workspace_returns_404(self):
         """Test deleting currency from other workspace returns 404."""
         other_ws = WorkspaceFactory(name='Other')
-        from workspaces.models import Currency
-
         other_currency = Currency.objects.create(workspace=other_ws, symbol='GBP', name='British Pound')
         self.delete(f'/api/workspaces/currencies/{other_currency.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_currency_as_member_returns_403(self):
         """Test that member cannot delete currencies."""
-        from workspaces.models import Currency
-
         gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
 
         self.member_user.current_workspace = self.workspace
@@ -963,8 +946,6 @@ class TestCurrencyEndpoints(WorkspaceTestCase):
 
     def test_delete_currency_as_viewer_returns_403(self):
         """Test that viewer cannot delete currencies."""
-        from workspaces.models import Currency
-
         gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
 
         self.viewer_user.current_workspace = self.workspace
@@ -986,9 +967,6 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
 
     def test_workspace_scoped_endpoint_returns_400_without_active_workspace(self):
         """A valid JWT with no current_workspace_id should get 400 on workspace-scoped endpoints."""
-        from common.auth import create_access_token
-        from common.tests.factories import UserFactory
-
         user = UserFactory(current_workspace=None)
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -997,9 +975,6 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
 
     def test_workspace_scoped_endpoints_return_400_without_active_workspace(self):
         """Multiple workspace-scoped endpoints should return 400 when user has no current_workspace."""
-        from common.auth import create_access_token
-        from common.tests.factories import UserFactory
-
         user = UserFactory(current_workspace=None)
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -1019,9 +994,6 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
 
     def test_write_endpoints_return_400_without_active_workspace(self):
         """Write endpoints should also return 400 (not 403) when no workspace is active."""
-        from common.auth import create_access_token
-        from common.tests.factories import UserFactory
-
         user = UserFactory(current_workspace=None)
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
@@ -1052,9 +1024,6 @@ class TestWorkspaceJWTAuthMembership(APIClientMixin, TestCase):
 
     def test_workspace_scoped_endpoint_returns_403_for_non_member(self):
         """A user with current_workspace_id pointing to a workspace they are not a member of gets 403."""
-        from common.auth import create_access_token
-        from common.tests.factories import UserFactory
-
         workspace = WorkspaceFactory(name='Test Workspace')
 
         user = UserFactory(current_workspace=workspace)
@@ -1066,9 +1035,6 @@ class TestWorkspaceJWTAuthMembership(APIClientMixin, TestCase):
 
     def test_workspace_scoped_endpoint_returns_200_for_valid_member(self):
         """A valid member of the workspace gets 200 on workspace-scoped endpoints."""
-        from common.auth import create_access_token
-        from common.tests.factories import UserFactory
-
         workspace = WorkspaceFactory(name='Test Workspace')
 
         user = UserFactory(current_workspace=workspace)
@@ -1084,10 +1050,6 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
     """Tests verifying viewer role is rejected on write endpoints."""
 
     def setUp(self):
-        from budget_accounts.models import BudgetAccount
-        from common.auth import create_access_token
-        from workspaces.models import Currency
-
         APIClientMixin.setUp(self)
 
         self.workspace = WorkspaceFactory(name='Test Workspace')
