@@ -1,6 +1,6 @@
 ---
-version: "1.1"
-effective_date: "2025-01-01"
+version: "1.0"
+effective_date: "2027-01-01"
 ---
 
 ## 1. Introduction
