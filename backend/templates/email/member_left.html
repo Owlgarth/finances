@@ -1,0 +1,23 @@
+{% extends "email/base.html" %}
+
+{% block preheader %}
+<tr>
+  <td style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{{ leaver_name }} left {{ workspace_name }}</td>
+</tr>
+{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Hi {{ user_name }},</p>
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;"><strong>{{ leaver_name }}</strong> left <strong>{{ workspace_name }}</strong>.</p>
+<p style="margin:0;font-size:14px;color:#6b7280;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">You may want to review your workspace members.</p>
+{% endblock %}
+
+{% block cta_url %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+  <tr>
+    <td align="center">
+      <a href="{{ frontend_url }}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;padding:16px 32px;font-size:16px;font-weight:600;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">{% block cta_text %}Open Monie{% endblock %}</a>
+    </td>
+  </tr>
+</table>
+{% endblock %}

@@ -7,6 +7,9 @@ backend/.env
 *.env
 !example.env
 
+# OS
+.DS_Store
+
 # IDE
 .idea/
 

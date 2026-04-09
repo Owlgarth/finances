@@ -1,0 +1,12 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Your Monie account and all associated data have been permanently deleted as requested. This action cannot be undone.
+
+If you did not request this deletion, please contact support immediately.
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

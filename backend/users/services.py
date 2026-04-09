@@ -1,20 +1,36 @@
 """Business logic for the users app."""
 
-import logging
+import random
+import time
 
+from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
+from django.db import IntegrityError
 from django.db import transaction as db_transaction
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
+from common.email import EmailService
 from common.exceptions import ValidationError
+from common.tokens import (
+    generate_email_change_token,
+    generate_verification_token,
+    verify_email_change_token,
+    verify_verification_token,
+)
 from core.schemas import UserPreferencesUpdate, UserUpdate
 from users.exceptions import (
+    UserAlreadyVerifiedError,
     UserConsentNotFoundError,
     UserDeletionBlockedError,
+    UserEmailAlreadyInUseError,
     UserInvalidConsentTypeError,
+    UserInvalidEmailChangeTokenError,
     UserInvalidPasswordError,
+    UserInvalidVerificationTokenError,
+    UserSameEmailError,
 )
 from users.models import ConsentType, FontChoices, User, UserConsent, UserPreferences, WeekdayChoices
-
-logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -46,8 +62,6 @@ class UserService:
     @staticmethod
     def update_profile(user: User, data: UserUpdate) -> User:
         """Update user profile information."""
-        if data.email is not None:
-            user.email = data.email
         if data.full_name is not None:
             user.full_name = data.full_name
         if data.is_active is not None:
@@ -57,13 +71,188 @@ class UserService:
         return user
 
     @staticmethod
+    def reset_password(user: User, new_password: str) -> None:
+        """Reset user password (after token validation in the API layer)."""
+        with db_transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+        UserService.send_password_changed_email(user)
+
+    @staticmethod
     def change_password(user: User, current_password: str, new_password: str) -> None:
         """Change user password with validation."""
         if not user.check_password(current_password):
             raise UserInvalidPasswordError()
 
-        user.set_password(new_password)
-        user.save()
+        with db_transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+
+        UserService.send_password_changed_email(user)
+
+    @staticmethod
+    def send_reset_password_email(email: str) -> None:
+        """Send a password reset email if the user exists.
+
+        Returns silently (with a small delay) when no user is found, to normalize
+        response timing and avoid leaking whether an email address is registered.
+        """
+        user = User.objects.filter(email=email).first()
+        if not user:
+            time.sleep(random.uniform(0.1, 0.3))
+            return
+
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        reset_url = f'{settings.FRONTEND_URL}/reset-password?uid={uidb64}&token={token}'
+        user_name = user.full_name or user.email
+
+        EmailService.send_email(
+            to=user.email,
+            subject='Reset your password — Monie',
+            template_name='email/reset_password',
+            context={'user_name': user_name, 'reset_url': reset_url},
+        )
+
+    @staticmethod
+    def send_password_changed_email(user, changed_by_admin: bool = False) -> None:
+        user_name = user.full_name or user.email
+        EmailService.send_email(
+            to=user.email,
+            subject='Your password was changed — Monie',
+            template_name='email/password_changed',
+            context={'user_name': user_name, 'changed_by_admin': changed_by_admin},
+        )
+
+    @staticmethod
+    def verify_email(token: str) -> User:
+        user_id = verify_verification_token(token)
+        if not user_id:
+            raise UserInvalidVerificationTokenError()
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            raise UserInvalidVerificationTokenError()
+        if user.email_verified:
+            raise UserAlreadyVerifiedError()
+        user.email_verified = True
+        user.save(update_fields=['email_verified'])
+        return user
+
+    @staticmethod
+    def send_registration_emails(user: User) -> None:
+        token = generate_verification_token(user.id)
+        verification_url = f'{settings.FRONTEND_URL}/verify-email?token={token}'
+        user_name = user.full_name or user.email
+
+        EmailService.send_email(
+            to=user.email,
+            subject='Verify your email — Monie',
+            template_name='email/verify_email',
+            context={'user_name': user_name, 'verification_url': verification_url},
+        )
+        EmailService.send_email(
+            to=user.email,
+            subject='Welcome to Monie!',
+            template_name='email/welcome',
+            context={'user_name': user_name},
+        )
+
+    @staticmethod
+    def resend_verification(email: str) -> None:
+        user = User.objects.filter(email=email).first()
+        if not user or user.email_verified:
+            time.sleep(random.uniform(0.1, 0.3))
+            return
+
+        token = generate_verification_token(user.id)
+        verification_url = f'{settings.FRONTEND_URL}/verify-email?token={token}'
+
+        EmailService.send_email(
+            to=user.email,
+            subject='Verify your email — Monie',
+            template_name='email/verify_email',
+            context={
+                'user_name': user.full_name or user.email,
+                'verification_url': verification_url,
+            },
+        )
+
+    @staticmethod
+    def request_email_change(user: User, password: str, new_email: str) -> None:
+        if not user.check_password(password):
+            raise UserInvalidPasswordError()
+
+        new_email = new_email.lower()
+
+        if new_email == user.email:
+            raise UserSameEmailError()
+
+        if User.objects.filter(email=new_email).exists():
+            raise UserEmailAlreadyInUseError()
+
+        with db_transaction.atomic():
+            user.pending_email = new_email
+            user.save(update_fields=['pending_email'])
+
+        token = generate_email_change_token(user.id, new_email)
+        confirm_url = f'{settings.FRONTEND_URL}/confirm-email-change?token={token}'
+
+        UserService._send_email_change_verify_email(user, new_email, confirm_url)
+
+    @staticmethod
+    def _send_email_change_verify_email(user, new_email, confirm_url):
+        EmailService.send_email(
+            to=new_email,
+            subject='Confirm your new email — Monie',
+            template_name='email/email_change_verify',
+            context={
+                'user_name': user.full_name or user.email,
+                'confirm_url': confirm_url,
+                'new_email': new_email,
+            },
+        )
+
+    @staticmethod
+    def confirm_email_change(user: User, token: str) -> None:
+        result = verify_email_change_token(token)
+        if not result:
+            raise UserInvalidEmailChangeTokenError()
+
+        user_id, new_email = result
+        if user.id != user_id:
+            raise UserInvalidEmailChangeTokenError()
+
+        if user.pending_email != new_email:
+            raise UserInvalidEmailChangeTokenError('This email change request is no longer valid')
+
+        if User.objects.filter(email=new_email).exclude(id=user.id).exists():
+            raise UserEmailAlreadyInUseError()
+
+        old_email = user.email
+
+        with db_transaction.atomic():
+            user.email = new_email
+            user.pending_email = ''
+            user.email_verified = True
+            try:
+                user.save(update_fields=['email', 'pending_email', 'email_verified'])
+            except IntegrityError:
+                raise UserEmailAlreadyInUseError()
+
+        UserService._send_email_change_notify_email(user, old_email, new_email)
+
+    @staticmethod
+    def _send_email_change_notify_email(user, old_email, new_email):
+        EmailService.send_email(
+            to=old_email,
+            subject='Your email was changed — Monie',
+            template_name='email/email_change_notify',
+            context={
+                'user_name': user.full_name or new_email,
+                'old_email': old_email,
+                'new_email': new_email,
+            },
+        )
 
     @staticmethod
     def record_consent(user: User, consent_type: str, version: str, ip_address: str | None = None) -> UserConsent:
@@ -190,7 +379,6 @@ class UserService:
         }
 
     @staticmethod
-    @db_transaction.atomic
     def delete_account(user: User, password: str) -> dict:
         """
         Permanently delete user account and all associated data (GDPR Article 17).
@@ -216,8 +404,6 @@ class UserService:
         if not user.check_password(password):
             raise UserInvalidPasswordError('Invalid password')
 
-        from django.core.mail import send_mail
-
         from workspaces.models import Workspace, WorkspaceMember
 
         # Capture user details before deletion
@@ -239,47 +425,34 @@ class UserService:
         # Delete solo-owned workspaces and all their data
         deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
 
-        from common.services.base import delete_workspace_financial_records
+        with db_transaction.atomic():
+            from common.services.base import delete_workspace_financial_records
 
-        for ws in owned_workspaces:
-            delete_workspace_financial_records(ws.id)
+            for ws in owned_workspaces:
+                delete_workspace_financial_records(ws.id)
 
-        # Delete BudgetAccounts (CASCADEs: BudgetPeriod, Category, Budget, PeriodBalance)
-        # BudgetAccount.default_currency has PROTECT, but currencies are deleted with workspace.
-        from budget_accounts.models import BudgetAccount
+            # Delete BudgetAccounts (CASCADEs: BudgetPeriod, Category, Budget, PeriodBalance)
+            # BudgetAccount.default_currency has PROTECT, but currencies are deleted with workspace.
+            from budget_accounts.models import BudgetAccount
 
-        BudgetAccount.objects.filter(workspace__in=owned_workspaces).delete()
+            BudgetAccount.objects.filter(workspace__in=owned_workspaces).delete()
 
-        # Now delete workspaces (CASCADE deletes currencies, members, etc.)
-        owned_workspaces.delete()
+            # Now delete workspaces (CASCADE deletes currencies, members, etc.)
+            owned_workspaces.delete()
 
-        # Remove memberships from non-owned workspaces (if any remain)
-        WorkspaceMember.objects.filter(user=user).delete()
+            # Remove memberships from non-owned workspaces (if any remain)
+            WorkspaceMember.objects.filter(user=user).delete()
 
-        # Delete user — CASCADE: UserPreferences
-        # SET_NULL: UserConsent (retained for GDPR audit), created_by/updated_by on financial models
-        user.delete()
+            # Delete user — CASCADE: UserPreferences
+            # SET_NULL: UserConsent (retained for GDPR audit), created_by/updated_by on financial models
+            user.delete()
 
-        # Send confirmation email after the transaction commits (non-blocking)
-        def _send_deletion_email():
-            try:
-                send_mail(
-                    subject='Your Monie account has been deleted',
-                    message=(
-                        f'Hi {user_name},\n\n'
-                        'Your Monie account and all associated data have been permanently deleted '
-                        'as requested. This action cannot be undone.\n\n'
-                        'If you did not request this deletion, please contact support immediately.\n\n'
-                        'Thank you for using Monie.\n'
-                    ),
-                    from_email=None,  # uses DEFAULT_FROM_EMAIL from settings
-                    recipient_list=[user_email],
-                    fail_silently=True,
-                )
-            except Exception:
-                logger.exception('Failed to send account deletion confirmation email to %s', user_email)
-
-        db_transaction.on_commit(_send_deletion_email)
+        EmailService.send_email(
+            to=user_email,
+            subject='Your Monie account has been deleted — Monie',
+            template_name='email/account_deleted',
+            context={'user_name': user_name},
+        )
 
         return {'deleted_workspaces': deleted_workspace_names}
 
@@ -316,6 +489,8 @@ class UserService:
         profile = {
             'id': user.id,
             'email': user.email,
+            'email_verified': user.email_verified,
+            'pending_email': user.pending_email or None,
             'full_name': user.full_name,
             'is_active': user.is_active,
             'created_at': user.created_at.isoformat(),
