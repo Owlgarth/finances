@@ -6,7 +6,8 @@ from ninja import Router
 
 from common.auth import JWTAuth, WorkspaceJWTAuth
 from common.permissions import require_role
-from core.schemas import MessageOut
+from core.schemas import DetailOut, MessageOut
+from users.two_factor import TwoFactorService
 from workspaces.exceptions import WorkspaceNotFoundError
 from workspaces.models import ADMIN_ROLES, Role, Workspace, WorkspaceMember
 from workspaces.schemas import (
@@ -267,3 +268,16 @@ def reset_member_password(
     WorkspaceMemberService.validate_access(workspace_id, user)
     current_role = require_role(user, workspace_id, ADMIN_ROLES)
     return WorkspaceMemberService.reset_password(user, workspace_id, user_id, data.new_password, current_role)
+
+
+@router.post(
+    '/{workspace_id}/members/{user_id}/reset-2fa',
+    response={200: MessageOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=JWTAuth(),
+)
+def reset_member_2fa(request: HttpRequest, workspace_id: int, user_id: int):
+    """Reset a workspace member's two-factor authentication (admin action)."""
+    user = request.auth
+    WorkspaceMemberService.validate_access(workspace_id, user)
+    current_role = require_role(user, workspace_id, ADMIN_ROLES)
+    return 200, TwoFactorService.admin_reset(user, workspace_id, user_id, current_role)

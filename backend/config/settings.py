@@ -158,6 +158,29 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
 # Workspace limits
 WORKSPACE_MAX_MEMBERS = int(os.getenv('WORKSPACE_MAX_MEMBERS', '10'))
 
+# Two-factor authentication
+TWO_FACTOR_RECOVERY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+TWO_FACTOR_RECOVERY_CODE_COUNT = 8
+TWO_FACTOR_RECOVERY_CODE_LENGTH = 8
+
+# Rate limiting
+# Max registration attempts per IP within the period window
+RATE_LIMIT_REGISTER = int(os.getenv('RATE_LIMIT_REGISTER', '5'))
+# Time window (seconds) for registration rate limiting
+RATE_LIMIT_REGISTER_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_PERIOD', '60'))
+# Max login attempts per IP within the period window
+RATE_LIMIT_LOGIN = int(os.getenv('RATE_LIMIT_LOGIN', '10'))
+# Time window (seconds) for login rate limiting
+RATE_LIMIT_LOGIN_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_PERIOD', '60'))
+# Max 2FA verification attempts per IP+user within the period window
+RATE_LIMIT_VERIFY_2FA = int(os.getenv('RATE_LIMIT_VERIFY_2FA', '10'))
+# Time window (seconds) for 2FA verification rate limiting
+RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60'))
+# Max GDPR data export requests per IP within the period window
+RATE_LIMIT_DATA_EXPORT = int(os.getenv('RATE_LIMIT_DATA_EXPORT', '3'))
+# Time window (seconds) for data export rate limiting
+RATE_LIMIT_DATA_EXPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_EXPORT_PERIOD', '3600'))
+
 # Cache configuration (used for rate limiting)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 CACHES = {

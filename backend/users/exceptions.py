@@ -23,6 +23,11 @@ class UserValidationError(ValidationError):
         super().__init__(message, code='validation_error')
 
 
+class TwoFactorNotEnabledError(NotFoundError):
+    default_message = 'Two-factor authentication is not enabled for this user'
+    default_code = 'two_factor_not_enabled'
+
+
 class UserDeletionBlockedError(ValidationError):
     def __init__(self, blocking_workspaces: list[str]):
         message = (
