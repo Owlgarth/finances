@@ -1,0 +1,12 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Your Monie email was changed from {{ old_email }} to {{ new_email }}.
+
+If you didn't make this change, contact support immediately.
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.

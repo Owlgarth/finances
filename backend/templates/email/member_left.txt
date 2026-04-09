@@ -1,0 +1,15 @@
+——————————————————————————————————
+Monie
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+{{ leaver_name }} left {{ workspace_name }}.
+
+You may want to review your workspace members.
+
+Open Monie
+{{ frontend_url }}
+
+——————————————————————————————————
+You're receiving this because you have a Monie account.
