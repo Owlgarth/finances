@@ -1,5 +1,5 @@
 ---
-version: "1.0"
+version: "1.1"
 effective_date: "2025-01-01"
 ---
 
@@ -22,6 +22,8 @@ Monie is a personal finance tracking application that provides:
 
 - You must provide a valid email address to register
 - You are responsible for maintaining the security of your password
+- You may enable two-factor authentication (2FA) for additional security; you are responsible for safeguarding your authenticator app and recovery codes
+- If you lose access to your 2FA device and recovery codes, account recovery may not be possible
 - You must notify us immediately of any unauthorized access to your account
 - One account per person; do not share account credentials
 

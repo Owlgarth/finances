@@ -34,6 +34,7 @@ pytest budget_accounts/tests/             # Run specific app tests
 pytest budget_accounts/tests/test_api.py::TestClass::test_method  # Single test
 pytest -k "test_create"                   # Run tests matching pattern
 pytest --cov=. --cov-report=html          # With coverage
+pytest --create-db -v                      # Fresh test DB (use when cross-branch migrations cause stale DB issues)
 
 # Linting & Formatting
 uv run ruff check .                       # Check linting issues
@@ -72,6 +73,53 @@ Workspace → BudgetAccount → BudgetPeriod → [Category, Transaction, Budget,
 ```
 
 Every endpoint must verify resources belong to the user's workspace.
+
+## Model Relationships Reference
+
+| Parent | Child | FK Field | on_delete | related_name |
+|--------|-------|----------|-----------|-------------|
+| Workspace | BudgetAccount | `workspace` | CASCADE | (default) |
+| Workspace | Currency | `workspace` | CASCADE | `currencies` |
+| BudgetAccount | BudgetPeriod | `budget_account` | CASCADE | `budget_periods` |
+| BudgetPeriod | Transaction | `budget_period` | SET_NULL | `transactions` |
+| BudgetPeriod | PlannedTransaction | `budget_period` | SET_NULL | `planned_transactions` |
+| BudgetPeriod | CurrencyExchange | `budget_period` | SET_NULL | `currency_exchanges` |
+
+### SET_NULL Children Must Be Explicitly Deleted
+
+`Transaction`, `PlannedTransaction`, and `CurrencyExchange` have `on_delete=SET_NULL` on their `budget_period` FK. Django does **not** cascade-delete them — it sets `budget_period=NULL`, leaving orphaned rows. These orphans hold FK references to `Currency` (with `on_delete=PROTECT`), which blocks downstream deletions with unhandled 500 errors.
+
+Any `delete()` method on a parent model that has `SET_NULL` children must explicitly delete those children first:
+
+```python
+@staticmethod
+@db_transaction.atomic
+def delete(workspace_id: int, account_id: int) -> None:
+    from currency_exchanges.models import CurrencyExchange
+    from planned_transactions.models import PlannedTransaction
+    from transactions.models import Transaction
+
+    account = BudgetAccountService.get(account_id, workspace_id)
+    period_ids = list(account.budget_periods.values_list('id', flat=True))
+    Transaction.objects.filter(budget_period_id__in=period_ids).delete()
+    PlannedTransaction.objects.filter(budget_period_id__in=period_ids).delete()
+    CurrencyExchange.objects.filter(budget_period_id__in=period_ids).delete()
+    account.delete()
+```
+
+> **When adding a new model with `on_delete=SET_NULL`**: Update every parent deletion service that could leave orphans. Also update `UserService.delete_account()` and `export_all_data()` per GDPR rules.
+
+### Defense-in-Depth Deletion in `delete_account`
+
+Even models with `on_delete=CASCADE` should be explicitly deleted in `UserService.delete_account()` before `user.delete()`. This ensures robustness if the deletion flow is ever refactored to not delete the User row directly, and makes the data cleanup order clear and auditable.
+
+```python
+# Explicit deletions before user.delete()
+UserTwoFactor.objects.filter(user=user).delete()  # CASCADE handles this, but explicit for defense-in-depth
+user.delete()
+```
+
+> **When adding a new model owned by User**: Explicitly delete it in `delete_account()` regardless of `on_delete` behavior.
 
 ## Backend Code Style (Python)
 
@@ -262,6 +310,196 @@ class TransactionService:
         return trans
 ```
 
+### No Nested Helper Functions
+
+Do not define helper functions inside a method body. Extract them as `@staticmethod` methods on the service class. This improves readability, testability, and follows the flat-structure convention used across the codebase.
+
+```python
+# Bad — nested functions inside a method
+class WorkspaceService:
+    def add_member(self, ...):
+        def _send_existing(user, workspace):
+            ...
+        def _send_new(email, workspace):
+            ...
+        _send_existing(user, workspace)
+
+# Good — class-level static methods
+class WorkspaceService:
+    @staticmethod
+    def _send_existing_invite(user, workspace):
+        ...
+
+    @staticmethod
+    def _send_new_invite(email, workspace):
+        ...
+
+    def add_member(self, ...):
+        WorkspaceService._send_existing_invite(user, workspace)
+```
+
+### Service-Layer Authorization (Defense-in-Depth)
+
+Service methods that perform destructive operations should validate authorization themselves, not rely solely on API-layer checks. This prevents accidental misuse if the service is called from a management command or future endpoint.
+
+```python
+@staticmethod
+@db_transaction.atomic
+def delete_workspace(user, workspace_id: int) -> None:
+    try:
+        workspace = Workspace.objects.select_for_update().get(id=workspace_id)
+    except Workspace.DoesNotExist:
+        raise WorkspaceNotFoundError()
+
+    membership = WorkspaceMember.objects.filter(user=user, workspace=workspace).select_for_update().first()
+    if not membership or membership.role != Role.OWNER:
+        raise WorkspacePermissionDeniedError()
+    # ... rest of logic
+```
+
+### Concurrent Safety with `select_for_update`
+
+For operations that must be atomic under concurrent requests (e.g., consuming a one-time recovery code), use `select_for_update()` to acquire a row-level lock and combine related field updates into a single `save()`:
+
+```python
+@staticmethod
+@db_transaction.atomic
+def verify_code(user: User, code: str) -> bool:
+    try:
+        twofa = UserTwoFactor.objects.select_for_update().get(user=user, is_enabled=True)
+    except UserTwoFactor.DoesNotExist:
+        return False
+
+    if _try_recovery_code(twofa, code):
+        twofa.last_used_at = timezone.now()
+        twofa.save(update_fields=['backup_codes', 'last_used_at', 'updated_at'])
+        return True
+    return False
+```
+
+Without `select_for_update()`, two concurrent requests could both read the same recovery code before either writes, allowing double-use.
+
+### Rate Limiting
+
+Two decorators are available in `common/throttle.py`:
+
+- **`rate_limit(key_prefix, limit, period)`** — Keys by client IP only. Use for most endpoints.
+- **`rate_limit_by_key(key_prefix, key_extractor, limit, period)`** — Keys by client IP + custom key (e.g., `user_id` from a temp token). Use when an attacker could rotate IPs to bypass IP-only limits.
+
+Both decorators use atomic cache operations (`cache.add()` + `cache.incr()`) via `_atomic_increment()` to eliminate TOCTOU race conditions. Do not use `cache.get()` → `cache.set()` patterns in rate limiting.
+
+Key extractors for tokens must return a unique value (e.g., `str(uuid.uuid4())`) for invalid tokens, not a fixed string like `'invalid'`. A fixed string lets attackers on a shared IP exhaust the bucket and block legitimate users.
+
+All rate limit `limit` and `period` values **must** be configured via Django settings backed by env vars, not hardcoded. Each setting needs an inline comment explaining its purpose:
+
+```python
+# Max 2FA verification attempts per IP+user within the period window
+RATE_LIMIT_VERIFY_2FA = int(os.getenv('RATE_LIMIT_VERIFY_2FA', '10'))
+# Time window (seconds) for 2FA verification rate limiting
+RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60'))
+```
+
+Reference in endpoints via `settings.RATE_LIMIT_*`:
+
+```python
+from django.conf import settings
+from common.throttle import rate_limit, rate_limit_by_key
+
+@router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut, 429: DetailOut})
+@rate_limit_by_key('verify_2fa', _extract_2fa_rate_key, limit=settings.RATE_LIMIT_VERIFY_2FA, period=settings.RATE_LIMIT_VERIFY_2FA_PERIOD)
+def verify_2fa(request, data: Verify2FAIn):
+    ...
+```
+
+### Token Consumption Patterns
+
+Two functions exist in `common/auth.py` for temp tokens:
+
+- **`decode_temp_token(token)`** — Peeks at the token payload without side effects. Use when you need to read claims without consuming the token (e.g., extracting a `user_id` for rate limiting).
+- **`consume_temp_token(token)`** — Consumes the token (marks its JTI as used in cache). Returns `None` on replay. Use when the token should be single-use (e.g., `verify_2fa`).
+
+Never use `decode_temp_token` where `consume_temp_token` is appropriate — a consumed token must not be replayable.
+
+The cache TTL for consumed tokens is derived from the token's `exp` claim via `_ttl_from_exp()`, not hardcoded. This ensures the cache TTL always matches the remaining token lifetime, regardless of what TTL is configured for temp token creation. If `ttl == 0` (token already expired), `None` is returned without caching.
+
+```python
+ttl = _ttl_from_exp(payload.get('exp', 0))
+if ttl == 0:
+    return None
+cache.set(cache_key, True, ttl)
+```
+
+### Check Object State, Not Just Existence
+
+When a model has a boolean flag (e.g., `is_enabled`, `is_active`), always check both the object's existence AND the flag. Records can exist in intermediate/disabled states, and a simple truthiness check on the object silently misses `flag=False`.
+
+```python
+# Bad — only checks existence, misses is_enabled=False
+twofa = UserTwoFactor.objects.filter(user_id=user_id).first()
+if not twofa:
+    raise TwoFactorNotEnabledError()
+
+# Good — checks existence AND enabled state
+twofa = UserTwoFactor.objects.filter(user_id=user_id).first()
+if not twofa or not twofa.is_enabled:
+    raise TwoFactorNotEnabledError()
+```
+
+This applies to any model with status flags: `is_enabled`, `is_active`, `is_verified`, etc.
+
+### Validate Stateful Dependencies Before Operations
+
+When an endpoint or service method depends on a resource being in a specific state, validate that state **before** attempting the main operation. This provides a meaningful, specific error instead of a misleading generic one.
+
+```python
+# Bad — user gets "Invalid verification code" when the real issue is 2FA was disabled
+@router.post('/verify-2fa')
+def verify_2fa(request, data):
+    user = get_user(data.temp_token)
+    if not TwoFactorService.verify_code(user, data.code):
+        return 401, {'detail': 'Invalid verification code'}
+
+# Good — check 2FA state first, then verify the code
+@router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut})
+def verify_2fa(request, data):
+    user = get_user(data.temp_token)
+    tf = UserTwoFactor.objects.filter(user=user).first()
+    if not tf or not tf.is_enabled:
+        raise TwoFactorNotEnabledError()
+    if not TwoFactorService.verify_code(user, data.code):
+        return 401, {'detail': 'Invalid verification code'}
+```
+
+This also applies to service methods that depend on a resource existing — validate and raise **before** creating records. For example, reject creation when no budget period covers the given date, rather than saving an invisible orphan record:
+
+```python
+# Bad — saves record with budget_period=None, invisible to the API
+period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+CurrencyExchange.objects.create(budget_period_id=period_id, ...)
+
+# Good — reject creation when no period exists
+period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+if not period_id:
+    raise CurrencyExchangeNoPeriodError()
+CurrencyExchange.objects.create(budget_period_id=period_id, ...)
+```
+
+### Document All Possible Response Status Codes
+
+Every endpoint's `response` parameter must list **all** status codes the endpoint can return, including those from raised exceptions. This serves as documentation and ensures Django Ninja generates accurate API schemas.
+
+```python
+# Bad — 404 is possible but not documented
+@router.post('/verify-2fa', response={200: Token, 401: DetailOut})
+def verify_2fa(request, data):
+    raise TwoFactorNotEnabledError()  # returns 404, but it's not in the response schema
+
+# Good — all status codes are documented
+@router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut})
+def verify_2fa(request, data):
+    ...
+```
+
 ### Workspace-Scoped Models
 
 All models that belong to a workspace must inherit from `WorkspaceScopedModel`. This provides:
@@ -387,22 +625,52 @@ This applies to verification flags, permission flags, and any security-relevant 
 - **Exception Types**: `NotFoundError` (404), `ValidationError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403)
 - **App Exceptions**: Each app defines specific exceptions in `<app>/exceptions.py` (e.g., `TransactionNotFoundError`)
 - **Transactions**: Use `@db_transaction.atomic` for database operations that update balances
+- **Exception Naming**: `<Domain><ErrorType>Error` — e.g., `TwoFactorNotEnabledError`, `TransactionNotFoundError`. Always set `default_message` and `default_code` as class attributes
+- **Exception Codes**: Every domain exception should include a `default_code` (snake_case string) for frontend error matching (e.g., `'two_factor_not_enabled'`, `'invalid_password'`)
 
 ```python
 # common/exceptions.py
 class ServiceError(Exception):
     http_status: int = 500
     default_message: str = 'An unexpected error occurred'
+    default_code: str | None = None
 
 class NotFoundError(ServiceError):
     http_status = 404
+    default_message = 'Not found'
 
-# transactions/exceptions.py
-class TransactionNotFoundError(NotFoundError):
-    default_message = 'Transaction not found'
+# users/exceptions.py
+class TwoFactorNotEnabledError(NotFoundError):
+    default_message = 'Two-factor authentication is not enabled for this user'
+    default_code = 'two_factor_not_enabled'
+
+# For exceptions with dynamic messages, accept params in __init__:
+class CurrencyNotFoundInWorkspaceError(ValidationError):
+    def __init__(self, currency: str):
+        super().__init__(f'Currency {currency} not found in workspace', code='currency_not_found')
 ```
 
 ### Testing
+
+Use Factory Boy factories (e.g., `WorkspaceMemberFactory`) instead of direct `Model.objects.create()` calls when creating test database records. Factories exist in `<app>/factories.py` across the codebase.
+
+**Factory gotcha:** Factories for financial records (`TransactionFactory`, `PlannedTransactionFactory`, `CurrencyExchangeFactory`) default to creating their own `BudgetPeriod` and `User` via `SubFactory`. When tests need records tied to a specific workspace/account/period, pass these explicitly:
+
+```python
+period = BudgetPeriodFactory(
+    budget_account=account,
+    start_date='2025-01-01',
+    end_date='2025-01-31',
+    created_by=self.user,
+)
+pln = self.workspace.currencies.get(symbol='PLN')
+transaction = TransactionFactory(
+    budget_period=period,
+    currency=pln,
+    created_by=self.user,
+    updated_by=self.user,
+)
+```
 
 ```python
 from common.tests.mixins import AuthMixin, APIClientMixin
@@ -419,6 +687,8 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
         # self.user, self.workspace, self.auth_token are available
         self.assertStatus(403)
 ```
+
+`AuthMixin` creates a workspace with PLN+USD currencies (via `WorkspaceFactory`), a user, a workspace membership, and a default "General" `BudgetAccount`. The mixin also creates an `auth_token` and provides `auth_headers()`.
 
 ### Test Data: Prefer Factories Over Service Calls
 
@@ -527,6 +797,56 @@ export default function CategoryForm({ id, name, onSave }: Props) {
   )
 }
 ```
+
+### Multi-Step UI Flows
+
+Use a union-typed state machine with conditional rendering for multi-step flows (e.g., setup → verify → confirm):
+
+```typescript
+type SectionState = 'idle' | 'setup' | 'showing_codes' | 'disabling'
+
+const [state, setState] = useState<SectionState>('idle')
+
+if (state === 'showing_codes') return <RecoveryCodesDisplay ... />
+if (state === 'setup' && setupData) return <SetupForm ... />
+
+const mutation = useMutation({
+  mutationFn: api.verifySetup,
+  onSuccess: (data) => {
+    setState('showing_codes')
+    queryClient.invalidateQueries({ queryKey: ['status'] })
+  },
+})
+```
+
+### Auth Response Error Guard
+
+Every auth function that expects an `access_token` in its response must have an `else` branch showing an error toast when the token is missing. Never silently do nothing on an unexpected response:
+
+```typescript
+if (response.access_token) {
+  // ... existing success logic
+} else {
+  toast.error('Unexpected response from server. Please try again.')
+  return
+}
+```
+
+### Stateful Component Preservation with CSS `hidden`
+
+When a component holds important transient state (e.g., recovery codes that cannot be re-displayed), use CSS `hidden` to keep it mounted but visually hidden when switching tabs. Conditional rendering (`{condition && <Component />}`) unmounts the component, permanently losing internal state:
+
+```tsx
+// Bad — unmounts TwoFactorSection, losing recovery codes
+{activeTab === 'security' && <TwoFactorSection />}
+
+// Good — stays mounted, preserving internal state
+<div className={activeTab === 'security' ? '' : 'hidden'}>
+  <TwoFactorSection />
+</div>
+```
+
+Only apply this to components where state loss is problematic — other tabs can continue using conditional rendering.
 
 ### Token-Based Verification Pages
 
@@ -677,7 +997,9 @@ Do not "fix" these to return 404 — the empty array behavior is intentional.
 >   correctly) before parent objects are removed. `on_delete=PROTECT` fields must be deleted
 >   in dependency order; otherwise account deletion will raise an `OperationalError`.
 > - `UserService.export_all_data()` — include the new model's data in the JSON export so
->   users receive a complete copy of their personal data (GDPR Art. 20).
+>   users receive a complete copy of their personal data (GDPR Art. 20). Export only
+>   non-sensitive fields (e.g., `is_enabled`, `created_at`, `last_used_at`). Never include
+>   secrets, encrypted values, or hashed tokens in the export.
 >   Normalize nullable string fields with `or None` (e.g., `user.pending_email or None`) to
 >   convert empty strings to `None` for cleaner JSON output.
 
