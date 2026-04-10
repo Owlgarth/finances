@@ -558,3 +558,140 @@ class TestLoginWith2FA(AuthTestCase):
             {'temp_token': temp_token, 'code': code},
         )
         self.assertStatus(401)
+
+
+class TestRefreshToken(AuthTestCase):
+    """Tests for refresh token flow — creation, rotation, expiry, replay prevention."""
+
+    def _register_and_get_refresh_token(self, email='refresh@example.com', password='securepassword123'):
+        self.post(
+            '/api/auth/register',
+            {
+                'email': email,
+                'password': password,
+                'workspace_name': 'Refresh WS',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
+            },
+        )
+        self.assertStatus(201)
+        data = self.post('/api/auth/login', {'email': email, 'password': password})
+        self.assertStatus(200)
+        return data['refresh_token']
+
+    def test_successful_refresh(self):
+        refresh_token = self._register_and_get_refresh_token('refresh_success@example.com')
+
+        data = self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+        self.assertIn('refresh_token', data)
+        self.assertEqual(data['token_type'], 'bearer')
+        self.assertEqual(len(data['access_token'].split('.')), 3)
+        self.assertEqual(len(data['refresh_token'].split('.')), 3)
+
+    def test_token_rotation(self):
+        refresh_token = self._register_and_get_refresh_token('rotation@example.com')
+
+        data = self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(200)
+        new_refresh_token = data['refresh_token']
+        self.assertNotEqual(refresh_token, new_refresh_token)
+
+        self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(401)
+
+    def test_expired_refresh_token(self):
+        import datetime as dt
+
+        import jwt
+        from django.conf import settings
+
+        user = get_user_model().objects.filter(email='expired_refresh@example.com').first()
+        if not user:
+            self.register_and_login('expired_refresh@example.com', 'securepassword123', 'Expired WS')
+            user = get_user_model().objects.get(email='expired_refresh@example.com')
+
+        now = dt.datetime.now(dt.timezone.utc)
+        payload = {
+            'user_id': str(user.id),
+            'type': 'refresh',
+            'jti': str(__import__('uuid').uuid4()),
+            'iat': (now - dt.timedelta(days=8)).timestamp(),
+            'exp': (now - dt.timedelta(days=1)).timestamp(),
+        }
+        expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+        self.post('/api/auth/refresh', {'refresh_token': expired_token})
+        self.assertStatus(401)
+
+    def test_invalid_refresh_token(self):
+        self.post('/api/auth/refresh', {'refresh_token': 'garbage.token.here'})
+        self.assertStatus(401)
+
+    def test_access_token_used_as_refresh_token(self):
+        access_token = self.register_and_login('access_as_refresh@example.com', 'securepassword123', 'Test WS')
+
+        self.post('/api/auth/refresh', {'refresh_token': access_token})
+        self.assertStatus(401)
+
+    def test_refresh_token_used_as_access_token(self):
+        refresh_token = self._register_and_get_refresh_token('refresh_as_access@example.com')
+
+        self.get('/api/users/me', HTTP_AUTHORIZATION=f'Bearer {refresh_token}')
+        self.assertStatus(401)
+
+    def test_register_returns_refresh_token(self):
+        data = self.post(
+            '/api/auth/register',
+            {
+                'email': 'register_refresh@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Register WS',
+                'accepted_terms_version': '1.0',
+                'accepted_privacy_version': '1.0',
+            },
+        )
+        self.assertStatus(201)
+        self.assertIn('refresh_token', data)
+        self.assertIsNotNone(data['refresh_token'])
+
+    def test_2fa_flow_returns_refresh_token(self):
+        self.register_and_login('2fa_refresh@example.com', 'securepassword123', '2FA Refresh WS')
+        user = get_user_model().objects.get(email='2fa_refresh@example.com')
+        setup = TwoFactorService.setup(user)
+        code = pyotp.TOTP(setup['secret_key']).now()
+        TwoFactorService.verify_and_enable(user, code)
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': '2fa_refresh@example.com', 'password': 'securepassword123'},
+        )
+        temp_token = data['temp_token']
+
+        code = pyotp.TOTP(setup['secret_key']).now()
+        data = self.post('/api/auth/verify-2fa', {'temp_token': temp_token, 'code': code})
+        self.assertStatus(200)
+        self.assertIn('refresh_token', data)
+        self.assertIsNotNone(data['refresh_token'])
+
+    def test_inactive_user_cannot_refresh(self):
+        refresh_token = self._register_and_get_refresh_token('inactive_refresh@example.com')
+
+        user = get_user_model().objects.get(email='inactive_refresh@example.com')
+        user.is_active = False
+        user.save()
+
+        self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(401)
+
+    def test_new_access_token_is_valid(self):
+        refresh_token = self._register_and_get_refresh_token('valid_refresh@example.com')
+
+        data = self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(200)
+        new_access_token = data['access_token']
+
+        data = self.get('/api/users/me', **self.auth_headers(new_access_token))
+        self.assertStatus(200)
+        self.assertEqual(data['email'], 'valid_refresh@example.com')

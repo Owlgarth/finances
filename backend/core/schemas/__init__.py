@@ -21,6 +21,7 @@ from core.schemas.auth import (
     LoginIn,
     LoginOut,
     RefreshToken,
+    RefreshTokenIn,
     RegisterIn,
     ResendVerificationIn,
     ResetPasswordIn,
@@ -87,6 +88,7 @@ __all__ = [
     # Auth
     'Token',
     'RefreshToken',
+    'RefreshTokenIn',
     'LoginIn',
     'LoginOut',
     'RegisterIn',

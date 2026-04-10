@@ -10,7 +10,15 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from ninja import Router
 
-from common.auth import JWTAuth, consume_temp_token, create_access_token, create_temp_token, decode_temp_token
+from common.auth import (
+    JWTAuth,
+    consume_refresh_token,
+    consume_temp_token,
+    create_access_token,
+    create_refresh_token,
+    create_temp_token,
+    decode_temp_token,
+)
 from common.throttle import rate_limit, rate_limit_by_key
 from common.utils import get_client_ip
 from core.schemas import (
@@ -22,6 +30,7 @@ from core.schemas import (
     LoginIn,
     LoginOut,
     MessageOut,
+    RefreshTokenIn,
     RegisterIn,
     ResendVerificationIn,
     ResetPasswordIn,
@@ -77,9 +86,11 @@ def register(request, data: RegisterIn):
         transaction.on_commit(lambda: UserService.send_registration_emails(user))
 
     access_token = create_access_token(user)
+    refresh_token = create_refresh_token(user)
 
     return 201, {
         'access_token': access_token,
+        'refresh_token': refresh_token,
         'token_type': 'bearer',
     }
 
@@ -105,8 +116,9 @@ def login(request, data: LoginIn):
         return 200, LoginOut(requires_2fa=True, temp_token=create_temp_token(user))
 
     access_token = create_access_token(user)
+    refresh_token = create_refresh_token(user)
 
-    return 200, LoginOut(access_token=access_token)
+    return 200, LoginOut(access_token=access_token, refresh_token=refresh_token)
 
 
 def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
@@ -147,7 +159,31 @@ def verify_2fa(request, data: Verify2FAIn):
         return 401, {'detail': 'Invalid verification code'}
 
     access_token = create_access_token(user)
-    return 200, {'access_token': access_token, 'token_type': 'bearer'}
+    refresh_token = create_refresh_token(user)
+    return 200, {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'token_type': 'bearer',
+    }
+
+
+@router.post('/refresh', response={200: Token, 401: DetailOut})
+def refresh_token(request, data: RefreshTokenIn):
+    payload = consume_refresh_token(data.refresh_token)
+    if not payload:
+        return 401, {'detail': 'Invalid or expired refresh token'}
+
+    user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
+    if not user:
+        return 401, {'detail': 'User not found'}
+
+    access_token = create_access_token(user)
+    new_refresh_token = create_refresh_token(user)
+    return 200, {
+        'access_token': access_token,
+        'refresh_token': new_refresh_token,
+        'token_type': 'bearer',
+    }
 
 
 @router.post('/verify-email', response={200: MessageOut, 400: DetailOut})
