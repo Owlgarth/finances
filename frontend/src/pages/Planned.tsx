@@ -16,7 +16,7 @@ export default function Planned() {
   const [statusFilter, setStatusFilter] = useState<string>('pending')
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [selectedPlanned, setSelectedPlanned] = useState<PlannedTransaction | null>(null)
-  const [executeId, setExecuteId] = useState<number | null>(null)
+  const [executePlanned, setExecutePlanned] = useState<PlannedTransaction | null>(null)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { selectedPeriodId } = useBudgetPeriod()
@@ -82,8 +82,8 @@ export default function Planned() {
     setIsFormModalOpen(true)
   }
 
-  const handleExecute = (id: number) => {
-    setExecuteId(id)
+  const handleExecute = (planned: PlannedTransaction) => {
+    setExecutePlanned(planned)
   }
 
   const handleCancel = (transaction: PlannedTransaction) => {
@@ -249,11 +249,12 @@ export default function Planned() {
         plannedTransaction={selectedPlanned}
       />
 
-      {executeId && (
+      {executePlanned && (
         <ExecutePlannedModal
-          isOpen={!!executeId}
-          onClose={() => setExecuteId(null)}
-          plannedId={executeId}
+          isOpen={!!executePlanned}
+          onClose={() => setExecutePlanned(null)}
+          plannedId={executePlanned.id}
+          plannedDate={executePlanned.planned_date}
         />
       )}
     </div>
