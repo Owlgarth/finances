@@ -379,6 +379,24 @@ def verify_code(user: User, code: str) -> bool:
 
 Without `select_for_update()`, two concurrent requests could both read the same recovery code before either writes, allowing double-use.
 
+**`select_for_update()` must execute inside `atomic()`:** All reads, validation, and writes using `select_for_update()` must be inside a single `atomic()` block — either via `@db_transaction.atomic` decorator or `with db_transaction.atomic():` at the top of the method. Without `ATOMIC_REQUESTS=True`, PostgreSQL raises `TransactionManagementError` in autocommit mode. Django's `TestCase` wraps each test in its own transaction, masking this bug — it only surfaces in production.
+
+```python
+# Bad — select_for_update outside atomic (crashes in production, passes in tests):
+workspace = Workspace.objects.select_for_update().get(id=workspace_id)
+# ... validation ...
+with db_transaction.atomic():
+    # ... deletion ...
+
+# Good — everything inside atomic:
+with db_transaction.atomic():
+    workspace = Workspace.objects.select_for_update().get(id=workspace_id)
+    # ... validation ...
+    # ... deletion ...
+```
+
+**`select_for_update()` exception to `filter().first()` convention:** Methods that need `select_for_update()` for row-level locking legitimately use `get()` inside `try/except DoesNotExist` because they need both the lock and the query in one call. This is acceptable even though the project convention is `filter().first()` + `None` check.
+
 ### Rate Limiting
 
 Two decorators are available in `common/throttle.py`:
@@ -420,13 +438,19 @@ Two functions exist in `common/auth.py` for temp tokens:
 
 Never use `decode_temp_token` where `consume_temp_token` is appropriate — a consumed token must not be replayable.
 
-The cache TTL for consumed tokens is derived from the token's `exp` claim via `_ttl_from_exp()`, not hardcoded. This ensures the cache TTL always matches the remaining token lifetime, regardless of what TTL is configured for temp token creation. If `ttl == 0` (token already expired), `None` is returned without caching.
+For refresh tokens:
+
+- **`create_refresh_token(user)`** — Issues a JWT with `type: 'refresh'`, a unique `jti`, and expiry configured via `JWT_REFRESH_TOKEN_EXPIRE_DAYS` setting (default 7 days). Does not include `email` or `current_workspace_id` (unlike access tokens).
+- **`consume_refresh_token(token)`** — Decodes the JWT, validates `type == 'refresh'`, then atomically marks the `jti` as consumed using `cache.add()`. Returns `None` on replay, expiry, or invalid signature. Follows the same pattern as `consume_temp_token`.
+
+Both `consume_temp_token` and `consume_refresh_token` use the same pattern: validate token type, derive cache TTL from `exp` via `_ttl_from_exp()`, atomically mark JTI with `cache.add()`. This ensures cache TTL always matches the remaining token lifetime. If `ttl == 0` (token already expired), `None` is returned without caching.
+
+`JWTAuth.authenticate` rejects tokens with `type: 'refresh'` alongside `'2fa_pending'` — this prevents refresh tokens from being used as access tokens:
 
 ```python
-ttl = _ttl_from_exp(payload.get('exp', 0))
-if ttl == 0:
+token_type = payload.get('type')
+if token_type in ('2fa_pending', 'refresh'):
     return None
-cache.set(cache_key, True, ttl)
 ```
 
 ### Check Object State, Not Just Existence
@@ -482,6 +506,21 @@ period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.dat
 if not period_id:
     raise CurrencyExchangeNoPeriodError()
 CurrencyExchange.objects.create(budget_period_id=period_id, ...)
+```
+
+This applies to both `create` and `update` paths. If a service validates a dependency before creating a record, the same guard must be applied when updating that record — otherwise the update path can silently produce orphan records:
+
+```python
+# create path — guard exists
+period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+if not period_id:
+    raise CurrencyExchangeNoPeriodError()
+CurrencyExchange.objects.create(budget_period_id=period_id, ...)
+
+# update path — same guard must be applied
+new_period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
+if not new_period_id:
+    raise CurrencyExchangeNoPeriodError()
 ```
 
 ### Document All Possible Response Status Codes
@@ -618,6 +657,22 @@ email_verified = getattr(user, 'email_verified', False)
 
 This applies to verification flags, permission flags, and any security-relevant booleans. The `getattr` fallback is only needed temporarily during migrations — after the migration runs, the actual model field value is used.
 
+### Model Field Defaults Must Match Service Defaults
+
+When a service overrides a model field default (e.g., `UserService.get_or_create_preferences` creates with `WeekdayChoices.MONDAY`), the model field `default` must match the service value. Otherwise direct creation paths (Django admin, factories, management commands) produce inconsistent data:
+
+```python
+# Bad: model defaults to SUNDAY but service creates with MONDAY
+class UserPreferences(models.Model):
+    calendar_start_day = models.IntegerField(default=WeekdayChoices.SUNDAY)
+
+# Good: model default matches service default
+class UserPreferences(models.Model):
+    calendar_start_day = models.IntegerField(default=WeekdayChoices.MONDAY)
+```
+
+Only the Django field `default` changes — no data migration needed since existing rows already have values set by the service.
+
 ### Error Handling
 
 - **Domain Exceptions**: Services raise domain exceptions inheriting from `ServiceError` (in `common/exceptions.py`)
@@ -744,6 +799,28 @@ class TestMyFeature(TestCase):
 
 Only patch `on_commit` for the specific tests that need it — don't apply it globally.
 
+### Testing Token Expiry
+
+On Python 3.13+, `datetime.datetime` is a C-implemented immutable type and cannot be patched with `unittest.mock.patch('datetime.datetime.now', ...)`. PyJWT also uses `datetime.datetime.now(tz=timezone.utc).timestamp()` internally, so patching `time.time` doesn't affect JWT decoding.
+
+Instead, create a manually-crafted JWT with a past `exp` timestamp using `jwt.encode()` directly:
+
+```python
+import datetime as dt
+import jwt
+from django.conf import settings
+
+now = dt.datetime.now(dt.timezone.utc)
+payload = {
+    'user_id': str(user.id),
+    'type': 'refresh',
+    'jti': str(uuid.uuid4()),
+    'iat': (now - dt.timedelta(days=8)).timestamp(),
+    'exp': (now - dt.timedelta(days=1)).timestamp(),
+}
+expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+```
+
 ### Code Cleanup When Refactoring
 
 When removing code that uses specific imports, also remove the now-unused imports. This applies especially to:
@@ -848,9 +925,49 @@ When a component holds important transient state (e.g., recovery codes that cann
 
 Only apply this to components where state loss is problematic — other tabs can continue using conditional rendering.
 
-### Token-Based Verification Pages
+### Avoid Duplicate Toasts
 
-Pages that verify tokens from URL query params follow a consistent `loading → success → error` state machine:
+Before adding error toasts in a component's catch block, check whether the called function already handles errors with toast notifications (e.g., `AuthContext.login()` already shows `toast.error()` and re-throws). If it does, the catch block only needs to prevent the unhandled promise rejection (so `finally` can reset loading state). An empty catch block needs a comment to satisfy ESLint's `no-empty` rule:
+
+```typescript
+} catch {
+  // Error already displayed by AuthContext
+} finally {
+  setIsSubmitting(false);
+}
+```
+
+### Token Storage
+
+Access and refresh tokens are stored separately in `localStorage` (`monie_token` and `monie_refresh_token` keys). Three exported helpers manage refresh token storage in `api/client.ts`: `setRefreshToken`, `getRefreshToken`, and `clearAuthToken` (which clears both tokens and the Authorization header).
+
+All auth flows that receive token pairs (`login`, `register`, `verify2FA`) must store both tokens:
+
+```typescript
+if (response.access_token) {
+  setAuthToken(response.access_token);
+  if (response.refresh_token) {
+    setRefreshToken(response.refresh_token);
+  }
+  // ... rest of flow
+}
+```
+
+The `if (response.refresh_token)` guard matches the optional `refresh_token` field on the `Token` type, providing backward compatibility for endpoints that only return access tokens.
+
+### 401 Interceptor with Token Refresh
+
+The Axios response interceptor in `api/client.ts` uses a queue-based pattern to transparently refresh expired access tokens:
+
+1. When a request fails with 401, check if a refresh token exists. If not, clear tokens and redirect to `/login`.
+2. If a refresh is already in progress (`isRefreshing` flag), queue the failed request in `failedQueue` and replay it after the refresh succeeds.
+3. On refresh success, store the new token pair, replay all queued requests, then retry the original request.
+4. On refresh failure, clear both tokens, reject all queued requests, and redirect to `/login`.
+5. Auth routes (`/login`, `/register`) are excluded from redirect to avoid infinite loops.
+
+The `authApi.refresh` method sends `{ headers: { Authorization: '' } }` to prevent sending the expired access token on the refresh request itself.
+
+### Token-Based Verification Pages
 
 ```tsx
 type State = 'loading' | 'success' | 'error'
