@@ -282,6 +282,24 @@ Shared helpers:
 - `common/permissions.py` — `require_role(user, workspace_id, allowed_roles)` — raises 403, returns the role
 - `common/services/base.py` — `resolve_currency`, `get_or_create_period_balance`, `update_period_balance`
 
+**Service-level uniqueness checks:** When a uniqueness constraint is scoped to a workspace but no `unique_together` DB constraint exists (e.g., a lightweight config pair like `from_currency`/`to_currency`), validate uniqueness at the service level. This keeps validation in one place and allows a clear domain-specific error message:
+
+```python
+existing = ExchangeShortcut.objects.for_workspace(workspace_id).filter(
+    from_currency=data.from_currency, to_currency=data.to_currency
+).exclude(id=shortcut_id).first()  # exclude self on update
+if existing:
+    raise ExchangeShortcutDuplicateError()
+```
+
+**Per-resource limit checks:** When a resource has a workspace-scoped maximum count, validate against a settings-backed env var before creation:
+
+```python
+count = ExchangeShortcut.objects.for_workspace(workspace_id).count()
+if count >= settings.EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE:
+    raise ExchangeShortcutLimitError()
+```
+
 ```python
 # transactions/services.py
 from django.db import transaction as db_transaction
@@ -592,6 +610,20 @@ Category.objects.create(
 )
 ```
 
+**Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` for default related names. Concrete models should set explicit `related_name` on all FKs for clarity:
+
+```python
+class ExchangeShortcut(WorkspaceScopedModel):
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='created_exchange_shortcuts',  # Override abstract default
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='updated_exchange_shortcuts',
+    )
+```
+
 For models with custom querysets (e.g., with additional filter methods):
 
 ```python
@@ -626,6 +658,23 @@ class TransactionOut(BaseModel):
     id: int
     date: date
     amount: Decimal
+```
+
+**Cross-field validation:** Use `@field_validator` with `mode='after'` to enforce constraints between fields (e.g., `from_currency` must differ from `to_currency`):
+
+```python
+from pydantic import BaseModel, field_validator
+
+class ExchangeShortcutCreate(BaseModel):
+    from_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
+    to_currency: str = Field(..., pattern=r'^[A-Z]{3}$')
+
+    @field_validator('to_currency', mode='after')
+    @classmethod
+    def currencies_must_differ(cls, v, info):
+        if info.data.get('from_currency') == v:
+            raise ValueError('Currencies must be different')
+        return v
 ```
 
 ### Shared Validated Types
