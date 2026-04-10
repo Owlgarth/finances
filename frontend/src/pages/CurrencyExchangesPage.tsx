@@ -1,15 +1,16 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { currencyExchangesApi, exchangeShortcutsApi } from '../api/client'
 import { useLayout } from '../contexts/LayoutContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
-import type { CurrencyExchange, ExchangeShortcut } from '../types'
+import type { CurrencyExchange, ExchangeShortcut, PaginatedResponse } from '../types'
 import CurrencyExchangeFormModal from '../components/modals/currency/CurrencyExchangeFormModal'
 import ManageShortcutsModal from '../components/modals/currency/ManageShortcutsModal'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
+import Pagination from '../components/common/Pagination'
 
 export default function CurrencyExchangesPage() {
   const queryClient = useQueryClient()
@@ -18,21 +19,30 @@ export default function CurrencyExchangesPage() {
   const { selectedPeriodId } = useBudgetPeriod()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedExchange, setSelectedExchange] = useState<CurrencyExchange | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const [preselectedFrom, setPreselectedFrom] = useState<string | undefined>(undefined)
   const [preselectedTo, setPreselectedTo] = useState<string | undefined>(undefined)
   const [isManageModalOpen, setIsManageModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: exchanges, isLoading, error } = useQuery({
-    queryKey: ['currency-exchanges', selectedPeriodId],
+  useEffect(() => {
+    setPage(1)
+  }, [selectedPeriodId])
+
+  const { data: apiResponse, isLoading, error } = useQuery({
+    queryKey: ['currency-exchanges', selectedPeriodId, page, pageSize],
     queryFn: async () => {
-      if (!selectedPeriodId) return []
-      const response = await currencyExchangesApi.getAll({ budget_period_id: selectedPeriodId })
-      return response.data as CurrencyExchange[]
+      if (!selectedPeriodId) return null
+      const response = await currencyExchangesApi.getAll({ budget_period_id: selectedPeriodId, page, page_size: pageSize })
+      return response.data as PaginatedResponse<CurrencyExchange>
     },
     enabled: !!selectedPeriodId
   })
 
+  const exchanges = apiResponse?.items || []
+  const totalItems = apiResponse?.total || 0
+  const totalPages = apiResponse?.total_pages || 0
   const { data: shortcuts } = useQuery({
     queryKey: ['exchange-shortcuts'],
     queryFn: async () => {
@@ -217,7 +227,7 @@ export default function CurrencyExchangesPage() {
               </tr>
             </thead>
             <tbody>
-              {exchanges?.map(exchange => (
+              {exchanges.map(exchange => (
                 <tr
                   key={exchange.id}
                   className="hover:bg-surface-container-low transition-colors"
@@ -261,7 +271,7 @@ export default function CurrencyExchangesPage() {
         </div>
 
         <div className={isCardsView ? '' : 'md:hidden'}>
-          {exchanges?.map(exchange => (
+          {exchanges.map(exchange => (
               <div
                 key={exchange.id}
                 className="p-4 hover:bg-surface-container-low transition-colors"
@@ -316,8 +326,22 @@ export default function CurrencyExchangesPage() {
           ))}
         </div>
 
-        {exchanges?.length === 0 && (
+        {totalItems === 0 && (
           <p className="text-center py-8 text-on-surface-variant">No currency exchanges yet</p>
+        )}
+
+        {totalItems > 0 && (
+          <Pagination
+            page={page}
+            total_pages={totalPages}
+            total={totalItems}
+            page_size={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size)
+              setPage(1)
+            }}
+          />
         )}
       </div>
 
