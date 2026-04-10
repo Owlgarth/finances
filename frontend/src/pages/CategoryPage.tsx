@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '../api/client';
-import type { Category } from '../types';
+import type { Category, PaginatedResponse } from '../types';
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext';
 import { useLayout } from '../contexts/LayoutContext';
 import { usePermissions } from '../hooks/usePermissions';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
+import Pagination from '../components/common/Pagination';
 import { format } from 'date-fns';
 import CreateCategoryModal from '../components/modals/categories/CreateCategoryModal';
 import EditCategoryModal from '../components/modals/categories/EditCategoryModal';
@@ -19,6 +20,8 @@ export default function CategoryPage() {
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { selectedPeriodId } = useBudgetPeriod();
@@ -26,15 +29,23 @@ export default function CategoryPage() {
   const { canManageBudgetData } = usePermissions();
   const queryClient = useQueryClient();
 
-  const { data: categories, isLoading, error, refetch } = useQuery<Category[]>({
-    queryKey: ['categories', selectedPeriodId],
+  useEffect(() => {
+    setPage(1);
+  }, [selectedPeriodId]);
+
+  const { data: apiResponse, isLoading, error, refetch } = useQuery({
+    queryKey: ['categories', selectedPeriodId, page, pageSize],
     queryFn: async () => {
-      if (!selectedPeriodId) return []
-      const response = await categoriesApi.getAll({ budget_period_id: selectedPeriodId });
-      return response.data as Category[];
+      if (!selectedPeriodId) return null
+      const response = await categoriesApi.getAll({ budget_period_id: selectedPeriodId, page, page_size: pageSize });
+      return response.data as PaginatedResponse<Category>;
     },
     enabled: !!selectedPeriodId
   });
+
+  const categories = apiResponse?.items || [];
+  const totalItems = apiResponse?.total || 0;
+  const totalPages = apiResponse?.total_pages || 0;
 
   const importMutation = useMutation({
     mutationFn: categoriesApi.import,
@@ -137,7 +148,7 @@ export default function CategoryPage() {
           <button
             onClick={handleExport}
             className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!selectedPeriodId || !categories || categories.length === 0}
+            disabled={!selectedPeriodId || totalItems === 0}
           >
             Export
           </button>
@@ -159,7 +170,7 @@ export default function CategoryPage() {
         <ErrorMessage message="Failed to load categories." />
       ) : (
         <div className="bg-surface-container-lowest rounded-xl overflow-hidden max-w-4xl mx-auto" style={{ boxShadow: 'var(--shadow-card)' }}>
-          {categories && categories.length > 0 ? (
+          {totalItems > 0 ? (
             <>
               <table className={isCardsView ? 'hidden' : 'hidden md:table w-full'}>
                 <thead className="bg-surface-container-low">
@@ -237,6 +248,20 @@ export default function CategoryPage() {
                   </div>
                 ))}
               </div>
+
+              {totalItems > 0 && (
+                <Pagination
+                  page={page}
+                  total_pages={totalPages}
+                  total={totalItems}
+                  page_size={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                />
+              )}
             </>
           ) : (
             <div className="p-6 text-center text-on-surface-variant">

@@ -1,34 +1,50 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { plannedTransactionsApi } from '../api/client'
-import type { PlannedTransaction } from '../types'
+import type { PaginatedResponse, PlannedTransaction } from '../types'
 import PlannedTransactionList from '../components/transactions/PlannedTransactionList'
 import PlannedTransactionFormModal from '../components/modals/transactions/PlannedTransactionFormModal'
 import ExecutePlannedModal from '../components/modals/transactions/ExecutePlannedModal'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
+import Pagination from '../components/common/Pagination'
 
 export default function Planned() {
   const [statusFilter, setStatusFilter] = useState<string>('pending')
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [selectedPlanned, setSelectedPlanned] = useState<PlannedTransaction | null>(null)
   const [executePlanned, setExecutePlanned] = useState<PlannedTransaction | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { selectedPeriodId } = useBudgetPeriod()
   const { canManageBudgetData } = usePermissions()
 
-  const { data: planned, isLoading, error } = useQuery({
-    queryKey: ['planned-transactions', statusFilter, selectedPeriodId],
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, selectedPeriodId])
+
+  const { data: apiResponse, isLoading, error } = useQuery({
+    queryKey: ['planned-transactions', statusFilter, selectedPeriodId, page, pageSize],
     queryFn: async () => {
-      const response = await plannedTransactionsApi.getAll(statusFilter, selectedPeriodId ?? undefined)
-      return response.data as PlannedTransaction[]
+      const response = await plannedTransactionsApi.getAll({
+        status: statusFilter || undefined,
+        budget_period_id: selectedPeriodId ?? undefined,
+        page,
+        page_size: pageSize,
+      })
+      return response.data as PaginatedResponse<PlannedTransaction>
     },
   })
+
+  const planned = apiResponse?.items || []
+  const totalItems = apiResponse?.total || 0
+  const totalPages = apiResponse?.total_pages || 0
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
@@ -167,7 +183,7 @@ export default function Planned() {
             <button
               onClick={handleExport}
               className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!selectedPeriodId || !planned || planned.length === 0}
+              disabled={!selectedPeriodId || totalItems === 0}
             >
               Export
             </button>
@@ -228,16 +244,31 @@ export default function Planned() {
         <Loading />
       ) : error ? (
         <ErrorMessage message="Failed to load planned transactions" />
-      ) : planned && planned.length === 0 ? (
+      ) : totalItems === 0 ? (
         <EmptyState message={`No ${statusFilter === 'pending' ? 'pending' : statusFilter === 'done' ? 'completed' : statusFilter === 'cancelled' ? 'cancelled' : ''} planned transactions`} />
       ) : (
-        <PlannedTransactionList
-          transactions={planned || []}
-          onEdit={canManageBudgetData ? handleEdit : undefined}
-          onExecute={canManageBudgetData ? handleExecute : undefined}
-          onCancel={canManageBudgetData ? handleCancel : undefined}
-          onDelete={canManageBudgetData ? handleDelete : undefined}
-        />
+        <>
+          <PlannedTransactionList
+            transactions={planned}
+            onEdit={canManageBudgetData ? handleEdit : undefined}
+            onExecute={canManageBudgetData ? handleExecute : undefined}
+            onCancel={canManageBudgetData ? handleCancel : undefined}
+            onDelete={canManageBudgetData ? handleDelete : undefined}
+          />
+          {totalItems > 0 && (
+            <Pagination
+              page={page}
+              total_pages={totalPages}
+              total={totalItems}
+              page_size={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size)
+                setPage(1)
+              }}
+            />
+          )}
+        </>
       )}
 
       <PlannedTransactionFormModal

@@ -8,6 +8,7 @@ from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
 from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
+from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from currency_exchanges.exceptions import (
     CurrencyExchangeImportError,
     CurrencyExchangeNoPeriodError,
@@ -59,12 +60,26 @@ class CurrencyExchangeService:
         return period.id if period else None
 
     @staticmethod
-    def list(workspace_id: int, budget_period_id: int | None = None) -> list[CurrencyExchange]:
+    def list(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        page: int = 1,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         """List currency exchanges for a workspace, optionally filtered by period."""
         queryset = CurrencyExchange.objects.select_related('from_currency', 'to_currency').for_workspace(workspace_id)
         if budget_period_id:
             queryset = queryset.filter(budget_period_id=budget_period_id)
-        return list(queryset.order_by('-date'))
+        queryset = queryset.order_by('-date')
+
+        items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
+        return {
+            'items': items,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+        }
 
     @staticmethod
     @db_transaction.atomic

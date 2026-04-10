@@ -11,6 +11,7 @@ from budget_periods.services import BudgetPeriodService
 from categories.models import Category
 from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
+from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from transactions.exceptions import (
     TransactionCategoryNotFoundError,
     TransactionImportError,
@@ -96,8 +97,10 @@ class TransactionService:
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
         ordering: str | None = None,
-    ) -> list[Transaction]:
-        """List transactions for a workspace with optional filters."""
+        page: int = 1,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
+        """List transactions for a workspace with optional filters and pagination."""
         from budget_periods.models import BudgetPeriod
 
         queryset = Transaction.objects.select_related('category').for_workspace(workspace_id)
@@ -117,7 +120,7 @@ class TransactionService:
             if period:
                 queryset = queryset.filter(budget_period_id=period.id)
             else:
-                return []
+                return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
 
         if type:
             queryset = queryset.filter(type__in=type)
@@ -135,7 +138,16 @@ class TransactionService:
             queryset = queryset.filter(amount__lte=amount_lte)
 
         sort_order = ordering or '-date'
-        return list(queryset.order_by(sort_order, '-created_at'))
+        queryset = queryset.order_by(sort_order, '-created_at')
+
+        items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
+        return {
+            'items': items,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+        }
 
     @staticmethod
     @db_transaction.atomic

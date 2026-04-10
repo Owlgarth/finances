@@ -99,23 +99,23 @@ class TestListCategories(CategoriesTestCase):
         """Test listing categories filtered by budget period."""
         data = self.get(f'/api/categories?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)
-        category_names = {c['name'] for c in data}
+        self.assertEqual(len(data['items']), 2)
+        category_names = {c['name'] for c in data['items']}
         self.assertEqual(category_names, {'Groceries', 'Transport'})
 
     def test_list_categories_with_current_date(self):
         """Test listing categories using current_date to find period."""
         data = self.get('/api/categories?current_date=2025-01-15', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)
-        category_names = {c['name'] for c in data}
+        self.assertEqual(len(data['items']), 2)
+        category_names = {c['name'] for c in data['items']}
         self.assertEqual(category_names, {'Groceries', 'Transport'})
 
     def test_list_categories_with_current_date_no_period(self):
         """Test listing categories with date that has no period."""
         data = self.get('/api/categories?current_date=2025-05-15', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(data, [])
+        self.assertEqual(data['items'], [])
 
     def test_list_categories_without_filters_fails(self):
         """Test that listing without budget_period_id or current_date fails."""
@@ -159,7 +159,7 @@ class TestListCategories(CategoriesTestCase):
 
         data = self.get(f'/api/categories?budget_period_id={other_period.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(data, [])
+        self.assertEqual(data['items'], [])
 
     def test_list_categories_without_auth_fails(self):
         """Test that listing categories without authentication fails."""
@@ -760,3 +760,92 @@ class TestImportCategories(CategoriesTestCase):
 
         # Verify only 2 unique categories were created
         self.assertEqual(Category.objects.filter(budget_period=self.period2).count(), 3)  # 1 existing + 2 new
+
+
+# =============================================================================
+# Pagination Tests
+# =============================================================================
+
+
+class TestCategoryPagination(AuthMixin, APIClientMixin, TestCase):
+    """Tests for category list pagination."""
+
+    def setUp(self):
+        super().setUp()
+        self.period = BudgetPeriodFactory(
+            budget_account=self.workspace.budget_accounts.first(),
+            name='January 2025',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+            weeks=5,
+            created_by=self.user,
+        )
+
+    def _create_categories(self, count):
+        """Create the given number of categories in the test period."""
+        for i in range(count):
+            CategoryFactory(
+                budget_period=self.period,
+                name=f'Category {i}',
+                created_by=self.user,
+            )
+
+    def test_default_pagination(self):
+        """Default page_size=25, page=1."""
+        self._create_categories(35)
+        data = self.get(f'/api/categories?budget_period_id={self.period.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 35)
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_custom_page_size(self):
+        """page_size=25 returns 25 items."""
+        self._create_categories(30)
+        data = self.get(f'/api/categories?budget_period_id={self.period.id}&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 30)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_second_page(self):
+        """page=2 returns correct slice."""
+        self._create_categories(30)
+        data = self.get(
+            f'/api/categories?budget_period_id={self.period.id}&page=2&page_size=25',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 5)
+        self.assertEqual(data['page'], 2)
+
+    def test_over_page_returns_empty(self):
+        """Requesting page beyond total_pages returns empty items."""
+        data = self.get(
+            f'/api/categories?budget_period_id={self.period.id}&page=999&page_size=25',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 0)
+        self.assertEqual(data['total'], 0)
+
+    def test_invalid_page_size_defaults(self):
+        """Invalid page_size value falls back to default 25."""
+        self._create_categories(30)
+        data = self.get(
+            f'/api/categories?budget_period_id={self.period.id}&page_size=999',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(len(data['items']), 25)
+
+    def test_zero_total_when_no_records(self):
+        """Empty result returns total=0, total_pages=0."""
+        data = self.get(f'/api/categories?budget_period_id={self.period.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['total'], 0)
+        self.assertEqual(data['total_pages'], 0)

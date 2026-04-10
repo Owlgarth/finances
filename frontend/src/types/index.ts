@@ -212,3 +212,12 @@ export interface AddMemberResponse {
   member_id: number;
   is_new_user: boolean;
 }
+
+// ============= Pagination Types =============
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
