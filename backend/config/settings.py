@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'budgets',
     'transactions',
     'currency_exchanges',
+    'exchange_shortcuts',
     'planned_transactions',
     'period_balances',
     'reports',
@@ -181,6 +182,9 @@ RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60
 RATE_LIMIT_DATA_EXPORT = int(os.getenv('RATE_LIMIT_DATA_EXPORT', '3'))
 # Time window (seconds) for data export rate limiting
 RATE_LIMIT_DATA_EXPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_EXPORT_PERIOD', '3600'))
+
+# Max exchange shortcuts per workspace
+EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE = int(os.getenv('EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE', '5'))
 
 # Cache configuration (used for rate limiting)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
