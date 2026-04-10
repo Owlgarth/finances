@@ -11,6 +11,7 @@ from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
 from planned_transactions.exceptions import (
     PlannedTransactionAlreadyExecutedError,
+    PlannedTransactionCannotRevertError,
     PlannedTransactionCategoryNotFoundError,
     PlannedTransactionImportError,
     PlannedTransactionNoActivePeriodError,
@@ -64,6 +65,7 @@ class PlannedTransactionService:
             raise PlannedTransactionCategoryNotFoundError()
 
     @staticmethod
+    @db_transaction.atomic
     def create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
         """Create a planned transaction."""
         currency = resolve_currency(workspace_id, data.currency)
@@ -73,7 +75,7 @@ class PlannedTransactionService:
         period_id = PlannedTransactionService._resolve_period(workspace_id, data.planned_date, data.budget_period_id)
         PlannedTransactionService._validate_category(data.category_id, period_id)
 
-        return PlannedTransaction.objects.create(
+        planned = PlannedTransaction.objects.create(
             workspace_id=workspace_id,
             budget_period_id=period_id,
             name=data.name,
@@ -86,10 +88,19 @@ class PlannedTransactionService:
             updated_by=user,
         )
 
+        if data.status == 'done':
+            return PlannedTransactionService._execute_side_effects(user, workspace_id, planned, planned.planned_date)
+
+        return planned
+
     @staticmethod
+    @db_transaction.atomic
     def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionUpdate) -> PlannedTransaction:
         """Update a planned transaction."""
         planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
+
+        if planned.status == 'done' and data.status != 'done':
+            raise PlannedTransactionCannotRevertError()
 
         currency = resolve_currency(workspace_id, data.currency)
         if not currency:
@@ -104,10 +115,13 @@ class PlannedTransactionService:
         planned.currency = currency
         planned.category_id = data.category_id
         planned.planned_date = data.planned_date
-        planned.status = data.status
         planned.updated_by = user
-        planned.save()
 
+        if data.status == 'done' and planned.status != 'done':
+            return PlannedTransactionService._execute_side_effects(user, workspace_id, planned, planned.planned_date)
+
+        planned.status = data.status
+        planned.save()
         return planned
 
     @staticmethod
@@ -117,14 +131,10 @@ class PlannedTransactionService:
         planned.delete()
 
     @staticmethod
-    @db_transaction.atomic
-    def execute(user, workspace_id: int, planned_id: int, payment_date: date) -> PlannedTransaction:
-        """Execute a planned transaction, creating an actual transaction."""
-        planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
-
-        if planned.status == 'done':
-            raise PlannedTransactionAlreadyExecutedError()
-
+    def _execute_side_effects(
+        user, workspace_id: int, planned: PlannedTransaction, payment_date: date
+    ) -> PlannedTransaction:
+        """Create a Transaction and update PeriodBalance for an executed planned transaction."""
         period = (
             BudgetPeriod.objects.select_related('budget_account')
             .filter(
@@ -162,12 +172,23 @@ class PlannedTransactionService:
         balance.save(update_fields=['total_expenses', 'closing_balance'])
 
         planned.transaction_id = transaction_obj.id
-        planned.status = 'done'
         planned.payment_date = payment_date
+        planned.status = 'done'
         planned.updated_by = user
         planned.save()
 
         return planned
+
+    @staticmethod
+    @db_transaction.atomic
+    def execute(user, workspace_id: int, planned_id: int, payment_date: date) -> PlannedTransaction:
+        """Execute a planned transaction, creating an actual transaction."""
+        planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
+
+        if planned.status == 'done':
+            raise PlannedTransactionAlreadyExecutedError()
+
+        return PlannedTransactionService._execute_side_effects(user, workspace_id, planned, payment_date)
 
     @staticmethod
     def export(workspace_id: int, period_id: int, status: str | None = None) -> list[dict]:
