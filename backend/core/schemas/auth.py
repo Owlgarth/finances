@@ -24,6 +24,7 @@ class Token(BaseModel):
     """Token response schema."""
 
     access_token: str
+    refresh_token: str | None = None
     token_type: str = 'bearer'
 
 
@@ -77,6 +78,10 @@ class VerifyEmailIn(BaseModel):
     token: str
 
 
+class RefreshTokenIn(BaseModel):
+    refresh_token: str
+
+
 class ResendVerificationIn(BaseModel):
     email: ValidatedEmail
 
@@ -109,6 +114,7 @@ class UserPasswordUpdate(BaseModel):
 
 class LoginOut(BaseModel):
     access_token: str | None = None
+    refresh_token: str | None = None
     token_type: str = 'bearer'
     requires_2fa: bool = False
     temp_token: str | None = None
