@@ -338,6 +338,26 @@ class WorkspaceService:
         WorkspaceService._send_existing_invite(user, workspace)
 ```
 
+**Private method ordering:** Place private `@staticmethod` methods before the public methods that call them (private-methods-first). This makes the dependency flow clear when reading top-to-bottom.
+
+**Shared helpers for side effects:** When multiple public methods need the same side-effect logic (e.g., balance updates triggered from both `execute` and `create`), extract it into a shared private `@staticmethod`. Keep caller-specific guard checks in the public method — the shared helper should contain only the side-effect logic:
+
+```python
+class PlannedTransactionService:
+    @staticmethod
+    def _execute_side_effects(planned, workspace_id):
+        """Shared logic — no guards, just side effects."""
+        # ... update balances, create related records ...
+
+    @staticmethod
+    @db_transaction.atomic
+    def execute(user, workspace_id, planned_id):
+        planned = PlannedTransactionService._get_planned(...)
+        if planned.status == 'done':
+            raise PlannedTransactionAlreadyExecutedError()  # Guard stays in public method
+        PlannedTransactionService._execute_side_effects(planned, workspace_id)
+```
+
 ### Service-Layer Authorization (Defense-in-Depth)
 
 Service methods that perform destructive operations should validate authorization themselves, not rely solely on API-layer checks. This prevents accidental misuse if the service is called from a management command or future endpoint.
@@ -844,6 +864,15 @@ Unused imports create noise and can mislead future readers about what a module d
 
 - Remove unused props from component interfaces — dead props create misleading API surfaces and confuse future developers.
 - When a component handles a concern internally (e.g., resend verification via API call), don't also expose a callback prop for the same concern. One mechanism is enough.
+- When a child component needs more than an ID from a list item (e.g., pre-filling a form field from a related value), pass the full object through callback props instead of just the ID. This avoids redundant lookups and keeps data flowing cleanly:
+
+```tsx
+// Bad — child must fetch data again or caller must pass extra props separately
+onExecute: (id: number) => void
+
+// Good — child has all the data it needs from the object
+onExecute: (planned: PlannedTransaction) => void
+```
 
 ```tsx
 interface Props {
