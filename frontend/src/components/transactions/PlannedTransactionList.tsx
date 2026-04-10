@@ -4,7 +4,7 @@ import { useLayout } from '../../contexts/LayoutContext'
 interface Props {
   transactions: PlannedTransaction[]
   onEdit?: (transaction: PlannedTransaction) => void
-  onExecute?: (id: number) => void
+  onExecute?: (planned: PlannedTransaction) => void
   onCancel?: (transaction: PlannedTransaction) => void
   onDelete?: (id: number) => void
 }
@@ -76,7 +76,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                     )}
                     {onExecute && planned.status === 'pending' && (
                       <button
-                        onClick={() => onExecute(planned.id)}
+                        onClick={() => onExecute(planned)}
                         className="text-positive hover:text-tertiary mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
                       >
                         Execute
@@ -145,7 +145,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                   )}
                   {onExecute && planned.status === 'pending' && (
                     <button
-                      onClick={() => onExecute(planned.id)}
+                      onClick={() => onExecute(planned)}
                       className="flex-1 px-3 py-2 text-xs font-mono font-bold uppercase tracking-wider text-on-tertiary-container bg-tertiary-container rounded hover:opacity-90 transition-colors"
                     >
                       Execute
