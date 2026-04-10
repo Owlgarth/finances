@@ -8,10 +8,11 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   plannedId: number
+  plannedDate: string
 }
 
-export default function ExecutePlannedModal({ isOpen, onClose, plannedId }: Props) {
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
+export default function ExecutePlannedModal({ isOpen, onClose, plannedId, plannedDate }: Props) {
+  const [paymentDate, setPaymentDate] = useState(plannedDate)
   const queryClient = useQueryClient()
 
   const executeMutation = useMutation({
