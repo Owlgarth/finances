@@ -10,11 +10,13 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   exchange?: CurrencyExchange | null
+  preselectedFrom?: string
+  preselectedTo?: string
 }
 
 const CURRENCIES = ['PLN', 'USD', 'EUR', 'UAH']
 
-export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }: Props) {
+export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, preselectedFrom, preselectedTo }: Props) {
   const [date, setDate] = useState('')
   const [description, setDescription] = useState('')
   const [fromCurrency, setFromCurrency] = useState('PLN')
@@ -36,12 +38,12 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange }:
     } else {
       setDate(today)
       setDescription('')
-      setFromCurrency('PLN')
+      setFromCurrency(preselectedFrom || 'PLN')
       setFromAmount('')
-      setToCurrency('USD')
+      setToCurrency(preselectedTo || 'USD')
       setToAmount('')
     }
-  }, [exchange, isOpen, today])
+  }, [exchange, isOpen, today, preselectedFrom, preselectedTo])
 
   const mutation = useMutation({
     mutationFn: (data: any) =>

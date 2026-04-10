@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { currencyExchangesApi } from '../api/client'
+import { currencyExchangesApi, exchangeShortcutsApi } from '../api/client'
 import { useLayout } from '../contexts/LayoutContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
-import type { CurrencyExchange } from '../types'
+import type { CurrencyExchange, ExchangeShortcut } from '../types'
 import CurrencyExchangeFormModal from '../components/modals/currency/CurrencyExchangeFormModal'
+import ManageShortcutsModal from '../components/modals/currency/ManageShortcutsModal'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 
@@ -17,6 +18,9 @@ export default function CurrencyExchangesPage() {
   const { selectedPeriodId } = useBudgetPeriod()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedExchange, setSelectedExchange] = useState<CurrencyExchange | null>(null)
+  const [preselectedFrom, setPreselectedFrom] = useState<string | undefined>(undefined)
+  const [preselectedTo, setPreselectedTo] = useState<string | undefined>(undefined)
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: exchanges, isLoading, error } = useQuery({
@@ -27,6 +31,14 @@ export default function CurrencyExchangesPage() {
       return response.data as CurrencyExchange[]
     },
     enabled: !!selectedPeriodId
+  })
+
+  const { data: shortcuts } = useQuery({
+    queryKey: ['exchange-shortcuts'],
+    queryFn: async () => {
+      const response = await exchangeShortcutsApi.getAll()
+      return response.data as ExchangeShortcut[]
+    },
   })
 
   const deleteMutation = useMutation({
@@ -101,6 +113,15 @@ export default function CurrencyExchangesPage() {
 
   const handleAddNew = () => {
     setSelectedExchange(null)
+    setPreselectedFrom(undefined)
+    setPreselectedTo(undefined)
+    setIsModalOpen(true)
+  }
+
+  const handleShortcutClick = (shortcut: ExchangeShortcut) => {
+    setSelectedExchange(null)
+    setPreselectedFrom(shortcut.from_currency)
+    setPreselectedTo(shortcut.to_currency)
     setIsModalOpen(true)
   }
 
@@ -143,6 +164,41 @@ export default function CurrencyExchangesPage() {
           </div>
         )}
       </div>
+
+      {/* Shortcut panel */}
+      {shortcuts && shortcuts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {shortcuts.map(shortcut => (
+            <button
+              key={shortcut.id}
+              onClick={() => handleShortcutClick(shortcut)}
+              className="px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface text-sm font-mono font-medium hover:bg-surface-container transition-all"
+            >
+              {shortcut.from_currency} → {shortcut.to_currency}
+            </button>
+          ))}
+          {canManageBudgetData && (
+            <button
+              onClick={() => setIsManageModalOpen(true)}
+              className="px-2 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+              title="Manage shortcuts"
+            >
+              <span className="material-symbols-outlined text-sm">settings</span>
+            </button>
+          )}
+        </div>
+      )}
+      {canManageBudgetData && (!shortcuts || shortcuts.length === 0) && (
+        <div className="mb-4">
+          <button
+            onClick={() => setIsManageModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface bg-surface-container-high hover:bg-surface-container transition-all text-sm font-medium"
+          >
+            <span className="material-symbols-outlined text-sm">settings</span>
+            Add Shortcuts
+          </button>
+        </div>
+      )}
 
       <div className="bg-surface-container-lowest rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
         <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
@@ -270,8 +326,18 @@ export default function CurrencyExchangesPage() {
         onClose={() => {
           setIsModalOpen(false)
           setSelectedExchange(null)
+          setPreselectedFrom(undefined)
+          setPreselectedTo(undefined)
         }}
         exchange={selectedExchange}
+        preselectedFrom={preselectedFrom}
+        preselectedTo={preselectedTo}
+      />
+
+      <ManageShortcutsModal
+        isOpen={isManageModalOpen}
+        onClose={() => setIsManageModalOpen(false)}
+        shortcuts={shortcuts || []}
       />
     </div>
   )
