@@ -149,17 +149,17 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         """Test listing all planned transactions in the workspace."""
         data = self.get('/api/planned-transactions', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 3)  # All 3 planned transactions created in setUp
+        self.assertEqual(len(data['items']), 3)  # All 3 planned transactions created in setUp
 
     def test_list_filtered_by_period(self):
         """Test listing planned transactions filtered by budget period."""
         data = self.get(f'/api/planned-transactions?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)  # Only planned transactions in period1
+        self.assertEqual(len(data['items']), 2)  # Only planned transactions in period1
 
         data = self.get(f'/api/planned-transactions?budget_period_id={self.period2.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)  # Only planned transaction in period2
+        self.assertEqual(len(data['items']), 1)  # Only planned transaction in period2
 
     def test_list_filtered_by_status(self):
         """Test listing planned transactions filtered by status."""
@@ -169,18 +169,18 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
 
         data = self.get('/api/planned-transactions?status=pending', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)  # Only pending transactions
+        self.assertEqual(len(data['items']), 2)  # Only pending transactions
 
         data = self.get('/api/planned-transactions?status=done', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)  # Only done transactions
+        self.assertEqual(len(data['items']), 1)  # Only done transactions
 
     def test_list_ordered_by_planned_date(self):
         """Test that planned transactions are ordered by planned_date."""
         data = self.get('/api/planned-transactions', **self.auth_headers())
         self.assertStatus(200)
         # Check dates are in ascending order
-        dates = [pt['planned_date'] for pt in data]
+        dates = [pt['planned_date'] for pt in data['items']]
         self.assertEqual(dates, sorted(dates))
 
     def test_list_without_auth_returns_401(self):
@@ -906,3 +906,79 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
                 )
 
         self.assertEqual(response.status_code, 403)
+
+
+# =============================================================================
+# Pagination Tests
+# =============================================================================
+
+
+class TestPlannedTransactionPagination(PlannedTransactionTestCase):
+    """Tests for planned transaction list pagination."""
+
+    def _create_planned_transactions(self, count):
+        """Create the given number of planned transactions in period1."""
+        for i in range(count):
+            PlannedTransactionFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                name=f'Planned {i}',
+                amount=Decimal('50.00'),
+                currency=self.currencies['USD'],
+                planned_date=date(2025, 1, i % 28 + 1),
+                status='pending',
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+    def test_default_pagination(self):
+        """Default page_size=25, page=1."""
+        self._create_planned_transactions(35)
+        data = self.get('/api/planned-transactions', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 38)  # 35 new + 3 from setUp
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_custom_page_size(self):
+        """page_size=25 returns 25 items."""
+        self._create_planned_transactions(30)
+        data = self.get('/api/planned-transactions?page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 33)  # 30 new + 3 from setUp
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_second_page(self):
+        """page=2 returns correct slice."""
+        self._create_planned_transactions(30)
+        data = self.get('/api/planned-transactions?page=2&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 8)  # 33 total - 25 = 8
+        self.assertEqual(data['page'], 2)
+
+    def test_over_page_returns_empty(self):
+        """Requesting page beyond total_pages returns empty items."""
+        data = self.get('/api/planned-transactions?page=999&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 0)
+        self.assertEqual(data['total'], 3)  # 3 from setUp
+
+    def test_invalid_page_size_defaults(self):
+        """Invalid page_size value falls back to default 25."""
+        data = self.get('/api/planned-transactions?page_size=999', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(len(data['items']), 3)  # 3 from setUp, fits in page 1
+
+    def test_zero_total_when_no_records(self):
+        """Empty result returns total=0, total_pages=0 when workspace has no records."""
+        # Delete the 3 records from setUp
+        PlannedTransaction.objects.filter(workspace=self.workspace).delete()
+        data = self.get('/api/planned-transactions', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['total'], 0)
+        self.assertEqual(data['total_pages'], 0)
