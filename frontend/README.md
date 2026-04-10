@@ -334,10 +334,11 @@ interface PeriodBalance {
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev                    # Runs at http://localhost:5173 (or VITE_PORT)
+npm run dev -- --port 3000    # Override port via CLI
 ```
 
-Application runs at http://localhost:5173
+Application runs at `http://localhost:{VITE_PORT}` (default: 5173)
 
 ### Build
 
@@ -358,6 +359,7 @@ docker-compose up monie_ui
 |----------|-------------|---------|
 | `VITE_API_URL` | Backend API base URL | `http://localhost:8000/api` |
 | `VITE_DEMO_MODE` | Disable registration (optional) | `false` |
+| `VITE_PORT` | Dev server port (optional) | `5173` (Vite default) |
 
 ## Development Notes
 
