@@ -11,6 +11,7 @@ const api = axios.create({
 
 // ============= Token Management =============
 const TOKEN_KEY = 'monie_token';
+const REFRESH_TOKEN_KEY = 'monie_refresh_token';
 
 export const setAuthToken = (token: string): void => {
   localStorage.setItem(TOKEN_KEY, token);
@@ -21,8 +22,17 @@ export const getAuthToken = (): string | null => {
   return localStorage.getItem(TOKEN_KEY);
 };
 
+export const setRefreshToken = (token: string): void => {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+};
+
+export const getRefreshToken = (): string | null => {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+};
+
 export const clearAuthToken = (): void => {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   delete api.defaults.headers.common['Authorization'];
 };
 
@@ -32,15 +42,75 @@ if (savedToken) {
   api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
 }
 
-// Response interceptor - handle 401
+// Response interceptor - handle 401 with token refresh
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void }> = [];
+
+const processQueue = (error: unknown) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(undefined);
+    }
+  });
+  failedQueue = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      const isAuthRoute = window.location.pathname === '/login' || window.location.pathname === '/register';
-      if (!isAuthRoute) {
+  async (error: AxiosError) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && originalRequest) {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
         clearAuthToken();
-        window.location.href = '/login';
+        const isAuthRoute = window.location.pathname === '/login' || window.location.pathname === '/register';
+        if (!isAuthRoute) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => {
+          originalRequest.headers.Authorization = `Bearer ${getAuthToken()}`;
+          return api(originalRequest);
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const response = await authApi.refresh(refreshToken);
+        if (response.access_token) {
+          setAuthToken(response.access_token);
+          if (response.refresh_token) {
+            setRefreshToken(response.refresh_token);
+          }
+          originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
+          processQueue(null);
+          return api(originalRequest);
+        } else {
+          clearAuthToken();
+          processQueue(error);
+          const isAuthRoute = window.location.pathname === '/login' || window.location.pathname === '/register';
+          if (!isAuthRoute) {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
+        }
+      } catch (refreshError) {
+        clearAuthToken();
+        processQueue(refreshError);
+        const isAuthRoute = window.location.pathname === '/login' || window.location.pathname === '/register';
+        if (!isAuthRoute) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);
@@ -177,6 +247,9 @@ export const authApi = {
 
   verify2FA: (tempToken: string, code: string): Promise<Token> =>
     api.post<Token>('/auth/verify-2fa', { temp_token: tempToken, code }, { headers: { Authorization: '' } }).then(res => res.data),
+
+  refresh: (refreshToken: string): Promise<Token> =>
+    api.post<Token>('/auth/refresh', { refresh_token: refreshToken }, { headers: { Authorization: '' } }).then(res => res.data),
 
   get2FAStatus: (): Promise<TwoFAStatus> =>
     api.get<TwoFAStatus>('/users/me/2fa').then(res => res.data),

@@ -21,6 +21,7 @@ SECRET_KEY = os.environ['SECRET_KEY']
 JWT_SECRET_KEY = os.environ['JWT_SECRET_KEY']
 JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', 60))  # 1 hour default
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('JWT_REFRESH_TOKEN_EXPIRE_DAYS', 7))  # 7 days default
 
 # Demo Mode
 DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() == 'true'
