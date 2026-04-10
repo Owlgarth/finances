@@ -360,6 +360,35 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
         self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(201)
 
+    def test_create_planned_with_status_done_creates_transaction(self):
+        """Test creating a planned transaction with status done triggers execution."""
+        initial_transaction_count = Transaction.objects.count()
+        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
+
+        payload = {
+            'name': 'Paid Bill',
+            'amount': '200.00',
+            'currency': 'USD',
+            'category_id': self.category1.id,
+            'planned_date': '2025-01-10',
+            'status': 'done',
+        }
+        data = self.post('/api/planned-transactions', payload, **self.auth_headers())
+
+        self.assertStatus(201)
+        self.assertEqual(data['status'], 'done')
+        self.assertEqual(data['payment_date'], '2025-01-10')
+        self.assertIsNotNone(data['transaction_id'])
+        self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
+
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('200.00'))
+
+        transaction = Transaction.objects.get(id=data['transaction_id'])
+        self.assertEqual(transaction.description, 'Paid Bill')
+        self.assertEqual(transaction.amount, Decimal('200.00'))
+        self.assertEqual(transaction.type, 'expense')
+
 
 # =============================================================================
 # Update Planned Transaction Tests
@@ -423,8 +452,11 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
-    def test_update_status_to_done(self):
-        """Test updating status to done."""
+    def test_update_status_to_done_creates_transaction(self):
+        """Test updating status to done triggers execution side effects."""
+        initial_transaction_count = Transaction.objects.count()
+        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
+
         payload = {
             'name': 'Monthly Rent',
             'amount': '1200.00',
@@ -435,6 +467,45 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
 
         self.assertStatus(200)
+        self.assertEqual(data['status'], 'done')
+        self.assertEqual(data['payment_date'], '2025-01-05')
+        self.assertIsNotNone(data['transaction_id'])
+        self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
+
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
+
+    def test_update_cannot_revert_from_done(self):
+        """Test that changing status from done to pending raises an error."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+
+        payload = {
+            'name': 'Monthly Rent',
+            'amount': '1200.00',
+            'currency': 'USD',
+            'planned_date': '2025-01-05',
+            'status': 'pending',
+        }
+        self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_update_done_transaction_keeping_done(self):
+        """Test that updating a done planned transaction while keeping done status works."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+
+        payload = {
+            'name': 'Updated Rent',
+            'amount': '1300.00',
+            'currency': 'USD',
+            'planned_date': '2025-01-05',
+            'status': 'done',
+        }
+        data = self.put(f'/api/planned-transactions/{self.planned1.id}', payload, **self.auth_headers())
+
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'Updated Rent')
         self.assertEqual(data['status'], 'done')
 
 

@@ -28,6 +28,11 @@ class PlannedTransactionAlreadyExecutedError(ValidationError):
     default_code = 'already_executed'
 
 
+class PlannedTransactionCannotRevertError(ValidationError):
+    default_message = 'Cannot change status of an executed planned transaction'
+    default_code = 'cannot_revert_executed'
+
+
 class PlannedTransactionImportError(ValidationError):
     def __init__(self, message: str):
         super().__init__(message, code='import_error')
