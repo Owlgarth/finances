@@ -22,7 +22,8 @@ class JWTAuth(HttpBearer):
         """Authenticate request using JWT token."""
         try:
             payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-            if payload.get('type') == '2fa_pending':
+            token_type = payload.get('type')
+            if token_type in ('2fa_pending', 'refresh'):
                 return None
             user_id = payload.get('user_id')
             if user_id is None:
@@ -110,6 +111,42 @@ def _ttl_from_exp(exp: float) -> int:
     now = datetime.datetime.now(datetime.timezone.utc).timestamp()
     remaining = int(exp - now)
     return max(remaining, 0)
+
+
+def create_refresh_token(user: User) -> str:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    exp = now + datetime.timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = {
+        'user_id': str(user.id),
+        'type': 'refresh',
+        'jti': str(uuid.uuid4()),
+        'iat': now.timestamp(),
+        'exp': exp.timestamp(),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def consume_refresh_token(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+
+    if payload.get('type') != 'refresh':
+        return None
+
+    jti = payload.get('jti')
+    if not jti:
+        return None
+
+    cache_key = f'refresh_token_used:{jti}'
+    ttl = _ttl_from_exp(payload.get('exp', 0))
+    if ttl == 0:
+        return None
+
+    if not cache.add(cache_key, True, ttl):
+        return None
+    return payload
 
 
 def consume_temp_token(token: str) -> dict | None:

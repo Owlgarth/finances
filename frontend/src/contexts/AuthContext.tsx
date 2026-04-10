@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authApi, setAuthToken, clearAuthToken, getAuthToken } from '../api/client';
+import { authApi, setAuthToken, setRefreshToken, clearAuthToken, getAuthToken } from '../api/client';
 import { queryClient } from '../main';
 import type { User, LoginRequest, RegisterRequest } from '../types';
 import toast from 'react-hot-toast';
@@ -74,6 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.access_token) {
         setAuthToken(response.access_token);
+        if (response.refresh_token) {
+          setRefreshToken(response.refresh_token);
+        }
         queryClient.clear();
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
@@ -96,6 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authApi.register(data);
       if (response.access_token) {
         setAuthToken(response.access_token);
+        if (response.refresh_token) {
+          setRefreshToken(response.refresh_token);
+        }
       } else {
         toast.error('Unexpected response from server. Please try again.');
         return;
@@ -121,6 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authApi.verify2FA(tempToken, code);
       if (response.access_token) {
         setAuthToken(response.access_token);
+        if (response.refresh_token) {
+          setRefreshToken(response.refresh_token);
+        }
         queryClient.clear();
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);

@@ -155,6 +155,7 @@ export interface AccountDeleteCheck {
 
 export interface Token {
   access_token?: string;
+  refresh_token?: string;
   token_type: string;
   requires_2fa?: boolean;
   temp_token?: string;
