@@ -192,6 +192,16 @@ export const currencyExchangesApi = {
   export: (params: { budget_period_id: number }) => api.get('/currency-exchanges/export/', { params }),
 };
 
+export const exchangeShortcutsApi = {
+  getAll: () => api.get('/exchange-shortcuts'),
+  create: (data: { from_currency: string; to_currency: string }) =>
+    api.post('/exchange-shortcuts', data),
+  update: (id: number, data: { from_currency: string; to_currency: string }) =>
+    api.put(`/exchange-shortcuts/${id}`, data),
+  delete: (id: number) =>
+    api.delete(`/exchange-shortcuts/${id}`),
+};
+
 export const plannedTransactionsApi = {
   getAll: (status?: string, budget_period_id?: number) => api.get('/planned-transactions', { params: { status, budget_period_id } }),
   create: (data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.post('/planned-transactions', data),

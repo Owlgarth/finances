@@ -62,6 +62,13 @@ export interface CurrencyExchange {
   created_at: string;
 }
 
+export interface ExchangeShortcut {
+  id: number;
+  from_currency: string;
+  to_currency: string;
+  created_at: string;
+}
+
 export interface PlannedTransaction {
   id: number;
   budget_period_id: number | null;
