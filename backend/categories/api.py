@@ -13,16 +13,19 @@ from categories.services import CategoryService
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
+from core.schemas.pagination import PaginatedOut
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Categories'])
 
 
-@router.get('', response=list[CategoryOut], auth=WorkspaceJWTAuth())
+@router.get('', response=PaginatedOut[CategoryOut], auth=WorkspaceJWTAuth())
 def list_categories(
     request: HttpRequest,
     budget_period_id: int | None = Query(None),
     current_date: date | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25),
 ):
     """List categories for the current workspace."""
     workspace_id = request.auth.current_workspace_id
@@ -30,7 +33,7 @@ def list_categories(
     if not budget_period_id and not current_date:
         raise HttpError(400, 'Either budget_period_id or current_date must be provided')
 
-    return CategoryService.list(workspace_id, budget_period_id, current_date)
+    return CategoryService.list(workspace_id, budget_period_id, current_date, page, page_size)
 
 
 @router.get('/export/', response={200: list[str]}, auth=WorkspaceJWTAuth())

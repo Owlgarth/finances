@@ -10,6 +10,7 @@ from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
+from core.schemas.pagination import PaginatedOut
 from currency_exchanges.schemas import (
     CurrencyExchangeCreate,
     CurrencyExchangeOut,
@@ -21,14 +22,16 @@ from workspaces.models import WRITE_ROLES
 router = Router(tags=['Currency Exchanges'])
 
 
-@router.get('', response=list[CurrencyExchangeOut], auth=WorkspaceJWTAuth())
+@router.get('', response=PaginatedOut[CurrencyExchangeOut], auth=WorkspaceJWTAuth())
 def list_exchanges(
     request: HttpRequest,
     budget_period_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25),
 ):
     """List currency exchanges for the current workspace."""
     workspace_id = request.auth.current_workspace_id
-    return CurrencyExchangeService.list(workspace_id, budget_period_id)
+    return CurrencyExchangeService.list(workspace_id, budget_period_id, page, page_size)
 
 
 @router.post('', response={201: CurrencyExchangeOut, 400: DetailOut}, auth=WorkspaceJWTAuth())

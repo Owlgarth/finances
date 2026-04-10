@@ -14,6 +14,7 @@ from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
+from transactions.factories import TransactionFactory
 from transactions.models import Transaction
 from workspaces.models import Currency, Workspace, WorkspaceMember
 
@@ -119,7 +120,7 @@ class TestListTransactions(TransactionsTestCase):
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)
+        self.assertEqual(len(data['items']), 2)
 
     def test_list_transactions_with_current_date(self):
         """Test listing transactions using current_date to find period."""
@@ -136,7 +137,7 @@ class TestListTransactions(TransactionsTestCase):
 
         data = self.get('/api/transactions?current_date=2025-01-15', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)
+        self.assertEqual(len(data['items']), 1)
 
     def test_list_transactions_with_type_filter(self):
         """Test listing transactions filtered by type."""
@@ -164,8 +165,8 @@ class TestListTransactions(TransactionsTestCase):
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}&type=expense', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['type'], 'expense')
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['type'], 'expense')
 
     def test_list_transactions_with_search(self):
         """Test listing transactions with search term."""
@@ -193,8 +194,8 @@ class TestListTransactions(TransactionsTestCase):
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}&search=grocery', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)
-        self.assertIn('Grocery', data[0]['description'])
+        self.assertEqual(len(data['items']), 1)
+        self.assertIn('Grocery', data['items'][0]['description'])
 
     def test_list_transactions_with_amount_filters(self):
         """Test listing transactions with amount range filters."""
@@ -222,8 +223,8 @@ class TestListTransactions(TransactionsTestCase):
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}&amount_gte=100', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['amount'], '500.00')
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['amount'], '500.00')
 
     def test_list_transactions_without_auth_fails(self):
         """Test that listing transactions without authentication fails."""
@@ -234,7 +235,7 @@ class TestListTransactions(TransactionsTestCase):
         """When current_date matches no period, return empty list (not 404)."""
         data = self.get('/api/transactions?current_date=2099-01-01', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(data, [])
+        self.assertEqual(data['items'], [])
 
 
 # =============================================================================
@@ -772,3 +773,95 @@ class TestImportTransactions(TransactionsTestCase):
             **self.auth_headers(),
         )
         self.assertStatus(400)
+
+
+# =============================================================================
+# Pagination Tests
+# =============================================================================
+
+
+class TestTransactionPagination(AuthMixin, APIClientMixin, TestCase):
+    """Tests for transaction list pagination."""
+
+    def setUp(self):
+        super().setUp()
+        self.period = BudgetPeriodFactory(
+            budget_account=self.workspace.budget_accounts.first(),
+            name='January 2025',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+            weeks=5,
+            created_by=self.user,
+        )
+        self.pln_currency = self.workspace.currencies.filter(symbol='PLN').first()
+
+    def _create_transactions(self, count):
+        """Create the given number of transactions in the test period."""
+        for i in range(count):
+            TransactionFactory(
+                budget_period=self.period,
+                workspace=self.workspace,
+                currency=self.pln_currency,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+    def test_default_pagination(self):
+        """Default page_size=25, page=1."""
+        self._create_transactions(35)
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 35)
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_custom_page_size(self):
+        """page_size=25 returns 25 items."""
+        self._create_transactions(30)
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 30)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_second_page(self):
+        """page=2 returns correct slice."""
+        self._create_transactions(30)
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&page=2&page_size=25',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 5)
+        self.assertEqual(data['page'], 2)
+
+    def test_over_page_returns_empty(self):
+        """Requesting page beyond total_pages returns empty items."""
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&page=999&page_size=25',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 0)
+        self.assertEqual(data['total'], 0)
+
+    def test_invalid_page_size_defaults(self):
+        """Invalid page_size value falls back to default 25."""
+        self._create_transactions(30)
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&page_size=999',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(len(data['items']), 25)
+
+    def test_zero_total_when_no_records(self):
+        """Empty result returns total=0, total_pages=0."""
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['total'], 0)
+        self.assertEqual(data['total_pages'], 0)

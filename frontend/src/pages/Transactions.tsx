@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { transactionsApi, categoriesApi } from '../api/client'
-import type { Transaction, Category } from '../types'
+import type { Transaction, Category, PaginatedResponse } from '../types'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
 import TransactionList from '../components/transactions/TransactionList'
@@ -10,6 +10,7 @@ import TransactionFormModal from '../components/modals/transactions/TransactionF
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
+import Pagination from '../components/common/Pagination'
 import DatePicker from '../components/DatePicker'
 
 export default function Transactions() {
@@ -38,6 +39,8 @@ export default function Transactions() {
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const queryClient = useQueryClient()
   const typeDropdownRef = useRef<HTMLDivElement>(null)
   const categoryDropdownRef = useRef<HTMLDivElement>(null)
@@ -79,6 +82,7 @@ export default function Transactions() {
     setAppliedEndDate(tempEndDate)
     setAppliedAmountMin(tempAmountMin)
     setAppliedAmountMax(tempAmountMax)
+    setPage(1)
   }
 
   const clearAllFilters = () => {
@@ -94,6 +98,7 @@ export default function Transactions() {
     setAppliedEndDate('')
     setAppliedAmountMin('')
     setAppliedAmountMax('')
+    setPage(1)
   }
 
   const openFilterPanel = () => {
@@ -116,7 +121,8 @@ export default function Transactions() {
     queryFn: async () => {
       if (!selectedPeriodId) return []
       const response = await categoriesApi.getAll({ budget_period_id: selectedPeriodId })
-      return response.data as Category[]
+      const data = response.data as PaginatedResponse<Category>
+      return data.items
     },
     enabled: !!selectedPeriodId
   })
@@ -125,7 +131,13 @@ export default function Transactions() {
   useEffect(() => {
     setTempCategories([])
     setAppliedCategories([])
+    setPage(1)
   }, [selectedPeriodId])
+
+  // Reset page when search or ordering changes
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, dateOrdering])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -142,10 +154,10 @@ export default function Transactions() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const { data: apiTransactions, isLoading, error } = useQuery({
-    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedAmountMin, appliedAmountMax, dateOrdering],
+  const { data: apiResponse, isLoading, error } = useQuery({
+    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedAmountMin, appliedAmountMax, dateOrdering, page, pageSize],
     queryFn: async () => {
-      if (!selectedPeriodId) return []
+      if (!selectedPeriodId) return null
       const response = await transactionsApi.getAll({
         budget_period_id: selectedPeriodId,
         search: searchQuery || undefined,
@@ -155,22 +167,19 @@ export default function Transactions() {
         category_id: appliedCategories.length > 0 ? appliedCategories : undefined,
         amount_gte: appliedAmountMin ? parseFloat(appliedAmountMin) : undefined,
         amount_lte: appliedAmountMax ? parseFloat(appliedAmountMax) : undefined,
-        ordering: dateOrdering
+        ordering: dateOrdering,
+        page,
+        page_size: pageSize,
       })
-      return response.data as Transaction[]
+      return response.data as PaginatedResponse<Transaction>
     },
     enabled: !!selectedPeriodId,
     staleTime: 0 // Force refetch when query key changes
   })
 
-  // Explicitly refetch when date ordering changes
-  useEffect(() => {
-    if (selectedPeriodId) {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-    }
-  }, [dateOrdering, selectedPeriodId, queryClient])
-
-  const transactions = apiTransactions || []
+  const transactions = apiResponse?.items || []
+  const totalItems = apiResponse?.total || 0
+  const totalPages = apiResponse?.total_pages || 0
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => transactionsApi.delete(id),
@@ -681,19 +690,34 @@ export default function Transactions() {
         <Loading />
       ) : error ? (
         <ErrorMessage message="Failed to load transactions" />
-      ) : transactions && transactions.length === 0 ? (
+      ) : totalItems === 0 ? (
         <EmptyState
           message={searchQuery || appliedStartDate || appliedEndDate || appliedTypes.length > 0 || appliedCategories.length > 0 || appliedAmountMin || appliedAmountMax ? "No transactions found matching your filters." : "No transactions yet for this period."}
           action={canManageBudgetData && !searchQuery && !appliedStartDate && !appliedEndDate && appliedTypes.length === 0 && appliedCategories.length === 0 && !appliedAmountMin && !appliedAmountMax ? { label: "Add Transaction", onClick: () => setIsModalOpen(true) } : undefined}
         />
       ) : (
-        <TransactionList
-          transactions={transactions || []}
-          dateOrdering={dateOrdering}
-          onToggleDateSort={() => setDateOrdering(prev => prev === '-date' ? 'date' : '-date')}
-          onEdit={canManageBudgetData ? handleEdit : undefined}
-          onDelete={canManageBudgetData ? handleDelete : undefined}
-        />
+        <>
+          <TransactionList
+            transactions={transactions}
+            dateOrdering={dateOrdering}
+            onToggleDateSort={() => setDateOrdering(prev => prev === '-date' ? 'date' : '-date')}
+            onEdit={canManageBudgetData ? handleEdit : undefined}
+            onDelete={canManageBudgetData ? handleDelete : undefined}
+          />
+          {totalItems > 0 && (
+            <Pagination
+              page={page}
+              total_pages={totalPages}
+              total={totalItems}
+              page_size={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size)
+                setPage(1)
+              }}
+            />
+          )}
+        </>
       )}
 
       <TransactionFormModal

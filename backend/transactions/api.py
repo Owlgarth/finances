@@ -11,6 +11,7 @@ from ninja.files import UploadedFile
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
+from core.schemas.pagination import PaginatedOut
 from transactions.schemas import TransactionCreate, TransactionOut
 from transactions.services import TransactionService
 from workspaces.models import WRITE_ROLES
@@ -18,7 +19,7 @@ from workspaces.models import WRITE_ROLES
 router = Router(tags=['Transactions'])
 
 
-@router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
+@router.get('', response=PaginatedOut[TransactionOut], auth=WorkspaceJWTAuth())
 def list_transactions(
     request: HttpRequest,
     budget_period_id: int | None = Query(None),
@@ -31,6 +32,8 @@ def list_transactions(
     amount_gte: Decimal | None = Query(None),
     amount_lte: Decimal | None = Query(None),
     ordering: str | None = Query(None, pattern=r'^(date|-date)$'),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25),
 ):
     """List transactions for the current workspace with optional filters."""
     workspace_id = request.auth.current_workspace_id
@@ -46,6 +49,8 @@ def list_transactions(
         amount_gte=amount_gte,
         amount_lte=amount_lte,
         ordering=ordering,
+        page=page,
+        page_size=page_size,
     )
 
 
