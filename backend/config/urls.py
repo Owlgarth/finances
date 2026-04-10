@@ -17,6 +17,7 @@ from common.exceptions import ServiceError
 from core.api import router as auth_router
 from core.legal_api import router as legal_router
 from currency_exchanges.api import router as currency_exchanges_router
+from exchange_shortcuts.api import router as exchange_shortcuts_router
 from period_balances.api import router as period_balances_router
 from planned_transactions.api import router as planned_transactions_router
 from reports.api import router as reports_router
@@ -42,6 +43,7 @@ api.add_router('/budget-periods', budget_periods_router)
 api.add_router('/budgets', budgets_router)
 api.add_router('/categories', categories_router)
 api.add_router('/currency-exchanges', currency_exchanges_router)
+api.add_router('/exchange-shortcuts', exchange_shortcuts_router)
 api.add_router('/period-balances', period_balances_router)
 api.add_router('/planned-transactions', planned_transactions_router)
 api.add_router('/reports', reports_router)

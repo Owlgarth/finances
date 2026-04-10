@@ -485,6 +485,7 @@ class UserService:
         from budgets.models import Budget
         from categories.models import Category
         from currency_exchanges.models import CurrencyExchange
+        from exchange_shortcuts.models import ExchangeShortcut
         from period_balances.models import PeriodBalance
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
@@ -550,6 +551,17 @@ class UserService:
                 'joined_at': membership.created_at.isoformat(),
                 'budget_accounts': [],
                 'currencies': list(Currency.objects.filter(workspace_id=ws.id).values('id', 'symbol', 'name')),
+                'exchange_shortcuts': [
+                    {
+                        'id': s['id'],
+                        'from_currency': s['from_currency'],
+                        'to_currency': s['to_currency'],
+                        'created_at': s['created_at'].isoformat() if s['created_at'] else None,
+                    }
+                    for s in ExchangeShortcut.objects.for_workspace(ws.id).values(
+                        'id', 'from_currency', 'to_currency', 'created_at'
+                    )
+                ],
             }
 
             accounts = BudgetAccount.objects.filter(workspace=ws).select_related('default_currency')

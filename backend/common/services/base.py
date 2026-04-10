@@ -53,6 +53,7 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     from budgets.models import Budget
     from categories.models import Category
     from currency_exchanges.models import CurrencyExchange
+    from exchange_shortcuts.models import ExchangeShortcut
     from period_balances.models import PeriodBalance
     from planned_transactions.models import PlannedTransaction
     from transactions.models import Transaction
@@ -64,3 +65,4 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     Budget.objects.for_workspace(workspace_id).delete()
     Category.objects.for_workspace(workspace_id).delete()
     BudgetAccount.objects.for_workspace(workspace_id).delete()
+    ExchangeShortcut.objects.for_workspace(workspace_id).delete()
