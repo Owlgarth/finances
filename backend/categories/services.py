@@ -11,6 +11,7 @@ from categories.exceptions import (
 )
 from categories.models import Category
 from categories.schemas import CategoryCreate, CategoryUpdate
+from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 
 
 class CategoryService:
@@ -28,10 +29,21 @@ class CategoryService:
         return category
 
     @staticmethod
-    def list(workspace_id: int, budget_period_id: int | None = None, current_date=None) -> list[Category]:
+    def _empty_paginated(page: int, page_size: int) -> dict:
+        """Return a paginated dict with empty items."""
+        return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
+
+    @staticmethod
+    def list(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        current_date=None,
+        page: int = 1,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         """List categories for a workspace, optionally filtered by period or date.
 
-        Returns an empty list (not 404) when budget_period_id does not belong to
+        Returns an empty paginated result (not 404) when budget_period_id does not belong to
         the workspace. This prevents leaking whether a period ID exists elsewhere.
         """
         from budget_periods.models import BudgetPeriod
@@ -46,15 +58,23 @@ class CategoryService:
             if period:
                 budget_period_id = period.id
             else:
-                return []
+                return CategoryService._empty_paginated(page, page_size)
 
         if budget_period_id is None:
-            return []
+            return CategoryService._empty_paginated(page, page_size)
 
         if not BudgetPeriod.objects.for_workspace(workspace_id).filter(id=budget_period_id).exists():
-            return []
+            return CategoryService._empty_paginated(page, page_size)
 
-        return list(Category.objects.filter(budget_period_id=budget_period_id))
+        queryset = Category.objects.filter(budget_period_id=budget_period_id)
+        items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
+        return {
+            'items': items,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+        }
 
     @staticmethod
     def create(user, workspace_id: int, data: CategoryCreate) -> Category:

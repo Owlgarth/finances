@@ -136,17 +136,17 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
         """Test listing all exchanges in the workspace."""
         data = self.get('/api/currency-exchanges', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 3)  # All 3 exchanges created in setUp
+        self.assertEqual(len(data['items']), 3)  # All 3 exchanges created in setUp
 
     def test_list_filtered_by_period(self):
         """Test listing exchanges filtered by budget period."""
         data = self.get(f'/api/currency-exchanges?budget_period_id={self.period1.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 2)  # Only exchanges in period1
+        self.assertEqual(len(data['items']), 2)  # Only exchanges in period1
 
         data = self.get(f'/api/currency-exchanges?budget_period_id={self.period2.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data), 1)  # Only exchange in period2
+        self.assertEqual(len(data['items']), 1)  # Only exchange in period2
 
     def test_list_ordered_by_date_desc(self):
         """Test that exchanges are ordered by date descending."""
@@ -166,7 +166,7 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
         data = self.get('/api/currency-exchanges', **self.auth_headers())
         self.assertStatus(200)
         # Check dates are in descending order
-        dates = [exchange['date'] for exchange in data]
+        dates = [exchange['date'] for exchange in data['items']]
         self.assertEqual(dates, sorted(dates, reverse=True))
 
     def test_list_without_auth_returns_401(self):
@@ -685,3 +685,78 @@ class TestImportCurrencyExchanges(CurrencyExchangeTestCase):
                 )
 
         self.assertEqual(response.status_code, 403)
+
+
+# =============================================================================
+# Pagination Tests
+# =============================================================================
+
+
+class TestCurrencyExchangePagination(CurrencyExchangeTestCase):
+    """Tests for currency exchange list pagination."""
+
+    def _create_exchanges(self, count):
+        """Create the given number of exchanges in period1."""
+        for i in range(count):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, i % 28 + 1),
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('10.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+    def test_default_pagination(self):
+        """Default page_size=25, page=1."""
+        self._create_exchanges(35)
+        data = self.get('/api/currency-exchanges', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 38)  # 35 new + 3 from setUp
+        self.assertEqual(data['page'], 1)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_custom_page_size(self):
+        """page_size=25 returns 25 items."""
+        self._create_exchanges(30)
+        data = self.get('/api/currency-exchanges?page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 25)
+        self.assertEqual(data['total'], 33)  # 30 new + 3 from setUp
+        self.assertEqual(data['total_pages'], 2)
+
+    def test_second_page(self):
+        """page=2 returns correct slice."""
+        self._create_exchanges(30)
+        data = self.get('/api/currency-exchanges?page=2&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 8)  # 33 total - 25 = 8
+        self.assertEqual(data['page'], 2)
+
+    def test_over_page_returns_empty(self):
+        """Requesting page beyond total_pages returns empty items."""
+        data = self.get('/api/currency-exchanges?page=999&page_size=25', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 0)
+        self.assertEqual(data['total'], 3)  # 3 from setUp
+
+    def test_invalid_page_size_defaults(self):
+        """Invalid page_size value falls back to default 25."""
+        data = self.get('/api/currency-exchanges?page_size=999', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['page_size'], 25)
+        self.assertEqual(len(data['items']), 3)  # 3 from setUp, fits in page 1
+
+    def test_zero_total_when_no_records(self):
+        """Empty result returns total=0, total_pages=0 when workspace has no records."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        data = self.get('/api/currency-exchanges', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['total'], 0)
+        self.assertEqual(data['total_pages'], 0)

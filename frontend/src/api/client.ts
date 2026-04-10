@@ -138,7 +138,7 @@ export const budgetPeriodsApi = {
 };
 
 export const categoriesApi = {
-  getAll: (params?: { budget_period_id?: number; current_date?: string }) => api.get('/categories', { params }),
+  getAll: (params?: { budget_period_id?: number; current_date?: string; page?: number; page_size?: number }) => api.get('/categories', { params }),
   getOne: (id: number) => api.get(`/categories/${id}`),
   create: (data: { budget_period_id: number; name: string }) => api.post('/categories', data),
   update: (id: number, data: { budget_period_id: number; name: string }) => api.put(`/categories/${id}`, data),
@@ -159,7 +159,7 @@ export const budgetsApi = {
 };
 
 export const transactionsApi = {
-  getAll: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; type?: string[]; category_id?: number[]; amount_gte?: number; amount_lte?: number; ordering?: 'date' | '-date' }) => api.get('/transactions', { params }),
+  getAll: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; type?: string[]; category_id?: number[]; amount_gte?: number; amount_lte?: number; ordering?: 'date' | '-date'; page?: number; page_size?: number }) => api.get('/transactions', { params }),
   create: (data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.post('/transactions', data),
   update: (id: number, data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.put(`/transactions/${id}`, data),
   delete: (id: number) => api.delete(`/transactions/${id}`),
@@ -182,7 +182,7 @@ export const periodBalancesApi = {
 };
 
 export const currencyExchangesApi = {
-  getAll: (params?: { budget_period_id?: number }) => api.get('/currency-exchanges', { params }),
+  getAll: (params?: { budget_period_id?: number; page?: number; page_size?: number }) => api.get('/currency-exchanges', { params }),
   create: (data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.post('/currency-exchanges', data),
   update: (id: number, data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.put(`/currency-exchanges/${id}`, data),
   delete: (id: number) => api.delete(`/currency-exchanges/${id}`),
@@ -203,7 +203,7 @@ export const exchangeShortcutsApi = {
 };
 
 export const plannedTransactionsApi = {
-  getAll: (status?: string, budget_period_id?: number) => api.get('/planned-transactions', { params: { status, budget_period_id } }),
+  getAll: (params?: { status?: string; budget_period_id?: number; page?: number; page_size?: number }) => api.get('/planned-transactions', { params }),
   create: (data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.post('/planned-transactions', data),
   update: (id: number, data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.put(`/planned-transactions/${id}`, data),
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),
