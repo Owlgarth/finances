@@ -53,7 +53,8 @@ cd frontend
 npm install
 
 # Development
-npm run dev                               # Runs at http://localhost:5173
+npm run dev                               # Runs at http://localhost:5173 (or VITE_PORT)
+npm run dev -- --port 3000               # Override port via CLI
 
 # Build
 npm run build                             # TypeScript check + Vite build
