@@ -8,6 +8,13 @@ export interface BudgetPeriod {
   created_at: string;
 }
 
+export interface Currency {
+  id: number;
+  name: string;
+  symbol: string;
+  created_at: string;
+}
+
 export interface Category {
   id: number;
   budget_period_id: number;
