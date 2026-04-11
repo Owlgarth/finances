@@ -91,6 +91,7 @@ class TransactionService:
         current_date=None,
         type: list | None = None,
         category_id: list | None = None,
+        currency: list | None = None,
         search: str | None = None,
         start_date=None,
         end_date=None,
@@ -126,6 +127,8 @@ class TransactionService:
             queryset = queryset.filter(type__in=type)
         if category_id:
             queryset = queryset.filter(category_id__in=category_id)
+        if currency:
+            queryset = queryset.filter(currency__symbol__in=currency)
         if search:
             queryset = queryset.filter(description__icontains=search)
         if start_date:
