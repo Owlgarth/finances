@@ -40,6 +40,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
               <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Name</th>
               <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Category</th>
               <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Amount</th>
+              <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Currency</th>
               <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Planned Date</th>
               <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Status</th>
               {(onEdit || onExecute || onCancel || onDelete) && (
@@ -56,7 +57,12 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
                 <td className="px-6 py-3 text-sm font-medium text-on-surface">{planned.name}</td>
                 <td className="px-6 py-3 text-sm text-on-surface-variant">{planned.category?.name || '-'}</td>
                 <td className="px-6 py-3 text-right font-mono text-sm font-bold text-on-surface">
-                  {Number(planned.amount).toFixed(2)} {planned.currency}
+                  {Number(planned.amount).toFixed(2)}
+                </td>
+                <td className="px-6 py-3 text-center">
+                  <span className="font-mono text-sm font-bold text-on-surface-variant">
+                    {planned.currency}
+                  </span>
                 </td>
                 <td className="px-6 py-3 font-mono text-sm text-on-surface-variant">{planned.planned_date}</td>
                 <td className="px-6 py-3">

@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
-import { plannedTransactionsApi } from '../api/client'
-import type { PaginatedResponse, PlannedTransaction } from '../types'
+import { plannedTransactionsApi, currenciesApi } from '../api/client'
+import type { PaginatedResponse, PlannedTransaction, Currency } from '../types'
 import PlannedTransactionList from '../components/transactions/PlannedTransactionList'
 import PlannedTransactionFormModal from '../components/modals/transactions/PlannedTransactionFormModal'
 import ExecutePlannedModal from '../components/modals/transactions/ExecutePlannedModal'
@@ -20,6 +20,9 @@ export default function Planned() {
   const [executePlanned, setExecutePlanned] = useState<PlannedTransaction | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
+  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([])
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false)
+  const currencyDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { selectedPeriodId } = useBudgetPeriod()
@@ -27,14 +30,41 @@ export default function Planned() {
 
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, selectedPeriodId])
+  }, [statusFilter, selectedPeriodId, selectedCurrencies])
+
+  const { data: currencies } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => {
+      const response = await currenciesApi.getAll()
+      return response as Currency[]
+    },
+  })
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (currencyDropdownRef.current && !currencyDropdownRef.current.contains(event.target as Node)) {
+        setIsCurrencyDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const toggleCurrency = (symbol: string) => {
+    setSelectedCurrencies(prev =>
+      prev.includes(symbol)
+        ? prev.filter(s => s !== symbol)
+        : [...prev, symbol]
+    )
+  }
 
   const { data: apiResponse, isLoading, error } = useQuery({
-    queryKey: ['planned-transactions', statusFilter, selectedPeriodId, page, pageSize],
+    queryKey: ['planned-transactions', statusFilter, selectedPeriodId, selectedCurrencies, page, pageSize],
     queryFn: async () => {
       const response = await plannedTransactionsApi.getAll({
         status: statusFilter || undefined,
         budget_period_id: selectedPeriodId ?? undefined,
+        currency: selectedCurrencies.length > 0 ? selectedCurrencies : undefined,
         page,
         page_size: pageSize,
       })
@@ -238,6 +268,52 @@ export default function Planned() {
         >
           All
         </button>
+
+        <div className="relative" ref={currencyDropdownRef}>
+          <button
+            onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
+            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              selectedCurrencies.length > 0
+                ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
+                : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+            </svg>
+            <span>Currency</span>
+            {selectedCurrencies.length > 0 && (
+              <span className="bg-on-primary text-primary text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center">
+                {selectedCurrencies.length}
+              </span>
+            )}
+          </button>
+
+          {isCurrencyDropdownOpen && currencies && currencies.length > 0 && (
+            <div className="absolute top-full mt-2 left-0 min-w-[180px] bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
+              {currencies.map((currency) => (
+                <label key={currency.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150">
+                  <input
+                    type="checkbox"
+                    checked={selectedCurrencies.includes(currency.symbol)}
+                    onChange={() => toggleCurrency(currency.symbol)}
+                    className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                  />
+                  <span className="text-on-surface font-mono font-bold">{currency.symbol}</span>
+                  <span className="text-on-surface-variant text-sm">{currency.name}</span>
+                </label>
+              ))}
+              {selectedCurrencies.length > 0 && (
+                <button
+                  onClick={() => setSelectedCurrencies([])}
+                  className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {isLoading ? (

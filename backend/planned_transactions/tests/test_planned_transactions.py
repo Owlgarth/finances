@@ -175,6 +175,27 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         self.assertStatus(200)
         self.assertEqual(len(data['items']), 1)  # Only done transactions
 
+    def test_list_filtered_by_currency(self):
+        """Test listing planned transactions filtered by currency."""
+        # Update one planned transaction to use EUR
+        self.planned1.currency = self.currencies['EUR']
+        self.planned1.save()
+
+        data = self.get('/api/planned-transactions?currency=EUR', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['id'], self.planned1.id)
+
+        # Filter by USD should return the remaining two
+        data = self.get('/api/planned-transactions?currency=USD', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 2)
+
+        # Filter by multiple currencies
+        data = self.get('/api/planned-transactions?currency=EUR&currency=USD', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 3)
+
     def test_list_ordered_by_planned_date(self):
         """Test that planned transactions are ordered by planned_date."""
         data = self.get('/api/planned-transactions', **self.auth_headers())
