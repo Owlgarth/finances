@@ -72,6 +72,7 @@ class PlannedTransactionService:
         workspace_id: int,
         status: str | None = None,
         budget_period_id: int | None = None,
+        currency: list | None = None,
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -80,6 +81,8 @@ class PlannedTransactionService:
             queryset = queryset.filter(status=status)
         if budget_period_id:
             queryset = queryset.filter(budget_period_id=budget_period_id)
+        if currency:
+            queryset = queryset.filter(currency__symbol__in=currency)
         queryset = queryset.order_by('planned_date')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)

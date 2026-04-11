@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { transactionsApi, categoriesApi } from '../api/client'
-import type { Transaction, Category, PaginatedResponse } from '../types'
+import { transactionsApi, categoriesApi, currenciesApi } from '../api/client'
+import type { Transaction, Category, Currency, PaginatedResponse } from '../types'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
 import TransactionList from '../components/transactions/TransactionList'
@@ -23,6 +23,7 @@ export default function Transactions() {
   // Applied filters (used in actual query)
   const [appliedTypes, setAppliedTypes] = useState<string[]>([])
   const [appliedCategories, setAppliedCategories] = useState<number[]>([])
+  const [appliedCurrencies, setAppliedCurrencies] = useState<string[]>([])
   const [appliedStartDate, setAppliedStartDate] = useState('')
   const [appliedEndDate, setAppliedEndDate] = useState('')
   const [appliedAmountMin, setAppliedAmountMin] = useState('')
@@ -31,6 +32,7 @@ export default function Transactions() {
   // Temporary filters (edited in panel before applying)
   const [tempTypes, setTempTypes] = useState<string[]>([])
   const [tempCategories, setTempCategories] = useState<number[]>([])
+  const [tempCurrencies, setTempCurrencies] = useState<string[]>([])
   const [tempStartDate, setTempStartDate] = useState('')
   const [tempEndDate, setTempEndDate] = useState('')
   const [tempAmountMin, setTempAmountMin] = useState('')
@@ -38,12 +40,14 @@ export default function Transactions() {
 
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false)
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false)
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const queryClient = useQueryClient()
   const typeDropdownRef = useRef<HTMLDivElement>(null)
   const categoryDropdownRef = useRef<HTMLDivElement>(null)
+  const currencyDropdownRef = useRef<HTMLDivElement>(null)
 
   const transactionTypes = [
     { value: 'income', label: 'Income' },
@@ -66,10 +70,19 @@ export default function Transactions() {
     )
   }
 
+  const toggleCurrency = (symbol: string) => {
+    setTempCurrencies(prev =>
+      prev.includes(symbol)
+        ? prev.filter(s => s !== symbol)
+        : [...prev, symbol]
+    )
+  }
+
   const getActiveFilterCount = () => {
     let count = 0
     if (appliedTypes.length > 0) count++
     if (appliedCategories.length > 0) count++
+    if (appliedCurrencies.length > 0) count++
     if (appliedStartDate || appliedEndDate) count++
     if (appliedAmountMin || appliedAmountMax) count++
     return count
@@ -78,6 +91,7 @@ export default function Transactions() {
   const applyFilters = () => {
     setAppliedTypes(tempTypes)
     setAppliedCategories(tempCategories)
+    setAppliedCurrencies(tempCurrencies)
     setAppliedStartDate(tempStartDate)
     setAppliedEndDate(tempEndDate)
     setAppliedAmountMin(tempAmountMin)
@@ -88,12 +102,14 @@ export default function Transactions() {
   const clearAllFilters = () => {
     setTempTypes([])
     setTempCategories([])
+    setTempCurrencies([])
     setTempStartDate('')
     setTempEndDate('')
     setTempAmountMin('')
     setTempAmountMax('')
     setAppliedTypes([])
     setAppliedCategories([])
+    setAppliedCurrencies([])
     setAppliedStartDate('')
     setAppliedEndDate('')
     setAppliedAmountMin('')
@@ -105,6 +121,7 @@ export default function Transactions() {
     // Initialize temp values with current applied values when opening panel
     setTempTypes(appliedTypes)
     setTempCategories(appliedCategories)
+    setTempCurrencies(appliedCurrencies)
     setTempStartDate(appliedStartDate)
     setTempEndDate(appliedEndDate)
     setTempAmountMin(appliedAmountMin)
@@ -125,6 +142,15 @@ export default function Transactions() {
       return data.items
     },
     enabled: !!selectedPeriodId
+  })
+
+  // Fetch workspace currencies
+  const { data: currencies } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => {
+      const response = await currenciesApi.getAll()
+      return response as Currency[]
+    },
   })
 
   // Reset filters when budget period changes
@@ -148,6 +174,9 @@ export default function Transactions() {
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
         setIsCategoryDropdownOpen(false)
       }
+      if (currencyDropdownRef.current && !currencyDropdownRef.current.contains(event.target as Node)) {
+        setIsCurrencyDropdownOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -155,7 +184,7 @@ export default function Transactions() {
   }, [])
 
   const { data: apiResponse, isLoading, error } = useQuery({
-    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedAmountMin, appliedAmountMax, dateOrdering, page, pageSize],
+    queryKey: ['transactions', selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedCurrencies, appliedAmountMin, appliedAmountMax, dateOrdering, page, pageSize],
     queryFn: async () => {
       if (!selectedPeriodId) return null
       const response = await transactionsApi.getAll({
@@ -165,6 +194,7 @@ export default function Transactions() {
         end_date: appliedEndDate || undefined,
         type: appliedTypes.length > 0 ? appliedTypes : undefined,
         category_id: appliedCategories.length > 0 ? appliedCategories : undefined,
+        currency: appliedCurrencies.length > 0 ? appliedCurrencies : undefined,
         amount_gte: appliedAmountMin ? parseFloat(appliedAmountMin) : undefined,
         amount_lte: appliedAmountMax ? parseFloat(appliedAmountMax) : undefined,
         ordering: dateOrdering,
@@ -479,6 +509,28 @@ export default function Transactions() {
                 </button>
               </div>
             )}
+            {appliedCurrencies.length > 0 && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+                <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Currency:</span>
+                <span>{appliedCurrencies.length === 1 ? appliedCurrencies[0] : `${appliedCurrencies.length} selected`}</span>
+                <button
+                  onClick={() => {
+                    setAppliedCurrencies([])
+                    setTempCurrencies([])
+                  }}
+                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  aria-label="Clear currency filter"
+                >
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
             <button
               onClick={clearAllFilters}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
@@ -611,6 +663,68 @@ export default function Transactions() {
               </div>
 
               <div>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Currency</label>
+                <div className="relative" ref={currencyDropdownRef}>
+                  <button
+                    onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
+                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
+                    disabled={!currencies || currencies.length === 0}
+                  >
+                    <span className="text-on-surface truncate">
+                      {!currencies || currencies.length === 0
+                        ? 'No Currencies'
+                        : tempCurrencies.length === 0
+                        ? 'All Currencies'
+                        : tempCurrencies.length === currencies.length
+                        ? 'All Currencies'
+                        : tempCurrencies.length === 1
+                        ? currencies.find(c => c.symbol === tempCurrencies[0])?.symbol
+                        : `${tempCurrencies.length} selected`}
+                    </span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isCurrencyDropdownOpen ? 'rotate-180' : ''}`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+
+                  {isCurrencyDropdownOpen && currencies && currencies.length > 0 && (
+                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
+                      {currencies.map((currency) => (
+                        <label
+                          key={currency.id}
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={tempCurrencies.includes(currency.symbol)}
+                            onChange={() => toggleCurrency(currency.symbol)}
+                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                          />
+                          <span className="text-on-surface">{currency.symbol}</span>
+                        </label>
+                      ))}
+                      {tempCurrencies.length > 0 && (
+                        <button
+                          onClick={() => setTempCurrencies([])}
+                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                        >
+                          Clear Selection
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Date Range</label>
                 <div className="space-y-3">
                   <div>
@@ -692,8 +806,8 @@ export default function Transactions() {
         <ErrorMessage message="Failed to load transactions" />
       ) : totalItems === 0 ? (
         <EmptyState
-          message={searchQuery || appliedStartDate || appliedEndDate || appliedTypes.length > 0 || appliedCategories.length > 0 || appliedAmountMin || appliedAmountMax ? "No transactions found matching your filters." : "No transactions yet for this period."}
-          action={canManageBudgetData && !searchQuery && !appliedStartDate && !appliedEndDate && appliedTypes.length === 0 && appliedCategories.length === 0 && !appliedAmountMin && !appliedAmountMax ? { label: "Add Transaction", onClick: () => setIsModalOpen(true) } : undefined}
+          message={searchQuery || appliedStartDate || appliedEndDate || appliedTypes.length > 0 || appliedCategories.length > 0 || appliedCurrencies.length > 0 || appliedAmountMin || appliedAmountMax ? "No transactions found matching your filters." : "No transactions yet for this period."}
+          action={canManageBudgetData && !searchQuery && !appliedStartDate && !appliedEndDate && appliedTypes.length === 0 && appliedCategories.length === 0 && appliedCurrencies.length === 0 && !appliedAmountMin && !appliedAmountMax ? { label: "Add Transaction", onClick: () => setIsModalOpen(true) } : undefined}
         />
       ) : (
         <>
