@@ -39,6 +39,7 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
             <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Description</th>
             <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Category</th>
             <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Amount</th>
+            <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Currency</th>
             <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Type</th>
             {(onEdit || onDelete) && (
               <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-outline uppercase tracking-widest">Actions</th>
@@ -59,7 +60,12 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
                   transaction.type === 'income' ? 'text-positive' : 'text-negative'
                 }`}>
                   {transaction.type === 'income' ? '+' : '-'}
-                  {Number(Math.abs(transaction.amount)).toFixed(2)} {transaction.currency}
+                  {Number(Math.abs(transaction.amount)).toFixed(2)}
+                </span>
+              </td>
+              <td className="px-6 py-3 text-center">
+                <span className="font-mono text-sm font-bold text-on-surface-variant">
+                  {transaction.currency}
                 </span>
               </td>
               <td className="px-6 py-3">

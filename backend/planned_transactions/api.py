@@ -32,12 +32,13 @@ def list_planned(
     request: HttpRequest,
     status: str | None = Query(None),
     budget_period_id: int | None = Query(None),
+    currency: list[str] | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
     """List planned transactions for the current workspace."""
     workspace_id = request.auth.current_workspace_id
-    return PlannedTransactionService.list(workspace_id, status, budget_period_id, page, page_size)
+    return PlannedTransactionService.list(workspace_id, status, budget_period_id, currency, page, page_size)
 
 
 @router.post('', response={201: PlannedTransactionOut, 400: dict}, auth=WorkspaceJWTAuth())
