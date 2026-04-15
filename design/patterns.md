@@ -1,10 +1,11 @@
 # UI Patterns
 
-> Motion, empty states, loading/skeleton, toasts, dropdowns, z-index scale, tooltips.
+> Motion, empty states, loading/skeleton, toasts, dropdowns, z-index scale, tooltips, scrollbars, keyboard navigation, file upload/download, stepper/wizard.
+> All colors reference `--color-*` CSS variables defined in `tokens.md`. All icons reference **Lucide Icons** exclusively (14px, 1.5px stroke weight). Zero shadows.
 
 ---
 
-## Motion & Transitions
+## 1. Motion & Transitions
 
 Speed is the priority. Every transition must feel instant.
 
@@ -30,19 +31,21 @@ Speed is the priority. Every transition must feel instant.
 | Bottom sheet slide up | `120ms` | `ease-out` | `transform` |
 | Dropdown open | `100ms` | `ease-out` | `opacity, transform` |
 | Dropdown close | `80ms` | `ease-in` | `opacity` |
-| Hover (color/bg) | `150ms` | `ease` | `background, color` |
+| Hover (color/bg) | `150ms` | `ease` | `background, color, border-color` |
 | Button press (scale) | `80ms` | `ease` | `transform` |
 | Toast enter | `150ms` | `ease-out` | `transform, opacity` |
 | Toast exit | `100ms` | `ease-in` | `opacity` |
-| Focus ring | `100ms` | `ease` | `box-shadow` |
+| Focus ring | `100ms` | `ease` | `outline-color, outline-offset` |
 | Sidebar collapse | `150ms` | `ease-standard` | `width` |
 | Page/screen change | `0ms` | — | Instant swap, no animation |
+| Progress bar fill | `300ms` | `ease` | `width` |
 
 ### Rules
 
 - **Maximum duration: 200ms.** No UI transition may exceed this.
 - No entrance animations on initial page load — content appears instantly.
 - Prefer `transform` + `opacity` over layout-triggering properties (`width`, `height`, `top`).
+- **No shadow animations.** Shadows do not exist in this system — do not animate `box-shadow` for elevation changes. Use `border-color` transitions instead (e.g., `border-border` → `border-border-focus`).
 - Disable all motion when `prefers-reduced-motion: reduce` is active:
 
 ```css
@@ -56,7 +59,7 @@ Speed is the priority. Every transition must feel instant.
 
 ---
 
-## Empty States
+## 2. Empty States
 
 Appear when a page or section has no data. Must feel intentional, not broken.
 
@@ -64,23 +67,18 @@ Appear when a page or section has no data. Must feel intentional, not broken.
 
 ```html
 <div class="flex flex-col items-center justify-center py-16 text-center">
-  <!-- Option A: Material Symbol icon (simple) -->
-  <span class="material-symbols-outlined text-outline/30" style="font-size:48px">
-    receipt_long
-  </span>
+  <!-- Lucide icon -->
+  <Receipt class="text-text-muted/30" size={48} strokeWidth={1.5} />
 
-  <!-- Option B: SVG illustration (richer, max 120px height) -->
-  <!-- <img src="/illustrations/empty-transactions.svg" class="h-[120px] w-auto opacity-60"/> -->
-
-  <h3 class="font-headline text-sm font-semibold text-on-surface-variant mt-4">
+  <h3 class="text-sm font-semibold text-text-muted mt-4">
     No transactions yet
   </h3>
-  <p class="font-body text-[13px] text-outline mt-1.5 max-w-[280px] leading-relaxed">
+  <p class="text-[13px] text-text-muted mt-1.5 max-w-[280px] leading-relaxed">
     Add your first transaction to start tracking your spending.
   </p>
-  <button class="mt-5 bg-gradient-to-br from-primary to-primary-dim text-on-primary
-                 px-4 py-2 rounded-lg text-[13px] font-semibold
-                 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+  <button class="mt-5 bg-primary text-white
+                 px-3 py-1.5 rounded-sm text-xs font-medium
+                 hover:bg-primary-hover transition-colors">
     Add Transaction
   </button>
 </div>
@@ -91,41 +89,79 @@ Appear when a page or section has no data. Must feel intentional, not broken.
 | Property | Value |
 |---|---|
 | Container | Centered horizontally and vertically within its parent |
-| Vertical padding | `64px` top and bottom |
-| Icon (Option A) | Material Symbols Outlined, 48px, `outline` color at 30% opacity |
-| Illustration (Option B) | SVG, max `120px` height, brand colors at reduced opacity |
-| Heading | Geist, 14px, semibold, `on-surface-variant` |
-| Description | Geist, 13px, `outline`, max-width `280px`, `leading-relaxed` |
-| CTA button | Primary button variant, `20px` top margin |
+| Vertical padding | `64px` top and bottom (`py-16`) |
+| Icon | Lucide icon, 48px, `strokeWidth={1.5}`, `text-text-muted` at 30% opacity |
+| Heading | Geist, 14px, semibold (`text-sm font-semibold`), `text-text-muted` |
+| Description | Geist, 13px, `text-text-muted`, max-width `280px`, `leading-relaxed` |
+| CTA button | Primary button variant (flat `bg-primary`), `20px` top margin |
 
 ### Per-Page Text
 
-| Page | Icon | Heading | Description |
+| Page | Lucide Icon | Heading | Description |
 |---|---|---|---|
-| Transactions | `receipt_long` | No transactions yet | Add your first transaction to start tracking your spending. |
-| Planned | `event_note` | No planned transactions | Schedule recurring or future transactions here. |
-| Categories | `category` | No categories | Create categories to organize your transactions. |
-| Budgets | `savings` | No budgets set | Set budgets for your categories to track spending limits. |
-| Exchanges | `currency_exchange` | No currency exchanges | Record exchanges between your currencies here. |
-| Periods | `calendar_month` | No budget periods | Create a period to start budgeting. |
-| Members | `group` | Just you for now | Invite team members to collaborate on this workspace. |
+| Transactions | `Receipt` | No transactions yet | Add your first transaction to start tracking your spending. |
+| Planned | `CalendarClock` | No planned transactions | Schedule recurring or future transactions here. |
+| Categories | `Tag` | No categories | Create categories to organize your transactions. |
+| Budgets | `PiggyBank` | No budgets set | Set budgets for your categories to track spending limits. |
+| Exchanges | `ArrowLeftRight` | No currency exchanges | Record exchanges between your currencies here. |
+| Periods | `CalendarRange` | No budget periods | Create a period to start budgeting. |
+| Members | `Users` | Just you for now | Invite team members to collaborate on this workspace. |
 
-### SVG Illustration Style Guide
+### Icon Style Guide
 
-- Colors: `primary`, `primary-container`, `secondary-container`, `surface-container-low` only
-- Opacity: 40–60% to keep illustrations subdued
-- Stroke: 1.5px, matching Material Symbols weight
-- No gradients or complex shading — flat shapes only
-- Abstract/geometric style, not literal or cartoonish
-- Max `120px` height, responsive width
+- Size: `48px` (`size={48}`)
+- Stroke width: `1.5px` (`strokeWidth={1.5}`)
+- Color: `text-text-muted` at 30% opacity (`text-text-muted/30`)
+- No SVG illustrations — Lucide icons only, single icon centered above the heading
+- No gradients, no complex shading — flat, subdued appearance
 
 ---
 
-## Loading & Skeleton States
+## 3. Loading & Skeleton States
 
-Use shimmer placeholders matching content shape. Never show a raw spinner for page-level loads.
+Replace spinners with **top-edge progress bars** for page-level loads and **wireframe skeletons** for component-level loads.
 
-### Shimmer Animation
+### Top-Edge Progress Bar
+
+For page-level navigation and data fetching:
+
+```css
+@keyframes progress-slide {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  z-index: 700;
+  overflow: hidden;
+}
+
+.progress-bar::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-primary); /* #171717 */
+  animation: progress-slide 1.5s ease-in-out infinite;
+}
+```
+
+```html
+<!-- Top-edge progress bar (1px, full width) -->
+<div class="fixed top-0 left-0 w-full h-px z-tooltip overflow-hidden">
+  <div class="h-full bg-primary animate-[progress-slide_1.5s_ease-in-out_infinite]"></div>
+</div>
+```
+
+### Wireframe Skeleton
+
+For component-level loading (cards, tables, forms). Uses 1px borders, not rounded shapes.
 
 ```css
 @keyframes shimmer {
@@ -136,22 +172,23 @@ Use shimmer placeholders matching content shape. Never show a raw spinner for pa
 .skeleton {
   background: linear-gradient(
     90deg,
-    #f3f4f3 25%,
-    #e6e9e8 37%,
-    #f3f4f3 63%
+    #FAFAFA 25%,
+    #E5E5E5 37%,
+    #FAFAFA 63%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 0; /* rounded-none — wireframe boxes */
 }
 
 /* Dark mode */
 .dark .skeleton {
   background: linear-gradient(
     90deg,
-    #1a1d20 25%,
-    #2c3033 37%,
-    #1a1d20 63%
+    #171717 25%,
+    #333333 37%,
+    #171717 63%
   );
   background-size: 200% 100%;
 }
@@ -161,43 +198,43 @@ Use shimmer placeholders matching content shape. Never show a raw spinner for pa
 
 ```html
 <!-- Balance card skeleton -->
-<div class="bg-surface-container-lowest rounded-md p-4 shadow-sm">
-  <div class="skeleton h-3 w-10 mb-2"></div>
-  <div class="skeleton h-6 w-24 mb-3"></div>
+<div class="bg-surface border border-border rounded-sm p-4">
+  <div class="skeleton h-3 w-10 mb-2 rounded-none"></div>
+  <div class="skeleton h-6 w-24 mb-3 rounded-none"></div>
   <div class="grid grid-cols-2 gap-2">
-    <div class="skeleton h-3 w-16"></div>
-    <div class="skeleton h-3 w-16"></div>
-    <div class="skeleton h-3 w-14"></div>
-    <div class="skeleton h-3 w-14"></div>
+    <div class="skeleton h-3 w-16 rounded-none"></div>
+    <div class="skeleton h-3 w-16 rounded-none"></div>
+    <div class="skeleton h-3 w-14 rounded-none"></div>
+    <div class="skeleton h-3 w-14 rounded-none"></div>
   </div>
 </div>
 
-<!-- Table row skeleton -->
-<tr style="height: 40px">
-  <td class="px-4"><div class="skeleton h-3 w-20"></div></td>
-  <td class="px-4"><div class="skeleton h-3 w-32"></div></td>
-  <td class="px-4"><div class="skeleton h-4 w-16 rounded-full"></div></td>
-  <td class="px-4 text-right"><div class="skeleton h-3 w-24 ml-auto"></div></td>
+<!-- Table row skeleton (32px row height) -->
+<tr class="h-8">
+  <td class="px-2 border-b border-border"><div class="skeleton h-3 w-20 rounded-none"></div></td>
+  <td class="px-2 border-b border-border"><div class="skeleton h-3 w-32 rounded-none"></div></td>
+  <td class="px-2 border-b border-border"><div class="skeleton h-3 w-16 rounded-none"></div></td>
+  <td class="px-2 border-b border-border text-right"><div class="skeleton h-3 w-24 ml-auto rounded-none"></div></td>
 </tr>
 
-<!-- Modal form skeleton (for modals that load data asynchronously) -->
-<div class="space-y-4 px-6 py-2">
+<!-- Modal form skeleton -->
+<div class="space-y-4 p-4">
   <div>
-    <div class="skeleton h-2.5 w-16 mb-2"></div>
-    <div class="skeleton h-10 w-full rounded-lg"></div>
+    <div class="skeleton h-2.5 w-16 mb-2 rounded-none"></div>
+    <div class="skeleton h-8 w-full rounded-none"></div>
   </div>
   <div>
-    <div class="skeleton h-2.5 w-20 mb-2"></div>
-    <div class="skeleton h-10 w-full rounded-lg"></div>
+    <div class="skeleton h-2.5 w-20 mb-2 rounded-none"></div>
+    <div class="skeleton h-8 w-full rounded-none"></div>
   </div>
   <div class="grid grid-cols-2 gap-4">
     <div>
-      <div class="skeleton h-2.5 w-14 mb-2"></div>
-      <div class="skeleton h-10 w-full rounded-lg"></div>
+      <div class="skeleton h-2.5 w-14 mb-2 rounded-none"></div>
+      <div class="skeleton h-8 w-full rounded-none"></div>
     </div>
     <div>
-      <div class="skeleton h-2.5 w-12 mb-2"></div>
-      <div class="skeleton h-10 w-full rounded-lg"></div>
+      <div class="skeleton h-2.5 w-12 mb-2 rounded-none"></div>
+      <div class="skeleton h-8 w-full rounded-none"></div>
     </div>
   </div>
 </div>
@@ -207,11 +244,12 @@ Use shimmer placeholders matching content shape. Never show a raw spinner for pa
 
 | Rule | Detail |
 |---|---|
-| Delay threshold | Don't show skeletons if data loads in < `300ms` |
+| Delay threshold | Don't show skeletons or progress bar if data loads in < `300ms` |
 | Row count | Show 5–8 skeleton rows for table loading |
 | Card count | Match the expected number of real cards |
 | Shape fidelity | Shapes must approximate real content dimensions |
-| No spinner fallback | Never fall back to a centered spinner |
+| No spinners | Never use a centered spinner for page-level or component-level loading |
+| Skeleton borders | All skeleton shapes use `border border-border rounded-none` — wireframe boxes, not blobs |
 | Inline loading | Use pulse animation on a single element being refreshed |
 
 ### Inline Pulse (single-value refresh)
@@ -226,7 +264,7 @@ Use shimmer placeholders matching content shape. Never show a raw spinner for pa
 
 ---
 
-## Toast Notifications
+## 4. Toast Notifications
 
 Transient, non-blocking feedback for user actions.
 
@@ -236,23 +274,22 @@ Transient, non-blocking feedback for user actions.
 <div class="fixed top-5 right-5 z-toast flex flex-col gap-2 pointer-events-none"
      style="max-width: 360px">
 
-  <div class="bg-surface-container-lowest rounded-md shadow-lg
+  <div class="bg-surface border border-border rounded-sm
               px-4 py-3 flex items-start gap-3
               pointer-events-auto
               animate-[slideInRight_150ms_ease-out]">
-    <span class="material-symbols-outlined text-positive flex-shrink-0" style="font-size:20px">
-      check_circle
-    </span>
+    <!-- Lucide icon -->
+    <CircleCheck class="text-positive flex-shrink-0" size={20} strokeWidth={1.5} />
     <div class="flex-1 min-w-0">
-      <div class="font-headline text-[13px] font-semibold text-on-surface">
+      <div class="text-[13px] font-semibold text-text">
         Transaction saved
       </div>
-      <div class="font-body text-[12px] text-on-surface-variant mt-0.5">
+      <div class="text-xs text-text-muted mt-0.5">
         150.00 PLN added to Food & Groceries
       </div>
     </div>
-    <button class="text-outline hover:text-on-surface transition-colors flex-shrink-0 mt-0.5">
-      <span class="material-symbols-outlined" style="font-size:16px">close</span>
+    <button class="text-text-muted hover:text-text transition-colors flex-shrink-0 mt-0.5">
+      <X size={16} strokeWidth={1.5} />
     </button>
   </div>
 </div>
@@ -273,14 +310,14 @@ Transient, non-blocking feedback for user actions.
 
 ### Variants
 
-| Variant | Icon | Icon Color | Use |
+| Variant | Lucide Icon | Icon Color | Use |
 |---|---|---|---|
-| Success | `check_circle` | `positive` | Successful actions (save, create, delete) |
-| Error | `error` | `negative` | Failed actions, server errors |
-| Info | `info` | `primary` | Informational notices |
-| Warning | `warning` | `#f59e0b` | Non-critical warnings |
+| Success | `CircleCheck` | `text-positive` | Successful actions (save, create, delete) |
+| Error | `CircleX` | `text-negative` | Failed actions, server errors |
+| Info | `Info` | `text-text-muted` | Informational notices |
+| Warning | `TriangleAlert` | `text-warning` | Non-critical warnings |
 
-All variants use `surface-container-lowest` background.
+All variants use `bg-surface border border-border rounded-sm`. No shadows.
 
 ### Specs
 
@@ -289,14 +326,15 @@ All variants use `surface-container-lowest` background.
 | Position | Fixed, `top: 20px`, `right: 20px` |
 | Z-index | `toast` (600) |
 | Max width | `360px` |
-| Padding | `12px 16px` |
-| Radius | `8px` |
-| Shadow | `0 8px 32px rgba(75,87,170,0.12), 0 2px 8px rgba(47,51,51,0.06)` |
+| Padding | `12px 16px` (`px-4 py-3`) |
+| Radius | `4px` (`rounded-sm`) |
+| Shadow | **None** — `border border-border` only |
+| Border | 1px, `--color-border` (`#E5E5E5`) |
 | Title font | Geist, 13px, semibold |
-| Body font | Geist, 12px, `on-surface-variant` |
+| Body font | Geist, 12px, `text-text-muted` |
 | Default duration | **2000ms** — configurable via `UserPreferences` (1s / 2s / 3s / 5s / persistent) |
 | Max visible | **3** — older ones fade out |
-| Gap between toasts | `8px` |
+| Gap between toasts | `8px` (`gap-2`) |
 | Enter animation | `slideInRight` 150ms ease-out |
 | Exit animation | `fadeOut` 100ms ease-in |
 | Hover | Pause auto-dismiss timer while mouse is over |
@@ -304,7 +342,7 @@ All variants use `surface-container-lowest` background.
 
 ---
 
-## Dropdown & Menu
+## 5. Dropdown & Menu
 
 Floating panels below a trigger. Used for context selectors, category pickers, action menus.
 
@@ -312,50 +350,49 @@ Floating panels below a trigger. Used for context selectors, category pickers, a
 
 ```html
 <div class="absolute top-full mt-1 left-0 w-56
-            bg-surface-container-lowest rounded-md
-            shadow-[0_8px_32px_rgba(75,87,170,0.12),0_2px_8px_rgba(47,51,51,0.06)]
+            bg-surface border border-border rounded-sm
             py-1 z-dropdown
             animate-[fadeIn_100ms_ease-out]
             overflow-hidden">
 
   <!-- Search (render when list has > 5 items) -->
   <div class="px-2 pb-1">
-    <input class="w-full bg-surface-container-low rounded-lg px-2.5 py-1.5
-                  text-[12px] text-on-surface border-none outline-none
-                  focus:bg-surface-container-lowest focus:ring-1 focus:ring-primary-container
-                  font-body placeholder:text-outline/50"
+    <input class="w-full bg-background border border-border rounded-none px-2 py-1.5
+                  text-xs font-mono text-text
+                  focus:border-border-focus focus:outline-none
+                  placeholder:text-text-muted/50"
            placeholder="Search…"/>
   </div>
 
   <!-- Group label -->
-  <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 px-3 py-1.5">
+  <div class="font-mono text-[10px] uppercase tracking-wider text-text-muted/60 px-3 py-1.5">
     Workspaces
   </div>
 
   <!-- Item: selected -->
-  <button class="w-full flex items-center gap-2.5 px-3 h-9 text-left
-                 text-[13px] text-on-surface font-medium
-                 bg-primary-container/30 transition-colors">
-    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">home</span>
+  <button class="w-full flex items-center gap-2.5 px-3 h-8 text-left
+                 text-[13px] text-text font-medium
+                 bg-surface-hover transition-colors">
+    <Home size={14} strokeWidth={1.5} class="text-text-muted" />
     <span class="flex-1 truncate">Home</span>
-    <span class="material-symbols-outlined text-primary" style="font-size:16px">check</span>
+    <Check size={14} strokeWidth={1.5} class="text-primary" />
   </button>
 
   <!-- Item: unselected -->
-  <button class="w-full flex items-center gap-2.5 px-3 h-9 text-left
-                 text-[13px] text-on-surface
-                 hover:bg-surface-container-low transition-colors">
-    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">business</span>
+  <button class="w-full flex items-center gap-2.5 px-3 h-8 text-left
+                 text-[13px] text-text
+                 hover:bg-surface-hover transition-colors">
+    <Building2 size={14} strokeWidth={1.5} class="text-text-muted" />
     <span class="flex-1 truncate">Business</span>
   </button>
 
   <!-- Divider between groups -->
-  <div class="h-px bg-[rgba(174,179,178,0.15)] my-1 mx-2"></div>
+  <div class="h-px bg-border my-1 mx-2"></div>
 
   <!-- Destructive action -->
-  <button class="w-full flex items-center gap-2.5 px-3 h-9 text-left
-                 text-[13px] text-error hover:bg-error/[0.05] transition-colors">
-    <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+  <button class="w-full flex items-center gap-2.5 px-3 h-8 text-left
+                 text-[13px] text-negative hover:bg-negative-bg transition-colors">
+    <Trash2 size={14} strokeWidth={1.5} />
     <span>Delete workspace</span>
   </button>
 </div>
@@ -372,20 +409,21 @@ Floating panels below a trigger. Used for context selectors, category pickers, a
 
 | Property | Value |
 |---|---|
-| Background | `surface-container-lowest` |
-| Radius | `12px` |
-| Shadow | `0 8px 32px rgba(75,87,170,0.12), 0 2px 8px rgba(47,51,51,0.06)` |
-| Vertical padding | `4px` |
+| Background | `bg-surface` (`#FFFFFF`) |
+| Border | `border border-border` (1px, `#E5E5E5`) |
+| Radius | `4px` (`rounded-sm`) |
+| Shadow | **None** — border only |
+| Vertical padding | `4px` (`py-1`) |
 | Max height | `280px`, `overflow-y: auto` |
-| Min width | Trigger width or `224px` minimum |
-| Item height | `36px` |
-| Item font | Geist, 13px |
-| Item icon | 16px, `on-surface-variant` |
-| Item hover | `surface-container-low` bg |
-| Selected item | `primary-container/30` bg + `check` icon in `primary` |
-| Group label | JetBrains Mono, 8px, UPPERCASE, `outline/60` |
-| Group divider | `rgba(174,179,178,0.15)`, 1px, `4px` horizontal margin |
-| Destructive items | `error` text, `error/5` hover bg |
+| Min width | Trigger width or `224px` minimum (`w-56`) |
+| Item height | `32px` (`h-8`) |
+| Item font | Geist, 13px (`text-[13px]`) |
+| Item icon | Lucide, 14px, 1.5px stroke, `text-text-muted` |
+| Item hover | `bg-surface-hover` (`#F5F5F5`) |
+| Selected item | `bg-surface-hover` bg + `Check` icon in `text-primary` |
+| Group label | JetBrains Mono, 10px, UPPERCASE, `text-text-muted/60` |
+| Group divider | `bg-border`, 1px, `4px` horizontal margin (`mx-2`) |
+| Destructive items | `text-negative` text, `hover:bg-negative-bg` |
 | Search | Show when list has > 5 items |
 | Open animation | `fadeIn` 100ms ease-out |
 | Close | Instant — no animation |
@@ -394,7 +432,7 @@ Floating panels below a trigger. Used for context selectors, category pickers, a
 
 ---
 
-## Z-Index Scale
+## 6. Z-Index Scale
 
 Never use arbitrary `z-index` values — always reference this scale.
 
@@ -405,7 +443,7 @@ Never use arbitrary `z-index` values — always reference this scale.
 | `z-sticky` | `200` | Sticky table headers, floating toolbars |
 | `z-sidebar` | `300` | Sidebar navigation |
 | `z-bottom-nav` | `300` | Bottom navigation (mobile) — never coexists with sidebar |
-| `z-topbar` | `400` | Top bar (glassmorphism header) |
+| `z-topbar` | `400` | Top bar |
 | `z-modal-backdrop` | `500` | Modal overlay/backdrop |
 | `z-modal` | `510` | Modal panel content |
 | `z-toast` | `600` | Toast notifications — visible above modals |
@@ -427,7 +465,7 @@ Never use arbitrary `z-index` values — always reference this scale.
 
 ---
 
-## Tooltips
+## 7. Tooltips
 
 Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-only buttons, truncated text.
 
@@ -436,14 +474,13 @@ Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-onl
 ```html
 <div class="relative group">
   <button>
-    <span class="material-symbols-outlined">dashboard</span>
+    <LayoutDashboard size={14} strokeWidth={1.5} />
   </button>
 
   <div class="absolute left-full ml-2 top-1/2 -translate-y-1/2
-              bg-on-surface text-on-primary
+              bg-text text-surface
               font-mono text-[10px] font-medium
-              px-2 py-1 rounded-md whitespace-nowrap
-              shadow-[0_2px_8px_rgba(47,51,51,0.20)]
+              px-2 py-1 rounded-sm whitespace-nowrap
               z-tooltip
               opacity-0 group-hover:opacity-100
               transition-opacity delay-[400ms]
@@ -452,7 +489,7 @@ Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-onl
     <!-- Arrow pointing left -->
     <div class="absolute right-full top-1/2 -translate-y-1/2
                 border-t-[4px] border-b-[4px] border-r-[4px]
-                border-t-transparent border-b-transparent border-r-on-surface">
+                border-t-transparent border-b-transparent border-r-text">
     </div>
   </div>
 </div>
@@ -462,17 +499,18 @@ Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-onl
 
 | Property | Value |
 |---|---|
-| Background | `on-surface` (#2f3333 light / #e3e6e5 dark) |
-| Text | `on-primary` (#f9f6ff light / #1a1c1e dark) |
+| Background | `--color-text` (`#171717`) — inverted |
+| Text | `--color-surface` (`#FFFFFF`) — inverted |
 | Font | JetBrains Mono, 10px, medium |
-| Radius | `6px` |
-| Padding | `4px 8px` |
-| Arrow | `4px` CSS border triangle |
+| Radius | `4px` (`rounded-sm`) |
+| Padding | `4px 8px` (`px-2 py-1`) |
+| Arrow | `4px` CSS border triangle, `border-r-text` |
 | Show delay | `400ms` |
 | Hide delay | `0ms` — instant |
 | Max width | `200px` |
-| Z-index | `700` |
+| Z-index | `700` (`z-tooltip`) |
 | Animation | Opacity, `100ms` |
+| Shadow | **None** — border not needed (opaque inverted bg) |
 | Placement | Right of trigger (sidebar). Flip if viewport-clipped. |
 
 ### When to Use / Not Use
@@ -486,7 +524,7 @@ Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-onl
 
 ---
 
-## Scrollbar Styling
+## 8. Scrollbar Styling
 
 Custom thin scrollbars for all scrollable containers. Hidden on mobile (touch scrolling only).
 
@@ -494,7 +532,7 @@ Custom thin scrollbars for all scrollable containers. Hidden on mobile (touch sc
 /* Apply to all scrollable containers (modal bodies, dropdowns, long lists) */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(174, 179, 178, 0.4) transparent;
+  scrollbar-color: rgba(229, 229, 229, 0.4) transparent;
 }
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
@@ -504,22 +542,22 @@ Custom thin scrollbars for all scrollable containers. Hidden on mobile (touch sc
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(174, 179, 178, 0.4);
-  border-radius: 3px;
+  background: rgba(229, 229, 229, 0.4);
+  border-radius: 0; /* rounded-none */
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(119, 124, 123, 0.6);
+  background: rgba(229, 229, 229, 0.7);
 }
 
 /* Dark mode */
 .dark .scrollbar-thin {
-  scrollbar-color: rgba(74, 78, 77, 0.5) transparent;
+  scrollbar-color: rgba(51, 51, 51, 0.5) transparent;
 }
 .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(74, 78, 77, 0.5);
+  background: rgba(51, 51, 51, 0.5);
 }
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(141, 145, 143, 0.5);
+  background: rgba(51, 51, 51, 0.7);
 }
 
 /* Hide scrollbar entirely — for mobile, horizontal scroll areas */
@@ -535,22 +573,34 @@ Custom thin scrollbars for all scrollable containers. Hidden on mobile (touch sc
 |---|---|
 | Width | `6px` |
 | Track | Transparent |
-| Thumb | `outline-variant` at 40% opacity |
-| Thumb hover | `outline` at 60% opacity |
-| Thumb radius | `3px` |
+| Thumb | `--color-border` (`#E5E5E5`) at 40% opacity |
+| Thumb hover | `--color-border` at 70% opacity |
+| Thumb radius | `0px` (`rounded-none`) — sharp edges |
 | Apply to | Modal bodies, dropdown lists, sidebar overflow, long tables |
 | Mobile | Use `scrollbar-none` — rely on native touch scrolling |
 
 ---
 
-## Keyboard Navigation & Focus Management
+## 9. Keyboard Navigation & Focus Management
+
+### Focus Ring
+
+All interactive elements use the Architectural Ledger focus style:
+
+```css
+:focus-visible {
+  outline: 2px solid var(--color-border-focus); /* #171717 */
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+```
 
 ### General Rules
 
 | Rule | Detail |
 |---|---|
 | Tab order | Follows visual left-to-right, top-to-bottom reading order |
-| Focus style | `2px solid primary-container`, `2px offset` (defined in `README.md`) |
+| Focus style | `2px solid border-focus` (`#171717`), `2px offset` (defined in `README.md`) |
 | Skip link | First focusable element: "Skip to content" link, visually hidden until focused |
 | Route change | Move focus to the page `<h1>` on navigation — prevents focus from getting lost |
 | No focus trap on page | Only trap focus inside modals and dialogs |
@@ -597,7 +647,7 @@ When a modal opens:
 
 ---
 
-## File Upload & Download
+## 10. File Upload & Download
 
 ### Upload Zone
 
@@ -605,49 +655,52 @@ For import flows (categories, transactions, etc.).
 
 ```html
 <!-- Drop zone: idle -->
-<div class="border-2 border-dashed border-outline-variant/30 rounded-xl p-8
+<div class="border-2 border-dashed border-border rounded-sm p-8
             flex flex-col items-center gap-3 text-center transition-colors
-            hover:border-primary/30 hover:bg-primary/[0.02]">
-  <span class="material-symbols-outlined text-outline/40" style="font-size:36px">upload_file</span>
+            hover:border-primary/30 hover:bg-surface-hover">
+  <Upload size={36} strokeWidth={1.5} class="text-text-muted/40" />
   <div>
-    <p class="font-headline text-[13px] font-semibold text-on-surface">
+    <p class="text-[13px] font-semibold text-text">
       Drop your file here or <button class="text-primary font-semibold underline">browse</button>
     </p>
-    <p class="font-body text-[12px] text-outline mt-1">JSON files only, max 5 MB</p>
+    <p class="text-xs text-text-muted mt-1">JSON files only, max 5 MB</p>
   </div>
 </div>
 
 <!-- Drop zone: active drag -->
-<div class="border-2 border-dashed border-primary rounded-xl p-8
-            bg-primary/[0.05] flex flex-col items-center gap-3 text-center">
-  <span class="material-symbols-outlined text-primary/60" style="font-size:36px">upload_file</span>
-  <p class="font-headline text-[13px] font-semibold text-primary">Drop to upload</p>
+<div class="border-2 border-dashed border-primary rounded-sm p-8
+            bg-surface-hover flex flex-col items-center gap-3 text-center">
+  <Upload size={36} strokeWidth={1.5} class="text-primary/60" />
+  <p class="text-[13px] font-semibold text-primary">Drop to upload</p>
 </div>
 
 <!-- Upload progress -->
-<div class="bg-surface-container-lowest rounded-lg p-4 flex items-center gap-3">
-  <span class="material-symbols-outlined text-primary" style="font-size:20px">description</span>
+<div class="bg-surface border border-border rounded-sm p-4 flex items-center gap-3">
+  <FileText size={20} strokeWidth={1.5} class="text-primary" />
   <div class="flex-1 min-w-0">
-    <div class="font-body text-[13px] text-on-surface truncate">transactions-export.json</div>
-    <div class="h-1 bg-surface-container-low rounded-full mt-2 overflow-hidden">
-      <div class="h-full bg-primary rounded-full transition-all" style="width: 65%"></div>
+    <div class="text-[13px] text-text truncate">transactions-export.json</div>
+    <div class="h-1 bg-surface-muted mt-2 overflow-hidden">
+      <div class="h-full bg-primary transition-all" style="width: 65%"></div>
     </div>
   </div>
-  <button class="text-outline hover:text-on-surface transition-colors">
-    <span class="material-symbols-outlined" style="font-size:16px">close</span>
+  <button class="text-text-muted hover:text-text transition-colors">
+    <X size={16} strokeWidth={1.5} />
   </button>
 </div>
 ```
 
 | Property | Value |
 |---|---|
-| Border | `2px dashed`, `outline-variant` at 30% opacity |
-| Active drag | `primary` border, `primary/5` bg |
-| Icon | `upload_file`, 36px, `outline/40` |
+| Border (idle) | `2px dashed`, `--color-border` (`#E5E5E5`) |
+| Border (active drag) | `2px dashed`, `--color-primary` (`#171717`) |
+| Radius | `4px` (`rounded-sm`) |
+| Icon | Lucide `Upload`, 36px, `strokeWidth={1.5}`, `text-text-muted/40` |
 | Accepted types | Display in muted helper text (e.g., "JSON files only, max 5 MB") |
-| Progress bar | `primary` fill, `surface-container-low` track, `4px` height, `rounded-full` |
+| Progress bar track | `bg-surface-muted` (`#E5E5E5`), 1px height (`h-1`), `rounded-none` |
+| Progress bar fill | `bg-primary` (`#171717`), `rounded-none` |
 | Success | Replace zone with filename + toast success notification |
 | Error | Toast error + "Try again" link in the zone |
+| Shadow | **None** — borders only |
 
 ### Download
 
@@ -661,7 +714,7 @@ Downloads use button triggers + toast feedback:
 
 ---
 
-## Stepper / Wizard
+## 11. Stepper / Wizard
 
 For multi-step flows (copy budget period, complex imports). Maximum **4 steps** — if more are needed, simplify the flow.
 
@@ -670,8 +723,8 @@ For multi-step flows (copy budget period, complex imports). Maximum **4 steps** 
 <div class="flex items-center gap-2 mb-6">
   <!-- Completed step -->
   <div class="flex items-center gap-2">
-    <div class="h-7 w-7 rounded-full bg-primary flex items-center justify-center">
-      <span class="material-symbols-outlined text-on-primary" style="font-size:16px">check</span>
+    <div class="h-7 w-7 bg-primary flex items-center justify-center rounded-none">
+      <Check size={14} strokeWidth={1.5} class="text-surface" />
     </div>
     <span class="font-mono text-[11px] font-semibold text-primary hidden sm:inline">Source</span>
   </div>
@@ -680,20 +733,20 @@ For multi-step flows (copy budget period, complex imports). Maximum **4 steps** 
 
   <!-- Current step -->
   <div class="flex items-center gap-2">
-    <div class="h-7 w-7 rounded-full bg-primary-container flex items-center justify-center">
-      <span class="font-mono text-[11px] font-bold text-on-primary-container">2</span>
+    <div class="h-7 w-7 border border-border-focus flex items-center justify-center rounded-none">
+      <span class="font-mono text-[11px] font-bold text-text">2</span>
     </div>
-    <span class="font-mono text-[11px] font-semibold text-on-surface hidden sm:inline">Options</span>
+    <span class="font-mono text-[11px] font-semibold text-text hidden sm:inline">Options</span>
   </div>
 
-  <div class="flex-1 h-px bg-surface-container-high max-w-[48px]"></div>
+  <div class="flex-1 h-px bg-border max-w-[48px]"></div>
 
   <!-- Future step -->
   <div class="flex items-center gap-2">
-    <div class="h-7 w-7 rounded-full bg-surface-container-high flex items-center justify-center">
-      <span class="font-mono text-[11px] font-bold text-outline">3</span>
+    <div class="h-7 w-7 border border-border flex items-center justify-center rounded-none">
+      <span class="font-mono text-[11px] font-bold text-text-muted">3</span>
     </div>
-    <span class="font-mono text-[11px] text-outline hidden sm:inline">Review</span>
+    <span class="font-mono text-[11px] text-text-muted hidden sm:inline">Review</span>
   </div>
 </div>
 
@@ -704,12 +757,12 @@ For multi-step flows (copy budget period, complex imports). Maximum **4 steps** 
 
 <!-- Step navigation -->
 <div class="flex justify-between pt-4">
-  <button class="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg text-[13px] font-medium
-                 hover:bg-surface-container transition-all">
+  <button class="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium
+                 hover:bg-surface-hover transition-colors">
     Back
   </button>
-  <button class="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg
-                 text-[13px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+  <button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium
+                 hover:bg-primary-hover transition-colors">
     Continue
   </button>
 </div>
@@ -719,17 +772,19 @@ For multi-step flows (copy budget period, complex imports). Maximum **4 steps** 
 
 | State | Dot | Connector | Label |
 |---|---|---|---|
-| Completed | `primary` bg + `check` icon (white) | `primary` line | `primary` text |
-| Current | `primary-container` bg + number | — | `on-surface` text |
-| Future | `surface-container-high` bg + number | `surface-container-high` line | `outline` text |
+| Completed | `bg-primary` fill + `Check` icon (white) | `bg-primary` line (`h-px`) | `text-primary` text |
+| Current | `border border-border-focus` + number | — | `text-text` text |
+| Future | `border border-border` + number | `bg-border` line (`h-px`) | `text-text-muted` text |
 
 | Property | Value |
 |---|---|
-| Dot size | `28px` circle |
+| Dot size | `28px` square (`h-7 w-7`), `rounded-none` |
 | Number font | JetBrains Mono, 11px, bold |
 | Label font | JetBrains Mono, 11px, semibold |
-| Connector | `1px` height, `max-width: 48px` |
+| Connector | `1px` height (`h-px`), `max-width: 48px` |
 | Labels | Hidden on mobile (`hidden sm:inline`) — dots only |
-| Navigation | Back (secondary) left, Continue (primary) right |
+| Navigation | Back (secondary with border) left, Continue (primary flat) right |
 | Last step | "Continue" label changes to "Confirm" or "Finish" |
 | Max steps | **4** — rethink the UX if more are needed |
+| Radius | `rounded-none` — sharp squares, not circles |
+| Shadow | **None** |

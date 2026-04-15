@@ -2,6 +2,7 @@
 
 > Rules for displaying numbers, currency, percentages, and dates.
 > Consistent formatting is critical in a finance application — inconsistency erodes trust.
+> All financial data uses **JetBrains Mono** (`font-mono`) exclusively — never Geist.
 
 ---
 
@@ -11,21 +12,21 @@
 |---|---|---|---|
 | Thousands separator | Comma (`,`) by default — configurable via `UserPreferences` in future | `1,234,567` | JetBrains Mono |
 | Decimal places | Always exactly **2** for currency values | `100.00` | JetBrains Mono |
-| Negative amount | Minus prefix, `negative` color (#e11d48) | `-1,234.56 PLN` | JetBrains Mono |
-| Positive income | Plus prefix, `positive` color (#10b981) | `+1,500.00 PLN` | JetBrains Mono |
-| Neutral amount | No prefix, `on-surface` color | `1,234.56 PLN` | JetBrains Mono |
+| Negative amount | Minus prefix, `negative` color (`--color-negative` `#DC2626`) | `-1,234.56 PLN` | JetBrains Mono |
+| Positive income | Plus prefix, `positive` color (`--color-positive` `#059669`) | `+1,500.00 PLN` | JetBrains Mono |
+| Neutral amount | No prefix, `text` color (`--color-text`) | `1,234.56 PLN` | JetBrains Mono |
 | Currency symbol position | **After** the number, space-separated | `1,234.56 PLN` | JetBrains Mono |
-| Zero amount | Show as `0.00`, `on-surface-variant` color | `0.00 PLN` | JetBrains Mono |
+| Zero amount | Show as `0.00`, `text-muted` color (`--color-text-muted`) | `0.00 PLN` | JetBrains Mono |
 
 ---
 
 ## Percentages
 
-| Context | Rule | Example |
-|---|---|---|
-| Integer | No decimal places | `78%` |
-| Fractional | One decimal place | `35.5%` |
-| Budget progress | No decimal; cap display at `>999%` for extreme overages | `125%`, `>999%` |
+| Context | Rule | Example | Font |
+|---|---|---|---|
+| Integer | No decimal places | `78%` | JetBrains Mono |
+| Fractional | One decimal place | `35.5%` | JetBrains Mono |
+| Budget progress | No decimal; cap display at `>999%` for extreme overages | `125%`, `>999%` | JetBrains Mono |
 
 ---
 
@@ -48,3 +49,4 @@
 - Right-align all amount columns in tables so decimal points visually align
 - Amounts in inline text (toasts, descriptions) follow the same rules: `150.00 PLN`, not `PLN150`
 - All numbers, amounts, dates, and percentages must use **JetBrains Mono** — never Geist
+- Color references for amounts use semantic tokens: `text-positive` for income, `text-negative` for expenses, `text-text-muted` for zero values
