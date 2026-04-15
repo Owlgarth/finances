@@ -1,316 +1,731 @@
 # Components
 
-> All UI component specs with HTML examples and property tables.
-> For icon specs see bottom of this file. For responsive behaviour see `responsive.md`.
+> All UI component specs with the Architectural Ledger design system.
+> For icon specs see the Icons section at the bottom. For responsive behaviour see `responsive.md`.
 
 ---
 
-## Sidebar
+## 1. Sidebar
+
+Fixed-width left navigation panel. No shadows, no container-low fills — only a right border defines the boundary.
 
 ```html
-<aside class="fixed left-0 top-0 h-full w-60 bg-surface-container-low flex flex-col p-6 z-sidebar">
+<aside class="fixed left-0 top-0 h-full w-60 bg-surface border-r border-border flex flex-col z-sidebar">
+
   <!-- Brand -->
-  <div class="text-2xl font-black text-primary font-headline tracking-tight mb-8">Monie</div>
+  <div class="flex items-center justify-between px-4 h-12 flex-shrink-0">
+    <span class="text-base font-semibold text-text tracking-tight select-none">Monie</span>
+    <button class="p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+            aria-label="Collapse sidebar">
+      <PanelLeftClose size={14} />
+    </button>
+  </div>
 
-  <!-- Active nav item -->
-  <a class="flex items-center gap-3 px-4 py-3 bg-white text-primary rounded-lg shadow-sm font-bold transition-all translate-x-1">
-    <span class="material-symbols-outlined">account_balance_wallet</span>
-    <span class="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">Budgets</span>
-  </a>
+  <!-- Selectors (hidden when collapsed) -->
+  <div class="px-3 space-y-1 flex-shrink-0 mb-2">
+    <!-- Workspace selector -->
+    <!-- Account selector -->
+    <!-- Period selector -->
+  </div>
 
-  <!-- Inactive nav item -->
-  <a class="flex items-center gap-3 px-4 py-3 text-on-surface/70 hover:text-primary hover:bg-white/50 transition-all rounded-lg">
-    <span class="material-symbols-outlined">dashboard</span>
-    <span class="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">Dashboard</span>
-  </a>
+  <!-- Divider -->
+  <div class="border-t border-border mx-3 mb-2"></div>
+
+  <!-- Nav links -->
+  <nav class="flex-1 overflow-y-auto px-2">
+    <!-- Active nav item -->
+    <a class="flex items-center gap-2 h-8 px-3 rounded-none
+              bg-surface-hover border-l-2 border-primary text-text
+              text-xs font-medium transition-colors">
+      <Wallet size={14} />
+      <span>Budgets</span>
+    </a>
+
+    <!-- Inactive nav item -->
+    <a class="flex items-center gap-2 h-8 px-3 rounded-none
+              text-text-muted hover:text-text hover:bg-surface-hover
+              text-xs transition-colors">
+      <LayoutDashboard size={14} />
+      <span>Dashboard</span>
+    </a>
+  </nav>
+
+  <!-- Bottom section -->
+  <div class="px-2 flex-shrink-0 py-3 border-t border-border">
+    <button class="flex items-center gap-2 w-full h-8 px-3 rounded-none
+                   text-text-muted hover:text-text hover:bg-surface-hover
+                   text-xs transition-colors">
+      <Settings size={14} />
+      <span>Settings</span>
+    </button>
+  </div>
 </aside>
 ```
+
+### Properties
 
 | Property | Value |
 |---|---|
 | Width | `240px` (`w-60`) fixed |
-| Background | `#f3f4f3` (`surface-container-low`) |
-| Brand | Geist, 22px, weight 900, `text-primary` |
-| Nav label font | JetBrains Mono, 10px, `uppercase`, `tracking-wider` |
-| Nav icon size | `20px`, stroke `1.5px` |
-| Active bg | `#ffffff` + `shadow-sm` |
-| Active text | `text-primary`, bold, `translate-x-1` |
-| Inactive text | `text-on-surface/70` |
-| Hover | `hover:bg-white/50 hover:text-primary` |
-| Tablet (641–1024px) | Collapses to `56px` — labels hidden, icons only, tooltips on hover |
-| Mobile (≤640px) | Hidden entirely — replaced by Bottom Navigation component |
+| Background | `bg-surface` (`#FFFFFF`) |
+| Right border | `border-r border-border` (1px, `#E5E5E5`) |
+| Brand text | Geist, 16px, weight 600, `text-text` |
+| Nav item height | `32px` (`h-8`) |
+| Nav label font | Geist, 12px, standard case (`text-xs`) |
+| Nav icon size | 14px, Lucide, 1.5px stroke |
+| Active bg | `bg-surface-hover` (`#F5F5F5`) |
+| Active indicator | 2px left border, `border-l-2 border-primary` |
+| Active text | `text-text`, weight 500 |
+| Inactive text | `text-text-muted` (`#737373`) |
+| Inactive hover | `hover:text-text hover:bg-surface-hover` |
+| Divider | `border-t border-border` between sections |
+| Shadows | **None** — zero shadows |
+| Tablet (641–1024px) | Collapses to `56px` (`w-14`) — labels hidden, icons only |
+| Mobile (≤640px) | Hidden entirely — replaced by Bottom Navigation |
 
----
-
-## Context Selectors (Sidebar)
+### Context Selectors (Sidebar)
 
 Compact workspace / account / period selectors at the top of the sidebar, above nav items.
 
 ```html
-<!-- Workspace selector (inactive) -->
-<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/60 transition-colors text-left">
-  <span class="material-symbols-outlined text-outline" style="font-size:16px">home</span>
+<!-- Workspace selector -->
+<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
+               hover:bg-surface-hover transition-colors text-left">
+  <Home size={14} class="text-text-muted flex-shrink-0" />
   <div class="flex-1 min-w-0">
-    <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 leading-tight">Workspace</div>
-    <div class="text-[12px] font-semibold text-on-surface truncate">Home</div>
+    <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Workspace</div>
+    <div class="text-xs font-medium text-text truncate">Home</div>
   </div>
-  <span class="material-symbols-outlined text-outline/40" style="font-size:14px">unfold_more</span>
+  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
 </button>
 
-<!-- Account selector (active — highlighted) -->
-<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/[0.08] text-left mt-0.5">
-  <span class="material-symbols-outlined text-primary" style="font-size:16px">account_balance</span>
+<!-- Account selector (active / highlighted) -->
+<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
+               bg-surface-hover transition-colors text-left">
+  <Landmark size={14} class="text-text flex-shrink-0" />
   <div class="flex-1 min-w-0">
-    <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 leading-tight">Account</div>
-    <div class="text-[12px] font-semibold text-primary truncate">Example Account</div>
+    <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Account</div>
+    <div class="text-xs font-medium text-text truncate">Example Account</div>
   </div>
-  <span class="material-symbols-outlined text-outline/40" style="font-size:14px">unfold_more</span>
+  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
 </button>
 
-<!-- Period selector (inactive) -->
-<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-white/60 transition-colors text-left mt-0.5">
-  <span class="material-symbols-outlined text-outline" style="font-size:16px">calendar_month</span>
+<!-- Period selector -->
+<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
+               hover:bg-surface-hover transition-colors text-left">
+  <Calendar size={14} class="text-text-muted flex-shrink-0" />
   <div class="flex-1 min-w-0">
-    <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 leading-tight">Period</div>
-    <div class="font-mono text-[12px] font-bold text-on-surface">Feb 2026</div>
+    <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Period</div>
+    <div class="font-mono text-xs font-medium text-text">Feb 2026</div>
   </div>
-  <span class="material-symbols-outlined text-outline/40" style="font-size:14px">unfold_more</span>
+  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
 </button>
 ```
 
 | Property | Value |
 |---|---|
-| Position | Top of sidebar, below brand mark, above nav divider |
-| Row height | ~40px |
-| Micro-label | JetBrains Mono, 8px, UPPERCASE, `outline` at 60% opacity |
-| Value (Workspace/Account) | Geist 12px semibold, `on-surface` or `primary` when active |
-| Value (Period) | JetBrains Mono 12px bold — always mono for date values |
-| Active/selected state | `bg-primary/8`, icon and value in `primary` |
-| Inactive hover | `bg-white/60` |
-| Tablet (collapsed sidebar) | Show icon only, centered; label/value hidden |
-| Mobile | Not rendered — current context shown via page header breadcrumb instead |
+| Position | Top of sidebar, below brand, above nav divider |
+| Row height | `32px` |
+| Micro-label | Geist 11px, uppercase, `tracking-wider`, `text-text-muted` |
+| Value (Workspace/Account) | Geist 12px, weight 500, `text-text` |
+| Value (Period) | JetBrains Mono 12px, weight 500, `text-text` — always mono for dates |
+| Active state | `bg-surface-hover` background |
+| Inactive hover | `bg-surface-hover` background |
+| Icons | Lucide 14px, `text-text-muted` |
+| Chevron | Lucide `ChevronDown` 12px, `text-text-muted` |
 
 ---
 
-## Top Bar
+## 2. Page Header
+
+Every page uses a compact single-row header with the page title and primary action. **Never use sizes above 16px for page titles** — the title is a navigational anchor, not a hero element.
 
 ```html
-<header class="fixed top-0 right-0 left-60 z-topbar h-16
-               bg-[rgba(250,249,248,0.80)] backdrop-blur-md
-               flex items-center justify-between px-8">
-  <!-- Search: pill shape, surface-container-low bg -->
-  <div class="bg-surface-container-low h-10 w-64 rounded-full flex items-center px-4 gap-2 focus-within:bg-surface-container-lowest transition-colors">
-    <span class="material-symbols-outlined text-on-surface/60 text-lg">search</span>
-    <input class="bg-transparent border-none focus:ring-0 text-sm w-full font-headline" placeholder="Search..."/>
-  </div>
-  <!-- Actions -->
-  <div class="flex items-center gap-6">
-    <button class="text-on-surface/60 hover:text-primary transition-colors">
-      <span class="material-symbols-outlined">notifications</span>
-    </button>
-    <!-- Primary CTA -->
-    <button class="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
-      Add Entry
-    </button>
-  </div>
-</header>
-```
-
----
-
-## Page Header
-
-Every page uses a compact two-line header. **Never use `display-lg` scale (28–32px) for page titles** — the title is a navigational anchor, not a hero element.
-
-```html
-<div class="flex items-end justify-between mb-7">
-  <div>
-    <!-- Context breadcrumb: always JetBrains Mono, muted -->
-    <div class="font-mono text-[9px] uppercase tracking-widest text-outline/70 mb-1.5">
+<div class="flex items-center justify-between h-8 mb-6">
+  <div class="flex items-center gap-3">
+    <!-- Context breadcrumb: JetBrains Mono, muted -->
+    <span class="font-mono text-[11px] text-text-muted">
       Feb 2026 · Example Account
-    </div>
-    <!-- Page title: heading scale — NOT display-lg -->
-    <h1 class="text-[20px] font-headline font-extrabold tracking-tight text-on-surface leading-none">
-      Transactions
-    </h1>
+    </span>
+    <!-- Separator -->
+    <span class="text-text-muted">/</span>
+    <!-- Page title -->
+    <h1 class="text-base font-semibold text-text">Transactions</h1>
   </div>
   <!-- Page-level actions -->
   <div class="flex gap-2 items-center">
-    <button class="bg-surface-container-high text-on-surface px-3.5 py-2 rounded-lg text-[13px] font-medium hover:bg-surface-container transition-all">
+    <button class="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium
+                   hover:bg-surface-hover transition-colors">
       Export
     </button>
-    <button class="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg text-[13px] font-semibold flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-      <span class="material-symbols-outlined text-base">add</span>
+    <button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium
+                   hover:bg-primary-hover transition-colors flex items-center gap-1.5">
+      <Plus size={14} />
       Add Transaction
     </button>
   </div>
 </div>
 ```
 
+### Properties
+
 | Property | Value |
 |---|---|
-| Title size | `20px`, weight `800` — `heading` scale only |
-| Breadcrumb | JetBrains Mono, 9px, UPPERCASE, `outline` at 70% opacity |
-| Breadcrumb content | `{Period} · {Account name}` |
-| Bottom margin | `28px` before first content section |
+| Title font | Geist 16px, weight 600 (`text-base font-semibold`) |
+| Title color | `text-text` |
+| Row height | `32px` (`h-8`) for the action row |
+| Bottom margin | `24px` (`mb-6`) before first content section |
+| Breadcrumb | JetBrains Mono, 11px, `text-text-muted` |
+| Breadcrumb content | `{Period} · {Account name} / {Page Title}` |
+| Primary action | Flat primary button (see Buttons section) |
+| Secondary actions | Secondary button variant |
 | On mobile | Title and actions wrap; actions row sits below title |
 
 ---
 
-## Buttons
+## 3. Buttons
+
+All buttons are flat — no gradients. Depth and hierarchy come from background color and border treatment.
+
+### Primary Button
 
 ```html
-<!-- Primary -->
-<button class="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg text-sm font-semibold
-               hover:opacity-90 active:scale-[0.98] transition-all
-               shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
-  Add Entry
+<button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium
+               hover:bg-primary-hover transition-colors
+               disabled:opacity-50 disabled:cursor-not-allowed
+               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
+  Save Transaction
 </button>
+```
 
-<!-- Secondary -->
-<button class="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg text-sm font-medium
-               hover:bg-surface-container transition-all">
+| State | Background | Text |
+|---|---|---|
+| Default | `bg-primary` (`#171717`) | `text-white` |
+| Hover | `bg-primary-hover` (`#262626`) | `text-white` |
+| Active | `bg-primary-hover` | `text-white` |
+| Disabled | `bg-primary` at 50% opacity | `text-white` at 50% opacity |
+| Loading | Same as default + `cursor-wait`; text changes to "-ing..." form |
+| Focus | `outline: 2px solid border-focus; outline-offset: 2px` |
+
+### Secondary Button
+
+```html
+<button class="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium
+               hover:bg-surface-hover transition-colors
+               disabled:opacity-50 disabled:cursor-not-allowed
+               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
   Cancel
 </button>
-
-<!-- FAB -->
-<button class="fixed bottom-6 right-6 h-12 w-12 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-full
-               shadow-[0_8px_32px_rgba(75,87,170,0.20),0_4px_12px_rgba(47,51,51,0.08)]
-               flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-modal">
-  <span class="material-symbols-outlined text-xl">add_task</span>
-</button>
-
-<!-- Ghost (on primary-bg panels) -->
-<button class="bg-white/10 hover:bg-white/20 text-on-primary px-4 py-2 rounded-lg
-               text-xs font-bold uppercase tracking-widest font-mono transition-colors">
-  Upgrade Plan
-</button>
 ```
 
-| Variant | Background | Text | Notes |
+| State | Background | Border | Text |
 |---|---|---|---|
-| Primary | `linear-gradient(135deg, #4b57aa, #3f4b9d)` | `#f9f6ff` | Inner glow via `box-shadow: inset 0 1px 0 rgba(255,255,255,0.10)` |
-| Secondary | `surface-container-high` | `on-surface` | No border, no shadow |
-| Ghost | `rgba(255,255,255,0.10)` | `on-primary` | On primary-bg panels only |
-| FAB | Primary gradient | `on-primary` | 48px circle, indigo float shadow |
+| Default | `bg-surface` | `border border-border` | `text-text` |
+| Hover | `bg-surface-hover` | `border border-border` | `text-text` |
+| Disabled | `bg-surface` at 50% opacity | `border border-border` | `text-text` at 50% opacity |
 
-Never use a flat hex on CTA buttons. Always use the gradient.
-
----
-
-## Input Fields
+### Destructive Button
 
 ```html
-<!-- Label always JetBrains Mono uppercase -->
-<label class="font-mono text-[9px] uppercase tracking-widest text-outline">Amount</label>
-
-<!-- Input -->
-<input class="bg-surface-container-highest border-none rounded-lg px-3 py-2
-              font-mono text-sm text-on-surface
-              focus:bg-surface-container-lowest focus:outline-none
-              focus:ring-2 focus:ring-primary-container
-              transition-all"/>
+<button class="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium
+               hover:bg-negative-bg transition-colors
+               disabled:opacity-50 disabled:cursor-not-allowed
+               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
+  Delete
+</button>
 ```
 
-| State | Background | Ring |
-|---|---|---|
-| Inactive | `surface-container-highest` (#dfe3e2) | None |
-| Hover | `surface-container-high` (#e6e9e8) | None |
-| Focus | `surface-container-lowest` (#ffffff) | `2px primary-container` (#dfe0ff) |
-| Error | `error-container` at 15% opacity | `2px error` |
-| Disabled | `surface-container` (#edeeed), opacity 50% | None |
+| State | Background | Border | Text |
+|---|---|---|---|
+| Default | `bg-surface` | `border-negative/30` | `text-negative` |
+| Hover | `bg-negative-bg` (`#FEF2F2`) | `border-negative/30` | `text-negative` |
+| Disabled | `bg-surface` at 50% opacity | `border-negative/30` | `text-negative` at 50% opacity |
+
+### Action Icon Buttons
+
+Small icon-only buttons for table row actions, toolbar controls, and inline actions.
+
+```html
+<!-- Standard action icon -->
+<button class="p-1 text-text-muted hover:text-text hover:bg-surface-hover
+               rounded-none transition-colors
+               focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        aria-label="Edit">
+  <Pencil size={14} />
+</button>
+
+<!-- Destructive action icon -->
+<button class="p-1 text-text-muted hover:text-negative hover:bg-negative-bg
+               rounded-none transition-colors"
+        aria-label="Delete">
+  <Trash2 size={14} />
+</button>
+```
+
+| Context | Size | Color Default | Color Hover |
+|---|---|---|---|
+| Standard actions | Lucide 14px | `text-text-muted` | `hover:text-text` |
+| Destructive actions | Lucide 14px | `text-text-muted` | `hover:text-negative` |
+| Positive actions | Lucide 14px | `text-text-muted` | `hover:text-positive` |
+
+### Button Specs Summary
+
+| Variant | Padding | Radius | Font |
+|---|---|---|---|
+| Primary | `px-3 py-1.5` | `rounded-sm` | Geist 12px, weight 500 |
+| Secondary | `px-3 py-1.5` | `rounded-sm` | Geist 12px, weight 500 |
+| Destructive | `px-3 py-1.5` | `rounded-sm` | Geist 12px, weight 500 |
+| Icon only | `p-1` | `rounded-none` | — |
+
+**Loading state text patterns:** `"Saving..."`, `"Creating..."`, `"Updating..."`, `"Deleting..."`, `"Processing..."`, `"Copying..."`
+
+**Rule:** Never use a gradient on any button. Primary buttons are flat `bg-primary` (`#171717`). Secondary buttons use a border. Destructive buttons use a colored border.
 
 ---
 
-## Segmented Control
+## 4. Form Inputs
+
+### Standard Text Input
+
+```html
+<input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
+              font-mono text-xs text-text
+              focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+              transition-colors
+              placeholder:text-text-muted"
+       type="text"
+       placeholder="Enter value..." />
+```
+
+| State | Background | Border | Ring |
+|---|---|---|---|
+| Default | `bg-surface` | `border border-border` | None |
+| Hover | `bg-surface` | `border border-border` | None |
+| Focus | `bg-surface` | `border-border-focus` | `ring-1 ring-border-focus` |
+| Error | `bg-negative-bg` | `border-negative` | `ring-1 ring-negative` |
+| Disabled | `bg-surface-muted` | `border border-border` | None; `opacity-50` |
+
+### Labels
+
+```html
+<label class="block text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1">
+  Amount <span class="text-negative">*</span>
+</label>
+```
+
+| Property | Value |
+|---|---|
+| Font | Geist 11px, weight 500 |
+| Case | Uppercase, `tracking-wider` |
+| Color | `text-text-muted` |
+| Spacing | `4px` (`mb-1`) above input |
+| Required indicator | `*` in `text-negative` color, placed after label text |
+
+### Error State
+
+```html
+<div>
+  <label class="block text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1">
+    Amount <span class="text-negative">*</span>
+  </label>
+  <input class="w-full bg-negative-bg border border-negative rounded-none px-2 py-1.5
+                font-mono text-xs text-text
+                ring-1 ring-negative
+                focus:outline-none transition-colors" />
+  <div class="flex items-center gap-1 mt-1">
+    <AlertCircle size={12} class="text-negative flex-shrink-0" />
+    <span class="text-[11px] text-negative font-medium">Amount must be greater than 0</span>
+  </div>
+</div>
+```
+
+| Property | Value |
+|---|---|
+| Error input bg | `bg-negative-bg` (`#FEF2F2`) |
+| Error input border | `border border-negative` |
+| Error ring | `ring-1 ring-negative` |
+| Error icon | Lucide `AlertCircle`, 12px, `text-negative` |
+| Error text | Geist 11px, weight 500, `text-negative` |
+| Error spacing | `4px` (`mt-1`) above error message |
+
+### Select (Native)
+
+```html
+<select class="w-full bg-surface border border-border rounded-none px-2 py-1.5
+               font-mono text-xs text-text
+               focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+               transition-colors
+               disabled:opacity-50">
+  <option value="">Select category...</option>
+  <option value="food">Food & Groceries</option>
+</select>
+```
+
+Uses the same border treatment and focus styling as standard text inputs. See Section 6 for the custom Select/Dropdown component.
+
+### Date Picker
+
+A composite component — a read-only input that opens a calendar popup.
+
+```html
+<!-- Trigger input -->
+<input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
+              font-mono text-xs text-text
+              focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+              transition-colors cursor-pointer"
+       readOnly
+       placeholder="Select date..." />
+
+<!-- Calendar popup -->
+<div class="absolute z-dropdown mt-1 bg-surface border border-border rounded-sm p-3">
+  <!-- Calendar content (react-day-picker) -->
+</div>
+```
+
+| Property | Value |
+|---|---|
+| Trigger | Identical to standard input + `cursor-pointer` + `readOnly` |
+| Popup background | `bg-surface` |
+| Popup border | `border border-border rounded-sm` |
+| Popup shadow | **None** — border only |
+| Z-index | `z-dropdown` |
+
+### Color Picker
+
+```html
+<div class="flex items-center gap-2">
+  <input type="color"
+         class="h-8 w-8 rounded-none border border-border cursor-pointer
+                focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus" />
+  <span class="font-mono text-xs text-text-muted">#171717</span>
+</div>
+```
+
+Uses standard HTML `<input type="color">` with border treatment matching other inputs.
+
+### Input Specs Summary
+
+| Element | Height | Padding | Radius |
+|---|---|---|---|
+| Text input | `32px` | `px-2 py-1.5` | `rounded-none` |
+| Select (native) | `32px` | `px-2 py-1.5` | `rounded-none` |
+| Date trigger | `32px` | `px-2 py-1.5` | `rounded-none` |
+| Color picker | `32px` | N/A | `rounded-none` |
+
+### Validation Timing
+
+| Event | Behavior |
+|---|---|
+| Initial render | No errors shown — fields are clean |
+| On blur (first touch) | Validate the field; show error if invalid |
+| On change (after first error) | Re-validate on every keystroke so errors clear quickly |
+| On submit | Validate all fields; scroll to and focus the first invalid field |
+
+---
+
+## 5. Segmented Control
 
 Replaces radio buttons for binary or ternary exclusive choices. Primary use: Expense / Income type selector in transaction forms.
 
 ```html
-<div class="bg-surface-container-low rounded-lg p-0.5 flex gap-0.5">
-  <!-- Active: Expense -->
-  <button class="flex-1 py-1.5 rounded-md text-[12px] font-semibold transition-all
-                 bg-surface-container-lowest text-negative
-                 shadow-[0_1px_3px_rgba(47,51,51,0.10)]">
+<div class="flex border border-border rounded-none overflow-hidden">
+  <!-- Active segment (Expense) -->
+  <button class="flex-1 py-1.5 text-xs font-medium transition-colors
+                 bg-primary text-white">
     Expense
   </button>
-  <!-- Inactive: Income -->
-  <button class="flex-1 py-1.5 rounded-md text-[12px] font-semibold transition-all
-                 bg-transparent text-on-surface-variant hover:text-on-surface">
+  <!-- Inactive segment (Income) -->
+  <button class="flex-1 py-1.5 text-xs font-medium transition-colors
+                 bg-surface text-text-muted
+                 hover:text-text hover:bg-surface-hover
+                 border-l border-border">
     Income
   </button>
 </div>
 ```
 
-| State | Background | Text |
-|---|---|---|
-| Track | `surface-container-low` | — |
-| Active (expense) | `surface-container-lowest` + subtle shadow | `negative` (#e11d48) |
-| Active (income) | `surface-container-lowest` + subtle shadow | `positive` (#10b981) |
-| Inactive | Transparent | `on-surface-variant` |
-| Inactive hover | Transparent | `on-surface` |
+### Properties
 
-**Rule:** Never use radio buttons for a binary choice that appears inside a modal or form.
+| Property | Value |
+|---|---|
+| Container | `border border-border rounded-none` — sharp corners |
+| Segment padding | `py-1.5` |
+| Font | Geist 12px, weight 500 |
+| Active background | `bg-primary` (`#171717`) |
+| Active text | `text-white` |
+| Inactive background | `bg-surface` |
+| Inactive text | `text-text-muted` |
+| Inactive hover | `hover:text-text hover:bg-surface-hover` |
+| Segment divider | `border-l border-border` between segments |
+| Transition | `transition-colors` only (no scale, no shadow) |
+| Radius | `rounded-none` (0px) — no rounded corners anywhere |
+
+### Color Variants for Active Segment
+
+| Context | Active bg | Active text |
+|---|---|---|
+| Default / Expense | `bg-primary` | `text-white` |
+| Income selected | `bg-positive` (`#059669`) | `text-white` |
+| Neutral toggle | `bg-primary` | `text-white` |
+
+**Rule:** Never use radio buttons for a binary choice that appears inside a modal or form. Always use the Segmented Control.
 
 ---
 
-## Cards
+## 6. Select / Custom Dropdown
+
+Styled dropdown trigger that replaces native `<select>`. Opens a floating panel with the same border treatment as all containers.
 
 ```html
-<div class="bg-surface-container-lowest px-4 py-3 rounded-lg shadow-sm
-            group hover:ring-1 hover:ring-primary/20 transition-all">
+<!-- Trigger: value selected -->
+<div>
+  <label class="block text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1">
+    Category <span class="text-negative">*</span>
+  </label>
+  <button class="w-full flex items-center justify-between
+                 bg-surface border border-border rounded-none px-2 py-1.5
+                 text-xs text-text text-left
+                 hover:bg-surface-hover
+                 focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+                 transition-colors">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="truncate">Food & Groceries</span>
+    </div>
+    <ChevronDown size={12} class="text-text-muted flex-shrink-0 transition-transform" />
+  </button>
+</div>
+
+<!-- Trigger: placeholder (nothing selected) -->
+<button class="w-full flex items-center justify-between
+               bg-surface border border-border rounded-none px-2 py-1.5
+               text-xs text-text-muted text-left
+               hover:bg-surface-hover
+               focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+               transition-colors">
+  <span>Select category...</span>
+  <ChevronDown size={12} class="text-text-muted flex-shrink-0 transition-transform" />
+</button>
+
+<!-- Dropdown panel -->
+<div class="absolute z-dropdown mt-1 w-full
+            bg-surface border border-border rounded-sm
+            max-h-[280px] overflow-y-auto scrollbar-thin">
+  <!-- Item -->
+  <button class="w-full flex items-center gap-2 px-2 h-8 text-left
+                 text-xs text-text
+                 hover:bg-surface-hover transition-colors">
+    <span class="truncate">Food & Groceries</span>
+  </button>
+  <!-- Selected item -->
+  <button class="w-full flex items-center gap-2 px-2 h-8 text-left
+                 text-xs text-text font-medium
+                 bg-surface-muted transition-colors">
+    <Check size={12} class="text-primary flex-shrink-0" />
+    <span class="truncate">Housing</span>
+  </button>
+  <!-- Group label -->
+  <div class="px-2 py-1 text-[10px] uppercase tracking-wider text-text-muted">
+    Common
+  </div>
+</div>
+```
+
+### Properties
+
+| Property | Value |
+|---|---|
+| Trigger style | Identical to text inputs — same border, radius, height, focus |
+| Trigger border | `border border-border rounded-none` |
+| Placeholder | `text-text-muted` color |
+| Selected value | `text-text` color |
+| Chevron | Lucide `ChevronDown`, 12px, `text-text-muted`; rotates 180° when open (`transition-transform`) |
+| Dropdown panel bg | `bg-surface` |
+| Dropdown panel border | `border border-border rounded-sm` |
+| Dropdown panel shadow | **None** — border only |
+| Item height | `32px` (`h-8`) |
+| Item font | Geist 12px |
+| Item hover | `hover:bg-surface-hover` |
+| Item selected | `bg-surface-muted`, bold, with check icon |
+| Group label | Geist 10px, uppercase, `tracking-wider`, `text-text-muted` |
+| Max height | `280px`, overflow with `scrollbar-thin` |
+| Error state | Same error styling as text inputs |
+| Keyboard | `Space`/`Enter` opens; `ArrowDown`/`ArrowUp` navigate; `Enter` selects; `Escape` closes |
+| On mobile | Opens as a bottom sheet instead of floating dropdown |
+
+---
+
+## 7. Toggle / Switch
+
+Binary on/off control. Use for settings and preferences — **never** use a checkbox for on/off toggles.
+
+```html
+<!-- Off state -->
+<label class="inline-flex items-center gap-3 cursor-pointer">
+  <button role="switch" aria-checked="false" aria-label="Dark mode"
+          class="relative inline-flex h-5 w-9 items-center rounded-none
+                 bg-surface-muted border border-border
+                 transition-colors duration-150
+                 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
+    <span class="inline-block h-3.5 w-3.5 bg-white border border-border
+                 translate-x-[3px] transition-transform duration-150"></span>
+  </button>
+  <span class="text-xs text-text">Dark mode</span>
+</label>
+
+<!-- On state -->
+<label class="inline-flex items-center gap-3 cursor-pointer">
+  <button role="switch" aria-checked="true" aria-label="Dark mode"
+          class="relative inline-flex h-5 w-9 items-center rounded-none
+                 bg-primary
+                 transition-colors duration-150
+                 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
+    <span class="inline-block h-3.5 w-3.5 bg-white
+                 translate-x-[19px] transition-transform duration-150"></span>
+  </button>
+  <span class="text-xs text-text">Dark mode</span>
+</label>
+```
+
+### Properties
+
+| State | Track Background | Track Border | Thumb |
+|---|---|---|---|
+| Off | `bg-surface-muted` (`#E5E5E5`) | `border border-border` | `bg-white border border-border`, left position (`translate-x-[3px]`) |
+| Off hover | `bg-surface-hover` | `border border-border` | — |
+| On | `bg-primary` (`#171717`) | None | `bg-white`, right position (`translate-x-[19px]`) |
+| On hover | `bg-primary-hover` (`#262626`) | None | — |
+| Disabled | `bg-surface-muted` at 50% opacity | `border border-border` | — |
+
+| Property | Value |
+|---|---|
+| Track size | `36px × 20px` (`w-9 h-5`) |
+| Track radius | `rounded-none` (0px) — sharp corners |
+| Thumb size | `14px` (`h-3.5 w-3.5`) |
+| Thumb radius | Full circle (`rounded-full`) — thumb remains circular |
+| Transition | `150ms` for both track color and thumb position |
+| Focus | `outline: 2px solid border-focus; outline-offset: 2px` |
+| ARIA | `role="switch"`, `aria-checked`, `aria-label` required |
+| Label | Geist 12px, `text-text`, `12px` gap (`gap-3`) |
+
+---
+
+## 8. Cards
+
+All cards use 1px borders instead of shadows. No elevation hierarchy — all cards are flat `bg-surface` with `border border-border`.
+
+### Standard Card
+
+```html
+<div class="bg-surface border border-border rounded-sm p-4">
   <!-- content -->
 </div>
 ```
 
 | Property | Value |
 |---|---|
-| Background | `surface-container-lowest` (#ffffff) |
-| Radius | `12px` (md) or `16px` (lg) — never 8px for main cards |
-| Padding | `16px` compact, `20–24px` standard |
-| Item separation | `gap: 12px` whitespace — **no divider lines** |
-| Group separation | Background shift to `surface-container-lowest` — **no divider lines** |
-| Hover | `ring-1 ring-primary/20` |
+| Background | `bg-surface` (`#FFFFFF`) |
+| Border | `border border-border` (1px, `#E5E5E5`) |
+| Radius | `rounded-sm` (4px) |
+| Padding | `12px` (`p-3`) or `16px` (`p-4`) |
+| Hover | No hover effect on standard cards |
+| Shadow | **None** |
 
----
+### Account Card
 
-## Balance Card (Compact)
-
-Compact design for per-currency balance cards on the Dashboard.
+Used for budget account selection in modals and inline selectors.
 
 ```html
-<div class="bg-surface-container-lowest rounded-md p-4 shadow-sm hover:shadow-md transition-shadow">
+<!-- Unselected -->
+<button class="w-full p-4 rounded-sm text-left relative overflow-hidden
+               bg-surface border border-border
+               hover:bg-surface-hover transition-colors">
+  <!-- Left color indicator -->
+  <div class="absolute left-0 top-0 bottom-0 w-0.5"
+       style="background-color: #4b57aa"></div>
+
+  <!-- Icon + name -->
+  <div class="flex items-center gap-3 mb-2 pl-2">
+    <span class="text-base">🏦</span>
+    <span class="text-sm font-medium text-text truncate">Example Account</span>
+  </div>
+  <!-- Description -->
+  <p class="text-xs text-text-muted pl-2 line-clamp-2">Personal finances</p>
+</button>
+
+<!-- Selected -->
+<button class="w-full p-4 rounded-sm text-left relative overflow-hidden
+               bg-surface border-primary ring-1 ring-primary
+               transition-colors">
+  <!-- Left color indicator -->
+  <div class="absolute left-0 top-0 bottom-0 w-0.5"
+       style="background-color: #4b57aa"></div>
+
+  <!-- Icon + name -->
+  <div class="flex items-center gap-3 mb-2 pl-2">
+    <span class="text-base">🏦</span>
+    <span class="text-sm font-medium text-text truncate">Example Account</span>
+  </div>
+  <!-- Selected indicator -->
+  <div class="absolute top-2 right-2">
+    <Check size={14} class="text-primary" />
+  </div>
+</button>
+
+<!-- Inactive / disabled -->
+<button class="w-full p-4 rounded-sm text-left relative overflow-hidden
+               bg-surface border border-border opacity-60 cursor-not-allowed">
+  <!-- content -->
+</button>
+```
+
+| Property | Value |
+|---|---|
+| Unselected | `bg-surface border border-border` |
+| Selected | `border-primary ring-1 ring-primary` |
+| Inactive | `opacity-60 cursor-not-allowed` |
+| Left indicator | `2px` colored bar (`w-0.5`), absolute positioned |
+| Radius | `rounded-sm` |
+| Shadow | **None** |
+
+### Balance Card
+
+Compact design for per-currency balance displays. All financial data in JetBrains Mono.
+
+```html
+<div class="bg-surface border border-border rounded-sm p-4">
   <!-- Currency label + recalc action -->
-  <div class="flex items-center justify-between mb-1.5">
-    <span class="font-mono text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">PLN</span>
-    <button class="font-mono text-[8px] uppercase tracking-wider text-outline
-                   bg-surface-container-low px-2 py-0.5 rounded-full
-                   hover:text-on-surface-variant transition-colors">
+  <div class="flex items-center justify-between mb-2">
+    <span class="font-mono text-xs font-medium text-text">PLN</span>
+    <button class="flex items-center gap-1 text-text-muted hover:text-text transition-colors
+                   text-[10px] font-mono uppercase tracking-wider">
+      <RefreshCw size={10} />
       Recalc
     </button>
   </div>
-  <!-- Closing balance — primary number, always positive/negative color -->
-  <div class="font-mono text-[22px] font-bold text-positive tracking-tight leading-none mb-2.5">
+
+  <!-- Closing balance — always positive/negative color -->
+  <div class="font-mono text-sm font-medium tabular-nums text-positive leading-none mb-3">
     1,786.20
   </div>
+
   <!-- Meta grid: show only rows with non-zero values -->
-  <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
+  <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
     <div>
-      <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 mb-0.5">Income</div>
-      <div class="font-mono text-[11px] font-semibold text-positive">+6,500.00</div>
+      <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Income</div>
+      <div class="font-mono text-xs font-medium tabular-nums text-positive">+6,500.00</div>
     </div>
     <div>
-      <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 mb-0.5">Expenses</div>
-      <div class="font-mono text-[11px] font-semibold text-negative">6,968.00</div>
+      <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Expenses</div>
+      <div class="font-mono text-xs font-medium tabular-nums text-negative">-6,968.00</div>
     </div>
     <div>
-      <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 mb-0.5">Opening</div>
-      <div class="font-mono text-[11px] font-semibold text-on-surface-variant">1,000.00</div>
+      <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Opening</div>
+      <div class="font-mono text-xs font-medium tabular-nums text-text">1,000.00</div>
     </div>
     <!-- Only render if value ≠ 0 -->
     <div>
-      <div class="font-mono text-[8px] uppercase tracking-widest text-outline/60 mb-0.5">Exch In</div>
-      <div class="font-mono text-[11px] font-semibold text-on-surface-variant">+1,255.00</div>
+      <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Exch In</div>
+      <div class="font-mono text-xs font-medium tabular-nums text-text">+1,255.00</div>
     </div>
   </div>
 </div>
@@ -318,267 +733,402 @@ Compact design for per-currency balance cards on the Dashboard.
 
 | Property | Value |
 |---|---|
-| Grid | `repeat(auto-fill, minmax(190px, 1fr))`, gap `10px` |
-| Closing balance | JetBrains Mono, 22px, bold — `positive` if > 0, `negative` if < 0 |
-| Currency label | JetBrains Mono, 11px, bold uppercase, `on-surface-variant` |
-| Meta labels | JetBrains Mono, 8px, uppercase, `outline` at 60% opacity |
-| Meta values | JetBrains Mono, 11px, semibold — semantic color only if sign matters |
+| Container | `bg-surface border border-border rounded-sm p-4` |
+| Grid layout | `repeat(auto-fill, minmax(180px, 1fr))`, gap `12px` (`gap-3`) |
+| Closing balance | JetBrains Mono 14px, weight 500 — `text-positive` if > 0, `text-negative` if < 0 |
+| Currency label | Geist 12px, weight 500, `text-text` |
+| Meta labels | Geist 10px, uppercase, `tracking-wider`, `text-text-muted` |
+| Meta values | JetBrains Mono 12px, weight 500, `tabular-nums` — semantic color only if sign matters |
 | Omit zero rows | Do not render exchange rows when the value is zero or null |
+| Shadow | **None** |
 
----
+### Budget Category Card
 
-## Budget Category Card
+Compact card for individual budget category display with progress bar.
 
 ```html
-<div class="bg-surface-container-lowest px-4 py-3 rounded-lg shadow-sm
-            group hover:ring-1 hover:ring-primary/20 transition-all">
-  <!-- Row 1: icon + name + amount -->
+<div class="bg-surface border border-border rounded-sm p-3">
+  <!-- Row 1: name + amounts -->
   <div class="flex justify-between items-start mb-2">
-    <div class="flex items-center gap-3">
-      <div class="h-8 w-8 bg-primary-container text-on-primary-container rounded flex items-center justify-center">
-        <span class="material-symbols-outlined text-lg">home</span>
+    <div class="flex items-center gap-2">
+      <div class="h-6 w-6 bg-surface-hover border border-border rounded-none
+                  flex items-center justify-center">
+        <Home size={12} class="text-text-muted" />
       </div>
       <div>
-        <h4 class="font-headline font-semibold text-xs text-on-surface">Housing & Utilities</h4>
-        <p class="font-mono text-[8px] uppercase text-on-surface/40">Recurring</p>
+        <span class="text-xs font-medium text-text">Housing & Utilities</span>
       </div>
     </div>
     <div class="text-right">
-      <span class="font-mono text-sm font-bold text-on-surface">2,450.00</span>
-      <p class="font-mono text-[8px] text-on-surface/40">of 2,500.00</p>
+      <span class="font-mono text-xs font-medium tabular-nums text-text">2,450.00</span>
+      <span class="font-mono text-[10px] text-text-muted ml-1">of 2,500.00</span>
     </div>
   </div>
-  <!-- Progress bar: 4px height -->
-  <div class="relative w-full h-1 bg-surface-container-low rounded-full overflow-hidden mb-1.5">
-    <div class="absolute top-0 left-0 h-full bg-error rounded-full transition-all" style="width: 98%"></div>
+
+  <!-- Progress bar: sharp corners, not rounded-full -->
+  <div class="w-full h-1 bg-surface-muted rounded-none overflow-hidden mb-1.5">
+    <div class="h-full bg-negative rounded-none transition-all" style="width: 98%"></div>
   </div>
+
   <!-- Status row -->
-  <div class="flex justify-between font-mono text-[8px] text-error font-bold uppercase">
-    <span>High Burn</span>
-    <span>50.00 Left</span>
+  <div class="flex justify-between text-[10px] font-mono font-medium uppercase tracking-wider">
+    <span class="text-negative">High Burn</span>
+    <span class="text-negative">50.00 Left</span>
   </div>
 </div>
 ```
 
 **Progress bar status colors:**
 
-| Status | Bar | Text | Threshold |
+| Status | Bar color | Text color | Threshold |
 |---|---|---|---|
-| Low Burn | `bg-primary` | `text-primary/60` | < 30% |
-| On Track | `bg-primary` | `text-primary/60` | 30–74% |
-| Near Limit | `bg-error` | `text-error font-bold` | 75–94% |
-| High Burn | `bg-error` | `text-error font-bold` | ≥ 95% |
+| On Track | `bg-primary` | `text-text-muted` | < 75% |
+| Near Limit | `bg-warning` | `text-warning` | 75–94% |
+| High Burn | `bg-negative` | `text-negative` | ≥ 95% |
+
+| Property | Value |
+|---|---|
+| Container | `bg-surface border border-border rounded-sm p-3` |
+| Icon container | `h-6 w-6 bg-surface-hover border border-border rounded-none` |
+| Icon | Lucide 12px, `text-text-muted` |
+| Category name | Geist 12px, weight 500, `text-text` |
+| Amount | JetBrains Mono 12px, weight 500, `tabular-nums` |
+| Progress track | `h-1 bg-surface-muted rounded-none` — sharp corners |
+| Progress fill | `rounded-none` — sharp corners, not `rounded-full` |
+| Status text | JetBrains Mono 10px, uppercase, `tracking-wider`, semantic color |
+| Shadow | **None** |
+
+### Card Specs Summary
+
+| Card type | Padding | Radius | Border | Shadow |
+|---|---|---|---|---|
+| Standard | `p-3` or `p-4` | `rounded-sm` | `border border-border` | None |
+| Account | `p-4` | `rounded-sm` | `border border-border` / `border-primary ring-1 ring-primary` (selected) | None |
+| Balance | `p-4` | `rounded-sm` | `border border-border` | None |
+| Budget Category | `p-3` | `rounded-sm` | `border border-border` | None |
 
 ---
 
-## Financial Chips / Tags
+## 9. The Ledger System (Tables)
+
+Tables are the primary data display component. They follow a strict ledger aesthetic: 1px borders, zebra striping, fixed row heights, and sticky headers. Every financial amount uses JetBrains Mono.
+
+### Table Container
 
 ```html
-<!-- Default (category) -->
-<span class="inline-flex items-center bg-secondary-container text-on-secondary-container
-             px-3 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider">
-  Housing
-</span>
-
-<!-- Positive (income) -->
-<span class="inline-flex items-center bg-positive-container text-on-positive-container
-             px-3 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider">
-  Income
-</span>
-
-<!-- Negative (expense) -->
-<span class="inline-flex items-center bg-negative-container text-on-negative-container
-             px-3 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider">
-  Expense
-</span>
-```
-
-Shape is always `rounded-full` (pill). Never use rectangular chips.
-
----
-
-## Data Tables (High Density)
-
-```html
-<table class="w-full">
-  <!-- Sticky header -->
-  <thead class="sticky top-0 bg-surface-container-low">
-    <tr>
-      <th class="font-mono text-[9px] uppercase tracking-widest text-outline px-3 py-2 text-left">Description</th>
-      <th class="font-mono text-[9px] uppercase tracking-widest text-outline px-3 py-2 text-right">Amount</th>
-      <th class="font-mono text-[9px] uppercase tracking-widest text-outline px-3 py-2 text-left">Category</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="hover:bg-surface-container-lowest transition-colors" style="height: 32px;">
-      <td class="font-body text-sm text-on-surface px-3">Grocery Store</td>
-      <td class="font-mono text-sm font-bold text-negative px-3 text-right">-84.20 PLN</td>
-      <td class="px-3"><!-- chip --></td>
-    </tr>
-  </tbody>
-</table>
+<div class="w-full border border-border rounded-sm overflow-hidden">
+  <table class="w-full border-collapse">
+    <!-- thead, tbody -->
+  </table>
+</div>
 ```
 
 | Property | Value |
 |---|---|
-| Row height | Strictly `28px–32px` (desktop), `40px` (mobile) |
-| Header bg | `surface-container-low` (#f3f4f3), sticky |
-| Header font | JetBrains Mono, 9px, UPPERCASE, `outline` color |
-| Row dividers | **None** — hover highlight only |
-| Amount column | Always **right-aligned**, JetBrains Mono |
-| Text/description | Left-aligned, Geist |
-| Selected row | Persistent `surface-container-low` bg |
-| Hover row | `surface-container-lowest` bg |
+| Container | `w-full border border-border rounded-sm overflow-hidden` |
+| Table | `w-full border-collapse` |
+| Outer border | 1px, `--color-border` (`#E5E5E5`) |
+| Internal borders | `border-b border-border` on every `<tr>` (header + data) |
+| Border radius | `rounded-sm` on container only; `rounded-none` on internal cells |
 
----
-
-## Charts & Sparklines
-
-| Element | Spec |
-|---|---|
-| Sparkline stroke | `1.5px`, no fill |
-| Positive line | `#10b981` (Emerald) |
-| Negative line | `#e11d48` (Rose) |
-| Bar: inactive | `surface-container-low` fill |
-| Bar: active | `primary` fill |
-| Bar: hover | `primary/20` fill |
-| Progress bar height | `6px–8px` |
-| Progress bar radius | `4px` |
-| Progress track | `surface-container-low` |
-| Axis labels | JetBrains Mono, 8–9px, UPPERCASE, `outline` color |
-| Rendering | SVG only (no canvas where avoidable) |
-
----
-
-## Savings / Goal Panel (Full-Width)
+### Header Row
 
 ```html
-<div class="bg-primary rounded-xl p-6 text-on-primary flex items-center justify-between relative overflow-hidden">
-  <!-- Decorative blur spot -->
-  <div class="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
-  <div class="flex-1">
-    <span class="font-mono text-[8px] uppercase tracking-widest opacity-70">Focus Goal</span>
-    <h3 class="text-lg font-headline font-bold">New York Vacation Fund</h3>
-    <div class="mt-2 flex items-baseline gap-4">
-      <span class="font-mono text-2xl font-bold">4,800.00</span>
-      <span class="font-headline text-[10px] opacity-70">Target: 6,500.00</span>
-    </div>
-    <div class="mt-4 max-w-md">
-      <div class="h-1.5 w-full bg-white/20 rounded-full overflow-hidden mb-1.5">
-        <div class="h-full bg-white rounded-full" style="width: 74%"></div>
+<thead class="sticky top-0 z-sticky">
+  <tr class="bg-background border-b border-border h-8">
+    <th class="text-[10px] font-medium uppercase tracking-wider text-text-muted px-3 py-1 text-left border-r border-border last:border-r-0">
+      Description
+    </th>
+    <th class="text-[10px] font-medium uppercase tracking-wider text-text-muted px-3 py-1 text-right">
+      Amount
+    </th>
+  </tr>
+</thead>
+```
+
+| Property | Value |
+|---|---|
+| Position | `sticky top-0 z-sticky` — stays visible on scroll |
+| Height | `32px` (`h-8`) |
+| Background | `bg-background` (`#FAFAFA`) |
+| Bottom border | `border-b border-border` |
+| Font | Geist, 10px, weight 500, `uppercase`, `tracking-wider` |
+| Text color | `text-muted` (`--color-text-muted`, `#737373`) |
+| Cell borders | `border-r border-border` between columns (optional); none on last column |
+| Alignment | Text: left; Amounts: `text-right`; Status/Actions: `text-center` |
+| Padding | `px-3 py-1` |
+
+### Sortable Header
+
+```html
+<th class="text-[10px] font-medium uppercase tracking-wider text-text-muted px-3 py-1 text-left">
+  <button class="flex items-center gap-1 hover:text-text transition-colors">
+    Date
+    <ChevronDown class="h-3.5 w-3.5 transition-transform" />
+  </button>
+</th>
+```
+
+The chevron icon rotates `180deg` when sort direction is ascending. Uses Lucide `ChevronDown` (not Material Symbols).
+
+### Data Rows
+
+```html
+<tbody>
+  <!-- Even rows -->
+  <tr class="bg-surface border-b border-border h-8 hover:bg-surface-hover transition-colors">
+    <td class="text-[13px] text-text px-3 py-1">Grocery Store</td>
+    <td class="font-mono text-xs font-medium text-negative px-3 py-1 text-right tabular-nums">-84.20</td>
+    <td class="px-3 py-1"><!-- chip component --></td>
+  </tr>
+  <!-- Odd rows (zebra stripe) -->
+  <tr class="bg-background border-b border-border h-8 hover:bg-surface-hover transition-colors">
+    <td class="text-[13px] text-text px-3 py-1">Salary</td>
+    <td class="font-mono text-xs font-medium text-positive px-3 py-1 text-right tabular-nums">+6,500.00</td>
+    <td class="px-3 py-1"><!-- chip component --></td>
+  </tr>
+</tbody>
+```
+
+| Property | Value |
+|---|---|
+| Row height | `32px` **strict** (`h-8`) |
+| Zebra striping | Even: `bg-surface` (`#FFFFFF`); Odd: `bg-background` (`#FAFAFA`) |
+| Row border | `border-b border-border` on every row |
+| Hover | `hover:bg-surface-hover` (`#F5F5F5`) |
+| Transition | `transition-colors` |
+| Text cells | Geist 13px, `text-text`, left-aligned |
+| Amount cells | JetBrains Mono 12px, `text-right`, `tabular-nums`, semantic color |
+| Positive amount | `text-positive` with `+` prefix |
+| Negative amount | `text-negative` with `-` prefix |
+| Neutral amount | `text-text` (no prefix) |
+| Date cells | JetBrains Mono 12px, `text-text-muted` |
+| Padding | `px-3 py-1` |
+
+### Group Dividers (Date Banners)
+
+Sticky date banners that separate transaction groups by date.
+
+```html
+<tr class="sticky top-8 z-sticky bg-background border-y border-border">
+  <td colspan="99" class="px-3 py-1">
+    <span class="font-mono text-[10px] font-medium text-text-muted uppercase tracking-wider">
+      2026-02-15 · 3 transactions
+    </span>
+  </td>
+</tr>
+```
+
+| Property | Value |
+|---|---|
+| Position | `sticky` with `top-8` (below header row) |
+| Z-index | `z-sticky` — below header, above data rows |
+| Background | `bg-background` (`#FAFAFA`) |
+| Border | `border-y border-border` — top and bottom 1px lines |
+| Font | JetBrains Mono, 10px, weight 500, `uppercase`, `tracking-wider` |
+| Text color | `text-muted` |
+| Colspan | `colspan="99"` to span full width |
+
+### Progress Bars (Within Tables)
+
+```html
+<!-- Budget progress bar within a table row -->
+<div class="h-1 w-full bg-surface-muted rounded-none overflow-hidden">
+  <div class="h-full bg-negative rounded-none transition-all" style="width: 95%"></div>
+</div>
+```
+
+| Property | Value |
+|---|---|
+| Track | `h-1 bg-surface-muted rounded-none` |
+| Fill | `h-full rounded-none` — never `rounded-full` |
+| Fill color | Semantic: `bg-positive`, `bg-warning`, or `bg-negative` based on threshold |
+| Radius | `rounded-none` (0px) — flat bar, not pill-shaped |
+
+**Progress bar status colors:**
+
+| Status | Fill Color | Text Color | Threshold |
+|---|---|---|---|
+| On Track | `bg-positive` | `text-positive` | < 75% |
+| Near Limit | `bg-warning` | `text-warning` | 75–94% |
+| Over Budget | `bg-negative` | `text-negative` | ≥ 95% |
+
+### Table Footer (Totals Row)
+
+```html
+<tfoot>
+  <tr class="bg-background border-t border-border h-8">
+    <td class="text-[10px] font-medium uppercase tracking-wider text-text-muted px-3 py-1">Total</td>
+    <td class="font-mono text-xs font-medium text-text px-3 py-1 text-right tabular-nums">4,715.80</td>
+  </tr>
+</tfoot>
+```
+
+### Mobile Card Layout (Instead of Table)
+
+On mobile (≤640px), tables convert to stacked cards:
+
+```html
+<div class="p-2 space-y-2 md:hidden">
+  <div class="p-3 bg-surface border border-border rounded-sm">
+    <!-- Header row -->
+    <div class="flex justify-between items-start mb-2">
+      <div>
+        <div class="text-[13px] font-medium text-text">Grocery Store</div>
+        <div class="font-mono text-[11px] text-text-muted">2026-02-15</div>
       </div>
-      <div class="flex justify-between font-mono text-[8px] font-bold uppercase">
-        <span>74% Complete</span><span>1,700 to go</span>
-      </div>
+      <div class="font-mono text-xs font-medium text-negative tabular-nums">-84.20</div>
     </div>
-  </div>
-  <div class="pl-6 border-l border-white/10 ml-6">
-    <p class="font-mono text-[8px] uppercase opacity-50 mb-1">Timeline</p>
-    <p class="font-headline text-xs font-bold">Dec 2026</p>
+    <!-- Meta row -->
+    <div class="flex justify-between items-center">
+      <div class="font-mono text-[11px] text-text-muted">PLN</div>
+      <!-- chip -->
+    </div>
   </div>
 </div>
 ```
 
+| Property | Value |
+|---|---|
+| Card | `bg-surface border border-border rounded-sm p-3` |
+| Spacing | `space-y-2` between cards |
+| Amount | JetBrains Mono, right-aligned, semantic color |
+| Date | JetBrains Mono 11px, `text-muted` |
+
 ---
 
-## Bottom Navigation (Mobile)
+## 10. Chips & Tags
 
-Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximum 5 slots — center is always the primary action FAB.
+Chips are rectangular with 1px borders and 4px border-radius. **Never** use `rounded-full` (pill shape). All chips use JetBrains Mono at 10px, uppercase, with wider letter-spacing.
+
+### Transaction Type Chips
 
 ```html
-<nav class="fixed bottom-0 left-0 right-0 z-bottom-nav
-            bg-[rgba(250,249,248,0.96)] backdrop-blur-md
-            border-t border-[rgba(174,179,178,0.15)]
-            flex justify-around items-end
-            pb-[env(safe-area-inset-bottom)]">
+<!-- Income -->
+<span class="inline-flex items-center px-2 py-0.5 border border-positive/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-positive-bg text-positive select-none">
+  Income
+</span>
 
-  <!-- Standard tab -->
-  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-primary">
-    <span class="material-symbols-outlined" style="font-size:22px">dashboard</span>
-    <span class="font-mono text-[8px] uppercase tracking-wider font-bold">Home</span>
-  </button>
-
-  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-outline">
-    <span class="material-symbols-outlined" style="font-size:22px">receipt_long</span>
-    <span class="font-mono text-[8px] uppercase tracking-wider font-bold">Txns</span>
-  </button>
-
-  <!-- Center FAB slot — elevated above the bar -->
-  <button class="flex-1 flex flex-col items-center -mt-5">
-    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-dim
-                flex items-center justify-center
-                shadow-[0_6px_20px_rgba(75,87,170,0.32)]
-                hover:scale-105 active:scale-95 transition-all">
-      <span class="material-symbols-outlined text-on-primary" style="font-size:24px">add</span>
-    </div>
-  </button>
-
-  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-outline">
-    <span class="material-symbols-outlined" style="font-size:22px">event_note</span>
-    <span class="font-mono text-[8px] uppercase tracking-wider font-bold">Planned</span>
-  </button>
-
-  <!-- "More" opens a bottom sheet with remaining nav items -->
-  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-outline">
-    <span class="material-symbols-outlined" style="font-size:22px">grid_view</span>
-    <span class="font-mono text-[8px] uppercase tracking-wider font-bold">More</span>
-  </button>
-</nav>
+<!-- Expense -->
+<span class="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none">
+  Expense
+</span>
 ```
+
+### Status Chips (Planned Transactions)
+
+```html
+<!-- Done -->
+<span class="inline-flex items-center px-2 py-0.5 border border-positive/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-positive-bg text-positive select-none">
+  Done
+</span>
+
+<!-- Pending -->
+<span class="inline-flex items-center px-2 py-0.5 border border-warning/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-warning-bg text-warning select-none">
+  Pending
+</span>
+
+<!-- Cancelled -->
+<span class="inline-flex items-center px-2 py-0.5 border border-negative/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-negative-bg text-negative select-none">
+  Cancelled
+</span>
+```
+
+### Role Badges
+
+```html
+<!-- Owner -->
+<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-warning/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-warning-bg text-warning select-none">
+  <Star class="h-3 w-3" />
+  Owner
+</span>
+
+<!-- Admin -->
+<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none">
+  <Shield class="h-3 w-3" />
+  Admin
+</span>
+
+<!-- Member -->
+<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text-muted select-none">
+  <User class="h-3 w-3" />
+  Member
+</span>
+
+<!-- Viewer -->
+<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-background text-text-muted select-none">
+  <Eye class="h-3 w-3" />
+  Viewer
+</span>
+```
+
+### Category Chips
+
+```html
+<span class="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none">
+  Housing
+</span>
+```
+
+### "You" Badge
+
+```html
+<span class="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text-muted select-none">
+  You
+</span>
+```
+
+### Chip Property Reference
 
 | Property | Value |
 |---|---|
-| Visibility | Mobile only (`≤640px`) — `display: none` at ≥641px |
-| Background | `rgba(250,249,248,0.96)` + `backdrop-blur-md` |
-| Border | `1px solid rgba(174,179,178,0.15)` — ghost only |
-| Height | ~56px + `safe-area-inset-bottom` |
-| Tab labels | JetBrains Mono, 8px, UPPERCASE |
-| Active tab | `primary` color (icon + label) |
-| Inactive tab | `outline` color |
-| FAB | 48px circle, indigo gradient, `box-shadow: 0 6px 20px rgba(75,87,170,0.32)`, `-20px` top margin |
-| Max tabs | 5 including FAB slot |
-| Overflow nav | Accessible via "More" → bottom sheet |
-| Safe area | Always apply `padding-bottom: env(safe-area-inset-bottom)` |
+| Shape | `rounded-sm` (4px) — **never** `rounded-full` |
+| Border | `border border-border` or `border border-{semantic}/20` |
+| Font | JetBrains Mono, 10px, weight 500 |
+| Casing | `uppercase` |
+| Letter spacing | `tracking-wider` |
+| Padding | `px-2 py-0.5` |
+| Selection | `select-none` |
 
 ---
 
-## Modal / Dialog
+## 11. Modals
 
-Overlay panel for focused tasks — forms, confirmations, detail views. The most common pattern in the app (15+ modals).
+Overlay panels for focused tasks — forms, confirmations, detail views. Zero shadows, 1px borders, `rounded-sm`.
+
+### Structure
 
 ```html
 <!-- Backdrop -->
-<div class="fixed inset-0 z-modal-backdrop bg-on-surface/40 backdrop-blur-[2px]"></div>
+<div class="fixed inset-0 z-modal-backdrop bg-primary/20 backdrop-blur-sm"></div>
 
-<!-- Panel (medium size) -->
+<!-- Panel wrapper -->
 <div class="fixed inset-0 z-modal flex items-center justify-center p-4">
-  <div class="bg-surface-container-lowest rounded-xl w-full max-w-lg
-              shadow-[0_8px_32px_rgba(75,87,170,0.12),0_2px_8px_rgba(47,51,51,0.06)]
-              animate-[modalIn_120ms_ease-out]
+  <div class="bg-surface border border-border rounded-sm w-full max-w-lg
               flex flex-col max-h-[85vh]">
 
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 pt-5 pb-3">
-      <h2 class="font-headline text-[17px] font-bold text-on-surface">Add Transaction</h2>
-      <button class="text-outline hover:text-on-surface transition-colors p-1 -mr-1
-                     rounded-lg hover:bg-surface-container-high">
-        <span class="material-symbols-outlined" style="font-size:20px">close</span>
+    <div class="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
+      <h2 class="text-sm font-semibold text-text">Add Transaction</h2>
+      <button class="text-text-muted hover:text-text transition-colors p-1 -mr-1
+                     hover:bg-surface-hover rounded-none">
+        <X class="h-3.5 w-3.5" />
       </button>
     </div>
 
     <!-- Body (scrollable) -->
-    <div class="flex-1 overflow-y-auto px-6 py-2 scrollbar-thin">
+    <div class="flex-1 overflow-y-auto px-4 py-3 scrollbar-thin">
       <!-- form fields or content -->
     </div>
 
     <!-- Footer -->
-    <div class="flex justify-end gap-2 px-6 pt-3 pb-5">
-      <button class="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg text-[13px] font-medium
-                     hover:bg-surface-container transition-all">
+    <div class="flex justify-end gap-2 px-4 pt-3 pb-4 border-t border-border">
+      <button class="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium
+                     hover:bg-surface-hover transition-colors">
         Cancel
       </button>
-      <button class="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg
-                     text-[13px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+      <button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium
+                     hover:bg-primary-hover transition-colors">
         Save Transaction
       </button>
     </div>
@@ -586,92 +1136,101 @@ Overlay panel for focused tasks — forms, confirmations, detail views. The most
 </div>
 ```
 
+### Animation
+
 ```css
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(0.97) translateY(4px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 ```
 
 | Property | Value |
 |---|---|
-| Backdrop | `on-surface` at 40% opacity + `blur(2px)` |
-| Panel bg | `surface-container-lowest` |
-| Radius | `16px` (xl) |
-| Shadow | `0 8px 32px rgba(75,87,170,0.12), 0 2px 8px rgba(47,51,51,0.06)` |
+| Backdrop | `bg-primary/20` (`#171717` at 20%) + `backdrop-blur-sm` |
+| Panel bg | `bg-surface` (`#FFFFFF`) |
+| Panel border | `border border-border` (1px, `#E5E5E5`) |
+| Panel radius | `rounded-sm` (4px) |
+| Shadow | **None** — `shadow-none` (no `box-shadow`) |
 | Max height | `85vh` |
-| Header padding | `24px` left/right, `20px` top, `12px` bottom |
-| Body padding | `24px` left/right, `8px` top/bottom — scrollable with `scrollbar-thin` |
-| Footer padding | `24px` left/right, `12px` top, `20px` bottom |
-| Open | `scale(0.97) translateY(4px)` → identity, `120ms ease-out` |
-| Close | `80ms ease-in`, opacity only — no scale on exit |
+| Header padding | `px-4 pt-4 pb-3` |
+| Header border | `border-b border-border` |
+| Title | Geist, 14px (`text-sm`), weight 600 (`font-semibold`), `text-text` |
+| Close icon | Lucide `X`, 14px (`h-3.5 w-3.5`) |
+| Body padding | `px-4 py-3` — scrollable with `scrollbar-thin` |
+| Footer padding | `px-4 pt-3 pb-4` |
+| Footer border | `border-t border-border` |
+| Open animation | `translateY(4px)` → identity, `120ms ease-out` |
+| Close | `80ms ease-in`, opacity only |
 | Dismiss | Click backdrop, `Escape` key, or close button |
 
 ### Size Variants
 
 | Size | Max Width | Use |
 |---|---|---|
-| `sm` | `400px` | Confirmation dialogs, simple prompts |
+| `sm` | `400px` (`max-w-sm`) | Confirmation dialogs, simple prompts |
 | `md` | `520px` (`max-w-lg`) | Standard forms (transaction, category, budget) |
 | `lg` | `640px` (`max-w-2xl`) | Complex forms, import/export, multi-step wizards |
 
 ### Mobile (≤640px)
 
-Modal converts to a bottom sheet — see `responsive.md` for the CSS. Additional specs:
+Modal converts to a bottom sheet:
 
 | Property | Value |
 |---|---|
 | Width | `100%`, no horizontal margin |
-| Radius | `16px 16px 0 0` (top corners only) |
+| Radius | `rounded-t-sm` (top corners only) |
 | Max height | `92dvh` |
-| Drag handle | `32px × 4px` rounded bar, `surface-container-high`, centered, `8px` top margin |
+| Drag handle | `32px × 4px` bar, `bg-surface-muted`, centered, `8px` top margin |
 | Swipe down | Dismiss gesture (threshold: 80px drag distance) |
 | Footer | Sticky to bottom with `safe-area-inset-bottom` padding |
 
 ---
 
-## Form Layout
+## 12. Form Layout
 
-Standard vertical form used inside modals and pages.
+Standard vertical form used inside modals and pages. Adapts the Architectural Ledger design: `rounded-none` inputs, uppercase labels, compact spacing.
+
+### Standard Form
 
 ```html
 <form class="space-y-4">
   <!-- Single field -->
   <div>
-    <label class="font-mono text-[9px] uppercase tracking-widest text-outline mb-1.5 block">
+    <label class="text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1 block">
       Description <span class="text-negative">*</span>
     </label>
-    <input class="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2.5
-                  font-body text-sm text-on-surface
-                  focus:bg-surface-container-lowest focus:outline-none
-                  focus:ring-2 focus:ring-primary-container transition-all"
+    <input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
+                  text-[13px] text-text
+                  focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+                  transition-colors"
            placeholder="What was this for?"/>
   </div>
 
   <!-- Field with validation error -->
   <div>
-    <label class="font-mono text-[9px] uppercase tracking-widest text-outline mb-1.5 block">
+    <label class="text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1 block">
       Amount <span class="text-negative">*</span>
     </label>
-    <input class="w-full bg-error/[0.06] border-none rounded-lg px-3 py-2.5
-                  font-mono text-sm text-on-surface
-                  ring-2 ring-error/40 focus:outline-none transition-all"/>
-    <div class="flex items-center gap-1 mt-1.5">
-      <span class="material-symbols-outlined text-error" style="font-size:14px">error</span>
-      <span class="text-[12px] text-error font-medium">Amount must be greater than 0</span>
+    <input class="w-full bg-negative-bg border border-negative/30 rounded-none px-2 py-1.5
+                  font-mono text-[13px] text-text
+                  ring-1 ring-negative/40 focus:outline-none transition-colors"/>
+    <div class="flex items-center gap-1 mt-1">
+      <AlertCircle class="h-3.5 w-3.5 text-negative" />
+      <span class="text-[11px] text-negative font-medium">Amount must be greater than 0</span>
     </div>
   </div>
 
   <!-- Two-column row (collapses on mobile) -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     <div>
-      <label class="font-mono text-[9px] uppercase tracking-widest text-outline mb-1.5 block">
+      <label class="text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1 block">
         Category
       </label>
       <!-- select component -->
     </div>
     <div>
-      <label class="font-mono text-[9px] uppercase tracking-widest text-outline mb-1.5 block">
+      <label class="text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1 block">
         Date
       </label>
       <!-- date input -->
@@ -679,23 +1238,27 @@ Standard vertical form used inside modals and pages.
   </div>
 
   <!-- Helper text -->
-  <p class="text-[12px] text-outline leading-relaxed">
+  <p class="text-[11px] text-text-muted leading-relaxed">
     Transactions are recorded in the current period's currency.
   </p>
 </form>
 ```
 
+### Form Properties
+
 | Property | Value |
 |---|---|
 | Field gap | `16px` (`space-y-4`) |
 | Group gap | `24px` between logical field groups (`space-y-6` between groups) |
-| Label | JetBrains Mono, 9px, UPPERCASE, `outline` — `6px` below label |
+| Label | Geist, 11px, weight 500, `uppercase`, `tracking-wider`, `text-muted` — `4px` (`mb-1`) above input |
 | Required indicator | `*` in `negative` color, placed after label text |
-| Input height | `40px` (`py-2.5` + `text-sm`) |
-| Error input bg | `error` at 6% opacity |
-| Error ring | `error` at 40% opacity, `2px` |
-| Error message | 12px, `error`, medium weight, `14px` error icon, `6px` top margin |
-| Helper text | 12px, `outline`, `leading-relaxed` |
+| Input height | `32px` (`py-1.5` + text) — matches row height |
+| Input radius | `rounded-none` (0px) |
+| Input border | `border border-border`; focus → `border-border-focus` + `ring-1 ring-border-focus` |
+| Error input bg | `bg-negative-bg` with `border-negative/30` |
+| Error ring | `ring-1 ring-negative/40` |
+| Error message | 11px, `text-negative`, medium weight, Lucide `AlertCircle` 14px, `4px` top margin |
+| Helper text | 11px, `text-muted`, `leading-relaxed` |
 | Multi-column | `grid-cols-2` at `sm:` breakpoint, single column on mobile |
 | Actions | Right-aligned inside modal footer — **not** inside the `<form>` body |
 
@@ -710,33 +1273,34 @@ Standard vertical form used inside modals and pages.
 
 ---
 
-## Confirmation Dialog
+## 13. Confirmation Dialog
 
-Uses the Modal at `sm` size (400px). Always requires explicit user action — never auto-dismiss.
+Uses the Modal at `sm` size (400px). Always requires explicit user action — never auto-dismiss. Flat styling, no shadows.
+
+### Structure
 
 ```html
-<div class="bg-surface-container-lowest rounded-xl w-full max-w-[400px] p-6
-            shadow-[0_8px_32px_rgba(75,87,170,0.12),0_2px_8px_rgba(47,51,51,0.06)]">
+<div class="bg-surface border border-border rounded-sm w-full max-w-sm p-4">
   <!-- Icon + text -->
-  <div class="flex items-start gap-3 mb-5">
-    <div class="h-10 w-10 rounded-full bg-error/10 flex items-center justify-center flex-shrink-0">
-      <span class="material-symbols-outlined text-error" style="font-size:22px">warning</span>
+  <div class="flex items-start gap-3 mb-4">
+    <div class="h-8 w-8 border border-negative/20 rounded-sm bg-negative-bg flex items-center justify-center flex-shrink-0">
+      <AlertTriangle class="h-4 w-4 text-negative" />
     </div>
     <div>
-      <h3 class="font-headline text-[15px] font-bold text-on-surface">Delete transaction?</h3>
-      <p class="font-body text-[13px] text-on-surface-variant mt-1.5 leading-relaxed">
+      <h3 class="text-sm font-semibold text-text">Delete transaction?</h3>
+      <p class="text-[13px] text-text-muted mt-1 leading-relaxed">
         This will permanently remove "Grocery Store — 84.20 PLN". This action cannot be undone.
       </p>
     </div>
   </div>
   <!-- Actions -->
   <div class="flex justify-end gap-2">
-    <button class="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg text-[13px] font-medium
-                   hover:bg-surface-container transition-all">
+    <button class="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium
+                   hover:bg-surface-hover transition-colors">
       Cancel
     </button>
-    <button class="bg-error text-white px-4 py-2 rounded-lg text-[13px] font-semibold
-                   hover:bg-error/90 transition-all">
+    <button class="bg-negative text-white px-3 py-1.5 rounded-sm text-xs font-medium
+                   hover:bg-negative/90 transition-colors">
       Delete
     </button>
   </div>
@@ -745,337 +1309,595 @@ Uses the Modal at `sm` size (400px). Always requires explicit user action — ne
 
 ### Variants
 
-| Variant | Icon | Icon bg | CTA bg | CTA text |
-|---|---|---|---|---|
-| Destructive | `warning` | `error/10` | `error` solid | `white` |
-| Confirm | `help` | `primary/10` | Primary gradient | `on-primary` |
-| Warning | `warning` | `warning/10` | `warning` solid | `white` |
+| Variant | Icon (Lucide) | Icon bg | Icon border | CTA bg | CTA text |
+|---|---|---|---|---|---|
+| Destructive | `AlertTriangle` | `bg-negative-bg` | `border-negative/20` | `bg-negative` | `white` |
+| Confirm | `HelpCircle` | `bg-surface` | `border-border` | `bg-primary` | `white` |
+| Warning | `AlertTriangle` | `bg-warning-bg` | `border-warning/20` | `bg-warning` | `white` |
+
+### Properties
 
 | Property | Value |
 |---|---|
-| Max width | `400px` |
-| Padding | `24px` uniform |
-| Icon container | `40px` circle, semantic color at 10% opacity |
-| Title | Geist, 15px, bold |
-| Description | Geist, 13px, `on-surface-variant`, `leading-relaxed` |
-| Button gap | `8px` |
+| Max width | `400px` (`max-w-sm`) |
+| Padding | `16px` uniform (`p-4`) |
+| Panel border | `border border-border` |
+| Panel radius | `rounded-sm` (4px) |
+| Shadow | **None** |
+| Icon container | `32px` square (`h-8 w-8`), `rounded-sm`, semantic color border + bg |
+| Title | Geist, 14px (`text-sm`), weight 600 (`font-semibold`), `text-text` |
+| Description | Geist, 13px, `text-muted`, `leading-relaxed` |
+| Button gap | `8px` (`gap-2`) |
 | Focus on open | Auto-focus **Cancel** button (never the destructive action) |
 | Mobile | Bottom sheet, same content layout |
 
 ---
 
-## Select / Custom Dropdown
+## 14. Empty States
 
-Styled dropdown trigger that replaces native `<select>`. Opens the Dropdown & Menu component (see `patterns.md`).
+Simplified for the high-density Architectural Ledger aesthetic. Minimal vertical space, muted icon, single line of text, flat CTA button.
+
+### Full Empty State
 
 ```html
-<!-- Trigger: value selected -->
-<div>
-  <label class="font-mono text-[9px] uppercase tracking-widest text-outline mb-1.5 block">Category</label>
-  <button class="w-full flex items-center justify-between
-                 bg-surface-container-highest rounded-lg px-3 py-2.5
-                 text-sm text-on-surface text-left
-                 hover:bg-surface-container-high
-                 focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none
-                 transition-all">
-    <div class="flex items-center gap-2 min-w-0">
-      <span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">restaurant</span>
-      <span class="truncate">Food & Groceries</span>
-    </div>
-    <span class="material-symbols-outlined text-outline flex-shrink-0 transition-transform"
-          style="font-size:18px">expand_more</span>
+<div class="text-center py-8">
+  <FileX class="h-12 w-12 text-text-muted/30 mx-auto mb-3" />
+  <p class="text-sm font-medium text-text-muted mb-4">No transactions yet</p>
+  <button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium
+                 hover:bg-primary-hover transition-colors">
+    Add Transaction
   </button>
 </div>
-
-<!-- Trigger: placeholder (nothing selected) -->
-<button class="w-full flex items-center justify-between
-               bg-surface-container-highest rounded-lg px-3 py-2.5
-               text-sm text-outline text-left ...">
-  <span>Select category...</span>
-  <span class="material-symbols-outlined text-outline" style="font-size:18px">expand_more</span>
-</button>
 ```
 
-| Property | Value |
-|---|---|
-| Trigger style | Identical to text inputs (same bg, radius, height, focus ring) |
-| Placeholder | `outline` color text |
-| Selected value | `on-surface` color, optional leading icon (16px) |
-| Chevron | `expand_more`, 18px, `outline` — rotates `180deg` when open (120ms) |
-| Dropdown panel | Reuses Dropdown & Menu from `patterns.md` |
-| Keyboard | `Space`/`Enter` opens; `ArrowDown`/`ArrowUp` navigate; `Enter` selects; `Escape` closes |
-| On mobile | Opens as a bottom sheet instead of floating dropdown |
-| Error state | Same error ring/bg as text inputs when validation fails |
-
----
-
-## Toggle / Switch
-
-Binary on/off control. Use for settings and preferences — **never** use a checkbox for on/off toggles.
+### Inline Empty State (Within Tables)
 
 ```html
-<!-- Off state -->
-<label class="inline-flex items-center gap-3 cursor-pointer">
-  <button role="switch" aria-checked="false"
-          class="relative inline-flex h-6 w-11 items-center rounded-full
-                 bg-surface-container-high transition-colors duration-[120ms]
-                 focus-visible:ring-2 focus-visible:ring-primary-container focus-visible:ring-offset-2">
-    <span class="inline-block h-[18px] w-[18px] rounded-full bg-white shadow-sm
-                 translate-x-[3px] transition-transform duration-[120ms]"></span>
-  </button>
-  <span class="font-body text-sm text-on-surface">Dark mode</span>
-</label>
-
-<!-- On state -->
-<label class="inline-flex items-center gap-3 cursor-pointer">
-  <button role="switch" aria-checked="true"
-          class="relative inline-flex h-6 w-11 items-center rounded-full
-                 bg-primary transition-colors duration-[120ms]
-                 focus-visible:ring-2 focus-visible:ring-primary-container focus-visible:ring-offset-2">
-    <span class="inline-block h-[18px] w-[18px] rounded-full bg-white shadow-sm
-                 translate-x-[22px] transition-transform duration-[120ms]"></span>
-  </button>
-  <span class="font-body text-sm text-on-surface">Dark mode</span>
-</label>
+<div class="text-center py-6 text-text-muted text-[13px]">
+  No transactions yet
+</div>
 ```
 
-| State | Track | Thumb |
-|---|---|---|
-| Off | `surface-container-high` | `white`, left position |
-| Off hover | `surface-container` | — |
-| On | `primary` | `white`, right position |
-| On hover | `primary-dim` | — |
-| Disabled | `surface-container` at 50% opacity | — |
+### Properties
 
 | Property | Value |
 |---|---|
-| Track | `44px × 24px`, `rounded-full` |
-| Thumb | `18px` circle, `white`, `shadow-sm` |
-| Transition | `120ms` for both track color and thumb position |
-| Focus | `2px primary-container` ring, `2px` offset |
-| ARIA | `role="switch"`, `aria-checked`, `aria-label` required |
-| Label | Geist body text to the right, `12px` gap |
+| Container padding | `py-8` (32px) |
+| Icon | Lucide at 48px (`h-12 w-12`), `text-text-muted/30` |
+| Icon spacing | `mb-3` (12px) below icon |
+| Message | Geist, 14px (`text-sm`), weight 500, `text-text-muted` |
+| Message spacing | `mb-4` (16px) below message |
+| CTA button | Flat primary button (`bg-primary`, no gradient) |
+| Inline variant | No icon, 13px text, `py-6` |
+
+### Lucide Icons for Empty States
+
+| Context | Icon |
+|---|---|
+| Transactions | `FileX` |
+| Planned Transactions | `CalendarX` |
+| Categories | `Tag` |
+| Members | `Users` |
+| Search results | `SearchX` |
 
 ---
 
-## Avatar
+## 15. Loading States
 
-User identity indicator. Shows a photo or initials fallback.
+The Architectural Ledger uses **top-edge progress bars** and **wireframe skeletons** — never spinners.
+
+### Top-Edge Progress Bar
+
+A thin progress bar fixed at the top of the viewport or container, indicating ongoing data loading.
+
+```html
+<!-- Fixed at viewport top -->
+<div class="fixed top-0 left-0 right-0 z-toast h-1 bg-primary animate-pulse"></div>
+
+<!-- Determinate progress -->
+<div class="fixed top-0 left-0 right-0 z-toast h-1 bg-surface-muted">
+  <div class="h-full bg-primary transition-all" style="width: 60%"></div>
+</div>
+```
+
+| Property | Value |
+|---|---|
+| Height | `4px` (`h-1`) |
+| Background (indeterminate) | `bg-primary animate-pulse` |
+| Background (track) | `bg-surface-muted` |
+| Fill color | `bg-primary` |
+| Position | `fixed top-0 left-0 right-0 z-toast` |
+| Radius | `rounded-none` |
+
+### Wireframe Skeletons
+
+1px-bordered empty boxes that show layout structure while content loads. Not rounded, not filled — just wireframe outlines.
+
+```html
+<!-- Card skeleton -->
+<div class="border border-border rounded-sm p-4 space-y-3 animate-pulse">
+  <div class="h-3 w-24 border border-border rounded-none"></div>
+  <div class="h-4 w-40 border border-border rounded-none"></div>
+  <div class="grid grid-cols-2 gap-2">
+    <div class="h-3 w-20 border border-border rounded-none"></div>
+    <div class="h-3 w-16 border border-border rounded-none"></div>
+  </div>
+</div>
+
+<!-- Table row skeleton -->
+<div class="border-b border-border h-8 flex items-center px-3 gap-3 animate-pulse">
+  <div class="h-3 w-32 border border-border rounded-none"></div>
+  <div class="flex-1"></div>
+  <div class="h-3 w-20 border border-border rounded-none"></div>
+</div>
+
+<!-- Inline skeleton (compact) -->
+<div class="flex items-center gap-2 px-3 py-1.5 animate-pulse">
+  <div class="h-4 w-4 border border-border rounded-none"></div>
+  <div class="h-3 w-24 border border-border rounded-none"></div>
+</div>
+```
+
+| Property | Value |
+|---|---|
+| Skeleton shape | `border border-border rounded-none` — wireframe outline only |
+| Animation | `animate-pulse` |
+| Fill | Transparent (no background fill) — only the 1px border is visible |
+| Radius | `rounded-none` — rectangular wireframe |
+| Sizes | Match expected content: `h-3 w-24`, `h-4 w-40`, etc. |
+
+### Loading Text (Inline)
+
+For inline loading indicators where a progress bar or skeleton isn't appropriate:
+
+```html
+<div class="flex items-center gap-2 py-4 text-text-muted text-[13px]">
+  <Loader2 class="h-3.5 w-3.5 animate-spin" />
+  Loading balances...
+</div>
+```
+
+Uses Lucide `Loader2` with `animate-spin` only for inline micro-loaders — not for full-page or section loading states.
+
+---
+
+## 16. Pagination
+
+Desktop shows numbered pages with prev/next; mobile uses "Load More". All styling uses the Architectural Ledger tokens.
+
+### Desktop Pagination
+
+```html
+<div class="flex flex-col sm:flex-row items-center justify-between gap-4 px-3 py-2 border-t border-border">
+  <!-- Left: info + page size -->
+  <div class="flex items-center gap-3">
+    <span class="font-mono text-[11px] text-text-muted">1–50 of 1,234</span>
+    <div class="flex items-center gap-2">
+      <span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">Rows</span>
+      <select class="bg-surface border border-border rounded-none px-2 py-1 text-[11px] font-mono text-text
+                     focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus">
+        <option>50</option>
+        <option>100</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Right: page navigation -->
+  <div class="flex items-center gap-1">
+    <button disabled class="h-8 w-8 flex items-center justify-center rounded-none text-text-muted/40 cursor-not-allowed">
+      <ChevronLeft class="h-4 w-4" />
+    </button>
+    <!-- Active page -->
+    <button class="h-8 min-w-[32px] px-1 flex items-center justify-center rounded-none
+                   bg-primary text-white font-mono text-[11px] font-medium">1</button>
+    <button class="h-8 min-w-[32px] px-1 flex items-center justify-center rounded-none
+                   text-text font-mono text-[11px] hover:bg-surface-hover transition-colors">2</button>
+    <button class="h-8 min-w-[32px] px-1 flex items-center justify-center rounded-none
+                   text-text font-mono text-[11px] hover:bg-surface-hover transition-colors">3</button>
+    <span class="text-text-muted font-mono text-[11px] px-1">…</span>
+    <button class="h-8 min-w-[32px] px-1 flex items-center justify-center rounded-none
+                   text-text font-mono text-[11px] hover:bg-surface-hover transition-colors">25</button>
+    <button class="h-8 w-8 flex items-center justify-center rounded-none
+                   text-text hover:bg-surface-hover transition-colors">
+      <ChevronRight class="h-4 w-4" />
+    </button>
+  </div>
+</div>
+```
+
+### Mobile: Load More
+
+```html
+<div class="flex flex-col items-center py-4 gap-2">
+  <button class="bg-surface border border-border text-text px-4 py-1.5 rounded-sm text-xs font-medium
+                 hover:bg-surface-hover transition-colors">
+    Load More
+  </button>
+  <span class="font-mono text-[11px] text-text-muted">Showing 50 of 1,234</span>
+</div>
+```
+
+### Properties
+
+| Property | Value |
+|---|---|
+| Container border | `border-t border-border` |
+| Container padding | `px-3 py-2` |
+| Count text | JetBrains Mono, 11px, `text-muted` |
+| "Rows" label | Geist, 10px, uppercase, `tracking-wider`, `text-muted` |
+| Page size select | `border border-border rounded-none`, JetBrains Mono 11px |
+| Page button | `32px` min square (`h-8 min-w-[32px]`), `rounded-none` |
+| Active page | `bg-primary text-white` (flat, no shadow) |
+| Inactive page | `text-text`, transparent bg |
+| Hover | `bg-surface-hover` |
+| Disabled arrow | `text-text-muted/40`, `cursor-not-allowed` |
+| Ellipsis | `…` in `text-muted` |
+| Font | JetBrains Mono, 11px |
+| Prev/next icons | Lucide `ChevronLeft` / `ChevronRight`, 16px |
+| Default per page | `50` |
+
+---
+
+## 17. Toast Notifications
+
+Uses `react-hot-toast` with custom styling via the `<Toaster>` component. Flat styling, 1px borders, no shadows.
+
+### Custom Toaster Configuration
+
+```tsx
+<Toaster
+  toastOptions={{
+    duration: 3000,
+    style: {
+      background: 'var(--color-surface)',
+      color: 'var(--color-text)',
+      border: '1px solid var(--color-border)',
+      borderRadius: '4px',
+      boxShadow: 'none',
+      fontSize: '13px',
+      padding: '12px 16px',
+    },
+    success: {
+      iconTheme: {
+        primary: 'var(--color-positive)',
+        secondary: 'var(--color-surface)',
+      },
+    },
+    error: {
+      iconTheme: {
+        primary: 'var(--color-negative)',
+        secondary: 'var(--color-surface)',
+      },
+    },
+  }}
+/>
+```
+
+### Visual Properties
+
+| Property | Value |
+|---|---|
+| Background | `bg-surface` (`#FFFFFF`) |
+| Border | `1px solid var(--color-border)` (`#E5E5E5`) |
+| Radius | `4px` (equivalent to `rounded-sm`) |
+| Shadow | **None** — `boxShadow: 'none'` |
+| Text | `text-text` (`#171717`), 13px |
+| Padding | `12px 16px` |
+| Position | Bottom-center (default) |
+| Duration | 3000ms |
+
+### Usage Patterns
+
+```tsx
+// Success
+toast.success('Transaction saved')
+
+// Error with API message extraction
+toast.error(getApiErrorMessage(error, 'Failed to save transaction'))
+
+// Validation error
+toast.error('Amount must be greater than 0')
+```
+
+### Toast Icon Colors
+
+| Type | Icon Color |
+|---|---|
+| Success | `--color-positive` (`#059669`) |
+| Error | `--color-negative` (`#DC2626`) |
+| Default | `--color-text-muted` (`#737373`) |
+
+---
+
+## 18. Avatar, Badge & Search Results
+
+### Avatar
 
 ```html
 <!-- With image -->
-<div class="h-8 w-8 rounded-full overflow-hidden bg-primary-container flex-shrink-0">
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-muted flex-shrink-0">
   <img src="/avatar.jpg" alt="John D." class="h-full w-full object-cover"/>
 </div>
 
 <!-- Initials fallback -->
-<div class="h-8 w-8 rounded-full bg-primary-container flex items-center justify-center flex-shrink-0">
-  <span class="font-mono text-[10px] font-bold text-on-primary-container">JD</span>
+<div class="h-8 w-8 rounded-full bg-surface-muted border border-border flex items-center justify-center flex-shrink-0">
+  <span class="font-mono text-[10px] font-medium text-text">JD</span>
 </div>
 
 <!-- With online indicator -->
 <div class="relative">
-  <div class="h-8 w-8 rounded-full bg-primary-container flex items-center justify-center">
-    <span class="font-mono text-[10px] font-bold text-on-primary-container">JD</span>
+  <div class="h-8 w-8 rounded-full bg-surface-muted border border-border flex items-center justify-center">
+    <span class="font-mono text-[10px] font-medium text-text">JD</span>
   </div>
   <div class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-positive
-              ring-2 ring-surface-container-lowest"></div>
+              ring-2 ring-surface"></div>
 </div>
 ```
 
-### Size Scale
+#### Avatar Size Scale
 
 | Size | Class | Initials Font | Use |
 |---|---|---|---|
 | `xs` | `h-6 w-6` (24px) | 8px | Inline mentions, compact lists |
 | `sm` | `h-8 w-8` (32px) | 10px | Sidebar user footer, table rows |
-| `md` | `h-10 w-10` (40px) | 12px | Member lists, workspace cards |
-| `lg` | `h-12 w-12` (48px) | 14px | Profile page, settings header |
+| `md` | `h-10 w-10` (40px) | 11px | Member lists, workspace cards |
+| `lg` | `h-12 w-12` (48px) | 12px | Profile page, settings header |
+
+#### Avatar Properties
 
 | Property | Value |
 |---|---|
-| Shape | Always `rounded-full` |
-| Fallback bg | `primary-container` |
-| Initials | JetBrains Mono, bold, `on-primary-container` — max 2 chars |
-| Online dot | `positive` bg, `12px`, `ring-2 ring-surface-container-lowest` |
-| Group (stacked) | Overlap by `8px`, each with `ring-2 ring-surface-container-lowest` |
+| Shape | `rounded-full` (circles only for avatars) |
+| Fallback bg | `bg-surface-muted` with `border border-border` |
+| Initials | JetBrains Mono, weight 500, `text-text` — max 2 chars |
+| Online dot | `bg-positive`, `12px`, `ring-2 ring-surface` |
+| Group (stacked) | Overlap by `8px`, each with `ring-2 ring-surface` |
 
----
-
-## Badge / Notification Dot
-
-Small indicators for unread counts or status. Always positioned on a parent element.
+### Badge / Notification Dot
 
 ```html
 <!-- Dot only (unread indicator) -->
 <div class="relative">
-  <span class="material-symbols-outlined">notifications</span>
+  <Bell class="h-4 w-4 text-text-muted" />
   <div class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-negative"></div>
 </div>
 
 <!-- Count badge -->
 <div class="relative">
-  <span class="material-symbols-outlined">notifications</span>
+  <Bell class="h-4 w-4 text-text-muted" />
   <div class="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1
               bg-negative rounded-full flex items-center justify-center
-              font-mono text-[9px] font-bold text-white">
+              font-mono text-[9px] font-medium text-white">
     3
   </div>
 </div>
 
-<!-- Large count (capped) -->
+<!-- Large count (capped at 99+) -->
 <div class="absolute -top-1.5 -right-3 min-w-[18px] h-[18px] px-1.5
             bg-negative rounded-full flex items-center justify-center
-            font-mono text-[9px] font-bold text-white">
+            font-mono text-[9px] font-medium text-white">
   99+
 </div>
 ```
 
-| Variant | Size | Content |
-|---|---|---|
-| Dot | `8px` circle | None — presence indicator only |
-| Count | `18px` min-height/width, pill shape | Number, capped at `99+` |
+#### Badge Properties
 
 | Property | Value |
 |---|---|
-| Background | `negative` |
-| Text | `white`, JetBrains Mono, 9px, bold |
-| Position | `absolute`, offset `-2px` to `-6px` from parent corner |
-| Radius | `rounded-full` |
+| Background | `bg-negative` |
+| Text | `text-white`, JetBrains Mono, 9px, weight 500 |
+| Position | `absolute`, offset from parent corner |
+| Radius | `rounded-full` (dots and badges remain circular) |
 | Max display | `99+` — values above 99 truncate |
 | Parent | Must have `position: relative` |
 
----
-
-## Pagination
-
-For long lists (transactions, members). Desktop shows page numbers; mobile uses "Load More".
-
-```html
-<!-- Desktop: numbered pagination -->
-<div class="flex items-center justify-between py-3">
-  <span class="font-mono text-[11px] text-outline">1-50 of 1,234</span>
-
-  <div class="flex items-center gap-1">
-    <button disabled class="h-8 w-8 rounded-lg flex items-center justify-center text-outline/40">
-      <span class="material-symbols-outlined" style="font-size:18px">chevron_left</span>
-    </button>
-    <!-- Active page -->
-    <button class="h-8 min-w-[32px] px-1 rounded-lg flex items-center justify-center
-                   bg-primary text-on-primary font-mono text-[12px] font-bold">1</button>
-    <button class="h-8 min-w-[32px] px-1 rounded-lg flex items-center justify-center
-                   text-on-surface font-mono text-[12px] hover:bg-surface-container-low transition-colors">2</button>
-    <button class="h-8 min-w-[32px] px-1 rounded-lg flex items-center justify-center
-                   text-on-surface font-mono text-[12px] hover:bg-surface-container-low transition-colors">3</button>
-    <span class="text-outline font-mono text-[12px] px-1">...</span>
-    <button class="h-8 min-w-[32px] px-1 rounded-lg flex items-center justify-center
-                   text-on-surface font-mono text-[12px] hover:bg-surface-container-low transition-colors">25</button>
-    <button class="h-8 w-8 rounded-lg flex items-center justify-center
-                   text-on-surface hover:bg-surface-container-low transition-colors">
-      <span class="material-symbols-outlined" style="font-size:18px">chevron_right</span>
-    </button>
-  </div>
-</div>
-
-<!-- Mobile: Load More -->
-<div class="flex flex-col items-center py-6 gap-2">
-  <button class="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg text-[13px] font-medium
-                 hover:bg-surface-container transition-all">
-    Load More
-  </button>
-  <span class="font-mono text-[11px] text-outline">Showing 50 of 1,234</span>
-</div>
-```
-
-| Property | Value |
-|---|---|
-| Count text | JetBrains Mono, 11px, `outline` |
-| Page button | `32px` min square, `rounded-lg` |
-| Active page | `primary` bg, `on-primary` text, bold |
-| Inactive page | Transparent bg, `on-surface` text |
-| Hover | `surface-container-low` bg |
-| Disabled arrow | `outline/40`, `cursor-not-allowed` |
-| Ellipsis | `...` in `outline` color |
-| Font | JetBrains Mono, 12px |
-| Desktop | Full numbered pages with prev/next arrows |
-| Mobile | "Load More" button — simpler, one-thumb friendly |
-| Default per page | `50` — future user preference for `25 / 50 / 100` |
-
----
-
-## Search Results Dropdown
-
-Appears below the top-bar search input on focus. Groups results by type.
+### Search Results Dropdown
 
 ```html
 <div class="absolute top-full mt-1 left-0 right-0
-            bg-surface-container-lowest rounded-xl
-            shadow-[0_8px_32px_rgba(75,87,170,0.12),0_2px_8px_rgba(47,51,51,0.06)]
-            z-dropdown max-h-[360px] overflow-y-auto scrollbar-thin
-            animate-[fadeIn_100ms_ease-out]">
+            bg-surface border border-border rounded-sm
+            z-dropdown max-h-[360px] overflow-y-auto scrollbar-thin">
 
-  <!-- Recent searches (shown when input is empty) -->
+  <!-- Group label -->
   <div class="px-3 pt-3 pb-1">
-    <span class="font-mono text-[8px] uppercase tracking-widest text-outline/60">Recent</span>
+    <span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">Recent</span>
   </div>
-  <button class="w-full flex items-center gap-2.5 px-3 h-9 text-left
-                 text-[13px] text-on-surface-variant hover:bg-surface-container-low transition-colors">
-    <span class="material-symbols-outlined" style="font-size:16px">history</span>
+
+  <!-- Recent search item -->
+  <button class="w-full flex items-center gap-2.5 px-3 h-8 text-left
+                 text-[13px] text-text-muted hover:bg-surface-hover transition-colors">
+    <Clock class="h-3.5 w-3.5 text-text-muted" />
     <span>Grocery</span>
   </button>
 
   <!-- Grouped results -->
   <div class="px-3 pt-3 pb-1">
-    <span class="font-mono text-[8px] uppercase tracking-widest text-outline/60">Transactions</span>
+    <span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">Transactions</span>
   </div>
   <button class="w-full flex items-center gap-2.5 px-3 h-10 text-left
-                 hover:bg-surface-container-low transition-colors">
-    <span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">receipt_long</span>
+                 hover:bg-surface-hover transition-colors">
+    <FileText class="h-3.5 w-3.5 text-text-muted" />
     <div class="flex-1 min-w-0">
-      <span class="text-[13px] text-on-surface">
-        <mark class="bg-primary-container/50 text-on-surface rounded-sm px-0.5">Grocery</mark> Store
+      <span class="text-[13px] text-text">
+        <mark class="bg-positive-bg text-text rounded-none px-0.5">Grocery</mark> Store
       </span>
     </div>
-    <span class="font-mono text-[11px] text-negative font-semibold">-84.20</span>
+    <span class="font-mono text-[11px] text-negative font-medium tabular-nums">-84.20</span>
   </button>
 
-  <!-- No results state -->
-  <div class="px-3 py-8 text-center">
-    <span class="text-[13px] text-outline">No results for "xyz"</span>
+  <!-- No results -->
+  <div class="px-3 py-6 text-center">
+    <span class="text-[13px] text-text-muted">No results for "xyz"</span>
   </div>
 </div>
 ```
 
+#### Search Results Properties
+
 | Property | Value |
 |---|---|
 | Trigger | Search input focus; minimum 2 characters for query results |
-| Max height | `360px`, `overflow-y: auto` with `scrollbar-thin` |
-| Match highlight | `<mark>` with `primary-container/50` bg, `rounded-sm` |
+| Background | `bg-surface` |
+| Border | `border border-border` |
+| Radius | `rounded-sm` (4px) |
+| Shadow | **None** |
+| Max height | `360px`, `overflow-y-auto` with `scrollbar-thin` |
+| Match highlight | `<mark>` with `bg-positive-bg`, `rounded-none`, `text-text` |
 | Groups | Transactions, Categories, Planned — each with a group label |
-| Recent | Shown when input is empty; `history` icon, `on-surface-variant` |
-| No results | Centered "No results for ..." in `outline` color |
-| Max per group | `5` items, with "View all {type}" link at bottom of group |
+| Group label | Geist, 10px, uppercase, `tracking-wider`, `text-muted` |
+| Recent | Shown when input is empty; Lucide `Clock` icon, `text-muted` |
+| Result icons | Lucide, 14px (`h-3.5 w-3.5`), `text-muted` |
+| No results | Centered text in `text-muted` |
+| Max per group | 5 items, with "View all {type}" link at bottom of group |
 | Keyboard | `ArrowDown`/`ArrowUp` navigate; `Enter` selects; `Escape` closes |
 | Dismiss | Click outside, `Escape`, or select an item |
 
 ---
 
-## Icons
+## 19. Bottom Navigation (Mobile)
 
-Use **Material Symbols Outlined** exclusively.
+Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximum 5 slots — center is always the primary action.
+
+### Structure
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<style>
-  .material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  }
-</style>
+<nav class="fixed bottom-0 left-0 right-0 z-bottom-nav
+            bg-surface border-t border-border
+            flex justify-around items-end
+            pb-[env(safe-area-inset-bottom)]">
+
+  <!-- Active tab -->
+  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-primary">
+    <LayoutDashboard class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">Home</span>
+  </button>
+
+  <!-- Inactive tab -->
+  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
+    <FileText class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">Txns</span>
+  </button>
+
+  <!-- Center FAB slot — elevated above the bar -->
+  <button class="flex-1 flex flex-col items-center -mt-5">
+    <div class="w-12 h-12 bg-primary border border-border
+                flex items-center justify-center rounded-sm
+                hover:bg-primary-hover active:scale-95 transition-all">
+      <Plus class="h-5 w-5 text-white" />
+    </div>
+  </button>
+
+  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
+    <Calendar class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">Planned</span>
+  </button>
+
+  <!-- "More" opens a bottom sheet -->
+  <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
+    <Grid3X3 class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">More</span>
+  </button>
+</nav>
 ```
 
-| Context | Size | Stroke |
+### Properties
+
+| Property | Value |
+|---|---|
+| Visibility | Mobile only (`≤640px`) — `display: none` at ≥641px |
+| Background | `bg-surface` (`#FFFFFF`) |
+| Border | `border-t border-border` — no glassmorphism, no blur |
+| Shadow | **None** |
+| Height | ~56px + `safe-area-inset-bottom` |
+| Tab labels | Geist, 10px, weight 500, `uppercase`, `tracking-wider` |
+| Tab icons | Lucide, 20px (`h-5 w-5`) |
+| Active tab | `text-primary` (icon + label) |
+| Inactive tab | `text-text-muted` |
+| FAB | `48px` square (`w-12 h-12`), `bg-primary`, `border border-border`, `rounded-sm` |
+| FAB icon | Lucide `Plus`, 20px, `text-white` |
+| FAB offset | `-20px` (`-mt-5`) above the bar |
+| Max tabs | 5 including FAB slot |
+| Overflow nav | Accessible via "More" → bottom sheet |
+| Safe area | Always apply `padding-bottom: env(safe-area-inset-bottom)` |
+
+---
+
+## 20. Icons
+
+### Library: Lucide Icons (Exclusively)
+
+All icons use **Lucide** (`lucide-react`). No Material Symbols, no HeroIcons, no `react-icons`, no inline SVGs.
+
+```bash
+npm install lucide-react
+```
+
+```tsx
+import { Plus, X, ChevronDown, AlertTriangle } from 'lucide-react'
+```
+
+### Icon Sizing & Stroke
+
+| Context | Size | Tailwind | Stroke Weight |
+|---|---|---|---|
+| Default (most UI) | 14px | `h-3.5 w-3.5` | 1.5px (Lucide default) |
+| Navigation (sidebar, bottom nav) | 20px | `h-5 w-5` | 1.5px |
+| Table headers, inline micro | 14px | `h-3.5 w-3.5` | 1.5px |
+| Empty state illustrations | 48px | `h-12 w-12` | 1.5px |
+| FAB / prominent actions | 20px | `h-5 w-5` | 1.5px |
+
+> **Note:** Lucide's default stroke width is 2px at 24px. At 14px rendered size, the effective stroke is ~1.5px visual weight. No `strokeWidth` prop override is needed — use the Lucide defaults.
+
+### Common Icon Mappings
+
+| Context | Lucide Icon | Old (Material Symbols) |
 |---|---|---|
-| Sidebar nav | `20px` | `1.5px` (via `wght` 200) |
-| Top bar actions | `24px` | default |
-| Card icons (in containers) | `18–20px` | default |
-| Inline / micro | `16px` | default |
+| Add / Create | `Plus` | `add` |
+| Close | `X` | `close` |
+| Edit | `Pencil` | `edit` |
+| Delete | `Trash2` | `delete` |
+| Search | `Search` | `search` |
+| Notifications | `Bell` | `notifications` |
+| Settings | `Settings` | `settings` |
+| Warning | `AlertTriangle` | `warning` |
+| Error | `AlertCircle` | `error` |
+| Success / Check | `Check` | `check` |
+| Calendar | `Calendar` | `calendar_month` |
+| Budget | `Wallet` | `account_balance_wallet` |
+| Dashboard | `LayoutDashboard` | `dashboard` |
+| Transactions | `FileText` | `receipt_long` |
+| Planned | `CalendarClock` | `event_note` |
+| Categories | `Tag` | `category` |
+| Members | `Users` | `group` |
+| Person | `User` | `person` |
+| Home / Workspace | `Home` | `home` |
+| Expand / Collapse | `ChevronDown` | `expand_more` |
+| Navigate left | `ChevronLeft` | `chevron_left` |
+| Navigate right | `ChevronRight` | `chevron_right` |
+| Loading | `Loader2` | — (was inline SVG spinner) |
+| Upload | `Upload` | `upload` |
+| Download | `Download` | `download` |
+| Sort | `ArrowUpDown` | — |
+| Filter | `Filter` | `filter_list` |
+| Export | `FileDown` | — |
+| Info | `Info` | `info` |
+| Help | `HelpCircle` | `help` |
+| Eye / View | `Eye` | `visibility` |
+| Shield / Admin | `Shield` | `admin_panel_settings` |
+| Star / Owner | `Star` | `star` |
+| History | `Clock` | `history` |
+| Grid / More | `Grid3X3` | `grid_view` |
+
+### Icon Color Rules
+
+Icons inherit their color from the parent element's text color. Use semantic tokens:
+
+| Context | Color | Tailwind |
+|---|---|---|
+| Default | `--color-text-muted` | `text-text-muted` |
+| Active / Hover | `--color-text` | `text-text` |
+| Primary actions | `--color-primary` | `text-primary` |
+| Destructive | `--color-negative` | `text-negative` |
+| Success | `--color-positive` | `text-positive` |
+| On primary bg | `white` | `text-white` |
+| Disabled | `--color-text-muted` at 40% | `text-text-muted/40` |
