@@ -10,97 +10,118 @@
 Always import both. No substitutes (no Inter, Roboto, Arial, system-ui).
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 ```
 
 | Role | Font | Use |
 |---|---|---|
-| Headlines, UI labels, body | `Geist` | All prose, navigation labels, headings |
-| **All numbers** | `JetBrains Mono` | Currency, percentages, dates, IDs, transaction amounts, nav items |
+| UI text, headings, labels, body, navigation | `Geist` | All prose, navigation labels, headings, button text |
+| **All financial data** | `JetBrains Mono` | Currency, percentages, dates, IDs, transaction amounts, balance displays |
 
-**Rule:** Every currency value, percentage, date, and transaction ID **must** use JetBrains Mono. Never render `$4,280.00` in Geist.
+**Rule:** Every currency value, percentage, date, and transaction ID **must** use JetBrains Mono. Never render `$4,280.00` in Geist. This applies to all tabular data, balance cards, budget amounts, and financial summaries.
 
 ### Type Scale
 
-| Token | Font | Size | Weight | Tracking | Use |
+The type scale is intentionally narrow (11–16px) to maintain a dense, ledger-like aesthetic. Headings lead with weight and spacing, not size.
+
+| Element | Font | Weight | Size | Style | Tailwind Classes |
 |---|---|---|---|---|---|
-| `display-lg` | Geist | 28–32px | 900 | -0.04em | Account balances, hero numbers |
-| `heading` | Geist | 18–22px | 800 | -0.025em | Page titles, section headers |
-| `body` | Geist | 13–14px | 500 | 0 | Labels, descriptions, body text |
-| `mono-amount` | JetBrains Mono | 13–14px | 700 | 0 | All currency/numerical values |
-| `micro` | JetBrains Mono | 9–11px | 700 | 0.12em | UPPERCASE tags, status labels, nav items |
+| Page Titles | Geist | 600 | 16px | Standard | `text-base font-semibold` |
+| Section Titles | Geist | 500 | 14px | Standard | `text-sm font-medium` |
+| Body UI | Geist | 400 | 13px | Standard | `text-[13px] font-normal` |
+| Financial Amounts | JetBrains Mono | 500 | 12px | Tabular | `font-mono text-xs font-medium tabular-nums` |
+| Labels / Headers | Geist | 500 | 11px | Uppercase, tracking-wider | `text-[11px] font-medium uppercase tracking-wider` |
+| Metadata | JetBrains Mono | 400 | 11px | Standard | `font-mono text-[11px] font-normal` |
+| Table Headers | Geist | 500 | 10px | Uppercase, tracking-wider | `text-[10px] font-medium uppercase tracking-wider` |
+
+> **Note on `tabular-nums`:** JetBrains Mono is already tabular by design, but explicitly setting `font-variant-numeric: tabular-nums` via the `tabular-nums` Tailwind utility ensures consistent column alignment in all browsers.
 
 ---
 
-## 2. Color Tokens
+## 2. Color Tokens — CSS Variables
 
-These are the **only** hex values to use. Do not invent new colors.
+These are the **only** hex values in the system. Every component references the CSS variable, never the raw hex. Dark mode overrides are defined in `dark-mode.md`.
 
-### Brand
+```css
+:root {
+  /* Brand / Primary */
+  --color-primary: #171717;
+  --color-primary-hover: #262626;
 
-| Token | Hex | Use |
-|---|---|---|
-| `primary` | `#4b57aa` | CTAs, active states, brand accents |
-| `primary-dim` | `#3f4b9d` | Button gradient end, hover |
-| `primary-container` | `#dfe0ff` | Focus rings, chip backgrounds, highlights |
-| `on-primary` | `#f9f6ff` | Text on primary buttons |
-| `on-primary-container` | `#3e4a9c` | Text on primary-container bg |
+  /* Surfaces */
+  --color-background: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F5F5F5;
+  --color-surface-muted: #E5E5E5;
 
-### Secondary
+  /* Borders */
+  --color-border: #E5E5E5;
+  --color-border-focus: #171717;
 
-| Token | Hex | Use |
-|---|---|---|
-| `secondary-container` | `#c9e7f7` | Financial chip backgrounds |
-| `on-secondary-container` | `#395663` | Text on secondary-container |
-| `secondary-fixed` | `#c9e7f7` | Alternate chip/tag bg |
-| `on-secondary-fixed` | `#264350` | Text on secondary-fixed |
+  /* Text */
+  --color-text: #171717;
+  --color-text-muted: #737373;
 
-### Surface Layers (use in this order — deepest to highest)
+  /* Semantic / Financial */
+  --color-positive: #059669;
+  --color-positive-bg: #ECFDF5;
+  --color-negative: #DC2626;
+  --color-negative-bg: #FEF2F2;
+  --color-warning: #D97706;
+  --color-warning-bg: #FFFBEB;
+}
+```
 
-| Token | Hex | Layer | Use |
+### Token Reference Table
+
+#### Brand / Primary
+
+| Token | CSS Variable | Hex | Use |
 |---|---|---|---|
-| `surface-container-low` | `#f3f4f3` | L1 | Sidebar, secondary panels |
-| `surface` | `#faf9f8` | L2 | Main canvas background |
-| `surface-container-lowest` | `#ffffff` | L3 | Cards, modals, floating elements |
-| `surface-container` | `#edeeed` | — | Mid-level containers |
-| `surface-container-high` | `#e6e9e8` | — | Secondary button fill |
-| `surface-container-highest` | `#dfe3e2` | — | Inactive input backgrounds |
-| `surface-variant` | `#dfe3e2` | — | Icon container backgrounds |
+| `primary` | `--color-primary` | `#171717` | Primary buttons, active states, CTAs, focus borders |
+| `primary-hover` | `--color-primary-hover` | `#262626` | Button hover state, active hover |
 
-### Text
+#### Surfaces
 
-| Token | Hex | Use |
-|---|---|---|
-| `on-surface` | `#2f3333` | All body text — **never use `#000`** |
-| `on-surface-variant` | `#5b605f` | Secondary labels, subtitles |
-| `outline` | `#777c7b` | Muted labels, axis text |
-| `outline-variant` | `#aeb3b2` | Ghost borders (at 15% opacity only) |
+| Token | CSS Variable | Hex | Use |
+|---|---|---|---|
+| `background` | `--color-background` | `#FAFAFA` | Page background, zebra stripe alternate rows |
+| `surface` | `--color-surface` | `#FFFFFF` | Cards, modals, panels, zebra stripe primary rows |
+| `surface-hover` | `--color-surface-hover` | `#F5F5F5` | Row hover, item hover, interactive surface hover |
+| `surface-muted` | `--color-surface-muted` | `#E5E5E5` | Disabled backgrounds, inactive fills, secondary button backgrounds |
 
-### Semantic (financial data only)
+#### Borders
 
-| Token | Hex | Use |
-|---|---|---|
-| `positive` | `#10b981` | Income, inflow, under budget |
-| `positive-container` | `#d1fae5` | Income chip/tag backgrounds |
-| `on-positive-container` | `#065f46` | Text on positive-container bg |
-| `negative` | `#e11d48` | Expenses, outflow, over budget |
-| `negative-container` | `#ffe4e9` | Expense chip/tag backgrounds |
-| `on-negative-container` | `#6b1728` | Text on negative-container bg |
-| `warning` | `#f59e0b` | Non-critical warnings, caution states |
-| `warning-container` | `#fef3c7` | Warning chip/tag backgrounds |
-| `on-warning-container` | `#78350f` | Text on warning-container bg |
-| `error` | `#9e3f4e` | Form errors, critical warnings |
-| `error-container` | `#ff8b9a` | Error chip/tag backgrounds |
-| `tertiary-container` | `#91f78e` | Success/low-burn backgrounds |
-| `on-tertiary-container` | `#005e17` | Text on tertiary-container |
+| Token | CSS Variable | Hex | Use |
+|---|---|---|---|
+| `border` | `--color-border` | `#E5E5E5` | All container borders, dividers, card borders, table cell borders |
+| `border-focus` | `--color-border-focus` | `#171717` | Input focus state, active card indicator, focus ring |
 
-> **Rule:** Only use `positive`/`negative` colors for financial movement. `warning` is for non-blocking caution states (e.g., nearing budget limit). Neutral data stays in `on-surface` / `on-surface-variant`.
+#### Text
+
+| Token | CSS Variable | Hex | Use |
+|---|---|---|---|
+| `text` | `--color-text` | `#171717` | Primary body text, headings — **never use `#000`** |
+| `text-muted` | `--color-text-muted` | `#737373` | Secondary labels, subtitles, placeholder text, metadata |
+
+#### Semantic / Financial
+
+| Token | CSS Variable | Hex | Use |
+|---|---|---|---|
+| `positive` | `--color-positive` | `#059669` | Income, inflow, under-budget indicators |
+| `positive-bg` | `--color-positive-bg` | `#ECFDF5` | Income chip backgrounds, positive highlight fills |
+| `negative` | `--color-negative` | `#DC2626` | Expenses, outflow, over-budget, error states, required field markers |
+| `negative-bg` | `--color-negative-bg` | `#FEF2F2` | Expense chip backgrounds, destructive action hover, error fills |
+| `warning` | `--color-warning` | `#D97706` | Non-critical warnings, caution states, nearing budget limits |
+| `warning-bg` | `--color-warning-bg` | `#FFFBEB` | Warning chip backgrounds, caution fills |
+
+> **Rule:** Only use `positive` / `negative` colors for financial movement. `warning` is for non-blocking caution states (e.g., nearing budget limit). Neutral data stays in `text` / `text-muted`.
 
 ---
 
 ## 3. Tailwind Config
 
-Paste this into every Monie project. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable definitions.
+Paste this into every Monie project. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable overrides.
 
 ```js
 tailwind.config = {
@@ -108,55 +129,39 @@ tailwind.config = {
   theme: {
     extend: {
       colors: {
-        "primary":                  "var(--color-primary)",
-        "primary-dim":              "var(--color-primary-dim)",
-        "primary-container":        "var(--color-primary-container)",
-        "on-primary":               "var(--color-on-primary)",
-        "on-primary-container":     "var(--color-on-primary-container)",
-        "secondary":                "var(--color-secondary)",
-        "secondary-container":      "var(--color-secondary-container)",
-        "on-secondary-container":   "var(--color-on-secondary-container)",
-        "secondary-fixed":          "var(--color-secondary-fixed)",
-        "on-secondary-fixed":       "var(--color-on-secondary-fixed)",
-        "surface":                  "var(--color-surface)",
-        "surface-container-lowest": "var(--color-surface-container-lowest)",
-        "surface-container-low":    "var(--color-surface-container-low)",
-        "surface-container":        "var(--color-surface-container)",
-        "surface-container-high":   "var(--color-surface-container-high)",
-        "surface-container-highest":"var(--color-surface-container-highest)",
-        "surface-variant":          "var(--color-surface-variant)",
-        "on-surface":               "var(--color-on-surface)",
-        "on-surface-variant":       "var(--color-on-surface-variant)",
-        "outline":                  "var(--color-outline)",
-        "outline-variant":          "var(--color-outline-variant)",
-        "error":                    "var(--color-error)",
-        "error-container":          "var(--color-error-container)",
-        "tertiary":                 "var(--color-tertiary)",
-        "tertiary-container":       "var(--color-tertiary-container)",
-        "on-tertiary-container":    "var(--color-on-tertiary-container)",
-        "warning":                  "var(--color-warning)",
-        "warning-container":        "var(--color-warning-container)",
-        "on-warning-container":     "var(--color-on-warning-container)",
-        "positive":                 "var(--color-positive)",
-        "positive-container":       "var(--color-positive-container)",
-        "on-positive-container":    "var(--color-on-positive-container)",
-        "negative":                 "var(--color-negative)",
-        "negative-container":       "var(--color-negative-container)",
-        "on-negative-container":    "var(--color-on-negative-container)",
+        // Brand
+        "primary":        "var(--color-primary)",
+        "primary-hover":  "var(--color-primary-hover)",
+
+        // Surfaces
+        "background":     "var(--color-background)",
+        "surface":        "var(--color-surface)",
+        "surface-hover":  "var(--color-surface-hover)",
+        "surface-muted":  "var(--color-surface-muted)",
+
+        // Borders
+        "border":         "var(--color-border)",
+        "border-focus":   "var(--color-border-focus)",
+
+        // Text
+        "text":           "var(--color-text)",
+        "text-muted":     "var(--color-text-muted)",
+
+        // Semantic / Financial
+        "positive":       "var(--color-positive)",
+        "positive-bg":    "var(--color-positive-bg)",
+        "negative":       "var(--color-negative)",
+        "negative-bg":    "var(--color-negative-bg)",
+        "warning":        "var(--color-warning)",
+        "warning-bg":     "var(--color-warning-bg)",
       },
       fontFamily: {
-        "headline": ["Geist", "sans-serif"],
-        "body":     ["Geist", "sans-serif"],
-        "mono":     ["JetBrains Mono", "monospace"],
-        "label":    ["JetBrains Mono", "monospace"],
+        "sans":   ["Geist", "sans-serif"],
+        "mono":   ["JetBrains Mono", "monospace"],
       },
       borderRadius: {
-        "sm":      "4px",    // avoid — checkboxes only
-        "DEFAULT": "8px",    // buttons, nav items
-        "md":      "12px",   // cards
-        "lg":      "16px",   // large cards, modals
-        "xl":      "16px",
-        "full":    "9999px", // chips, pills, search
+        "sm":    "4px",     // Containers, cards, modals
+        "none":  "0px",     // Internal grid elements, inputs, table cells
       },
       zIndex: {
         "dropdown":       "100",
@@ -174,71 +179,85 @@ tailwind.config = {
 }
 ```
 
+### Usage Examples
+
+```html
+<!-- Container with border -->
+<div class="bg-surface border border-border rounded-sm p-4">
+
+<!-- Primary button -->
+<button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover">
+
+<!-- Input -->
+<input class="bg-surface border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-none">
+
+<!-- Chip (rectangular) -->
+<span class="px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] uppercase tracking-wider">
+
+<!-- Table row (zebra) -->
+<tr class="bg-surface">  <!-- or bg-background for alternate -->
+```
+
 ---
 
 ## 4. Layout & Spacing
 
 4px baseline grid. All margins and paddings must be multiples of 4.
 
-| Element | Value |
-|---|---|
-| Sidebar width | `240px` fixed |
-| Top bar height | `64px` fixed, sticky |
-| Main container padding | `24px–32px` |
-| Card internal padding | `16px–20px` |
-| Table row height | `28px–32px` (strict) |
-| Dashboard grid gap | `16px` |
-| Major section separation | `56px–64px` whitespace — no dividers |
-| Item separation within groups | `12px` whitespace — no dividers |
-| Sidebar nav item height | `40px` |
-
----
-
-## 5. Borders & Depth
-
-### The No-Border Rule
-**Never** use `1px solid` borders to define containers, sections, or list items. Structure is achieved through background color shifts only.
-
-### Surface Layering (primary depth method)
-Stack surfaces to create depth without shadows:
-- Sidebar (`#f3f4f3`) → Main canvas (`#faf9f8`) → Cards (`#ffffff`)
-- This contrast creates natural lift without visual noise.
-
-### Shadows (use sparingly)
-```css
-/* Ambient card shadow */
-box-shadow: 0 4px 24px rgba(47,51,51,0.06), 0 1px 4px rgba(47,51,51,0.04);
-
-/* Floating element / FAB (indigo-tinted) */
-box-shadow: 0 8px 32px rgba(75,87,170,0.12), 0 2px 8px rgba(47,51,51,0.06);
-```
-Never use black-based shadows (`rgba(0,0,0,...)`). Always tint with `on-surface` or the brand indigo.
-
-### Ghost Border (accessibility fallback only)
-```css
-/* Use ONLY when a boundary is required for accessibility */
-border: 1px solid rgba(174, 179, 178, 0.15); /* outline-variant at 15% max */
-```
-100% opaque borders are forbidden everywhere.
-
-### Glassmorphism (top bar & floating nav)
-```css
-background: rgba(250, 249, 248, 0.80);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-/* No border-bottom. No box-shadow on the bar. */
-```
-
----
-
-## 6. Border Radius
-
-| Token | Value | Use |
+| Element | Value | Tailwind |
 |---|---|---|
-| `sm` | `4px` | Avoid. Checkboxes only. |
-| `DEFAULT` | `8px` | Buttons, nav items, small containers |
-| `md` | `12px` | Cards, category widgets |
-| `lg` / `xl` | `16px` | Large cards, panels, modals |
-| `full` | `9999px` | Chips, pills, search bar |
+| Sidebar width | `240px` fixed | `w-60` |
+| Top bar height | `48px` fixed | `h-12` |
+| Main container padding | `16px` | `p-4` |
+| Card internal padding | `12px` or `16px` | `p-3` or `p-4` |
+| Table row height | `32px` **strict** | `h-8` |
+| Dashboard grid gap | `12px` | `gap-3` |
+| Major section separation | `32px` | `mb-8` or `space-y-8` |
+| Item separation within groups | `8px` or `12px` | `gap-2` or `gap-3` |
+| Sidebar nav item height | `32px` | `h-8` |
+| Standard button padding | `12px 6px` | `px-3 py-1.5` |
+| Input padding | `8px 6px` | `px-2 py-1.5` |
+| Touch target minimum | `44px × 44px` (mobile) | `min-h-[44px] min-w-[44px]` |
 
-Never use `0px` radius on any user-facing element larger than a checkbox.
+---
+
+## 5. Borders & Radius
+
+### The Border Rule
+
+All container boundaries are defined by **1px borders** (`border border-border`). Depth is achieved through the contrast between `--color-background` and `--color-surface`, not through shadows or surface layering. Borders are structural — they define edges and boundaries. They are not decorative.
+
+### Border Radius
+
+| Context | Value | Tailwind | Use |
+|---|---|---|---|
+| Containers | `4px` | `rounded-sm` | Cards, modals, panels, dropdowns, popovers |
+| Internal elements | `0px` | `rounded-none` | Inputs, table cells, grid items, inline fields, progress bars |
+| Chips / Tags | `4px` | `rounded-sm` | Rectangular chips with borders — never pills |
+
+**Never** use `rounded-lg` (8px), `rounded-xl` (16px), or `rounded-full` (9999px) on any element.
+
+### Border Usage
+
+| Element | Border | Tailwind |
+|---|---|---|
+| Cards | 1px, `--color-border` | `border border-border` |
+| Table container | 1px, `--color-border` | `border border-border` |
+| Table rows | 1px bottom, `--color-border` | `border-b border-border` |
+| Table header | 1px bottom, `--color-border` | `border-b border-border` |
+| Inputs | 1px, `--color-border`; focus → `--color-border-focus` | `border border-border focus:border-border-focus` |
+| Chips | 1px, semantic or `--color-border` | `border border-border` |
+| Modals | 1px, `--color-border` | `border border-border` |
+| Dropdowns | 1px, `--color-border` | `border border-border` |
+| Sidebar separator | 1px right, `--color-border` | `border-r border-border` |
+| Active nav indicator | 2px left, `--color-primary` | `border-l-2 border-primary` |
+
+### Zero Shadows
+
+```css
+/* This entire section is empty by design. */
+/* No shadows exist in the Architectural Ledger system. */
+/* Depth comes from 1px borders and surface contrast only. */
+```
+
+The CSS variables `--shadow-card` and `--shadow-float` have been removed. Any existing `shadow-sm`, `shadow-lg`, `shadow-card`, or `shadow-float` usage in the codebase must be replaced with `border border-border`.
