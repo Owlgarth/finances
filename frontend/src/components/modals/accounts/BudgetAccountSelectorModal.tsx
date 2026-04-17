@@ -1,3 +1,4 @@
+import { X, CircleCheck } from 'lucide-react'
 import { useBudgetAccount } from '../../../contexts/BudgetAccountContext'
 
 interface Props {
@@ -17,23 +18,22 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div 
-        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative"
-        style={{ boxShadow: 'var(--shadow-float)' }}
+      <div
+        className="bg-surface border border-border rounded-sm p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
           aria-label="Close modal"
         >
-          <span className="material-symbols-outlined">close</span>
+          <X size={14} />
         </button>
 
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">Select Budget Account</h2>
+        <h2 className="font-semibold text-text text-sm mb-6">Select Budget Account</h2>
 
         {accounts.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-on-surface-variant font-headline">No budget accounts available</p>
+            <p className="text-text-muted font-sans">No budget accounts available</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
@@ -41,10 +41,10 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
               <button
                 key={account.id}
                 onClick={() => handleSelectAccount(account.id)}
-                className={`p-4 rounded-xl transition-all duration-200 text-left relative overflow-hidden group
+                className={`p-4 rounded-sm transition-colors duration-200 text-left relative overflow-hidden group border
                   ${selectedAccountId === account.id
-                    ? 'bg-primary-container ring-2 ring-primary shadow-sm'
-                    : 'bg-surface-container-low hover:bg-surface-container-high hover:shadow-sm text-on-surface'
+                    ? 'bg-surface-hover border-primary'
+                    : 'bg-surface hover:bg-surface-hover text-text border-border'
                 }`}
                 style={{
                   borderLeftColor: account.color || 'transparent',
@@ -55,13 +55,12 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
                   {account.icon && (
                     <span className="text-2xl select-none">{account.icon}</span>
                   )}
-                  <h3 className={`font-headline font-bold truncate flex-1 ${selectedAccountId === account.id ? 'text-on-primary-container' : 'text-on-surface'}`}>
+                  <h3 className={`font-semibold truncate flex-1 text-text`}>
                     {account.name}
                   </h3>
                 </div>
                 {account.description && (
-                  <p className={`text-sm mb-3 font-headline leading-snug opacity-80
-                    ${selectedAccountId === account.id ? 'text-on-primary-container' : 'text-on-surface-variant'}`}
+                  <p className={`text-sm mb-3 font-sans leading-snug text-text-muted`}
                     style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
@@ -72,16 +71,15 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
                     {account.description}
                   </p>
                 )}
-                <div className={`flex items-center justify-between font-mono text-[9px] uppercase tracking-widest
-                  ${selectedAccountId === account.id ? 'text-on-primary-container/70' : 'text-outline'}`}>
+                <div className={`flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-text-muted`}>
                   <span>Default: {account.default_currency}</span>
                   {account.is_active && (
-                    <span className={`${selectedAccountId === account.id ? 'text-on-primary-container' : 'text-positive'} font-bold`}>Active</span>
+                    <span className={`${selectedAccountId === account.id ? 'text-text' : 'text-positive'} font-medium`}>Active</span>
                   )}
                 </div>
                 {selectedAccountId === account.id && (
                   <div className="absolute top-2 right-2 text-primary">
-                    <span className="material-symbols-outlined text-base">check_circle</span>
+                    <CircleCheck size={14} />
                   </div>
                 )}
               </button>
@@ -92,7 +90,7 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
         <div className="flex justify-end mt-8">
           <button
             onClick={onClose}
-            className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
+            className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>

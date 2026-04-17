@@ -54,25 +54,25 @@ export default function Login() {
     setIsSubmitting(false);
   };
 
-  const inputClassName = "w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all";
+  const inputClassName = "w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface py-12 px-4 sm:px-6 lg:px-8">
-      <div className="bg-surface-container-lowest rounded-xl p-8 w-full max-w-md" style={{ boxShadow: 'var(--shadow-card)' }}>
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+      <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h2 className="font-headline font-black text-primary text-3xl tracking-tight">
+          <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
             Monie
           </h2>
           {!requires2FA ? (
-            <p className="mt-2 text-sm text-on-surface-variant">
+            <p className="mt-2 text-sm text-text-muted">
               Sign in to your account
             </p>
           ) : (
             <>
-              <p className="mt-2 text-sm font-medium text-on-surface">
+              <p className="mt-2 text-sm font-medium text-text">
                 Two-Factor Authentication
               </p>
-              <p className="mt-1 text-sm text-on-surface-variant">
+              <p className="mt-1 text-sm text-text-muted">
                 Enter the code from your authenticator app
               </p>
             </>
@@ -82,7 +82,7 @@ export default function Login() {
         {!requires2FA ? (
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 Email address
               </label>
               <input
@@ -99,7 +99,7 @@ export default function Login() {
             </div>
 
             <div className="mb-4">
-              <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 Password
               </label>
               <input
@@ -119,7 +119,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center py-2 px-4 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Signing in...' : 'Sign in'}
               </button>
@@ -129,23 +129,23 @@ export default function Login() {
               <div className="text-center">
                 <Link
                   to="/register"
-                  className="font-medium text-primary hover:text-primary-dim"
+                  className="font-medium text-primary hover:text-primary-hover"
                 >
                   Don't have an account? Register
                 </Link>
               </div>
             )}
 
-            <div className="text-center text-xs text-outline">
-              <Link to="/privacy" className="hover:text-on-surface-variant">Privacy Policy</Link>
+            <div className="text-center text-xs text-text-muted">
+              <Link to="/privacy" className="hover:text-text">Privacy Policy</Link>
               {' · '}
-              <Link to="/terms" className="hover:text-on-surface-variant">Terms of Service</Link>
+              <Link to="/terms" className="hover:text-text">Terms of Service</Link>
             </div>
           </form>
         ) : (
           <form className="space-y-6" onSubmit={handle2FAVerify}>
             <div className="mb-4">
-              <label htmlFor="2fa-code" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              <label htmlFor="2fa-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 {useRecoveryCode ? 'Recovery code' : 'Verification code'}
               </label>
               <input
@@ -167,7 +167,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isSubmitting || !twoFACode}
-                className="w-full flex justify-center py-2 px-4 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Verifying...' : 'Verify'}
               </button>
@@ -180,7 +180,7 @@ export default function Login() {
                   setUseRecoveryCode(!useRecoveryCode);
                   setTwoFACode('');
                 }}
-                className="text-sm text-primary hover:text-primary-dim"
+                className="text-sm text-primary hover:text-primary-hover"
               >
                 {useRecoveryCode ? 'Use authenticator code' : 'Use recovery code'}
               </button>
@@ -188,7 +188,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="text-sm text-on-surface-variant hover:text-on-surface"
+                  className="text-sm text-text-muted hover:text-text"
                 >
                   &larr; Back to sign in
                 </button>

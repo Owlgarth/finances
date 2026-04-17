@@ -18,16 +18,16 @@ export default function TermsPage() {
     <div className="min-h-screen bg-surface py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <Link to={isAuthenticated ? '/' : '/login'} className="text-sm text-primary hover:text-primary-dim">
+          <Link to={isAuthenticated ? '/' : '/login'} className="text-sm text-primary hover:text-primary-hover">
             &larr; {isAuthenticated ? 'Back' : 'Back to login'}
           </Link>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-8" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="bg-surface rounded-sm p-8 border border-border">
           <div className="mb-8">
-            <h1 className="font-headline font-bold text-on-surface text-3xl">Terms of Service</h1>
+            <h1 className="text-base font-semibold text-text">Terms of Service</h1>
             {doc && (
-              <p className="mt-2 text-sm text-on-surface-variant">
+              <p className="mt-2 text-sm text-text-muted">
                 Effective date: {doc.effective_date} &middot; Version {doc.version}
               </p>
             )}
@@ -38,7 +38,7 @@ export default function TermsPage() {
           )}
 
           {!doc && !error && (
-            <p className="text-outline">Loading…</p>
+            <p className="text-text-muted">Loading…</p>
           )}
 
           {doc && (
@@ -46,19 +46,19 @@ export default function TermsPage() {
               <ReactMarkdown
                 components={{
                   h2: ({ children }) => (
-                    <h2 className="font-headline font-bold text-on-surface text-xl mt-8 mb-3">{children}</h2>
+                    <h2 className="text-sm font-medium text-text mt-8 mb-3">{children}</h2>
                   ),
                   p: ({ children }) => (
-                    <p className="text-on-surface-variant mb-3">{children}</p>
+                    <p className="text-text-muted mb-3">{children}</p>
                   ),
                   ul: ({ children }) => (
-                    <ul className="list-disc list-inside text-on-surface-variant space-y-1 ml-4 mb-3">{children}</ul>
+                    <ul className="list-disc list-inside text-text-muted space-y-1 ml-4 mb-3">{children}</ul>
                   ),
                   li: ({ children }) => <li>{children}</li>,
                   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                   em: ({ children }) => <em className="italic">{children}</em>,
                   a: ({ href, children }) => (
-                    <a href={href} className="text-primary hover:text-primary-dim">{children}</a>
+                    <a href={href} className="text-primary hover:text-primary-hover">{children}</a>
                   ),
                 }}
               >
