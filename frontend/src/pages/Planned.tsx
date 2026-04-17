@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Filter } from 'lucide-react'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { plannedTransactionsApi, currenciesApi } from '../api/client'
@@ -193,12 +194,12 @@ export default function Planned() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Planned Transactions</h1>
+        <h1 className="text-base font-semibold text-text">Planned Transactions</h1>
         {canManageBudgetData && (
           <div className="flex flex-col sm:flex-row gap-2">
             <button
               onClick={handleImportClick}
-              className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 bg-surface border border-border text-text rounded-sm hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
               disabled={!selectedPeriodId}
             >
               Import
@@ -212,14 +213,14 @@ export default function Planned() {
             />
             <button
               onClick={handleExport}
-              className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 bg-surface border border-border text-text rounded-sm hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
               disabled={!selectedPeriodId || totalItems === 0}
             >
               Export
             </button>
             <button
               onClick={handleAddNew}
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm hover:bg-primary-hover transition-colors text-xs font-medium"
             >
               Add Planned Transaction
             </button>
@@ -230,40 +231,40 @@ export default function Planned() {
       <div className="mb-8 flex flex-wrap gap-3">
         <button
           onClick={() => setStatusFilter('pending')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
             statusFilter === 'pending'
-              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
-              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+              ? 'bg-primary text-white'
+              : 'bg-surface border border-border text-text hover:bg-surface-hover'
           }`}
         >
           Pending
         </button>
         <button
           onClick={() => setStatusFilter('done')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
             statusFilter === 'done'
-              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
-              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+              ? 'bg-primary text-white'
+              : 'bg-surface border border-border text-text hover:bg-surface-hover'
           }`}
         >
           Done
         </button>
         <button
           onClick={() => setStatusFilter('cancelled')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
             statusFilter === 'cancelled'
-              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
-              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+              ? 'bg-primary text-white'
+              : 'bg-surface border border-border text-text hover:bg-surface-hover'
           }`}
         >
           Cancelled
         </button>
         <button
           onClick={() => setStatusFilter('')}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
             statusFilter === ''
-              ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
-              : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+              ? 'bg-primary text-white'
+              : 'bg-surface border border-border text-text hover:bg-surface-hover'
           }`}
         >
           All
@@ -272,41 +273,39 @@ export default function Planned() {
         <div className="relative" ref={currencyDropdownRef}>
           <button
             onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
-            className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors flex items-center gap-2 ${
               selectedCurrencies.length > 0
-                ? 'bg-gradient-to-br from-primary to-primary-dim text-on-primary'
-                : 'bg-surface-container-highest border-none text-on-surface hover:bg-surface-container'
+                ? 'bg-primary text-white'
+                : 'bg-surface border border-border text-text hover:bg-surface-hover'
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-            </svg>
+            <Filter size={14} />
             <span>Currency</span>
             {selectedCurrencies.length > 0 && (
-              <span className="bg-on-primary text-primary text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center">
+              <span className="bg-white text-primary text-xs font-semibold rounded-sm h-5 w-5 flex items-center justify-center">
                 {selectedCurrencies.length}
               </span>
             )}
           </button>
 
           {isCurrencyDropdownOpen && currencies && currencies.length > 0 && (
-            <div className="absolute top-full mt-2 left-0 min-w-[180px] bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
+            <div className="absolute top-full mt-2 left-0 min-w-[180px] bg-surface border border-border rounded-sm z-dropdown overflow-hidden animate-in fade-in duration-200">
               {currencies.map((currency) => (
-                <label key={currency.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150">
+                <label key={currency.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors duration-150">
                   <input
                     type="checkbox"
                     checked={selectedCurrencies.includes(currency.symbol)}
                     onChange={() => toggleCurrency(currency.symbol)}
-                    className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                    className="w-4 h-4 text-primary border-border rounded-none focus:ring-2 focus:ring-border-focus"
                   />
-                  <span className="text-on-surface font-mono font-bold">{currency.symbol}</span>
-                  <span className="text-on-surface-variant text-sm">{currency.name}</span>
+                  <span className="text-text font-mono font-bold">{currency.symbol}</span>
+                  <span className="text-text-muted text-sm">{currency.name}</span>
                 </label>
               ))}
               {selectedCurrencies.length > 0 && (
                 <button
                   onClick={() => setSelectedCurrencies([])}
-                  className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                  className="w-full px-4 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors duration-150"
                 >
                   Clear Selection
                 </button>

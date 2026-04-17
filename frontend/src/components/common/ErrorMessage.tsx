@@ -1,3 +1,6 @@
+import { AlertTriangle, Ban, Lock, Search, WifiOff } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+
 interface Props {
   message: string
   type?: 'error' | 'warning' | 'info'
@@ -5,32 +8,57 @@ interface Props {
   onRetry?: () => void
 }
 
-const errorConfigs = {
+interface ErrorConfig {
+  title: string
+  description: string
+  icon: LucideIcon
+}
+
+const errorConfigs: Record<number, ErrorConfig> = {
   401: {
     title: 'Session Expired',
     description: 'Your session has expired. Please log in again.',
-    icon: 'lock',
+    icon: Lock,
   },
   403: {
     title: 'Access Denied',
     description: 'You do not have permission to access this resource.',
-    icon: 'block',
+    icon: Ban,
   },
   404: {
     title: 'Not Found',
     description: 'The requested resource could not be found.',
-    icon: 'search',
+    icon: Search,
   },
   500: {
     title: 'Server Error',
     description: 'An unexpected error occurred. Please try again later.',
-    icon: 'warning',
+    icon: AlertTriangle,
   },
-  network: {
-    title: 'Connection Error',
-    description: 'Unable to connect to the server. Check your internet connection.',
-    icon: 'wifi_off',
-  },
+}
+
+const networkConfig: ErrorConfig = {
+  title: 'Connection Error',
+  description: 'Unable to connect to the server. Check your internet connection.',
+  icon: WifiOff,
+}
+
+const bgColors = {
+  error: 'bg-negative-bg',
+  warning: 'bg-warning-bg',
+  info: 'bg-surface-hover',
+}
+
+const textColors = {
+  error: 'text-negative',
+  warning: 'text-warning',
+  info: 'text-text',
+}
+
+const buttonColors = {
+  error: 'bg-negative/10 hover:bg-negative/20 text-negative',
+  warning: 'bg-warning/10 hover:bg-warning/20 text-warning',
+  info: 'bg-surface-hover hover:bg-surface-muted text-text',
 }
 
 export default function ErrorMessage({ message, type = 'error', statusCode, onRetry }: Props) {
@@ -39,38 +67,20 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
                          message.toLowerCase().includes('offline')
 
   const config = statusCode
-    ? errorConfigs[statusCode as keyof typeof errorConfigs]
+    ? errorConfigs[statusCode]
     : isNetworkError
-      ? errorConfigs.network
+      ? networkConfig
       : null
 
-  const bgColors = {
-    error: 'bg-error-container/20',
-    warning: 'bg-[#fef3c7]',
-    info: 'bg-secondary-container/40',
-  }
-
-  const textColors = {
-    error: 'text-error',
-    warning: 'text-[#92400e]',
-    info: 'text-on-secondary-container',
-  }
-
-  const buttonColors = {
-    error: 'bg-error-container/40 hover:bg-error-container/60 text-error',
-    warning: 'bg-[#fde68a] hover:bg-[#fcd34d] text-[#92400e]',
-    info: 'bg-secondary-container hover:bg-secondary-container/80 text-on-secondary-container',
-  }
+  const IconComponent = config?.icon || AlertTriangle
 
   return (
-    <div className={`${bgColors[type]} rounded-lg p-4 mb-4 transition-all duration-200`}>
+    <div className={`${bgColors[type]} rounded-sm p-4 mb-4 transition-colors`}>
       <div className="flex items-start">
-        <span className="material-symbols-outlined text-xl mr-3 flex-shrink-0 select-none">
-          {config?.icon || 'warning'}
-        </span>
+        <IconComponent size={20} className={`mr-3 flex-shrink-0 ${textColors[type]}`} />
         <div className="flex-1">
           {config && (
-            <h4 className={`font-headline font-semibold ${textColors[type]} mb-1`}>
+            <h4 className={`font-semibold ${textColors[type]} mb-1`}>
               {config.title}
             </h4>
           )}
@@ -80,7 +90,7 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
           {onRetry && (
             <button
               onClick={onRetry}
-              className={`mt-3 px-4 py-2 rounded-lg text-sm font-bold font-mono uppercase tracking-wider ${buttonColors[type]} transition-all active:scale-[0.98] shadow-sm`}
+              className={`mt-3 px-3 py-1.5 rounded-sm text-xs font-medium font-mono uppercase tracking-wider border border-border ${buttonColors[type]} transition-colors`}
             >
               Try Again
             </button>

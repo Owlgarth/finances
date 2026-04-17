@@ -114,7 +114,7 @@ export default function TwoFactorSection() {
   }
 
   if (statusQuery.isLoading) {
-    return <p className="text-sm text-on-surface-variant">Loading...</p>
+    return <p className="text-sm text-text-muted">Loading...</p>
   }
 
   const status = statusQuery.data
@@ -133,26 +133,26 @@ export default function TwoFactorSection() {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="font-headline font-bold text-on-surface text-lg mb-1">
+          <h3 className="text-sm font-medium text-text mb-1">
             Set Up Authenticator App
           </h3>
-          <p className="text-sm text-on-surface-variant">
+          <p className="text-sm text-text-muted">
             Scan this QR code with your authenticator app.
           </p>
         </div>
 
         <div className="flex justify-center">
-          <div className="bg-white rounded-lg p-4 inline-block">
+          <div className="bg-surface rounded-sm p-4 inline-block border border-border">
             <img src={setupData.qr_code_svg} alt="2FA QR Code" className="w-48 h-48" />
           </div>
         </div>
 
-        <div className="bg-surface-container-highest rounded-lg p-4">
-          <p className="text-sm text-on-surface-variant mb-2">
+        <div className="bg-surface-muted rounded-sm p-4">
+          <p className="text-sm text-text-muted mb-2">
             Manual entry key:
           </p>
           <div className="flex items-center gap-2">
-            <code className="font-mono text-sm text-on-surface bg-surface-container-lowest px-3 py-1 rounded break-all select-all">
+            <code className="font-mono text-sm text-text bg-surface px-3 py-1 rounded-none border border-border break-all select-all">
               {setupData.secret_key}
             </code>
             <button
@@ -165,7 +165,7 @@ export default function TwoFactorSection() {
                   toast.error('Failed to copy')
                 }
               }}
-              className="px-3 py-1 text-xs font-medium rounded-md border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-all shrink-0"
+              className="px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover transition-colors shrink-0"
             >
               Copy
             </button>
@@ -174,7 +174,7 @@ export default function TwoFactorSection() {
 
         <form onSubmit={handleVerifySetup} className="space-y-4">
           <div>
-            <label htmlFor="verify-code" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+            <label htmlFor="verify-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
               Verification Code
             </label>
             <input
@@ -182,7 +182,7 @@ export default function TwoFactorSection() {
               type="text"
               value={verifyCode}
               onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full max-w-xs bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all tracking-widest text-center"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors tracking-widest text-center"
               placeholder="000000"
               maxLength={6}
               required
@@ -193,14 +193,14 @@ export default function TwoFactorSection() {
             <button
               type="submit"
               disabled={verifySetupMutation.isPending || verifyCode.length !== 6}
-              className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {verifySetupMutation.isPending ? 'Verifying...' : 'Verify'}
             </button>
             <button
               type="button"
               onClick={cancelSetup}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
@@ -214,16 +214,16 @@ export default function TwoFactorSection() {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="font-headline font-bold text-on-surface text-lg mb-1">
+          <h3 className="text-sm font-medium text-text mb-1">
             Disable Two-Factor Authentication
           </h3>
-          <p className="text-sm text-on-surface-variant">
+          <p className="text-sm text-text-muted">
             Enter your password to disable 2FA. This will make your account less secure.
           </p>
         </div>
         <form onSubmit={handleDisable} className="space-y-4">
           <div>
-            <label htmlFor="disable-password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+            <label htmlFor="disable-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
               Confirm your password
             </label>
             <input
@@ -232,7 +232,7 @@ export default function TwoFactorSection() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full max-w-xs bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
               placeholder="Enter your password"
             />
           </div>
@@ -240,14 +240,14 @@ export default function TwoFactorSection() {
             <button
               type="submit"
               disabled={disableMutation.isPending || !password}
-              className="px-4 py-2 bg-negative text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all"
+              className="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {disableMutation.isPending ? 'Disabling...' : 'Disable 2FA'}
             </button>
             <button
               type="button"
               onClick={cancelPasswordAction}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
@@ -261,16 +261,16 @@ export default function TwoFactorSection() {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="font-headline font-bold text-on-surface text-lg mb-1">
+          <h3 className="text-sm font-medium text-text mb-1">
             Regenerate Recovery Codes
           </h3>
-          <p className="text-sm text-on-surface-variant">
+          <p className="text-sm text-text-muted">
             This will invalidate your current recovery codes and generate new ones.
           </p>
         </div>
         <form onSubmit={handleRegenerate} className="space-y-4">
           <div>
-            <label htmlFor="regenerate-password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+            <label htmlFor="regenerate-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
               Confirm your password
             </label>
             <input
@@ -279,7 +279,7 @@ export default function TwoFactorSection() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full max-w-xs bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
               placeholder="Enter your password"
             />
           </div>
@@ -287,14 +287,14 @@ export default function TwoFactorSection() {
             <button
               type="submit"
               disabled={regenerateMutation.isPending || !password}
-              className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {regenerateMutation.isPending ? 'Regenerating...' : 'Regenerate Codes'}
             </button>
             <button
               type="button"
               onClick={cancelPasswordAction}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
@@ -309,21 +309,21 @@ export default function TwoFactorSection() {
       <div className="space-y-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-positive-bg text-positive border border-positive/20">
               Enabled
             </span>
-            <h3 className="font-headline font-bold text-on-surface text-lg">
+            <h3 className="text-sm font-medium text-text">
               Two-Factor Authentication
             </h3>
           </div>
-          <p className="text-sm text-on-surface-variant">
+          <p className="text-sm text-text-muted">
             Your account is protected with two-factor authentication.
           </p>
         </div>
 
-        <div className="bg-surface-container-highest rounded-lg p-4">
-          <p className="text-sm text-on-surface-variant">
-            Recovery codes remaining: <span className="font-medium text-on-surface">{status.remaining_recovery_codes}</span>
+        <div className="bg-surface-muted rounded-sm p-4 border border-border">
+          <p className="text-sm text-text-muted">
+            Recovery codes remaining: <span className="font-medium text-text">{status.remaining_recovery_codes}</span>
           </p>
         </div>
 
@@ -334,17 +334,17 @@ export default function TwoFactorSection() {
               setPassword('')
               setState('regenerating')
             }}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
-          >
-            Regenerate Recovery Codes
-          </button>
+            className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+            >
+              Regenerate Recovery Codes
+            </button>
           <button
             type="button"
             onClick={() => {
               setPassword('')
               setState('disabling')
             }}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-negative/30 text-negative hover:bg-negative/5 transition-all"
+            className="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors"
           >
             Disable 2FA
           </button>
@@ -356,10 +356,10 @@ export default function TwoFactorSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-headline font-bold text-on-surface text-lg mb-1">
+        <h3 className="text-sm font-medium text-text mb-1">
           Two-Factor Authentication
         </h3>
-        <p className="text-sm text-on-surface-variant">
+        <p className="text-sm text-text-muted">
           Add an extra layer of security by requiring a code from your authenticator app when you sign in.
         </p>
       </div>
@@ -367,7 +367,7 @@ export default function TwoFactorSection() {
         type="button"
         onClick={handleSetup}
         disabled={setupMutation.isPending}
-        className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98] transition-all disabled:opacity-50"
+        className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {setupMutation.isPending ? 'Loading...' : 'Enable 2FA'}
       </button>

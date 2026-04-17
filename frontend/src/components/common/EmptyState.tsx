@@ -9,11 +9,11 @@ interface Props {
 export default function EmptyState({ message, action }: Props) {
   return (
     <div className="text-center py-12">
-      <p className="text-on-surface-variant mb-6 font-headline">{message}</p>
+      <p className="text-text-muted mb-6 font-sans">{message}</p>
       {action && (
         <button
           onClick={action.onClick}
-          className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] font-medium text-sm"
+          className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
         >
           {action.label}
         </button>

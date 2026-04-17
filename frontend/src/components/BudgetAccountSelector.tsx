@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Landmark, ChevronDown } from 'lucide-react'
 import { useBudgetAccount } from '../contexts/BudgetAccountContext'
 import BudgetAccountSelectorModal from './modals/accounts/BudgetAccountSelectorModal'
 
@@ -8,17 +9,17 @@ export default function BudgetAccountSelector() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low rounded animate-pulse">
-        <div className="w-4 h-4 bg-surface-container-high rounded" />
-        <div className="w-24 h-4 bg-surface-container-high rounded" />
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-sm animate-pulse">
+        <div className="w-4 h-4 bg-surface-hover rounded-sm" />
+        <div className="w-24 h-4 bg-surface-hover rounded-sm" />
       </div>
     )
   }
 
   if (accounts.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-on-surface-variant font-mono text-[10px] uppercase tracking-wider">
-        <span className="material-symbols-outlined text-base">account_balance</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted font-mono text-[10px] uppercase tracking-wider">
+        <Landmark size={14} />
         <span>No accounts</span>
       </div>
     )
@@ -27,7 +28,7 @@ export default function BudgetAccountSelector() {
   return (
     <>
       <div
-        className="flex items-center gap-2 bg-surface-container-highest rounded-lg hover:bg-surface-container-high transition-colors w-full md:w-auto min-w-[120px] cursor-pointer group overflow-hidden"
+        className="flex items-center gap-2 bg-surface rounded-sm hover:bg-surface-hover transition-colors w-full md:w-auto min-w-[120px] cursor-pointer group overflow-hidden border border-border"
         onClick={() => setIsModalOpen(true)}
         style={{
           borderLeftColor: selectedAccount?.color || 'transparent',
@@ -35,8 +36,8 @@ export default function BudgetAccountSelector() {
         }}
       >
         <div className="px-3 py-1.5 flex items-center gap-2 flex-1 min-w-0">
-          <span className="material-symbols-outlined text-base text-on-surface-variant flex-shrink-0 select-none">account_balance</span>
-          <span className="font-mono text-sm font-medium text-on-surface truncate flex items-center gap-1">
+          <Landmark size={14} className="text-text-muted flex-shrink-0 select-none" />
+          <span className="font-mono text-sm font-medium text-text truncate flex items-center gap-1">
             {selectedAccount?.icon && <span>{selectedAccount.icon}</span>}
             {selectedAccount?.name || 'Select account'}
           </span>
@@ -46,10 +47,10 @@ export default function BudgetAccountSelector() {
             e.stopPropagation()
             setIsModalOpen(true)
           }}
-          className="px-2 py-1.5 hover:bg-surface-container transition-colors rounded-r-lg flex items-center justify-center"
+          className="px-2 py-1.5 hover:bg-surface-muted transition-colors rounded-r-sm flex items-center justify-center"
           aria-label="Change budget account"
         >
-          <span className="material-symbols-outlined text-base text-on-surface-variant select-none">expand_more</span>
+          <ChevronDown size={14} className="text-text-muted select-none" />
         </button>
       </div>
       <BudgetAccountSelectorModal

@@ -63,21 +63,23 @@ export default function Register() {
     }
   };
 
+  const inputClassName = "w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors placeholder:text-text-muted";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface py-12 px-4 sm:px-6 lg:px-8">
-      <div className="bg-surface-container-lowest rounded-xl p-8 w-full max-w-md" style={{ boxShadow: 'var(--shadow-card)' }}>
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+      <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h2 className="font-headline font-black text-primary text-3xl tracking-tight">
+          <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
             Create your account
           </h2>
-          <p className="mt-2 text-sm text-on-surface-variant">
+          <p className="mt-2 text-sm text-text-muted">
             Start tracking your budget today
           </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Email address *
             </label>
             <input
@@ -88,12 +90,12 @@ export default function Register() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className={inputClassName}
             />
           </div>
 
           <div>
-            <label htmlFor="full-name" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label htmlFor="full-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Full name
             </label>
             <input
@@ -103,12 +105,12 @@ export default function Register() {
               autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className={inputClassName}
             />
           </div>
 
           <div>
-            <label htmlFor="workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label htmlFor="workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Workspace name *
             </label>
             <input
@@ -119,12 +121,12 @@ export default function Register() {
               value={workspaceName}
               onChange={(e) => setWorkspaceName(e.target.value)}
               placeholder="My Budget"
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all placeholder:text-outline"
+              className={inputClassName}
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Password * (min 8 characters)
             </label>
             <input
@@ -135,12 +137,12 @@ export default function Register() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className={inputClassName}
             />
           </div>
 
           <div>
-            <label htmlFor="confirm-password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label htmlFor="confirm-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Confirm password *
             </label>
             <input
@@ -151,7 +153,7 @@ export default function Register() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className={inputClassName}
             />
           </div>
 
@@ -165,9 +167,9 @@ export default function Register() {
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 className="mt-1"
               />
-              <label htmlFor="accept-terms" className="text-sm text-on-surface-variant">
+              <label htmlFor="accept-terms" className="text-sm text-text-muted">
                 I accept the{' '}
-                <Link to="/terms" className="text-primary hover:text-primary-dim">Terms of Service</Link>
+                <Link to="/terms" className="text-primary hover:text-primary-hover">Terms of Service</Link>
                 {' '}*
               </label>
             </div>
@@ -180,9 +182,9 @@ export default function Register() {
                 onChange={(e) => setAcceptedPrivacy(e.target.checked)}
                 className="mt-1"
               />
-              <label htmlFor="accept-privacy" className="text-sm text-on-surface-variant">
+              <label htmlFor="accept-privacy" className="text-sm text-text-muted">
                 I accept the{' '}
-                <Link to="/privacy" className="text-primary hover:text-primary-dim">Privacy Policy</Link>
+                <Link to="/privacy" className="text-primary hover:text-primary-hover">Privacy Policy</Link>
                 {' '}*
               </label>
             </div>
@@ -192,7 +194,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={isSubmitting || !acceptedTerms || !acceptedPrivacy || !termsVersion || !privacyVersion}
-              className="w-full flex justify-center py-2 px-4 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creating account...' : 'Create account'}
             </button>
@@ -201,16 +203,16 @@ export default function Register() {
           <div className="text-center">
             <Link
               to="/login"
-              className="font-medium text-primary hover:text-primary-dim"
+              className="font-medium text-primary hover:text-primary-hover"
             >
               Already have an account? Sign in
             </Link>
           </div>
 
-          <div className="text-center text-xs text-outline">
-            <Link to="/privacy" className="hover:text-on-surface-variant">Privacy Policy</Link>
+          <div className="text-center text-xs text-text-muted">
+            <Link to="/privacy" className="hover:text-text">Privacy Policy</Link>
             {' · '}
-            <Link to="/terms" className="hover:text-on-surface-variant">Terms of Service</Link>
+            <Link to="/terms" className="hover:text-text">Terms of Service</Link>
           </div>
         </form>
       </div>

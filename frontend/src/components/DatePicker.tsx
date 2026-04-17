@@ -65,7 +65,7 @@ export default function DatePicker({
         value={value}
         onChange={handleInputChange}
         onFocus={() => setIsOpen(true)}
-        className={`bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all ${className}`}
+        className={`bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all ${className}`}
         required={required}
         disabled={disabled}
         placeholder={placeholder}
@@ -73,8 +73,7 @@ export default function DatePicker({
       />
       {isOpen && (
         <div 
-          className="absolute z-50 mt-2 bg-surface-container-lowest rounded-xl p-4"
-          style={{ boxShadow: 'var(--shadow-float)' }}
+          className="absolute z-50 mt-2 bg-surface rounded-sm border border-border p-4"
         >
           <DayPicker
             mode="single"

@@ -48,17 +48,17 @@ export default function ReConsentPage() {
 
   if (!status) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500">Loading…</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-text-muted">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Updated agreements</h1>
-        <p className="text-gray-600 mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4">
+      <div className="max-w-md w-full bg-surface rounded-sm border border-border p-8">
+        <h1 className="text-base font-semibold text-text mb-2">Updated agreements</h1>
+        <p className="text-text-muted mb-6">
           We've updated our legal documents. Please review and accept the changes to continue using Monie.
         </p>
 
@@ -69,11 +69,11 @@ export default function ReConsentPage() {
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={e => setAcceptedTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300"
+                className="mt-1 h-4 w-4 rounded-none border-border"
               />
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-text">
                 I accept the updated{' '}
-                <Link to="/terms" target="_blank" className="text-blue-600 hover:underline">
+                <Link to="/terms" target="_blank" className="text-primary hover:text-primary-hover">
                   Terms of Service
                 </Link>{' '}
                 {status && `(v${status.terms_version_required})`}
@@ -87,11 +87,11 @@ export default function ReConsentPage() {
                 type="checkbox"
                 checked={acceptedPrivacy}
                 onChange={e => setAcceptedPrivacy(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300"
+                className="mt-1 h-4 w-4 rounded-none border-border"
               />
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-text">
                 I accept the updated{' '}
-                <Link to="/privacy" target="_blank" className="text-blue-600 hover:underline">
+                <Link to="/privacy" target="_blank" className="text-primary hover:text-primary-hover">
                   Privacy Policy
                 </Link>{' '}
                 {status && `(v${status.privacy_version_required})`}
@@ -102,7 +102,7 @@ export default function ReConsentPage() {
           <button
             type="submit"
             disabled={!canSubmit || isSubmitting}
-            className="w-full py-2 px-4 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="w-full py-2 px-4 bg-primary text-white rounded-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {isSubmitting ? 'Saving…' : 'Accept and continue'}
           </button>

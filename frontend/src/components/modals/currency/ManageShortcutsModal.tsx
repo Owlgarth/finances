@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { X } from 'lucide-react'
 import { exchangeShortcutsApi } from '../../../api/client'
 import type { ExchangeShortcut } from '../../../types'
 
@@ -101,30 +102,29 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
       <div
-        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
-        style={{ boxShadow: 'var(--shadow-float)' }}
+        className="bg-surface border border-border rounded-sm p-6 w-full max-w-md relative"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
           aria-label="Close modal"
         >
-          <span className="material-symbols-outlined">close</span>
+          <X size={14} />
         </button>
 
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">
+        <h2 className="font-sans font-semibold text-text text-sm mb-6">
           Manage Shortcuts
         </h2>
 
         {/* Existing shortcuts list */}
         {shortcuts.length === 0 ? (
-          <p className="text-on-surface-variant text-sm mb-6">No shortcuts yet. Add one below.</p>
+          <p className="text-text-muted text-sm mb-6">No shortcuts yet. Add one below.</p>
         ) : (
           <div className="space-y-2 mb-6">
             {shortcuts.map(shortcut => (
               <div
                 key={shortcut.id}
-                className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg"
+                className="flex items-center justify-between p-3 bg-surface-hover rounded-sm"
               >
                 {editingId === shortcut.id ? (
                   <>
@@ -132,17 +132,17 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
                       <select
                         value={editFrom}
                         onChange={(e) => setEditFrom(e.target.value)}
-                        className="bg-surface-container-highest border-none rounded-lg px-2 py-1.5 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none"
+                        className="bg-surface-muted border border-border rounded-none px-2 py-1.5 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                       >
                         {CURRENCIES.map(cur => (
                           <option key={cur} value={cur}>{cur}</option>
                         ))}
                       </select>
-                      <span className="text-on-surface-variant">→</span>
+                      <span className="text-text-muted">→</span>
                       <select
                         value={editTo}
                         onChange={(e) => setEditTo(e.target.value)}
-                        className="bg-surface-container-highest border-none rounded-lg px-2 py-1.5 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none"
+                        className="bg-surface-muted border border-border rounded-none px-2 py-1.5 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                       >
                         {CURRENCIES.map(cur => (
                           <option key={cur} value={cur}>{cur}</option>
@@ -153,13 +153,13 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
                       <button
                         onClick={handleSaveEdit}
                         disabled={updateMutation.isPending}
-                        className="text-primary hover:opacity-80 text-sm font-medium disabled:opacity-50"
+                        className="text-primary hover:text-primary-hover text-sm font-medium disabled:opacity-50"
                       >
                         Save
                       </button>
                       <button
                         onClick={handleCancelEdit}
-                        className="text-on-surface-variant hover:text-on-surface text-sm font-medium"
+                        className="text-text-muted hover:text-text text-sm font-medium"
                       >
                         Cancel
                       </button>
@@ -167,13 +167,13 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
                   </>
                 ) : (
                   <>
-                    <span className="font-mono font-medium text-on-surface text-sm">
+                    <span className="font-mono font-medium text-text text-sm">
                       {shortcut.from_currency} → {shortcut.to_currency}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleStartEdit(shortcut)}
-                        className="text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
+                        className="text-text-muted hover:text-text text-sm font-medium transition-colors"
                       >
                         Edit
                       </button>
@@ -198,17 +198,17 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
             <select
               value={newFrom}
               onChange={(e) => setNewFrom(e.target.value)}
-              className="bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none"
+              className="bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
             >
               {CURRENCIES.map(cur => (
                 <option key={cur} value={cur}>{cur}</option>
               ))}
             </select>
-            <span className="text-on-surface-variant">→</span>
+            <span className="text-text-muted">→</span>
             <select
               value={newTo}
               onChange={(e) => setNewTo(e.target.value)}
-              className="bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:ring-2 focus:ring-primary-container focus:outline-none"
+              className="bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
             >
               {CURRENCIES.map(cur => (
                 <option key={cur} value={cur}>{cur}</option>
@@ -217,7 +217,7 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-4 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createMutation.isPending ? '...' : 'Add'}
             </button>
