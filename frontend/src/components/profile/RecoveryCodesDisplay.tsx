@@ -48,18 +48,18 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="font-headline font-bold text-on-surface text-lg mb-1">Recovery Codes</h3>
-        <p className="text-sm text-on-surface-variant">
+        <h3 className="text-sm font-medium text-text mb-1">Recovery Codes</h3>
+        <p className="text-sm text-text-muted">
           Save these codes in a safe place. You will not be able to see them again.
         </p>
       </div>
 
-      <div className="bg-surface-container-highest rounded-lg p-4">
+      <div className="bg-surface-muted rounded-sm p-4">
         <div className="grid grid-cols-2 gap-2">
           {codes.map((code) => (
             <div
               key={code}
-              className="bg-surface-container-lowest rounded-md px-3 py-2 text-center font-mono text-sm text-on-surface tracking-wider"
+              className="bg-surface rounded-none px-3 py-2 text-center font-mono text-sm text-text tracking-wider"
             >
               {code}
             </div>
@@ -71,14 +71,14 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
         <button
           type="button"
           onClick={handleCopyAll}
-          className="px-4 py-2 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
+          className="px-4 py-2 text-sm font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover hover:text-text transition-colors"
         >
           {copied ? 'Copied!' : 'Copy All Codes'}
         </button>
         <button
           type="button"
           onClick={handleDownload}
-          className="px-4 py-2 text-sm font-medium rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all"
+          className="px-4 py-2 text-sm font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover hover:text-text transition-colors"
         >
           Download Codes
         </button>
@@ -89,7 +89,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
           <button
             type="button"
             onClick={onAcknowledge}
-            className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98] transition-all"
+            className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
           >
             I've Saved My Codes
           </button>

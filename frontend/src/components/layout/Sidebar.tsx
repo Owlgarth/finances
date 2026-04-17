@@ -1,5 +1,19 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  Receipt,
+  ArrowLeftRight,
+  Tag,
+  Landmark,
+  Users,
+  List,
+  LayoutGrid,
+} from 'lucide-react'
 import { useBudgetPeriod } from '../../contexts/BudgetPeriodContext'
 import { useLayout } from '../../contexts/LayoutContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -10,14 +24,14 @@ import WorkspaceSelector from './WorkspaceSelector'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: 'home', exact: true },
-  { to: '/transactions', label: 'Transactions', icon: 'payments' },
-  { to: '/planned', label: 'Planned', icon: 'today' },
-  { to: '/exchanges', label: 'Exchanges', icon: 'currency_exchange' },
-  { to: '/categories', label: 'Categories', icon: 'label' },
-  { to: '/budget-periods', label: 'Periods', icon: 'schedule' },
-  { to: '/budget-accounts', label: 'Accounts', icon: 'account_balance' },
-  { to: '/members', label: 'Members', icon: 'group' },
+  { to: '/', label: 'Dashboard', icon: Home, exact: true },
+  { to: '/transactions', label: 'Transactions', icon: Receipt },
+  { to: '/planned', label: 'Planned', icon: Calendar },
+  { to: '/exchanges', label: 'Exchanges', icon: ArrowLeftRight },
+  { to: '/categories', label: 'Categories', icon: Tag },
+  { to: '/budget-periods', label: 'Periods', icon: Calendar },
+  { to: '/budget-accounts', label: 'Accounts', icon: Landmark },
+  { to: '/members', label: 'Members', icon: Users },
 ]
 
 function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
@@ -33,7 +47,7 @@ function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
 
   if (periods.length === 0) {
     return (
-      <span className="text-sm text-on-surface-variant px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider">
+      <span className="text-sm text-text-muted px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider">
         No periods
       </span>
     )
@@ -41,19 +55,19 @@ function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
 
   return (
     <>
-      <div className="flex items-center gap-2 bg-surface-container-highest rounded-lg hover:bg-surface-container-high transition-colors">
+      <div className="flex items-center gap-2 bg-surface-muted rounded-sm hover:bg-surface-hover transition-colors">
         <div className="px-3 py-1.5 flex items-center gap-2 flex-1 min-w-0">
-          <span className="material-symbols-outlined text-base text-on-surface-variant flex-shrink-0 select-none">today</span>
-          <span className="text-sm font-medium text-on-surface truncate">
+          <Calendar size={14} className="text-text-muted flex-shrink-0" />
+          <span className="text-sm font-medium text-text truncate">
             {selectedPeriod?.name || 'Select period'}
           </span>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-2 py-1.5 hover:bg-surface-container transition-colors rounded-r-lg flex items-center justify-center"
+          className="px-2 py-1.5 hover:bg-surface-hover transition-colors rounded-r-sm flex items-center justify-center"
           aria-label="Change budget period"
         >
-          <span className="material-symbols-outlined text-base text-on-surface-variant select-none">expand_more</span>
+          <ChevronDown size={12} className="text-text-muted" />
         </button>
       </div>
       <BudgetPeriodSelectorModal
@@ -72,13 +86,11 @@ function LayoutToggle({ collapsed }: { collapsed: boolean }) {
   return (
     <button
       onClick={() => setLayoutMode(layoutMode === 'auto' ? 'cards' : 'auto')}
-      className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-on-surface/70 hover:bg-white/50 hover:text-primary transition-all text-sm group"
+      className="flex items-center gap-2 w-full px-3 py-2 rounded-sm text-text-muted hover:bg-surface-hover hover:text-text transition-colors text-sm group"
       title={layoutMode === 'cards' ? 'Switch to auto layout' : 'Switch to cards layout'}
     >
-      <span className="material-symbols-outlined text-xl flex-shrink-0 select-none">
-        {layoutMode === 'cards' ? 'view_list' : 'grid_view'}
-      </span>
-      <span className="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">
+      {layoutMode === 'cards' ? <List size={14} className="flex-shrink-0" /> : <LayoutGrid size={14} className="flex-shrink-0" />}
+      <span className="font-mono text-xs uppercase tracking-wider">
         Layout: {layoutMode === 'cards' ? 'Cards' : 'Auto'}
       </span>
     </button>
@@ -100,23 +112,21 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
   return (
     <>
       <aside
-        className={`flex flex-col h-full bg-surface-container-low transition-all duration-300 z-50
+        className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-300 z-50
           ${collapsed ? 'w-16' : 'w-60'}`}
       >
         {/* Logo + collapse toggle */}
         <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
           {!collapsed && (
-            <span className="font-headline font-black text-primary text-2xl tracking-tight select-none">Monie</span>
+            <span className="font-sans font-semibold text-primary text-base tracking-tight select-none">Monie</span>
           )}
           <button
             onClick={onClose ?? onToggleCollapse}
-            className={`p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-white/50 transition-colors
+            className={`p-1.5 rounded-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors
               ${collapsed ? 'mx-auto' : ''}`}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <span className="material-symbols-outlined select-none">
-              {collapsed ? 'chevron_right' : 'chevron_left'}
-            </span>
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
         </div>
 
@@ -143,19 +153,17 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
                 end={item.exact}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg transition-all mb-1 group
+                  `flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1 group
                   ${isActive
-                    ? 'bg-white shadow-sm text-primary font-bold translate-x-1'
-                    : 'text-on-surface/70 hover:bg-white/50 hover:text-primary'
+                    ? 'bg-surface-hover border-l-2 border-primary text-text font-medium'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text'
                   }`
                 }
                 title={collapsed ? item.label : undefined}
               >
-                <span className="material-symbols-outlined text-xl flex-shrink-0 select-none">
-                  {item.icon}
-                </span>
+                <item.icon size={14} className="flex-shrink-0" />
                 {!collapsed && (
-                  <span className="font-['JetBrains_Mono'] text-xs uppercase tracking-wider">
+                  <span className="font-mono text-xs uppercase tracking-wider">
                     {item.label}
                   </span>
                 )}
@@ -165,8 +173,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">
-              <p className="text-sm text-on-surface-variant mb-2">No workspace selected</p>
-              <p className="text-xs text-on-surface-variant/70">
+              <p className="text-sm text-text-muted mb-2">No workspace selected</p>
+              <p className="text-xs text-text-muted">
                 Create or join a workspace to get started
               </p>
             </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { X } from 'lucide-react'
 import { periodBalancesApi } from '../../../api/client'
 import type { PeriodBalance } from '../../../types'
 
@@ -51,43 +52,40 @@ export default function EditPeriodBalanceModal({ isOpen, onClose, balance }: Pro
 
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div 
-        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
-        style={{ boxShadow: 'var(--shadow-float)' }}
-      >
+      <div className="bg-surface border border-border rounded-sm p-6 w-full max-w-md relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
           aria-label="Close modal"
         >
-          <span className="material-symbols-outlined">close</span>
+          <X size={14} />
         </button>
 
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">Edit Opening Balance</h2>
+        <h2 className="font-semibold text-text text-sm mb-6">Edit Opening Balance</h2>
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Currency</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Currency</label>
             <input
               type="text"
               value={balance.currency}
-              className="w-full bg-surface-container border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface-variant cursor-not-allowed"
+              className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text-muted cursor-not-allowed"
               disabled
             />
           </div>
 
           <div className="mb-6">
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Opening Balance *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Opening Balance *</label>
             <input
               type="number"
               step="0.01"
               value={openingBalance}
               onChange={(e) => setOpeningBalance(e.target.value)}
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:outline-none focus:border-border-focus transition-colors"
               placeholder="0.00"
               required
             />
-            <p className="font-mono text-[9px] text-on-surface-variant mt-2">
+            <p className="font-mono text-[9px] text-text-muted mt-2">
               Changing the opening balance will automatically update the closing balance.
             </p>
           </div>
@@ -96,13 +94,13 @@ export default function EditPeriodBalanceModal({ isOpen, onClose, balance }: Pro
             <button
               type="button"
               onClick={onClose}
-              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm hover:bg-surface-hover transition-colors text-xs font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
               disabled={updateMutation.isPending}
             >
               {updateMutation.isPending ? 'Updating...' : 'Update'}
