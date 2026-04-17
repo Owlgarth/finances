@@ -125,13 +125,13 @@ export default function CategoryPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Categories</h1>
+        <h1 className="text-base font-semibold text-text">Categories</h1>
         <div className="flex flex-col sm:flex-row gap-2">
           {canManageBudgetData && (
             <>
               <button
                 onClick={handleImportClick}
-                className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId}
               >
                 Import
@@ -147,7 +147,7 @@ export default function CategoryPage() {
           )}
           <button
             onClick={handleExport}
-            className="px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!selectedPeriodId || totalItems === 0}
           >
             Export
@@ -155,7 +155,7 @@ export default function CategoryPage() {
           {canManageBudgetData && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId}
             >
               Create New Category
@@ -169,20 +169,20 @@ export default function CategoryPage() {
       ) : error ? (
         <ErrorMessage message="Failed to load categories." />
       ) : (
-        <div className="bg-surface-container-lowest rounded-xl overflow-hidden max-w-4xl mx-auto" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="bg-surface rounded-sm border border-border overflow-hidden max-w-4xl mx-auto">
           {totalItems > 0 ? (
             <>
               <table className={isCardsView ? 'hidden' : 'hidden md:table w-full'}>
-                <thead className="bg-surface-container-low">
+                <thead className="bg-surface-hover">
                   <tr>
-                    <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-outline">
+                    <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
                       Name
                     </th>
-                    <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-outline">
+                    <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
                       Created At
                     </th>
                     {canManageBudgetData && (
-                      <th className="px-6 py-3 text-right font-mono text-[9px] uppercase tracking-widest text-outline">
+                      <th className="px-6 py-3 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">
                         Actions
                       </th>
                     )}
@@ -190,18 +190,18 @@ export default function CategoryPage() {
                 </thead>
                 <tbody>
                   {categories.map((category) => (
-                    <tr key={category.id} className="hover:bg-surface-container-low transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-on-surface">
+                    <tr key={category.id} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-text">
                         {category.name}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-on-surface-variant font-mono">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted font-mono">
                         {format(new Date(category.created_at), 'PPP')}
                       </td>
                       {canManageBudgetData && (
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
                             onClick={() => handleEditClick(category)}
-                            className="text-primary hover:text-primary-dim"
+                            className="text-primary hover:text-primary-hover"
                           >
                             Edit
                           </button>
@@ -220,11 +220,11 @@ export default function CategoryPage() {
 
               <div className={isCardsView ? '' : 'md:hidden'}>
                 {categories.map((category) => (
-                  <div key={category.id} className="p-4 hover:bg-surface-container-low transition-colors">
+                  <div key={category.id} className="p-4 hover:bg-surface-hover transition-colors">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
-                        <h4 className="font-semibold text-on-surface">{category.name}</h4>
-                        <p className="text-sm text-on-surface-variant mt-1 font-mono">
+                        <h4 className="font-semibold text-text">{category.name}</h4>
+                        <p className="text-sm text-text-muted mt-1 font-mono">
                           {format(new Date(category.created_at), 'PPP')}
                         </p>
                       </div>
@@ -233,13 +233,13 @@ export default function CategoryPage() {
                       <div className="flex space-x-2 mt-3">
                         <button
                           onClick={() => handleEditClick(category)}
-                          className="flex-1 px-3 py-2 text-sm font-medium text-primary bg-primary-container rounded-lg hover:opacity-80"
+                          className="flex-1 px-3 py-2 text-sm font-medium text-primary bg-surface-hover rounded-sm hover:bg-surface-muted transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDeleteClick(category)}
-                          className="flex-1 px-3 py-2 text-sm font-medium text-white bg-negative rounded-lg hover:opacity-80"
+                          className="flex-1 px-3 py-2 text-sm font-medium text-negative bg-negative-bg rounded-sm hover:opacity-80 transition-colors"
                         >
                           Delete
                         </button>
@@ -264,7 +264,7 @@ export default function CategoryPage() {
               )}
             </>
           ) : (
-            <div className="p-6 text-center text-on-surface-variant">
+            <div className="p-6 text-center text-text-muted">
               No categories found for this budget period.
             </div>
           )}

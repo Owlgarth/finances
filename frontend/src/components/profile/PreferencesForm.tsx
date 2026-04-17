@@ -44,17 +44,17 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="font_family" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+        <label htmlFor="font_family" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           Font Family
         </label>
-        <p className="text-sm text-on-surface-variant mb-3">
+        <p className="text-sm text-text-muted mb-3">
           Choose the font used throughout the app.
         </p>
         <select
           id="font_family"
           value={fontFamily}
           onChange={(e) => setFontFamily(e.target.value)}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
         >
           {FONT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -65,17 +65,17 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
       </div>
 
       <div>
-        <label htmlFor="calendar_start_day" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+        <label htmlFor="calendar_start_day" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           First Day of the Week
         </label>
-        <p className="text-sm text-on-surface-variant mb-3">
+        <p className="text-sm text-text-muted mb-3">
           Choose which day your calendar starts with.
         </p>
         <select
           id="calendar_start_day"
           value={calendarStartDay}
           onChange={(e) => setCalendarStartDay(Number(e.target.value))}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
         >
           {WEEKDAY_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -89,7 +89,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
         <button
           type="submit"
           disabled={isLoading}
-          className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary-container focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98]"
+          className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Saving...' : 'Save Preferences'}
         </button>

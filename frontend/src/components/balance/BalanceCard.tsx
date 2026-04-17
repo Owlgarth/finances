@@ -1,3 +1,4 @@
+import { Pencil, RefreshCw } from 'lucide-react'
 import type { PeriodBalance } from '../../types'
 
 interface Props {
@@ -16,27 +17,24 @@ export default function BalanceCard({ balance, onEdit, onRecalculate }: Props) {
   const closingBalance = Number(balance.closing_balance) || 0
 
   return (
-    <div 
-      className="bg-surface-container-lowest rounded-xl p-6"
-      style={{ boxShadow: 'var(--shadow-card)' }}
-    >
+    <div className="bg-surface border border-border rounded-sm p-6">
       <div className="flex justify-between items-start mb-6">
-        <h3 className="font-headline font-bold text-on-surface text-lg">{balance.currency}</h3>
+        <h3 className="font-semibold text-text text-sm">{balance.currency}</h3>
         <div className="flex space-x-3">
           <button
             onClick={onEdit}
-            className="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors font-mono text-[10px] uppercase tracking-wider group"
+            className="flex items-center gap-1 text-text-muted hover:text-primary transition-colors font-mono text-[10px] uppercase tracking-wider group"
             title="Edit opening balance"
           >
-            <span className="material-symbols-outlined text-sm select-none">edit</span>
+            <Pencil size={14} />
             <span>Edit</span>
           </button>
           <button
             onClick={onRecalculate}
-            className="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors font-mono text-[10px] uppercase tracking-wider group"
+            className="flex items-center gap-1 text-text-muted hover:text-primary transition-colors font-mono text-[10px] uppercase tracking-wider group"
             title="Recalculate balance"
           >
-            <span className="material-symbols-outlined text-sm select-none">refresh</span>
+            <RefreshCw size={14} />
             <span>Recalculate</span>
           </button>
         </div>
@@ -44,44 +42,44 @@ export default function BalanceCard({ balance, onEdit, onRecalculate }: Props) {
 
       <div className="space-y-3 text-sm">
         <div className="flex justify-between items-baseline">
-          <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Opening:</span>
-          <span className="font-mono font-bold text-on-surface">{openingBalance.toFixed(2)}</span>
+          <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Opening:</span>
+          <span className="font-mono font-semibold text-text">{openingBalance.toFixed(2)}</span>
         </div>
 
         <div className="flex justify-between items-baseline">
-          <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Income:</span>
-          <span className="font-mono font-bold text-positive">+{totalIncome.toFixed(2)}</span>
+          <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Income:</span>
+          <span className="font-mono font-semibold text-positive">+{totalIncome.toFixed(2)}</span>
         </div>
 
         <div className="flex justify-between items-baseline">
-          <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Expenses:</span>
-          <span className="font-mono font-bold text-negative">-{totalExpenses.toFixed(2)}</span>
+          <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Expenses:</span>
+          <span className="font-mono font-semibold text-negative">-{totalExpenses.toFixed(2)}</span>
         </div>
 
         {exchangesIn > 0 && (
           <div className="flex justify-between items-baseline">
-            <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Exchanges in:</span>
-            <span className="font-mono font-bold text-primary">+{exchangesIn.toFixed(2)}</span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Exchanges in:</span>
+            <span className="font-mono font-semibold text-primary">+{exchangesIn.toFixed(2)}</span>
           </div>
         )}
 
         {exchangesOut > 0 && (
           <div className="flex justify-between items-baseline">
-            <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Exchanges out:</span>
-            <span className="font-mono font-bold text-primary">-{exchangesOut.toFixed(2)}</span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Exchanges out:</span>
+            <span className="font-mono font-semibold text-primary">-{exchangesOut.toFixed(2)}</span>
           </div>
         )}
 
         <div className="pt-3 mt-4 flex justify-between items-baseline">
-          <span className="font-mono text-[9px] uppercase tracking-widest text-on-surface font-bold">Closing:</span>
-          <span className={`font-mono font-bold text-lg ${closingBalance >= 0 ? 'text-positive' : 'text-negative'}`}>
+          <span className="font-mono text-[9px] uppercase tracking-widest text-text font-semibold">Closing:</span>
+          <span className={`font-mono font-semibold text-lg ${closingBalance >= 0 ? 'text-positive' : 'text-negative'}`}>
             {closingBalance.toFixed(2)}
           </span>
         </div>
       </div>
 
       {balance.last_calculated_at && (
-        <p className="font-mono text-[9px] text-outline mt-4">
+        <p className="font-mono text-[9px] text-text-muted mt-4">
           Last calculated: {new Date(balance.last_calculated_at).toLocaleString()}
         </p>
       )}

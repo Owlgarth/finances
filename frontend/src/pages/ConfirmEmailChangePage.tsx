@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
+import { CircleCheck, CircleX } from 'lucide-react'
 import { authApi } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -37,9 +38,9 @@ export default function ConfirmEmailChangePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface py-12 px-4 sm:px-6 lg:px-8">
-      <div className="bg-surface-container-lowest rounded-xl p-8 w-full max-w-md" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h2 className="font-headline font-black text-primary text-3xl tracking-tight">
+          <h2 className="font-sans font-semibold text-text text-base tracking-tight">
             Monie
           </h2>
         </div>
@@ -47,23 +48,21 @@ export default function ConfirmEmailChangePage() {
         <div className="text-center">
           {state === 'loading' && (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-on-surface-variant">Confirming email change...</p>
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-sm animate-spin" />
+              <p className="text-sm text-text-muted">Confirming email change...</p>
             </div>
           )}
 
           {state === 'success' && (
             <div className="space-y-4">
-              <div className="w-12 h-12 mx-auto bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+              <div className="flex justify-center">
+                <CircleCheck size={16} className="text-positive" />
               </div>
-              <h3 className="font-headline font-bold text-on-surface text-lg">Email Changed Successfully</h3>
-              <p className="text-sm text-on-surface-variant">Your email has been updated.</p>
+              <h3 className="font-sans font-medium text-text text-sm">Email Changed Successfully</h3>
+              <p className="text-sm text-text-muted">Your email has been updated.</p>
               <Link
                 to="/"
-                className="inline-block px-4 py-2 text-sm font-medium rounded-lg text-on-primary bg-gradient-to-br from-primary to-primary-dim hover:opacity-90 active:scale-[0.98] transition-all"
+                className="inline-block bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
               >
                 Go to Dashboard
               </Link>
@@ -72,18 +71,16 @@ export default function ConfirmEmailChangePage() {
 
           {state === 'error' && (
             <div className="space-y-4">
-              <div className="w-12 h-12 mx-auto bg-red-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+              <div className="flex justify-center">
+                <CircleX size={16} className="text-negative" />
               </div>
-              <h3 className="font-headline font-bold text-on-surface text-lg">Invalid or Expired Link</h3>
-              <p className="text-sm text-on-surface-variant">
+              <h3 className="font-sans font-medium text-text text-sm">Invalid or Expired Link</h3>
+              <p className="text-sm text-text-muted">
                 This email change link is invalid or has expired.
               </p>
               <Link
                 to="/profile"
-                className="text-primary hover:text-primary-dim text-sm font-medium"
+                className="text-primary hover:text-primary-hover text-sm font-medium"
               >
                 Go to Settings
               </Link>

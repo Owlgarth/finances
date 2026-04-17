@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HiPlus } from 'react-icons/hi'
+import { Plus } from 'lucide-react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import toast from 'react-hot-toast'
 import { getApiErrorMessage } from '../../utils/errors'
@@ -48,7 +48,7 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
           onChange={(e) => setName(e.target.value)}
           placeholder="Workspace name"
           maxLength={100}
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-2 py-1.5 text-sm border border-border rounded-none focus:outline-none"
           autoFocus
           onKeyDown={handleKeyDown}
         />
@@ -56,14 +56,14 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
           <button
             onClick={handleCreate}
             disabled={!name.trim() || isSubmitting}
-            className="flex-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="flex-1 px-2 py-1 text-xs font-medium bg-primary text-white rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50"
           >
             {isSubmitting ? 'Creating...' : 'Create'}
           </button>
           <button
             onClick={onCancel}
             disabled={isSubmitting}
-            className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+            className="px-2 py-1 text-xs font-medium border border-border rounded-sm hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
@@ -79,7 +79,7 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Workspace name"
-        className="block w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
+        className="block w-64 rounded-none border border-border px-3 py-2 text-sm"
         onKeyDown={handleKeyDown}
         autoFocus
       />
@@ -87,14 +87,14 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
         <button
           onClick={handleCreate}
           disabled={isSubmitting || !name.trim()}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50"
         >
           {isSubmitting ? 'Creating...' : 'Create'}
         </button>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
-          className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50"
+          className="px-3 py-1.5 bg-surface border border-border text-text text-xs font-medium rounded-sm hover:bg-surface-hover transition-colors"
         >
           Cancel
         </button>
@@ -107,9 +107,9 @@ function CreateWorkspaceButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
+      className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors"
     >
-      <HiPlus className="h-4 w-4" />
+      <Plus size={14} />
       Create Workspace
     </button>
   )

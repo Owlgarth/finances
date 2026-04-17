@@ -19,7 +19,7 @@ export default function Loading({ message, size = 'md', fullPage = false }: Prop
         aria-label="Loading"
       />
       {message && (
-        <p className="text-sm text-on-surface-variant font-headline">{message}</p>
+        <p className="text-sm text-text-muted font-sans">{message}</p>
       )}
     </div>
   )
