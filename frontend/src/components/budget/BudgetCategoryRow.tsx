@@ -21,10 +21,10 @@ export default function BudgetCategoryRow({ categoryBudget, onEdit, onDelete }: 
   const percentage = budgetNum > 0 ? (actualNum / budgetNum) * 100 : 0
 
   return (
-    <tr className={`hover:bg-surface-container-low transition-colors h-8 ${percentage >= 100 ? 'bg-[rgba(225,29,72,0.04)]' : ''}`}>
-      <td className="px-6 py-2 text-sm font-medium text-on-surface">{categoryBudget.category}</td>
-      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-on-surface">{budgetNum.toFixed(2)}</td>
-      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-on-surface">{actualNum.toFixed(2)}</td>
+    <tr className={`hover:bg-surface-hover transition-colors h-8 ${percentage >= 100 ? 'bg-negative-bg' : ''}`}>
+      <td className="px-6 py-2 text-sm font-medium text-text">{categoryBudget.category}</td>
+      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{budgetNum.toFixed(2)}</td>
+      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{actualNum.toFixed(2)}</td>
       <td className="px-6 py-2 text-right">
         <span className={`font-mono text-sm font-bold ${difference < 0 ? 'text-negative' : 'text-positive'}`}>
           {difference.toFixed(2)}
@@ -32,13 +32,13 @@ export default function BudgetCategoryRow({ categoryBudget, onEdit, onDelete }: 
       </td>
       <td className="px-6 py-2">
         <div className="flex items-center space-x-3">
-          <div className="flex-1 bg-surface-container-high rounded-full h-1.5">
+          <div className="flex-1 bg-surface-muted rounded-none h-1.5">
             <div
-              className={`h-1.5 rounded-full ${percentage >= 75 ? 'bg-negative' : 'bg-primary'}`}
+              className={`h-1.5 rounded-none ${percentage >= 75 ? 'bg-negative' : 'bg-primary'}`}
               style={{ width: `${Math.min(percentage, 100)}%` }}
             />
           </div>
-          <span className="font-mono text-[9px] text-outline w-10 text-right select-none">{percentage.toFixed(0)}%</span>
+          <span className="font-mono text-[9px] text-text-muted w-10 text-right select-none">{percentage.toFixed(0)}%</span>
         </div>
       </td>
       {(onEdit || onDelete) && (
@@ -46,7 +46,7 @@ export default function BudgetCategoryRow({ categoryBudget, onEdit, onDelete }: 
           {onEdit && (
             <button
               onClick={() => onEdit(categoryBudget)}
-              className="text-on-surface-variant hover:text-primary mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
+              className="text-text-muted hover:text-text mr-4 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
             >
               Edit
             </button>
@@ -54,7 +54,7 @@ export default function BudgetCategoryRow({ categoryBudget, onEdit, onDelete }: 
           {onDelete && (
             <button
               onClick={() => onDelete(categoryBudget.id)}
-              className="text-negative hover:text-error font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
+              className="text-negative hover:text-negative/80 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors"
             >
               Delete
             </button>

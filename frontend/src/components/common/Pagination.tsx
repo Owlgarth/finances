@@ -1,3 +1,5 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+
 interface Props {
   page: number
   total_pages: number
@@ -43,13 +45,13 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
   const lastItem = Math.min(page * page_size, total)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-outline-variant">
-      <div className="flex items-center gap-3 text-sm text-on-surface-variant">
-        <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Rows per page</span>
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-border">
+      <div className="flex items-center gap-3 text-sm text-text-muted">
+        <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Rows per page</span>
         <select
           value={page_size}
           onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="bg-surface-container-high text-on-surface rounded-lg px-2 py-1 text-sm font-mono border border-outline-variant focus:outline-none focus:ring-1 focus:ring-primary"
+          className="bg-surface-hover text-text rounded-none px-2 py-1 text-sm font-mono border border-border focus:outline-none focus:ring-1 focus:ring-primary"
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
@@ -66,25 +68,25 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous page"
         >
-          <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+          <ChevronLeft size={14} />
         </button>
 
         {getPageNumbers(page, total_pages).map((p, idx) =>
           p === 'ellipsis' ? (
-            <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-on-surface-variant text-sm">
+            <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-text-muted text-sm">
               &hellip;
             </span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-mono font-medium transition-colors ${
+              className={`w-8 h-8 flex items-center justify-center rounded-sm text-sm font-mono font-medium transition-colors ${
                 p === page
-                  ? 'bg-primary text-on-primary shadow-sm'
-                  : 'text-on-surface-variant hover:bg-surface-container-high'
+                  ? 'bg-primary text-white'
+                  : 'text-text-muted hover:bg-surface-hover'
               }`}
             >
               {p}
@@ -95,10 +97,10 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= total_pages}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Next page"
         >
-          <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+          <ChevronRight size={14} />
         </button>
       </div>
     </div>

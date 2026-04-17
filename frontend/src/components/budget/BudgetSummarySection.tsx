@@ -33,10 +33,10 @@ export default function BudgetSummarySection({ periodId, onEdit, onDelete }: Pro
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4">Budget vs Actual</h2>
+      <h2 className="text-sm font-medium mb-4">Budget vs Actual</h2>
 
       {Object.keys(currencies).length === 0 && (
-        <p className="text-gray-500">No budgets set for this period.</p>
+        <p className="text-text-muted">No budgets set for this period.</p>
       )}
 
       {Object.entries(currencies).map(([currency, data]: [string, any]) => (

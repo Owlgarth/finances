@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Settings } from 'lucide-react'
 import { currencyExchangesApi, exchangeShortcutsApi } from '../api/client'
 import { useLayout } from '../contexts/LayoutContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -141,12 +142,12 @@ export default function CurrencyExchangesPage() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Currency Exchanges</h1>
+        <h1 className="text-base font-semibold text-text">Currency Exchanges</h1>
         {canManageBudgetData && (
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleExport}
-              className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId}
             >
               Export
@@ -160,14 +161,14 @@ export default function CurrencyExchangesPage() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!selectedPeriodId || importMutation.isPending}
             >
               {importMutation.isPending ? 'Importing...' : 'Import'}
             </button>
             <button
               onClick={handleAddNew}
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
             >
               Add Exchange
             </button>
@@ -182,7 +183,7 @@ export default function CurrencyExchangesPage() {
             <button
               key={shortcut.id}
               onClick={() => handleShortcutClick(shortcut)}
-              className="px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface text-sm font-mono font-medium hover:bg-surface-container transition-all"
+              className="px-3 py-1.5 rounded-sm bg-surface border border-border text-text text-xs font-mono font-medium hover:bg-surface-hover transition-colors"
             >
               {shortcut.from_currency} → {shortcut.to_currency}
             </button>
@@ -190,10 +191,10 @@ export default function CurrencyExchangesPage() {
           {canManageBudgetData && (
             <button
               onClick={() => setIsManageModalOpen(true)}
-              className="px-2 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+              className="px-2 py-1.5 rounded-sm text-text-muted hover:text-text transition-colors"
               title="Manage shortcuts"
             >
-              <span className="material-symbols-outlined text-sm">settings</span>
+              <Settings size={14} />
             </button>
           )}
         </div>
@@ -202,27 +203,27 @@ export default function CurrencyExchangesPage() {
         <div className="mb-4">
           <button
             onClick={() => setIsManageModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface bg-surface-container-high hover:bg-surface-container transition-all text-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-text-muted hover:text-text bg-surface border border-border hover:bg-surface-hover transition-colors text-xs font-medium"
           >
-            <span className="material-symbols-outlined text-sm">settings</span>
+            <Settings size={14} />
             Add Shortcuts
           </button>
         </div>
       )}
 
-      <div className="bg-surface-container-lowest rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="bg-surface border border-border rounded-sm overflow-hidden">
         <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
           <table className="w-full">
-            <thead className="bg-surface-container-low">
+            <thead className="bg-surface-hover">
               <tr>
-                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-outline">Date</th>
-                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-outline">Description</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">From</th>
-                <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-outline">→</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">To</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-outline">Rate</th>
+                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">Date</th>
+                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">Description</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">From</th>
+                <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-text-muted">→</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">To</th>
+                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">Rate</th>
                 {canManageBudgetData && (
-                  <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-outline">Actions</th>
+                  <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-text-muted">Actions</th>
                 )}
               </tr>
             </thead>
@@ -230,29 +231,29 @@ export default function CurrencyExchangesPage() {
               {exchanges.map(exchange => (
                 <tr
                   key={exchange.id}
-                  className="hover:bg-surface-container-low transition-colors"
+                  className="hover:bg-surface-hover transition-colors"
                 >
-                  <td className="px-6 py-4 text-sm text-on-surface-variant font-mono">{exchange.date}</td>
-                  <td className="px-6 py-4 text-sm text-on-surface">{exchange.description || '-'}</td>
+                  <td className="px-6 py-4 text-sm text-text-muted font-mono">{exchange.date}</td>
+                  <td className="px-6 py-4 text-sm text-text">{exchange.description || '-'}</td>
                   <td className="px-6 py-4 text-right">
                     <span className="text-sm font-mono font-bold text-negative">
                       -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center text-outline">→</td>
+                  <td className="px-6 py-4 text-center text-text-muted">→</td>
                   <td className="px-6 py-4 text-right">
                     <span className="text-sm font-mono font-bold text-positive">
                       +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm text-on-surface-variant font-mono">
+                  <td className="px-6 py-4 text-right text-sm text-text-muted font-mono">
                     {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
                   </td>
                   {canManageBudgetData && (
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => handleEdit(exchange)}
-                        className="text-on-surface-variant hover:text-on-surface mr-4 text-sm font-medium transition-colors"
+                        className="text-text-muted hover:text-text mr-4 text-sm font-medium transition-colors"
                       >
                         Edit
                       </button>
@@ -274,25 +275,25 @@ export default function CurrencyExchangesPage() {
           {exchanges.map(exchange => (
               <div
                 key={exchange.id}
-                className="p-4 hover:bg-surface-container-low transition-colors"
+                className="p-4 hover:bg-surface-hover transition-colors"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
-                    <h4 className="font-semibold text-on-surface">{exchange.description || 'Currency Exchange'}</h4>
-                    <p className="text-sm text-on-surface-variant mt-1 font-mono">{exchange.date}</p>
+                    <h4 className="font-semibold text-text">{exchange.description || 'Currency Exchange'}</h4>
+                    <p className="text-sm text-text-muted mt-1 font-mono">{exchange.date}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between mb-3 py-2">
                   <div className="flex-1">
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-outline block mb-1">From</span>
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted block mb-1">From</span>
                     <span className="text-sm font-mono font-bold text-negative">
                       -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
                     </span>
                   </div>
-                  <div className="px-3 text-outline">→</div>
+                  <div className="px-3 text-text-muted">→</div>
                   <div className="flex-1 text-right">
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-outline block mb-1">To</span>
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted block mb-1">To</span>
                     <span className="text-sm font-mono font-bold text-positive">
                       +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
                     </span>
@@ -300,8 +301,8 @@ export default function CurrencyExchangesPage() {
                 </div>
 
                 <div className="mb-3">
-                  <span className="font-mono text-[9px] uppercase tracking-widest text-outline">Exchange Rate: </span>
-                  <span className="text-sm font-medium text-on-surface font-mono">
+                  <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Exchange Rate: </span>
+                  <span className="text-sm font-medium text-text font-mono">
                     {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
                   </span>
                 </div>
@@ -310,13 +311,13 @@ export default function CurrencyExchangesPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(exchange)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-on-surface bg-surface-container-high rounded-lg hover:bg-surface-container transition-all"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-text bg-surface border border-border rounded-sm hover:bg-surface-hover transition-colors"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(exchange.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-negative rounded-lg hover:opacity-80 transition-all"
+                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-negative rounded-sm hover:opacity-80 transition-colors"
                     >
                       Delete
                     </button>
@@ -327,7 +328,7 @@ export default function CurrencyExchangesPage() {
         </div>
 
         {totalItems === 0 && (
-          <p className="text-center py-8 text-on-surface-variant">No currency exchanges yet</p>
+          <p className="text-center py-8 text-text-muted">No currency exchanges yet</p>
         )}
 
         {totalItems > 0 && (

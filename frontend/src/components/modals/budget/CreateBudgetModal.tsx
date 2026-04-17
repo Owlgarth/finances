@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { X } from 'lucide-react'
 import { budgetsApi, categoriesApi, budgetPeriodsApi } from '../../../api/client'
 import type { Category, BudgetPeriod } from '../../../types'
 
@@ -90,24 +91,23 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
       <div 
-        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
-        style={{ boxShadow: 'var(--shadow-float)' }}
+        className="bg-surface rounded-sm p-6 w-full max-w-md relative border border-border"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
           aria-label="Close modal"
         >
-          <span className="material-symbols-outlined">close</span>
+          <X size={14} />
         </button>
 
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">Create Budget</h2>
+        <h2 className="text-sm font-medium text-text mb-6">Create Budget</h2>
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Budget Period *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Budget Period *</label>
             {isLoadingPeriods ? (
-              <p className="text-sm text-on-surface-variant italic">Loading budget periods...</p>
+              <p className="text-sm text-text-muted italic">Loading budget periods...</p>
             ) : (
               <select
                 value={selectedPeriodId}
@@ -115,7 +115,7 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
                   setSelectedPeriodId(Number(e.target.value))
                   setCategoryId('') // Reset category when period changes
                 }}
-                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors"
                 required
               >
                 <option value="">Select budget period</option>
@@ -127,20 +127,20 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
           </div>
 
           <div className="mb-4">
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Category *</label>
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Category *</label>
             {!selectedPeriodId ? (
-              <p className="text-sm text-on-surface-variant">Please select a budget period first</p>
+              <p className="text-sm text-text-muted">Please select a budget period first</p>
             ) : isLoadingCategories ? (
-              <p className="text-sm text-on-surface-variant italic">Loading categories...</p>
+              <p className="text-sm text-text-muted italic">Loading categories...</p>
             ) : categoriesError ? (
-              <p className="text-error text-sm">Error loading categories</p>
+              <p className="text-negative text-sm">Error loading categories</p>
             ) : categories && categories.length === 0 ? (
-              <p className="text-on-secondary-container bg-secondary-container/20 px-3 py-1 rounded-lg text-sm">No categories found for this period</p>
+              <p className="text-text bg-surface-hover px-3 py-1 rounded-sm text-sm">No categories found for this period</p>
             ) : (
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all disabled:opacity-50"
+                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors disabled:opacity-50"
                 required
                 disabled={!selectedPeriodId}
               >
@@ -154,11 +154,11 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Currency *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Currency *</label>
               <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors"
               >
                 {CURRENCIES.map(cur => (
                   <option key={cur} value={cur}>{cur}</option>
@@ -167,13 +167,13 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
             </div>
 
             <div>
-              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Amount *</label>
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Amount *</label>
               <input
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors"
                 placeholder="1400.00"
                 required
               />
@@ -184,13 +184,13 @@ export default function CreateBudgetModal({ isOpen, onClose, periodId: initialPe
             <button
               type="button"
               onClick={onClose}
-              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={createMutation.isPending || isLoadingCategories || !!categoriesError}
             >
               {createMutation.isPending ? 'Creating...' : 'Create Budget'}

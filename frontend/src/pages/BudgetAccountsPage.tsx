@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, Check, Archive, Pencil, Trash2 } from 'lucide-react'
 import { budgetAccountsApi } from '../api/client'
 import { useBudgetAccount } from '../contexts/BudgetAccountContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -77,23 +78,23 @@ export default function BudgetAccountsPage() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <h1 className="font-headline font-extrabold tracking-tight text-2xl sm:text-3xl text-on-surface">Budget Accounts</h1>
+        <h1 className="text-base font-semibold text-text">Budget Accounts</h1>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-on-surface-variant">
+          <label className="flex items-center gap-2 text-sm text-text-muted">
             <input
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-outline focus:ring-primary-container"
+              className="rounded-sm border-border focus:ring-border-focus"
             />
             Show archived
           </label>
           {canManageBudgetAccounts && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all"
+              className="flex items-center gap-2 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
             >
-              <span className="material-symbols-outlined text-lg">add</span>
+              <Plus size={14} />
               <span className="hidden sm:inline">New Account</span>
             </button>
           )}
@@ -177,51 +178,51 @@ function BudgetAccountCard({
 }: BudgetAccountCardProps) {
   return (
     <div
-      className={`bg-surface-container-lowest p-6 rounded-lg transition-all ${
+      className={`bg-surface p-6 rounded-sm border border-border transition-all ${
         !account.is_active ? 'opacity-60' : ''
       } ${isSelected ? 'ring-2 ring-primary' : ''}`}
-      style={{ boxShadow: 'var(--shadow-card)', borderLeftColor: account.color || '#3B82F6', borderLeftWidth: 4 }}
+      style={{ borderLeftColor: account.color || '#3B82F6', borderLeftWidth: 4 }}
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           {account.icon && <span className="text-2xl">{account.icon}</span>}
           <div>
-            <h3 className="text-lg font-semibold text-on-surface flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-text flex items-center gap-2">
               {account.name}
               {isSelected && (
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-primary-container text-on-primary-container px-2 py-0.5 rounded-full">Active</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border">Active</span>
               )}
             </h3>
             {!account.is_active && (
-              <span className="text-xs text-on-surface-variant">Archived</span>
+              <span className="text-xs text-text-muted">Archived</span>
             )}
           </div>
         </div>
       </div>
 
       {account.description && (
-        <p className="text-sm text-on-surface-variant mb-4 line-clamp-2">{account.description}</p>
+        <p className="text-sm text-text-muted mb-4 line-clamp-2">{account.description}</p>
       )}
 
       <div className="flex items-center gap-2 mb-4">
-        <span className="px-2 py-1 bg-surface-container-low rounded text-sm font-medium font-mono text-on-surface">
+        <span className="px-2 py-1 bg-surface rounded-none text-sm font-medium font-mono text-text">
           {account.default_currency}
         </span>
       </div>
 
       <div className="flex items-center justify-between pt-4">
-        <button
-          onClick={onSelect}
-          disabled={isSelected || !account.is_active}
-          className={`flex items-center gap-1 text-sm ${
-            isSelected
-              ? 'text-primary cursor-default'
-              : account.is_active
-              ? 'text-on-surface-variant hover:text-primary'
-              : 'text-outline cursor-not-allowed'
-          }`}
-        >
-          <span className="material-symbols-outlined text-base">check</span>
+          <button
+            onClick={onSelect}
+            disabled={isSelected || !account.is_active}
+            className={`flex items-center gap-1 text-sm ${
+              isSelected
+                ? 'text-primary cursor-default'
+                : account.is_active
+                ? 'text-text-muted hover:text-primary'
+                : 'text-text-muted cursor-not-allowed'
+            }`}
+          >
+            <Check size={14} />
           {isSelected ? 'Selected' : 'Select'}
         </button>
 
@@ -229,24 +230,24 @@ function BudgetAccountCard({
           <div className="flex items-center gap-2">
             <button
               onClick={onArchive}
-              className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
+              className="p-1.5 text-text-muted hover:text-primary transition-colors"
               title={account.is_active ? 'Archive' : 'Restore'}
             >
-              <span className="material-symbols-outlined text-base">archive</span>
+              <Archive size={14} />
             </button>
             <button
               onClick={onEdit}
-              className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
+              className="p-1.5 text-text-muted hover:text-primary transition-colors"
               title="Edit"
             >
-              <span className="material-symbols-outlined text-base">edit</span>
+              <Pencil size={14} />
             </button>
             <button
               onClick={onDelete}
-              className="p-1.5 text-on-surface-variant hover:text-negative transition-colors"
+              className="p-1.5 text-text-muted hover:text-negative transition-colors"
               title="Delete"
             >
-              <span className="material-symbols-outlined text-base">delete</span>
+              <Trash2 size={14} />
             </button>
           </div>
         )}
@@ -291,13 +292,13 @@ function BudgetAccountFormModal({
 
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
-      <div className="bg-surface-container-lowest rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" style={{ boxShadow: 'var(--shadow-float)' }}>
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-4">
+      <div className="bg-surface rounded-sm border border-border p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="font-sans font-semibold text-text text-sm mb-4">
           {account ? 'Edit Budget Account' : 'Create Budget Account'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Name *
             </label>
             <input
@@ -305,19 +306,19 @@ function BudgetAccountFormModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
+              className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
               placeholder="Personal, Business, etc."
             />
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Description
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
+              className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
               rows={2}
               placeholder="Optional description..."
             />
@@ -325,13 +326,13 @@ function BudgetAccountFormModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 Icon
               </label>
               <select
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
-                className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
+                className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
               >
                 {iconOptions.map((opt) => (
                   <option key={opt} value={opt}>
@@ -342,26 +343,26 @@ function BudgetAccountFormModal({
             </div>
 
             <div>
-              <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+              <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 Color
               </label>
               <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-full h-10 border-none rounded-lg cursor-pointer bg-surface-container-highest"
+                className="w-full h-10 border border-border rounded-none cursor-pointer bg-surface-muted"
               />
             </div>
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Default Currency
             </label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-sm text-on-surface"
+              className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
             >
               <option value="PLN">PLN - Polish Zloty</option>
               <option value="USD">USD - US Dollar</option>
@@ -375,14 +376,14 @@ function BudgetAccountFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface rounded-lg hover:bg-surface-container transition-all"
+              className="flex-1 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
+              className="flex-1 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Saving...' : account ? 'Save Changes' : 'Create'}

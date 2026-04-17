@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { X } from 'lucide-react';
 import { categoriesApi } from '../../../api/client';
 
 interface Props {
@@ -45,26 +46,25 @@ export default function CreateCategoryModal({ isOpen, onClose, periodId }: Props
   return (
     <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
       <div 
-        className="bg-surface-container-lowest rounded-xl p-6 w-full max-w-md relative"
-        style={{ boxShadow: 'var(--shadow-float)' }}
+        className="bg-surface rounded-sm border border-border p-6 w-full max-w-md relative"
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+          className="absolute top-4 right-4 text-text-muted hover:text-primary transition-colors flex items-center justify-center"
           aria-label="Close modal"
         >
-          <span className="material-symbols-outlined">close</span>
+          <X size={14} />
         </button>
 
-        <h2 className="font-headline font-bold text-on-surface text-xl mb-6">Create New Category</h2>
+        <h2 className="text-sm font-medium text-text mb-6">Create New Category</h2>
         
         <form onSubmit={handleSubmit}>
           <div className="mb-6">
-            <label htmlFor="categoryName" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Category Name</label>
+            <label htmlFor="categoryName" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Category Name</label>
             <input
               type="text"
               id="categoryName"
-              className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+              className="w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Groceries"
@@ -75,13 +75,13 @@ export default function CreateCategoryModal({ isOpen, onClose, periodId }: Props
             <button
               type="button"
               onClick={onClose}
-              className="bg-surface-container-high text-on-surface px-4 py-2 rounded-lg hover:bg-surface-container transition-all text-sm font-medium"
+              className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold shadow-sm"
+              className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={createMutation.isPending}
             >
               {createMutation.isPending ? 'Creating...' : 'Create Category'}

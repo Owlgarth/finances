@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
+import { Menu } from 'lucide-react'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import Sidebar from './Sidebar'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -18,8 +19,8 @@ function NoWorkspaceMessage() {
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">No workspace selected</h2>
-        <p className="text-gray-500 mb-4">Create a workspace or ask to be added to one.</p>
+        <h2 className="text-lg font-semibold text-text mb-2">No workspace selected</h2>
+        <p className="text-text-muted mb-4">Create a workspace or ask to be added to one.</p>
         
         {!showForm ? (
           <CreateWorkspaceButton onClick={() => setShowForm(true)} />
@@ -78,17 +79,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-surface">
+      <div className="min-h-screen bg-background">
         {/* Mobile top bar */}
-        <div className="fixed top-0 left-0 right-0 z-30 bg-[rgba(250,249,248,0.80)] backdrop-blur-md flex items-center gap-3 px-4 py-3">
+        <div className="fixed top-0 left-0 right-0 z-30 bg-background/80 backdrop-blur-md border-b border-border flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-white/50 transition-colors flex items-center justify-center"
+            className="p-1.5 rounded-sm text-text-muted hover:text-primary hover:bg-surface-hover transition-colors flex items-center justify-center"
             aria-label="Open navigation menu"
           >
-            <span className="material-symbols-outlined text-2xl select-none">menu</span>
+            <Menu size={14} />
           </button>
-          <span className="font-headline font-black text-primary text-xl tracking-tight">Monie</span>
+          <span className="font-sans font-semibold text-text text-base tracking-tight">Monie</span>
         </div>
 
         {/* Mobile drawer overlay */}
@@ -117,7 +118,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-surface">
+    <div className="flex h-screen bg-background">
       <div className="flex-shrink-0">
         <Sidebar
           collapsed={collapsed}

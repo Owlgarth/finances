@@ -44,7 +44,7 @@ export default function BalanceSection({ periodId }: Props) {
 
   return (
     <div className="mb-12">
-      <h2 className="text-2xl font-semibold text-gray-900 mb-8">Balances</h2>
+      <h2 className="text-sm font-medium text-text mb-8">Balances</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {balances?.map(balance => (
@@ -58,7 +58,7 @@ export default function BalanceSection({ periodId }: Props) {
       </div>
 
       {balances?.length === 0 && (
-        <p className="text-gray-500">No balances yet. Add some transactions!</p>
+        <p className="text-text-muted">No balances yet. Add some transactions!</p>
       )}
 
       <EditPeriodBalanceModal

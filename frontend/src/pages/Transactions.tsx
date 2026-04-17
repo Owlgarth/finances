@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { X, ChevronDown, Filter } from 'lucide-react'
 import { transactionsApi, categoriesApi, currenciesApi } from '../api/client'
 import type { Transaction, Category, Currency, PaginatedResponse } from '../types'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
@@ -298,13 +299,13 @@ export default function Transactions() {
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface">Transactions</h1>
+        <h1 className="text-base font-semibold text-text">Transactions</h1>
         <div className="flex flex-wrap gap-3">
           {canManageBudgetData && (
             <>
               <button
                 onClick={handleExport}
-                className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId}
               >
                 Export
@@ -318,7 +319,7 @@ export default function Transactions() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-lg hover:bg-surface-container transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId || importMutation.isPending}
               >
                 {importMutation.isPending ? 'Importing...' : 'Import'}
@@ -328,7 +329,7 @@ export default function Transactions() {
                   setEditingTransaction(null)
                   setIsModalOpen(true)
                 }}
-                className="bg-gradient-to-br from-primary to-primary-dim text-on-primary px-6 py-2.5 rounded-lg hover:opacity-90 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPeriodId}
               >
                 Add Transaction
@@ -346,71 +347,38 @@ export default function Transactions() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search transactions..."
-              className="w-full px-4 py-2.5 pr-10 bg-surface-container-highest border-none rounded-full focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
+              className="w-full px-4 py-2.5 pr-10 bg-surface-muted border border-border rounded-none focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant transition-colors duration-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text transition-colors"
                 aria-label="Clear search"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <X size={14} />
               </button>
             )}
           </div>
 
           <button
             onClick={() => isFilterPanelOpen ? setIsFilterPanelOpen(false) : openFilterPanel()}
-            className="px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-center gap-2 sm:w-auto"
+            className="px-3 py-1.5 bg-surface-muted border border-border rounded-sm hover:bg-surface-hover focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors flex items-center justify-center gap-2 sm:w-auto text-xs font-medium"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-on-surface-variant"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span className="font-medium text-on-surface">Filters</span>
+            <Filter size={14} className="text-text-muted" />
+            <span className="text-text">Filters</span>
             {getActiveFilterCount() > 0 && (
-              <span className="bg-primary text-on-primary text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center">
+              <span className="bg-primary text-white text-xs font-semibold rounded-sm h-5 w-5 flex items-center justify-center">
                 {getActiveFilterCount()}
               </span>
             )}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className={`h-4 w-4 text-outline transition-transform duration-200 ${isFilterPanelOpen ? 'rotate-180' : ''}`}
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <ChevronDown size={12} className={`text-text-muted transition-transform duration-200 ${isFilterPanelOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
         {getActiveFilterCount() > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {appliedTypes.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface text-text rounded-sm border border-border text-sm">
                 <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Type:</span>
                 <span>{appliedTypes.map(t => transactionTypes.find(type => type.value === t)?.label).join(', ')}</span>
                 <button
@@ -418,21 +386,15 @@ export default function Transactions() {
                     setAppliedTypes([])
                     setTempTypes([])
                   }}
-                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  className="text-text-muted hover:text-text transition-colors"
                   aria-label="Clear type filter"
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             )}
             {appliedCategories.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface text-text rounded-sm border border-border text-sm">
                 <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Categories:</span>
                 <span>
                   {appliedCategories.length === 1
@@ -444,21 +406,15 @@ export default function Transactions() {
                     setAppliedCategories([])
                     setTempCategories([])
                   }}
-                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  className="text-text-muted hover:text-text transition-colors"
                   aria-label="Clear category filter"
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             )}
             {(appliedStartDate || appliedEndDate) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface text-text rounded-sm border border-border text-sm">
                 <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Date:</span>
                 <span className="font-mono">
                   {appliedStartDate && appliedEndDate ? `${appliedStartDate} to ${appliedEndDate}` : appliedStartDate ? `From ${appliedStartDate}` : `Until ${appliedEndDate}`}
@@ -470,21 +426,15 @@ export default function Transactions() {
                     setTempStartDate('')
                     setTempEndDate('')
                   }}
-                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  className="text-text-muted hover:text-text transition-colors"
                   aria-label="Clear date filter"
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             )}
             {(appliedAmountMin || appliedAmountMax) && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface text-text rounded-sm border border-border text-sm">
                 <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Amount:</span>
                 <span className="font-mono">
                   {appliedAmountMin && appliedAmountMax ? `${appliedAmountMin} - ${appliedAmountMax}` : appliedAmountMin ? `Min ${appliedAmountMin}` : `Max ${appliedAmountMax}`}
@@ -496,21 +446,15 @@ export default function Transactions() {
                     setTempAmountMin('')
                     setTempAmountMax('')
                   }}
-                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  className="text-text-muted hover:text-text transition-colors"
                   aria-label="Clear amount filter"
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             )}
             {appliedCurrencies.length > 0 && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-container-low text-on-surface rounded-full text-sm">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface text-text rounded-sm border border-border text-sm">
                 <span className="font-mono text-[10px] uppercase tracking-wider font-bold">Currency:</span>
                 <span>{appliedCurrencies.length === 1 ? appliedCurrencies[0] : `${appliedCurrencies.length} selected`}</span>
                 <button
@@ -518,22 +462,16 @@ export default function Transactions() {
                     setAppliedCurrencies([])
                     setTempCurrencies([])
                   }}
-                  className="text-outline hover:text-on-surface-variant transition-colors"
+                  className="text-text-muted hover:text-text transition-colors"
                   aria-label="Clear currency filter"
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             )}
             <button
               onClick={clearAllFilters}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-on-surface-variant hover:text-on-surface text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-text-muted hover:text-text text-sm font-medium transition-colors"
             >
               Clear all
             </button>
@@ -541,56 +479,45 @@ export default function Transactions() {
         )}
 
         {isFilterPanelOpen && (
-          <div className="bg-surface-container-lowest rounded-lg p-6 mb-4 animate-in fade-in slide-in-from-top-2 duration-200" style={{ boxShadow: 'var(--shadow-card)' }}>
+          <div className="bg-surface border border-border rounded-sm p-6 mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Transaction Type</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-3">Transaction Type</label>
                 <div className="relative" ref={typeDropdownRef}>
                   <button
                     onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
-                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
+                    className="w-full px-3 py-1.5 bg-surface-muted border border-border rounded-none hover:bg-surface-hover focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors flex items-center justify-between text-xs"
                   >
-                    <span className="text-on-surface">
+                    <span className="text-text">
                       {tempTypes.length === 0
                         ? 'All Types'
                         : tempTypes.length === transactionTypes.length
                         ? 'All Types'
                         : tempTypes.map(t => transactionTypes.find(type => type.value === t)?.label).join(', ')}
                     </span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isTypeDropdownOpen ? 'rotate-180' : ''}`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <ChevronDown size={14} className={`text-text-muted transition-transform duration-200 ${isTypeDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isTypeDropdownOpen && (
-                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
+                    <div className="absolute top-full mt-2 w-full bg-surface border border-border rounded-sm z-dropdown overflow-hidden animate-in fade-in duration-200">
                       {transactionTypes.map((type) => (
                         <label
                           key={type.value}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
                             checked={tempTypes.includes(type.value)}
                             onChange={() => toggleType(type.value)}
-                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-2 focus:ring-border-focus"
                           />
-                          <span className="text-on-surface">{type.label}</span>
+                          <span className="text-text">{type.label}</span>
                         </label>
                       ))}
                       {tempTypes.length > 0 && (
                         <button
                           onClick={() => setTempTypes([])}
-                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                          className="w-full px-4 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
                         >
                           Clear Selection
                         </button>
@@ -601,14 +528,14 @@ export default function Transactions() {
               </div>
 
               <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Category</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-3">Category</label>
                 <div className="relative" ref={categoryDropdownRef}>
                   <button
                     onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
+                    className="w-full px-3 py-1.5 bg-surface-muted border border-border rounded-none hover:bg-surface-hover focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors flex items-center justify-between text-xs"
                     disabled={!categories || categories.length === 0}
                   >
-                    <span className="text-on-surface truncate">
+                    <span className="text-text truncate">
                       {!categories || categories.length === 0
                         ? 'No Categories'
                         : tempCategories.length === 0
@@ -619,40 +546,29 @@ export default function Transactions() {
                         ? categories.find(c => c.id === tempCategories[0])?.name
                         : `${tempCategories.length} selected`}
                     </span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <ChevronDown size={14} className={`text-text-muted transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isCategoryDropdownOpen && categories && categories.length > 0 && (
-                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200 max-h-64 overflow-y-auto" style={{ boxShadow: 'var(--shadow-float)' }}>
+                    <div className="absolute top-full mt-2 w-full bg-surface border border-border rounded-sm z-dropdown overflow-hidden animate-in fade-in duration-200 max-h-64 overflow-y-auto">
                       {categories.map((category) => (
                         <label
                           key={category.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
                             checked={tempCategories.includes(category.id)}
                             onChange={() => toggleCategory(category.id)}
-                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-2 focus:ring-border-focus"
                           />
-                          <span className="text-on-surface truncate">{category.name}</span>
+                          <span className="text-text truncate">{category.name}</span>
                         </label>
                       ))}
                       {tempCategories.length > 0 && (
                         <button
                           onClick={() => setTempCategories([])}
-                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                          className="w-full px-4 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
                         >
                           Clear Selection
                         </button>
@@ -663,14 +579,14 @@ export default function Transactions() {
               </div>
 
               <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Currency</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-3">Currency</label>
                 <div className="relative" ref={currencyDropdownRef}>
                   <button
                     onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
-                    className="w-full px-4 py-2.5 bg-surface-container-highest border-none rounded-lg hover:bg-surface-container focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out flex items-center justify-between"
+                    className="w-full px-3 py-1.5 bg-surface-muted border border-border rounded-none hover:bg-surface-hover focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors flex items-center justify-between text-xs"
                     disabled={!currencies || currencies.length === 0}
                   >
-                    <span className="text-on-surface truncate">
+                    <span className="text-text truncate">
                       {!currencies || currencies.length === 0
                         ? 'No Currencies'
                         : tempCurrencies.length === 0
@@ -681,40 +597,29 @@ export default function Transactions() {
                         ? currencies.find(c => c.symbol === tempCurrencies[0])?.symbol
                         : `${tempCurrencies.length} selected`}
                     </span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 text-outline transition-transform duration-200 ${isCurrencyDropdownOpen ? 'rotate-180' : ''}`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <ChevronDown size={14} className={`text-text-muted transition-transform duration-200 ${isCurrencyDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isCurrencyDropdownOpen && currencies && currencies.length > 0 && (
-                    <div className="absolute top-full mt-2 w-full bg-surface-container-lowest rounded-lg z-10 overflow-hidden animate-in fade-in duration-200" style={{ boxShadow: 'var(--shadow-float)' }}>
+                    <div className="absolute top-full mt-2 w-full bg-surface border border-border rounded-sm z-dropdown overflow-hidden animate-in fade-in duration-200">
                       {currencies.map((currency) => (
                         <label
                           key={currency.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low cursor-pointer transition-colors duration-150"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
                             checked={tempCurrencies.includes(currency.symbol)}
                             onChange={() => toggleCurrency(currency.symbol)}
-                            className="w-4 h-4 text-primary border-outline rounded focus:ring-2 focus:ring-primary-container"
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-2 focus:ring-border-focus"
                           />
-                          <span className="text-on-surface">{currency.symbol}</span>
+                          <span className="text-text">{currency.symbol}</span>
                         </label>
                       ))}
                       {tempCurrencies.length > 0 && (
                         <button
                           onClick={() => setTempCurrencies([])}
-                          className="w-full px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-150"
+                          className="w-full px-4 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
                         >
                           Clear Selection
                         </button>
@@ -725,34 +630,34 @@ export default function Transactions() {
               </div>
 
               <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Date Range</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-3">Date Range</label>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="start-date" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">From</label>
+                    <label htmlFor="start-date" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">From</label>
                     <DatePicker
                       id="start-date"
                       value={tempStartDate}
                       onChange={(value) => setTempStartDate(value)}
-                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label htmlFor="end-date" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">To</label>
+                    <label htmlFor="end-date" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">To</label>
                     <DatePicker
                       id="end-date"
                       value={tempEndDate}
                       onChange={(value) => setTempEndDate(value)}
-                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out"
+                      className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-3">Amount Range</label>
+                <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-3">Amount Range</label>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="amount-min" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Minimum</label>
+                    <label htmlFor="amount-min" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Minimum</label>
                     <input
                       id="amount-min"
                       type="number"
@@ -762,11 +667,11 @@ export default function Transactions() {
                       min="0"
                       step="0.01"
                       max={tempAmountMax || undefined}
-                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out font-mono"
+                      className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors font-mono"
                     />
                   </div>
                   <div>
-                    <label htmlFor="amount-max" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-1">Maximum</label>
+                    <label htmlFor="amount-max" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Maximum</label>
                     <input
                       id="amount-max"
                       type="number"
@@ -775,7 +680,7 @@ export default function Transactions() {
                       placeholder="0.00"
                       min={tempAmountMin || "0"}
                       step="0.01"
-                      className="w-full px-3 py-2 bg-surface-container-highest border-none rounded-lg focus:ring-2 focus:ring-primary-container focus:outline-none transition-all duration-200 ease-in-out font-mono"
+                      className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors font-mono"
                     />
                   </div>
                 </div>
@@ -785,13 +690,13 @@ export default function Transactions() {
             <div className="flex justify-end gap-3 mt-6 pt-6">
               <button
                 onClick={clearAllFilters}
-                className="px-4 py-2 text-on-surface-variant hover:text-on-surface font-medium transition-colors"
+                className="px-3 py-1.5 text-text-muted hover:text-text font-medium text-xs transition-colors"
               >
                 Clear All
               </button>
               <button
                 onClick={applyFilters}
-                className="px-6 py-2 bg-gradient-to-br from-primary to-primary-dim text-on-primary rounded-lg hover:opacity-90 transition-all font-medium"
+                className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
               >
                 Apply Filters
               </button>

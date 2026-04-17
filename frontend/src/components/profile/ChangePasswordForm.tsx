@@ -42,7 +42,7 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
   return (
     <form id="change-password-form" onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="current_password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+        <label htmlFor="current_password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           Current Password
         </label>
         <input
@@ -50,14 +50,14 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
           id="current_password"
           value={formData.currentPassword}
           onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
           placeholder="Enter your current password"
           required
         />
       </div>
 
       <div>
-        <label htmlFor="new_password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+        <label htmlFor="new_password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           New Password
         </label>
         <input
@@ -65,16 +65,16 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
           id="new_password"
           value={formData.newPassword}
           onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
           placeholder="Enter your new password"
           required
           minLength={6}
         />
-        <p className="mt-1 text-sm text-on-surface-variant">Password must be at least 6 characters long</p>
+        <p className="mt-1 text-sm text-text-muted">Password must be at least 6 characters long</p>
       </div>
 
       <div>
-        <label htmlFor="confirm_password" className="block font-mono text-[9px] uppercase tracking-widest text-outline mb-2">
+        <label htmlFor="confirm_password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           Confirm New Password
         </label>
         <input
@@ -82,7 +82,7 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
           id="confirm_password"
           value={formData.confirmPassword}
           onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-          className="w-full bg-surface-container-highest border-none rounded-lg px-3 py-2 font-mono text-sm text-on-surface focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
           placeholder="Confirm your new password"
           required
           minLength={6}
@@ -90,8 +90,8 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
       </div>
 
       {error && (
-        <div className="rounded-lg bg-error-container/20 p-4">
-          <div className="text-sm text-error">{error}</div>
+        <div className="rounded-sm bg-negative-bg p-4">
+          <div className="text-sm text-negative">{error}</div>
         </div>
       )}
 
@@ -99,7 +99,7 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
         <button
           type="submit"
           disabled={isLoading}
-          className="px-6 py-2.5 text-on-primary rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary-container focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium bg-gradient-to-br from-primary to-primary-dim active:scale-[0.98]"
+          className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Changing Password...' : 'Change Password'}
         </button>

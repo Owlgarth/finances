@@ -85,57 +85,57 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="font-headline font-extrabold tracking-tight text-3xl text-on-surface mb-8">Profile Settings</h1>
+      <h1 className="text-base font-semibold text-text mb-8">Profile Settings</h1>
 
-      <div className="bg-surface-container-lowest rounded-xl" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="bg-surface border border-border rounded-sm">
         <div className="py-3 px-3">
           <nav className="flex flex-wrap gap-1">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'profile'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
               Profile
             </button>
             <button
               onClick={() => setActiveTab('password')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'password'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
               Password
             </button>
             <button
               onClick={() => setActiveTab('security')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'security'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
               Security
             </button>
             <button
               onClick={() => setActiveTab('preferences')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'preferences'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
               Preferences
             </button>
             <button
               onClick={() => setActiveTab('account')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-lg transition-all ${
+              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'account'
-                  ? 'bg-surface-container-high text-on-surface'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
               Account
@@ -176,21 +176,21 @@ export default function ProfilePage() {
           {activeTab === 'account' && (
             <div className="space-y-10">
               <div>
-                <h3 className="font-headline font-bold text-on-surface text-lg mb-2">Export Your Data</h3>
-                <p className="text-sm text-on-surface-variant mb-4">
+                <h3 className="text-sm font-medium text-text mb-2">Export Your Data</h3>
+                <p className="text-sm text-text-muted mb-4">
                   Download a complete copy of all your personal data in JSON format.
                   This includes your profile, preferences, all transactions, budgets, and workspace data.
                 </p>
                 <button
                   onClick={handleExportData}
                   disabled={isExporting}
-                  className="px-4 py-2 text-on-primary rounded-lg hover:opacity-90 text-sm font-medium bg-gradient-to-br from-primary to-primary-dim disabled:opacity-50 active:scale-[0.98] transition-all"
+                  className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                 >
                   {isExporting ? 'Exporting...' : 'Export All My Data'}
                 </button>
               </div>
 
-              <div className="bg-[rgba(158,63,78,0.04)] rounded-xl p-6">
+              <div className="bg-negative-bg rounded-sm border border-border p-6">
                 <DeleteAccountSection />
               </div>
             </div>
