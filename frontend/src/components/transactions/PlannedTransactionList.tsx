@@ -1,5 +1,4 @@
 import type { PlannedTransaction } from '../../types'
-import { useLayout } from '../../contexts/LayoutContext'
 
 interface Props {
   transactions: PlannedTransaction[]
@@ -10,8 +9,6 @@ interface Props {
 }
 
 export default function PlannedTransactionList({ transactions, onEdit, onExecute, onCancel, onDelete }: Props) {
-  const { isCardsView } = useLayout()
-
   const getStatusChipClass = (status: string) => {
     const base = "px-3 py-0.5 rounded-sm border font-mono text-[10px] font-medium uppercase tracking-wider select-none";
     switch (status) {
@@ -30,7 +27,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
   return (
     <div className="bg-surface rounded-sm border border-border overflow-hidden">
       {/* Desktop Table */}
-      <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-surface-muted">
@@ -110,7 +107,7 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
       </div>
 
       {/* Mobile Cards */}
-      <div className={isCardsView ? 'p-2 space-y-2' : 'md:hidden p-2 space-y-2'}>
+      <div className="md:hidden p-2 space-y-2">
         {transactions.map(planned => (
             <div
               key={planned.id}
