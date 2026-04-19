@@ -10,8 +10,8 @@ const api = axios.create({
 });
 
 // ============= Token Management =============
-const TOKEN_KEY = 'monie_token';
-const REFRESH_TOKEN_KEY = 'monie_refresh_token';
+const TOKEN_KEY = 'moniteria_token';
+const REFRESH_TOKEN_KEY = 'moniteria_refresh_token';
 
 export const setAuthToken = (token: string): void => {
   localStorage.setItem(TOKEN_KEY, token);

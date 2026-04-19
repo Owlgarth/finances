@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Monie
+Moniteria
 ——————————————————————————————————
 
 Hi {{ user_name }},
@@ -9,4 +9,4 @@ Hi {{ user_name }},
 All data associated with this workspace has been permanently removed.
 
 ——————————————————————————————————
-You're receiving this because you have a Monie account.
+You're receiving this because you have a Moniteria account.
