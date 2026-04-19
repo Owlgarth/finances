@@ -12,8 +12,8 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 | React Router 7 | Client routing |
 | TanStack Query 5 | Server state |
 | Axios | HTTP client |
-| Tailwind CSS 3 | Styling |
-| React Icons | Icon library |
+| Tailwind CSS 3 | Styling (Architectural Ledger design system) |
+| Lucide React | Icon library |
 | React Hot Toast | Notifications |
 
 ## Project Structure
@@ -403,19 +403,45 @@ const mutation = useMutation({
 
 ## Styling
 
-### Tailwind Configuration
+### Design System
 
-- Primary colors: Gray palette
-- Spacing: 4px base unit
-- Responsive breakpoints: sm (640px), md (768px), lg (1024px)
+The app uses an **Architectural Ledger** design system with CSS custom properties in `src/index.css` mapped to Tailwind utility classes in `tailwind.config.js`.
 
-### Color Scheme
+Visual separation uses flat surfaces with borders (`border border-border`) — no gradients or box shadows.
 
-| Use | Color |
-|-----|-------|
-| Primary | Gray-900 |
-| Background | Gray-50 |
-| Borders | Gray-200 |
-| Success | Green-600 |
-| Error | Red-600 |
-| Warning | Yellow-600 |
+### Tailwind Theme
+
+- **Colors**: 16 CSS custom property tokens (brand, surfaces, borders, text, semantic/financial)
+- **Font families**: Geist (`font-sans`) and JetBrains Mono (`font-mono`)
+- **Border radius**: `rounded-sm` (4px) and `rounded-none` (0px)
+- **Z-index**: Named scale from 100 (dropdowns) to 700 (tooltips)
+
+### Color Tokens
+
+| Use | Token | Tailwind Class |
+|-----|-------|----------------|
+| Brand / CTAs | `--color-primary` | `bg-primary`, `text-primary` |
+| Page background | `--color-background` | `bg-background` |
+| Cards, panels | `--color-surface` | `bg-surface` |
+| Surface hover | `--color-surface-hover` | `bg-surface-hover` |
+| Muted surface | `--color-surface-muted` | `bg-surface-muted` |
+| Default borders | `--color-border` | `border-border` |
+| Focus rings | `--color-border-focus` | `ring-border-focus` |
+| Primary text | `--color-text` | `text-text` |
+| Secondary text | `--color-text-muted` | `text-text-muted` |
+| Success / income | `--color-positive` | `text-positive`, `bg-positive` |
+| Error / expense | `--color-negative` | `text-negative`, `bg-negative` |
+| Warnings | `--color-warning` | `text-warning`, `bg-warning` |
+
+### Icons
+
+All icons use **Lucide React** exclusively:
+
+```tsx
+import { Plus, Pencil, Trash2, X, ChevronDown } from 'lucide-react'
+<Plus size={14} />
+```
+
+### External Fonts
+
+Geist (sans) and JetBrains Mono (monospace) loaded from Google Fonts. No icon fonts.
