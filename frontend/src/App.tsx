@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { BudgetPeriodProvider } from './contexts/BudgetPeriodContext'
 import { BudgetAccountProvider } from './contexts/BudgetAccountContext'
-import { LayoutProvider } from './contexts/LayoutContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { WorkspaceProvider } from './contexts/WorkspaceContext'
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext'
@@ -49,13 +48,11 @@ function ProtectedApp() {
     <ProtectedRoute>
       <WorkspaceProvider>
         <UserPreferencesProvider>
-          <LayoutProvider>
-            <BudgetAccountProvider>
-              <BudgetPeriodProvider>
-                <AppContent />
-              </BudgetPeriodProvider>
-            </BudgetAccountProvider>
-          </LayoutProvider>
+          <BudgetAccountProvider>
+            <BudgetPeriodProvider>
+              <AppContent />
+            </BudgetPeriodProvider>
+          </BudgetAccountProvider>
         </UserPreferencesProvider>
       </WorkspaceProvider>
     </ProtectedRoute>

@@ -11,11 +11,8 @@ import {
   Tag,
   Landmark,
   Users,
-  List,
-  LayoutGrid,
 } from 'lucide-react'
 import { useBudgetPeriod } from '../../contexts/BudgetPeriodContext'
-import { useLayout } from '../../contexts/LayoutContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import BudgetAccountSelector from '../BudgetAccountSelector'
 import BudgetPeriodSelectorModal from '../modals/periods/BudgetPeriodSelectorModal'
@@ -75,25 +72,6 @@ function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
         onClose={() => setIsModalOpen(false)}
       />
     </>
-  )
-}
-
-function LayoutToggle({ collapsed }: { collapsed: boolean }) {
-  const { layoutMode, setLayoutMode } = useLayout()
-
-  if (collapsed) return null
-
-  return (
-    <button
-      onClick={() => setLayoutMode(layoutMode === 'auto' ? 'cards' : 'auto')}
-      className="flex items-center gap-2 w-full px-3 py-2 rounded-sm text-text-muted hover:bg-surface-hover hover:text-text transition-colors text-sm group"
-      title={layoutMode === 'cards' ? 'Switch to auto layout' : 'Switch to cards layout'}
-    >
-      {layoutMode === 'cards' ? <List size={14} className="flex-shrink-0" /> : <LayoutGrid size={14} className="flex-shrink-0" />}
-      <span className="font-mono text-xs uppercase tracking-wider">
-        Layout: {layoutMode === 'cards' ? 'Cards' : 'Auto'}
-      </span>
-    </button>
   )
 }
 
@@ -181,9 +159,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
           </div>
         )}
 
-        {/* Bottom: layout toggle + user menu */}
+        {/* Bottom: user menu */}
         <div className="p-2 flex-shrink-0 space-y-1 py-3 mt-3">
-          <LayoutToggle collapsed={collapsed} />
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>

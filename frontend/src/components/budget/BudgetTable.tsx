@@ -1,5 +1,4 @@
 import BudgetCategoryRow from './BudgetCategoryRow'
-import { useLayout } from '../../contexts/LayoutContext'
 
 interface CategoryBudget {
   id: number
@@ -19,7 +18,6 @@ interface Props {
 }
 
 export default function BudgetTable({ currency, categories, onEdit, onDelete }: Props) {
-  const { isCardsView } = useLayout()
   const totalBudget = categories.reduce((sum, c) => sum + Number(c.budget), 0)
   const totalActual = categories.reduce((sum, c) => sum + Number(c.actual), 0)
   const totalDifference = totalBudget - totalActual
@@ -31,7 +29,7 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
       </div>
 
       {/* Desktop Table */}
-      <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
         <thead>
           <tr className="bg-surface-hover">
@@ -71,7 +69,7 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
       </div>
 
       {/* Mobile Cards */}
-      <div className={isCardsView ? '' : 'md:hidden'}>
+      <div className="md:hidden">
         {categories.map(cat => {
           const budgetNum = Number(cat.budget) || 0
           const actualNum = Number(cat.actual) || 0
