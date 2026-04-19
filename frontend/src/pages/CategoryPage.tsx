@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '../api/client';
 import type { Category, PaginatedResponse } from '../types';
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext';
-import { useLayout } from '../contexts/LayoutContext';
 import { usePermissions } from '../hooks/usePermissions';
 import Loading from '../components/common/Loading';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -25,7 +24,6 @@ export default function CategoryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { selectedPeriodId } = useBudgetPeriod();
-  const { isCardsView } = useLayout();
   const { canManageBudgetData } = usePermissions();
   const queryClient = useQueryClient();
 
@@ -172,7 +170,7 @@ export default function CategoryPage() {
         <div className="bg-surface rounded-sm border border-border overflow-hidden max-w-4xl mx-auto">
           {totalItems > 0 ? (
             <>
-              <table className={isCardsView ? 'hidden' : 'hidden md:table w-full'}>
+              <table className="hidden md:table w-full">
                 <thead className="bg-surface-hover">
                   <tr>
                     <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
@@ -218,7 +216,7 @@ export default function CategoryPage() {
                 </tbody>
               </table>
 
-              <div className={isCardsView ? '' : 'md:hidden'}>
+              <div className="md:hidden">
                 {categories.map((category) => (
                   <div key={category.id} className="p-4 hover:bg-surface-hover transition-colors">
                     <div className="flex justify-between items-start mb-2">

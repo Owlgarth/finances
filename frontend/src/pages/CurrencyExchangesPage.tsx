@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Settings } from 'lucide-react'
 import { currencyExchangesApi, exchangeShortcutsApi } from '../api/client'
-import { useLayout } from '../contexts/LayoutContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import type { CurrencyExchange, ExchangeShortcut, PaginatedResponse } from '../types'
@@ -15,7 +14,6 @@ import Pagination from '../components/common/Pagination'
 
 export default function CurrencyExchangesPage() {
   const queryClient = useQueryClient()
-  const { isCardsView } = useLayout()
   const { canManageBudgetData } = usePermissions()
   const { selectedPeriodId } = useBudgetPeriod()
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -212,7 +210,7 @@ export default function CurrencyExchangesPage() {
       )}
 
       <div className="bg-surface border border-border rounded-sm overflow-hidden">
-        <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-surface-hover">
               <tr>
@@ -271,7 +269,7 @@ export default function CurrencyExchangesPage() {
           </table>
         </div>
 
-        <div className={isCardsView ? '' : 'md:hidden'}>
+        <div className="md:hidden">
           {exchanges.map(exchange => (
               <div
                 key={exchange.id}

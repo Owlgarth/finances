@@ -1,6 +1,5 @@
 import { ChevronDown } from 'lucide-react'
 import type { Transaction } from '../../types'
-import { useLayout } from '../../contexts/LayoutContext'
 
 type DateOrdering = 'date' | '-date'
 
@@ -13,13 +12,12 @@ interface Props {
 }
 
 export default function TransactionList({ transactions, dateOrdering, onToggleDateSort, onEdit, onDelete }: Props) {
-  const { isCardsView } = useLayout()
   const isDesc = dateOrdering === '-date'
 
   return (
     <div className="bg-surface rounded-sm overflow-hidden border border-border">
       {/* Desktop Table */}
-      <div className={isCardsView ? 'hidden' : 'hidden md:block overflow-x-auto'}>
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
         <thead>
           <tr className="bg-surface-muted">
@@ -100,7 +98,7 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
       </div>
 
       {/* Mobile Cards */}
-      <div className={isCardsView ? 'p-2 space-y-2' : 'md:hidden p-2 space-y-2'}>
+      <div className="md:hidden p-2 space-y-2">
         {transactions.map(transaction => (
             <div
               key={transaction.id}
