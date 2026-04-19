@@ -1,8 +1,8 @@
-# Monie
+# Moniteria
 
 A modern, full-stack personal finance tracking application with multi-currency support, period-based budgeting, multi-account workspaces, and collaborative team features.
 
-[![CI](https://github.com/erikmoroz/monie/actions/workflows/ci.yml/badge.svg)](https://github.com/erikmoroz/monie/actions/workflows/ci.yml)
+[![CI](https://github.com/erikmoroz/moniteria/actions/workflows/ci.yml/badge.svg)](https://github.com/erikmoroz/moniteria/actions/workflows/ci.yml)
 ![Tech Stack](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -16,7 +16,7 @@ A modern, full-stack personal finance tracking application with multi-currency s
 
 ### Developer's Note
 
-This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Monie as an open-source application.
+This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Moniteria as an open-source application.
 
 In the next development phase, I plan to conduct deeper code reviews and refactoring to ensure code quality, maintainability, and adherence to best practices.
 
@@ -24,7 +24,7 @@ In the next development phase, I plan to conduct deeper code reviews and refacto
 
 ## Overview
 
-Monie is a comprehensive financial management tool designed for individuals and teams:
+Moniteria is a comprehensive financial management tool designed for individuals and teams:
 
 - **Multi-Account Architecture** - Workspaces, budget accounts, and time-based periods
 - **Role-Based Access Control** - Owner, Admin, Member, and Viewer roles
@@ -79,7 +79,7 @@ VITE_DEMO_MODE=true
 
 ## GDPR Compliance
 
-Monie includes built-in GDPR compliance features:
+Moniteria includes built-in GDPR compliance features:
 
 - **Consent Management** — Track user consent for Terms of Service and Privacy Policy
 - **Right to Erasure** — Users can delete their account and all associated data

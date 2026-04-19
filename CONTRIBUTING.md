@@ -1,6 +1,6 @@
-# Contributing to Monie
+# Contributing to Moniteria
 
-Thank you for your interest in contributing to Monie! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Moniteria! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
@@ -16,8 +16,8 @@ Thank you for your interest in contributing to Monie! This document provides gui
 
 ```bash
 # Clone the repository
-git clone https://github.com/erikmoroz/monie.git
-cd monie
+git clone https://github.com/erikmoroz/moniteria.git
+cd moniteria
 
 # Copy environment file
 cp backend/example.env .env
@@ -180,7 +180,7 @@ When requesting features, please include:
 ## Project Structure
 
 ```
-monie/
+moniteria/
 ├── backend/           # Django API
 │   ├── config/        # Django settings
 │   ├── common/        # Shared utilities (auth, permissions)

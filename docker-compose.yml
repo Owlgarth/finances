@@ -1,5 +1,5 @@
 services:
-  monie_db:
+  moniteria_db:
     image: postgres:17-alpine
     env_file:
       - .env
@@ -8,23 +8,23 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - monie-network
+      - moniteria-network
 
-  monie_redis:
+  moniteria_redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     networks:
-      - monie-network
+      - moniteria-network
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  monie_api:
+  moniteria_api:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: monie_api
+    container_name: moniteria_api
     env_file:
       - .env
     environment:
@@ -33,18 +33,18 @@ services:
       - DEBUG=${DEBUG:-false}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - REDIS_URL=redis://monie_redis:6379
+      - REDIS_URL=redis://moniteria_redis:6379
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
     networks:
-      - monie-network
+      - moniteria-network
     depends_on:
-      - monie_db
-      - monie_redis
+      - moniteria_db
+      - moniteria_redis
 
-  monie_ui:
+  moniteria_ui:
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -55,14 +55,14 @@ services:
     ports:
       - "3000:80"
     networks:
-      - monie-network
+      - moniteria-network
     depends_on:
-      - monie_api
+      - moniteria_api
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  monie-network:
+  moniteria-network:
     driver: bridge

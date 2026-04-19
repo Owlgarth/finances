@@ -210,7 +210,7 @@ if _email_host:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@monie.app')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@moniteria.com')
 
 # Legal document operator settings (for privacy policy, terms of service)
 # Supports both individuals and companies as data controllers

@@ -312,19 +312,19 @@ CORS_ALLOW_CREDENTIALS = True
 
 ```yaml
 services:
-  monie_db:
+  moniteria_db:
     image: postgres:17-alpine
     ports: ["5432:5432"]
 
-  monie_api:
+  moniteria_api:
     build: ./backend
     ports: ["8000:8000"]
-    depends_on: [monie_db]
+    depends_on: [moniteria_db]
 
-  monie_ui:
+  moniteria_ui:
     build: ./frontend
     ports: ["3000:80"]
-    depends_on: [monie_api]
+    depends_on: [moniteria_api]
 ```
 
 ### Production Considerations

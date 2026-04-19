@@ -142,7 +142,7 @@ class WorkspaceService:
     def _send_workspace_deleted_email(email, user_name, workspace_name, deleter_name):
         EmailService.send_email(
             to=email,
-            subject=f'{workspace_name} was deleted — Monie',
+            subject=f'{workspace_name} was deleted — Moniteria',
             template_name='email/workspace_deleted',
             context={
                 'user_name': user_name,
@@ -501,7 +501,7 @@ class WorkspaceMemberService:
     def _send_existing_user_email(existing_user, workspace, admin_name, role):
         EmailService.send_email(
             to=existing_user.email,
-            subject=f'You were added to {workspace.name} — Monie',
+            subject=f'You were added to {workspace.name} — Moniteria',
             template_name='email/workspace_invitation_existing',
             context={
                 'user_name': existing_user.full_name or existing_user.email,
@@ -515,7 +515,7 @@ class WorkspaceMemberService:
     def _send_new_user_email(new_user, workspace, admin_name, role):
         EmailService.send_email(
             to=new_user.email,
-            subject=f'You were invited to {workspace.name} — Monie',
+            subject=f'You were invited to {workspace.name} — Moniteria',
             template_name='email/workspace_invitation_new',
             context={
                 'user_name': new_user.full_name or new_user.email,
@@ -530,7 +530,7 @@ class WorkspaceMemberService:
     def _send_member_removed_email(email, user_name, workspace_name, admin_name):
         EmailService.send_email(
             to=email,
-            subject=f'You were removed from {workspace_name} — Monie',
+            subject=f'You were removed from {workspace_name} — Moniteria',
             template_name='email/member_removed',
             context={
                 'user_name': user_name,
@@ -543,7 +543,7 @@ class WorkspaceMemberService:
     def _send_member_left_email(email, user_name, leaver_name, workspace_name):
         EmailService.send_email(
             to=email,
-            subject=f'{leaver_name} left {workspace_name} — Monie',
+            subject=f'{leaver_name} left {workspace_name} — Moniteria',
             template_name='email/member_left',
             context={
                 'user_name': user_name,
@@ -556,7 +556,7 @@ class WorkspaceMemberService:
     def _send_role_changed_email(email, user_name, workspace_name, old_role, new_role, admin_name):
         EmailService.send_email(
             to=email,
-            subject=f'Your role was changed in {workspace_name} — Monie',
+            subject=f'Your role was changed in {workspace_name} — Moniteria',
             template_name='email/role_changed',
             context={
                 'user_name': user_name,

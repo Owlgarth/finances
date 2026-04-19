@@ -23,7 +23,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
 
   const handleDownload = () => {
     const content = [
-      'Monie Recovery Codes',
+      'Moniteria Recovery Codes',
       '=====================',
       '',
       'Store these codes in a safe place.',
@@ -38,7 +38,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'monie_recovery_codes.txt'
+    link.download = 'moniteria_recovery_codes.txt'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

@@ -1,7 +1,7 @@
 """Demo fixtures service for creating sample data in new workspaces.
 
 This module provides functionality to populate new workspaces with example data
-to help users understand how Monie works.
+to help users understand how Moniteria works.
 """
 
 from datetime import date, timedelta

@@ -24,7 +24,7 @@ from workspaces.models import Role, WorkspaceMember
 
 
 def _generate_qr_code_svg(user: User, secret: str) -> str:
-    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name='Monie')
+    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name='Moniteria')
     qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgImage)
     qr.add_data(totp_uri)
     qr.make(fit=True)

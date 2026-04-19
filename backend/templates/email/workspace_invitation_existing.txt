@@ -1,13 +1,13 @@
 ——————————————————————————————————
-Monie
+Moniteria
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
 {{ admin_name }} added you as a {{ role }} to {{ workspace_name }}.
 
-Open Monie
+Open Moniteria
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Monie account.
+You're receiving this because you have a Moniteria account.

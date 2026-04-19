@@ -1,6 +1,6 @@
 # Role-Based Permissions Matrix
 
-This document describes the permission system and access control matrix for Monie.
+This document describes the permission system and access control matrix for Moniteria.
 
 ## Permission Layers
 
