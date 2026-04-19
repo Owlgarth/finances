@@ -59,7 +59,7 @@ export default function ReConsentPage() {
       <div className="max-w-md w-full bg-surface rounded-sm border border-border p-8">
         <h1 className="text-base font-semibold text-text mb-2">Updated agreements</h1>
         <p className="text-text-muted mb-6">
-          We've updated our legal documents. Please review and accept the changes to continue using Monie.
+          We've updated our legal documents. Please review and accept the changes to continue using Moniteria.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

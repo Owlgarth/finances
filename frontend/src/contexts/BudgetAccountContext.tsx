@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { budgetAccountsApi } from '../api/client'
 import type { BudgetAccount } from '../types'
 
-const SELECTED_ACCOUNT_KEY = 'monie_selected_account'
+const SELECTED_ACCOUNT_KEY = 'moniteria_selected_account'
 
 interface BudgetAccountContextType {
   selectedAccount: BudgetAccount | null

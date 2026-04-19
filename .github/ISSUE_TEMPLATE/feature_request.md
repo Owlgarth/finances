@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Monie
+about: Suggest an idea for Moniteria
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

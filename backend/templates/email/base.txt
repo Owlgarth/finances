@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Monie
+Moniteria
 ——————————————————————————————————
 
 {% block content %}{% endblock %}
@@ -8,4 +8,4 @@ Monie
 {% block cta_url %}{{ cta_url }}{% endblock %}
 
 ——————————————————————————————————
-You're receiving this because you have a Monie account.
+You're receiving this because you have a Moniteria account.

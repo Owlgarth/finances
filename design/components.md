@@ -14,7 +14,7 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
 
   <!-- Brand -->
   <div class="flex items-center justify-between px-4 h-12 flex-shrink-0">
-    <span class="text-base font-semibold text-text tracking-tight select-none">Monie</span>
+    Moniteria
     <button class="p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
             aria-label="Collapse sidebar">
       <PanelLeftClose size={14} />

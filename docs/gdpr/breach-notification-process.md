@@ -52,7 +52,7 @@ If the breach is likely to result in a risk to individuals' rights and freedoms:
 - Likely consequences of the breach
 - Measures taken or proposed to address the breach
 
-**Template notification subject:** `GDPR Data Breach Notification — Monie — [Date]`
+**Template notification subject:** `GDPR Data Breach Notification — Moniteria — [Date]`
 
 If notification cannot be made within 72 hours, provide notification as soon as possible with explanation of delay.
 
@@ -64,7 +64,7 @@ Notify affected users **without undue delay** if the breach is likely to result 
 
 **Notification method:** Email to affected users' registered email addresses
 
-**Template subject:** `Important: Security Notice Regarding Your Monie Account`
+**Template subject:** `Important: Security Notice Regarding Your Moniteria Account`
 
 **Notification must include:**
 - Clear description of the nature of the breach

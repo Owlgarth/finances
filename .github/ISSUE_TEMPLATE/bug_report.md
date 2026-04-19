@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve Monie
+about: Report a bug to help us improve Moniteria
 title: '[BUG] '
 labels: bug
 assignees: ''

@@ -210,5 +210,5 @@ npm run dev       # Port 5173
 npm run build
 
 # Docker
-docker-compose up monie_ui   # Port 3000
+docker-compose up moniteria_ui   # Port 3000
 ```
