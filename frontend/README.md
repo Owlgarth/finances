@@ -350,7 +350,7 @@ npm run preview  # Preview production build
 ### Docker
 
 ```bash
-docker-compose up monie_ui
+docker-compose up moniteria_ui
 ```
 
 ## Environment Variables
