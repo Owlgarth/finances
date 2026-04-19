@@ -41,7 +41,7 @@ export default function ConfirmEmailChangePage() {
       <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h2 className="font-sans font-semibold text-text text-base tracking-tight">
-            Monie
+            Moniteria
           </h2>
         </div>
 

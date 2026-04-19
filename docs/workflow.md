@@ -1,6 +1,6 @@
 # Application Workflow
 
-This document describes the main workflows and user flows in the Monie application.
+This document describes the main workflows and user flows in the Moniteria application.
 
 ## User Registration and Authentication
 
