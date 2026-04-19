@@ -902,6 +902,24 @@ Unused imports create noise and can mislead future readers about what a module d
 
 ## Frontend Code Style (TypeScript/React)
 
+### Design System Tokens
+
+The frontend uses an "Architectural Ledger" design system defined via CSS custom properties. All colors reference `var(--color-*)` variables — never hardcoded hex values in component code.
+
+**Color tokens:** `primary`, `primary-hover`, `background`, `surface`, `surface-hover`, `surface-muted`, `border`, `border-focus`, `text`, `text-muted`, `positive`, `positive-bg`, `negative`, `negative-bg`, `warning`, `warning-bg`
+
+**Border radii:**
+- `rounded-sm` (4px) — containers, buttons
+- `rounded-none` (0px) — inputs, table cells
+
+**Fonts:**
+- `font-sans` — Geist (body text, UI)
+- `font-mono` — JetBrains Mono (code, numbers)
+
+**Icons:** `lucide-react` is the icon library. Do not use Material Symbols or any other icon font.
+
+**Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables are defined — avoid adding `box-shadow` utilities for elevation.
+
 ### File Structure
 
 - Components: `components/Category/CategoryRow.tsx`

@@ -8,9 +8,9 @@ React SPA for budget tracking.
 - **Routing**: React Router DOM 7
 - **State**: TanStack React Query 5
 - **HTTP**: Axios
-- **Styling**: Tailwind CSS 3
+- **Styling**: Tailwind CSS 3 (Architectural Ledger design system)
 - **Build**: Vite 7
-- **Icons**: React Icons
+- **Icons**: Lucide React
 
 ## Directory Structure
 
@@ -199,6 +199,72 @@ interface PeriodBalance { id, budget_period_id, currency, opening_balance, total
 2. **Data Fetching**: React Query with `queryKey` including `periodId`
 3. **Mutations**: Create/update/delete via React Query mutations
 4. **Cache Invalidation**: Automatic on mutation success
+
+## Design System
+
+The frontend uses an **Architectural Ledger** design system with CSS custom properties defined in `index.css` and mapped to Tailwind utility classes in `tailwind.config.js`.
+
+### Color Tokens
+
+All colors are CSS custom properties (`--color-*`) mapped to Tailwind classes:
+
+| Token | CSS Variable | Tailwind Class | Purpose |
+|-------|-------------|----------------|---------|
+| `primary` | `--color-primary` | `bg-primary`, `text-primary` | Brand / CTAs |
+| `primary-hover` | `--color-primary-hover` | `bg-primary-hover` | CTA hover state |
+| `background` | `--color-background` | `bg-background` | Page background |
+| `surface` | `--color-surface` | `bg-surface` | Cards, panels, modals |
+| `surface-hover` | `--color-surface-hover` | `bg-surface-hover` | Interactive surface hover |
+| `surface-muted` | `--color-surface-muted` | `bg-surface-muted` | Subtle / disabled surfaces |
+| `border` | `--color-border` | `border-border` | Default borders |
+| `border-focus` | `--color-border-focus` | `ring-border-focus` | Focus rings, outlines |
+| `text` | `--color-text` | `text-text` | Primary text |
+| `text-muted` | `--color-text-muted` | `text-text-muted` | Secondary / placeholder text |
+| `positive` | `--color-positive` | `text-positive`, `bg-positive` | Income / success |
+| `negative` | `--color-negative` | `text-negative`, `bg-negative` | Expense / error |
+| `warning` | `--color-warning` | `text-warning`, `bg-warning` | Warnings |
+
+Visual separation uses borders (`border border-border`) instead of box shadows. Surfaces are flat — no gradients.
+
+### Typography
+
+| Font Family | Tailwind | Use |
+|-------------|----------|-----|
+| Geist | `font-sans` | Body text, headings (default) |
+| JetBrains Mono | `font-mono` | Numeric values, labels, code |
+
+### Border Radius
+
+Only two radius values: `rounded-sm` (4px) for elements and `rounded-none` (0px) for flush edges.
+
+### Z-Index Scale
+
+Named z-index tokens prevent stacking conflicts:
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `z-dropdown` | 100 | Dropdowns |
+| `z-sticky` | 200 | Sticky headers |
+| `z-sidebar` | 300 | Sidebar |
+| `z-bottom-nav` | 300 | Mobile bottom nav |
+| `z-topbar` | 400 | Top bars |
+| `z-modal-backdrop` | 500 | Modal overlay |
+| `z-modal` | 510 | Modal content |
+| `z-toast` | 600 | Toast notifications |
+| `z-tooltip` | 700 | Tooltips |
+
+### Icons
+
+All icons use [Lucide React](https://lucide.dev/) exclusively. Usage pattern:
+
+```tsx
+import { Plus, Pencil, Trash2 } from 'lucide-react'
+<Plus size={14} />
+```
+
+### External Fonts
+
+Loaded from Google Fonts: **Geist** (weights 300–700) and **JetBrains Mono** (weights 400–700). No Material Symbols or other icon fonts.
 
 ## Running
 
