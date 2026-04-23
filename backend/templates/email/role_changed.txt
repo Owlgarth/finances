@@ -1,13 +1,13 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
 Your role in {{ workspace_name }} was changed from {{ old_role }} to {{ new_role }} by {{ admin_name }}.
 
-Open Moniteria
+Open Denarly
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

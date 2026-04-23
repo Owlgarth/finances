@@ -1,13 +1,13 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
 {{ admin_name }} added you as a {{ role }} to {{ workspace_name }}.
 
-Open Moniteria
+Open Denarly
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.
