@@ -21,7 +21,7 @@ class DataExportTests(AuthMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('application/json', response['Content-Type'])
         self.assertIn('attachment', response['Content-Disposition'])
-        self.assertIn('moniteria_data_export', response['Content-Disposition'])
+        self.assertIn('denarly_data_export', response['Content-Disposition'])
 
     def test_export_contains_profile_data(self):
         """Export should contain user profile information."""

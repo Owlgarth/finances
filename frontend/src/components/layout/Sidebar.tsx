@@ -96,7 +96,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
         {/* Logo + collapse toggle */}
         <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
           {!collapsed && (
-            <span className="font-sans font-semibold text-primary text-base tracking-tight select-none">Moniteria</span>
+            <span className="font-sans font-semibold text-primary text-base tracking-tight select-none">Denarly</span>
           )}
           <button
             onClick={onClose ?? onToggleCollapse}

@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
@@ -8,8 +8,8 @@ Hi {{ user_name }},
 
 You may want to review your workspace members.
 
-Open Moniteria
+Open Denarly
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

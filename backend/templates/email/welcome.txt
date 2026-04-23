@@ -1,10 +1,10 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
-Welcome to Moniteria! We're excited to help you take control of your finances.
+Welcome to Denarly! We're excited to help you take control of your finances.
 
 Here's what you can do:
 - Track your spending across multiple currencies
@@ -15,4 +15,4 @@ Get Started
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

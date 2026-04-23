@@ -5,11 +5,11 @@ effective_date: "2027-01-01"
 
 ## 1. Acceptance of Terms
 
-By registering for and using Moniteria, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.
+By registering for and using Denarly, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.
 
 ## 2. Service Description
 
-Moniteria is a personal finance tracking application that provides:
+Denarly is a personal finance tracking application that provides:
 
 - Multi-currency budget tracking
 - Period-based budgeting with categories
@@ -29,7 +29,7 @@ Moniteria is a personal finance tracking application that provides:
 
 ## 4. Acceptable Use
 
-You agree to use Moniteria only for:
+You agree to use Denarly only for:
 
 - Personal or business finance tracking
 - Legitimate budgeting and financial planning
@@ -43,7 +43,7 @@ You agree NOT to:
 
 ## 5. Data & Privacy
 
-Your use of Moniteria is also governed by our [Privacy Policy](/privacy), which is incorporated into these Terms by reference. Please read it carefully.
+Your use of Denarly is also governed by our [Privacy Policy](/privacy), which is incorporated into these Terms by reference. Please read it carefully.
 
 ## 6. Workspace Collaboration
 
@@ -61,13 +61,13 @@ Your use of Moniteria is also governed by our [Privacy Policy](/privacy), which 
 
 ## 8. Intellectual Property
 
-- You own your financial data entered into Moniteria
+- You own your financial data entered into Denarly
 - You may export your data at any time
-- The Moniteria software, design, and branding are owned by {{ operator_name }}
+- The Denarly software, design, and branding are owned by {{ operator_name }}
 
 ## 9. Limitation of Liability
 
-Moniteria is provided "as is" without warranty of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the service. Our total liability shall not exceed the amount you paid for the service in the past 12 months.
+Denarly is provided "as is" without warranty of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the service. Our total liability shall not exceed the amount you paid for the service in the past 12 months.
 
 ## 10. Governing Law
 
