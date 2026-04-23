@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 {% block content %}{% endblock %}
@@ -8,4 +8,4 @@ Moniteria
 {% block cta_url %}{{ cta_url }}{% endblock %}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

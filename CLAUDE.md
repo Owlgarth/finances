@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Moniteria** is a full-stack personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It features multi-currency support, period-based budgeting, multi-account workspaces, and collaborative team features with role-based access control.
+**Denarly** is a full-stack personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It features multi-currency support, period-based budgeting, multi-account workspaces, and collaborative team features with role-based access control.
 
 ## Development Commands
 

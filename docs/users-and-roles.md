@@ -1,6 +1,6 @@
 # Users and Roles
 
-This document describes the user management system, role hierarchy, and member management in Moniteria.
+This document describes the user management system, role hierarchy, and member management in Denarly.
 
 ## User Model
 

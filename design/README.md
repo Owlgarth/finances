@@ -1,4 +1,4 @@
-# Moniteria Design System
+# Denarly Design System
 
 > Philosophy: **"The Architectural Ledger"** — A professional financial tool aesthetic utilizing fine-line wireframe grids, compact tabular layouts, zero drop shadows, and strict 1px borders.
 > Stack: Tailwind CSS + Geist + JetBrains Mono + Lucide Icons (14px, 1.5px stroke weight).
