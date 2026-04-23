@@ -121,7 +121,7 @@ These are the **only** hex values in the system. Every component references the 
 
 ## 3. Tailwind Config
 
-Paste this into every Moniteria project. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable overrides.
+Paste this into every Denarly project. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable overrides.
 
 ```js
 tailwind.config = {

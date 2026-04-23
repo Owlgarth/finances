@@ -1,10 +1,10 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
-{{ admin_name }} created a Moniteria account for you and added you as a {{ role }} to {{ workspace_name }}.
+{{ admin_name }} created a Denarly account for you and added you as a {{ role }} to {{ workspace_name }}.
 
 Your login email is {{ email }}. Please ask {{ admin_name }} for your temporary password.
 
@@ -12,4 +12,4 @@ Sign In
 {{ frontend_url }}/login
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

@@ -1,5 +1,5 @@
 services:
-  moniteria_db:
+  denarly_db:
     image: postgres:17-alpine
     env_file:
       - .env
@@ -8,23 +8,23 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - moniteria-network
+      - denarly-network
 
-  moniteria_redis:
+  denarly_redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     networks:
-      - moniteria-network
+      - denarly-network
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  moniteria_api:
+  denarly_api:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: moniteria_api
+    container_name: denarly_api
     env_file:
       - .env
     environment:
@@ -33,18 +33,18 @@ services:
       - DEBUG=${DEBUG:-false}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - REDIS_URL=redis://moniteria_redis:6379
+      - REDIS_URL=redis://denarly_redis:6379
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
     networks:
-      - moniteria-network
+      - denarly-network
     depends_on:
-      - moniteria_db
-      - moniteria_redis
+      - denarly_db
+      - denarly_redis
 
-  moniteria_ui:
+  denarly_ui:
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -55,14 +55,14 @@ services:
     ports:
       - "3000:80"
     networks:
-      - moniteria-network
+      - denarly-network
     depends_on:
-      - moniteria_api
+      - denarly_api
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  moniteria-network:
+  denarly-network:
     driver: bridge

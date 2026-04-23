@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
@@ -10,4 +10,4 @@ Confirm Email Change
 {{ confirm_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

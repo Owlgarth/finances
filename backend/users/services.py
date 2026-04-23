@@ -109,7 +109,7 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Reset your password — Moniteria',
+            subject='Reset your password — Denarly',
             template_name='email/reset_password',
             context={'user_name': user_name, 'reset_url': reset_url},
         )
@@ -119,7 +119,7 @@ class UserService:
         user_name = user.full_name or user.email
         EmailService.send_email(
             to=user.email,
-            subject='Your password was changed — Moniteria',
+            subject='Your password was changed — Denarly',
             template_name='email/password_changed',
             context={'user_name': user_name, 'changed_by_admin': changed_by_admin},
         )
@@ -146,13 +146,13 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Verify your email — Moniteria',
+            subject='Verify your email — Denarly',
             template_name='email/verify_email',
             context={'user_name': user_name, 'verification_url': verification_url},
         )
         EmailService.send_email(
             to=user.email,
-            subject='Welcome to Moniteria!',
+            subject='Welcome to Denarly!',
             template_name='email/welcome',
             context={'user_name': user_name},
         )
@@ -169,7 +169,7 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Verify your email — Moniteria',
+            subject='Verify your email — Denarly',
             template_name='email/verify_email',
             context={
                 'user_name': user.full_name or user.email,
@@ -203,7 +203,7 @@ class UserService:
     def _send_email_change_verify_email(user, new_email, confirm_url):
         EmailService.send_email(
             to=new_email,
-            subject='Confirm your new email — Moniteria',
+            subject='Confirm your new email — Denarly',
             template_name='email/email_change_verify',
             context={
                 'user_name': user.full_name or user.email,
@@ -245,7 +245,7 @@ class UserService:
     def _send_email_change_notify_email(user, old_email, new_email):
         EmailService.send_email(
             to=old_email,
-            subject='Your email was changed — Moniteria',
+            subject='Your email was changed — Denarly',
             template_name='email/email_change_notify',
             context={
                 'user_name': user.full_name or new_email,
@@ -454,7 +454,7 @@ class UserService:
 
         EmailService.send_email(
             to=user_email,
-            subject='Your Moniteria account has been deleted — Moniteria',
+            subject='Your Denarly account has been deleted — Denarly',
             template_name='email/account_deleted',
             context={'user_name': user_name},
         )

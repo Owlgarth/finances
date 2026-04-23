@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Coding guidelines and commands for agentic coding agents working on the Moniteria codebase.
+Coding guidelines and commands for agentic coding agents working on the Denarly codebase.
 
 ## Project Overview
 
-Moniteria is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It features multi-currency support, period-based budgeting, and collaborative team features.
+Denarly is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It features multi-currency support, period-based budgeting, and collaborative team features.
 
 ## Build/Lint/Test Commands
 
@@ -1036,7 +1036,7 @@ Before adding error toasts in a component's catch block, check whether the calle
 
 ### Token Storage
 
-Access and refresh tokens are stored separately in `localStorage` (`moniteria_token` and `moniteria_refresh_token` keys). Three exported helpers manage refresh token storage in `api/client.ts`: `setRefreshToken`, `getRefreshToken`, and `clearAuthToken` (which clears both tokens and the Authorization header).
+Access and refresh tokens are stored separately in `localStorage` (`denarly_token` and `denarly_refresh_token` keys). Three exported helpers manage refresh token storage in `api/client.ts`: `setRefreshToken`, `getRefreshToken`, and `clearAuthToken` (which clears both tokens and the Authorization header).
 
 All auth flows that receive token pairs (`login`, `register`, `verify2FA`) must store both tokens:
 
@@ -1264,7 +1264,7 @@ class MyService:
     def _send_notification_email(user, workspace_id):
         EmailService.send_email(
             to=user.email,
-            subject='Something happened — Moniteria',
+            subject='Something happened — Denarly',
             template_name='email/template_name',
             context={'user_name': user.full_name or user.email},
         )
@@ -1288,7 +1288,7 @@ class MyService:
     def _send_notification_email(user):
         EmailService.send_email(
             to=user.email,
-            subject='Password changed — Moniteria',
+            subject='Password changed — Denarly',
             template_name='email/password_changed',
             context={'user_name': user.full_name or user.email},
         )
@@ -1303,14 +1303,14 @@ class MyService:
 
 ### Email Subject Format
 
-All email subjects follow the format `{Description} — Moniteria` using an em-dash (`—`) before the app name:
+All email subjects follow the format `{Description} — Denarly` using an em-dash (`—`) before the app name:
 
 ```python
-subject='Verify your email — Moniteria'
-subject='Reset your password — Moniteria'
-subject='Password changed — Moniteria'
-subject='Your email was changed — Moniteria'
-subject='Your Moniteria account has been deleted — Moniteria'
+subject='Verify your email — Denarly'
+subject='Reset your password — Denarly'
+subject='Password changed — Denarly'
+subject='Your email was changed — Denarly'
+subject='Your Denarly account has been deleted — Denarly'
 ```
 
 ### Email Templates

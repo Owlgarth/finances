@@ -1,13 +1,13 @@
 ——————————————————————————————————
-Moniteria
+Denarly
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
-Please verify your email address to get the most out of Moniteria.
+Please verify your email address to get the most out of Denarly.
 
 Verify Email
 {{ verification_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Moniteria account.
+You're receiving this because you have a Denarly account.

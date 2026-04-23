@@ -1,6 +1,6 @@
-# Contributing to Moniteria
+# Contributing to Denarly
 
-Thank you for your interest in contributing to Moniteria! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Denarly! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
@@ -16,8 +16,8 @@ Thank you for your interest in contributing to Moniteria! This document provides
 
 ```bash
 # Clone the repository
-git clone https://github.com/erikmoroz/moniteria.git
-cd moniteria
+git clone https://github.com/erikmoroz/denarly.git
+cd denarly
 
 # Copy environment file
 cp backend/example.env .env
@@ -180,7 +180,7 @@ When requesting features, please include:
 ## Project Structure
 
 ```
-moniteria/
+denarly/
 ├── backend/           # Django API
 │   ├── config/        # Django settings
 │   ├── common/        # Shared utilities (auth, permissions)

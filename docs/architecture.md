@@ -312,19 +312,19 @@ CORS_ALLOW_CREDENTIALS = True
 
 ```yaml
 services:
-  moniteria_db:
+  denarly_db:
     image: postgres:17-alpine
     ports: ["5432:5432"]
 
-  moniteria_api:
+  denarly_api:
     build: ./backend
     ports: ["8000:8000"]
-    depends_on: [moniteria_db]
+    depends_on: [denarly_db]
 
-  moniteria_ui:
+  denarly_ui:
     build: ./frontend
     ports: ["3000:80"]
-    depends_on: [moniteria_api]
+    depends_on: [denarly_api]
 ```
 
 ### Production Considerations
