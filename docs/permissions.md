@@ -1,6 +1,6 @@
 # Role-Based Permissions Matrix
 
-This document describes the permission system and access control matrix for Moniteria.
+This document describes the permission system and access control matrix for Denarly.
 
 ## Permission Layers
 

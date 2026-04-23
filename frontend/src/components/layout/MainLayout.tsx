@@ -7,7 +7,7 @@ import Sidebar from './Sidebar'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
 
-const SIDEBAR_COLLAPSED_KEY = 'moniteria-sidebar-collapsed'
+const SIDEBAR_COLLAPSED_KEY = 'denarly-sidebar-collapsed'
 
 interface MainLayoutProps {
   children: ReactNode
@@ -89,7 +89,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           >
             <Menu size={14} />
           </button>
-          <span className="font-sans font-semibold text-text text-base tracking-tight">Moniteria</span>
+          <span className="font-sans font-semibold text-text text-base tracking-tight">Denarly</span>
         </div>
 
         {/* Mobile drawer overlay */}
