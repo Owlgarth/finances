@@ -45,7 +45,7 @@ Denarly is a comprehensive financial management tool designed for individuals an
 ```bash
 # Clone and start
 git clone <repository-url>
-cd budget-tracker
+cd denarly
 docker-compose up -d
 ```
 
@@ -102,7 +102,7 @@ See [GDPR Documentation](docs/gdpr/README.md) for details.
 ## Project Structure
 
 ```
-budget-tracker/
+denarly/
 ├── backend/           # Django Ninja REST API
 ├── frontend/          # React SPA
 ├── docs/              # Architecture and specifications
