@@ -3,7 +3,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { transactionsApi, categoriesApi } from '../../../api/client'
-import type { Transaction, Category } from '../../../types'
+import type { Transaction, Category, PaginatedResponse } from '../../../types'
 import { useBudgetPeriod } from '../../../contexts/BudgetPeriodContext'
 import { format } from 'date-fns'
 import DatePicker from '../../DatePicker'
@@ -33,7 +33,7 @@ export default function TransactionFormModal({ isOpen, onClose, transaction }: P
     queryFn: async () => {
       if (!selectedPeriodId) return [];
       const response = await categoriesApi.getAll({ budget_period_id: selectedPeriodId });
-      return response.data;
+      return (response.data as PaginatedResponse<Category>).items;
     },
     enabled: !!selectedPeriodId && isOpen,
   });
