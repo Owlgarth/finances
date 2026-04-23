@@ -383,7 +383,7 @@ cp example.env .env
 
 Required variables:
 ```bash
-POSTGRES_DB=budget_tracker
+POSTGRES_DB=denarly_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_HOST=localhost
@@ -445,10 +445,10 @@ A Dockerfile is provided for containerized deployment. The container automatical
 
 ```bash
 # Build image
-docker build -t budget-tracker-backend .
+docker build -t denarly-backend .
 
 # Run container
-docker run -p 8000:8000 --env-file .env budget-tracker-backend
+docker run -p 8000:8000 --env-file .env denarly-backend
 ```
 
 The entrypoint script (`docker-entrypoint.sh`) executes:
