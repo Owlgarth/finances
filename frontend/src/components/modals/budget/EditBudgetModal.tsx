@@ -3,7 +3,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { budgetsApi, categoriesApi, budgetPeriodsApi } from '../../../api/client'
-import type { Category, BudgetPeriod } from '../../../types'
+import type { Category, BudgetPeriod, PaginatedResponse } from '../../../types'
 
 interface CategoryBudget {
   id: number
@@ -55,7 +55,7 @@ export default function EditBudgetModal({ isOpen, onClose, budget, periodId }: P
     queryFn: async () => {
       if (!selectedPeriodId) return [];
       const response = await categoriesApi.getAll({ budget_period_id: selectedPeriodId });
-      return response.data;
+      return (response.data as PaginatedResponse<Category>).items;
     },
     enabled: !!selectedPeriodId && isOpen,
   });
