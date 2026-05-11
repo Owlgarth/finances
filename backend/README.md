@@ -258,18 +258,20 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/transactions` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `type[]`, `category_id[]`, `amount_gte`, `amount_lte` | List transactions |
+| GET | `/api/transactions` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `transaction_type[]`, `category_id[]`, `currency[]`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated) |
+| GET | `/api/transactions/totals` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `transaction_type[]`, `category_id[]`, `currency[]`, `amount_gte`, `amount_lte`, `group_by` | Aggregated totals grouped by `type`, `category`, or `type,category` |
 | POST | `/api/transactions` | - | Create transaction |
 | PUT | `/api/transactions/{id}` | - | Update transaction |
 | DELETE | `/api/transactions/{id}` | - | Delete transaction |
 | POST | `/api/transactions/import` | - | Import transactions (FormData) |
-| GET | `/api/transactions/export/` | `budget_period_id`, `type` | Export transactions to JSON |
+| GET | `/api/transactions/export/` | `budget_period_id`, `transaction_type` | Export transactions to JSON |
 
 ### Planned Transactions
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/planned-transactions` | `status`, `budget_period_id` | List planned transactions |
+| GET | `/api/planned-transactions` | `status`, `budget_period_id`, `currency[]`, `page`, `page_size` | List planned transactions (paginated) |
+| GET | `/api/planned-transactions/totals` | `status`, `budget_period_id`, `currency[]`, `group_by` | Aggregated totals grouped by `currency` or `category` |
 | POST | `/api/planned-transactions` | - | Create planned transaction |
 | PUT | `/api/planned-transactions/{id}` | - | Update planned transaction |
 | DELETE | `/api/planned-transactions/{id}` | - | Delete planned transaction |
@@ -289,7 +291,8 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/currency-exchanges` | `budget_period_id` | List currency exchanges |
+| GET | `/api/currency-exchanges` | `budget_period_id`, `page`, `page_size` | List currency exchanges (paginated) |
+| GET | `/api/currency-exchanges/totals` | `budget_period_id` | Aggregated totals grouped by currency pair |
 | POST | `/api/currency-exchanges` | - | Create currency exchange |
 | PUT | `/api/currency-exchanges/{id}` | - | Update currency exchange |
 | DELETE | `/api/currency-exchanges/{id}` | - | Delete currency exchange |

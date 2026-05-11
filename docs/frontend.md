@@ -71,6 +71,7 @@ frontend/src/
 - `PeriodSelector` - Period dropdown
 - `BudgetAccountSelector` - Account dropdown
 - `ProtectedRoute` - Auth route wrapper
+- `TotalsSummary` - Aggregated totals tables for transactions, planned transactions, and currency exchanges (supports `group_by` modes: type, category, or combined)
 
 ### Feature Components
 - `BalanceCard`, `BalanceSection` - Balance display
@@ -171,9 +172,9 @@ const api = axios.create({
 - `budgetPeriodsApi` - Periods with copy
 - `categoriesApi` - Categories with import
 - `budgetsApi` - Budget amounts
-- `transactionsApi` - Transactions with filters
-- `plannedTransactionsApi` - Planned with execute
-- `currencyExchangesApi` - Exchange records
+- `transactionsApi` - Transactions with filters, totals with `group_by` (type/category/combined)
+- `plannedTransactionsApi` - Planned with execute, totals with `group_by` (currency/category)
+- `currencyExchangesApi` - Exchange records, totals by currency pair
 - `periodBalancesApi` - Balances with recalculate
 - `reportsApi` - Budget summary, balances
 
@@ -191,6 +192,15 @@ interface Transaction { id, budget_period_id, date, description, category, amoun
 interface PlannedTransaction { id, budget_period_id, name, amount, currency, category, planned_date, payment_date, status, transaction_id, created_at }
 interface CurrencyExchange { id, budget_period_id, date, description, from_currency, from_amount, to_currency, to_amount, exchange_rate, created_at }
 interface PeriodBalance { id, budget_period_id, currency, opening_balance, total_income, total_expenses, exchanges_in, exchanges_out, closing_balance, last_calculated_at }
+
+// Totals Types
+interface TransactionTotalItem { group, currency, total }
+interface TransactionTotalsResponse { totals?, by_type?, by_category? }
+interface PlannedTransactionTotalItem { group, currency, total }
+interface PlannedTransactionTotalsResponse { totals }
+interface CurrencyExchangeTotalItem { from_currency, to_currency, from_total, to_total }
+interface CurrencyExchangeTotalsResponse { totals }
+const TotalsLabel = { UNCATEGORIZED: 'Uncategorized' }
 ```
 
 ## Data Flow
