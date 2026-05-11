@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import type { CurrencyExchange, ExchangeShortcut, PaginatedResponse } from '../types'
 import CurrencyExchangeFormModal from '../components/modals/currency/CurrencyExchangeFormModal'
+import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import ManageShortcutsModal from '../components/modals/currency/ManageShortcutsModal'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
@@ -24,6 +25,10 @@ export default function CurrencyExchangesPage() {
   const [preselectedFrom, setPreselectedFrom] = useState<string | undefined>(undefined)
   const [preselectedTo, setPreselectedTo] = useState<string | undefined>(undefined)
   const [isManageModalOpen, setIsManageModalOpen] = useState(false)
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
+  const [prefilledTransactionData, setPrefilledTransactionData] = useState<{
+    date?: string; description?: string; amount?: string; currency?: string; type?: 'expense' | 'income'
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -144,6 +149,17 @@ export default function CurrencyExchangesPage() {
     setPreselectedFrom(shortcut.from_currency)
     setPreselectedTo(shortcut.to_currency)
     setIsModalOpen(true)
+  }
+
+  const handleLinkedTransactions = (exchange: CurrencyExchange) => {
+    setPrefilledTransactionData({
+      date: exchange.date,
+      description: exchange.description || `Currency exchange: ${exchange.from_currency} → ${exchange.to_currency}`,
+      amount: exchange.to_amount.toString(),
+      currency: exchange.to_currency,
+      type: 'expense',
+    })
+    setIsTransactionModalOpen(true)
   }
 
   if (isLoading) return <Loading />
@@ -371,12 +387,22 @@ export default function CurrencyExchangesPage() {
         exchange={selectedExchange}
         preselectedFrom={preselectedFrom}
         preselectedTo={preselectedTo}
+        onLinkedTransactions={handleLinkedTransactions}
       />
 
       <ManageShortcutsModal
         isOpen={isManageModalOpen}
         onClose={() => setIsManageModalOpen(false)}
         shortcuts={shortcuts || []}
+      />
+
+      <TransactionFormModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => {
+          setIsTransactionModalOpen(false)
+          setPrefilledTransactionData(null)
+        }}
+        prefilledData={prefilledTransactionData || undefined}
       />
     </div>
   )
