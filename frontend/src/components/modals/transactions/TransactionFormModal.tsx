@@ -63,6 +63,7 @@ export default function TransactionFormModal({ isOpen, onClose, transaction }: P
         : transactionsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions-totals'] })
       queryClient.invalidateQueries({ queryKey: ['budget-summary'] })
       queryClient.refetchQueries({ queryKey: ['period-balances'] })
       toast.success(transaction ? 'Transaction updated successfully!' : 'Transaction created successfully!')

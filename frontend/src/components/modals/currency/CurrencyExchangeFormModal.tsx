@@ -53,6 +53,7 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
         : currencyExchangesApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currency-exchanges'] })
+      queryClient.invalidateQueries({ queryKey: ['currency-exchanges-totals'] })
       // Force refetch of period-balances to ensure UI updates immediately
       // This is needed because the app uses persistent cache with staleTime
       queryClient.refetchQueries({ queryKey: ['period-balances'] })

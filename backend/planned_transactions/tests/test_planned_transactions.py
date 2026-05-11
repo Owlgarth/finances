@@ -9,12 +9,14 @@ from django.test import TestCase
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from categories.factories import CategoryFactory
+from common.enums import TotalsLabel
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -1003,3 +1005,235 @@ class TestPlannedTransactionPagination(PlannedTransactionTestCase):
         self.assertEqual(data['items'], [])
         self.assertEqual(data['total'], 0)
         self.assertEqual(data['total_pages'], 0)
+
+
+# =============================================================================
+# Planned Transaction Totals Tests
+# =============================================================================
+
+
+class TestPlannedTransactionTotals(PlannedTransactionTestCase):
+    """Tests for GET /api/planned-transactions/totals."""
+
+    def test_totals_no_filters(self):
+        """Test totals returns aggregated amounts grouped by currency."""
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertIn('totals', data)
+        totals = data['totals']
+        # All 3 planned transactions use USD (1200 + 150 + 1200 = 2550)
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(totals[0]['group'], 'USD')
+        self.assertEqual(totals[0]['currency'], 'USD')
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('2550.00'))
+
+    def test_totals_status_filter(self):
+        """Test totals filtered by status."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+
+        data = self.get('/api/planned-transactions/totals?status=done', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(totals[0]['group'], 'USD')
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1200.00'))
+
+    def test_totals_currency_filter(self):
+        """Test totals filtered by currency."""
+        # Change planned1 to EUR
+        self.planned1.currency = self.currencies['EUR']
+        self.planned1.save()
+
+        data = self.get('/api/planned-transactions/totals?currency=USD', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(totals[0]['group'], 'USD')
+        self.assertEqual(totals[0]['currency'], 'USD')
+        # Only planned2 (150) + planned3 (1200) = 1350 in USD
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1350.00'))
+
+    def test_totals_multiple_currencies(self):
+        """Test totals with multiple currencies returns separate groups."""
+        self.planned1.currency = self.currencies['EUR']
+        self.planned1.save()
+
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 2)
+
+        # Find each currency group
+        by_currency = {t['currency']: Decimal(t['total']) for t in totals}
+        self.assertEqual(by_currency['EUR'], Decimal('1200.00'))
+        self.assertEqual(by_currency['USD'], Decimal('1350.00'))
+
+    def test_totals_budget_period_id_filter(self):
+        """Test totals filtered by budget period."""
+        data = self.get(f'/api/planned-transactions/totals?budget_period_id={self.period1.id}', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 1)
+        # Only planned1 (1200) + planned2 (150) = 1350 in period1
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1350.00'))
+
+    def test_totals_no_results(self):
+        """Test totals returns empty list when no records match."""
+        PlannedTransaction.objects.filter(workspace=self.workspace).delete()
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['totals'], [])
+
+    def test_totals_cross_workspace_isolation(self):
+        """Test that totals only include planned transactions from the user's workspace."""
+        other_workspace = WorkspaceFactory(name='Other Workspace')
+        other_user = User.objects.create_user(
+            email='other@example.com',
+            password='otherpass123',
+            current_workspace=other_workspace,
+        )
+        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
+
+        other_account = BudgetAccount.objects.create(
+            workspace=other_workspace,
+            name='Other Account',
+            default_currency=self.currencies['PLN'],
+            created_by=other_user,
+        )
+        other_period = BudgetPeriodFactory(
+            budget_account=other_account,
+            workspace=other_workspace,
+            name='Other Period',
+            start_date=date(2025, 4, 1),
+            end_date=date(2025, 4, 30),
+            created_by=other_user,
+        )
+
+        # Create a planned transaction in other workspace
+        PlannedTransactionFactory(
+            workspace=other_workspace,
+            budget_period=other_period,
+            name='Other Planned',
+            amount=Decimal('9999.00'),
+            currency=self.currencies['USD'],
+            planned_date=date(2025, 4, 10),
+            status='pending',
+            created_by=other_user,
+            updated_by=other_user,
+        )
+
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        # Should only see the 3 planned transactions from the user's workspace
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('2550.00'))
+
+    def test_totals_without_auth_returns_401(self):
+        """Test that totals endpoint requires authentication."""
+        self.get('/api/planned-transactions/totals')
+        self.assertStatus(401)
+
+    def test_totals_combined_filters(self):
+        """Test totals with multiple filters applied together."""
+        # planned1: USD, pending, period1, amount=1200
+        # planned2: USD, pending, period1, amount=150
+        # planned3: USD, pending, period2, amount=1200
+
+        # Change planned2 to done
+        self.planned2.status = 'done'
+        self.planned2.save()
+
+        # Filter: status=pending, budget_period_id=period1
+        data = self.get(
+            f'/api/planned-transactions/totals?status=pending&budget_period_id={self.period1.id}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 1)
+        # Only planned1 (1200) matches pending + period1
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1200.00'))
+
+    def test_totals_group_by_category(self):
+        """Test totals grouped by category."""
+        data = self.get(
+            f'/api/planned-transactions/totals?group_by=category&budget_period_id={self.period1.id}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        totals = data['totals']
+        self.assertEqual(len(totals), 2)
+
+        by_group = {t['group']: Decimal(t['total']) for t in totals}
+        # planned1 (Rent): 1200, planned2 (Groceries): 150
+        self.assertEqual(by_group['Groceries'], Decimal('150.00'))
+        self.assertEqual(by_group['Rent'], Decimal('1200.00'))
+        for t in totals:
+            self.assertEqual(t['currency'], 'USD')
+
+    def test_totals_group_by_category_uncategorized(self):
+        """Test totals grouped by category with uncategorized transactions."""
+        # planned3 has no category
+        data = self.get(
+            '/api/planned-transactions/totals?group_by=category',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        totals = data['totals']
+        groups = [t['group'] for t in totals]
+        self.assertIn(TotalsLabel.UNCATEGORIZED, groups)
+        uncategorized = [t for t in totals if t['group'] == TotalsLabel.UNCATEGORIZED][0]
+        self.assertEqual(Decimal(uncategorized['total']), Decimal('1200.00'))
+
+    def test_totals_group_by_category_cross_workspace(self):
+        """Test that category totals only include planned transactions from the user's workspace."""
+        other_workspace = WorkspaceFactory(name='Other Workspace')
+        other_user = User.objects.create_user(
+            email='other2@example.com',
+            password='otherpass123',
+            current_workspace=other_workspace,
+        )
+        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
+
+        other_account = BudgetAccount.objects.create(
+            workspace=other_workspace,
+            name='Other Account',
+            default_currency=self.currencies['PLN'],
+            created_by=other_user,
+        )
+        other_period = BudgetPeriodFactory(
+            budget_account=other_account,
+            workspace=other_workspace,
+            name='Other Period',
+            start_date=date(2025, 4, 1),
+            end_date=date(2025, 4, 30),
+            created_by=other_user,
+        )
+
+        other_category = CategoryFactory(
+            budget_period=other_period,
+            workspace=other_workspace,
+            name='Secret Category',
+            created_by=other_user,
+        )
+
+        PlannedTransactionFactory(
+            workspace=other_workspace,
+            budget_period=other_period,
+            name='Other Planned',
+            amount=Decimal('9999.00'),
+            currency=self.currencies['USD'],
+            category=other_category,
+            planned_date=date(2025, 4, 10),
+            status='pending',
+            created_by=other_user,
+            updated_by=other_user,
+        )
+
+        data = self.get('/api/planned-transactions/totals?group_by=category', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        groups = [t['group'] for t in totals]
+        self.assertNotIn('Secret Category', groups)
