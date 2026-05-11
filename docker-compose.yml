@@ -1,14 +1,27 @@
+# Local development stack.
+# - Host ports published so you can connect from your IDE / curl / a host-side Vite.
+# - DEBUG=true (no HTTPS redirect, verbose errors).
+# - Source bind-mounted with hot reload (uvicorn --reload, vite).
+# - Anonymous volumes preserve /app/.venv and /app/node_modules built into the images.
+#
+# For the production-style setup use:  docker compose -f docker-compose-prod.yml up -d
+
 services:
   denarly_db:
     image: postgres:17-alpine
     env_file:
       - .env
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data_dev:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - denarly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   denarly_redis:
     image: redis:7-alpine
@@ -17,8 +30,13 @@ services:
     networks:
       - denarly-network
     volumes:
-      - redis_data:/data
+      - redis_data_dev:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   denarly_api:
     build:
@@ -30,38 +48,56 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DEBUG=${DEBUG:-false}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - DEBUG=true
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
       - REDIS_URL=redis://denarly_redis:6379
     volumes:
       - ./backend:/app
+      - backend_venv:/app/.venv
     ports:
       - "8000:8000"
     networks:
       - denarly-network
     depends_on:
-      - denarly_db
-      - denarly_redis
+      denarly_db:
+        condition: service_healthy
+      denarly_redis:
+        condition: service_healthy
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "Running database migrations..."
+        uv run python manage.py migrate --noinput
+        echo "Seeding legal documents..."
+        uv run python manage.py seed_legal_documents
+        echo "Starting dev server (autoreload)..."
+        exec uv run uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
 
   denarly_ui:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: http://localhost:8000/api
-    env_file:
-      - .env
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
+      - VITE_DEMO_MODE=${VITE_DEMO_MODE:-false}
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 5173"
     ports:
-      - "3000:80"
+      - "5173:5173"
     networks:
       - denarly-network
     depends_on:
       - denarly_api
 
 volumes:
-  postgres_data:
-  redis_data:
+  postgres_data_dev:
+  redis_data_dev:
+  backend_venv:
+  frontend_node_modules:
 
 networks:
   denarly-network:
