@@ -63,3 +63,18 @@ class CurrencyExchangeOut(BaseModel):
         if hasattr(value, 'symbol'):
             return value.symbol
         return value
+
+
+class CurrencyExchangeTotalsItem(BaseModel):
+    """Schema for a single currency exchange totals group."""
+
+    from_currency: str
+    to_currency: str
+    from_total: Decimal
+    to_total: Decimal
+
+
+class CurrencyExchangeTotalsResponse(BaseModel):
+    """Schema for currency exchange totals response."""
+
+    totals: list[CurrencyExchangeTotalsItem]
