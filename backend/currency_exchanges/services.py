@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.db import transaction as db_transaction
+from django.db.models import Sum
 
 from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
@@ -60,6 +61,14 @@ class CurrencyExchangeService:
         return period.id if period else None
 
     @staticmethod
+    def _build_filtered_queryset(workspace_id: int, budget_period_id: int | None = None):
+        """Build a filtered queryset for currency exchanges. Used by list() and totals()."""
+        queryset = CurrencyExchange.objects.for_workspace(workspace_id)
+        if budget_period_id:
+            queryset = queryset.filter(budget_period_id=budget_period_id)
+        return queryset
+
+    @staticmethod
     def list(
         workspace_id: int,
         budget_period_id: int | None = None,
@@ -67,10 +76,8 @@ class CurrencyExchangeService:
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         """List currency exchanges for a workspace, optionally filtered by period."""
-        queryset = CurrencyExchange.objects.select_related('from_currency', 'to_currency').for_workspace(workspace_id)
-        if budget_period_id:
-            queryset = queryset.filter(budget_period_id=budget_period_id)
-        queryset = queryset.order_by('-date')
+        queryset = CurrencyExchangeService._build_filtered_queryset(workspace_id, budget_period_id)
+        queryset = queryset.select_related('from_currency', 'to_currency').order_by('-date')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
@@ -80,6 +87,25 @@ class CurrencyExchangeService:
             'page_size': page_size,
             'total_pages': total_pages,
         }
+
+    @staticmethod
+    def totals(workspace_id: int, budget_period_id: int | None = None) -> list[dict]:
+        """Return aggregated totals grouped by (from_currency, to_currency) pair."""
+        queryset = CurrencyExchangeService._build_filtered_queryset(workspace_id, budget_period_id)
+        rows = (
+            queryset.values('from_currency__symbol', 'to_currency__symbol')
+            .annotate(from_total=Sum('from_amount'), to_total=Sum('to_amount'))
+            .order_by('from_currency__symbol', 'to_currency__symbol')
+        )
+        return [
+            {
+                'from_currency': row['from_currency__symbol'],
+                'to_currency': row['to_currency__symbol'],
+                'from_total': row['from_total'],
+                'to_total': row['to_total'],
+            }
+            for row in rows
+        ]
 
     @staticmethod
     @db_transaction.atomic
