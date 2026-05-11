@@ -63,7 +63,9 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
         : plannedTransactionsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned-transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['planned-transactions-totals-category'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions-totals'] })
       toast.success(plannedTransaction ? 'Planned transaction updated!' : 'Planned transaction created!')
       onClose()
     },

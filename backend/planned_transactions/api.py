@@ -14,6 +14,7 @@ from core.schemas.pagination import PaginatedOut
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
     PlannedTransactionOut,
+    PlannedTransactionTotalsResponse,
     PlannedTransactionUpdate,
 )
 from planned_transactions.services import PlannedTransactionService
@@ -50,6 +51,19 @@ def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
 
     planned = PlannedTransactionService.create(user, workspace_id, data)
     return 201, planned
+
+
+@router.get('/totals', response=PlannedTransactionTotalsResponse, auth=WorkspaceJWTAuth())
+def planned_totals(
+    request: HttpRequest,
+    status: str | None = Query(None),
+    budget_period_id: int | None = Query(None),
+    currency: list[str] | None = Query(None),
+    group_by: str = Query('currency', pattern=r'^(currency|category)$'),
+):
+    """Get aggregated planned transaction totals grouped by currency or category."""
+    workspace_id = request.auth.current_workspace_id
+    return {'totals': PlannedTransactionService.totals(workspace_id, status, budget_period_id, currency, group_by)}
 
 
 # Specific routes must come before parameterized routes

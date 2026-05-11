@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -159,14 +159,16 @@ export const budgetsApi = {
 };
 
 export const transactionsApi = {
-  getAll: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; type?: string[]; category_id?: number[]; currency?: string[]; amount_gte?: number; amount_lte?: number; ordering?: 'date' | '-date'; page?: number; page_size?: number }) => api.get('/transactions', { params }),
+  getAll: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; transaction_type?: string[]; category_id?: number[]; currency?: string[]; amount_gte?: number; amount_lte?: number; ordering?: 'date' | '-date'; page?: number; page_size?: number }) => api.get('/transactions', { params }),
+  getTotals: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; transaction_type?: string[]; category_id?: number[]; currency?: string[]; amount_gte?: number; amount_lte?: number; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
+    api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
   create: (data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.post('/transactions', data),
   update: (id: number, data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.put(`/transactions/${id}`, data),
   delete: (id: number) => api.delete(`/transactions/${id}`),
   import: (data: FormData) => api.post('/transactions/import', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  export: (params: { budget_period_id: number; type?: string }) => api.get('/transactions/export/', { params }),
+  export: (params: { budget_period_id: number; transaction_type?: string }) => api.get('/transactions/export/', { params }),
 };
 
 export const reportsApi = {
@@ -187,6 +189,8 @@ export const currenciesApi = {
 
 export const currencyExchangesApi = {
   getAll: (params?: { budget_period_id?: number; page?: number; page_size?: number }) => api.get('/currency-exchanges', { params }),
+  getTotals: (params?: { budget_period_id?: number }): Promise<CurrencyExchangeTotalsResponse> =>
+    api.get<CurrencyExchangeTotalsResponse>('/currency-exchanges/totals', { params }).then(res => res.data),
   create: (data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.post('/currency-exchanges', data),
   update: (id: number, data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.put(`/currency-exchanges/${id}`, data),
   delete: (id: number) => api.delete(`/currency-exchanges/${id}`),
@@ -208,6 +212,8 @@ export const exchangeShortcutsApi = {
 
 export const plannedTransactionsApi = {
   getAll: (params?: { status?: string; budget_period_id?: number; currency?: string[]; page?: number; page_size?: number }) => api.get('/planned-transactions', { params }),
+  getTotals: (params?: { status?: string; budget_period_id?: number; currency?: string[]; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
+    api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
   create: (data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.post('/planned-transactions', data),
   update: (id: number, data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.put(`/planned-transactions/${id}`, data),
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),

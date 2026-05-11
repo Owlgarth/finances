@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { X, ChevronDown, Filter } from 'lucide-react'
@@ -12,6 +12,7 @@ import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
+import TotalsSummary from '../components/common/TotalsSummary'
 import DatePicker from '../components/DatePicker'
 
 export default function Transactions() {
@@ -193,7 +194,7 @@ export default function Transactions() {
         search: searchQuery || undefined,
         start_date: appliedStartDate || undefined,
         end_date: appliedEndDate || undefined,
-        type: appliedTypes.length > 0 ? appliedTypes : undefined,
+        transaction_type: appliedTypes.length > 0 ? appliedTypes : undefined,
         category_id: appliedCategories.length > 0 ? appliedCategories : undefined,
         currency: appliedCurrencies.length > 0 ? appliedCurrencies : undefined,
         amount_gte: appliedAmountMin ? parseFloat(appliedAmountMin) : undefined,
@@ -212,10 +213,36 @@ export default function Transactions() {
   const totalItems = apiResponse?.total || 0
   const totalPages = apiResponse?.total_pages || 0
 
+  // Fetch type+category totals in a single request
+  const totalsFilterKey = useMemo(
+    () => [selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedCurrencies, appliedAmountMin, appliedAmountMax],
+    [selectedPeriodId, searchQuery, appliedStartDate, appliedEndDate, appliedTypes, appliedCategories, appliedCurrencies, appliedAmountMin, appliedAmountMax],
+  )
+  const { data: combinedTotalsData } = useQuery({
+    queryKey: ['transactions-totals', ...totalsFilterKey],
+    queryFn: async () => {
+      if (!selectedPeriodId) return null
+      return transactionsApi.getTotals({
+        group_by: 'type,category',
+        budget_period_id: selectedPeriodId,
+        search: searchQuery || undefined,
+        start_date: appliedStartDate || undefined,
+        end_date: appliedEndDate || undefined,
+        transaction_type: appliedTypes.length > 0 ? appliedTypes : undefined,
+        category_id: appliedCategories.length > 0 ? appliedCategories : undefined,
+        currency: appliedCurrencies.length > 0 ? appliedCurrencies : undefined,
+        amount_gte: appliedAmountMin ? parseFloat(appliedAmountMin) : undefined,
+        amount_lte: appliedAmountMax ? parseFloat(appliedAmountMax) : undefined,
+      })
+    },
+    enabled: !!selectedPeriodId,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => transactionsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions-totals'] })
       queryClient.invalidateQueries({ queryKey: ['budget-summary'] })
       // Force refetch of period-balances to ensure UI updates immediately
       queryClient.refetchQueries({ queryKey: ['period-balances'] })
@@ -230,6 +257,7 @@ export default function Transactions() {
     mutationFn: (formData: FormData) => transactionsApi.import(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions-totals'] })
       queryClient.invalidateQueries({ queryKey: ['budget-summary'] })
       queryClient.refetchQueries({ queryKey: ['period-balances'] })
       toast.success('Transactions imported successfully!')
@@ -246,11 +274,11 @@ export default function Transactions() {
     if (!selectedPeriodId) return
 
     try {
-      const params: { budget_period_id: number; type?: string } = {
+      const params: { budget_period_id: number; transaction_type?: string } = {
         budget_period_id: selectedPeriodId
       }
       if (appliedTypes.length > 0) {
-        params.type = appliedTypes[0]
+        params.transaction_type = appliedTypes[0]
       }
 
       const response = await transactionsApi.export(params)
@@ -723,6 +751,13 @@ export default function Transactions() {
             onEdit={canManageBudgetData ? handleEdit : undefined}
             onDelete={canManageBudgetData ? handleDelete : undefined}
           />
+          {totalItems > 0 && combinedTotalsData?.by_type && combinedTotalsData.by_type.length > 0 && (
+            <TotalsSummary
+              mode="transactions"
+              typeTotals={combinedTotalsData.by_type}
+              categoryTotals={combinedTotalsData.by_category}
+            />
+          )}
           {totalItems > 0 && (
             <Pagination
               page={page}
