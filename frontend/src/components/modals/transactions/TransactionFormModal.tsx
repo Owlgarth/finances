@@ -8,15 +8,24 @@ import { useBudgetPeriod } from '../../../contexts/BudgetPeriodContext'
 import { format } from 'date-fns'
 import DatePicker from '../../DatePicker'
 
+interface PrefilledData {
+  date?: string
+  description?: string
+  amount?: string
+  currency?: string
+  type?: 'expense' | 'income'
+}
+
 interface Props {
   isOpen: boolean
   onClose: () => void
   transaction?: Transaction | null
+  prefilledData?: PrefilledData
 }
 
 const CURRENCIES = ['PLN', 'USD', 'EUR', 'UAH']
 
-export default function TransactionFormModal({ isOpen, onClose, transaction }: Props) {
+export default function TransactionFormModal({ isOpen, onClose, transaction, prefilledData }: Props) {
   const [date, setDate] = useState('')
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState<number | ''>('')
@@ -46,15 +55,22 @@ export default function TransactionFormModal({ isOpen, onClose, transaction }: P
       setAmount(transaction.amount.toString())
       setCurrency(transaction.currency)
       setType(transaction.type)
+    } else if (prefilledData) {
+      setDate(prefilledData.date || today)
+      setDescription(prefilledData.description || '')
+      setCategoryId('')
+      setAmount(prefilledData.amount || '')
+      setCurrency(prefilledData.currency || 'PLN')
+      setType(prefilledData.type || 'expense')
     } else {
-      setDate(today) // Set today's date for new transactions
+      setDate(today)
       setDescription('')
       setCategoryId('')
       setAmount('')
       setCurrency('PLN')
       setType('expense')
     }
-  }, [transaction, isOpen, today])
+  }, [transaction, isOpen, today, prefilledData])
 
   const createMutation = useMutation({
     mutationFn: (data: any) =>
