@@ -12,7 +12,7 @@ from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.pagination import PaginatedOut
-from transactions.schemas import TransactionCreate, TransactionOut
+from transactions.schemas import TransactionCreate, TransactionOut, TransactionTotalsResponse
 from transactions.services import TransactionService
 from workspaces.models import WRITE_ROLES
 
@@ -24,7 +24,7 @@ def list_transactions(
     request: HttpRequest,
     budget_period_id: int | None = Query(None),
     current_date: date | None = Query(None),
-    type: list[str] | None = Query(None),
+    transaction_type: list[str] | None = Query(None),
     category_id: list[int] | None = Query(None),
     currency: list[str] | None = Query(None),
     search: str | None = Query(None),
@@ -42,7 +42,7 @@ def list_transactions(
         workspace_id=workspace_id,
         budget_period_id=budget_period_id,
         current_date=current_date,
-        type=type,
+        transaction_type=transaction_type,
         category_id=category_id,
         currency=currency,
         search=search,
@@ -56,15 +56,51 @@ def list_transactions(
     )
 
 
+@router.get('/totals', response=TransactionTotalsResponse, auth=WorkspaceJWTAuth())
+def get_transaction_totals(
+    request: HttpRequest,
+    budget_period_id: int | None = Query(None),
+    current_date: date | None = Query(None),
+    transaction_type: list[str] | None = Query(None),
+    category_id: list[int] | None = Query(None),
+    currency: list[str] | None = Query(None),
+    search: str | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    amount_gte: Decimal | None = Query(None),
+    amount_lte: Decimal | None = Query(None),
+    group_by: str = Query('type', pattern=r'^(type|category|type,category)$'),
+):
+    """Get aggregated transaction totals grouped by type or category."""
+    workspace_id = request.auth.current_workspace_id
+    common_kwargs = dict(
+        workspace_id=workspace_id,
+        budget_period_id=budget_period_id,
+        current_date=current_date,
+        transaction_type=transaction_type,
+        category_id=category_id,
+        currency=currency,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+        amount_gte=amount_gte,
+        amount_lte=amount_lte,
+    )
+    if group_by == 'type,category':
+        return TransactionService.totals_combined(**common_kwargs)
+    totals = TransactionService.totals(**common_kwargs, group_by=group_by)
+    return {'totals': totals}
+
+
 @router.get('/export/', auth=WorkspaceJWTAuth())
 def export_transactions(
     request: HttpRequest,
     budget_period_id: int = Query(...),
-    type: str | None = Query(None, pattern=r'^(expense|income)$'),
+    transaction_type: str | None = Query(None, pattern=r'^(expense|income)$'),
 ):
     """Export transactions from a budget period as JSON."""
     workspace_id = request.auth.current_workspace_id
-    export_data = TransactionService.export(workspace_id, budget_period_id, type)
+    export_data = TransactionService.export(workspace_id, budget_period_id, transaction_type)
     response = HttpResponse(json.dumps(export_data, indent=2), content_type='application/json')
     response['Content-Disposition'] = f'attachment; filename=transactions_export_{budget_period_id}.json'
     return response

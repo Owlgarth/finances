@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import date
 
 from django.db import transaction as db_transaction
+from django.db.models import F, Sum, Value
+from django.db.models.functions import Coalesce
 
 from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
 from categories.models import Category
+from common.enums import TotalsLabel
 from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
@@ -68,6 +71,23 @@ class PlannedTransactionService:
             raise PlannedTransactionCategoryNotFoundError()
 
     @staticmethod
+    def _build_filtered_queryset(
+        workspace_id: int,
+        status: str | None = None,
+        budget_period_id: int | None = None,
+        currency: list | None = None,
+    ):
+        """Build a filtered queryset for planned transactions."""
+        queryset = PlannedTransaction.objects.for_workspace(workspace_id)
+        if status:
+            queryset = queryset.filter(status=status)
+        if budget_period_id:
+            queryset = queryset.filter(budget_period_id=budget_period_id)
+        if currency:
+            queryset = queryset.filter(currency__symbol__in=currency)
+        return queryset
+
+    @staticmethod
     def list(
         workspace_id: int,
         status: str | None = None,
@@ -76,14 +96,8 @@ class PlannedTransactionService:
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        queryset = PlannedTransaction.objects.select_related('category').for_workspace(workspace_id)
-        if status:
-            queryset = queryset.filter(status=status)
-        if budget_period_id:
-            queryset = queryset.filter(budget_period_id=budget_period_id)
-        if currency:
-            queryset = queryset.filter(currency__symbol__in=currency)
-        queryset = queryset.order_by('planned_date')
+        queryset = PlannedTransactionService._build_filtered_queryset(workspace_id, status, budget_period_id, currency)
+        queryset = queryset.select_related('category').order_by('planned_date')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
@@ -93,6 +107,38 @@ class PlannedTransactionService:
             'page_size': page_size,
             'total_pages': total_pages,
         }
+
+    @staticmethod
+    def totals(
+        workspace_id: int,
+        status: str | None = None,
+        budget_period_id: int | None = None,
+        currency: list | None = None,
+        group_by: str = 'currency',
+    ) -> list[dict]:
+        """Return aggregated totals grouped by currency or category."""
+        queryset = PlannedTransactionService._build_filtered_queryset(workspace_id, status, budget_period_id, currency)
+
+        if group_by == 'category':
+            rows = (
+                queryset.annotate(
+                    currency_symbol=F('currency__symbol'),
+                    category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+                )
+                .values('category_name', 'currency_symbol')
+                .annotate(total=Sum('amount'))
+                .order_by('category_name', 'currency_symbol')
+            )
+            return [{'group': r['category_name'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+
+        # Default: group by currency
+        rows = (
+            queryset.annotate(currency_symbol=F('currency__symbol'))
+            .values('currency_symbol')
+            .annotate(total=Sum('amount'))
+            .order_by('currency_symbol')
+        )
+        return [{'group': r['currency_symbol'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
 
     @staticmethod
     @db_transaction.atomic

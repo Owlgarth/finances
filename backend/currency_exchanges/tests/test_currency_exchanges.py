@@ -760,3 +760,134 @@ class TestCurrencyExchangePagination(CurrencyExchangeTestCase):
         self.assertEqual(data['items'], [])
         self.assertEqual(data['total'], 0)
         self.assertEqual(data['total_pages'], 0)
+
+
+# =============================================================================
+# Currency Exchange Totals Tests
+# =============================================================================
+
+
+class TestCurrencyExchangeTotals(CurrencyExchangeTestCase):
+    """Tests for GET /backend/currency-exchanges/totals."""
+
+    def test_totals_returns_all_pairs(self):
+        """Test that totals returns aggregated amounts for all currency pairs."""
+        data = self.get('/api/currency-exchanges/totals', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        # Three unique pairs: USD→EUR, EUR→USD, USD→PLN
+        self.assertEqual(len(totals), 3)
+
+        totals_map = {(t['from_currency'], t['to_currency']): t for t in totals}
+
+        # USD→EUR: exchange1 (100 USD → 92 EUR)
+        usd_eur = totals_map[('USD', 'EUR')]
+        self.assertEqual(Decimal(usd_eur['from_total']), Decimal('100.00'))
+        self.assertEqual(Decimal(usd_eur['to_total']), Decimal('92.00'))
+
+        # EUR→USD: exchange2 (50 EUR → 54.50 USD)
+        eur_usd = totals_map[('EUR', 'USD')]
+        self.assertEqual(Decimal(eur_usd['from_total']), Decimal('50.00'))
+        self.assertEqual(Decimal(eur_usd['to_total']), Decimal('54.50'))
+
+        # USD→PLN: exchange3 (200 USD → 800 PLN)
+        usd_pln = totals_map[('USD', 'PLN')]
+        self.assertEqual(Decimal(usd_pln['from_total']), Decimal('200.00'))
+        self.assertEqual(Decimal(usd_pln['to_total']), Decimal('800.00'))
+
+    def test_totals_filtered_by_period(self):
+        """Test that totals can be filtered by budget_period_id."""
+        data = self.get(f'/api/currency-exchanges/totals?budget_period_id={self.period1.id}', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        # Period 1 has: USD→EUR (exchange1) and EUR→USD (exchange2)
+        self.assertEqual(len(totals), 2)
+
+        totals_map = {(t['from_currency'], t['to_currency']): t for t in totals}
+        self.assertIn(('USD', 'EUR'), totals_map)
+        self.assertIn(('EUR', 'USD'), totals_map)
+        self.assertNotIn(('USD', 'PLN'), totals_map)
+
+    def test_totals_no_results(self):
+        """Test that totals returns empty list when no exchanges match filters."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        data = self.get('/api/currency-exchanges/totals', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['totals'], [])
+
+    def test_totals_cross_workspace_isolation(self):
+        """Test that totals only returns exchanges from the user's workspace."""
+        other_workspace = Workspace.objects.create(name='Other Workspace')
+        other_user = User.objects.create_user(
+            email='other@example.com',
+            password='otherpass123',
+            current_workspace=other_workspace,
+        )
+        other_workspace.owner = other_user
+        other_workspace.save()
+
+        WorkspaceMember.objects.create(workspace=other_workspace, user=other_user, role='owner')
+
+        other_account = BudgetAccount.objects.create(
+            workspace=other_workspace,
+            name='Other Account',
+            default_currency=self.currencies['PLN'],
+            created_by=other_user,
+        )
+
+        other_period = BudgetPeriodFactory(
+            budget_account=other_account,
+            workspace=other_workspace,
+            name='Other Period',
+            start_date=date(2025, 4, 1),
+            end_date=date(2025, 4, 30),
+            created_by=other_user,
+        )
+
+        CurrencyExchangeFactory(
+            workspace=other_workspace,
+            budget_period=other_period,
+            date=date(2025, 4, 10),
+            from_currency=self.currencies['USD'],
+            from_amount=Decimal('9999.00'),
+            to_currency=self.currencies['EUR'],
+            to_amount=Decimal('8888.00'),
+            created_by=other_user,
+            updated_by=other_user,
+        )
+
+        data = self.get('/api/currency-exchanges/totals', **self.auth_headers())
+        self.assertStatus(200)
+
+        # Should not include the other workspace's exchange
+        for t in data['totals']:
+            self.assertNotEqual(Decimal(t['from_total']), Decimal('9999.00'))
+
+    def test_totals_aggregates_multiple_exchanges_same_pair(self):
+        """Test that multiple exchanges with the same currency pair are aggregated."""
+        # Add another USD→EUR exchange in period1
+        CurrencyExchangeFactory(
+            workspace=self.workspace,
+            budget_period=self.period1,
+            date=date(2025, 1, 25),
+            from_currency=self.currencies['USD'],
+            from_amount=Decimal('50.00'),
+            to_currency=self.currencies['EUR'],
+            to_amount=Decimal('46.00'),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        data = self.get('/api/currency-exchanges/totals', **self.auth_headers())
+        self.assertStatus(200)
+        totals_map = {(t['from_currency'], t['to_currency']): t for t in data['totals']}
+
+        # USD→EUR now: 100 + 50 = 150, 92 + 46 = 138
+        usd_eur = totals_map[('USD', 'EUR')]
+        self.assertEqual(Decimal(usd_eur['from_total']), Decimal('150.00'))
+        self.assertEqual(Decimal(usd_eur['to_total']), Decimal('138.00'))
+
+    def test_totals_without_auth_returns_401(self):
+        """Test that totals endpoint requires authentication."""
+        self.get('/api/currency-exchanges/totals')
+        self.assertStatus(401)

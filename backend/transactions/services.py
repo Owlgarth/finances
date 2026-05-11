@@ -5,10 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction as db_transaction
+from django.db.models import F, Sum, Value
+from django.db.models.functions import Coalesce
 
 from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
 from categories.models import Category
+from common.enums import TotalsLabel
 from common.exceptions import CurrencyNotFoundInWorkspaceError
 from common.services.base import get_or_create_period_balance, resolve_currency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
@@ -85,11 +88,11 @@ class TransactionService:
             raise TransactionCategoryNotFoundError()
 
     @staticmethod
-    def list(
+    def _build_filtered_queryset(
         workspace_id: int,
         budget_period_id: int | None = None,
         current_date=None,
-        type: list | None = None,
+        transaction_type: list | None = None,
         category_id: list | None = None,
         currency: list | None = None,
         search: str | None = None,
@@ -97,14 +100,11 @@ class TransactionService:
         end_date=None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
-        ordering: str | None = None,
-        page: int = 1,
-        page_size: int = DEFAULT_PAGE_SIZE,
-    ) -> dict:
-        """List transactions for a workspace with optional filters and pagination."""
+    ):
+        """Build a filtered queryset for transactions. Returns None when current_date matches no period."""
         from budget_periods.models import BudgetPeriod
 
-        queryset = Transaction.objects.select_related('category').for_workspace(workspace_id)
+        queryset = Transaction.objects.for_workspace(workspace_id)
 
         if budget_period_id:
             queryset = queryset.filter(budget_period_id=budget_period_id)
@@ -121,10 +121,10 @@ class TransactionService:
             if period:
                 queryset = queryset.filter(budget_period_id=period.id)
             else:
-                return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
+                return None
 
-        if type:
-            queryset = queryset.filter(type__in=type)
+        if transaction_type:
+            queryset = queryset.filter(type__in=transaction_type)
         if category_id:
             queryset = queryset.filter(category_id__in=category_id)
         if currency:
@@ -140,6 +140,45 @@ class TransactionService:
         if amount_lte is not None:
             queryset = queryset.filter(amount__lte=amount_lte)
 
+        return queryset
+
+    @staticmethod
+    def list(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        current_date=None,
+        transaction_type: list | None = None,
+        category_id: list | None = None,
+        currency: list | None = None,
+        search: str | None = None,
+        start_date=None,
+        end_date=None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
+        ordering: str | None = None,
+        page: int = 1,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
+        """List transactions for a workspace with optional filters and pagination."""
+        queryset = TransactionService._build_filtered_queryset(
+            workspace_id=workspace_id,
+            budget_period_id=budget_period_id,
+            current_date=current_date,
+            transaction_type=transaction_type,
+            category_id=category_id,
+            currency=currency,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
+        )
+
+        if queryset is None:
+            return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
+
+        queryset = queryset.select_related('category')
+
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
 
@@ -151,6 +190,123 @@ class TransactionService:
             'page_size': page_size,
             'total_pages': total_pages,
         }
+
+    @staticmethod
+    def totals(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        current_date=None,
+        transaction_type: list | None = None,
+        category_id: list | None = None,
+        currency: list | None = None,
+        search: str | None = None,
+        start_date=None,
+        end_date=None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
+        group_by: str = 'type',
+    ) -> list[dict]:
+        """Get aggregated transaction totals grouped by (type, currency) or (category, currency)."""
+        queryset = TransactionService._build_filtered_queryset(
+            workspace_id=workspace_id,
+            budget_period_id=budget_period_id,
+            current_date=current_date,
+            transaction_type=transaction_type,
+            category_id=category_id,
+            currency=currency,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
+        )
+
+        if queryset is None:
+            return []
+
+        if group_by == 'category':
+            rows = (
+                queryset.annotate(
+                    currency_symbol=F('currency__symbol'),
+                    category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+                )
+                .values('category_name', 'currency_symbol')
+                .annotate(total=Sum('amount'))
+                .order_by('category_name', 'currency_symbol')
+            )
+            return [{'group': r['category_name'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+
+        # Default: group by type
+        rows = (
+            queryset.annotate(currency_symbol=F('currency__symbol'))
+            .values('type', 'currency_symbol')
+            .annotate(total=Sum('amount'))
+            .order_by('type', 'currency_symbol')
+        )
+        return [{'group': r['type'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+
+    @staticmethod
+    def totals_combined(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        current_date=None,
+        transaction_type: list | None = None,
+        category_id: list | None = None,
+        currency: list | None = None,
+        search: str | None = None,
+        start_date=None,
+        end_date=None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
+    ) -> dict:
+        """Get both type and category totals in a single DB query.
+
+        Returns {'by_type': [...], 'by_category': [...]}.
+        The base queryset is built once; both groupings are derived from a single
+        database round-trip using Python-side aggregation over the filtered rows.
+        """
+        from collections import defaultdict
+
+        queryset = TransactionService._build_filtered_queryset(
+            workspace_id=workspace_id,
+            budget_period_id=budget_period_id,
+            current_date=current_date,
+            transaction_type=transaction_type,
+            category_id=category_id,
+            currency=currency,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
+        )
+
+        if queryset is None:
+            return {'by_type': [], 'by_category': []}
+
+        rows = queryset.annotate(
+            currency_symbol=F('currency__symbol'),
+            category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+        ).values_list('type', 'category_name', 'currency_symbol', 'amount')
+
+        type_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+        cat_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+
+        for trans_type, category, curr, amount in rows:
+            type_map[trans_type][curr] += amount
+            cat_map[category][curr] += amount
+
+        by_type = [
+            {'group': t, 'currency': c, 'total': total}
+            for t in sorted(type_map)
+            for c, total in sorted(type_map[t].items())
+        ]
+        by_category = [
+            {'group': cat, 'currency': c, 'total': total}
+            for cat in sorted(cat_map)
+            for c, total in sorted(cat_map[cat].items())
+        ]
+        return {'by_type': by_type, 'by_category': by_category}
 
     @staticmethod
     @db_transaction.atomic

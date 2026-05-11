@@ -14,6 +14,7 @@ from core.schemas.pagination import PaginatedOut
 from currency_exchanges.schemas import (
     CurrencyExchangeCreate,
     CurrencyExchangeOut,
+    CurrencyExchangeTotalsResponse,
     CurrencyExchangeUpdate,
 )
 from currency_exchanges.services import CurrencyExchangeService
@@ -32,6 +33,17 @@ def list_exchanges(
     """List currency exchanges for the current workspace."""
     workspace_id = request.auth.current_workspace_id
     return CurrencyExchangeService.list(workspace_id, budget_period_id, page, page_size)
+
+
+@router.get('/totals', response=CurrencyExchangeTotalsResponse, auth=WorkspaceJWTAuth())
+def get_totals(
+    request: HttpRequest,
+    budget_period_id: int | None = Query(None),
+):
+    """Get aggregated exchange totals grouped by currency pair."""
+    workspace_id = request.auth.current_workspace_id
+    totals = CurrencyExchangeService.totals(workspace_id, budget_period_id)
+    return {'totals': totals}
 
 
 @router.post('', response={201: CurrencyExchangeOut, 400: DetailOut}, auth=WorkspaceJWTAuth())

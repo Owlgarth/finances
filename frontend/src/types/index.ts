@@ -228,3 +228,44 @@ export interface PaginatedResponse<T> {
   page_size: number;
   total_pages: number;
 }
+
+// ============= Totals Types =============
+export interface TransactionTotalItem {
+  group: string; // "income"/"expense" or category name
+  currency: string;
+  total: string;
+}
+
+export interface TransactionTotalsResponse {
+  totals?: TransactionTotalItem[];
+  by_type?: TransactionTotalItem[];
+  by_category?: TransactionTotalItem[];
+}
+
+export interface PlannedTransactionTotalItem {
+  group: string; // category name
+  currency: string;
+  total: string;
+}
+
+export interface PlannedTransactionTotalsResponse {
+  totals: PlannedTransactionTotalItem[];
+}
+
+export interface CurrencyExchangeTotalItem {
+  from_currency: string;
+  to_currency: string;
+  from_total: string;
+  to_total: string;
+}
+
+export interface CurrencyExchangeTotalsResponse {
+  totals: CurrencyExchangeTotalItem[];
+}
+
+// ============= Enums =============
+
+export const TotalsLabel = {
+  /** Display label for records without a category. Synced with backend common.enums.TotalsLabel. */
+  UNCATEGORIZED: 'Uncategorized',
+} as const

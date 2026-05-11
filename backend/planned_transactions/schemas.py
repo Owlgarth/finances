@@ -115,3 +115,17 @@ class PlannedTransactionOut(BaseModel):
         if isinstance(value, int):
             return value
         return None
+
+
+class PlannedTransactionTotalsItem(BaseModel):
+    """Schema for a single planned transaction totals group."""
+
+    group: str  # currency symbol (when group_by=currency) or category name (when group_by=category)
+    currency: str
+    total: Decimal
+
+
+class PlannedTransactionTotalsResponse(BaseModel):
+    """Schema for planned transaction totals response."""
+
+    totals: list[PlannedTransactionTotalsItem]

@@ -11,6 +11,7 @@ import ManageShortcutsModal from '../components/modals/currency/ManageShortcutsM
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import Pagination from '../components/common/Pagination'
+import TotalsSummary from '../components/common/TotalsSummary'
 
 export default function CurrencyExchangesPage() {
   const queryClient = useQueryClient()
@@ -50,10 +51,20 @@ export default function CurrencyExchangesPage() {
     },
   })
 
+  const { data: totalsData } = useQuery({
+    queryKey: ['currency-exchanges-totals', selectedPeriodId],
+    queryFn: async () => {
+      if (!selectedPeriodId) return null
+      return currencyExchangesApi.getTotals({ budget_period_id: selectedPeriodId })
+    },
+    enabled: !!selectedPeriodId,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => currencyExchangesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currency-exchanges'] })
+      queryClient.invalidateQueries({ queryKey: ['currency-exchanges-totals'] })
       // Force refetch of period-balances to ensure UI updates immediately
       queryClient.refetchQueries({ queryKey: ['period-balances'] })
       toast.success('Exchange deleted successfully!')
@@ -67,6 +78,7 @@ export default function CurrencyExchangesPage() {
     mutationFn: (formData: FormData) => currencyExchangesApi.import(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currency-exchanges'] })
+      queryClient.invalidateQueries({ queryKey: ['currency-exchanges-totals'] })
       queryClient.refetchQueries({ queryKey: ['period-balances'] })
       toast.success('Currency exchanges imported successfully!')
       if (fileInputRef.current) {
@@ -343,6 +355,10 @@ export default function CurrencyExchangesPage() {
           />
         )}
       </div>
+
+      {totalItems > 0 && totalsData?.totals && totalsData.totals.length > 0 && (
+        <TotalsSummary mode="exchanges" totals={totalsData.totals} />
+      )}
 
       <CurrencyExchangeFormModal
         isOpen={isModalOpen}
