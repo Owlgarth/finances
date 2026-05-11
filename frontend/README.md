@@ -92,6 +92,7 @@ frontend/
 | `PeriodSelector` | Period dropdown |
 | `BudgetAccountSelector` | Account dropdown |
 | `ProtectedRoute` | Auth route wrapper |
+| `TotalsSummary` | Aggregated totals tables (transactions, planned, exchanges) with `group_by` support |
 
 ### Feature Components
 
@@ -222,9 +223,9 @@ const api = axios.create({
 | `budgetPeriodsApi` | Periods with copy |
 | `categoriesApi` | Categories with import |
 | `budgetsApi` | Budget amounts |
-| `transactionsApi` | Transactions with filters |
-| `plannedTransactionsApi` | Planned with execute |
-| `currencyExchangesApi` | Exchange records |
+| `transactionsApi` | Transactions with filters, totals with `group_by` (type/category/combined) |
+| `plannedTransactionsApi` | Planned with execute, totals with `group_by` (currency/category) |
+| `currencyExchangesApi` | Exchange records, totals by currency pair |
 | `periodBalancesApi` | Balances with recalculate |
 | `reportsApi` | Budget summary, balances |
 
