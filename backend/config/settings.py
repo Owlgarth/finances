@@ -222,6 +222,9 @@ LEGAL_JURISDICTION = os.getenv('LEGAL_JURISDICTION', 'Your Jurisdiction')
 
 # Production security settings
 if not DEBUG:
+    # When fronted by a TLS-terminating reverse proxy (nginx/Caddy/Traefik),
+    # the proxy must set X-Forwarded-Proto so Django recognizes the request as HTTPS.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True

@@ -1,0 +1,81 @@
+
+services:
+  denarly_db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - denarly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  denarly_redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    expose:
+      - "6379"
+    networks:
+      - denarly-network
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  denarly_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: denarly_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DEBUG=${DEBUG:-false}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      - REDIS_URL=redis://denarly_redis:6379
+    ports:
+      - "8000:8000"
+    networks:
+      - denarly-network
+    depends_on:
+      denarly_db:
+        condition: service_healthy
+      denarly_redis:
+        condition: service_healthy
+
+  denarly_ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - denarly-network
+    depends_on:
+      - denarly_api
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  denarly-network:
+    driver: bridge
