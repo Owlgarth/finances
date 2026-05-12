@@ -3,8 +3,6 @@
 # - DEBUG=true (no HTTPS redirect, verbose errors).
 # - Source bind-mounted with hot reload (uvicorn --reload, vite).
 # - Anonymous volumes preserve /app/.venv and /app/node_modules built into the images.
-#
-# For the production-style setup use:  docker compose -f docker-compose-prod.yml up -d
 
 services:
   denarly_db:
@@ -43,6 +41,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: denarly_api
+    user: root
     env_file:
       - .env
     environment:
