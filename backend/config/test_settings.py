@@ -17,6 +17,9 @@ CACHES = {
     }
 }
 
+# Use local filesystem storage in tests (no S3 dependency)
+USE_S3_STORAGE = False
+
 # Allow test server in ALLOWED_HOSTS for API tests
 if 'testserver' not in ALLOWED_HOSTS:  # noqa: F405
     ALLOWED_HOSTS.append('testserver')  # noqa: F405
