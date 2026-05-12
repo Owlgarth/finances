@@ -1449,3 +1449,65 @@ const { user, isAuthenticated } = useAuth()
 const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace } = useWorkspace()
 const { selectedPeriod, selectedPeriodId } = useBudgetPeriod()
 ```
+
+## Docker & Infrastructure
+
+### DNS-Safe Service Names
+
+Docker Compose service names that will be accessed via URLs must use DNS-safe characters (hyphens, not underscores). botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` will crash at runtime.
+
+When the service name itself contains underscores, add a DNS-safe `networks` alias:
+
+```yaml
+services:
+  denarly_storage:          # Container name (underscores are fine)
+    networks:
+      denarly-network:
+        aliases:
+          - rustfs          # DNS-safe alias used in endpoint URLs
+```
+
+Then reference the alias in any URL/endpoint configuration:
+
+```
+S3_ENDPOINT_URL=http://rustfs:9000
+```
+
+### Docker Entrypoint Consistency
+
+`docker-compose.yml` inline `entrypoint` overrides the Dockerfile/shell script `CMD`/`ENTRYPOINT`. When modifying startup behavior, update **both** `docker-entrypoint.sh` **and** the inline entrypoint in `docker-compose.yml`. Missing one causes different behavior depending on how the container is started (compose vs. direct Docker run).
+
+### S3-Compatible Storage in Docker
+
+When using S3-compatible storage (RustFS, MinIO, etc.) in Docker Compose, use **two URLs** — one for server-side API calls, one for browser-facing URLs:
+
+- `S3_ENDPOINT_URL` — internal Docker network hostname (e.g., `http://rustfs:9000`), used by boto3 for server-side API calls (uploads, bucket management)
+- `S3_EXTERNAL_URL` — browser-accessible URL (e.g., `http://localhost:9000`), used for static file URLs rendered in HTML and presigned URLs
+
+Internal Docker hostnames are unresolvable from the browser. Static files configure `custom_domain` in STORAGES OPTIONS to use the external URL. Presigned URL generation uses a separate boto3 client pointed at the external URL (safe because `generate_presigned_url` is a purely local cryptographic operation — no network call).
+
+### Bucket Policies Over Object ACLs
+
+Use **bucket policies** (not per-object ACLs) for S3 access control. Bucket policies are retroactive (apply to existing objects immediately), idempotent, and more reliable across S3-compatible services. Per-object ACLs require setting ACL on every `put_object` call and don't apply retroactively — existing private objects stay private even after adding `default_acl='public-read'`.
+
+```python
+# Public-read bucket policy (for static files)
+policy = {
+    'Version': '2012-10-17',
+    'Statement': [{
+        'Effect': 'Allow',
+        'Principal': {'AWS': ['*']},
+        'Action': ['s3:GetObject'],
+        'Resource': [f'arn:aws:s3:::{bucket_name}/*'],
+    }],
+}
+client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
+```
+
+### Entrypoint Ordering: Init Before Upload
+
+When using S3 storage, bucket initialization must run **before** `collectstatic`. Buckets must exist before files can be uploaded to them. Apply bucket policies after initialization:
+
+```
+migrate → seed_legal_documents → init_storage_buckets (creates buckets + applies policies) → collectstatic → start server
+```
