@@ -23,3 +23,6 @@ USE_S3_STORAGE = False
 # Allow test server in ALLOWED_HOSTS for API tests
 if 'testserver' not in ALLOWED_HOSTS:  # noqa: F405
     ALLOWED_HOSTS.append('testserver')  # noqa: F405
+
+# Run Celery tasks synchronously in tests (no worker available)
+CELERY_TASK_ALWAYS_EAGER = True
