@@ -36,6 +36,39 @@ services:
       timeout: 3s
       retries: 10
 
+  denarly_storage_init:
+    image: busybox:1.37
+    container_name: denarly_storage_init
+    volumes:
+      - rustfs_data_dev:/data
+    command: chown -R 10001:10001 /data
+    restart: "no"
+
+  denarly_storage:
+    image: rustfs/rustfs:latest
+    container_name: denarly_storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
+      - RUSTFS_SERVER_URL=http://localhost:9000
+    volumes:
+      - rustfs_data_dev:/data
+    networks:
+      denarly-network:
+        aliases:
+          - rustfs
+    depends_on:
+      denarly_storage_init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   denarly_api:
     build:
       context: ./backend
@@ -51,6 +84,14 @@ services:
       - ALLOWED_HOSTS=*
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
       - REDIS_URL=redis://denarly_redis:6379
+      - USE_S3_STORAGE=true
+      - S3_ENDPOINT_URL=http://rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
+      - S3_BUCKET_STATIC=denarly-static
+      - S3_BUCKET_MEDIA=denarly-media
+      - S3_BUCKET_LOGS=denarly-logs
+      - S3_EXTERNAL_URL=http://localhost:9000
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
@@ -63,6 +104,8 @@ services:
         condition: service_healthy
       denarly_redis:
         condition: service_healthy
+      denarly_storage:
+        condition: service_healthy
     entrypoint:
       - /bin/bash
       - -c
@@ -72,6 +115,14 @@ services:
         uv run python manage.py migrate --noinput
         echo "Seeding legal documents..."
         uv run python manage.py seed_legal_documents
+        if [ "$$USE_S3_STORAGE" = "true" ]; then
+          echo "Initializing storage buckets..."
+          uv run python manage.py init_storage_buckets
+        fi
+        if [ "$$USE_S3_STORAGE" = "true" ]; then
+          echo "Collecting static files to S3..."
+          uv run python manage.py collectstatic --noinput
+        fi
         echo "Starting dev server (autoreload)..."
         exec uv run uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
 
@@ -95,6 +146,7 @@ services:
 volumes:
   postgres_data_dev:
   redis_data_dev:
+  rustfs_data_dev:
   backend_venv:
   frontend_node_modules:
 
