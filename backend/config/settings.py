@@ -151,7 +151,62 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+# S3-compatible object storage toggle
+USE_S3_STORAGE = os.getenv('USE_S3_STORAGE', 'false').lower() == 'true'
+
+if USE_S3_STORAGE:
+    # Internal URL for boto3 API calls (server-side, within Docker network)
+    S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL', 'http://localhost:9000')
+    # External URL for browser-facing URLs (static files, presigned URLs)
+    S3_EXTERNAL_URL = os.getenv('S3_EXTERNAL_URL', S3_ENDPOINT_URL)
+    # S3 access credentials
+    S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY', '')
+    S3_SECRET_KEY = os.getenv('S3_SECRET_KEY', '')
+    # Bucket for Django collectstatic output
+    S3_BUCKET_STATIC = os.getenv('S3_BUCKET_STATIC', 'denarly-static')
+    # Bucket for user-uploaded media files
+    S3_BUCKET_MEDIA = os.getenv('S3_BUCKET_MEDIA', 'denarly-media')
+    # Bucket for application logs
+    S3_BUCKET_LOGS = os.getenv('S3_BUCKET_LOGS', 'denarly-logs')
+    # Include presigned query parameters in media URLs (private access)
+    S3_QUERYSTRING_AUTH = True
+    # Parse external URL for static file custom domain
+    from urllib.parse import urlparse as _urlparse
+
+    _external_netloc = _urlparse(S3_EXTERNAL_URL).netloc
+
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'endpoint_url': S3_ENDPOINT_URL,
+                'access_key': S3_ACCESS_KEY,
+                'secret_key': S3_SECRET_KEY,
+                'bucket_name': S3_BUCKET_MEDIA,
+            },
+        },
+        'staticfiles': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'endpoint_url': S3_ENDPOINT_URL,
+                'access_key': S3_ACCESS_KEY,
+                'secret_key': S3_SECRET_KEY,
+                'bucket_name': S3_BUCKET_STATIC,
+                # Generate browser-accessible URLs using external host (no presigned params)
+                'custom_domain': f'{_external_netloc}/{S3_BUCKET_STATIC}',
+                'url_protocol': 'http:',
+            },
+        },
+    }
+
+    STATIC_URL = f'{S3_EXTERNAL_URL}/{S3_BUCKET_STATIC}/'
+    MEDIA_URL = f'{S3_EXTERNAL_URL}/{S3_BUCKET_MEDIA}/'
+else:
+    # Local filesystem storage (default for host-based development)
+    STATIC_URL = 'static/'
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
+    MEDIA_ROOT = BASE_DIR / 'mediafiles'
+    MEDIA_URL = 'media/'
 
 # File upload limits
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
