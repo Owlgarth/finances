@@ -143,6 +143,60 @@ services:
     depends_on:
       - denarly_api
 
+  denarly_celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: denarly_celery_worker
+    env_file:
+      - .env
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DEBUG=true
+      - REDIS_URL=redis://denarly_redis:6379
+      - CELERY_BROKER_URL=redis://denarly_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://denarly_redis:6379/1
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    networks:
+      - denarly-network
+    depends_on:
+      denarly_db:
+        condition: service_healthy
+      denarly_redis:
+        condition: service_healthy
+    entrypoint: ["/app/celery-entrypoint.sh"]
+    command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+
+  denarly_celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: denarly_celery_beat
+    env_file:
+      - .env
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DEBUG=true
+      - REDIS_URL=redis://denarly_redis:6379
+      - CELERY_BROKER_URL=redis://denarly_redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://denarly_redis:6379/1
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+    networks:
+      - denarly-network
+    depends_on:
+      denarly_db:
+        condition: service_healthy
+      denarly_redis:
+        condition: service_healthy
+    entrypoint: ["/app/celery-entrypoint.sh"]
+    command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+
 volumes:
   postgres_data_dev:
   redis_data_dev:

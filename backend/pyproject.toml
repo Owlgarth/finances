@@ -4,23 +4,24 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
+    "boto3>=1.43.6",
+    "celery[redis]>=5.6.3",
+    "cryptography>=44.0",
     "django>=6.0",
     "django-cors-headers>=4.9.0",
     "django-ninja>=1.5.1",
+    "django-storages>=1.14",
     "email-validator>=2.0",
-    "pyjwt>=2.10.1",
-    "psycopg2-binary==2.9.10",
-    "python-dotenv>=1.2.1",
-    "python-dateutil>=2.9.0.post0",
-    "redis>=5.0.0",
-    "uvicorn>=0.40.0",
     "factory-boy>=3.3.3",
     "faker>=40.4.0",
+    "psycopg2-binary==2.9.10",
+    "pyjwt>=2.10.1",
     "pyotp>=2.9.0",
+    "python-dateutil>=2.9.0.post0",
+    "python-dotenv>=1.2.1",
     "qrcode>=8.0",
-    "cryptography>=44.0",
-    "django-storages>=1.14",
-    "boto3>=1.43.6",
+    "redis>=5.0.0",
+    "uvicorn>=0.40.0",
 ]
 
 [dependency-groups]

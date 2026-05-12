@@ -250,6 +250,16 @@ CACHES = {
     }
 }
 
+# Celery configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+# Run tasks synchronously in the calling process (no worker needed).
+# Useful for local debugging. Set to 'true' via env var to enable.
+CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
+
 # Email configuration
 # In development, emails are printed to the console.
 # In production, set EMAIL_HOST (and optionally EMAIL_PORT, EMAIL_HOST_USER,

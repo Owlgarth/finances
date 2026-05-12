@@ -28,6 +28,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
+COPY celery-entrypoint.sh /app/celery-entrypoint.sh
+RUN chmod +x /app/celery-entrypoint.sh
+
 # Create static/media dirs and set ownership
 RUN mkdir -p /app/staticfiles /app/mediafiles && \
     chown -R appuser:appuser /app
