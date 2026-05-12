@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -26,6 +28,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Create static/media dirs and set ownership
+RUN mkdir -p /app/staticfiles /app/mediafiles && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["uv", "run", "uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
