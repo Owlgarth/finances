@@ -125,7 +125,7 @@ export default function Login() {
               </button>
             </div>
 
-            {!import.meta.env.VITE_DEMO_MODE && (
+            {import.meta.env.VITE_DEMO_MODE !== 'true' && (
               <div className="text-center">
                 <Link
                   to="/register"
