@@ -127,17 +127,15 @@ services:
         exec uv run uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
 
   denarly_ui:
-    image: node:22-alpine
-    working_dir: /app
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
-      - VITE_DEMO_MODE=${VITE_DEMO_MODE:-false}
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0 --port 5173"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
+    container_name: denarly_ui
     ports:
-      - "5173:5173"
+      - "5173:80"
     networks:
       - denarly-network
     depends_on:
@@ -202,7 +200,6 @@ volumes:
   redis_data_dev:
   rustfs_data_dev:
   backend_venv:
-  frontend_node_modules:
 
 networks:
   denarly-network:
