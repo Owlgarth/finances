@@ -45,6 +45,18 @@ This directory contains documentation for Denarly's GDPR compliance implementati
 - **Frontend:** Export button in Profile Settings → Account tab
 - **Includes:** Profile, preferences, consents, all workspace/budget/transaction data
 
+### Data Import (Portability)
+
+Users can restore data from a previously exported JSON file:
+
+- **Service:** `UserService.import_all_data` in `backend/users/services.py`
+- **Normalizer:** `UserService.normalize_export_v1_to_v2` converts v1.0 exports to v2.0 format
+- **Endpoint:** `POST /api/users/me/import` — imports all data from JSON export file
+- **Frontend:** Import Data button in Profile Settings → Account tab
+- **Version support:** Both v1.0 (legacy, auto-normalized) and v2.0 export formats
+- **Conflict handling:** Duplicate workspace names are renamed automatically (or skipped)
+- **Response:** Returns counts of imported records and any skipped/renamed items
+
 ### Public-Facing Pages
 
 - `/privacy` — Privacy Policy
@@ -81,4 +93,5 @@ To update policies:
 | Rectification (Art. 16) | `/api/users/me` (PATCH) |
 | Erasure (Art. 17) | `/api/users/me` (DELETE) |
 | Portability (Art. 20) | `/api/users/me/export` (JSON download) |
+| Data Import | `/api/users/me/import` (JSON upload, v1.0 and v2.0) |
 | Withdraw Consent (Art. 7) | `/api/users/me/consents/{type}` (DELETE) |

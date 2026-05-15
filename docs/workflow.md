@@ -284,3 +284,39 @@ Balances are updated incrementally on:
    - Exchange flows
    - Closing balance
 ```
+
+## Data Import/Export
+
+### Exporting User Data
+
+```
+1. User navigates to Profile → Account tab
+2. User clicks "Export Data"
+3. System generates JSON file with all user data:
+   - Profile, preferences, 2FA settings
+   - All workspaces with budget accounts, periods,
+     categories, transactions, budgets, planned transactions,
+     currency exchanges, and period balances
+4. JSON file downloads to browser
+5. Export format version: 2.0
+```
+
+### Importing User Data
+
+```
+1. User navigates to Profile → Account tab
+2. User clicks "Import Data"
+3. User selects a previously exported JSON file
+4. System validates export version:
+   - v1.0: Normalized to v2.0 format automatically
+     (renames double-underscore keys, synthesizes currencies,
+      fills missing sections with defaults)
+   - v2.0: Processed directly
+   - Other versions: Rejected with error
+5. System imports data:
+   - Creates workspaces (renames if name conflict)
+   - Creates budget accounts, periods, categories
+   - Creates transactions, budgets, planned transactions
+   - Creates currency exchanges and period balances
+6. Import summary displayed with counts and any renamed/skipped items
+```

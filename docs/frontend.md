@@ -165,7 +165,7 @@ const api = axios.create({
 ```
 
 ### API Modules
-- `authApi` - Login, register, current user
+- `authApi` - Login, register, current user, export data, import data
 - `workspacesApi` - Workspace management
 - `workspaceMembersApi` - Member management
 - `budgetAccountsApi` - Budget accounts
@@ -200,6 +200,8 @@ interface PlannedTransactionTotalItem { group, currency, total }
 interface PlannedTransactionTotalsResponse { totals }
 interface CurrencyExchangeTotalItem { from_currency, to_currency, from_total, to_total }
 interface CurrencyExchangeTotalsResponse { totals }
+// Import Types
+interface ImportResult { imported_workspaces, imported_budget_accounts, imported_budget_periods, imported_categories, imported_transactions, imported_budgets, imported_planned_transactions, imported_currency_exchanges, skipped, renamed }
 const TotalsLabel = { UNCATEGORIZED: 'Uncategorized' }
 ```
 
