@@ -172,6 +172,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | GET | `/api/users/me/deletion-check` | Pre-check account deletion impact |
 | DELETE | `/api/users/me` | Permanently delete account and all data |
 | GET | `/api/users/me/export` | Export all personal data as JSON (rate limited) |
+| POST | `/api/users/me/import` | Import data from a previously exported JSON file (supports v1.0 and v2.0 formats) |
 
 ### Legal
 
@@ -307,6 +308,16 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | GET | `/api/reports/current-balances` | - | Get current balances across currencies |
 
 ## Import/Export
+
+### Full Data Import/Export (GDPR Portability)
+
+The `POST /api/users/me/import` endpoint restores all user data from a JSON file produced by `GET /api/users/me/export`.
+
+- **Supported export versions**: v1.0 and v2.0. v1.0 exports are automatically normalized to v2.0 format by renaming double-underscore keys (e.g., `currency__symbol` → `currency_symbol`), synthesizing missing currencies, and filling in default sections.
+- **Conflict strategy**: `rename` (default) renames duplicate workspace names; `skip` skips conflicting workspaces.
+- **Response**: Returns counts of imported records and any skipped/renamed items.
+
+### Per-Feature Import/Export
 
 Several endpoints support bulk import/export via JSON files using FormData (multipart/form-data):
 
