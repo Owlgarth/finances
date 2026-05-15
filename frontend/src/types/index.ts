@@ -263,6 +263,20 @@ export interface CurrencyExchangeTotalsResponse {
   totals: CurrencyExchangeTotalItem[];
 }
 
+// ============= Import Types =============
+export interface ImportResult {
+  imported_workspaces: number
+  imported_budget_accounts: number
+  imported_budget_periods: number
+  imported_categories: number
+  imported_transactions: number
+  imported_budgets: number
+  imported_planned_transactions: number
+  imported_currency_exchanges: number
+  skipped: Record<string, string[]>
+  renamed: Record<string, string>
+}
+
 // ============= Enums =============
 
 export const TotalsLabel = {
