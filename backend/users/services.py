@@ -681,6 +681,107 @@ class UserService:
         }
 
     @staticmethod
+    def _rename_keys(record: dict, key_map: dict[str, str]) -> dict:
+        """Rename keys in a dict according to a mapping."""
+        return {key_map.get(k, k): v for k, v in record.items()}
+
+    @staticmethod
+    def _discover_currencies(ws_data: dict) -> list[dict]:
+        """Extract unique currency symbols from all records in a workspace."""
+        symbols: set[str] = set()
+
+        for acc in ws_data.get('budget_accounts', []):
+            dc = acc.get('default_currency')
+            if dc:
+                symbols.add(dc)
+
+            for period in acc.get('periods', []):
+                for tx in period.get('transactions', []):
+                    sym = tx.get('currency__symbol') or tx.get('currency_symbol')
+                    if sym:
+                        symbols.add(sym)
+                for b in period.get('budgets', []):
+                    sym = b.get('currency__symbol') or b.get('currency_symbol')
+                    if sym:
+                        symbols.add(sym)
+                for pt in period.get('planned_transactions', []):
+                    sym = pt.get('currency__symbol') or pt.get('currency_symbol')
+                    if sym:
+                        symbols.add(sym)
+                for ce in period.get('currency_exchanges', []):
+                    from_sym = ce.get('from_currency__symbol') or ce.get('from_currency_symbol')
+                    to_sym = ce.get('to_currency__symbol') or ce.get('to_currency_symbol')
+                    if from_sym:
+                        symbols.add(from_sym)
+                    if to_sym:
+                        symbols.add(to_sym)
+                for pb in period.get('period_balances', []):
+                    sym = pb.get('currency__symbol') or pb.get('currency_symbol')
+                    if sym:
+                        symbols.add(sym)
+
+        return [{'id': None, 'symbol': s, 'name': s} for s in sorted(symbols)]
+
+    @staticmethod
+    def normalize_export_v1_to_v2(export_data: dict) -> dict:
+        """Transform a v1.0 export dict into v2.0 format."""
+        budget_tx_keys = {
+            'category__name': 'category_name',
+            'currency__symbol': 'currency_symbol',
+        }
+        planned_tx_keys = {
+            'currency__symbol': 'currency_symbol',
+        }
+        exchange_keys = {
+            'from_currency__symbol': 'from_currency_symbol',
+            'to_currency__symbol': 'to_currency_symbol',
+        }
+        balance_keys = {
+            'currency__symbol': 'currency_symbol',
+        }
+
+        for ws_data in export_data.get('workspaces', []):
+            if 'currencies' not in ws_data:
+                ws_data['currencies'] = UserService._discover_currencies(ws_data)
+            ws_data.setdefault('exchange_shortcuts', [])
+            ws_data.setdefault('workspace_id', None)
+
+            for acc_data in ws_data.get('budget_accounts', []):
+                acc_data.setdefault('budget_account_id', None)
+
+                for period_data in acc_data.get('periods', []):
+                    period_data.setdefault('budget_period_id', None)
+
+                    for cat in period_data.get('categories', []):
+                        cat.setdefault('id', None)
+
+                    period_data['budgets'] = [
+                        UserService._rename_keys(b, budget_tx_keys) for b in period_data.get('budgets', [])
+                    ]
+                    period_data['transactions'] = [
+                        UserService._rename_keys(tx, budget_tx_keys) for tx in period_data.get('transactions', [])
+                    ]
+                    period_data['planned_transactions'] = [
+                        UserService._rename_keys(pt, planned_tx_keys)
+                        for pt in period_data.get('planned_transactions', [])
+                    ]
+                    period_data['currency_exchanges'] = [
+                        UserService._rename_keys(ce, exchange_keys) for ce in period_data.get('currency_exchanges', [])
+                    ]
+                    period_data['period_balances'] = [
+                        UserService._rename_keys(pb, balance_keys) for pb in period_data.get('period_balances', [])
+                    ]
+
+        export_data.setdefault('two_factor', {'is_enabled': False, 'last_used_at': None, 'created_at': None})
+        profile = export_data.setdefault('profile', {})
+        profile.setdefault('email_verified', False)
+        profile.setdefault('pending_email', None)
+        preferences = export_data.setdefault('preferences', {})
+        preferences.setdefault('font_family', 'default')
+        export_data['export_version'] = '2.0'
+        return export_data
+
+    @staticmethod
     @db_transaction.atomic
     def import_all_data(user, data) -> dict:
         """
@@ -713,8 +814,12 @@ class UserService:
         conflict_strategy = data.conflict_strategy
 
         export_version = export_data.get('export_version', '1.0')
-        if not export_version.startswith('2.'):
-            raise ValidationError(f'Incompatible export version: {export_version}. Only version 2.x is supported.')
+        if export_version.startswith('1.'):
+            export_data = UserService.normalize_export_v1_to_v2(export_data)
+        elif not export_version.startswith('2.'):
+            raise ValidationError(
+                f'Incompatible export version: {export_version}. Only versions 1.x and 2.x are supported.'
+            )
 
         imported_workspaces = 0
         imported_budget_accounts = 0

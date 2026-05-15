@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse, ImportResult } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -259,6 +259,13 @@ export const authApi = {
 
   exportData: (): Promise<Blob> =>
     api.get('/users/me/export', { responseType: 'blob' }).then(res => res.data),
+
+  importData: (data: Record<string, unknown>, conflictStrategy: string = 'rename', workspaces?: string[]): Promise<ImportResult> =>
+    api.post<ImportResult>('/users/me/import', {
+      data,
+      workspaces: workspaces ?? null,
+      conflict_strategy: conflictStrategy,
+    }).then(res => res.data),
 
   getConsentStatus: (): Promise<ConsentStatus> =>
     api.get<ConsentStatus>('/users/me/consent-status').then(res => res.data),

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { authApi } from '../api/client'
@@ -10,6 +10,8 @@ import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
 
+import type { ImportResult } from '../types'
+
 type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
 export default function ProfilePage() {
@@ -18,6 +20,9 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const queryClient = useQueryClient()
   const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
 
   const handleExportData = async () => {
     setIsExporting(true)
@@ -36,6 +41,32 @@ export default function ProfilePage() {
       toast.error('Failed to export data. Please try again later.')
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsImporting(true)
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const exportData = JSON.parse(text)
+      const result = await authApi.importData(exportData)
+      setImportResult(result)
+      toast.success(`Imported ${result.imported_workspaces} workspace(s) successfully!`)
+    } catch (error: any) {
+      if (error instanceof SyntaxError) {
+        toast.error('Invalid JSON file. Please select a valid export file.')
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to import data. Please try again.')
+      }
+    } finally {
+      setIsImporting(false)
+      if (importFileRef.current) {
+        importFileRef.current.value = ''
+      }
     }
   }
 
@@ -175,6 +206,51 @@ export default function ProfilePage() {
 
           {activeTab === 'account' && (
             <div className="space-y-10">
+              <div>
+                <h3 className="text-sm font-medium text-text mb-2">Import Your Data</h3>
+                <p className="text-sm text-text-muted mb-4">
+                  Restore your data from a previously exported JSON file.
+                  Supports both current (v2.0) and legacy (v1.0) export formats.
+                  If a workspace with the same name already exists, it will be renamed automatically.
+                </p>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportFile}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => importFileRef.current?.click()}
+                  disabled={isImporting}
+                  className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+                >
+                  {isImporting ? 'Importing...' : 'Import Data'}
+                </button>
+                {importResult && (
+                  <div className="mt-4 p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-1">
+                    <p className="font-medium text-text">Import Summary</p>
+                    <p className="text-text-muted">Workspaces: {importResult.imported_workspaces}</p>
+                    <p className="text-text-muted">Budget Accounts: {importResult.imported_budget_accounts}</p>
+                    <p className="text-text-muted">Periods: {importResult.imported_budget_periods}</p>
+                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
+                    <p className="text-text-muted">Budgets: {importResult.imported_budgets}</p>
+                    <p className="text-text-muted">Planned Transactions: {importResult.imported_planned_transactions}</p>
+                    <p className="text-text-muted">Currency Exchanges: {importResult.imported_currency_exchanges}</p>
+                    {Object.keys(importResult.renamed).length > 0 && (
+                      <p className="text-text-muted">
+                        Renamed: {Object.entries(importResult.renamed).map(([from, to]) => `${from} → ${to}`).join(', ')}
+                      </p>
+                    )}
+                    {Object.keys(importResult.skipped).length > 0 && (
+                      <p className="text-text-muted">
+                        Skipped: {Object.entries(importResult.skipped).map(([ws, items]) => `${ws} (${items.join(', ')})`).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <h3 className="text-sm font-medium text-text mb-2">Export Your Data</h3>
                 <p className="text-sm text-text-muted mb-4">
