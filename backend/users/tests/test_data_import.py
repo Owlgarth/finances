@@ -25,9 +25,9 @@ class DataImportTests(AuthMixin, TestCase):
     """Tests for GDPR data import service."""
 
     def test_import_rejects_incompatible_version(self):
-        """Import should reject exports with version 1.x."""
+        """Import should reject exports with truly incompatible versions."""
         export_data = {
-            'export_version': '1.0',
+            'export_version': '3.0',
             'workspaces': [],
         }
 
@@ -37,6 +37,17 @@ class DataImportTests(AuthMixin, TestCase):
             UserService.import_all_data(self.user, self._make_import_input(export_data))
 
         self.assertIn('Incompatible export version', str(ctx.exception.message))
+
+    def test_import_accepts_version_1_0(self):
+        """Import should accept v1.0 exports by normalizing them to v2.0."""
+        export_data = {
+            'export_version': '1.0',
+            'workspaces': [],
+        }
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_workspaces'], 0)
 
     def test_import_accepts_version_2_0(self):
         """Import should accept exports with version 2.0."""
@@ -610,3 +621,367 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         from core.schemas import FullImportIn
 
         return FullImportIn(data=data, workspaces=workspaces, conflict_strategy=conflict_strategy)
+
+
+class V1DataImportTests(AuthMixin, TestCase):
+    """Tests for v1.0 export normalizer and v1.0 import end-to-end."""
+
+    def _make_import_input(self, data, workspaces=None, conflict_strategy='rename'):
+        """Create FullImportIn-like object."""
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data, workspaces=workspaces, conflict_strategy=conflict_strategy)
+
+    def _create_v1_sample_export(self):
+        """Create a v1.0-format export dict with PLN, USD, EUR currencies and various record types.
+
+        Uses v1.0 double-underscore key names (category__name, currency__symbol, etc.)
+        and omits the currencies, exchange_shortcuts, two_factor, profile, and preferences sections.
+        """
+        return {
+            'export_version': '1.0',
+            'workspaces': [
+                {
+                    'workspace_name': 'V1 Test Workspace',
+                    'budget_accounts': [
+                        {
+                            'name': 'Main Account',
+                            'description': 'Test account',
+                            'default_currency': 'PLN',
+                            'is_active': True,
+                            'periods': [
+                                {
+                                    'name': 'January 2024',
+                                    'start_date': '2024-01-01',
+                                    'end_date': '2024-01-31',
+                                    'categories': [
+                                        {'name': 'Food'},
+                                        {'name': 'Transport'},
+                                    ],
+                                    'budgets': [
+                                        {
+                                            'category__name': 'Food',
+                                            'amount': '500.00',
+                                            'currency__symbol': 'PLN',
+                                        },
+                                    ],
+                                    'transactions': [
+                                        {
+                                            'date': '2024-01-15',
+                                            'description': 'Groceries',
+                                            'amount': '50.00',
+                                            'type': 'expense',
+                                            'category__name': 'Food',
+                                            'currency__symbol': 'PLN',
+                                        },
+                                        {
+                                            'date': '2024-01-20',
+                                            'description': 'Salary',
+                                            'amount': '1000.00',
+                                            'type': 'income',
+                                            'category__name': None,
+                                            'currency__symbol': 'USD',
+                                        },
+                                    ],
+                                    'planned_transactions': [
+                                        {
+                                            'name': 'Rent',
+                                            'amount': '2000.00',
+                                            'planned_date': '2024-01-01',
+                                            'payment_date': None,
+                                            'status': 'pending',
+                                            'currency__symbol': 'PLN',
+                                        },
+                                    ],
+                                    'currency_exchanges': [
+                                        {
+                                            'date': '2024-01-10',
+                                            'description': 'USD to EUR',
+                                            'from_amount': '100.00',
+                                            'to_amount': '92.00',
+                                            'exchange_rate': '0.92',
+                                            'from_currency__symbol': 'USD',
+                                            'to_currency__symbol': 'EUR',
+                                        },
+                                    ],
+                                    'period_balances': [
+                                        {
+                                            'currency__symbol': 'PLN',
+                                            'opening_balance': '1000.00',
+                                            'total_income': '0',
+                                            'total_expenses': '50.00',
+                                            'exchanges_in': '0',
+                                            'exchanges_out': '0',
+                                            'closing_balance': '950.00',
+                                        },
+                                        {
+                                            'currency__symbol': 'USD',
+                                            'opening_balance': '500.00',
+                                            'total_income': '1000.00',
+                                            'total_expenses': '0',
+                                            'exchanges_in': '0',
+                                            'exchanges_out': '100.00',
+                                            'closing_balance': '1400.00',
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+
+    # --- Normalizer unit tests ---
+
+    def test_normalize_renames_double_underscore_keys(self):
+        """Normalizer should rename all double-underscore keys to single-underscore equivalents."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        period = result['workspaces'][0]['budget_accounts'][0]['periods'][0]
+
+        # Transaction keys renamed
+        tx = period['transactions'][0]
+        self.assertIn('category_name', tx)
+        self.assertIn('currency_symbol', tx)
+        self.assertNotIn('category__name', tx)
+        self.assertNotIn('currency__symbol', tx)
+
+        # Budget keys renamed
+        budget = period['budgets'][0]
+        self.assertIn('category_name', budget)
+        self.assertIn('currency_symbol', budget)
+        self.assertNotIn('category__name', budget)
+        self.assertNotIn('currency__symbol', budget)
+
+        # Planned transaction keys renamed
+        pt = period['planned_transactions'][0]
+        self.assertIn('currency_symbol', pt)
+        self.assertNotIn('currency__symbol', pt)
+
+        # Exchange keys renamed
+        ce = period['currency_exchanges'][0]
+        self.assertIn('from_currency_symbol', ce)
+        self.assertIn('to_currency_symbol', ce)
+        self.assertNotIn('from_currency__symbol', ce)
+        self.assertNotIn('to_currency__symbol', ce)
+
+        # Period balance keys renamed
+        pb = period['period_balances'][0]
+        self.assertIn('currency_symbol', pb)
+        self.assertNotIn('currency__symbol', pb)
+
+    def test_normalize_synthesizes_currencies(self):
+        """Normalizer should discover currencies from records when currencies section is missing."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        currencies = result['workspaces'][0]['currencies']
+        symbols = {c['symbol'] for c in currencies}
+        self.assertIn('PLN', symbols)
+        self.assertIn('USD', symbols)
+        self.assertIn('EUR', symbols)
+
+    def test_normalize_adds_missing_profile_fields(self):
+        """Normalizer should add default profile fields when profile is missing."""
+        export = {'export_version': '1.0', 'workspaces': []}
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertIn('profile', result)
+        self.assertFalse(result['profile']['email_verified'])
+        self.assertIsNone(result['profile']['pending_email'])
+
+    def test_normalize_adds_missing_preferences_field(self):
+        """Normalizer should add default preferences when preferences section is missing."""
+        export = {'export_version': '1.0', 'workspaces': []}
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertIn('preferences', result)
+        self.assertEqual(result['preferences']['font_family'], 'default')
+
+    def test_normalize_adds_missing_two_factor(self):
+        """Normalizer should add default two_factor section when missing."""
+        export = {'export_version': '1.0', 'workspaces': []}
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertIn('two_factor', result)
+        self.assertFalse(result['two_factor']['is_enabled'])
+        self.assertIsNone(result['two_factor']['last_used_at'])
+        self.assertIsNone(result['two_factor']['created_at'])
+
+    def test_normalize_adds_missing_exchange_shortcuts(self):
+        """Normalizer should add empty exchange_shortcuts when missing."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertIn('exchange_shortcuts', result['workspaces'][0])
+        self.assertEqual(result['workspaces'][0]['exchange_shortcuts'], [])
+
+    def test_normalize_sets_version_to_2_0(self):
+        """Normalizer should set export_version to 2.0."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertEqual(result['export_version'], '2.0')
+
+    def test_normalize_adds_category_ids(self):
+        """Normalizer should add id=None to categories that don't have one."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        categories = result['workspaces'][0]['budget_accounts'][0]['periods'][0]['categories']
+        for cat in categories:
+            self.assertIn('id', cat)
+            self.assertIsNone(cat['id'])
+
+    def test_normalize_handles_null_category(self):
+        """Normalizer should preserve null category_name after key rename."""
+        export = self._create_v1_sample_export()
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        tx = result['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][1]
+        self.assertIn('category_name', tx)
+        self.assertIsNone(tx['category_name'])
+
+    def test_normalize_handles_empty_workspaces(self):
+        """Normalizer should handle export with empty workspaces list."""
+        export = {'export_version': '1.0', 'workspaces': []}
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertEqual(result['workspaces'], [])
+        self.assertEqual(result['export_version'], '2.0')
+
+    def test_normalize_handles_empty_periods(self):
+        """Normalizer should handle accounts with no periods."""
+        export = {
+            'export_version': '1.0',
+            'workspaces': [
+                {
+                    'workspace_name': 'Empty Periods',
+                    'budget_accounts': [
+                        {
+                            'name': 'Account',
+                            'description': '',
+                            'default_currency': 'PLN',
+                            'is_active': True,
+                            'periods': [],
+                        }
+                    ],
+                }
+            ],
+        }
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        self.assertEqual(result['workspaces'][0]['budget_accounts'][0]['periods'], [])
+
+    def test_normalize_preserves_existing_currencies(self):
+        """Normalizer should not overwrite currencies if already present in workspace."""
+        export = {
+            'export_version': '1.0',
+            'workspaces': [
+                {
+                    'workspace_name': 'Has Currencies',
+                    'currencies': [{'id': 1, 'symbol': 'GBP', 'name': 'British Pound'}],
+                    'budget_accounts': [],
+                }
+            ],
+        }
+        result = UserService.normalize_export_v1_to_v2(export)
+
+        currencies = result['workspaces'][0]['currencies']
+        self.assertEqual(len(currencies), 1)
+        self.assertEqual(currencies[0]['symbol'], 'GBP')
+
+    # --- E2E import tests ---
+
+    def test_v1_import_creates_all_records(self):
+        """V1 import should create all record types from normalized data."""
+        export = self._create_v1_sample_export()
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_workspaces'], 1)
+        self.assertEqual(result['imported_budget_accounts'], 1)
+        self.assertEqual(result['imported_budget_periods'], 1)
+        self.assertEqual(result['imported_categories'], 2)
+        self.assertEqual(result['imported_transactions'], 2)
+        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(result['imported_planned_transactions'], 1)
+        self.assertEqual(result['imported_currency_exchanges'], 1)
+
+    def test_v1_import_creates_discovered_currencies(self):
+        """V1 import should create Currency records for all symbols discovered by the normalizer."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        self.assertIsNotNone(workspace)
+        symbols = set(workspace.currencies.values_list('symbol', flat=True))
+        self.assertIn('PLN', symbols)
+        self.assertIn('USD', symbols)
+        self.assertIn('EUR', symbols)
+
+    def test_v1_import_handles_null_category(self):
+        """V1 import should create transactions with null category_name (no category assigned)."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        salary_tx = Transaction.objects.filter(workspace=workspace, description='Salary').first()
+        self.assertIsNotNone(salary_tx)
+        self.assertIsNone(salary_tx.category_id)
+
+    def test_v1_import_multiple_currencies_in_period(self):
+        """V1 import should handle multiple currencies within a single period."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        period = BudgetPeriod.objects.filter(workspace=workspace).first()
+
+        tx_currencies = set(Transaction.objects.filter(budget_period=period).values_list('currency__symbol', flat=True))
+        self.assertIn('PLN', tx_currencies)
+        self.assertIn('USD', tx_currencies)
+
+    def test_v1_import_verifies_record_counts(self):
+        """V1 import should produce correct total record counts in the database."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        ws_id = workspace.id
+
+        self.assertEqual(BudgetAccount.objects.filter(workspace_id=ws_id).count(), 1)
+        self.assertEqual(BudgetPeriod.objects.filter(workspace_id=ws_id).count(), 1)
+        self.assertEqual(Category.objects.filter(workspace_id=ws_id).count(), 2)
+        self.assertEqual(Transaction.objects.filter(workspace_id=ws_id).count(), 2)
+        self.assertEqual(Budget.objects.filter(workspace_id=ws_id).count(), 1)
+        self.assertEqual(PlannedTransaction.objects.filter(workspace_id=ws_id).count(), 1)
+        self.assertEqual(CurrencyExchange.objects.filter(workspace_id=ws_id).count(), 1)
+
+    def test_v1_import_preserves_exchange_rates(self):
+        """V1 import should preserve exchange rates from currency exchanges."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        ce = CurrencyExchange.objects.filter(workspace=workspace).first()
+        self.assertIsNotNone(ce)
+        self.assertEqual(ce.from_amount, Decimal('100.00'))
+        self.assertEqual(ce.to_amount, Decimal('92.00'))
+        self.assertEqual(ce.exchange_rate, Decimal('0.92'))
+
+    def test_v1_import_preserves_period_balances(self):
+        """V1 import should preserve period balance values."""
+        export = self._create_v1_sample_export()
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
+        balances = PeriodBalance.objects.filter(workspace=workspace)
+        self.assertEqual(balances.count(), 2)
+
+        pln_balance = balances.filter(currency__symbol='PLN').first()
+        self.assertIsNotNone(pln_balance)
+        self.assertEqual(pln_balance.opening_balance, Decimal('1000.00'))
+        self.assertEqual(pln_balance.total_expenses, Decimal('50.00'))
+        self.assertEqual(pln_balance.closing_balance, Decimal('950.00'))
