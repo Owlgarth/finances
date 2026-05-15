@@ -4,6 +4,7 @@ import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccou
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  withCredentials: true,
   paramsSerializer: {
     indexes: null, // This removes the brackets from array parameters
   },
