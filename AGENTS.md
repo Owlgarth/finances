@@ -815,6 +815,16 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
 
 `AuthMixin` creates a workspace with PLN+USD currencies (via `WorkspaceFactory`), a user, a workspace membership, and a default "General" `BudgetAccount`. The mixin also creates an `auth_token` and provides `auth_headers()`.
 
+**AuthMixin workspace ambiguity:** When tests create additional workspaces for the same user (e.g., via `import_all_data` or factory calls), filtering by `owner=self.user` alone may return the AuthMixin workspace instead of the new one. Filter by both `owner` and `name` (or another distinguishing field):
+
+```python
+# Bad — returns the AuthMixin "General" workspace, not the imported one
+workspace = Workspace.objects.filter(owner=self.user).first()
+
+# Good — filters by owner AND name to get the correct workspace
+workspace = Workspace.objects.filter(owner=self.user, name='Imported Workspace').first()
+```
+
 ### Test Data: Prefer Factories Over Service Calls
 
 Use factory classes (`WorkspaceFactory`, `WorkspaceMemberFactory`, `UserFactory`) for test setup. Service calls create extra side effects (currencies, budget accounts, memberships) that make assertions unreliable.
@@ -1237,6 +1247,15 @@ Do not "fix" these to return 404 — the empty array behavior is intentional.
 > python manage.py seed_legal_documents --force  # Force update even if version matches
 > ```
 > Alternatively, use Django admin to create/edit `LegalDocument` records directly.
+
+### Import Version Compatibility
+
+`import_all_data` supports older export formats via `normalize_export_v1_to_v2()`, which transforms old key names and adds missing fields **before** processing. The import logic itself only handles the current (v2.0) format — all version-specific transformations live in the normalizer.
+
+When adding new fields to the export format:
+1. Update `export_all_data()` to include the new field
+2. Update the normalizer to add sensible defaults for older exports missing that field
+3. Bump `export_version` in `export_all_data()` only for breaking changes (new required fields without defaults)
 
 ## Email Patterns
 
