@@ -182,7 +182,7 @@ export const reportsApi = {
 
 export const periodBalancesApi = {
   getAll: (periodId?: number) => api.get('/period-balances', { params: { budget_period_id: periodId } }),
-  update: (id: number, data: { opening_balance: number }) => api.put(`/period-balances/${id}`, data),
+  update: (id: number, data: { opening_balance?: number; note?: string }) => api.put(`/period-balances/${id}`, data),
   recalculate: (periodId: number, currency: string) =>
     api.post('/period-balances/recalculate', { budget_period_id: periodId, currency }),
 };

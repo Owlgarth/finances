@@ -301,7 +301,7 @@ Balances are updated incrementally on:
 ### Current Balances
 
 ```
-1. User views Balance section (Dashboard or Budgets page)
+1. User views Balance section (Dashboard, Budgets page, or Balances page)
 2. System fetches latest balance per currency
 3. Response schema: { balances: { "PLN": "...", "USD": "..." } }
 4. Displays closing balance per currency in a compact bar:
@@ -312,10 +312,26 @@ Balances are updated incrementally on:
    - Income / Expenses
    - Exchange In / Exchange Out
    - Closing balance (semantic color)
+   - Note (if set)
    - "Last calculated" timestamp (when available)
 6. From detail modal, user can:
-   - Edit Opening Balance → opens edit modal
+   - Edit Opening Balance + Note → opens edit modal
    - Recalculate → triggers server-side recalculation
+```
+
+### Balances Page
+
+```
+1. User navigates to Balances page (/balances)
+2. System displays balance cards for the selected period:
+   - One card per currency
+   - Each card shows: opening balance, income, expenses, exchanges in/out,
+     closing balance, note (if set), and last calculated timestamp
+3. Closing balances use semantic colors (positive/negative/muted)
+4. User can edit a balance (requires member role or above):
+   - Opens edit modal with opening balance field and note textarea
+   - Both fields are optional — can update just the note without touching opening balance
+5. User can recalculate individual balances (requires member role or above)
 ```
 
 ## Data Import/Export
