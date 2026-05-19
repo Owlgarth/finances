@@ -76,6 +76,8 @@ class PlannedTransactionService:
         status: str | None = None,
         budget_period_id: int | None = None,
         currency: list | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ):
         """Build a filtered queryset for planned transactions."""
         queryset = PlannedTransaction.objects.for_workspace(workspace_id)
@@ -85,6 +87,10 @@ class PlannedTransactionService:
             queryset = queryset.filter(budget_period_id=budget_period_id)
         if currency:
             queryset = queryset.filter(currency__symbol__in=currency)
+        if start_date:
+            queryset = queryset.filter(planned_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(planned_date__lte=end_date)
         return queryset
 
     @staticmethod
@@ -93,10 +99,14 @@ class PlannedTransactionService:
         status: str | None = None,
         budget_period_id: int | None = None,
         currency: list | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
-        queryset = PlannedTransactionService._build_filtered_queryset(workspace_id, status, budget_period_id, currency)
+        queryset = PlannedTransactionService._build_filtered_queryset(
+            workspace_id, status, budget_period_id, currency, start_date, end_date
+        )
         queryset = queryset.select_related('category').order_by('planned_date')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
@@ -114,10 +124,14 @@ class PlannedTransactionService:
         status: str | None = None,
         budget_period_id: int | None = None,
         currency: list | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         group_by: str = 'currency',
     ) -> list[dict]:
         """Return aggregated totals grouped by currency or category."""
-        queryset = PlannedTransactionService._build_filtered_queryset(workspace_id, status, budget_period_id, currency)
+        queryset = PlannedTransactionService._build_filtered_queryset(
+            workspace_id, status, budget_period_id, currency, start_date, end_date
+        )
 
         if group_by == 'category':
             rows = (

@@ -255,14 +255,10 @@ class TestCurrentBalances(ReportsTestCase):
         self.assertStatus(200)
 
         # PLN should have the latest balance (period2)
-        self.assertEqual(data['PLN'], '13000.00')
+        self.assertEqual(data['balances']['PLN'], '13000.00')
 
         # USD should have balance from period1 (latest for USD)
-        self.assertEqual(data['USD'], '2500.00')
-
-        # EUR and UAH should be 0 (no balances)
-        self.assertEqual(data['EUR'], '0')
-        self.assertEqual(data['UAH'], '0')
+        self.assertEqual(data['balances']['USD'], '2500.00')
 
     def test_current_balances_empty_workspace(self):
         """Test current balances when workspace has no balances."""
@@ -273,10 +269,8 @@ class TestCurrentBalances(ReportsTestCase):
         self.assertStatus(200)
 
         # All currencies should be 0
-        self.assertEqual(data['PLN'], '0')
-        self.assertEqual(data['USD'], '0')
-        self.assertEqual(data['EUR'], '0')
-        self.assertEqual(data['UAH'], '0')
+        self.assertEqual(data['balances']['PLN'], '0')
+        self.assertEqual(data['balances']['USD'], '0')
 
     def test_current_balances_without_auth_fails(self):
         """Test that getting current balances without authentication fails."""
@@ -301,4 +295,4 @@ class TestCurrentBalances(ReportsTestCase):
         self.assertStatus(200)
 
         # Should return the period2 balance for USD (latest)
-        self.assertEqual(data['USD'], '2700.00')
+        self.assertEqual(data['balances']['USD'], '2700.00')

@@ -1343,3 +1343,216 @@ class TestTransactionTotals(TransactionsTestCase):
         by_type_map = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
         self.assertEqual(by_type_map[('income', 'PLN')], '5000.00')
         self.assertEqual(by_type_map[('expense', 'PLN')], '250.00')
+
+
+# =============================================================================
+# Frequent Descriptions Tests
+# =============================================================================
+
+
+class TestFrequentDescriptions(TransactionsTestCase):
+    """Tests for the frequent descriptions endpoint."""
+
+    def _create_transaction(self, description, amount, currency, trans_type='expense', period=None):
+        """Helper to create a transaction in the test period."""
+        return Transaction.objects.create(
+            budget_period=period or self.period,
+            date=date(2025, 1, 15),
+            description=description,
+            amount=Decimal(str(amount)),
+            currency=currency,
+            type=trans_type,
+            created_by=self.user,
+            updated_by=self.user,
+            workspace=self.workspace,
+        )
+
+    def test_basic_grouping(self):
+        """Test that transactions are grouped by description."""
+        self._create_transaction('Grocery shopping', '50.00', self.pln_currency)
+        self._create_transaction('Grocery shopping', '75.00', self.pln_currency)
+        self._create_transaction('Bus ticket', '30.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 2)
+
+        # Grocery shopping should be first (count=2)
+        self.assertEqual(items[0]['description'], 'Grocery shopping')
+        self.assertEqual(items[0]['count'], 2)
+        self.assertEqual(items[0]['total'], '125.00')
+        self.assertEqual(items[0]['currency'], 'PLN')
+
+        self.assertEqual(items[1]['description'], 'Bus ticket')
+        self.assertEqual(items[1]['count'], 1)
+        self.assertEqual(items[1]['total'], '30.00')
+
+    def test_case_insensitive_grouping(self):
+        """Test that descriptions are grouped case-insensitively."""
+        self._create_transaction('grocery shopping', '50.00', self.pln_currency)
+        self._create_transaction('Grocery Shopping', '75.00', self.pln_currency)
+        self._create_transaction('GROCERY SHOPPING', '25.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['count'], 3)
+        self.assertEqual(items[0]['total'], '150.00')
+
+    def test_most_common_casing(self):
+        """Test that the description uses the most common original casing."""
+        self._create_transaction('grocery shopping', '10.00', self.pln_currency)
+        self._create_transaction('Grocery Shopping', '20.00', self.pln_currency)
+        self._create_transaction('Grocery Shopping', '30.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 1)
+        # "Grocery Shopping" appears twice, "grocery shopping" once
+        self.assertEqual(items[0]['description'], 'Grocery Shopping')
+
+    def test_currency_separation(self):
+        """Test that same description in different currencies is grouped separately."""
+        self._create_transaction('Coffee', '15.00', self.pln_currency)
+        self._create_transaction('Coffee', '5.00', self.usd_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 2)
+
+        currencies = {item['currency'] for item in items}
+        self.assertIn('PLN', currencies)
+        self.assertIn('USD', currencies)
+
+    def test_limit_parameter(self):
+        """Test that the limit parameter restricts results."""
+        for i in range(5):
+            self._create_transaction(f'Transaction {i}', '10.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}&limit=3',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 3)
+
+    def test_default_limit(self):
+        """Test that default limit is 10."""
+        for i in range(15):
+            self._create_transaction(f'Transaction {i}', '10.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 10)
+
+    def test_empty_results(self):
+        """Test that empty period returns empty items."""
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+
+    def test_ordering_by_count_desc(self):
+        """Test that items are ordered by count descending."""
+        self._create_transaction('Bus ticket', '10.00', self.pln_currency)
+        self._create_transaction('Grocery shopping', '50.00', self.pln_currency)
+        self._create_transaction('Grocery shopping', '25.00', self.pln_currency)
+        self._create_transaction('Grocery shopping', '30.00', self.pln_currency)
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 2)
+        # Grocery shopping (count=3) should be before Bus ticket (count=1)
+        self.assertEqual(items[0]['description'], 'Grocery shopping')
+        self.assertEqual(items[0]['count'], 3)
+        self.assertEqual(items[1]['description'], 'Bus ticket')
+        self.assertEqual(items[1]['count'], 1)
+
+    def test_transaction_type_filter(self):
+        """Test filtering by transaction type."""
+        self._create_transaction('Salary', '5000.00', self.pln_currency, trans_type='income')
+        self._create_transaction('Coffee', '15.00', self.pln_currency, trans_type='expense')
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}&transaction_type=expense',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['description'], 'Coffee')
+
+    def test_auth_required(self):
+        """Test that authentication is required."""
+        self.get(f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}')
+        self.assertStatus(401)
+
+    def test_no_matching_period_returns_empty(self):
+        """Test that current_date matching no period returns empty items."""
+        data = self.get('/api/transactions/frequent-descriptions?current_date=2099-01-01', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+
+    def test_cross_workspace_isolation(self):
+        """Test that frequent descriptions only returns data from the user's workspace."""
+        self._create_transaction('My coffee', '15.00', self.pln_currency)
+
+        # Create transaction in another workspace
+        other_workspace = Workspace.objects.create(name='Other Workspace')
+        other_user = User.objects.create_user(
+            email='other@example.com',
+            password='otherpass123',
+            current_workspace=other_workspace,
+        )
+        other_workspace.owner = other_user
+        other_workspace.save()
+        WorkspaceMember.objects.create(workspace=other_workspace, user=other_user, role='owner')
+        other_currency = Currency.objects.create(workspace=other_workspace, name='Polish Zloty', symbol='PLN')
+        other_account = BudgetAccount.objects.create(
+            workspace=other_workspace, name='Other Account', default_currency=other_currency, created_by=other_user
+        )
+        other_period = BudgetPeriod.objects.create(
+            budget_account=other_account,
+            name='Other Period',
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+            created_by=other_user,
+            workspace=other_workspace,
+        )
+        Transaction.objects.create(
+            budget_period=other_period,
+            date=date(2025, 1, 15),
+            description='Other coffee',
+            amount=Decimal('9999.00'),
+            currency=other_currency,
+            type='expense',
+            created_by=other_user,
+            updated_by=other_user,
+            workspace=other_workspace,
+        )
+
+        data = self.get(
+            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        items = data['items']
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['description'], 'My coffee')
