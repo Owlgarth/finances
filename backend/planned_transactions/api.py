@@ -34,12 +34,16 @@ def list_planned(
     status: str | None = Query(None),
     budget_period_id: int | None = Query(None),
     currency: list[str] | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
     """List planned transactions for the current workspace."""
     workspace_id = request.auth.current_workspace_id
-    return PlannedTransactionService.list(workspace_id, status, budget_period_id, currency, page, page_size)
+    return PlannedTransactionService.list(
+        workspace_id, status, budget_period_id, currency, start_date, end_date, page, page_size
+    )
 
 
 @router.post('', response={201: PlannedTransactionOut, 400: dict}, auth=WorkspaceJWTAuth())
@@ -59,11 +63,17 @@ def planned_totals(
     status: str | None = Query(None),
     budget_period_id: int | None = Query(None),
     currency: list[str] | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     group_by: str = Query('currency', pattern=r'^(currency|category)$'),
 ):
     """Get aggregated planned transaction totals grouped by currency or category."""
     workspace_id = request.auth.current_workspace_id
-    return {'totals': PlannedTransactionService.totals(workspace_id, status, budget_period_id, currency, group_by)}
+    return {
+        'totals': PlannedTransactionService.totals(
+            workspace_id, status, budget_period_id, currency, start_date, end_date, group_by
+        )
+    }
 
 
 # Specific routes must come before parameterized routes

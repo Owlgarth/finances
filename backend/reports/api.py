@@ -74,4 +74,4 @@ def current_balances(request):
 
     currencies = get_workspace_currencies(workspace_id)
     result = ReportService.get_current_balances(workspace_id, currencies)
-    return CurrentBalancesResponse(**result)
+    return CurrentBalancesResponse(balances=result)

@@ -263,6 +263,23 @@ export interface CurrencyExchangeTotalsResponse {
   totals: CurrencyExchangeTotalItem[];
 }
 
+// ============= Frequent Descriptions Types =============
+export interface FrequentDescriptionItem {
+  description: string;
+  count: number;
+  total: string;
+  currency: string;
+}
+
+export interface FrequentDescriptionsResponse {
+  items: FrequentDescriptionItem[];
+}
+
+// ============= Reports Types =============
+export interface CurrentBalancesResponse {
+  balances: Record<string, string>;
+}
+
 // ============= Import Types =============
 export interface ImportResult {
   imported_workspaces: number
