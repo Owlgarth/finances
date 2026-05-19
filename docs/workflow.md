@@ -278,11 +278,18 @@ Balances are updated incrementally on:
 ```
 1. User views Balance section
 2. System fetches latest balance per currency
-3. Displays:
+3. Displays closing balance per currency in a compact bar:
+   - Mobile (<768px): list rows (currency left, closing balance right)
+   - Desktop (≥768px): horizontal bordered cards with semantic accent
+4. User clicks a balance row/card → detail modal opens showing:
    - Opening balance
-   - Income/Expenses
-   - Exchange flows
-   - Closing balance
+   - Income / Expenses
+   - Exchange In / Exchange Out
+   - Closing balance (semantic color)
+   - "Last calculated" timestamp (when available)
+5. From detail modal, user can:
+   - Edit Opening Balance → opens edit modal
+   - Recalculate → triggers server-side recalculation
 ```
 
 ## Data Import/Export
