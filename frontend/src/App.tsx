@@ -7,6 +7,7 @@ import { UserPreferencesProvider } from './contexts/UserPreferencesContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
+import BudgetsPage from './pages/BudgetsPage'
 import BudgetPeriod from './pages/BudgetPeriod'
 import Transactions from './pages/Transactions'
 import Planned from './pages/Planned'
@@ -29,6 +30,7 @@ function AppContent() {
     <MainLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/period/:id" element={<BudgetPeriod />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/exchanges" element={<CurrencyExchangesPage />} />

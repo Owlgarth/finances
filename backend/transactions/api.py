@@ -12,7 +12,12 @@ from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.pagination import PaginatedOut
-from transactions.schemas import TransactionCreate, TransactionOut, TransactionTotalsResponse
+from transactions.schemas import (
+    FrequentDescriptionsResponse,
+    TransactionCreate,
+    TransactionOut,
+    TransactionTotalsResponse,
+)
 from transactions.services import TransactionService
 from workspaces.models import WRITE_ROLES
 
@@ -104,6 +109,25 @@ def export_transactions(
     response = HttpResponse(json.dumps(export_data, indent=2), content_type='application/json')
     response['Content-Disposition'] = f'attachment; filename=transactions_export_{budget_period_id}.json'
     return response
+
+
+@router.get('/frequent-descriptions', response=FrequentDescriptionsResponse, auth=WorkspaceJWTAuth())
+def frequent_descriptions(
+    request: HttpRequest,
+    budget_period_id: int | None = Query(None),
+    current_date: date | None = Query(None),
+    transaction_type: list[str] | None = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Get the most frequent transaction descriptions grouped by description + currency."""
+    workspace_id = request.auth.current_workspace_id
+    return TransactionService.frequent_descriptions(
+        workspace_id=workspace_id,
+        budget_period_id=budget_period_id,
+        current_date=current_date,
+        transaction_type=transaction_type,
+        limit=limit,
+    )
 
 
 @router.post('/import', response={201: dict, 400: dict}, auth=WorkspaceJWTAuth())

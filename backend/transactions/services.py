@@ -88,6 +88,22 @@ class TransactionService:
             raise TransactionCategoryNotFoundError()
 
     @staticmethod
+    def _resolve_display_descriptions(queryset) -> dict[str, str]:
+        """Map lowercase descriptions to the most common original casing.
+
+        Returns a dict mapping lowercase description → display (most common casing).
+        """
+        from collections import Counter
+
+        rows = queryset.values_list('description', flat=True)
+        lower_groups: dict[str, list[str]] = {}
+        for desc in rows:
+            key = desc.lower()
+            lower_groups.setdefault(key, []).append(desc)
+
+        return {key: Counter(variants).most_common(1)[0][0] for key, variants in lower_groups.items()}
+
+    @staticmethod
     def _build_filtered_queryset(
         workspace_id: int,
         budget_period_id: int | None = None,
@@ -307,6 +323,51 @@ class TransactionService:
             for c, total in sorted(cat_map[cat].items())
         ]
         return {'by_type': by_type, 'by_category': by_category}
+
+    @staticmethod
+    def frequent_descriptions(
+        workspace_id: int,
+        budget_period_id: int | None = None,
+        current_date=None,
+        transaction_type: list | None = None,
+        limit: int = 10,
+    ) -> dict:
+        """Return the most frequent transaction descriptions grouped by lowercase + currency.
+
+        The `description` field uses the most common original casing for each group.
+        """
+        from django.db.models import Count
+        from django.db.models.functions import Lower
+
+        queryset = TransactionService._build_filtered_queryset(
+            workspace_id=workspace_id,
+            budget_period_id=budget_period_id,
+            current_date=current_date,
+            transaction_type=transaction_type,
+        )
+
+        if queryset is None:
+            return {'items': []}
+
+        display_map = TransactionService._resolve_display_descriptions(queryset)
+
+        rows = (
+            queryset.annotate(lower_desc=Lower('description'), currency_symbol=F('currency__symbol'))
+            .values('lower_desc', 'currency_symbol')
+            .annotate(count=Count('id'), total=Sum('amount'))
+            .order_by('-count')[:limit]
+        )
+
+        items = [
+            {
+                'description': display_map.get(r['lower_desc'], r['lower_desc']),
+                'count': r['count'],
+                'total': r['total'],
+                'currency': r['currency_symbol'],
+            }
+            for r in rows
+        ]
+        return {'items': items}
 
     @staticmethod
     @db_transaction.atomic

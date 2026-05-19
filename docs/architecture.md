@@ -156,6 +156,7 @@ frontend/src/
 ├── components/
 │   ├── layout/           # MainLayout, Sidebar, UserMenu
 │   ├── common/           # Shared (Loading, Error, Empty)
+│   ├── dashboard/        # Dashboard overview widgets
 │   ├── balance/          # Balance display
 │   ├── budget/           # Budget table
 │   ├── transactions/     # Transaction lists

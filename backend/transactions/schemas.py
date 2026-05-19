@@ -136,3 +136,18 @@ class TransactionTotalsResponse(BaseModel):
     totals: list[TransactionTotalsItem] | None = None
     by_type: list[TransactionTotalsItem] | None = None
     by_category: list[TransactionTotalsItem] | None = None
+
+
+class FrequentDescriptionItem(BaseModel):
+    """Schema for a single frequent description item."""
+
+    description: str
+    count: int
+    total: Decimal
+    currency: str
+
+
+class FrequentDescriptionsResponse(BaseModel):
+    """Schema for frequent descriptions response."""
+
+    items: list[FrequentDescriptionItem]

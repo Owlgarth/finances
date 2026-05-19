@@ -1237,3 +1237,98 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         totals = data['totals']
         groups = [t['group'] for t in totals]
         self.assertNotIn('Secret Category', groups)
+
+
+# =============================================================================
+# Date Range Filter Tests
+# =============================================================================
+
+
+class TestPlannedTransactionDateRangeFilter(PlannedTransactionTestCase):
+    """Tests for start_date / end_date query params on list and totals endpoints."""
+
+    def test_list_filtered_by_start_date(self):
+        """Test listing planned transactions with start_date filter."""
+        data = self.get('/api/planned-transactions?start_date=2025-01-15', **self.auth_headers())
+        self.assertStatus(200)
+        items = data['items']
+        # planned1: 2025-01-05, planned2: 2025-01-15, planned3: 2025-02-05
+        # start_date=2025-01-15 includes planned2 (15th) and planned3 (Feb 5th)
+        self.assertEqual(len(items), 2)
+        for item in items:
+            self.assertGreaterEqual(date.fromisoformat(item['planned_date']), date(2025, 1, 15))
+
+    def test_list_filtered_by_end_date(self):
+        """Test listing planned transactions with end_date filter."""
+        data = self.get('/api/planned-transactions?end_date=2025-01-15', **self.auth_headers())
+        self.assertStatus(200)
+        items = data['items']
+        # planned1: 2025-01-05, planned2: 2025-01-15, planned3: 2025-02-05
+        # end_date=2025-01-15 includes planned1 (5th) and planned2 (15th)
+        self.assertEqual(len(items), 2)
+        for item in items:
+            self.assertLessEqual(date.fromisoformat(item['planned_date']), date(2025, 1, 15))
+
+    def test_list_filtered_by_date_range(self):
+        """Test listing planned transactions with both start_date and end_date."""
+        data = self.get(
+            '/api/planned-transactions?start_date=2025-01-10&end_date=2025-01-20',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        items = data['items']
+        # Only planned2 (2025-01-15) falls in the range
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], self.planned2.id)
+
+    def test_list_date_range_with_period_filter(self):
+        """Test that date range filters combine correctly with budget_period_id filter."""
+        data = self.get(
+            f'/api/planned-transactions?budget_period_id={self.period1.id}&start_date=2025-01-10',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        items = data['items']
+        # period1: planned1 (Jan 5), planned2 (Jan 15). start_date=Jan 10 excludes planned1.
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['id'], self.planned2.id)
+
+    def test_list_date_range_returns_empty_when_no_match(self):
+        """Test that date range returns empty when no planned transactions match."""
+        data = self.get(
+            '/api/planned-transactions?start_date=2025-03-01&end_date=2025-03-31',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['total'], 0)
+
+    def test_totals_filtered_by_start_date(self):
+        """Test totals with start_date filter."""
+        data = self.get('/api/planned-transactions/totals?start_date=2025-01-15', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        # planned2 (150, Jan 15) + planned3 (1200, Feb 5) = 1350
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1350.00'))
+
+    def test_totals_filtered_by_end_date(self):
+        """Test totals with end_date filter."""
+        data = self.get('/api/planned-transactions/totals?end_date=2025-01-15', **self.auth_headers())
+        self.assertStatus(200)
+        totals = data['totals']
+        # planned1 (1200, Jan 5) + planned2 (150, Jan 15) = 1350
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('1350.00'))
+
+    def test_totals_filtered_by_date_range(self):
+        """Test totals with both start_date and end_date filters."""
+        data = self.get(
+            '/api/planned-transactions/totals?start_date=2025-01-10&end_date=2025-01-20',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        totals = data['totals']
+        # Only planned2 (150) falls in range
+        self.assertEqual(len(totals), 1)
+        self.assertEqual(Decimal(totals[0]['total']), Decimal('150.00'))

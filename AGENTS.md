@@ -901,6 +901,62 @@ payload = {
 expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 ```
 
+### Dynamic Dict-Based Schemas for Multi-Currency Data
+
+When response data is keyed by a dynamic value (e.g., currency codes), use `dict[str, ValueType]` in Pydantic schemas instead of hardcoded fields. This avoids creating N currency fields and works with any number of currencies:
+
+```python
+class BudgetSummaryResponse(BaseModel):
+    period: BudgetSummaryOut
+    currencies: dict[str, CurrencySummary]   # Keyed by currency code ("PLN", "USD", …)
+    balances: dict[str, CurrencyBalances]    # Keyed by currency code
+
+class CurrentBalancesResponse(BaseModel):
+    balances: dict[str, Decimal]             # Keyed by currency code
+```
+
+Populate these in the API layer by iterating the queryset and grouping into dicts:
+
+```python
+by_currency: dict[str, CurrencySummary] = {}
+for item in summary:
+    currency = item.currency
+    if currency not in by_currency:
+        by_currency[currency] = CurrencySummary(total_budget=Decimal('0'), total_actual=Decimal('0'), categories=[])
+    by_currency[currency].total_budget += item.budget
+    by_currency[currency].total_actual += item.actual
+    by_currency[currency].categories.append(item)
+```
+
+### Case-Insensitive Grouping with Display Casing
+
+When grouping text values that may vary in casing (e.g., "Amazon", "amazon", "AMAZON"), group by lowercase but display the most common original casing. This provides clean grouping while preserving user-preferred formatting:
+
+```python
+from collections import Counter
+from django.db.models import Count, F, Sum
+from django.db.models.functions import Lower
+
+# Step 1: Map lowercase → most common original casing
+def _resolve_display_descriptions(queryset) -> dict[str, str]:
+    rows = queryset.values_list('description', flat=True)
+    lower_groups: dict[str, list[str]] = {}
+    for desc in rows:
+        key = desc.lower()
+        lower_groups.setdefault(key, []).append(desc)
+    return {key: Counter(variants).most_common(1)[0][0] for key, variants in lower_groups.items()}
+
+# Step 2: Aggregate by lowercase, then map to display casing
+display_map = _resolve_display_descriptions(queryset)
+rows = (
+    queryset.annotate(lower_desc=Lower('description'), currency_symbol=F('currency__symbol'))
+    .values('lower_desc', 'currency_symbol')
+    .annotate(count=Count('id'), total=Sum('amount'))
+    .order_by('-count')[:limit]
+)
+items = [{'description': display_map.get(r['lower_desc'], r['lower_desc']), ...} for r in rows]
+```
+
 ### Code Cleanup When Refactoring
 
 When removing code that uses specific imports, also remove the now-unused imports. This applies especially to:
@@ -1161,6 +1217,63 @@ export default function VerifyPage() {
 - Success states should offer a navigation link; error states should offer a retry or resend option
 - Use a named `async` function inside `useEffect` with `try/catch/await` — avoid mixing `.then()` chains with async calls
 - Never swallow errors by showing the same success state in both `try` and `catch` blocks. Add a distinct error state with a retry option so users can recover from failures.
+
+### Dashboard Widget Component Pattern
+
+Dashboard widgets follow a consistent structure for period-scoped data display:
+
+```tsx
+interface Props {
+  periodId: number | null
+}
+
+export default function MyWidget({ periodId }: Props) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['my-data', periodId],
+    queryFn: async () => {
+      if (!periodId) return null
+      return myApi.getData({ budget_period_id: periodId })
+    },
+    enabled: !!periodId,
+  })
+
+  if (!periodId) return null
+
+  const items = data?.items ?? []
+
+  return (
+    <div className="border border-border rounded-sm bg-surface p-4">
+      <h3 className="text-sm font-medium text-text mb-3">Widget Title</h3>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-4 bg-surface-muted rounded-sm animate-pulse" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-text-muted">No data this period.</p>
+      ) : (
+        <div>{/* Render items */}</div>
+      )}
+
+      <Link to="/detail-page" className="inline-block mt-3 text-sm text-primary hover:text-primary-hover">
+        View Details →
+      </Link>
+    </div>
+  )
+}
+```
+
+**Key conventions:**
+- Accept `periodId: number | null` prop and early-return `null` when null (widget is invisible, no skeleton)
+- Use `enabled: !!periodId` on `useQuery` to prevent fetching without a period
+- Three rendering states: loading skeleton, empty message, data display
+- Always include a `<Link>` to the full detail page at the bottom
+- Loading skeletons use `bg-surface-muted rounded-sm animate-pulse` rows
+- Widget container uses `border border-border rounded-sm bg-surface p-4`
+
+**Context-based variant:** When a widget always reads the same context value the parent already has, it can call `useBudgetPeriod()` directly instead of receiving a `periodId` prop. This simplifies the parent's JSX but makes the widget less portable — use only when the widget is tightly coupled to the dashboard page.
 
 ### Frontend State Refresh After Mutations
 
