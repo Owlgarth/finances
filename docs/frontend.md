@@ -74,12 +74,12 @@ frontend/src/
 - `TotalsSummary` - Aggregated totals tables for transactions, planned transactions, and currency exchanges (supports `group_by` modes: type, category, or combined)
 
 ### Feature Components
-- `BalanceCard`, `BalanceSection` - Balance display
+- `BalanceBar`, `BalanceSection` - Balance display (compact bar: list on mobile, horizontal cards on desktop; click opens detail modal)
 - `BudgetTable`, `BudgetCategoryRow`, `BudgetSummarySection` - Budget vs actual
 - `TransactionList`, `PlannedTransactionList` - Transaction tables
 
 ### Modals (by feature)
-- Balance: `EditPeriodBalanceModal`
+- Balance: `BalanceDetailModal`, `EditPeriodBalanceModal`
 - Budget: `CreateBudgetModal`, `EditBudgetModal`
 - Categories: `CreateCategoryModal`, `EditCategoryModal`
 - Currency: `CurrencyExchangeFormModal`
