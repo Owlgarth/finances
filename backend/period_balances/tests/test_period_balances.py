@@ -296,6 +296,61 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
+    def test_update_balance_with_note(self):
+        """Test updating a balance with a note value."""
+        payload = {
+            'opening_balance': '2000.00',
+            'note': 'Carried over from previous system',
+        }
+        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['note'], 'Carried over from previous system')
+        self.assertEqual(float(data['opening_balance']), 2000.00)
+
+        self.balance1_pln.refresh_from_db()
+        self.assertEqual(self.balance1_pln.note, 'Carried over from previous system')
+
+    def test_update_balance_note_only(self):
+        """Test updating only the note keeps existing opening_balance."""
+        payload = {
+            'note': 'Updated note only',
+        }
+        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['note'], 'Updated note only')
+        self.assertEqual(float(data['opening_balance']), 1000.00)
+
+    def test_update_balance_clears_note(self):
+        """Test setting note to empty string clears it."""
+        self.balance1_pln.note = 'Some existing note'
+        self.balance1_pln.save()
+
+        payload = {
+            'note': '',
+        }
+        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['note'], '')
+
+        self.balance1_pln.refresh_from_db()
+        self.assertEqual(self.balance1_pln.note, '')
+
+    def test_update_balance_preserves_note_when_not_provided(self):
+        """Test that omitting note from update payload preserves existing note."""
+        self.balance1_pln.note = 'Important note to keep'
+        self.balance1_pln.save()
+
+        payload = {
+            'opening_balance': '3000.00',
+        }
+        data = self.put(f'/api/period-balances/{self.balance1_pln.id}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(float(data['opening_balance']), 3000.00)
+        self.assertEqual(data['note'], 'Important note to keep')
+
+        self.balance1_pln.refresh_from_db()
+        self.assertEqual(self.balance1_pln.note, 'Important note to keep')
+
     # =============================================================================
     # Recalculate Balance Tests
     # =============================================================================
@@ -552,3 +607,26 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         data = self.get('/api/period-balances', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(data), 4)
+
+    def test_list_balances_includes_note(self):
+        """Test that list response includes the note field."""
+        self.balance1_pln.note = 'January summary'
+        self.balance1_pln.save()
+
+        data = self.get('/api/period-balances', **self.auth_headers())
+        self.assertStatus(200)
+
+        balance_data = next(b for b in data if b['id'] == self.balance1_pln.id)
+        self.assertEqual(balance_data['note'], 'January summary')
+
+        balance_usd = next(b for b in data if b['id'] == self.balance1_usd.id)
+        self.assertEqual(balance_usd['note'], '')
+
+    def test_get_balance_includes_note(self):
+        """Test that detail response includes the note field."""
+        self.balance1_pln.note = 'Detailed note for this balance'
+        self.balance1_pln.save()
+
+        data = self.get(f'/api/period-balances/{self.balance1_pln.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['note'], 'Detailed note for this balance')

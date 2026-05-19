@@ -37,6 +37,7 @@ class PeriodBalance(WorkspaceScopedModel):
     exchanges_in = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     exchanges_out = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     closing_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    note = models.TextField(blank=True, default='')
     last_calculated_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:

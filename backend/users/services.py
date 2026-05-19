@@ -650,6 +650,7 @@ class UserService:
                                 'exchanges_in': pb['exchanges_in'],
                                 'exchanges_out': pb['exchanges_out'],
                                 'closing_balance': pb['closing_balance'],
+                                'note': pb['note'],
                             }
                             for pb in PeriodBalance.objects.filter(budget_period=period)
                             .select_related('currency')
@@ -661,6 +662,7 @@ class UserService:
                                 'exchanges_in',
                                 'exchanges_out',
                                 'closing_balance',
+                                'note',
                             )
                         ],
                     }
@@ -771,6 +773,8 @@ class UserService:
                     period_data['period_balances'] = [
                         UserService._rename_keys(pb, balance_keys) for pb in period_data.get('period_balances', [])
                     ]
+                    for pb in period_data['period_balances']:
+                        pb.setdefault('note', '')
 
         export_data.setdefault('two_factor', {'is_enabled': False, 'last_used_at': None, 'created_at': None})
         profile = export_data.setdefault('profile', {})
@@ -1013,6 +1017,7 @@ class UserService:
                                 exchanges_in=pb_data.get('exchanges_in', 0),
                                 exchanges_out=pb_data.get('exchanges_out', 0),
                                 closing_balance=pb_data.get('closing_balance', 0),
+                                note=pb_data.get('note', ''),
                                 created_by=user,
                                 updated_by=user,
                             )
