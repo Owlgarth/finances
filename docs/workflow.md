@@ -44,6 +44,31 @@ This document describes the main workflows and user flows in the Denarly applica
 
 ## Budget Management Workflow
 
+### Viewing Budget Overview (Dashboard)
+
+```
+1. User views Dashboard (/)
+2. Dashboard displays multi-panel overview:
+   - Period Header: period name, date range, elapsed-days progress bar
+   - Balance Cards: closing balance per currency (compact bar)
+   - Budget Health: per-currency on-track/over-budget counts + top overspent categories
+   - Frequent Spending: top 5 most frequent transaction descriptions with totals
+   - Upcoming Planned: pending planned transactions due within 7 days with countdown
+   - Exchange Activity: currency exchange totals by pair for the period
+3. Each widget links to its full detail page
+```
+
+### Managing Budgets (Budgets Page)
+
+```
+1. User navigates to Budgets page (/budgets)
+2. System displays:
+   - Balance section (opening/closing per currency)
+   - Budget vs Actual table (per-category budget amounts, actual spending, remaining)
+3. User can create, edit, or delete budget amounts (requires member role or above)
+4. Budget summary data is shared with the Dashboard Budget Health widget
+```
+
 ### Setting Up a Budget Period
 
 ```
@@ -264,7 +289,7 @@ Balances are updated incrementally on:
 ### Budget Summary Report
 
 ```
-1. User views Dashboard
+1. User views Dashboard Budget Health widget (or Budgets page)
 2. System fetches budget summary for current period
 3. Displays per-category:
    - Budget amount
@@ -276,18 +301,19 @@ Balances are updated incrementally on:
 ### Current Balances
 
 ```
-1. User views Balance section
+1. User views Balance section (Dashboard or Budgets page)
 2. System fetches latest balance per currency
-3. Displays closing balance per currency in a compact bar:
+3. Response schema: { balances: { "PLN": "...", "USD": "..." } }
+4. Displays closing balance per currency in a compact bar:
    - Mobile (<768px): list rows (currency left, closing balance right)
    - Desktop (≥768px): horizontal bordered cards with semantic accent
-4. User clicks a balance row/card → detail modal opens showing:
+5. User clicks a balance row/card → detail modal opens showing:
    - Opening balance
    - Income / Expenses
    - Exchange In / Exchange Out
    - Closing balance (semantic color)
    - "Last calculated" timestamp (when available)
-5. From detail modal, user can:
+6. From detail modal, user can:
    - Edit Opening Balance → opens edit modal
    - Recalculate → triggers server-side recalculation
 ```
