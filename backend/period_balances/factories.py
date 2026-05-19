@@ -21,4 +21,5 @@ class PeriodBalanceFactory(DjangoModelFactory):
     exchanges_in = Decimal('0')
     exchanges_out = Decimal('0')
     closing_balance = Decimal('1300.00')
+    note = ''
     created_by = factory.SubFactory('common.tests.factories.UserFactory')

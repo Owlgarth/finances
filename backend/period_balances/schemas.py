@@ -8,9 +8,17 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class PeriodBalanceUpdate(BaseModel):
-    """Schema for updating a period balance (opening balance)."""
+    """Schema for updating a period balance (opening balance and/or note)."""
 
-    opening_balance: Decimal = Field(..., ge=0)
+    opening_balance: Decimal | None = None
+    note: str | None = None
+
+    @field_validator('opening_balance', mode='after')
+    @classmethod
+    def opening_balance_must_be_non_negative(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Opening balance must be non-negative')
+        return v
 
 
 class PeriodBalanceOut(BaseModel):
@@ -25,6 +33,7 @@ class PeriodBalanceOut(BaseModel):
     exchanges_in: Decimal
     exchanges_out: Decimal
     closing_balance: Decimal
+    note: str
     last_calculated_at: Optional[datetime] = None
     created_by: Optional[Any] = None
     updated_by: Optional[Any] = None

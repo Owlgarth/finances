@@ -105,7 +105,7 @@ Layer 4: Resource Ownership Validation
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View balances | ✓ | ✓ | ✓ | ✓ |
-| Edit opening balance | ✓ | ✓ | ✓ | ✗ |
+| Edit balance (opening balance, note) | ✓ | ✓ | ✓ | ✗ |
 | Recalculate balances | ✓ | ✓ | ✓ | ✗ |
 
 ### Workspace Member Management
