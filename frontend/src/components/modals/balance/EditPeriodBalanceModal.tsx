@@ -13,16 +13,18 @@ interface Props {
 
 export default function EditPeriodBalanceModal({ isOpen, onClose, balance }: Props) {
   const [openingBalance, setOpeningBalance] = useState('')
+  const [note, setNote] = useState('')
   const queryClient = useQueryClient()
 
   useEffect(() => {
     if (isOpen && balance) {
       setOpeningBalance(balance.opening_balance.toString())
+      setNote(balance.note || '')
     }
   }, [isOpen, balance])
 
   const updateMutation = useMutation({
-    mutationFn: (data: { opening_balance: number }) =>
+    mutationFn: (data: { opening_balance?: number; note?: string }) =>
       periodBalancesApi.update(balance!.id, data),
     onSuccess: () => {
       // Force refetch of period-balances to ensure UI updates immediately
@@ -43,9 +45,13 @@ export default function EditPeriodBalanceModal({ isOpen, onClose, balance }: Pro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    updateMutation.mutate({
-      opening_balance: parseFloat(openingBalance)
-    })
+    const payload: { opening_balance?: number; note?: string } = {}
+    const parsedBalance = parseFloat(openingBalance)
+    if (!isNaN(parsedBalance)) {
+      payload.opening_balance = parsedBalance
+    }
+    payload.note = note
+    updateMutation.mutate(payload)
   }
 
   if (!isOpen || !balance) return null
@@ -88,6 +94,17 @@ export default function EditPeriodBalanceModal({ isOpen, onClose, balance }: Pro
             <p className="font-mono text-[9px] text-text-muted mt-2">
               Changing the opening balance will automatically update the closing balance.
             </p>
+          </div>
+
+          <div className="mb-6">
+            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Note</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-sans text-sm text-text focus:outline-none focus:border-border-focus transition-colors resize-y min-h-[60px]"
+              placeholder="Optional notes about this balance..."
+              rows={2}
+            />
           </div>
 
           <div className="flex justify-end space-x-3 mt-8">

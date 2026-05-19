@@ -53,6 +53,7 @@ export interface PeriodBalance {
   exchanges_in: number;
   exchanges_out: number;
   closing_balance: number;
+  note: string;
   last_calculated_at: string | null;
 }
 

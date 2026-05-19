@@ -49,6 +49,7 @@ frontend/src/
 | `/budgets` | BudgetsPage | Budget vs actual management (CRUD) |
 | `/transactions` | Transactions | Transaction list with filters |
 | `/exchanges` | CurrencyExchangesPage | Currency exchange records |
+| `/balances` | BalancesPage | Balance cards per currency with note editing |
 | `/planned` | Planned | Planned transactions management |
 | `/categories` | CategoryPage | Category CRUD |
 | `/budget-periods` | BudgetPeriodsPage | Period management |
@@ -88,7 +89,7 @@ frontend/src/
 - `ExchangeActivityWidget` - Currency exchange totals for the current period by pair
 
 ### Modals (by feature)
-- Balance: `BalanceDetailModal`, `EditPeriodBalanceModal`
+- Balance: `BalanceDetailModal`, `EditPeriodBalanceModal` (opening balance + note)
 - Budget: `CreateBudgetModal`, `EditBudgetModal`
 - Categories: `CreateCategoryModal`, `EditCategoryModal`
 - Currency: `CurrencyExchangeFormModal`
@@ -200,7 +201,7 @@ interface Budget { id, budget_period_id, category, currency, amount, created_at 
 interface Transaction { id, budget_period_id, date, description, category, amount, currency, type, created_at }
 interface PlannedTransaction { id, budget_period_id, name, amount, currency, category, planned_date, payment_date, status, transaction_id, created_at }
 interface CurrencyExchange { id, budget_period_id, date, description, from_currency, from_amount, to_currency, to_amount, exchange_rate, created_at }
-interface PeriodBalance { id, budget_period_id, currency, opening_balance, total_income, total_expenses, exchanges_in, exchanges_out, closing_balance, last_calculated_at }
+interface PeriodBalance { id, budget_period_id, currency, opening_balance, total_income, total_expenses, exchanges_in, exchanges_out, closing_balance, note, last_calculated_at }
 
 // Totals Types
 interface TransactionTotalItem { group, currency, total }

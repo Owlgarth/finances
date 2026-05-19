@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db import transaction as db_transaction
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -133,18 +134,22 @@ class PeriodBalanceService:
         return [PeriodBalanceService.recalculate(period_id, currency.symbol) for currency in currencies]
 
     @staticmethod
+    @db_transaction.atomic
     def update_opening_balance(user, workspace_id: int, balance_id: int, data: PeriodBalanceUpdate) -> PeriodBalance:
-        """Update the opening balance and recalculate closing balance."""
+        """Update the opening balance and/or note, and recalculate closing balance if needed."""
         balance = PeriodBalanceService.get(balance_id, workspace_id)
 
-        balance.opening_balance = data.opening_balance
-        balance.closing_balance = (
-            balance.opening_balance
-            + balance.total_income
-            + balance.exchanges_in
-            - balance.total_expenses
-            - balance.exchanges_out
-        )
+        if data.opening_balance is not None:
+            balance.opening_balance = data.opening_balance
+            balance.closing_balance = (
+                balance.opening_balance
+                + balance.total_income
+                + balance.exchanges_in
+                - balance.total_expenses
+                - balance.exchanges_out
+            )
+        if data.note is not None:
+            balance.note = data.note
         balance.updated_by = user
         balance.save()
 

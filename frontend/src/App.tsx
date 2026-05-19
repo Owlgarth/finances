@@ -18,6 +18,7 @@ import CurrencyExchangesPage from './pages/CurrencyExchangesPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import BalancesPage from './pages/BalancesPage'
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import TermsPage from './pages/TermsPage'
@@ -34,6 +35,7 @@ function AppContent() {
         <Route path="/period/:id" element={<BudgetPeriod />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/exchanges" element={<CurrencyExchangesPage />} />
+        <Route path="/balances" element={<BalancesPage />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/categories" element={<CategoryPage />} />
         <Route path="/budget-periods" element={<BudgetPeriodsPage />} />
