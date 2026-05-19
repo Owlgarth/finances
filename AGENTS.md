@@ -930,6 +930,58 @@ The frontend uses an "Architectural Ledger" design system defined via CSS custom
 
 **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables are defined — avoid adding `box-shadow` utilities for elevation.
 
+### Responsive Breakpoints
+
+Use `md` (768px) as the primary responsive breakpoint for layout changes. This covers tablets in portrait mode — the smallest screen that benefits from a distinct layout. Avoid using `lg` (1024px) as the first breakpoint, as it excludes many tablet devices:
+
+```tsx
+// Bad — tablet users (768–1023px) get the mobile layout
+<div className="grid grid-cols-1 lg:grid-cols-3">
+
+// Good — tablet users (768px+) get the adapted layout
+<div className="grid grid-cols-1 md:grid-cols-3">
+```
+
+### Modal Pattern
+
+Modals follow a consistent pattern across the app — fixed overlay, centered content, X close button:
+
+```tsx
+{isOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+    <div className="relative z-10 w-full max-w-md rounded-sm bg-surface p-6">
+      <button onClick={onClose} className="absolute right-4 top-4 text-text-muted hover:text-text">
+        <X size={20} />
+      </button>
+      {/* Modal content */}
+    </div>
+  </div>
+)}
+```
+
+When a component manages multiple modals, use separate boolean state for each. Modals can chain transitions by closing one and opening another:
+
+```tsx
+const [showDetail, setShowDetail] = useState(false)
+const [showEdit, setShowEdit] = useState(false)
+
+return (
+  <>
+    <BalanceBar onClick={() => setShowDetail(true)} />
+    {showDetail && (
+      <BalanceDetailModal
+        onClose={() => setShowDetail(false)}
+        onEdit={() => { setShowDetail(false); setShowEdit(true) }}
+      />
+    )}
+    {showEdit && (
+      <EditPeriodBalanceModal onClose={() => setShowEdit(false)} />
+    )}
+  </>
+)
+```
+
 ### File Structure
 
 - Components: `components/Category/CategoryRow.tsx`
@@ -1491,6 +1543,10 @@ Then reference the alias in any URL/endpoint configuration:
 ```
 S3_ENDPOINT_URL=http://rustfs:9000
 ```
+
+### nginx Header Inheritance
+
+nginx does NOT inherit parent-context `add_header` directives into child blocks that define their own `add_header`. Security headers (CSP, HSTS, X-Frame-Options, etc.) must be repeated in each `location` block that has its own `add_header` — for example, `location = /index.html` and `location ~* \.(js|css,…)$`. This is critical for SPAs where `try_files` internally redirects to `/index.html`.
 
 ### Docker Entrypoint Consistency
 
