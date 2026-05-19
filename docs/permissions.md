@@ -78,6 +78,7 @@ Layer 4: Resource Ownership Validation
 | Create transaction | ✓ | ✓ | ✓ | ✗ |
 | Edit transaction | ✓ | ✓ | ✓ | ✗ |
 | Delete transaction | ✓ | ✓ | ✓ | ✗ |
+| View frequent descriptions | ✓ | ✓ | ✓ | ✓ |
 
 ### Planned Transaction Management
 

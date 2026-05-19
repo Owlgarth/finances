@@ -59,7 +59,4 @@ class BudgetSummaryResponse(BaseModel):
 class CurrentBalancesResponse(BaseModel):
     """Schema for current balances response."""
 
-    PLN: Decimal = 0
-    USD: Decimal = 0
-    EUR: Decimal = 0
-    UAH: Decimal = 0
+    balances: dict[str, Decimal]

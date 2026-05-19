@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
+  PieChart,
   Receipt,
   ArrowLeftRight,
   Tag,
@@ -22,6 +23,7 @@ import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: Home, exact: true },
+  { to: '/budgets', label: 'Budgets', icon: PieChart },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
   { to: '/planned', label: 'Planned', icon: Calendar },
   { to: '/exchanges', label: 'Exchanges', icon: ArrowLeftRight },

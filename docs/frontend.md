@@ -21,6 +21,7 @@ frontend/src/
 ├── components/
 │   ├── layout/           # MainLayout, Sidebar, UserMenu
 │   ├── common/           # Shared components (Loading, ErrorMessage, etc.)
+│   ├── dashboard/        # Dashboard overview widgets
 │   ├── balance/          # Balance display components
 │   ├── budget/           # Budget table components
 │   ├── transactions/     # Transaction list components
@@ -44,7 +45,8 @@ frontend/src/
 |------|-----------|-------------|
 | `/login` | Login | User authentication |
 | `/register` | Register | New user registration |
-| `/` | Dashboard | Period balances and budget summary |
+| `/` | Dashboard | Multi-panel period overview (balance cards, budget health, frequent spending, upcoming planned, exchange activity) |
+| `/budgets` | BudgetsPage | Budget vs actual management (CRUD) |
 | `/transactions` | Transactions | Transaction list with filters |
 | `/exchanges` | CurrencyExchangesPage | Currency exchange records |
 | `/planned` | Planned | Planned transactions management |
@@ -77,6 +79,13 @@ frontend/src/
 - `BalanceBar`, `BalanceSection` - Balance display (compact bar: list on mobile, horizontal cards on desktop; click opens detail modal)
 - `BudgetTable`, `BudgetCategoryRow`, `BudgetSummarySection` - Budget vs actual
 - `TransactionList`, `PlannedTransactionList` - Transaction tables
+
+### Dashboard Widgets
+- `PeriodHeader` - Period name, date range, and elapsed-days progress bar
+- `BudgetHealthWidget` - Per-currency budget health summary with top overspent categories
+- `FrequentSpendingWidget` - Top 5 most frequent transaction descriptions with totals
+- `UpcomingPlannedWidget` - Planned transactions due within the next 7 days with countdown labels
+- `ExchangeActivityWidget` - Currency exchange totals for the current period by pair
 
 ### Modals (by feature)
 - Balance: `BalanceDetailModal`, `EditPeriodBalanceModal`
@@ -172,11 +181,11 @@ const api = axios.create({
 - `budgetPeriodsApi` - Periods with copy
 - `categoriesApi` - Categories with import
 - `budgetsApi` - Budget amounts
-- `transactionsApi` - Transactions with filters, totals with `group_by` (type/category/combined)
-- `plannedTransactionsApi` - Planned with execute, totals with `group_by` (currency/category)
+- `transactionsApi` - Transactions with filters, totals with `group_by` (type/category/combined), frequent descriptions
+- `plannedTransactionsApi` - Planned with execute, totals with `group_by` (currency/category), supports `start_date`/`end_date` filtering
 - `currencyExchangesApi` - Exchange records, totals by currency pair
 - `periodBalancesApi` - Balances with recalculate
-- `reportsApi` - Budget summary, balances
+- `reportsApi` - Budget summary, current balances (response wrapped in `{balances: {...}}`)
 
 ## Types
 
@@ -200,6 +209,11 @@ interface PlannedTransactionTotalItem { group, currency, total }
 interface PlannedTransactionTotalsResponse { totals }
 interface CurrencyExchangeTotalItem { from_currency, to_currency, from_total, to_total }
 interface CurrencyExchangeTotalsResponse { totals }
+// Frequent Descriptions Types
+interface FrequentDescriptionItem { description, count, total, currency }
+interface FrequentDescriptionsResponse { items }
+// Reports Types
+interface CurrentBalancesResponse { balances: Record<string, string> }
 // Import Types
 interface ImportResult { imported_workspaces, imported_budget_accounts, imported_budget_periods, imported_categories, imported_transactions, imported_budgets, imported_planned_transactions, imported_currency_exchanges, skipped, renamed }
 const TotalsLabel = { UNCATEGORIZED: 'Uncategorized' }

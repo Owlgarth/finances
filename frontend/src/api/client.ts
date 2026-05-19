@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse, ImportResult } from '../types';
+import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse, ImportResult } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -170,11 +170,14 @@ export const transactionsApi = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   export: (params: { budget_period_id: number; transaction_type?: string }) => api.get('/transactions/export/', { params }),
+  getFrequentDescriptions: (params?: { budget_period_id?: number; current_date?: string; transaction_type?: string; limit?: number }): Promise<FrequentDescriptionsResponse> =>
+    api.get<FrequentDescriptionsResponse>('/transactions/frequent-descriptions', { params }).then(res => res.data),
 };
 
 export const reportsApi = {
   budgetSummary: (periodId: number) => api.get('/reports/budget-summary', { params: { budget_period_id: periodId } }),
-  currentBalances: () => api.get('/reports/current-balances'),
+  currentBalances: (): Promise<CurrentBalancesResponse> =>
+    api.get<CurrentBalancesResponse>('/reports/current-balances').then(res => res.data),
 };
 
 export const periodBalancesApi = {
@@ -212,7 +215,7 @@ export const exchangeShortcutsApi = {
 };
 
 export const plannedTransactionsApi = {
-  getAll: (params?: { status?: string; budget_period_id?: number; currency?: string[]; page?: number; page_size?: number }) => api.get('/planned-transactions', { params }),
+  getAll: (params?: { status?: string; budget_period_id?: number; currency?: string[]; start_date?: string; end_date?: string; page?: number; page_size?: number }) => api.get('/planned-transactions', { params }),
   getTotals: (params?: { status?: string; budget_period_id?: number; currency?: string[]; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
   create: (data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.post('/planned-transactions', data),
