@@ -37,13 +37,7 @@ class CurrencyExchangeService:
     @staticmethod
     def _update_balance(balance: PeriodBalance) -> None:
         """Recalculate and save closing balance after exchange changes."""
-        balance.closing_balance = (
-            balance.opening_balance
-            + balance.total_income
-            - balance.total_expenses
-            + balance.exchanges_in
-            - balance.exchanges_out
-        )
+        balance.recalculate_closing_balance()
         balance.save(update_fields=['exchanges_in', 'exchanges_out', 'closing_balance'])
 
     @staticmethod

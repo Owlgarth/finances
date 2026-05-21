@@ -50,13 +50,7 @@ class TransactionService:
         else:
             balance.total_expenses += amount_value
 
-        balance.closing_balance = (
-            balance.opening_balance
-            + balance.total_income
-            - balance.total_expenses
-            + balance.exchanges_in
-            - balance.exchanges_out
-        )
+        balance.recalculate_closing_balance()
         balance.save()
 
     @staticmethod
