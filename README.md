@@ -75,6 +75,7 @@ VITE_DEMO_MODE=true
 | Frontend | React 19, TypeScript, Vite, TanStack Query, Tailwind CSS |
 | Backend | Django 6, Django Ninja, Python 3.13+                     |
 | Database | PostgreSQL 17                                            |
+| Task Queue | Celery with Redis broker                               |
 | Auth | JWT with bcrypt                                          |
 
 ## GDPR Compliance
