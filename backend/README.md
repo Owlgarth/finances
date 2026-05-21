@@ -71,12 +71,15 @@ Business logic is extracted from endpoints into `<app>/services.py` files:
 ```
 transactions/
 ├── api.py        # Thin wrapper: parse request → call service → return response
-└── services.py   # Business logic: create_transaction, update_transaction, delete_transaction
+├── services.py   # Business logic: create_transaction, update_transaction, delete_transaction
+└── tasks.py      # Celery tasks (optional): async side effects dispatched by services
 ```
 
 Endpoints should not contain database operations beyond workspace validation. All logic that involves multiple model writes, balance updates, or atomic operations lives in services.
 
 Apps with service files: `transactions`, `budget_periods`, `categories`, `budgets`, `currency_exchanges`, `planned_transactions`, `period_balances`, `reports`, `workspaces`.
+
+Apps with Celery tasks: `planned_transactions` (see `tasks.py`). Services dispatch tasks via `task.delay()` directly — no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
 
 ## JWT Authentication
 

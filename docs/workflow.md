@@ -144,7 +144,12 @@ Expense transactions:
    - Amount and currency
    - Category
    - Planned date
-4. Status set to "pending"
+4. If status is "pending":
+   - Planned transaction saved, no side effects
+5. If status is "done":
+   - Planned transaction saved with status='done' and payment_date set
+   - Celery task dispatched to create actual transaction async
+   - Service returns the planned transaction (refreshed from DB)
 ```
 
 ### Executing a Planned Transaction
@@ -153,12 +158,18 @@ Expense transactions:
 1. User views pending planned transaction
 2. User clicks "Execute"
 3. User confirms payment date
-4. System creates actual transaction:
-   - Amount, currency, category copied
-   - Date set to payment date
-   - Linked to planned transaction
-5. Planned transaction status → "done"
-6. Balance automatically updated
+4. Service validates period exists for payment date
+5. Service sets status='done', payment_date, saves
+6. Service dispatches Celery task (execute_planned_transaction.delay)
+7. [Async] Celery worker:
+   - Re-fetches planned transaction with row lock (select_for_update)
+   - Idempotency check: skips if transaction_id already set
+   - Creates actual Transaction via TransactionService.create()
+     - Amount, currency, category, description copied from planned
+     - Date set to payment date
+     - PeriodBalance updated (income/expense + closing balance)
+   - Links planned.transaction_id to the new Transaction
+8. Planned transaction status → "done"
 ```
 
 ## Currency Exchange Workflow
@@ -185,6 +196,9 @@ Expense transactions:
 Balances are updated incrementally on:
 - Transaction create/update/delete
 - Currency exchange create/delete
+- Planned transaction execution (via Celery task, which calls `TransactionService.create()`)
+
+All closing balance calculations use `PeriodBalance.recalculate_closing_balance()`, a single method on the model that centralizes the formula: `opening + income - expenses + exchanges_in - exchanges_out`. This ensures consistency across all callers (transaction services, exchange services, period balance services, and the Celery task).
 
 ### Balance Recalculation
 
