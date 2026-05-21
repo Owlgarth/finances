@@ -9,6 +9,7 @@ Full-stack web application with:
 - **Backend**: Django 6 + Django Ninja REST API
 - **Database**: PostgreSQL 17
 - **Authentication**: JWT (JSON Web Tokens)
+- **Task Queue**: Celery with Redis broker
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
@@ -16,8 +17,13 @@ Full-stack web application with:
 │    Frontend     │◄────►│    Backend      │◄────►│   PostgreSQL    │
 │    (React)      │ HTTP │  (Django Ninja) │ SQL  │                 │
 │                 │      │                 │      │                 │
-└─────────────────┘      └─────────────────┘      └─────────────────┘
-     Port 5173               Port 8000              Port 5432
+└─────────────────┘      └────────┬────────┘      └─────────────────┘
+     Port 5173               │ 8000              Port 5432
+                              │
+                     ┌────────▼────────┐      ┌─────────────────┐
+                     │   Celery Worker │◄────►│     Redis       │
+                     │  (async tasks)  │       │  (broker/cache) │
+                     └─────────────────┘      └─────────────────┘
 ```
 
 ## Data Hierarchy
@@ -73,6 +79,8 @@ All workspace-scoped endpoints use `WorkspaceJWTAuth` which validates the user h
 backend/
 ├── config/                 # Django project configuration (settings, urls, wsgi)
 ├── common/                 # Shared utilities (JWT auth, test mixins, services)
+│   ├── tasks.py            # Celery tasks (send_email_task)
+│   ├── email.py            # EmailService (dispatches to Celery, sync fallback)
 │   └── services/
 │       └── base.py         # get_workspace_period, require_role, update_period_balance
 ├── core/                   # Main API endpoints, schemas, demo data
@@ -110,7 +118,9 @@ Each app with business logic has a `services.py` (e.g., `transactions/services.p
    │
 6. Service executes business logic (atomic DB operations)
    │
-7. Response returned
+7. Side effects dispatched to Celery (email sending, etc.)
+   │
+8. Response returned (before async tasks complete)
 ```
 
 ### Authentication Flow
@@ -295,6 +305,7 @@ CORS_ALLOW_CREDENTIALS = True
 | Variable | Purpose |
 |----------|---------|
 | `POSTGRES_*` | Database connection |
+| `REDIS_URL` | Celery broker and cache backend |
 | `SECRET_KEY` | Django secret key |
 | `JWT_SECRET_KEY` | Token signing |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | Token lifetime (default: 60) |
@@ -317,16 +328,41 @@ services:
     image: postgres:17-alpine
     ports: ["5432:5432"]
 
+  denarly_redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
   denarly_api:
     build: ./backend
     ports: ["8000:8000"]
-    depends_on: [denarly_db]
+    depends_on: [denarly_db, denarly_redis]
+
+  denarly_celery_worker:
+    build: ./backend
+    command: celery -A config worker -l info
+    depends_on: [denarly_redis, denarly_db]
+
+  denarly_celery_beat:
+    build: ./backend
+    command: celery -A config beat -l info
+    depends_on: [denarly_redis]
 
   denarly_ui:
     build: ./frontend
     ports: ["3000:80"]
     depends_on: [denarly_api]
 ```
+
+### Celery Task Infrastructure
+
+Email sending and other async operations are handled by Celery workers:
+
+- **Broker**: Redis (`REDIS_URL`) — queues tasks for workers
+- **Workers**: Process tasks asynchronously (e.g., `send_email_task`)
+- **Beat**: Scheduled task runner (periodic tasks)
+- **Eager mode**: Tests use `CELERY_TASK_ALWAYS_EAGER=True` to execute tasks synchronously
+
+`EmailService.send_email()` dispatches to `send_email_task.delay()` by default. If the Celery broker is unavailable, it falls back to synchronous sending.
 
 ### Production Considerations
 
