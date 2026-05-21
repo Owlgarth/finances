@@ -48,6 +48,13 @@ Shared utilities used across the project:
   - `decode_access_token()` - Validates and decodes JWT
   - `user_to_schema()` - Converts User model to API schema
 
+- **`email.py`**: Email sending via Celery
+  - `EmailService.send_email()` - Dispatches email to Celery task (with sync fallback)
+  - `EmailService._send_sync()` - Synchronous email rendering and SMTP delivery
+
+- **`tasks.py`**: Celery tasks
+  - `send_email_task` - Async email sending with retry (3 retries, exponential backoff)
+
 - **`services/base.py`**: Shared service helpers
   - `require_role(user, workspace_id, allowed_roles)` - Raises 403 if role not allowed
   - `get_or_create_period_balance(period_id, currency, user)` - Gets or creates balance record
@@ -402,6 +409,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
+REDIS_URL=redis://localhost:6379
 SECRET_KEY=your-secret-key-here
 JWT_SECRET_KEY=your-jwt-secret-key-here
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
