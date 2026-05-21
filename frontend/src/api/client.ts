@@ -63,6 +63,12 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && originalRequest) {
+      // Prevent deadlock: if the refresh request itself returns 401,
+      // reject immediately so the outer catch handles cleanup.
+      if ((originalRequest as any)._skipAuthRefresh) {
+        return Promise.reject(error);
+      }
+
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
         clearAuthToken();
@@ -280,7 +286,7 @@ export const authApi = {
     api.post<Token>('/auth/verify-2fa', { temp_token: tempToken, code }, { headers: { Authorization: '' } }).then(res => res.data),
 
   refresh: (refreshToken: string): Promise<Token> =>
-    api.post<Token>('/auth/refresh', { refresh_token: refreshToken }, { headers: { Authorization: '' } }).then(res => res.data),
+    api.post<Token>('/auth/refresh', { refresh_token: refreshToken }, { headers: { Authorization: '' }, _skipAuthRefresh: true } as any).then(res => res.data),
 
   get2FAStatus: (): Promise<TwoFAStatus> =>
     api.get<TwoFAStatus>('/users/me/2fa').then(res => res.data),
