@@ -15,3 +15,6 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
+
+# Also discover from common/ which is not in INSTALLED_APPS.
+app.autodiscover_tasks(['common'])
