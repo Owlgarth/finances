@@ -9,21 +9,22 @@ Full-stack web application with:
 - **Backend**: Django 6 + Django Ninja REST API
 - **Database**: PostgreSQL 17
 - **Authentication**: JWT (JSON Web Tokens)
-- **Task Queue**: Celery with Redis broker
+- **Task Queue**: Celery with Redis broker (async planned transaction execution)
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │                 │      │                 │      │                 │
 │    Frontend     │◄────►│    Backend      │◄────►│   PostgreSQL    │
 │    (React)      │ HTTP │  (Django Ninja) │ SQL  │                 │
-│                 │      │                 │      │                 │
-└─────────────────┘      └────────┬────────┘      └─────────────────┘
-     Port 5173               │ 8000              Port 5432
-                              │
-                     ┌────────▼────────┐      ┌─────────────────┐
-                     │   Celery Worker │◄────►│     Redis       │
-                     │  (async tasks)  │       │  (broker/cache) │
-                     └─────────────────┘      └─────────────────┘
+│                 │      │       │         │      │                 │
+└─────────────────┘      └───────┼─────────┘      └─────────────────┘
+     Port 5173                   │                     Port 5432
+                                  │ dispatches
+                                  ▼
+                           ┌─────────────────┐
+                           │     Celery      │
+                           │     Worker      │
+                           └─────────────────┘
 ```
 
 ## Data Hierarchy
@@ -91,13 +92,16 @@ backend/
 ├── categories/             # Transaction categories
 ├── budgets/                # Budget allocations per category
 ├── transactions/           # Income/expense transactions
-├── planned_transactions/   # Future planned transactions
+├── planned_transactions/   # Future planned transactions (includes Celery task)
+│   └── tasks.py        # Celery task: execute_planned_transaction
 ├── currency_exchanges/     # Multi-currency exchange tracking
 ├── period_balances/        # Calculated balances per period
 └── reports/                # Budget summaries and current balances
 ```
 
 Each app with business logic has a `services.py` (e.g., `transactions/services.py`, `budget_periods/services.py`). The `api.py` files are thin wrappers that parse requests and delegate to services.
+
+Apps with Celery tasks also have a `tasks.py` (e.g., `planned_transactions/tasks.py`). Services dispatch tasks via `task.delay()` rather than performing all DB work inline — the task handles the actual transaction creation and balance updates asynchronously.
 
 ### Request Flow
 
@@ -121,6 +125,29 @@ Each app with business logic has a `services.py` (e.g., `transactions/services.p
 7. Side effects dispatched to Celery (email sending, etc.)
    │
 8. Response returned (before async tasks complete)
+```
+
+### Async Task Flow (Planned Transaction Execution)
+
+When a planned transaction is executed (status → `done`), the service does NOT create the `Transaction` or update the `PeriodBalance` inline. Instead, it saves the status change and dispatches a Celery task:
+
+```
+1. API endpoint receives execute request
+   │
+2. Service validates (not already done, period exists)
+   │
+3. Service sets status='done', payment_date, saves
+   │
+4. Service calls execute_planned_transaction.delay(planned.id)
+   │
+5. Service returns PlannedTransaction (refreshed from DB)
+   │
+6. [Async] Celery worker picks up task:
+   ├── Re-fetches PlannedTransaction with select_for_update()
+   ├── Idempotency guard: checks transaction_id not already set
+   ├── Finds BudgetPeriod covering payment_date
+   ├── Calls TransactionService.create() (creates Transaction + updates PeriodBalance)
+   └── Sets planned.transaction_id and saves
 ```
 
 ### Authentication Flow
