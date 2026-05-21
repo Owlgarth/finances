@@ -329,6 +329,66 @@ class TransactionService:
         return trans
 ```
 
+### Celery Tasks
+
+Celery tasks live in `<app>/tasks.py`. `config/celery.py` calls `autodiscover_tasks()` after Django is fully set up, so module-level imports of Django models are safe — do not use function-body imports.
+
+**Tasks must delegate DB operations to service classes.** Never use `Model.objects.create()` or direct ORM writes in a task — call the corresponding service method instead. Tasks are a transport layer, not a business logic layer:
+
+```python
+# Bad — task does DB operations directly
+@shared_task
+def process_item(item_id):
+    item = Item.objects.get(id=item_id)
+    item.status = 'done'
+    item.save()
+    Balance.objects.create(...)
+
+# Good — task delegates to service
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=3,
+    retry_backoff=True,
+)
+def execute_planned_transaction(self, planned_id):
+    planned = PlannedTransaction.objects.filter(id=planned_id).first()
+    if not planned or not planned.payment_date:
+        return  # Permanent failure — no point retrying
+    if planned.transaction_id:
+        return  # Already processed (idempotency fast path)
+    # ... transient checks that raise domain exceptions for retry ...
+    TransactionService.update_period_balance(...)
+```
+
+**Dispatch pattern:** Call `task.delay()` directly at call sites — no wrapper methods. Import the task at module level in `services.py`:
+
+```python
+from planned_transactions.tasks import execute_planned_transaction
+
+class PlannedTransactionService:
+    @staticmethod
+    @db_transaction.atomic
+    def execute(user, workspace_id, planned_id):
+        # ... validation, status update to 'done' ...
+        execute_planned_transaction.delay(planned.id)
+```
+
+**Retry semantics:** Raise domain exceptions for transient failures (may resolve on retry — e.g., missing period that could be created later). Return silently for permanent failures (missing record, missing required field) to avoid infinite retries.
+
+**Double idempotency guard:** Check outside the lock (fast path for retries), then again inside `select_for_update()` (prevents race conditions):
+
+```python
+if planned.transaction_id:
+    return  # Fast path — no lock needed
+with db_transaction.atomic():
+    planned = PlannedTransaction.objects.select_for_update().get(id=planned_id)
+    if planned.transaction_id:
+        return  # Slow path — locked, prevents race
+```
+
+**Testing Celery tasks:** Test settings use `CELERY_TASK_ALWAYS_EAGER = True`, so tasks run synchronously. Call tasks directly (`execute_planned_transaction(planned_id)`) instead of via `.delay()` for clearer error messages. After dispatching a task in a test, call `instance.refresh_from_db()` to pick up changes the synchronous task made.
+
 ### No Nested Helper Functions
 
 Do not define helper functions inside a method body. Extract them as `@staticmethod` methods on the service class. This improves readability, testability, and follows the flat-structure convention used across the codebase.
@@ -433,6 +493,8 @@ with db_transaction.atomic():
     # ... validation ...
     # ... deletion ...
 ```
+
+**`select_for_update()` + `select_related()` caveat:** Cannot combine `select_for_update()` with `select_related()` on nullable FKs — PostgreSQL raises "FOR UPDATE cannot be applied to the nullable side of an outer join". Remove `select_related` from locked queries that involve nullable FKs.
 
 **`select_for_update()` exception to `filter().first()` convention:** Methods that need `select_for_update()` for row-level locking legitimately use `get()` inside `try/except DoesNotExist` because they need both the lock and the query in one call. This is acceptable even though the project convention is `filter().first()` + `None` check.
 
