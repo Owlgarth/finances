@@ -15,6 +15,7 @@ from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
+from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Workspace, WorkspaceMember
@@ -1332,3 +1333,83 @@ class TestPlannedTransactionDateRangeFilter(PlannedTransactionTestCase):
         # Only planned2 (150) falls in range
         self.assertEqual(len(totals), 1)
         self.assertEqual(Decimal(totals[0]['total']), Decimal('150.00'))
+
+
+# =============================================================================
+# Celery Task Tests
+# =============================================================================
+
+
+class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
+    """Tests for the execute_planned_transaction Celery task."""
+
+    def test_task_creates_transaction_and_updates_balance(self):
+        """Test that the Celery task creates a Transaction and updates PeriodBalance."""
+        initial_transaction_count = Transaction.objects.count()
+        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
+
+        # Set up the planned tx as the service would (status='done', payment_date set)
+        self.planned1.status = 'done'
+        self.planned1.payment_date = date(2025, 1, 5)
+        self.planned1.save()
+
+        execute_planned_transaction(self.planned1.id)
+
+        # Verify Transaction was created
+        self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
+
+        # Verify PeriodBalance was updated
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
+
+        # Verify the planned transaction has transaction_id set
+        self.planned1.refresh_from_db()
+        self.assertIsNotNone(self.planned1.transaction_id)
+
+    def test_task_idempotent_on_duplicate_call(self):
+        """Test that calling the task twice does not create duplicate Transactions."""
+        # Set up the planned tx as the service would
+        self.planned1.status = 'done'
+        self.planned1.payment_date = date(2025, 1, 5)
+        self.planned1.save()
+
+        # Execute once
+        execute_planned_transaction(self.planned1.id)
+        transaction_count_after_first = Transaction.objects.count()
+
+        # Execute again — should be a no-op due to idempotency guard
+        execute_planned_transaction(self.planned1.id)
+
+        # No additional Transaction should be created
+        self.assertEqual(Transaction.objects.count(), transaction_count_after_first)
+
+        # PeriodBalance should not double-count
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        self.assertEqual(balance.total_expenses, Decimal('1200.00'))
+
+    def test_task_handles_missing_planned_transaction_gracefully(self):
+        """Test that the task logs and returns (no raise) for non-existent planned tx."""
+        non_existent_id = 99999
+        # Should not raise — the task must handle this gracefully to avoid infinite retries
+        execute_planned_transaction(non_existent_id)
+        # No Transaction should be created
+        self.assertEqual(Transaction.objects.count(), 0)
+
+    def test_task_raises_for_missing_budget_period(self):
+        """Test that the task raises when no period covers the payment date (triggers retry)."""
+        from planned_transactions.exceptions import PlannedTransactionNoActivePeriodError
+
+        # Set payment_date to a date outside any period
+        self.planned1.status = 'done'
+        self.planned1.payment_date = date(2025, 12, 25)  # No period covers Dec 2025
+        self.planned1.save()
+
+        with self.assertRaises(PlannedTransactionNoActivePeriodError):
+            execute_planned_transaction(self.planned1.id)
+
+        # No Transaction should have been created
+        self.assertEqual(Transaction.objects.count(), 0)
+
+        # transaction_id should NOT be set (task failed before setting it)
+        self.planned1.refresh_from_db()
+        self.assertIsNone(self.planned1.transaction_id)

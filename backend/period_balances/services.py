@@ -120,7 +120,7 @@ class PeriodBalanceService:
         balance.total_expenses = expenses
         balance.exchanges_in = exchanges_in
         balance.exchanges_out = exchanges_out
-        balance.closing_balance = balance.opening_balance + income - expenses + exchanges_in - exchanges_out
+        balance.recalculate_closing_balance()
         balance.last_calculated_at = timezone.now()
         balance.save()
 
@@ -141,13 +141,7 @@ class PeriodBalanceService:
 
         if data.opening_balance is not None:
             balance.opening_balance = data.opening_balance
-            balance.closing_balance = (
-                balance.opening_balance
-                + balance.total_income
-                + balance.exchanges_in
-                - balance.total_expenses
-                - balance.exchanges_out
-            )
+            balance.recalculate_closing_balance()
         if data.note is not None:
             balance.note = data.note
         balance.updated_by = user
