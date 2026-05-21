@@ -44,5 +44,11 @@ class PeriodBalance(WorkspaceScopedModel):
         db_table = 'period_balances'
         unique_together = [['budget_period', 'currency']]
 
+    def recalculate_closing_balance(self) -> None:
+        """Recalculate closing_balance from component fields."""
+        self.closing_balance = (
+            self.opening_balance + self.total_income - self.total_expenses + self.exchanges_in - self.exchanges_out
+        )
+
     def __str__(self):
         return f'{self.budget_period.name} - {self.currency.symbol}: {self.closing_balance}'
