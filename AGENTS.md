@@ -901,6 +901,35 @@ payload = {
 expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 ```
 
+### Testing Celery Tasks
+
+Test settings use `CELERY_TASK_ALWAYS_EAGER=True`, which makes `.delay()` execute synchronously — no Celery worker needed. Use a three-class structure:
+
+1. **Direct task invocation** — call the task function directly, assert side effects
+2. **Service-level dispatch** — call the service method, verify the task executed (works because of `ALWAYS_EAGER`)
+3. **Configuration validation** — assert task attributes match expected retry config
+
+```python
+class TestSendEmailTaskDirect(TestCase):
+    """Test the task function directly."""
+    def test_sends_email(self):
+        send_email_task(['user@example.com'], 'Test', 'email/test', {})
+        self.assertEqual(len(mail.outbox), 1)
+
+class TestEmailServiceDispatch(TestCase):
+    """Test that the service enqueues the task correctly."""
+    def test_dispatches_task(self):
+        result = EmailService.send_email(['user@example.com'], 'Test', 'email/test', {})
+        self.assertTrue(result)
+
+class TestTaskConfig(TestCase):
+    """Validate task decorator configuration."""
+    def test_retry_config(self):
+        self.assertEqual(send_email_task.max_retries, 3)
+        self.assertEqual(send_email_task.autoretry_for, (Exception,))
+        self.assertTrue(send_email_task.retry_backoff)
+```
+
 ### Dynamic Dict-Based Schemas for Multi-Currency Data
 
 When response data is keyed by a dynamic value (e.g., currency codes), use `dict[str, ValueType]` in Pydantic schemas instead of hardcoded fields. This avoids creating N currency fields and works with any number of currencies:
@@ -956,6 +985,39 @@ rows = (
 )
 items = [{'description': display_map.get(r['lower_desc'], r['lower_desc']), ...} for r in rows]
 ```
+
+### Celery Task Patterns
+
+Tasks are defined in `<app>/tasks.py` using `@shared_task` with retry configuration:
+
+```python
+from celery import shared_task
+
+@shared_task(autoretry_for=(Exception,), max_retries=3, retry_backoff=True)
+def send_email_task(to, subject, template_name, context):
+    # Task logic here
+```
+
+**Service-to-task dispatch:** When a service method enqueues a Celery task, keep the synchronous logic in a private `@staticmethod` (e.g., `_send_sync()`) and make the public method a thin dispatcher that calls `.delay()`:
+
+```python
+class EmailService:
+    @staticmethod
+    def send_email(to, subject, template_name, context):
+        # Import inside method body to avoid circular imports (tasks.py → email.py → tasks.py)
+        from common.tasks import send_email_task
+
+        to = [to] if isinstance(to, str) else to
+        send_email_task.delay(to, subject, template_name, context)
+        return True
+
+    @staticmethod
+    def _send_sync(to, subject, template_name, context):
+        """Actual synchronous logic — called by the task."""
+        ...
+```
+
+**Circular import avoidance:** When a service and its task are in the same module chain (e.g., `common/tasks.py` imports from `common/email.py`), import the task inside the method body, not at module level. This prevents `ImportError` from circular dependencies.
 
 ### Code Cleanup When Refactoring
 
