@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, LogOut } from 'lucide-react'
+import { LogOut, Moon, User } from 'lucide-react'
+import Switch from '../common/Switch'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 
 interface UserMenuProps {
   collapsed?: boolean
@@ -9,6 +11,7 @@ interface UserMenuProps {
 
 export default function UserMenu({ collapsed = false }: UserMenuProps) {
   const { user, logout } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -36,6 +39,15 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
           <div 
             className="absolute bottom-full left-0 mb-2 w-48 bg-surface rounded-sm border border-border py-1 z-20"
           >
+            {/* Dark mode — first item */}
+            <div className="flex items-center justify-between px-4 py-2 hover:bg-surface-hover transition-colors">
+              <span className="flex items-center gap-2 text-sm text-text">
+                <Moon size={14} className="flex-shrink-0" />
+                Dark mode
+              </span>
+              <Switch checked={isDark} onChange={() => toggleTheme()} aria-label="Dark mode" />
+            </div>
+            <div className="border-b border-border my-1" />
             <div className="px-4 py-2 text-sm text-text-muted mb-1 truncate">
               {user?.email}
             </div>
