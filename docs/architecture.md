@@ -192,7 +192,7 @@ frontend/src/
 │   └── client.ts         # Axios instance, API functions
 ├── components/
 │   ├── layout/           # MainLayout, Sidebar, UserMenu
-│   ├── common/           # Shared (Loading, Error, Empty)
+│   ├── common/           # Shared (Loading, Error, Empty, Switch)
 │   ├── dashboard/        # Dashboard overview widgets
 │   ├── balance/          # Balance display
 │   ├── budget/           # Budget table
@@ -202,7 +202,8 @@ frontend/src/
 │   ├── AuthContext.tsx         # Authentication state
 │   ├── WorkspaceContext.tsx    # Current workspace and role
 │   ├── BudgetAccountContext.tsx# Selected budget account
-│   └── BudgetPeriodContext.tsx # Selected period
+│   ├── BudgetPeriodContext.tsx # Selected period
+│   └── ThemeContext.tsx        # Light/dark theme
 ├── hooks/
 │   ├── usePermissions.ts       # Permission checks
 │   └── useMediaQuery.ts        # Responsive breakpoint detection
@@ -214,16 +215,19 @@ frontend/src/
 ### State Management
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        App                                   │
-├─────────────────────────────────────────────────────────────┤
-│  AuthProvider (user, token, login/logout)                   │
-│    └── WorkspaceProvider (workspace, role)                  │
-│          └── BudgetAccountProvider (selected account)       │
-│                └── BudgetPeriodProvider (selected period)   │
-│                      └── Pages and Components               │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                              App                                 │
+├──────────────────────────────────────────────────────────────────┤
+│  ThemeProvider (isDark, toggleTheme — wraps the whole route tree)│
+│    └── AuthProvider (user, token, login/logout)                  │
+│          └── WorkspaceProvider (workspace, role)                 │
+│                └── BudgetAccountProvider (selected account)      │
+│                      └── BudgetPeriodProvider (selected period)  │
+│                            └── Pages and Components              │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+`ThemeProvider` sits inside `<BrowserRouter>` and wraps the entire route tree — public and protected — so theme is applied before any route renders.
 
 ### Data Fetching
 

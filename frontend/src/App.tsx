@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { BudgetPeriodProvider } from './contexts/BudgetPeriodContext'
 import { BudgetAccountProvider } from './contexts/BudgetAccountContext'
 import { AuthProvider } from './contexts/AuthContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { WorkspaceProvider } from './contexts/WorkspaceContext'
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -66,8 +67,9 @@ function ProtectedApp() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
+      <ThemeProvider>
+        <AuthProvider>
+          <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -81,8 +83,9 @@ function App() {
 
           {/* Protected routes */}
           <Route path="/*" element={<ProtectedApp />} />
-        </Routes>
-      </AuthProvider>
+          </Routes>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }
