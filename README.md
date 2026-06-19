@@ -31,6 +31,7 @@ Denarly is a comprehensive financial management tool designed for individuals an
 - **Multi-Currency Support** - Configurable per-workspace currencies with exchange tracking
 - **Budget Management** - Category budgets with actual vs planned tracking
 - **Planned Transactions** - Schedule and execute future transactions
+- **Light & Dark Mode** - Theme toggle that follows the OS preference until you choose, with no flash on load
 
 ## Quick Start
 
