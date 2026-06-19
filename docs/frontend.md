@@ -20,7 +20,7 @@ frontend/src/
 │   └── client.ts         # Axios instance, API functions
 ├── components/
 │   ├── layout/           # MainLayout, Sidebar, UserMenu
-│   ├── common/           # Shared components (Loading, ErrorMessage, etc.)
+│   ├── common/           # Shared components (Loading, ErrorMessage, Switch, etc.)
 │   ├── dashboard/        # Dashboard overview widgets
 │   ├── balance/          # Balance display components
 │   ├── budget/           # Budget table components
@@ -30,7 +30,8 @@ frontend/src/
 │   ├── AuthContext.tsx          # Authentication state
 │   ├── WorkspaceContext.tsx     # Current workspace and role
 │   ├── BudgetAccountContext.tsx # Selected budget account
-│   └── BudgetPeriodContext.tsx  # Selected period
+│   ├── BudgetPeriodContext.tsx  # Selected period
+│   └── ThemeContext.tsx         # Light/dark theme (follows OS until user toggles)
 ├── hooks/
 │   ├── usePermissions.ts        # Role-based permission checks
 │   └── useMediaQuery.ts         # Responsive breakpoint detection
@@ -62,7 +63,7 @@ frontend/src/
 ### Layout Components
 - `MainLayout` - Responsive wrapper: mobile drawer, tablet auto-collapsed, desktop persistent sidebar
 - `Sidebar` - Navigation links, account/period selectors, user menu; supports collapsed/expanded
-- `UserMenu` - User profile and logout at sidebar bottom
+- `UserMenu` - User profile and logout at sidebar bottom; a dark mode toggle (Moon icon + `Switch`) is the first dropdown item, above the email header
 - `WorkspaceSelector` - Dropdown to switch/create workspaces, with settings gear to open settings panel
 - `WorkspaceSettingsPanel` - Modal for workspace name editing (owner/admin) and deletion (owner only, requires multiple workspaces)
 
@@ -71,6 +72,7 @@ frontend/src/
 - `ErrorMessage` - Error display
 - `EmptyState` - Empty state with action
 - `ConfirmDialog` - Delete confirmation
+- `Switch` - Accessible toggle switch (`role="switch"`, `aria-checked`, visible focus ring); on = `bg-primary`, off = `bg-surface-muted border border-border` (per `design/components.md` §7)
 - `PeriodSelector` - Period dropdown
 - `BudgetAccountSelector` - Account dropdown
 - `ProtectedRoute` - Auth route wrapper
@@ -165,6 +167,27 @@ interface BudgetPeriodContextType {
 
 Auto-selects latest period on load.
 
+### ThemeContext
+Manages light/dark theme. Mounted at the top of the provider tree (inside `<BrowserRouter>`, wrapping `<AuthProvider>`) so all routes — public and protected — are themed.
+
+```typescript
+interface ThemeContextType {
+  isDark: boolean;
+  toggleTheme: () => void;
+  setDark: (dark: boolean) => void;
+}
+```
+
+**Persistence contract** (`localStorage` key `denarly_theme`):
+- `'light'` — user explicitly chose light
+- `'dark'` — user explicitly chose dark
+- `null` (no value stored) — follow the OS `prefers-color-scheme`
+
+**Behavior:**
+- On first load, an inline FOUC-prevention `<script>` in `index.html` sets the `.dark` class on `<html>` before React hydration. `ThemeProvider` reads that class as its initial state, so the first React paint matches the DOM (no flash, no hydration mismatch).
+- `toggleTheme()` / `setDark()` flip the `.dark` class on `<html>` and persist the choice (`'light'` / `'dark'`).
+- A `prefers-color-scheme` media listener follows the OS **only** while no value is stored (`null`). Once the user toggles, the stored choice wins and the listener becomes a no-op; it never writes to `localStorage` (so it never pins a choice the user did not make).
+
 ## API Client
 
 ### Configuration
@@ -250,6 +273,8 @@ All colors are CSS custom properties (`--color-*`) mapped to Tailwind classes:
 | `positive` | `--color-positive` | `text-positive`, `bg-positive` | Income / success |
 | `negative` | `--color-negative` | `text-negative`, `bg-negative` | Expense / error |
 | `warning` | `--color-warning` | `text-warning`, `bg-warning` | Warnings |
+
+**Dark mode:** the tokens above are the light-mode defaults. A `.dark` block in `index.css` overrides all 16 tokens (brand/primary, surfaces, borders, text, semantic/financial) — see [`design/dark-mode.md`](../design/dark-mode.md) §1 for the authoritative mapping. Because `--color-primary` inverts to a light value in dark mode, a single centralized rule — `.dark .bg-primary.text-white { color: var(--color-background); }` — flips the text of primary buttons/badges so they remain legible (equivalent to adding `dark:text-background` on every primary button, but defined once).
 
 Visual separation uses borders (`border border-border`) instead of box shadows. Surfaces are flat — no gradients.
 

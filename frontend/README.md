@@ -25,7 +25,7 @@ frontend/
 │   │   └── client.ts         # Axios instance, API functions
 │   ├── components/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu
-│   │   ├── common/           # Shared components (Loading, Error, etc.)
+│   │   ├── common/           # Shared components (Loading, Error, Switch, etc.)
 │   │   ├── balance/          # Balance display components
 │   │   ├── budget/           # Budget table components
 │   │   ├── transactions/     # Transaction list components
@@ -40,7 +40,8 @@ frontend/
 │   │   ├── AuthContext.tsx          # Authentication state
 │   │   ├── WorkspaceContext.tsx     # Current workspace and role
 │   │   ├── BudgetAccountContext.tsx # Selected budget account
-│   │   └── BudgetPeriodContext.tsx  # Selected period
+│   │   ├── BudgetPeriodContext.tsx  # Selected period
+│   │   └── ThemeContext.tsx         # Light/dark theme
 │   ├── hooks/
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
@@ -79,7 +80,7 @@ frontend/
 |-----------|-------------|
 | `MainLayout` | Responsive wrapper (mobile drawer / tablet collapsed / desktop persistent) |
 | `Sidebar` | Navigation, account/period selectors, user menu; collapsed/expanded |
-| `UserMenu` | User profile and logout |
+| `UserMenu` | User profile and logout; dark mode toggle is the first dropdown item |
 
 **Common Components** (`components/common/`):
 
@@ -92,6 +93,7 @@ frontend/
 | `PeriodSelector` | Period dropdown |
 | `BudgetAccountSelector` | Account dropdown |
 | `ProtectedRoute` | Auth route wrapper |
+| `Switch` | Accessible toggle switch (`role="switch"`, `aria-checked`) — see `design/components.md` §7 |
 | `TotalsSummary` | Aggregated totals tables (transactions, planned, exchanges) with `group_by` support |
 
 ### Feature Components
@@ -181,6 +183,20 @@ interface BudgetPeriodContextType {
   isLoading: boolean;
 }
 ```
+
+### ThemeContext
+
+Manages light/dark theme. Mounted at the top of the provider tree (inside `<BrowserRouter>`, wrapping `<AuthProvider>`) so all routes are themed.
+
+```typescript
+interface ThemeContextType {
+  isDark: boolean;
+  toggleTheme: () => void;
+  setDark: (dark: boolean) => void;
+}
+```
+
+The choice is persisted to `localStorage` under `denarly_theme` (`'light'` | `'dark'` | `null`). `null` (no stored value) means follow the OS `prefers-color-scheme`; once the user toggles, the stored choice wins and the OS listener becomes a no-op. An inline script in `index.html` sets the `.dark` class on `<html>` before React hydration to prevent a flash of the wrong theme.
 
 ## Hooks
 
@@ -433,6 +449,8 @@ Visual separation uses flat surfaces with borders (`border border-border`) — n
 | Success / income | `--color-positive` | `text-positive`, `bg-positive` |
 | Error / expense | `--color-negative` | `text-negative`, `bg-negative` |
 | Warnings | `--color-warning` | `text-warning`, `bg-warning` |
+
+> **Dark mode:** a `.dark` block in `src/index.css` overrides all 16 tokens above — see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
 
 ### Icons
 
