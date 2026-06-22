@@ -37,7 +37,7 @@ def list_transactions(
     end_date: date | None = Query(None),
     amount_gte: Decimal | None = Query(None),
     amount_lte: Decimal | None = Query(None),
-    ordering: str | None = Query(None, pattern=r'^(date|-date)$'),
+    ordering: str | None = Query(None, pattern=r'^(-?(date|description|amount|type|category__name|currency__symbol))$'),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):

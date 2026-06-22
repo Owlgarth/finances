@@ -101,13 +101,15 @@ class PlannedTransactionService:
         currency: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        ordering: str | None = None,
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         queryset = PlannedTransactionService._build_filtered_queryset(
             workspace_id, status, budget_period_id, currency, start_date, end_date
         )
-        queryset = queryset.select_related('category').order_by('planned_date')
+        sort_order = ordering or 'planned_date'
+        queryset = queryset.select_related('category').order_by(sort_order, '-id')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
