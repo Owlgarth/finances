@@ -27,12 +27,18 @@ router = Router(tags=['Currency Exchanges'])
 def list_exchanges(
     request: HttpRequest,
     budget_period_id: int | None = Query(None),
+    ordering: str | None = Query(
+        None,
+        pattern=r'^(-?(date|description|from_amount|to_amount|exchange_rate))$',
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
     """List currency exchanges for the current workspace."""
     workspace_id = request.auth.current_workspace_id
-    return CurrencyExchangeService.list(workspace_id, budget_period_id, page, page_size)
+    return CurrencyExchangeService.list(
+        workspace_id, budget_period_id, ordering=ordering, page=page, page_size=page_size
+    )
 
 
 @router.get('/totals', response=CurrencyExchangeTotalsResponse, auth=WorkspaceJWTAuth())

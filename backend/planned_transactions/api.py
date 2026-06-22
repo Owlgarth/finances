@@ -36,13 +36,25 @@ def list_planned(
     currency: list[str] | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    ordering: str | None = Query(
+        None,
+        pattern=r'^(-?(name|amount|status|planned_date|category__name|currency__symbol))$',
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
     """List planned transactions for the current workspace."""
     workspace_id = request.auth.current_workspace_id
     return PlannedTransactionService.list(
-        workspace_id, status, budget_period_id, currency, start_date, end_date, page, page_size
+        workspace_id,
+        status,
+        budget_period_id,
+        currency,
+        start_date,
+        end_date,
+        ordering=ordering,
+        page=page,
+        page_size=page_size,
     )
 
 

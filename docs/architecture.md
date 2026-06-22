@@ -197,6 +197,7 @@ frontend/src/
 │   ├── balance/          # Balance display
 │   ├── budget/           # Budget table
 │   ├── transactions/     # Transaction lists
+│   ├── currencyExchanges/ # Currency exchange list
 │   └── modals/           # Form modals by feature
 ├── contexts/
 │   ├── AuthContext.tsx         # Authentication state

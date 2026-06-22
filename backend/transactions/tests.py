@@ -240,6 +240,205 @@ class TestListTransactions(TransactionsTestCase):
         self.assertStatus(200)
         self.assertEqual(data['items'], [])
 
+    def test_list_transactions_order_by_date(self):
+        """Test ordering transactions by date ascending and descending."""
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 20),
+            description='Late',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 10),
+            description='Early',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=date', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Early', 'Late'])
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-date', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Late', 'Early'])
+
+    def test_list_transactions_order_by_description(self):
+        """Test ordering transactions by description ascending and descending."""
+        for desc in ['Zebra', 'Apple', 'Mango']:
+            TransactionFactory(
+                budget_period=self.period,
+                date=date(2025, 1, 15),
+                description=desc,
+                category=self.category1,
+                amount=Decimal('100.00'),
+                currency=self.pln_currency,
+                type='expense',
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=description', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Apple', 'Mango', 'Zebra'])
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=-description', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Zebra', 'Mango', 'Apple'])
+
+    def test_list_transactions_order_by_amount(self):
+        """Test ordering transactions by amount ascending and descending."""
+        for amt in ['300.00', '100.00', '200.00']:
+            TransactionFactory(
+                budget_period=self.period,
+                date=date(2025, 1, 15),
+                description=f'Transaction {amt}',
+                category=self.category1,
+                amount=Decimal(amt),
+                currency=self.pln_currency,
+                type='expense',
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=amount', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['amount'] for t in data['items']], ['100.00', '200.00', '300.00'])
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-amount', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['amount'] for t in data['items']], ['300.00', '200.00', '100.00'])
+
+    def test_list_transactions_order_by_type(self):
+        """Test ordering transactions by type ascending and descending."""
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='Expense item',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='Income item',
+            category=None,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='income',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        # 'expense' sorts before 'income' alphabetically
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=type', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['type'] for t in data['items']], ['expense', 'income'])
+        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-type', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([t['type'] for t in data['items']], ['income', 'expense'])
+
+    def test_list_transactions_order_by_category_name(self):
+        """Test ordering transactions by category name via FK traversal."""
+        # self.category2 = 'Transport' (T), self.category1 = 'Groceries' (G)
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='Bus',
+            category=self.category2,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='Food',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        # 'Groceries' < 'Transport' alphabetically
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=category__name', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Food', 'Bus'])
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=-category__name', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['Bus', 'Food'])
+
+    def test_list_transactions_order_by_currency_symbol(self):
+        """Test ordering transactions by currency symbol via FK traversal."""
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='USD item',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.usd_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='PLN item',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        # 'PLN' < 'USD' alphabetically
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=currency__symbol', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['PLN item', 'USD item'])
+        data = self.get(
+            f'/api/transactions?budget_period_id={self.period.id}&ordering=-currency__symbol', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual([t['description'] for t in data['items']], ['USD item', 'PLN item'])
+
+    def test_list_transactions_invalid_ordering_rejected(self):
+        """Test that an ordering value not in the allowlist is rejected (422)."""
+        TransactionFactory(
+            budget_period=self.period,
+            date=date(2025, 1, 15),
+            description='Test',
+            category=self.category1,
+            amount=Decimal('100.00'),
+            currency=self.pln_currency,
+            type='expense',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=invalid_field', **self.auth_headers())
+        # Django Ninja returns 422 for Query param pattern mismatches.
+        self.assertStatus(422)
+
 
 # =============================================================================
 # Get Transaction Tests

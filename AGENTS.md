@@ -640,6 +640,35 @@ def verify_2fa(request, data):
     ...
 ```
 
+### Sortable List Endpoints
+
+When a list endpoint accepts a user-controlled `ordering` parameter that flows into `queryset.order_by()`, validate it with a regex `pattern=` allowlist on the Django Ninja `Query(...)` param. Django's `order_by()` raises `FieldError` (→ 500) on unknown fields, and accepts `__` FK traversal natively (`category__name`, `currency__symbol`) — the regex allowlist is what prevents arbitrary-field injection and 500s:
+
+```python
+@router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
+def list_transactions(
+    request: HttpRequest,
+    ordering: str | None = Query(
+        None,
+        pattern=r'^(-?(date|description|amount|type|category__name|currency__symbol))$',
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25),
+):
+    ...
+```
+
+The pattern structure is `^(-?(field1|field2|fk__field))$` — an optional `-` prefix for descending, then an alternation of allowed field names. Always anchor with `^` and `$`.
+
+**Deterministic tiebreaker for paginated sortable lists:** Append a unique-field secondary sort after the primary `order_by()` to guarantee stable ordering across pages. Without it, rows with equal primary-sort values can appear on different pages (or duplicate/drop) when the DB's unordered scan changes:
+
+```python
+sort_order = ordering or '-date'
+queryset = queryset.order_by(sort_order, '-id')  # '-id' tiebreaker → stable pagination
+```
+
+Transactions uses `-created_at` (pre-existing); planned transactions and currency exchanges use `-id`. Either is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
+
 ### Workspace-Scoped Models
 
 All models that belong to a workspace must inherit from `WorkspaceScopedModel`. This provides:
@@ -1427,6 +1456,21 @@ export const categoriesApi = {
   delete: (id: number) => 
     api.delete(`/categories/${id}`),
 }
+```
+
+**Export type aliases for repeated literal unions:** When a literal union (e.g., ordering options) is used in more than one place — the API method param type and a page-level `as` cast — export it as a `type` alias at the top of `client.ts` and import it at call sites. Don't inline the same union in multiple files:
+
+```typescript
+// client.ts
+export type TransactionOrdering =
+  | '-date' | 'date' | '-description' | 'description'
+  | '-amount' | 'amount' | '-type' | 'type'
+  | '-category__name' | 'category__name' | '-currency__symbol' | 'currency__symbol';
+
+// Transactions.tsx
+import type { TransactionOrdering } from '../api/client'
+// ...
+ordering: ordering as TransactionOrdering,
 ```
 
 ### Naming Conventions

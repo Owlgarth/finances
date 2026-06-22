@@ -281,7 +281,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/planned-transactions` | `status`, `budget_period_id`, `currency[]`, `page`, `page_size` | List planned transactions (paginated) |
+| GET | `/api/planned-transactions` | `status`, `budget_period_id`, `currency[]`, `ordering`, `page`, `page_size` | List planned transactions (paginated) |
 | GET | `/api/planned-transactions/totals` | `status`, `budget_period_id`, `currency[]`, `group_by` | Aggregated totals grouped by `currency` or `category` |
 | POST | `/api/planned-transactions` | - | Create planned transaction |
 | PUT | `/api/planned-transactions/{id}` | - | Update planned transaction |
@@ -302,13 +302,25 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/currency-exchanges` | `budget_period_id`, `page`, `page_size` | List currency exchanges (paginated) |
+| GET | `/api/currency-exchanges` | `budget_period_id`, `ordering`, `page`, `page_size` | List currency exchanges (paginated) |
 | GET | `/api/currency-exchanges/totals` | `budget_period_id` | Aggregated totals grouped by currency pair |
 | POST | `/api/currency-exchanges` | - | Create currency exchange |
 | PUT | `/api/currency-exchanges/{id}` | - | Update currency exchange |
 | DELETE | `/api/currency-exchanges/{id}` | - | Delete currency exchange |
 | POST | `/api/currency-exchanges/import` | - | Import currency exchanges (FormData) |
 | GET | `/api/currency-exchanges/export/` | `budget_period_id` | Export currency exchanges to JSON |
+
+### Column Sorting (`ordering`)
+
+The Transactions, Planned Transactions, and Currency Exchanges list endpoints accept an optional `ordering` query parameter for server-side column sorting. Values are validated against a per-endpoint allowlist (regex); anything outside it returns `422`. Prefix a field with `-` for descending order (ascending is the default).
+
+| Endpoint | Sortable fields | Default |
+|----------|-----------------|---------|
+| `GET /api/transactions` | `date`, `description`, `amount`, `type`, `category__name`, `currency__symbol` | `-date` |
+| `GET /api/planned-transactions` | `name`, `amount`, `status`, `planned_date`, `category__name`, `currency__symbol` | `planned_date` |
+| `GET /api/currency-exchanges` | `date`, `description`, `from_amount`, `to_amount`, `exchange_rate` | `-date` |
+
+Each endpoint appends a deterministic tiebreaker after the chosen sort so pagination stays stable across pages (planned transactions and currency exchanges use `-id`). Example: `GET /api/transactions?budget_period_id=1&ordering=-amount`.
 
 ### Reports
 

@@ -66,12 +66,14 @@ class CurrencyExchangeService:
     def list(
         workspace_id: int,
         budget_period_id: int | None = None,
+        ordering: str | None = None,
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         """List currency exchanges for a workspace, optionally filtered by period."""
         queryset = CurrencyExchangeService._build_filtered_queryset(workspace_id, budget_period_id)
-        queryset = queryset.select_related('from_currency', 'to_currency').order_by('-date')
+        sort_order = ordering or '-date'
+        queryset = queryset.select_related('from_currency', 'to_currency').order_by(sort_order, '-id')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
