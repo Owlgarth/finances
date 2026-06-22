@@ -29,6 +29,7 @@ frontend/
 │   │   ├── balance/          # Balance display components
 │   │   ├── budget/           # Budget table components
 │   │   ├── transactions/     # Transaction list components
+│   │   ├── currencyExchanges/ # Currency exchange list component
 │   │   └── modals/           # Form modals organized by feature
 │   │       ├── balance/
 │   │       ├── budget/
@@ -95,6 +96,7 @@ frontend/
 | `ProtectedRoute` | Auth route wrapper |
 | `Switch` | Accessible toggle switch (`role="switch"`, `aria-checked`) — see `design/components.md` §7 |
 | `TotalsSummary` | Aggregated totals tables (transactions, planned, exchanges) with `group_by` support |
+| `SortableTh` | Sortable table header cell (click toggles sort direction; rotating chevron on active column) |
 
 ### Feature Components
 
@@ -107,6 +109,7 @@ frontend/
 | `BudgetSummarySection` | Budget overview |
 | `TransactionList` | Transaction table |
 | `PlannedTransactionList` | Planned transactions table |
+| `CurrencyExchangeList` | Currency exchange table (desktop-only column sorting; mobile cards unchanged) |
 
 ### Modal Components
 

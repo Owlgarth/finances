@@ -1,18 +1,17 @@
-import { ChevronDown } from 'lucide-react'
+import SortableTh from '../common/SortableTh'
 import type { Transaction } from '../../types'
-
-type DateOrdering = 'date' | '-date'
 
 interface Props {
   transactions: Transaction[]
-  dateOrdering: DateOrdering
-  onToggleDateSort: () => void
+  ordering: string
+  onSort: (field: string) => void
   onEdit?: (transaction: Transaction) => void
   onDelete?: (id: number) => void
 }
 
-export default function TransactionList({ transactions, dateOrdering, onToggleDateSort, onEdit, onDelete }: Props) {
-  const isDesc = dateOrdering === '-date'
+export default function TransactionList({ transactions, ordering, onSort, onEdit, onDelete }: Props) {
+  const activeField = ordering.replace(/^-/, '')
+  const isDescending = ordering.startsWith('-')
 
   return (
     <div className="bg-surface rounded-sm overflow-hidden border border-border">
@@ -21,20 +20,12 @@ export default function TransactionList({ transactions, dateOrdering, onToggleDa
         <table className="w-full">
         <thead>
           <tr className="bg-surface-muted">
-            <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">
-              <button
-                onClick={onToggleDateSort}
-                className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer group uppercase"
-              >
-                Date
-                <ChevronDown size={12} className={`transition-transform ${isDesc ? '' : 'rotate-180'} select-none`} />
-              </button>
-            </th>
-            <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Description</th>
-            <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Category</th>
-            <th className="px-6 py-2 text-right font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Amount</th>
-            <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Currency</th>
-            <th className="px-6 py-2 text-left font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Type</th>
+            <SortableTh label="Date" field="date" activeField={activeField} isDescending={isDescending} onSort={onSort} />
+            <SortableTh label="Description" field="description" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
+            <SortableTh label="Category" field="category__name" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
+            <SortableTh label="Amount" field="amount" activeField={activeField} isDescending={isDescending} onSort={onSort} align="right" />
+            <SortableTh label="Currency" field="currency__symbol" activeField={activeField} isDescending={isDescending} onSort={onSort} align="center" />
+            <SortableTh label="Type" field="type" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
             {(onEdit || onDelete) && (
               <th className="px-6 py-2 text-center font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest">Actions</th>
             )}

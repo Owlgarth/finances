@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Settings } from 'lucide-react'
 import { currencyExchangesApi, exchangeShortcutsApi } from '../api/client'
+import type { CurrencyExchangeOrdering } from '../api/client'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import type { CurrencyExchange, ExchangeShortcut, PaginatedResponse } from '../types'
@@ -13,6 +14,7 @@ import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import Pagination from '../components/common/Pagination'
 import TotalsSummary from '../components/common/TotalsSummary'
+import CurrencyExchangeList from '../components/currencyExchanges/CurrencyExchangeList'
 
 export default function CurrencyExchangesPage() {
   const queryClient = useQueryClient()
@@ -31,15 +33,31 @@ export default function CurrencyExchangesPage() {
   } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [ordering, setOrdering] = useState<string>('-date')
+
+  const handleSort = (field: string) => {
+    setOrdering(prev => {
+      const current = prev.replace(/^-/, '')
+      if (current === field) return prev.startsWith('-') ? field : '-' + field
+      const defaultDesc = field === 'date'
+      return defaultDesc ? '-' + field : field
+    })
+  }
+
   useEffect(() => {
     setPage(1)
-  }, [selectedPeriodId])
+  }, [selectedPeriodId, ordering])
 
   const { data: apiResponse, isLoading, error } = useQuery({
-    queryKey: ['currency-exchanges', selectedPeriodId, page, pageSize],
+    queryKey: ['currency-exchanges', selectedPeriodId, page, pageSize, ordering],
     queryFn: async () => {
       if (!selectedPeriodId) return null
-      const response = await currencyExchangesApi.getAll({ budget_period_id: selectedPeriodId, page, page_size: pageSize })
+      const response = await currencyExchangesApi.getAll({
+        budget_period_id: selectedPeriodId,
+        page,
+        page_size: pageSize,
+        ordering: ordering as CurrencyExchangeOrdering,
+      })
       return response.data as PaginatedResponse<CurrencyExchange>
     },
     enabled: !!selectedPeriodId
@@ -237,140 +255,28 @@ export default function CurrencyExchangesPage() {
         </div>
       )}
 
-      <div className="bg-surface border border-border rounded-sm overflow-hidden">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-surface-hover">
-              <tr>
-                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">Date</th>
-                <th className="px-6 py-2 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">Description</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">From</th>
-                <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-text-muted">→</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">To</th>
-                <th className="px-6 py-2 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">Rate</th>
-                {canManageBudgetData && (
-                  <th className="px-6 py-2 text-center font-mono text-[9px] uppercase tracking-widest text-text-muted">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {exchanges.map(exchange => (
-                <tr
-                  key={exchange.id}
-                  className="hover:bg-surface-hover transition-colors"
-                >
-                  <td className="px-6 py-4 text-sm text-text-muted font-mono">{exchange.date}</td>
-                  <td className="px-6 py-4 text-sm text-text">{exchange.description || '-'}</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="text-sm font-mono font-bold text-negative">
-                      -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center text-text-muted">→</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="text-sm font-mono font-bold text-positive">
-                      +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-text-muted font-mono">
-                    {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
-                  </td>
-                  {canManageBudgetData && (
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => handleEdit(exchange)}
-                        className="text-text-muted hover:text-text mr-4 text-sm font-medium transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(exchange.id)}
-                        className="text-negative hover:opacity-80 text-sm font-medium transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <CurrencyExchangeList
+        exchanges={exchanges}
+        ordering={ordering}
+        onSort={handleSort}
+        canManageBudgetData={canManageBudgetData}
+        onEdit={canManageBudgetData ? handleEdit : undefined}
+        onDelete={canManageBudgetData ? handleDelete : undefined}
+      />
 
-        <div className="md:hidden">
-          {exchanges.map(exchange => (
-              <div
-                key={exchange.id}
-                className="p-4 hover:bg-surface-hover transition-colors"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-text">{exchange.description || 'Currency Exchange'}</h4>
-                    <p className="text-sm text-text-muted mt-1 font-mono">{exchange.date}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mb-3 py-2">
-                  <div className="flex-1">
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted block mb-1">From</span>
-                    <span className="text-sm font-mono font-bold text-negative">
-                      -{Number(exchange.from_amount).toFixed(2)} {exchange.from_currency}
-                    </span>
-                  </div>
-                  <div className="px-3 text-text-muted">→</div>
-                  <div className="flex-1 text-right">
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted block mb-1">To</span>
-                    <span className="text-sm font-mono font-bold text-positive">
-                      +{Number(exchange.to_amount).toFixed(2)} {exchange.to_currency}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Exchange Rate: </span>
-                  <span className="text-sm font-medium text-text font-mono">
-                    {exchange.exchange_rate ? Number(exchange.exchange_rate).toFixed(6) : '-'}
-                  </span>
-                </div>
-
-                {canManageBudgetData && (
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleEdit(exchange)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-text bg-surface border border-border rounded-sm hover:bg-surface-hover transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(exchange.id)}
-                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-negative rounded-sm hover:opacity-80 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-          ))}
-        </div>
-
-        {totalItems === 0 && (
-          <p className="text-center py-8 text-text-muted">No currency exchanges yet</p>
-        )}
-
-        {totalItems > 0 && (
-          <Pagination
-            page={page}
-            total_pages={totalPages}
-            total={totalItems}
-            page_size={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size)
-              setPage(1)
-            }}
-          />
-        )}
-      </div>
+      {totalItems > 0 && (
+        <Pagination
+          page={page}
+          total_pages={totalPages}
+          total={totalItems}
+          page_size={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+        />
+      )}
 
       {totalItems > 0 && totalsData?.totals && totalsData.totals.length > 0 && (
         <TotalsSummary mode="exchanges" totals={totalsData.totals} />

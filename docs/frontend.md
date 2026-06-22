@@ -25,6 +25,7 @@ frontend/src/
 │   ├── balance/          # Balance display components
 │   ├── budget/           # Budget table components
 │   ├── transactions/     # Transaction list components
+│   ├── currencyExchanges/ # Currency exchange list component
 │   └── modals/           # All modal forms organized by feature
 ├── contexts/
 │   ├── AuthContext.tsx          # Authentication state
@@ -77,11 +78,13 @@ frontend/src/
 - `BudgetAccountSelector` - Account dropdown
 - `ProtectedRoute` - Auth route wrapper
 - `TotalsSummary` - Aggregated totals tables for transactions, planned transactions, and currency exchanges (supports `group_by` modes: type, category, or combined)
+- `SortableTh` - Sortable table header cell (click toggles the active column's sort direction; shows a rotating chevron on the active column)
 
 ### Feature Components
 - `BalanceBar`, `BalanceSection` - Balance display (compact bar: list on mobile, horizontal cards on desktop; click opens detail modal)
 - `BudgetTable`, `BudgetCategoryRow`, `BudgetSummarySection` - Budget vs actual
-- `TransactionList`, `PlannedTransactionList` - Transaction tables
+- `TransactionList`, `PlannedTransactionList` - Transaction tables (column-sortable via `SortableTh`)
+- `CurrencyExchangeList` - Currency exchange table (desktop-only column sorting; mobile cards unchanged)
 
 ### Dashboard Widgets
 - `PeriodHeader` - Period name, date range, and elapsed-days progress bar

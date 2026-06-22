@@ -1,14 +1,20 @@
 import type { PlannedTransaction } from '../../types'
+import SortableTh from '../common/SortableTh'
 
 interface Props {
   transactions: PlannedTransaction[]
+  ordering: string
+  onSort: (field: string) => void
   onEdit?: (transaction: PlannedTransaction) => void
   onExecute?: (planned: PlannedTransaction) => void
   onCancel?: (transaction: PlannedTransaction) => void
   onDelete?: (id: number) => void
 }
 
-export default function PlannedTransactionList({ transactions, onEdit, onExecute, onCancel, onDelete }: Props) {
+export default function PlannedTransactionList({ transactions, ordering, onSort, onEdit, onExecute, onCancel, onDelete }: Props) {
+  const activeField = ordering.replace(/^-/, '')
+  const isDescending = ordering.startsWith('-')
+
   const getStatusChipClass = (status: string) => {
     const base = "px-3 py-0.5 rounded-sm border font-mono text-[10px] font-medium uppercase tracking-wider select-none";
     switch (status) {
@@ -31,12 +37,12 @@ export default function PlannedTransactionList({ transactions, onEdit, onExecute
         <table className="w-full">
           <thead>
             <tr className="bg-surface-muted">
-              <th className="px-6 py-2 text-left font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Name</th>
-              <th className="px-6 py-2 text-left font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Category</th>
-              <th className="px-6 py-2 text-right font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Amount</th>
-              <th className="px-6 py-2 text-center font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Currency</th>
-              <th className="px-6 py-2 text-left font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Planned Date</th>
-              <th className="px-6 py-2 text-left font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Status</th>
+              <SortableTh label="Name" field="name" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
+              <SortableTh label="Category" field="category__name" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
+              <SortableTh label="Amount" field="amount" activeField={activeField} isDescending={isDescending} onSort={onSort} align="right" />
+              <SortableTh label="Currency" field="currency__symbol" activeField={activeField} isDescending={isDescending} onSort={onSort} align="center" />
+              <SortableTh label="Planned Date" field="planned_date" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
+              <SortableTh label="Status" field="status" activeField={activeField} isDescending={isDescending} onSort={onSort} align="left" />
               {(onEdit || onExecute || onCancel || onDelete) && (
                 <th className="px-6 py-2 text-center font-mono text-[9px] font-medium text-text-muted uppercase tracking-widest">Actions</th>
               )}

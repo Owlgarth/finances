@@ -207,6 +207,128 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         dates = [pt['planned_date'] for pt in data['items']]
         self.assertEqual(dates, sorted(dates))
 
+    def test_list_default_ordering_is_planned_date_asc(self):
+        """Omitting ordering defaults to planned_date ascending."""
+        data = self.get('/api/planned-transactions', **self.auth_headers())
+        self.assertStatus(200)
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned1.id, self.planned2.id, self.planned3.id])
+
+    def test_list_ordered_by_planned_date_desc(self):
+        """ordering=-planned_date returns planned transactions newest first."""
+        data = self.get('/api/planned-transactions?ordering=-planned_date', **self.auth_headers())
+        self.assertStatus(200)
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned3.id, self.planned2.id, self.planned1.id])
+
+    def test_list_ordered_by_name_asc(self):
+        """ordering=name sorts by name ascending."""
+        data = self.get('/api/planned-transactions?ordering=name', **self.auth_headers())
+        self.assertStatus(200)
+        names = [pt['name'] for pt in data['items']]
+        self.assertEqual(names, ['February Rent', 'Grocery Shopping', 'Monthly Rent'])
+
+    def test_list_ordered_by_name_desc(self):
+        """ordering=-name sorts by name descending."""
+        data = self.get('/api/planned-transactions?ordering=-name', **self.auth_headers())
+        self.assertStatus(200)
+        names = [pt['name'] for pt in data['items']]
+        self.assertEqual(names, ['Monthly Rent', 'Grocery Shopping', 'February Rent'])
+
+    def test_list_ordered_by_amount_asc_applies_id_tiebreaker(self):
+        """ordering=amount sorts ascending; equal amounts broken by -id."""
+        data = self.get('/api/planned-transactions?ordering=amount', **self.auth_headers())
+        self.assertStatus(200)
+        ids = [pt['id'] for pt in data['items']]
+        # 150 (planned2) first, then 1200 tie broken by -id: planned3 before planned1.
+        self.assertEqual(ids, [self.planned2.id, self.planned3.id, self.planned1.id])
+
+    def test_list_ordered_by_amount_desc(self):
+        """ordering=-amount sorts descending; ties broken by -id."""
+        data = self.get('/api/planned-transactions?ordering=-amount', **self.auth_headers())
+        self.assertStatus(200)
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned3.id, self.planned1.id, self.planned2.id])
+
+    def test_list_ordered_by_status_asc(self):
+        """ordering=status sorts by status ascending."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+        data = self.get('/api/planned-transactions?ordering=status', **self.auth_headers())
+        self.assertStatus(200)
+        statuses = [pt['status'] for pt in data['items']]
+        self.assertEqual(statuses, ['done', 'pending', 'pending'])
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned1.id, self.planned3.id, self.planned2.id])
+
+    def test_list_ordered_by_status_desc(self):
+        """ordering=-status sorts by status descending."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+        data = self.get('/api/planned-transactions?ordering=-status', **self.auth_headers())
+        self.assertStatus(200)
+        statuses = [pt['status'] for pt in data['items']]
+        self.assertEqual(statuses, ['pending', 'pending', 'done'])
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned3.id, self.planned2.id, self.planned1.id])
+
+    def test_list_ordered_by_category_name_asc(self):
+        """ordering=category__name sorts by category name ascending."""
+        utilities = CategoryFactory(
+            budget_period=self.period2,
+            workspace=self.workspace,
+            name='Utilities',
+            created_by=self.user,
+        )
+        self.planned3.category = utilities
+        self.planned3.save()
+        data = self.get('/api/planned-transactions?ordering=category__name', **self.auth_headers())
+        self.assertStatus(200)
+        category_names = [pt['category']['name'] for pt in data['items']]
+        self.assertEqual(category_names, ['Groceries', 'Rent', 'Utilities'])
+
+    def test_list_ordered_by_category_name_desc(self):
+        """ordering=-category__name sorts by category name descending."""
+        utilities = CategoryFactory(
+            budget_period=self.period2,
+            workspace=self.workspace,
+            name='Utilities',
+            created_by=self.user,
+        )
+        self.planned3.category = utilities
+        self.planned3.save()
+        data = self.get('/api/planned-transactions?ordering=-category__name', **self.auth_headers())
+        self.assertStatus(200)
+        category_names = [pt['category']['name'] for pt in data['items']]
+        self.assertEqual(category_names, ['Utilities', 'Rent', 'Groceries'])
+
+    def test_list_ordered_by_currency_symbol_asc(self):
+        """ordering=currency__symbol sorts by currency ascending."""
+        self.planned1.currency = self.currencies['EUR']
+        self.planned1.save()
+        data = self.get('/api/planned-transactions?ordering=currency__symbol', **self.auth_headers())
+        self.assertStatus(200)
+        symbols = [pt['currency'] for pt in data['items']]
+        self.assertEqual(symbols, ['EUR', 'USD', 'USD'])
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned1.id, self.planned3.id, self.planned2.id])
+
+    def test_list_ordered_by_currency_symbol_desc(self):
+        """ordering=-currency__symbol sorts by currency descending."""
+        self.planned1.currency = self.currencies['EUR']
+        self.planned1.save()
+        data = self.get('/api/planned-transactions?ordering=-currency__symbol', **self.auth_headers())
+        self.assertStatus(200)
+        symbols = [pt['currency'] for pt in data['items']]
+        self.assertEqual(symbols, ['USD', 'USD', 'EUR'])
+        ids = [pt['id'] for pt in data['items']]
+        self.assertEqual(ids, [self.planned3.id, self.planned2.id, self.planned1.id])
+
+    def test_list_invalid_ordering_returns_422(self):
+        """Ordering values outside the allowlist are rejected by the regex pattern."""
+        self.get('/api/planned-transactions?ordering=invalid_field', **self.auth_headers())
+        self.assertStatus(422)
+
     def test_list_without_auth_returns_401(self):
         """Test that listing planned transactions without authentication fails."""
         self.get('/api/planned-transactions')
