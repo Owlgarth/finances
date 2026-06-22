@@ -169,6 +169,195 @@ class TestListCurrencyExchanges(CurrencyExchangeTestCase):
         dates = [exchange['date'] for exchange in data['items']]
         self.assertEqual(dates, sorted(dates, reverse=True))
 
+    def test_list_ordered_by_date_asc(self):
+        """Test that exchanges can be ordered by date ascending via ordering=date."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for d in (date(2025, 2, 10), date(2025, 1, 5), date(2025, 1, 20)):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=d,
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('10.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=date', **self.auth_headers())
+        self.assertStatus(200)
+        dates = [exchange['date'] for exchange in data['items']]
+        self.assertEqual(dates, ['2025-01-05', '2025-01-20', '2025-02-10'])
+
+    def test_list_ordered_by_from_amount_asc(self):
+        """Test that exchanges can be ordered by from_amount ascending."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for amount in (Decimal('50.00'), Decimal('300.00'), Decimal('100.00')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=amount,
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=from_amount', **self.auth_headers())
+        self.assertStatus(200)
+        amounts = [Decimal(str(exchange['from_amount'])) for exchange in data['items']]
+        self.assertEqual(amounts, [Decimal('50.00'), Decimal('100.00'), Decimal('300.00')])
+
+    def test_list_ordered_by_from_amount_desc(self):
+        """Test that exchanges can be ordered by from_amount descending."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for amount in (Decimal('50.00'), Decimal('300.00'), Decimal('100.00')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=amount,
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=-from_amount', **self.auth_headers())
+        self.assertStatus(200)
+        amounts = [Decimal(str(exchange['from_amount'])) for exchange in data['items']]
+        self.assertEqual(amounts, [Decimal('300.00'), Decimal('100.00'), Decimal('50.00')])
+
+    def test_list_ordered_by_to_amount_asc(self):
+        """Test that exchanges can be ordered by to_amount ascending."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for amount in (Decimal('800.00'), Decimal('45.00'), Decimal('120.00')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('100.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=amount,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=to_amount', **self.auth_headers())
+        self.assertStatus(200)
+        amounts = [Decimal(str(exchange['to_amount'])) for exchange in data['items']]
+        self.assertEqual(amounts, [Decimal('45.00'), Decimal('120.00'), Decimal('800.00')])
+
+    def test_list_ordered_by_to_amount_desc(self):
+        """Test that exchanges can be ordered by to_amount descending."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for amount in (Decimal('800.00'), Decimal('45.00'), Decimal('120.00')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('100.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=amount,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=-to_amount', **self.auth_headers())
+        self.assertStatus(200)
+        amounts = [Decimal(str(exchange['to_amount'])) for exchange in data['items']]
+        self.assertEqual(amounts, [Decimal('800.00'), Decimal('120.00'), Decimal('45.00')])
+
+    def test_list_ordered_by_description_asc(self):
+        """Test that exchanges can be ordered by description ascending (non-null values)."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for desc in ('zebra exchange', 'apple exchange', 'mango exchange'):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                description=desc,
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('10.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=description', **self.auth_headers())
+        self.assertStatus(200)
+        descs = [exchange['description'] for exchange in data['items']]
+        self.assertEqual(descs, ['apple exchange', 'mango exchange', 'zebra exchange'])
+
+    def test_list_ordered_by_description_desc(self):
+        """Test that exchanges can be ordered by description descending (non-null values)."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for desc in ('zebra exchange', 'apple exchange', 'mango exchange'):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                description=desc,
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('10.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=-description', **self.auth_headers())
+        self.assertStatus(200)
+        descs = [exchange['description'] for exchange in data['items']]
+        self.assertEqual(descs, ['zebra exchange', 'mango exchange', 'apple exchange'])
+
+    def test_list_ordered_by_exchange_rate_asc(self):
+        """Test that exchanges can be ordered by exchange_rate ascending (non-null values)."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for rate in (Decimal('4.50'), Decimal('0.92'), Decimal('1.09')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('100.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                exchange_rate=rate,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=exchange_rate', **self.auth_headers())
+        self.assertStatus(200)
+        rates = [Decimal(str(exchange['exchange_rate'])) for exchange in data['items']]
+        self.assertEqual(rates, [Decimal('0.92'), Decimal('1.09'), Decimal('4.50')])
+
+    def test_list_ordered_by_exchange_rate_desc(self):
+        """Test that exchanges can be ordered by exchange_rate descending (non-null values)."""
+        CurrencyExchange.objects.filter(workspace=self.workspace).delete()
+        for rate in (Decimal('4.50'), Decimal('0.92'), Decimal('1.09')):
+            CurrencyExchangeFactory(
+                workspace=self.workspace,
+                budget_period=self.period1,
+                date=date(2025, 1, 10),
+                from_currency=self.currencies['USD'],
+                from_amount=Decimal('100.00'),
+                to_currency=self.currencies['EUR'],
+                to_amount=Decimal('9.00'),
+                exchange_rate=rate,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        data = self.get('/api/currency-exchanges?ordering=-exchange_rate', **self.auth_headers())
+        self.assertStatus(200)
+        rates = [Decimal(str(exchange['exchange_rate'])) for exchange in data['items']]
+        self.assertEqual(rates, [Decimal('4.50'), Decimal('1.09'), Decimal('0.92')])
+
+    def test_list_ordering_invalid_field_returns_422(self):
+        """Test that an unknown ordering field is rejected by the regex (422)."""
+        self.get('/api/currency-exchanges?ordering=invalid_field', **self.auth_headers())
+        self.assertStatus(422)
+
     def test_list_without_auth_returns_401(self):
         """Test that listing exchanges without authentication fails."""
         self.get('/api/currency-exchanges')
