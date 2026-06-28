@@ -6,17 +6,19 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
+from budget_periods.factories import BudgetPeriodFactory
 from budget_periods.models import BudgetPeriod
 from budgets.models import Budget
 from categories.models import Category
+from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import AuthMixin
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
 from users.services import UserService
-from workspaces.factories import WorkspaceFactory
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
+from workspaces.models import Workspace
 
 User = get_user_model()
 
@@ -412,7 +414,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         self.assertFalse(User.objects.filter(email=self.user.email).exists())
         self.assertFalse(Workspace.objects.filter(id=original_workspace_id).exists())
 
-        new_user = User.objects.create_user(email='restored@test.com', password='newpass123', full_name='Restored User')
+        new_user = UserFactory(email='restored@test.com', full_name='Restored User')
+        new_user.set_password('newpass123')
+        new_user.save()
 
         import_input = self._make_import_input(export_data)
         result = UserService.import_all_data(new_user, import_input)
@@ -435,15 +439,15 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
     def test_full_cycle_with_multiple_workspaces(self):
         """Test export/import cycle with multiple workspaces."""
         workspace2 = WorkspaceFactory(name='Second Workspace')
-        WorkspaceMember.objects.create(workspace=workspace2, user=self.user, role='owner')
+        WorkspaceMemberFactory(workspace=workspace2, user=self.user, role='owner')
         workspace2.owner = self.user
         workspace2.save()
 
         usd = workspace2.currencies.filter(symbol='USD').first()
-        account2 = BudgetAccount.objects.create(
+        account2 = BudgetAccountFactory(
             workspace=workspace2, name='Account 2', default_currency=usd, created_by=self.user
         )
-        period2 = BudgetPeriod.objects.create(
+        period2 = BudgetPeriodFactory(
             workspace=workspace2,
             budget_account=account2,
             name='Period 2',
@@ -465,7 +469,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         export_data = UserService.export_all_data(self.user)
         self.assertEqual(len(export_data['workspaces']), 2)
 
-        new_user = User.objects.create_user(email='multi@test.com', password='pass12345')
+        new_user = UserFactory(email='multi@test.com')
+        new_user.set_password('pass12345')
+        new_user.save()
         result = UserService.import_all_data(new_user, self._make_import_input(export_data))
 
         self.assertEqual(result['imported_workspaces'], 2)
@@ -478,7 +484,7 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         create_demo_fixtures(workspace_id=self.workspace.id, user_id=self.user.id)
 
         workspace2 = WorkspaceFactory(name='Target Workspace')
-        WorkspaceMember.objects.create(workspace=workspace2, user=self.user, role='owner')
+        WorkspaceMemberFactory(workspace=workspace2, user=self.user, role='owner')
         workspace2.owner = self.user
         workspace2.save()
 
@@ -487,7 +493,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
 
         UserService.delete_account(self.user, self.user_password)
 
-        new_user = User.objects.create_user(email='partial@test.com', password='pass12345')
+        new_user = UserFactory(email='partial@test.com')
+        new_user.set_password('pass12345')
+        new_user.save()
         result = UserService.import_all_data(
             new_user, self._make_import_input(export_data, workspaces=['Target Workspace'])
         )
@@ -500,10 +508,10 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
     def test_period_balance_preserved_on_import(self):
         """Test that period balances are preserved during import."""
         pln = self.workspace.currencies.filter(symbol='PLN').first()
-        account = BudgetAccount.objects.create(
+        account = BudgetAccountFactory(
             workspace=self.workspace, name='Balance Test', default_currency=pln, created_by=self.user
         )
-        period = BudgetPeriod.objects.create(
+        period = BudgetPeriodFactory(
             workspace=self.workspace,
             budget_account=account,
             name='Balance Period',
@@ -528,7 +536,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         export_data = UserService.export_all_data(self.user)
 
         UserService.delete_account(self.user, self.user_password)
-        new_user = User.objects.create_user(email='balance@test.com', password='pass12345')
+        new_user = UserFactory(email='balance@test.com')
+        new_user.set_password('pass12345')
+        new_user.save()
         UserService.import_all_data(new_user, self._make_import_input(export_data))
 
         restored_workspace = Workspace.objects.filter(owner=new_user).first()
@@ -543,10 +553,10 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
     def test_import_preserves_workspace_scoped_data_integrity(self):
         """Test that all imported records have correct workspace_id FK."""
         pln = self.workspace.currencies.filter(symbol='PLN').first()
-        account = BudgetAccount.objects.create(
+        account = BudgetAccountFactory(
             workspace=self.workspace, name='Integrity Test', default_currency=pln, created_by=self.user
         )
-        period = BudgetPeriod.objects.create(
+        period = BudgetPeriodFactory(
             workspace=self.workspace,
             budget_account=account,
             name='Integrity Period',
@@ -590,7 +600,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         export_data = UserService.export_all_data(self.user)
 
         UserService.delete_account(self.user, self.user_password)
-        new_user = User.objects.create_user(email='integrity@test.com', password='pass12345')
+        new_user = UserFactory(email='integrity@test.com')
+        new_user.set_password('pass12345')
+        new_user.save()
         UserService.import_all_data(new_user, self._make_import_input(export_data))
 
         restored_workspace = Workspace.objects.filter(owner=new_user).first()

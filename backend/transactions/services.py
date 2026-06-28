@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from decimal import Decimal
 
 from django.db import transaction as db_transaction
-from django.db.models import F, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Count, F, Sum, Value
+from django.db.models.functions import Coalesce, Lower
 
 from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
@@ -23,6 +24,7 @@ from transactions.exceptions import (
 )
 from transactions.models import Transaction
 from transactions.schemas import TransactionCreate, TransactionImport
+from workspaces.models import Currency
 
 
 class TransactionService:
@@ -41,7 +43,13 @@ class TransactionService:
 
     @staticmethod
     def update_period_balance(period_id: int, currency, trans_type: str, amount: Decimal, operation: str) -> None:
-        """Add or subtract a transaction amount from the period balance."""
+        """Add or subtract a transaction amount from the period balance.
+
+        Not atomic on its own: callers MUST wrap the enclosing operation in
+        ``@db_transaction.atomic`` so this read/modify/write of the balance stays
+        consistent with the triggering transaction's row save. All current callers
+        (``create``, ``update``, ``delete``, ``import_data``) already do.
+        """
         balance = get_or_create_period_balance(period_id, currency)
         amount_value = amount if operation == 'add' else -amount
 
@@ -87,8 +95,6 @@ class TransactionService:
 
         Returns a dict mapping lowercase description → display (most common casing).
         """
-        from collections import Counter
-
         rows = queryset.values_list('description', flat=True)
         lower_groups: dict[str, list[str]] = {}
         for desc in rows:
@@ -112,8 +118,6 @@ class TransactionService:
         amount_lte: Decimal | None = None,
     ):
         """Build a filtered queryset for transactions. Returns None when current_date matches no period."""
-        from budget_periods.models import BudgetPeriod
-
         queryset = Transaction.objects.for_workspace(workspace_id)
 
         if budget_period_id:
@@ -275,8 +279,6 @@ class TransactionService:
         The base queryset is built once; both groupings are derived from a single
         database round-trip using Python-side aggregation over the filtered rows.
         """
-        from collections import defaultdict
-
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
             budget_period_id=budget_period_id,
@@ -330,9 +332,6 @@ class TransactionService:
 
         The `description` field uses the most common original casing for each group.
         """
-        from django.db.models import Count
-        from django.db.models.functions import Lower
-
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
             budget_period_id=budget_period_id,
@@ -440,7 +439,11 @@ class TransactionService:
         """Return serialisable transaction data for a period."""
         BudgetPeriodService.get(period_id, workspace_id)
 
-        queryset = Transaction.objects.select_related('category', 'currency').filter(budget_period_id=period_id)
+        queryset = (
+            Transaction.objects.for_workspace(workspace_id)
+            .select_related('category', 'currency')
+            .filter(budget_period_id=period_id)
+        )
         if trans_type:
             queryset = queryset.filter(type=trans_type)
 
@@ -462,9 +465,7 @@ class TransactionService:
         """Bulk-create transactions from parsed JSON data. Returns count of created records."""
         BudgetPeriodService.get(period_id, workspace_id)
 
-        from workspaces.models import Currency
-
-        currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
+        currency_map = {c.symbol: c for c in Currency.objects.for_workspace(workspace_id)}
 
         new_transactions = []
         for item in data:

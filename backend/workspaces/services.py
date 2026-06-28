@@ -27,6 +27,7 @@ from workspaces.exceptions import (
     WorkspacePermissionDeniedError,
 )
 from workspaces.models import Currency, Role, Workspace, WorkspaceMember
+from workspaces.schemas import WorkspaceMemberOut, WorkspaceOut
 
 User = get_user_model()
 
@@ -72,6 +73,66 @@ class WorkspaceService:
         user.save(update_fields=['current_workspace'])
 
         return workspace
+
+    @staticmethod
+    def _to_response(workspace: Workspace, role: str) -> WorkspaceOut:
+        """Build a WorkspaceOut with user_role populated from the membership."""
+        ws = WorkspaceOut.model_validate(workspace)
+        return ws.model_copy(update={'user_role': role})
+
+    @staticmethod
+    def list_for_user(user) -> list[WorkspaceOut]:
+        """List all workspaces the user has access to, with their role in each."""
+        memberships = WorkspaceMember.objects.filter(user_id=user.id).select_related('workspace')
+        return [WorkspaceService._to_response(m.workspace, m.role) for m in memberships]
+
+    @staticmethod
+    def get_current(user) -> WorkspaceOut:
+        """Get the user's current workspace with their role.
+
+        Membership is normally already verified by WorkspaceJWTAuth; the
+        ``filter().first()`` + ``None`` check here is defense-in-depth for
+        callers that bypass the API layer (management commands, tests).
+        """
+        workspace_id = user.current_workspace_id
+        member = (
+            WorkspaceMember.objects.select_related('workspace').filter(workspace_id=workspace_id, user=user).first()
+        )
+        if not member:
+            raise WorkspaceNotFoundError()
+        return WorkspaceService._to_response(member.workspace, member.role)
+
+    @staticmethod
+    @db_transaction.atomic
+    def update(workspace_id: int, data, user_role: str) -> WorkspaceOut:
+        """Update the workspace name. Caller is responsible for role authorization.
+
+        ``user_role`` is the validated role of the acting user, threaded through
+        so the response can include ``user_role`` without re-querying.
+        """
+        workspace = Workspace.objects.filter(id=workspace_id).first()
+        if not workspace:
+            raise WorkspaceNotFoundError()
+        if data.name is not None:
+            workspace.name = data.name
+            workspace.save(update_fields=['name'])
+        return WorkspaceService._to_response(workspace, user_role)
+
+    @staticmethod
+    def switch_workspace(user, workspace_id: int) -> dict:
+        """Switch the user's current workspace.
+
+        Raises WorkspaceNotFoundError if the user is not a member of the target.
+        """
+        member = WorkspaceMember.objects.filter(
+            workspace_id=workspace_id,
+            user_id=user.id,
+        ).first()
+        if not member:
+            raise WorkspaceNotFoundError()
+        user.current_workspace_id = workspace_id
+        user.save(update_fields=['current_workspace'])
+        return {'message': 'Workspace switched successfully', 'workspace_id': workspace_id}
 
     @staticmethod
     def delete_workspace(user, workspace_id: int) -> None:
@@ -123,7 +184,7 @@ class WorkspaceService:
 
             from budget_accounts.models import BudgetAccount
 
-            BudgetAccount.objects.filter(workspace_id=workspace_id).delete()
+            BudgetAccount.objects.for_workspace(workspace_id).delete()
 
             workspace.delete()
 
@@ -156,18 +217,18 @@ class CurrencyService:
     @staticmethod
     def list_currencies(workspace_id: int) -> list[Currency]:
         """List all currencies for a workspace."""
-        return list(Currency.objects.filter(workspace_id=workspace_id))
+        return list(Currency.objects.for_workspace(workspace_id))
 
     @staticmethod
     def get_currency(currency_id: int, workspace_id: int) -> Currency | None:
         """Get a currency by ID within a workspace."""
-        return Currency.objects.filter(id=currency_id, workspace_id=workspace_id).first()
+        return Currency.objects.for_workspace(workspace_id).filter(id=currency_id).first()
 
     @staticmethod
     @db_transaction.atomic
     def create_currency(workspace_id: int, data) -> Currency:
         """Create a new currency for a workspace."""
-        if Currency.objects.filter(workspace_id=workspace_id, symbol=data.symbol).exists():
+        if Currency.objects.for_workspace(workspace_id).filter(symbol=data.symbol).exists():
             raise CurrencyDuplicateSymbolError(data.symbol)
 
         return Currency.objects.create(
@@ -218,6 +279,28 @@ class WorkspaceMemberService:
         return WorkspaceMember.objects.filter(workspace_id=workspace_id, user_id=user_id).first()
 
     @staticmethod
+    def list_members(workspace_id: int) -> list[WorkspaceMemberOut]:
+        """List all members of a workspace, ordered by role desc then email."""
+        members = (
+            WorkspaceMember.objects.filter(workspace_id=workspace_id)
+            .select_related('user')
+            .order_by('-role', 'user__email')
+        )
+        return [
+            WorkspaceMemberOut(
+                id=member.id,
+                workspace_id=member.workspace_id,
+                user_id=member.user_id,
+                email=member.user.email,
+                full_name=member.user.full_name,
+                role=member.role,
+                is_active=member.user.is_active,
+                created_at=member.created_at,
+            )
+            for member in members
+        ]
+
+    @staticmethod
     def add_member(user, workspace_id: int, data) -> dict:
         """
         Add a member to the workspace.
@@ -228,6 +311,8 @@ class WorkspaceMemberService:
 
         Raises domain exceptions on error.
         """
+        admin_name = user.full_name or user.email
+
         with db_transaction.atomic():
             workspace = Workspace.objects.select_for_update().get(id=workspace_id)
 
@@ -235,9 +320,7 @@ class WorkspaceMemberService:
             if current_member_count >= settings.WORKSPACE_MAX_MEMBERS:
                 raise WorkspaceMemberLimitReachedError()
 
-            existing_user = User.objects.filter(email=data.email.lower()).first()
-
-            admin_name = user.full_name or user.email
+            existing_user = User.objects.filter(email=data.email).first()
 
             if existing_user:
                 existing_member = WorkspaceMember.objects.filter(
@@ -264,10 +347,7 @@ class WorkspaceMemberService:
                     'member_id': new_member.id,
                     'is_new_user': False,
                 }
-
-                WorkspaceMemberService._send_existing_user_email(existing_user, workspace, admin_name, data.role)
-
-                return result
+                recipient = existing_user
             else:
                 if not data.password:
                     raise WorkspaceMemberPasswordRequiredError()
@@ -286,14 +366,21 @@ class WorkspaceMemberService:
                     role=data.role,
                 )
 
-                WorkspaceMemberService._send_new_user_email(new_user, workspace, admin_name, data.role)
-
-                return {
+                result = {
                     'message': f'User {data.email} created and added to workspace',
                     'user_id': new_user.id,
                     'member_id': new_member.id,
                     'is_new_user': True,
                 }
+                recipient = new_user
+
+        # Emails sent AFTER the transaction commits (Pattern B, AGENTS.md "Email Patterns").
+        if result['is_new_user']:
+            WorkspaceMemberService._send_new_user_email(recipient, workspace, admin_name, data.role)
+        else:
+            WorkspaceMemberService._send_existing_user_email(recipient, workspace, admin_name, data.role)
+
+        return result
 
     @staticmethod
     def leave(user, workspace_id: int) -> dict:

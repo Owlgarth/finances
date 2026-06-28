@@ -10,15 +10,17 @@ from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from categories.factories import CategoryFactory
 from common.enums import TotalsLabel
+from common.tests.helpers import create_other_workspace
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
+from planned_transactions.services import PlannedTransactionService
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.models import WorkspaceMember
 
 User = get_user_model()
 
@@ -814,27 +816,7 @@ class TestExportPlannedTransactions(PlannedTransactionTestCase):
     def test_export_planned_from_other_workspace_fails(self):
         """Test exporting planned transactions from another workspace returns 404."""
         # Create another workspace
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMember.objects.create(
-            workspace=other_workspace,
-            user=other_user,
-            role='owner',
-        )
-
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=self.currencies['PLN'],
-            created_by=other_user,
-        )
+        other_workspace, other_user, other_account, _ = create_other_workspace()
 
         other_period = BudgetPeriodFactory(
             budget_account=other_account,
@@ -986,6 +968,26 @@ class TestImportPlannedTransactions(PlannedTransactionTestCase):
                 )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_import_planned_invalid_binary_file_returns_400(self):
+        """A non-JSON / non-UTF-8 upload returns 400, not 500 (UnicodeDecodeError is caught)."""
+        import tempfile
+
+        # A PNG header is not valid UTF-8, so json.loads() raises UnicodeDecodeError
+        # (a ValueError, not a json.JSONDecodeError) which must be caught as a 400.
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.json', delete=False) as f:
+            f.write(b'\x89PNG\r\n\x1a\n')
+            f.flush()
+
+            with open(f.name, 'rb') as file:
+                response = self.client.post(
+                    '/api/planned-transactions/import',
+                    data={'file': file, 'budget_period_id': self.period1.id},
+                    **self.auth_headers(),
+                )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['detail'], 'Invalid JSON file.')
 
     def test_import_planned_invalid_data_fails(self):
         """Test importing with invalid data format fails."""
@@ -1535,3 +1537,72 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         # transaction_id should NOT be set (task failed before setting it)
         self.planned1.refresh_from_db()
         self.assertIsNone(self.planned1.transaction_id)
+
+
+class TestExecutePlannedTransactionDispatch(PlannedTransactionTestCase):
+    """Tests for PlannedTransactionService.execute dispatching to the Celery task.
+
+    CELERY_TASK_ALWAYS_EAGER=True in test settings means execute_planned_transaction.delay()
+    runs synchronously, so we can assert the task's side effects directly after the service call.
+    """
+
+    def test_execute_dispatches_task_and_creates_transaction(self):
+        """Service.execute enqueues the task, which creates the Transaction."""
+        initial_transaction_count = Transaction.objects.count()
+
+        PlannedTransactionService.execute(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            planned_id=self.planned1.id,
+            payment_date=date(2025, 1, 5),
+        )
+
+        # Task ran synchronously via CELERY_TASK_ALWAYS_EAGER — Transaction created
+        self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
+
+        # Task's side effect on the planned record: status flipped + transaction_id set
+        self.planned1.refresh_from_db()
+        self.assertEqual(self.planned1.status, 'done')
+        self.assertEqual(self.planned1.payment_date, date(2025, 1, 5))
+        self.assertIsNotNone(self.planned1.transaction_id)
+
+    def test_execute_dispatch_updates_period_balance(self):
+        """The dispatched task updates PeriodBalance.total_expenses."""
+        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
+
+        PlannedTransactionService.execute(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            planned_id=self.planned1.id,
+            payment_date=date(2025, 1, 5),
+        )
+
+        # planned1 is $1200 USD in period1; PeriodBalance.total_expenses must reflect it
+        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
+        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
+
+    def test_execute_returns_planned_with_transaction_id(self):
+        """The returned PlannedTransaction reflects the task's writes (refresh_from_db in service)."""
+        result = PlannedTransactionService.execute(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            planned_id=self.planned1.id,
+            payment_date=date(2025, 1, 5),
+        )
+
+        # Service does refresh_from_db before returning, so result carries the task's mutation
+        self.assertEqual(result.status, 'done')
+        self.assertIsNotNone(result.transaction_id)
+
+
+class TestExecutePlannedTransactionConfig(TestCase):
+    """Tests for execute_planned_transaction retry configuration."""
+
+    def test_task_has_autoretry_for_exception(self):
+        self.assertIn(Exception, execute_planned_transaction.autoretry_for)
+
+    def test_task_has_max_retries(self):
+        self.assertEqual(execute_planned_transaction.max_retries, 3)
+
+    def test_task_has_retry_backoff(self):
+        self.assertTrue(execute_planned_transaction.retry_backoff)

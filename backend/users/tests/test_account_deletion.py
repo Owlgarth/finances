@@ -4,7 +4,10 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
 
+from common.tests.factories import UserFactory
+from common.tests.helpers import create_other_workspace
 from common.tests.mixins import AuthMixin
+from workspaces.factories import WorkspaceMemberFactory
 from workspaces.models import Workspace, WorkspaceMember
 
 User = get_user_model()
@@ -42,8 +45,8 @@ class AccountDeletionTests(AuthMixin, TestCase):
 
     def test_delete_account_blocked_by_shared_workspace(self):
         """Cannot delete if user owns a workspace with other members."""
-        other_user = User.objects.create_user(email='other@test.com', password='pass12345')
-        WorkspaceMember.objects.create(workspace=self.workspace, user=other_user, role='member')
+        other_user = UserFactory(email='other@test.com')
+        WorkspaceMemberFactory(workspace=self.workspace, user=other_user, role='member')
 
         response = self.client.delete(
             '/api/users/me',
@@ -57,10 +60,10 @@ class AccountDeletionTests(AuthMixin, TestCase):
 
     def test_delete_removes_membership_from_others_workspace(self):
         """When deleted, user's memberships in other workspaces are removed."""
-        other_owner = User.objects.create_user(email='owner@test.com', password='pass12345')
-        other_ws = Workspace.objects.create(name='Other Workspace', owner=other_owner)
-        WorkspaceMember.objects.create(workspace=other_ws, user=other_owner, role='owner')
-        WorkspaceMember.objects.create(workspace=other_ws, user=self.user, role='member')
+        other_ws, other_owner, _, _ = create_other_workspace(
+            owner_email='owner@test.com', workspace_name='Other Workspace'
+        )
+        WorkspaceMemberFactory(workspace=other_ws, user=self.user, role='member')
 
         self.client.delete(
             '/api/users/me',
@@ -105,8 +108,8 @@ class AccountDeletionTests(AuthMixin, TestCase):
 
     def test_deletion_check_blocked_when_shared_workspace(self):
         """Pre-deletion check shows blocked when user owns shared workspace."""
-        other_user = User.objects.create_user(email='other@test.com', password='pass12345')
-        WorkspaceMember.objects.create(workspace=self.workspace, user=other_user, role='member')
+        other_user = UserFactory(email='other@test.com')
+        WorkspaceMemberFactory(workspace=self.workspace, user=other_user, role='member')
 
         response = self.client.get('/api/users/me/deletion-check', **self.auth_headers())
 
@@ -115,6 +118,22 @@ class AccountDeletionTests(AuthMixin, TestCase):
         self.assertFalse(data['can_delete'])
         self.assertIsNotNone(data['blocking_workspaces'])
         self.assertEqual(len(data['blocking_workspaces']), 1)
+
+    def test_preferences_deleted_on_account_deletion(self):
+        """UserPreferences are explicitly deleted on account deletion (defense-in-depth)."""
+        from users.models import UserPreferences
+
+        UserPreferences.objects.create(user=self.user)
+
+        self.client.delete(
+            '/api/users/me',
+            {'password': self.user_password},
+            content_type='application/json',
+            **self.auth_headers(),
+        )
+
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        self.assertFalse(UserPreferences.objects.filter(user_id=self.user.id).exists())
 
     def test_consent_records_survive_account_deletion(self):
         """Consent records should be retained (with user=NULL) after account deletion."""

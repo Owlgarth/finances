@@ -10,6 +10,7 @@ import type { PaginatedResponse, PlannedTransaction, Currency } from '../types'
 import PlannedTransactionList from '../components/transactions/PlannedTransactionList'
 import PlannedTransactionFormModal from '../components/modals/transactions/PlannedTransactionFormModal'
 import ExecutePlannedModal from '../components/modals/transactions/ExecutePlannedModal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
@@ -21,6 +22,8 @@ export default function Planned() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [selectedPlanned, setSelectedPlanned] = useState<PlannedTransaction | null>(null)
   const [executePlanned, setExecutePlanned] = useState<PlannedTransaction | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<PlannedTransaction | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([])
@@ -165,15 +168,11 @@ export default function Planned() {
   }
 
   const handleCancel = (transaction: PlannedTransaction) => {
-    if (confirm('Cancel this planned transaction?')) {
-      cancelMutation.mutate({ id: transaction.id, transaction })
-    }
+    setCancelTarget(transaction)
   }
 
   const handleDelete = (id: number) => {
-    if (confirm('Delete this planned transaction?')) {
-      deleteMutation.mutate(id)
-    }
+    setDeleteTargetId(id)
   }
 
   const handleExport = async () => {
@@ -399,6 +398,21 @@ export default function Planned() {
           plannedDate={executePlanned.planned_date}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={cancelTarget !== null}
+        title="Cancel planned transaction"
+        message="Cancel this planned transaction?"
+        onConfirm={() => { if (cancelTarget) { cancelMutation.mutate({ id: cancelTarget.id, transaction: cancelTarget }) } setCancelTarget(null) }}
+        onCancel={() => setCancelTarget(null)}
+      />
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete planned transaction"
+        message="Delete this planned transaction?"
+        onConfirm={() => { if (deleteTargetId !== null) { deleteMutation.mutate(deleteTargetId) } setDeleteTargetId(null) }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
     </div>
   )
 }

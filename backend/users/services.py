@@ -2,23 +2,36 @@
 
 import random
 import time
+from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.db import IntegrityError
 from django.db import transaction as db_transaction
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from budget_accounts.models import BudgetAccount
+from budget_periods.models import BudgetPeriod
+from budgets.models import Budget
+from categories.models import Category
 from common.email import EmailService
 from common.exceptions import ValidationError
+from common.services.base import delete_workspace_financial_records
 from common.tokens import (
     generate_email_change_token,
     generate_verification_token,
     verify_email_change_token,
     verify_verification_token,
 )
+from core.legal import get_privacy, get_terms
 from core.schemas import UserPreferencesUpdate, UserUpdate
+from currency_exchanges.models import CurrencyExchange
+from exchange_shortcuts.models import ExchangeShortcut
+from period_balances.models import PeriodBalance
+from planned_transactions.models import PlannedTransaction
+from transactions.models import Transaction
 from users.exceptions import (
     UserAlreadyVerifiedError,
     UserConsentNotFoundError,
@@ -30,7 +43,8 @@ from users.exceptions import (
     UserInvalidVerificationTokenError,
     UserSameEmailError,
 )
-from users.models import ConsentType, FontChoices, User, UserConsent, UserPreferences, WeekdayChoices
+from users.models import ConsentType, FontChoices, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
+from workspaces.models import Currency, Role, Workspace, WorkspaceMember
 
 
 class UserService:
@@ -290,8 +304,6 @@ class UserService:
         Raises:
             HttpError(404): If no active consent exists for this type
         """
-        from django.utils import timezone
-
         consent = (
             UserConsent.objects.filter(user=user, consent_type=consent_type, withdrawn_at__isnull=True)
             .order_by('-granted_at')
@@ -316,8 +328,6 @@ class UserService:
         Returns a dict suitable for ConsentStatusOut. If either consent is missing
         or on an older version, needs_reconsent will be True.
         """
-        from core.legal import get_privacy, get_terms
-
         terms_version = get_terms()['version']
         privacy_version = get_privacy()['version']
 
@@ -350,11 +360,6 @@ class UserService:
         - total_planned_transactions: count of planned transactions created by this user
         - total_currency_exchanges: count of currency exchanges created by this user
         """
-        from currency_exchanges.models import CurrencyExchange
-        from planned_transactions.models import PlannedTransaction
-        from transactions.models import Transaction
-        from workspaces.models import Workspace, WorkspaceMember
-
         owned_workspaces = Workspace.objects.filter(owner=user)
         blocking = []
         solo = []
@@ -404,8 +409,6 @@ class UserService:
         if not user.check_password(password):
             raise UserInvalidPasswordError('Invalid password')
 
-        from workspaces.models import Workspace, WorkspaceMember
-
         # Capture user details before deletion
         user_email = user.email
         user_name = user.full_name or user.email
@@ -426,15 +429,11 @@ class UserService:
         deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
 
         with db_transaction.atomic():
-            from common.services.base import delete_workspace_financial_records
-
             for ws in owned_workspaces:
                 delete_workspace_financial_records(ws.id)
 
             # Delete BudgetAccounts (CASCADEs: BudgetPeriod, Category, Budget, PeriodBalance)
             # BudgetAccount.default_currency has PROTECT, but currencies are deleted with workspace.
-            from budget_accounts.models import BudgetAccount
-
             BudgetAccount.objects.filter(workspace__in=owned_workspaces).delete()
 
             # Now delete workspaces (CASCADE deletes currencies, members, etc.)
@@ -444,11 +443,12 @@ class UserService:
             WorkspaceMember.objects.filter(user=user).delete()
 
             # Delete 2FA records (CASCADE handles this, but explicit for defense-in-depth)
-            from users.models import UserTwoFactor
-
             UserTwoFactor.objects.filter(user=user).delete()
 
-            # Delete user — CASCADE: UserPreferences
+            # Delete preferences (CASCADE handles this, but explicit for defense-in-depth)
+            UserPreferences.objects.filter(user=user).delete()
+
+            # Delete user
             # SET_NULL: UserConsent (retained for GDPR audit), created_by/updated_by on financial models
             user.delete()
 
@@ -478,20 +478,6 @@ class UserService:
         The output is designed to be serialized as JSON and downloaded as a file.
         All Decimal values are converted to strings, all datetimes to ISO format.
         """
-        from django.utils import timezone
-
-        from budget_accounts.models import BudgetAccount
-        from budget_periods.models import BudgetPeriod
-        from budgets.models import Budget
-        from categories.models import Category
-        from currency_exchanges.models import CurrencyExchange
-        from exchange_shortcuts.models import ExchangeShortcut
-        from period_balances.models import PeriodBalance
-        from planned_transactions.models import PlannedTransaction
-        from transactions.models import Transaction
-        from users.models import UserTwoFactor
-        from workspaces.models import Currency, WorkspaceMember
-
         # 1. Profile
         profile = {
             'id': user.id,
@@ -801,18 +787,6 @@ class UserService:
         Raises:
             ValidationError: If export version is incompatible
         """
-        from datetime import datetime
-
-        from budget_accounts.models import BudgetAccount
-        from budget_periods.models import BudgetPeriod
-        from budgets.models import Budget
-        from categories.models import Category
-        from currency_exchanges.models import CurrencyExchange
-        from period_balances.models import PeriodBalance
-        from planned_transactions.models import PlannedTransaction
-        from transactions.models import Transaction
-        from workspaces.models import Currency, Role, Workspace, WorkspaceMember
-
         export_data = data.data
         workspace_filter = data.workspaces
         conflict_strategy = data.conflict_strategy

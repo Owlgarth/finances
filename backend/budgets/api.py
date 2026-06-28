@@ -7,6 +7,7 @@ from budgets.schemas import BudgetCreate, BudgetOut, BudgetUpdate
 from budgets.services import BudgetService
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
+from core.schemas.common import DetailOut
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Budgets'])
@@ -22,7 +23,7 @@ def list_budgets(
     return BudgetService.list(workspace_id, budget_period_id)
 
 
-@router.post('', response={201: BudgetOut}, auth=WorkspaceJWTAuth())
+@router.post('', response={201: BudgetOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_budget(request: HttpRequest, data: BudgetCreate):
     """Create a new budget entry."""
     user = request.auth
@@ -32,7 +33,7 @@ def create_budget(request: HttpRequest, data: BudgetCreate):
     return 201, budget
 
 
-@router.put('/{budget_id}', response=BudgetOut, auth=WorkspaceJWTAuth())
+@router.put('/{budget_id}', response={200: BudgetOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def update_budget(request: HttpRequest, budget_id: int, data: BudgetUpdate):
     """Update a budget entry."""
     user = request.auth
@@ -41,7 +42,7 @@ def update_budget(request: HttpRequest, budget_id: int, data: BudgetUpdate):
     return BudgetService.update(user, workspace_id, budget_id, data)
 
 
-@router.delete('/{budget_id}', response={204: None}, auth=WorkspaceJWTAuth())
+@router.delete('/{budget_id}', response={204: None, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def delete_budget(request: HttpRequest, budget_id: int):
     """Delete a budget entry."""
     workspace_id = request.auth.current_workspace_id

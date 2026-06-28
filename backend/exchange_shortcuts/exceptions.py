@@ -16,11 +16,6 @@ class ExchangeShortcutDuplicateError(ValidationError):
     default_code = 'exchange_shortcut_duplicate'
 
 
-class ExchangeShortcutCurrencyError(ValidationError):
-    default_message = 'Currencies must be different'
-    default_code = 'exchange_shortcut_same_currency'
-
-
 class ExchangeShortcutCurrencyNotInWorkspaceError(ValidationError):
     default_code = 'exchange_shortcut_currency_not_in_workspace'
 

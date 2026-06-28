@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { X } from 'lucide-react';
 import { categoriesApi, budgetPeriodsApi } from '../../../api/client';
 import type { Category, BudgetPeriod } from '../../../types';
 import Loading from '../../common/Loading';
 import ErrorMessage from '../../common/ErrorMessage';
+import Modal from '../../common/Modal';
+import Select from '../../common/Select';
 
 interface Props {
   isOpen: boolean;
@@ -68,18 +69,7 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div 
-        className="bg-surface rounded-sm border border-border p-6 w-full max-w-md relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-primary transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-6">Edit Category</h2>
 
         {isLoadingPeriods ? (
@@ -102,19 +92,13 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
 
             <div className="mb-6">
               <label htmlFor="budgetPeriod" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Budget Period</label>
-              <select
+              <Select
                 id="budgetPeriod"
-                className="w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
                 value={selectedPeriodId}
-                onChange={(e) => setSelectedPeriodId(Number(e.target.value))}
-                required
-              >
-                {budgetPeriods?.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedPeriodId(v)}
+                options={(budgetPeriods ?? []).map((p) => ({ value: p.id, label: p.name }))}
+                aria-label="Budget Period"
+              />
             </div>
 
             <div className="flex justify-end space-x-3 mt-8">
@@ -135,7 +119,6 @@ export default function EditCategoryModal({ isOpen, onClose, category }: Props) 
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

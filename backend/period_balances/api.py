@@ -1,9 +1,11 @@
 """Django-Ninja API endpoints for period_balances app."""
 
+from django.http import HttpRequest
 from ninja import Query, Router
 
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
+from core.schemas.common import DetailOut
 from period_balances.schemas import (
     PeriodBalanceOut,
     PeriodBalanceUpdate,
@@ -18,7 +20,7 @@ router = Router(tags=['Period Balances'])
 
 @router.get('', response=list[PeriodBalanceOut], auth=WorkspaceJWTAuth())
 def list_balances(
-    request,
+    request: HttpRequest,
     budget_period_id: int | None = Query(None),
     currency: str | None = Query(None),
 ):
@@ -27,8 +29,8 @@ def list_balances(
     return PeriodBalanceService.list(workspace_id, budget_period_id, currency)
 
 
-@router.post('/recalculate', response=PeriodBalanceOut, auth=WorkspaceJWTAuth())
-def recalculate_balance(request, data: RecalculateRequest):
+@router.post('/recalculate', response={200: PeriodBalanceOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def recalculate_balance(request: HttpRequest, data: RecalculateRequest):
     """Recalculate a specific period balance."""
     user = request.auth
     workspace_id = request.auth.current_workspace_id
@@ -40,8 +42,10 @@ def recalculate_balance(request, data: RecalculateRequest):
     return balance
 
 
-@router.post('/recalculate-all', response=list[PeriodBalanceOut], auth=WorkspaceJWTAuth())
-def recalculate_all(request, data: RecalculateAllRequest):
+@router.post(
+    '/recalculate-all', response={200: list[PeriodBalanceOut], 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
+)
+def recalculate_all(request: HttpRequest, data: RecalculateAllRequest):
     """Recalculate all currency balances for a period."""
     user = request.auth
     workspace_id = request.auth.current_workspace_id
@@ -52,15 +56,15 @@ def recalculate_all(request, data: RecalculateAllRequest):
     return results
 
 
-@router.get('/{balance_id}', response=PeriodBalanceOut, auth=WorkspaceJWTAuth())
-def get_balance(request, balance_id: int):
+@router.get('/{balance_id}', response={200: PeriodBalanceOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def get_balance(request: HttpRequest, balance_id: int):
     """Get a specific period balance."""
     workspace_id = request.auth.current_workspace_id
     return PeriodBalanceService.get(balance_id, workspace_id)
 
 
-@router.put('/{balance_id}', response=PeriodBalanceOut, auth=WorkspaceJWTAuth())
-def update_balance(request, balance_id: int, data: PeriodBalanceUpdate):
+@router.put('/{balance_id}', response={200: PeriodBalanceOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def update_balance(request: HttpRequest, balance_id: int, data: PeriodBalanceUpdate):
     """Update a period balance (opening balance)."""
     user = request.auth
     workspace_id = request.auth.current_workspace_id
