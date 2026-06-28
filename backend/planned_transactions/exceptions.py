@@ -8,11 +8,6 @@ class PlannedTransactionNotFoundError(NotFoundError):
     default_code = 'not_found'
 
 
-class PlannedTransactionPeriodNotFoundError(NotFoundError):
-    default_message = 'Budget period not found'
-    default_code = 'period_not_found'
-
-
 class PlannedTransactionNoActivePeriodError(ValidationError):
     default_message = 'No active budget period for the planned transaction date'
     default_code = 'no_active_period'

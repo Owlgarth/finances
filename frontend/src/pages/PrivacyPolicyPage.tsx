@@ -11,7 +11,15 @@ export default function PrivacyPolicyPage() {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    legalApi.getPrivacy().then(setDoc).catch(() => setError(true));
+    const loadPrivacy = async () => {
+      try {
+        const doc = await legalApi.getPrivacy();
+        setDoc(doc);
+      } catch {
+        setError(true);
+      }
+    };
+    loadPrivacy();
   }, []);
 
   return (

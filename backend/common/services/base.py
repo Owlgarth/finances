@@ -9,7 +9,7 @@ def resolve_currency(workspace_id: int, symbol: str):
     """Look up a Currency by symbol for a workspace. Returns None if not found."""
     from workspaces.models import Currency
 
-    return Currency.objects.filter(workspace_id=workspace_id, symbol=symbol).first()
+    return Currency.objects.for_workspace(workspace_id).filter(symbol=symbol).first()
 
 
 def get_or_create_period_balance(period_id: int, currency, user=None) -> PeriodBalance:
@@ -41,7 +41,7 @@ def get_workspace_currencies(workspace_id: int) -> list:
     """Get list of Currency objects for a workspace."""
     from workspaces.models import Currency
 
-    return list(Currency.objects.filter(workspace_id=workspace_id))
+    return list(Currency.objects.for_workspace(workspace_id))
 
 
 def delete_workspace_financial_records(workspace_id: int) -> None:

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
 import { budgetsApi, categoriesApi, budgetPeriodsApi } from '../../../api/client'
 import type { Category, BudgetPeriod, PaginatedResponse } from '../../../types'
+import Modal from '../../common/Modal'
+import Select from '../../common/Select'
 
 interface CategoryBudget {
   id: number
@@ -97,18 +98,7 @@ export default function EditBudgetModal({ isOpen, onClose, budget, periodId }: P
   if (!isOpen || !budget) return null
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div 
-        className="bg-surface rounded-sm p-6 w-full max-w-md relative border border-border"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-6">Edit Budget</h2>
 
         <form onSubmit={handleSubmit}>
@@ -117,20 +107,16 @@ export default function EditBudgetModal({ isOpen, onClose, budget, periodId }: P
             {isLoadingPeriods ? (
               <p className="text-sm text-text-muted italic">Loading budget periods...</p>
             ) : (
-              <select
-                value={selectedPeriodId}
-                onChange={(e) => {
-                  setSelectedPeriodId(Number(e.target.value))
+              <Select
+                value={selectedPeriodId === '' ? null : selectedPeriodId}
+                onChange={(v) => {
+                  setSelectedPeriodId(v)
                   setCategoryId('') // Reset category when period changes
                 }}
-                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors"
-                required
-              >
-                <option value="">Select budget period</option>
-                {budgetPeriods?.map(period => (
-                  <option key={period.id} value={period.id}>{period.name}</option>
-                ))}
-              </select>
+                options={(budgetPeriods ?? []).map((p) => ({ value: p.id, label: p.name }))}
+                placeholder="Select budget period"
+                aria-label="Budget Period"
+              />
             )}
           </div>
 
@@ -145,33 +131,27 @@ export default function EditBudgetModal({ isOpen, onClose, budget, periodId }: P
             ) : categories && categories.length === 0 ? (
               <p className="text-text bg-surface-hover px-3 py-1 rounded-sm text-sm">No categories found for this period</p>
             ) : (
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
-                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors disabled:opacity-50"
-                required
+              <Select
+                value={categoryId === '' ? null : categoryId}
+                onChange={(v) => setCategoryId(v)}
+                options={(categories ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                placeholder="Select category"
                 disabled={!selectedPeriodId}
-              >
-                <option value="">Select category</option>
-                {categories?.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+                aria-label="Category"
+              />
             )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">Currency *</label>
-              <select
+              <Select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:border-border-focus focus:outline-none transition-colors"
-              >
-                {CURRENCIES.map(cur => (
-                  <option key={cur} value={cur}>{cur}</option>
-                ))}
-              </select>
+                onChange={(v) => setCurrency(v)}
+                options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                mono
+                aria-label="Currency"
+              />
             </div>
 
             <div>
@@ -205,7 +185,6 @@ export default function EditBudgetModal({ isOpen, onClose, budget, periodId }: P
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

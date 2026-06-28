@@ -5,9 +5,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import toast from 'react-hot-toast'
-import Loading from '../components/common/Loading'
+import Skeleton from '../components/common/Skeleton'
 import EmptyState from '../components/common/EmptyState'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import Modal from '../components/common/Modal'
+import Select from '../components/common/Select'
 import type { WorkspaceMember, AddMemberRequest } from '../types'
 import {
   KeyRound,
@@ -105,7 +107,52 @@ export default function WorkspaceMembersPage() {
     },
   })
 
-  if (workspaceLoading || membersLoading) return <Loading />
+  if (workspaceLoading || membersLoading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-7 w-36" />
+            <Skeleton className="h-7 w-28" />
+          </div>
+        </div>
+        <div className="bg-surface rounded-sm overflow-hidden border border-border">
+          <div className="bg-surface-hover px-6 py-3">
+            <div className="grid grid-cols-4 gap-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-3 w-14 ml-auto" />
+            </div>
+          </div>
+          <div className="divide-y divide-border">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-6 py-4 grid grid-cols-4 gap-4 items-center">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-10 w-10 flex-shrink-0" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-16" />
+                <div className="flex justify-end gap-2">
+                  <Skeleton className="h-5 w-5" />
+                  <Skeleton className="h-5 w-5" />
+                  <Skeleton className="h-5 w-5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (error) return <div className="text-negative p-4">Failed to load workspace members</div>
 
   return (
@@ -378,8 +425,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-sm p-6 max-w-md w-full border border-border">
+    <Modal open={true} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-4">Add Member</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -431,15 +477,16 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
             <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Role *
             </label>
-            <select
+            <Select
               value={role}
-              onChange={(e) => setRole(e.target.value as 'admin' | 'member' | 'viewer')}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
-            >
-              <option value="viewer">Viewer - Can view all data</option>
-              <option value="member">Member - Can view and edit data</option>
-              <option value="admin">Admin - Can manage members and settings</option>
-            </select>
+              onChange={(v) => setRole(v)}
+              options={[
+                { value: 'viewer', label: 'Viewer - Can view all data' },
+                { value: 'member', label: 'Member - Can view and edit data' },
+                { value: 'admin', label: 'Admin - Can manage members and settings' },
+              ]}
+              aria-label="Role"
+            />
           </div>
 
           <p className="text-xs text-text-muted">
@@ -464,8 +511,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -485,8 +531,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-sm p-6 max-w-md w-full border border-border">
+    <Modal open={true} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-4">Change Role</h2>
         <p className="text-text-muted mb-4">
           Update role for <strong className="text-text">{member.full_name || member.email}</strong>
@@ -496,15 +541,16 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
             <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Role
             </label>
-            <select
+            <Select
               value={role}
-              onChange={(e) => setRole(e.target.value as 'admin' | 'member' | 'viewer')}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
-            >
-              <option value="viewer">Viewer - Can view all data</option>
-              <option value="member">Member - Can view and edit data</option>
-              <option value="admin">Admin - Can manage members and settings</option>
-            </select>
+              onChange={(v) => setRole(v)}
+              options={[
+                { value: 'viewer', label: 'Viewer - Can view all data' },
+                { value: 'member', label: 'Member - Can view and edit data' },
+                { value: 'admin', label: 'Admin - Can manage members and settings' },
+              ]}
+              aria-label="Role"
+            />
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -525,8 +571,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -560,8 +605,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-sm p-6 max-w-md w-full border border-border">
+    <Modal open={true} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-2">Reset Password</h2>
         <p className="text-text-muted mb-4">
           Resetting password for <strong className="text-text">{member.full_name || member.email}</strong>
@@ -626,8 +670,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -671,8 +714,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-sm p-6 max-w-md w-full border border-border">
+    <Modal open={true} onClose={onClose} size="md" className="p-6">
         <h2 className="text-sm font-medium text-text mb-2">Change My Password</h2>
         <p className="text-text-muted mb-4">
           Update your account password
@@ -757,7 +799,6 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

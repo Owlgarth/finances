@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from common.crypto import decrypt_secret, encrypt_secret
 from common.exceptions import AuthenticationError, NotFoundError, ValidationError
-from users.exceptions import TwoFactorNotEnabledError
+from users.exceptions import TwoFactorNotEnabledError, UserInvalidPasswordError
 from users.models import User, UserTwoFactor
 from workspaces.exceptions import (
     WorkspaceMemberAdminInsufficientError,
@@ -101,7 +101,9 @@ class TwoFactorService:
         return {'recovery_codes': recovery_codes}
 
     @staticmethod
-    def disable(user: User) -> None:
+    def disable(user: User, password: str) -> None:
+        if not user.check_password(password):
+            raise UserInvalidPasswordError()
         twofa = UserTwoFactor.objects.filter(user=user, is_enabled=True).first()
         if not twofa:
             raise NotFoundError('Two-factor authentication is not enabled')
@@ -119,7 +121,9 @@ class TwoFactorService:
         }
 
     @staticmethod
-    def regenerate_codes(user: User) -> dict:
+    def regenerate_codes(user: User, password: str) -> dict:
+        if not user.check_password(password):
+            raise UserInvalidPasswordError()
         twofa = UserTwoFactor.objects.filter(user=user, is_enabled=True).first()
         if not twofa:
             raise NotFoundError('Two-factor authentication is not enabled')

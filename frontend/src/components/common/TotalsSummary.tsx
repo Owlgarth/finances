@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react'
+import { formatAmount } from '../../utils/format'
 import type { TransactionTotalItem, PlannedTransactionTotalItem, CurrencyExchangeTotalItem } from '../../types'
 
 // ============= Props =============
@@ -22,18 +23,6 @@ interface ExchangeProps {
 type Props = TransactionProps | PlannedProps | ExchangeProps
 
 // ============= Helpers =============
-
-function formatAmount(total: string): string {
-  // String-based formatting to preserve full Decimal precision from backend.
-  // Avoids parseFloat which loses precision for large values (e.g. "123456789012345.67").
-  const isNegative = total.startsWith('-')
-  const abs = isNegative ? total.slice(1) : total
-  const [intPart, decPart = '00'] = abs.split('.')
-  const paddedDec = decPart.length < 2 ? decPart.padEnd(2, '0') : decPart.slice(0, 2)
-  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  const sign = isNegative ? '-' : ''
-  return `${sign}${formattedInt}.${paddedDec}`
-}
 
 function extractCurrencies(items: { currency: string }[]): string[] {
   const seen = new Set<string>()

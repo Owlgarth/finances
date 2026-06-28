@@ -1,4 +1,5 @@
 import BudgetCategoryRow from './BudgetCategoryRow'
+import { formatAmount } from '../../utils/format'
 
 interface CategoryBudget {
   id: number
@@ -54,11 +55,11 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
           ))}
           <tr className="bg-surface-hover">
             <td className="px-6 py-4 font-mono font-bold text-text">Total</td>
-            <td className="px-6 py-4 text-right font-mono font-bold text-text">{totalBudget.toFixed(2)}</td>
-            <td className="px-6 py-4 text-right font-mono font-bold text-text">{totalActual.toFixed(2)}</td>
+            <td className="px-6 py-4 text-right font-mono font-bold text-text">{formatAmount(totalBudget)}</td>
+            <td className="px-6 py-4 text-right font-mono font-bold text-text">{formatAmount(totalActual)}</td>
             <td className="px-6 py-4 text-right">
               <span className={`font-mono font-bold ${totalDifference < 0 ? 'text-negative' : 'text-positive'}`}>
-                {totalDifference.toFixed(2)}
+                {formatAmount(totalDifference)}
               </span>
             </td>
             <td className="px-6 py-4"></td>
@@ -82,18 +83,18 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
               <div className="flex justify-between items-start mb-3">
                 <h4 className="font-sans font-medium text-text">{cat.category}</h4>
                 <span className={`font-mono font-bold ${isOverBudget ? 'text-negative' : 'text-positive'}`}>
-                  {difference.toFixed(2)}
+                  {formatAmount(difference)}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-3 text-sm font-mono">
                 <div>
                   <span className="text-text-muted text-[10px] uppercase tracking-wider">Budget:</span>
-                  <span className="ml-1 font-bold text-text">{budgetNum.toFixed(2)}</span>
+                  <span className="ml-1 font-bold text-text">{formatAmount(budgetNum)}</span>
                 </div>
                 <div>
                   <span className="text-text-muted text-[10px] uppercase tracking-wider">Actual:</span>
-                  <span className="ml-1 font-bold text-text">{actualNum.toFixed(2)}</span>
+                  <span className="ml-1 font-bold text-text">{formatAmount(actualNum)}</span>
                 </div>
               </div>
 
@@ -138,17 +139,17 @@ export default function BudgetTable({ currency, categories, onEdit, onDelete }: 
           <div className="flex justify-between items-center mb-2">
             <span className="text-text font-sans uppercase tracking-tight text-sm select-none">Total</span>
             <span className={`font-mono ${totalDifference < 0 ? 'text-negative' : 'text-positive'}`}>
-              {totalDifference.toFixed(2)}
+              {formatAmount(totalDifference)}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm font-mono">
             <div>
               <span className="text-text-muted text-[10px] uppercase tracking-wider select-none">Budget:</span>
-              <span className="ml-1 text-text">{totalBudget.toFixed(2)}</span>
+              <span className="ml-1 text-text">{formatAmount(totalBudget)}</span>
             </div>
             <div>
               <span className="text-text-muted text-[10px] uppercase tracking-wider select-none">Actual:</span>
-              <span className="ml-1 text-text">{totalActual.toFixed(2)}</span>
+              <span className="ml-1 text-text">{formatAmount(totalActual)}</span>
             </div>
           </div>
         </div>

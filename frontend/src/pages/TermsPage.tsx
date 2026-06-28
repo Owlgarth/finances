@@ -11,7 +11,15 @@ export default function TermsPage() {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    legalApi.getTerms().then(setDoc).catch(() => setError(true));
+    const loadTerms = async () => {
+      try {
+        const doc = await legalApi.getTerms();
+        setDoc(doc);
+      } catch {
+        setError(true);
+      }
+    };
+    loadTerms();
   }, []);
 
   return (

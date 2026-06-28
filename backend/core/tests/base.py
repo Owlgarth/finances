@@ -1,12 +1,10 @@
 """Base test case for core tests."""
 
-from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin
-
-User = get_user_model()
 
 
 class AuthTestCase(APIClientMixin, TestCase):
@@ -20,11 +18,10 @@ class AuthTestCase(APIClientMixin, TestCase):
     @staticmethod
     def create_user(email='test@example.com', password='testpass123', full_name='Test User'):
         """Helper to create a test user."""
-        return User.objects.create_user(
-            email=email,
-            password=password,
-            full_name=full_name,
-        )
+        user = UserFactory(email=email, full_name=full_name)
+        user.set_password(password)
+        user.save()
+        return user
 
     def register_and_login(self, email='test@example.com', password='testpass123', workspace_name='Test Workspace'):
         """Helper to register a user and return their token."""

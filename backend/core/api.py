@@ -5,20 +5,11 @@ import uuid
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from ninja import Router
 
-from common.auth import (
-    JWTAuth,
-    consume_refresh_token,
-    consume_temp_token,
-    create_access_token,
-    create_refresh_token,
-    create_temp_token,
-    decode_temp_token,
-)
+from common.auth import JWTAuth, decode_temp_token
 from common.throttle import rate_limit, rate_limit_by_key
 from common.utils import get_client_ip
 from core.schemas import (
@@ -38,9 +29,7 @@ from core.schemas import (
     Verify2FAIn,
     VerifyEmailIn,
 )
-from users.exceptions import TwoFactorNotEnabledError
-from users.models import UserTwoFactor
-from workspaces.services import WorkspaceService
+from core.services import AuthService
 
 router = Router(tags=['Auth'])
 User = get_user_model()
@@ -49,76 +38,15 @@ User = get_user_model()
 @router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
 @rate_limit('register', limit=settings.RATE_LIMIT_REGISTER, period=settings.RATE_LIMIT_REGISTER_PERIOD)
 def register(request, data: RegisterIn):
-    """
-    Register a new user with workspace and default data.
-
-    Creates:
-    - User account
-    - Workspace with user as owner
-    - Workspace membership
-    - Default budget account
-    - Demo data for the previous month
-
-    Returns JWT token for automatic login.
-    """
-    if settings.DEMO_MODE:
-        return 403, {'detail': 'Registration is disabled in demo mode'}
-
-    if User.objects.filter(email=data.email).exists():
-        return 400, {'error': 'User with this email already exists'}
-
-    with transaction.atomic():
-        user = User.objects.create_user(
-            email=data.email,
-            password=data.password,
-            full_name=data.full_name,
-        )
-
-        WorkspaceService.create_workspace(user=user, name=data.workspace_name, create_demo=True)
-
-        from users.models import ConsentType
-        from users.services import UserService
-
-        ip = get_client_ip(request)
-        UserService.record_consent(user, ConsentType.TERMS_OF_SERVICE, data.accepted_terms_version, ip)
-        UserService.record_consent(user, ConsentType.PRIVACY_POLICY, data.accepted_privacy_version, ip)
-
-        transaction.on_commit(lambda: UserService.send_registration_emails(user))
-
-    access_token = create_access_token(user)
-    refresh_token = create_refresh_token(user)
-
-    return 201, {
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'token_type': 'bearer',
-    }
+    """Register a new user with workspace and default data. See AuthService.register."""
+    return AuthService.register(data, get_client_ip(request))
 
 
 @router.post('/login', response={200: LoginOut, 401: DetailOut, 429: DetailOut})
 @rate_limit('login', limit=settings.RATE_LIMIT_LOGIN, period=settings.RATE_LIMIT_LOGIN_PERIOD)
 def login(request, data: LoginIn):
-    """
-    Login user and return JWT token.
-
-    If the user has 2FA enabled, returns a temporary token
-    that must be verified before issuing a full JWT.
-    """
-    user = User.objects.filter(email=data.email).first()
-    if not user:
-        return 401, {'detail': 'Invalid email or password'}
-    if not user.check_password(data.password):
-        return 401, {'detail': 'Invalid email or password'}
-    if not user.is_active:
-        return 401, {'detail': 'User account is disabled'}
-
-    if UserTwoFactor.objects.filter(user=user, is_enabled=True).exists():
-        return 200, LoginOut(requires_2fa=True, temp_token=create_temp_token(user))
-
-    access_token = create_access_token(user)
-    refresh_token = create_refresh_token(user)
-
-    return 200, LoginOut(access_token=access_token, refresh_token=refresh_token)
+    """Login user and return a JWT pair, or a 2FA temp token. See AuthService.login."""
+    return AuthService.login(data)
 
 
 def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
@@ -141,49 +69,14 @@ def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
     period=settings.RATE_LIMIT_VERIFY_2FA_PERIOD,
 )
 def verify_2fa(request, data: Verify2FAIn):
-    payload = consume_temp_token(data.temp_token)
-    if not payload:
-        return 401, {'detail': 'Invalid or expired verification token'}
-
-    user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
-    if not user:
-        return 401, {'detail': 'User not found'}
-
-    tf = UserTwoFactor.objects.filter(user=user).first()
-    if not tf or not tf.is_enabled:
-        raise TwoFactorNotEnabledError()
-
-    from users.two_factor import TwoFactorService
-
-    if not TwoFactorService.verify_code(user, data.code):
-        return 401, {'detail': 'Invalid verification code'}
-
-    access_token = create_access_token(user)
-    refresh_token = create_refresh_token(user)
-    return 200, {
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'token_type': 'bearer',
-    }
+    """Verify a 2FA temp token + code and issue full tokens. See AuthService.complete_2fa."""
+    return AuthService.complete_2fa(data)
 
 
 @router.post('/refresh', response={200: Token, 401: DetailOut})
 def refresh_token(request, data: RefreshTokenIn):
-    payload = consume_refresh_token(data.refresh_token)
-    if not payload:
-        return 401, {'detail': 'Invalid or expired refresh token'}
-
-    user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
-    if not user:
-        return 401, {'detail': 'User not found'}
-
-    access_token = create_access_token(user)
-    new_refresh_token = create_refresh_token(user)
-    return 200, {
-        'access_token': access_token,
-        'refresh_token': new_refresh_token,
-        'token_type': 'bearer',
-    }
+    """Exchange a refresh token for a rotated token pair. See AuthService.refresh."""
+    return AuthService.refresh(data)
 
 
 @router.post('/verify-email', response={200: MessageOut, 400: DetailOut})
@@ -195,7 +88,11 @@ def verify_email(request, data: VerifyEmailIn):
 
 
 @router.post('/resend-verification', response={200: MessageOut, 429: DetailOut})
-@rate_limit('resend_verification', limit=3, period=3600)
+@rate_limit(
+    'resend_verification',
+    limit=settings.RATE_LIMIT_RESEND_VERIFICATION,
+    period=settings.RATE_LIMIT_RESEND_VERIFICATION_PERIOD,
+)
 def resend_verification(request, data: ResendVerificationIn):
     from users.services import UserService
 
@@ -204,7 +101,9 @@ def resend_verification(request, data: ResendVerificationIn):
 
 
 @router.post('/forgot-password', response={200: MessageOut, 429: DetailOut})
-@rate_limit('forgot_password', limit=3, period=3600)
+@rate_limit(
+    'forgot_password', limit=settings.RATE_LIMIT_FORGOT_PASSWORD, period=settings.RATE_LIMIT_FORGOT_PASSWORD_PERIOD
+)
 def forgot_password(request, data: ForgotPasswordIn):
     from users.services import UserService
 
@@ -213,7 +112,9 @@ def forgot_password(request, data: ForgotPasswordIn):
 
 
 @router.post('/reset-password', response={200: MessageOut, 400: DetailOut, 429: DetailOut})
-@rate_limit('reset_password', limit=5, period=60)
+@rate_limit(
+    'reset_password', limit=settings.RATE_LIMIT_RESET_PASSWORD, period=settings.RATE_LIMIT_RESET_PASSWORD_PERIOD
+)
 def reset_password(request, data: ResetPasswordIn):
     from users.services import UserService
 

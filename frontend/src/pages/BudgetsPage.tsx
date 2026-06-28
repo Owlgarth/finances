@@ -7,7 +7,8 @@ import {useBudgetPeriod} from '../contexts/BudgetPeriodContext'
 import {usePermissions} from '../hooks/usePermissions'
 import CreateBudgetModal from '../components/modals/budget/CreateBudgetModal'
 import EditBudgetModal from '../components/modals/budget/EditBudgetModal'
-import Loading from '../components/common/Loading'
+import ConfirmDialog from '../components/common/ConfirmDialog'
+import Skeleton, { SkeletonRows } from '../components/common/Skeleton'
 import EmptyState from '../components/common/EmptyState'
 import BalanceSection from '../components/balance/BalanceSection'
 import BudgetSummarySection from '../components/budget/BudgetSummarySection'
@@ -28,6 +29,7 @@ export default function BudgetsPage() {
     const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [selectedBudget, setSelectedBudget] = useState<CategoryBudget | null>(null)
+    const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
 
     const {selectedPeriod: period, isLoading} = useBudgetPeriod()
     const {canManageBudgetData} = usePermissions()
@@ -49,12 +51,24 @@ export default function BudgetsPage() {
     }
 
     const handleDelete = (id: number) => {
-        if (window.confirm('Are you sure you want to delete this budget?')) {
-            deleteMutation.mutate(id)
-        }
+        setDeleteTargetId(id)
     }
 
-    if (isLoading) return <Loading/>
+    if (isLoading) {
+        return (
+            <div className="max-w-screen-2xl mx-auto">
+                <div className="bg-surface border border-border rounded-sm p-4 sm:p-6 md:p-8">
+                    <SkeletonRows count={2} className="space-y-4" rowClassName="h-16 w-full" />
+                </div>
+                <div className="flex items-center gap-4 mb-8 mt-8 sm:mt-12">
+                    <Skeleton className="h-5 w-40" />
+                </div>
+                <div className="bg-surface border border-border rounded-sm p-4 sm:p-6 md:p-8">
+                    <SkeletonRows count={3} className="divide-y divide-border" rowClassName="h-12 w-full" />
+                </div>
+            </div>
+        )
+    }
 
     if (!period) {
         return (
@@ -101,6 +115,14 @@ export default function BudgetsPage() {
                 }}
                 budget={selectedBudget}
                 periodId={period.id}
+            />
+
+            <ConfirmDialog
+                isOpen={deleteTargetId !== null}
+                title="Delete budget"
+                message="Are you sure you want to delete this budget?"
+                onConfirm={() => { if (deleteTargetId !== null) { deleteMutation.mutate(deleteTargetId) } setDeleteTargetId(null) }}
+                onCancel={() => setDeleteTargetId(null)}
             />
         </div>
     )

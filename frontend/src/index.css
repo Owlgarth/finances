@@ -29,6 +29,9 @@
   --color-warning: #D97706;
   --color-warning-bg: #FFFBEB;
 
+  /* Overlays */
+  --color-scrim: rgba(23, 23, 23, 0.20);   /* #171717 (primary) at 20% — modal/drawer backdrop */
+
   font-family: 'Geist', sans-serif;
   line-height: 1.5;
   font-weight: 500;
@@ -97,6 +100,9 @@ button {
   --color-negative-bg:     #450A0A;
   --color-warning:         #FBBF24;
   --color-warning-bg:      #451A03;
+
+  /* Overlays */
+  --color-scrim: rgba(0, 0, 0, 0.50);      /* pure black at 50% */
 }
 
 /*

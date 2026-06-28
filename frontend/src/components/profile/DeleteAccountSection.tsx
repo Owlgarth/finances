@@ -12,10 +12,17 @@ export default function DeleteAccountSection() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    authApi.checkDeletion()
-      .then(setCheck)
-      .catch(() => toast.error('Failed to load account deletion info'))
-      .finally(() => setIsLoadingCheck(false));
+    const loadCheck = async () => {
+      try {
+        const check = await authApi.checkDeletion();
+        setCheck(check);
+      } catch {
+        toast.error('Failed to load account deletion info');
+      } finally {
+        setIsLoadingCheck(false);
+      }
+    };
+    loadCheck();
   }, []);
 
   const handleDelete = async (e: React.FormEvent) => {

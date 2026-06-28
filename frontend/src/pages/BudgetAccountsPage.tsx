@@ -5,9 +5,12 @@ import { budgetAccountsApi } from '../api/client'
 import { useBudgetAccount } from '../contexts/BudgetAccountContext'
 import { usePermissions } from '../hooks/usePermissions'
 import toast from 'react-hot-toast'
-import Loading from '../components/common/Loading'
+import Skeleton from '../components/common/Skeleton'
 import EmptyState from '../components/common/EmptyState'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import Switch from '../components/common/Switch'
+import Modal from '../components/common/Modal'
+import Select from '../components/common/Select'
 import type { BudgetAccount } from '../types'
 
 export default function BudgetAccountsPage() {
@@ -72,7 +75,39 @@ export default function BudgetAccountsPage() {
     },
   })
 
-  if (isLoading) return <Loading />
+  if (isLoading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <Skeleton className="h-5 w-40" />
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="h-7 w-28" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-surface p-6 rounded-sm border border-border border-l-4">
+              <div className="flex items-center gap-3 mb-4">
+                <Skeleton className="h-8 w-8 flex-shrink-0" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+              <Skeleton className="h-4 w-full mb-4" />
+              <Skeleton className="h-6 w-16 mb-4" />
+              <div className="flex items-center justify-between pt-4">
+                <Skeleton className="h-4 w-16" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-5 w-5" />
+                  <Skeleton className="h-5 w-5" />
+                  <Skeleton className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
   if (error) return <div className="text-negative p-4">Failed to load budget accounts</div>
 
   return (
@@ -81,11 +116,10 @@ export default function BudgetAccountsPage() {
         <h1 className="text-base font-semibold text-text">Budget Accounts</h1>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input
-              type="checkbox"
+            <Switch
               checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded-sm border-border focus:ring-border-focus"
+              onChange={setShowInactive}
+              aria-label="Show archived"
             />
             Show archived
           </label>
@@ -181,7 +215,7 @@ function BudgetAccountCard({
       className={`bg-surface p-6 rounded-sm border border-border transition-all ${
         !account.is_active ? 'opacity-60' : ''
       } ${isSelected ? 'ring-2 ring-primary' : ''}`}
-      style={{ borderLeftColor: account.color || '#3B82F6', borderLeftWidth: 4 }}
+      style={{ borderLeftColor: account.color || 'var(--color-primary)', borderLeftWidth: 4 }}
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -272,7 +306,9 @@ function BudgetAccountFormModal({
   const [name, setName] = useState(account?.name || '')
   const [description, setDescription] = useState(account?.description || '')
   const [currency, setCurrency] = useState(account?.default_currency || 'PLN')
-  const [color, setColor] = useState(account?.color || '#3B82F6')
+  // #171717 is the resolved value of --color-primary (design/tokens.md:48).
+  // Native <input type="color"> cannot accept a CSS variable, so the hex literal is required here.
+  const [color, setColor] = useState(account?.color || '#171717')
   const [icon, setIcon] = useState(account?.icon || '')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -291,8 +327,7 @@ function BudgetAccountFormModal({
   const iconOptions = ['', '💰', '💳', '🏠', '🚗', '💼', '🎯', '🛒', '✈️', '📱', '🎓', '📊']
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-sm border border-border p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <Modal open={true} onClose={onClose} size="md" className="p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="font-sans font-semibold text-text text-sm mb-4">
           {account ? 'Edit Budget Account' : 'Create Budget Account'}
         </h2>
@@ -329,17 +364,12 @@ function BudgetAccountFormModal({
               <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 Icon
               </label>
-              <select
+              <Select
                 value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
-              >
-                {iconOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt || 'None'}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setIcon(v)}
+                options={iconOptions.map((o) => ({ value: o, label: o || 'None' }))}
+                aria-label="Icon"
+              />
             </div>
 
             <div>
@@ -359,17 +389,19 @@ function BudgetAccountFormModal({
             <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
               Default Currency
             </label>
-            <select
+            <Select
               value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-muted border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
-            >
-              <option value="PLN">PLN - Polish Zloty</option>
-              <option value="USD">USD - US Dollar</option>
-              <option value="EUR">EUR - Euro</option>
-              <option value="UAH">UAH - Ukrainian Hryvnia</option>
-              <option value="GBP">GBP - British Pound</option>
-            </select>
+              onChange={(v) => setCurrency(v)}
+              options={[
+                { value: 'PLN', label: 'PLN - Polish Zloty' },
+                { value: 'USD', label: 'USD - US Dollar' },
+                { value: 'EUR', label: 'EUR - Euro' },
+                { value: 'UAH', label: 'UAH - Ukrainian Hryvnia' },
+                { value: 'GBP', label: 'GBP - British Pound' },
+              ]}
+              mono
+              aria-label="Default Currency"
+            />
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -390,7 +422,6 @@ function BudgetAccountFormModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

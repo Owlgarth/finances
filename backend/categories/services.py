@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.db import IntegrityError
 
+from budget_periods.models import BudgetPeriod
 from budget_periods.services import BudgetPeriodService
 from categories.exceptions import (
     CategoryDuplicateNameError,
@@ -46,8 +47,6 @@ class CategoryService:
         Returns an empty paginated result (not 404) when budget_period_id does not belong to
         the workspace. This prevents leaking whether a period ID exists elsewhere.
         """
-        from budget_periods.models import BudgetPeriod
-
         if current_date and not budget_period_id:
             period = (
                 BudgetPeriod.objects.select_related('budget_account')

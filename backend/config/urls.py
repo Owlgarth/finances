@@ -31,7 +31,10 @@ api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
 
 @api.exception_handler(ServiceError)
 def service_error_handler(request, exc: ServiceError):
-    return api.create_response(request, {'detail': exc.message}, status=exc.http_status)
+    body: dict = {'detail': exc.message}
+    if exc.code:
+        body['code'] = exc.code
+    return api.create_response(request, body, status=exc.http_status)
 
 
 # Register all routers to the API

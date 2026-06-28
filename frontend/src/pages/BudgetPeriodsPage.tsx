@@ -9,7 +9,7 @@ import type {BudgetPeriod} from "../types";
 import CreatePeriodModal from '../components/modals/periods/CreatePeriodModal'
 import CopyBudgetPeriodModal from '../components/modals/periods/CopyBudgetPeriodModal'
 import EditBudgetPeriodModal from '../components/modals/periods/EditBudgetPeriodModal'
-import Loading from '../components/common/Loading'
+import Skeleton from '../components/common/Skeleton'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
 
@@ -32,7 +32,27 @@ export default function BudgetPeriodsPage() {
     }
   })
 
-  if (isLoading) return <Loading />
+  if (isLoading) {
+    return (
+      <div className="max-w-screen-2xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-7 w-28" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-surface border border-border p-4 sm:p-6 md:p-8 rounded-sm">
+              <Skeleton className="h-5 w-2/3 mb-3" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-1/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
   if (error) return <ErrorMessage message="Failed to load budget periods" />
 
   return (

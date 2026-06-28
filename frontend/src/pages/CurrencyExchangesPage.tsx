@@ -10,11 +10,12 @@ import type { CurrencyExchange, ExchangeShortcut, PaginatedResponse } from '../t
 import CurrencyExchangeFormModal from '../components/modals/currency/CurrencyExchangeFormModal'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import ManageShortcutsModal from '../components/modals/currency/ManageShortcutsModal'
-import Loading from '../components/common/Loading'
+import Skeleton, { SkeletonRows } from '../components/common/Skeleton'
 import ErrorMessage from '../components/common/ErrorMessage'
 import Pagination from '../components/common/Pagination'
 import TotalsSummary from '../components/common/TotalsSummary'
 import CurrencyExchangeList from '../components/currencyExchanges/CurrencyExchangeList'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 
 export default function CurrencyExchangesPage() {
   const queryClient = useQueryClient()
@@ -34,6 +35,7 @@ export default function CurrencyExchangesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [ordering, setOrdering] = useState<string>('-date')
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
 
   const handleSort = (field: string) => {
     setOrdering(prev => {
@@ -150,9 +152,7 @@ export default function CurrencyExchangesPage() {
   }
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this exchange?')) {
-      deleteMutation.mutate(id)
-    }
+    setDeleteTargetId(id)
   }
 
   const handleAddNew = () => {
@@ -180,7 +180,23 @@ export default function CurrencyExchangesPage() {
     setIsTransactionModalOpen(true)
   }
 
-  if (isLoading) return <Loading />
+  if (isLoading) {
+    return (
+      <div className="max-w-screen-2xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+          <Skeleton className="h-5 w-48" />
+          <div className="flex gap-3">
+            <Skeleton className="h-7 w-20" />
+            <Skeleton className="h-7 w-20" />
+            <Skeleton className="h-7 w-32" />
+          </div>
+        </div>
+        <div className="bg-surface border border-border rounded-sm">
+          <SkeletonRows count={8} className="divide-y divide-border" rowClassName="h-12 w-full" />
+        </div>
+      </div>
+    )
+  }
   if (error) return <ErrorMessage message="Failed to load currency exchanges" />
 
   return (
@@ -309,6 +325,14 @@ export default function CurrencyExchangesPage() {
           setPrefilledTransactionData(null)
         }}
         prefilledData={prefilledTransactionData || undefined}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete exchange"
+        message="Are you sure you want to delete this exchange?"
+        onConfirm={() => { if (deleteTargetId !== null) { deleteMutation.mutate(deleteTargetId) } setDeleteTargetId(null) }}
+        onCancel={() => setDeleteTargetId(null)}
       />
     </div>
   )

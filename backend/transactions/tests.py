@@ -106,6 +106,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         Transaction.objects.create(
@@ -117,6 +118,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
@@ -134,6 +136,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get('/api/transactions?current_date=2025-01-15', **self.auth_headers())
@@ -151,6 +154,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='income',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         Transaction.objects.create(
@@ -162,6 +166,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get(
@@ -182,6 +187,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         Transaction.objects.create(
@@ -193,6 +199,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}&search=grocery', **self.auth_headers())
@@ -211,6 +218,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         Transaction.objects.create(
@@ -222,6 +230,7 @@ class TestListTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get(f'/api/transactions?budget_period_id={self.period.id}&amount_gte=100', **self.auth_headers())
@@ -459,6 +468,7 @@ class TestGetTransaction(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         data = self.get(f'/api/transactions/{trans.id}', **self.auth_headers())
@@ -507,6 +517,7 @@ class TestGetTransaction(TransactionsTestCase):
             start_date=date(2025, 4, 1),
             end_date=date(2025, 4, 30),
             created_by=other_user,
+            workspace=other_workspace,
         )
 
         other_trans = Transaction.objects.create(
@@ -517,6 +528,7 @@ class TestGetTransaction(TransactionsTestCase):
             currency=other_currency,
             type='expense',
             created_by=other_user,
+            workspace=other_workspace,
         )
 
         self.get(f'/api/transactions/{other_trans.id}', **self.auth_headers())
@@ -635,6 +647,7 @@ class TestUpdateTransaction(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         payload = {
@@ -717,6 +730,7 @@ class TestDeleteTransaction(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         trans_id = trans.id
@@ -776,6 +790,7 @@ class TestExportTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         response = self.client.get(
@@ -797,6 +812,7 @@ class TestExportTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='income',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         Transaction.objects.create(
@@ -808,6 +824,7 @@ class TestExportTransactions(TransactionsTestCase):
             currency=self.pln_currency,
             type='expense',
             created_by=self.user,
+            workspace=self.workspace,
         )
 
         response = self.client.get(
@@ -947,6 +964,24 @@ class TestImportTransactions(TransactionsTestCase):
             **self.auth_headers(),
         )
         self.assertStatus(400)
+
+    def test_import_transactions_invalid_binary_file_returns_400(self):
+        """A non-JSON / non-UTF-8 upload returns 400, not 500 (UnicodeDecodeError is caught)."""
+        # A PNG header is not valid UTF-8, so json.loads() raises UnicodeDecodeError
+        # (a ValueError, not a json.JSONDecodeError) which must be caught as a 400.
+        file = SimpleUploadedFile(
+            'transactions.json',
+            b'\x89PNG\r\n\x1a\n',
+            content_type='application/json',
+        )
+
+        data = self.post_file(
+            '/api/transactions/import',
+            {'file': file, 'budget_period_id': self.period.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'Invalid JSON file.')
 
     def test_import_transactions_invalid_format_fails(self):
         """Test importing with invalid data format."""
