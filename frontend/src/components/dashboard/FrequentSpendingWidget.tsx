@@ -1,19 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { transactionsApi } from '../../api/client'
+import { formatAmount } from '../../utils/format'
 
 interface Props {
   periodId: number | null
-}
-
-function formatAmount(total: string): string {
-  const isNegative = total.startsWith('-')
-  const abs = isNegative ? total.slice(1) : total
-  const [intPart, decPart = '00'] = abs.split('.')
-  const paddedDec = decPart.length < 2 ? decPart.padEnd(2, '0') : decPart.slice(0, 2)
-  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  const sign = isNegative ? '-' : ''
-  return `${sign}${formattedInt}.${paddedDec}`
 }
 
 export default function FrequentSpendingWidget({ periodId }: Props) {
@@ -50,7 +42,7 @@ export default function FrequentSpendingWidget({ periodId }: Props) {
           {items.map((item) => (
             <div key={`${item.description}-${item.currency}`} className="flex items-center justify-between text-xs">
               <div className="flex-1 min-w-0 mr-2">
-                <span className="text-text-muted mr-1">&#9656;</span>
+                <ChevronRight size={14} className="text-text-muted mr-1 inline-block align-text-bottom" />
                 <span className="text-text truncate">{item.description}</span>
               </div>
               <div className="flex items-center gap-2 whitespace-nowrap">

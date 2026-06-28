@@ -16,6 +16,7 @@ from period_balances.exceptions import PeriodBalanceNotFoundError, PeriodBalance
 from period_balances.models import PeriodBalance
 from period_balances.schemas import PeriodBalanceUpdate
 from transactions.models import Transaction
+from workspaces.models import Currency
 
 
 class PeriodBalanceService:
@@ -52,8 +53,6 @@ class PeriodBalanceService:
     @staticmethod
     def get_validated_period(period_id: int, workspace_id: int) -> BudgetPeriod:
         """Validate period belongs to workspace. Raises PeriodBalancePeriodNotFoundError if not."""
-        from budget_periods.models import BudgetPeriod
-
         period = (
             BudgetPeriod.objects.select_related('budget_account')
             .filter(id=period_id, budget_account__workspace_id=workspace_id)
@@ -64,10 +63,9 @@ class PeriodBalanceService:
         return period
 
     @staticmethod
+    @db_transaction.atomic
     def recalculate(period_id: int, currency_symbol: str) -> PeriodBalance:
         """Recalculate a period balance from scratch using aggregates."""
-        from workspaces.models import Currency
-
         current_period = BudgetPeriod.objects.select_related('budget_account__workspace').filter(id=period_id).first()
         if not current_period:
             raise PeriodBalancePeriodNotFoundError()
@@ -127,6 +125,7 @@ class PeriodBalanceService:
         return balance
 
     @staticmethod
+    @db_transaction.atomic
     def recalculate_all(workspace_id: int, period_id: int) -> list[PeriodBalance]:
         """Recalculate all currency balances for a period."""
         PeriodBalanceService.get_validated_period(period_id, workspace_id)

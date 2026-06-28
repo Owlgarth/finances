@@ -94,7 +94,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
   return (
     <>
       <aside
-        className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-300 z-50
+        className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-200 z-50
           ${collapsed ? 'w-16' : 'w-60'}`}
       >
         {/* Logo + collapse toggle */}

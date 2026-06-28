@@ -49,9 +49,9 @@ class ReportService:
         result = {}
         for currency in currencies:
             latest_balance = (
-                PeriodBalance.objects.filter(currency__symbol=currency.symbol)
+                PeriodBalance.objects.for_workspace(workspace_id)
+                .filter(currency__symbol=currency.symbol)
                 .select_related('budget_period__budget_account', 'currency')
-                .filter(budget_period__budget_account__workspace_id=workspace_id)
                 .order_by('-budget_period__end_date')
                 .first()
             )

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
 import { exchangeShortcutsApi } from '../../../api/client'
 import type { ExchangeShortcut } from '../../../types'
+import Modal from '../../common/Modal'
+import Select from '../../common/Select'
 
 const CURRENCIES = ['PLN', 'USD', 'EUR', 'UAH']
 
@@ -100,18 +101,7 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div
-        className="bg-surface border border-border rounded-sm p-6 w-full max-w-md relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="md" className="p-6">
         <h2 className="font-sans font-semibold text-text text-sm mb-6">
           Manage Shortcuts
         </h2>
@@ -129,25 +119,23 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
                 {editingId === shortcut.id ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <select
+                      <Select
                         value={editFrom}
-                        onChange={(e) => setEditFrom(e.target.value)}
-                        className="bg-surface-muted border border-border rounded-none px-2 py-1.5 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
-                      >
-                        {CURRENCIES.map(cur => (
-                          <option key={cur} value={cur}>{cur}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setEditFrom(v)}
+                        options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                        mono
+                        aria-label="Edit from currency"
+                        className="w-24"
+                      />
                       <span className="text-text-muted">→</span>
-                      <select
+                      <Select
                         value={editTo}
-                        onChange={(e) => setEditTo(e.target.value)}
-                        className="bg-surface-muted border border-border rounded-none px-2 py-1.5 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
-                      >
-                        {CURRENCIES.map(cur => (
-                          <option key={cur} value={cur}>{cur}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setEditTo(v)}
+                        options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                        mono
+                        aria-label="Edit to currency"
+                        className="w-24"
+                      />
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -195,25 +183,23 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
         {/* Add shortcut form */}
         <form onSubmit={handleAdd}>
           <div className="flex items-center gap-2">
-            <select
+            <Select
               value={newFrom}
-              onChange={(e) => setNewFrom(e.target.value)}
-              className="bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
-            >
-              {CURRENCIES.map(cur => (
-                <option key={cur} value={cur}>{cur}</option>
-              ))}
-            </select>
+              onChange={(v) => setNewFrom(v)}
+              options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+              mono
+              aria-label="New shortcut from currency"
+              className="w-24"
+            />
             <span className="text-text-muted">→</span>
-            <select
+            <Select
               value={newTo}
-              onChange={(e) => setNewTo(e.target.value)}
-              className="bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
-            >
-              {CURRENCIES.map(cur => (
-                <option key={cur} value={cur}>{cur}</option>
-              ))}
-            </select>
+              onChange={(v) => setNewTo(v)}
+              options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+              mono
+              aria-label="New shortcut to currency"
+              className="w-24"
+            />
             <button
               type="submit"
               disabled={createMutation.isPending}
@@ -223,7 +209,6 @@ export default function ManageShortcutsModal({ isOpen, onClose, shortcuts }: Pro
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
