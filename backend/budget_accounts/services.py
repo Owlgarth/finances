@@ -36,7 +36,7 @@ class BudgetAccountService:
     @db_transaction.atomic
     def create(user, workspace_id: int, data: BudgetAccountCreate) -> BudgetAccount:
         """Create a new budget account."""
-        if BudgetAccount.objects.filter(workspace_id=workspace_id, name=data.name).exists():
+        if BudgetAccount.objects.for_workspace(workspace_id).filter(name=data.name).exists():
             raise BudgetAccountDuplicateNameError()
 
         default_currency = resolve_currency(workspace_id, data.default_currency)
@@ -65,7 +65,7 @@ class BudgetAccountService:
         if (
             data.name is not None
             and data.name != account.name
-            and BudgetAccount.objects.filter(workspace_id=workspace_id, name=data.name).exclude(id=account_id).exists()
+            and BudgetAccount.objects.for_workspace(workspace_id).filter(name=data.name).exclude(id=account_id).exists()
         ):
             raise BudgetAccountDuplicateNameError()
 

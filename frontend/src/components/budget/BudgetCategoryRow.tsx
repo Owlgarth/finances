@@ -1,3 +1,5 @@
+import { formatAmount } from '../../utils/format'
+
 interface CategoryBudget {
   id: number
   category_id: number
@@ -23,11 +25,11 @@ export default function BudgetCategoryRow({ categoryBudget, onEdit, onDelete }: 
   return (
     <tr className={`hover:bg-surface-hover transition-colors h-8 ${percentage >= 100 ? 'bg-negative-bg' : ''}`}>
       <td className="px-6 py-2 text-sm font-medium text-text">{categoryBudget.category}</td>
-      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{budgetNum.toFixed(2)}</td>
-      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{actualNum.toFixed(2)}</td>
+      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{formatAmount(budgetNum)}</td>
+      <td className="px-6 py-2 text-right font-mono text-sm font-bold text-text">{formatAmount(actualNum)}</td>
       <td className="px-6 py-2 text-right">
         <span className={`font-mono text-sm font-bold ${difference < 0 ? 'text-negative' : 'text-positive'}`}>
-          {difference.toFixed(2)}
+          {formatAmount(difference)}
         </span>
       </td>
       <td className="px-6 py-2">

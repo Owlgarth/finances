@@ -9,6 +9,7 @@ import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
 import { usePermissions } from '../hooks/usePermissions'
 import TransactionList from '../components/transactions/TransactionList'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 import Loading from '../components/common/Loading'
 import ErrorMessage from '../components/common/ErrorMessage'
 import EmptyState from '../components/common/EmptyState'
@@ -21,6 +22,7 @@ export default function Transactions() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [ordering, setOrdering] = useState<string>('-date')
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Applied filters (used in actual query)
@@ -324,9 +326,7 @@ export default function Transactions() {
   }
 
   const handleDelete = (id: number) => {
-    if (confirm('Delete this transaction?')) {
-      deleteMutation.mutate(id)
-    }
+    setDeleteTargetId(id)
   }
 
   const handleCloseModal = () => {
@@ -788,6 +788,14 @@ export default function Transactions() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         transaction={editingTransaction}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete transaction"
+        message="Delete this transaction?"
+        onConfirm={() => { if (deleteTargetId !== null) { deleteMutation.mutate(deleteTargetId) } setDeleteTargetId(null) }}
+        onCancel={() => setDeleteTargetId(null)}
       />
     </div>
   )

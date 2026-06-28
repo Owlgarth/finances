@@ -237,6 +237,22 @@ RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60
 RATE_LIMIT_DATA_EXPORT = int(os.getenv('RATE_LIMIT_DATA_EXPORT', '3'))
 # Time window (seconds) for data export rate limiting
 RATE_LIMIT_DATA_EXPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_EXPORT_PERIOD', '3600'))
+# Max resend-verification requests per IP within the period window
+RATE_LIMIT_RESEND_VERIFICATION = int(os.getenv('RATE_LIMIT_RESEND_VERIFICATION', '3'))
+# Time window (seconds) for resend-verification rate limiting
+RATE_LIMIT_RESEND_VERIFICATION_PERIOD = int(os.getenv('RATE_LIMIT_RESEND_VERIFICATION_PERIOD', '3600'))
+# Max forgot-password requests per IP within the period window
+RATE_LIMIT_FORGOT_PASSWORD = int(os.getenv('RATE_LIMIT_FORGOT_PASSWORD', '3'))
+# Time window (seconds) for forgot-password rate limiting
+RATE_LIMIT_FORGOT_PASSWORD_PERIOD = int(os.getenv('RATE_LIMIT_FORGOT_PASSWORD_PERIOD', '3600'))
+# Max reset-password requests per IP within the period window
+RATE_LIMIT_RESET_PASSWORD = int(os.getenv('RATE_LIMIT_RESET_PASSWORD', '5'))
+# Time window (seconds) for reset-password rate limiting
+RATE_LIMIT_RESET_PASSWORD_PERIOD = int(os.getenv('RATE_LIMIT_RESET_PASSWORD_PERIOD', '60'))
+# Max data-import requests per IP within the period window
+RATE_LIMIT_DATA_IMPORT = int(os.getenv('RATE_LIMIT_DATA_IMPORT', '3'))
+# Time window (seconds) for data-import rate limiting
+RATE_LIMIT_DATA_IMPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_IMPORT_PERIOD', '3600'))
 
 # Max exchange shortcuts per workspace
 EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE = int(os.getenv('EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE', '5'))

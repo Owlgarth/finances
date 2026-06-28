@@ -11,8 +11,8 @@ from django.test import Client
 
 from common.auth import create_access_token
 from common.tests.factories import BudgetAccountFactory, UserFactory
-from workspaces.factories import WorkspaceFactory
-from workspaces.models import Workspace, WorkspaceMember
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
+from workspaces.models import Workspace
 
 User = get_user_model()
 
@@ -134,7 +134,7 @@ class AuthMixin:
             self.workspace.save()
 
         # Create workspace membership with configured role
-        WorkspaceMember.objects.create(
+        WorkspaceMemberFactory(
             workspace=self.workspace,
             user=self.user,
             role=self.user_role,

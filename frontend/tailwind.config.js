@@ -33,6 +33,9 @@ export default {
         "negative-bg":    "var(--color-negative-bg)",
         "warning":        "var(--color-warning)",
         "warning-bg":     "var(--color-warning-bg)",
+
+        // Overlays
+        "scrim":          "var(--color-scrim)",
       },
       fontFamily: {
         "sans":   ["Geist", "sans-serif"],

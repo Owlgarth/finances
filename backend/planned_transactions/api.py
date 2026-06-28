@@ -10,6 +10,7 @@ from ninja.files import UploadedFile
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
+from core.schemas.common import DetailOut
 from core.schemas.pagination import PaginatedOut
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
@@ -122,10 +123,8 @@ def import_planned_transactions(
 
     try:
         data = json.loads(file.read())
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return 400, {'detail': 'Invalid JSON file.'}
-    except Exception as e:
-        return 400, {'detail': f'Invalid data format: {e}'}
 
     count = PlannedTransactionService.import_data(user, workspace_id, budget_period_id, data)
     if count == 0:
@@ -134,14 +133,16 @@ def import_planned_transactions(
 
 
 # Parameterized routes must come after specific routes
-@router.get('/{planned_id}', response=PlannedTransactionOut, auth=WorkspaceJWTAuth())
+@router.get('/{planned_id}', response={200: PlannedTransactionOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def get_planned(request: HttpRequest, planned_id: int):
     """Get a specific planned transaction by ID."""
     workspace_id = request.auth.current_workspace_id
     return PlannedTransactionService.get_planned(planned_id, workspace_id)
 
 
-@router.put('/{planned_id}', response=PlannedTransactionOut, auth=WorkspaceJWTAuth())
+@router.put(
+    '/{planned_id}', response={200: PlannedTransactionOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
+)
 def update_planned(request: HttpRequest, planned_id: int, data: PlannedTransactionUpdate):
     """Update a planned transaction (requires write access)."""
     user = request.auth
@@ -152,7 +153,7 @@ def update_planned(request: HttpRequest, planned_id: int, data: PlannedTransacti
     return planned
 
 
-@router.delete('/{planned_id}', response={204: None}, auth=WorkspaceJWTAuth())
+@router.delete('/{planned_id}', response={204: None, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def delete_planned(request: HttpRequest, planned_id: int):
     """Delete a planned transaction (requires write access)."""
     user = request.auth
@@ -163,7 +164,11 @@ def delete_planned(request: HttpRequest, planned_id: int):
     return 204, None
 
 
-@router.post('/{planned_id}/execute', response=PlannedTransactionOut, auth=WorkspaceJWTAuth())
+@router.post(
+    '/{planned_id}/execute',
+    response={200: PlannedTransactionOut, 400: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
 def execute_planned(
     request: HttpRequest,
     planned_id: int,

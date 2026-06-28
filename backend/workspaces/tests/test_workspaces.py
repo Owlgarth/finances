@@ -4,14 +4,13 @@ from datetime import date
 
 from django.test import TestCase
 
-from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from budgets.factories import BudgetFactory
 from categories.factories import CategoryFactory
 from common.auth import create_access_token
-from common.tests.factories import UserFactory
+from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
-from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
+from workspaces.factories import CurrencyFactory, WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Currency, Workspace, WorkspaceMember
 from workspaces.services import WorkspaceService
 
@@ -920,20 +919,20 @@ class TestCurrencyEndpoints(WorkspaceTestCase):
 
     def test_delete_currency_success(self):
         """Test deleting currency as owner returns 204."""
-        gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
+        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
         self.delete(f'/api/workspaces/currencies/{gbp.id}', **self.auth_headers())
         self.assertStatus(204)
 
     def test_delete_currency_wrong_workspace_returns_404(self):
         """Test deleting currency from other workspace returns 404."""
         other_ws = WorkspaceFactory(name='Other')
-        other_currency = Currency.objects.create(workspace=other_ws, symbol='GBP', name='British Pound')
+        other_currency = CurrencyFactory(workspace=other_ws, symbol='GBP', name='British Pound')
         self.delete(f'/api/workspaces/currencies/{other_currency.id}', **self.auth_headers())
         self.assertStatus(404)
 
     def test_delete_currency_as_member_returns_403(self):
         """Test that member cannot delete currencies."""
-        gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
+        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
 
         self.member_user.current_workspace = self.workspace
         self.member_user.save()
@@ -946,7 +945,7 @@ class TestCurrencyEndpoints(WorkspaceTestCase):
 
     def test_delete_currency_as_viewer_returns_403(self):
         """Test that viewer cannot delete currencies."""
-        gbp = Currency.objects.create(workspace=self.workspace, symbol='GBP', name='British Pound')
+        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
 
         self.viewer_user.current_workspace = self.workspace
         self.viewer_user.save()
@@ -1066,7 +1065,7 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
         self.auth_token = create_access_token(self.viewer_user)
 
         self.pln = Currency.objects.get(workspace=self.workspace, symbol='PLN')
-        self.account = BudgetAccount.objects.create(
+        self.account = BudgetAccountFactory(
             workspace=self.workspace,
             name='General',
             default_currency=self.pln,

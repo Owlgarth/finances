@@ -3,19 +3,17 @@
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
+from common.tests.helpers import create_other_workspace
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currency_exchanges.factories import CurrencyExchangeFactory
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
 from transactions.factories import TransactionFactory
-from workspaces.models import Workspace, WorkspaceMember
-
-User = get_user_model()
+from workspaces.models import WorkspaceMember
 
 
 class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -192,28 +190,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
     def test_get_balance_from_other_workspace_fails(self):
         """Test that getting a balance from another workspace fails."""
         # Create another workspace with a period and balance
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMember.objects.create(
-            workspace=other_workspace,
-            user=other_user,
-            role='owner',
-        )
-
-        other_pln_currency = self.currencies['PLN']
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln_currency,
-            created_by=other_user,
-        )
+        other_workspace, other_user, other_account, other_currencies = create_other_workspace()
 
         other_period = BudgetPeriodFactory(
             budget_account=other_account,
@@ -227,7 +204,7 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         other_balance = PeriodBalanceFactory(
             workspace=other_workspace,
             budget_period=other_period,
-            currency=other_pln_currency,
+            currency=other_currencies['PLN'],
             opening_balance=Decimal('500.00'),
             total_income=Decimal('1000.00'),
             total_expenses=Decimal('800.00'),
