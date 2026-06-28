@@ -12,8 +12,10 @@ from budget_periods.schemas import BudgetPeriodCopy, BudgetPeriodCreate, BudgetP
 from budgets.models import Budget
 from categories.models import Category
 from common.services.base import get_workspace_currencies
+from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
+from transactions.models import Transaction
 
 
 class BudgetPeriodService:
@@ -122,10 +124,6 @@ class BudgetPeriodService:
         (set budget_period=NULL) rather than cascade-delete them.
         We delete them explicitly to avoid orphaned records.
         """
-        from currency_exchanges.models import CurrencyExchange
-        from planned_transactions.models import PlannedTransaction
-        from transactions.models import Transaction
-
         period = BudgetPeriodService.get(period_id, workspace_id)
         Transaction.objects.filter(budget_period=period).delete()
         PlannedTransaction.objects.filter(budget_period=period).delete()

@@ -14,9 +14,15 @@ export default function ReConsentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    authApi.getConsentStatus().then(setStatus).catch(() => {
-      toast.error('Failed to load consent status');
-    });
+    const loadConsentStatus = async () => {
+      try {
+        const status = await authApi.getConsentStatus();
+        setStatus(status);
+      } catch {
+        toast.error('Failed to load consent status');
+      }
+    };
+    loadConsentStatus();
   }, []);
 
   const needsTerms = status ? !status.terms_current : false;

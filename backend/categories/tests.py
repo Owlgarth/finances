@@ -670,6 +670,21 @@ class TestImportCategories(CategoriesTestCase):
         )
         self.assertStatus(400)
 
+    def test_import_categories_invalid_binary_file_returns_400(self):
+        """A non-JSON / non-UTF-8 upload returns 400, not 500 (UnicodeDecodeError is caught)."""
+        file = SimpleUploadedFile(
+            'categories.json',
+            b'\x89PNG\r\n\x1a\n',
+            content_type='application/json',
+        )
+
+        self.post_file(
+            '/api/categories/import',
+            {'file': file, 'budget_period_id': self.period1.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
     def test_import_categories_from_other_workspace_fails(self):
         """Test that importing categories to another workspace's period fails."""
         other_workspace = WorkspaceFactory(name='Other Workspace')

@@ -366,7 +366,7 @@ class TestVerify2FAEndpoint(_Base):
         self.assertEqual(login_response.status_code, 200)
         temp_token = login_response.json()['temp_token']
 
-        TwoFactorService.disable(self.user)
+        TwoFactorService.disable(self.user, 'testpass123')
 
         response = client.post(
             '/api/auth/verify-2fa',

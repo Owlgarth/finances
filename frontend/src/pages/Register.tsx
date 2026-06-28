@@ -18,10 +18,16 @@ export default function Register() {
   const [privacyVersion, setPrivacyVersion] = useState('');
 
   useEffect(() => {
-    Promise.all([legalApi.getTerms(), legalApi.getPrivacy()]).then(([terms, privacy]) => {
-      setTermsVersion(terms.version);
-      setPrivacyVersion(privacy.version);
-    });
+    const loadLegalVersions = async () => {
+      try {
+        const [terms, privacy] = await Promise.all([legalApi.getTerms(), legalApi.getPrivacy()]);
+        setTermsVersion(terms.version);
+        setPrivacyVersion(privacy.version);
+      } catch {
+        // Versions stay empty; the submit button remains disabled until they load.
+      }
+    };
+    loadLegalVersions();
   }, []);
 
   if (import.meta.env.VITE_DEMO_MODE === 'true') {

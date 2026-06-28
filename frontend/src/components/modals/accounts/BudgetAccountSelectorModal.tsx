@@ -1,5 +1,6 @@
-import { X, CircleCheck } from 'lucide-react'
+import { CircleCheck } from 'lucide-react'
 import { useBudgetAccount } from '../../../contexts/BudgetAccountContext'
+import Modal from '../../common/Modal'
 
 interface Props {
   isOpen: boolean
@@ -17,18 +18,7 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div
-        className="bg-surface border border-border rounded-sm p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="lg" className="p-6 max-h-[80vh] overflow-hidden flex flex-col">
         <h2 className="font-semibold text-text text-sm mb-6">Select Budget Account</h2>
 
         {accounts.length === 0 ? (
@@ -95,7 +85,6 @@ export default function BudgetAccountSelectorModal({ isOpen, onClose }: Props) {
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

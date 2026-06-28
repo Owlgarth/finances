@@ -74,7 +74,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   return (
     <div className="fixed inset-0 z-modal-backdrop overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="ws-settings-title">
       <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-        <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={onClose} aria-hidden="true" />
+        <div className="fixed inset-0 bg-scrim backdrop-blur-sm transition-opacity" onClick={onClose} aria-hidden="true" />
 
         <div className="relative transform overflow-hidden rounded-sm bg-surface border border-border text-left transition-all sm:my-8 sm:w-full sm:max-w-lg">
           <div className="px-4 pb-4 pt-5 sm:p-6 sm:pb-4">

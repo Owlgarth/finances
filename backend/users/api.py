@@ -1,11 +1,14 @@
 """Django-Ninja API endpoints for user management."""
 
+import json
 from typing import Literal
 
 from django.conf import settings
+from django.http import HttpResponse
 from ninja import Router
 
 from common.auth import JWTAuth, user_to_schema
+from common.json_encoder import GDPREncoder
 from common.throttle import rate_limit
 from common.utils import get_client_ip
 from core.schemas import (
@@ -154,12 +157,6 @@ def export_my_data(request):
 
     Rate limited to 3 exports per hour.
     """
-    import json
-
-    from django.http import HttpResponse
-
-    from common.json_encoder import GDPREncoder
-
     export_data = services.UserService.export_all_data(request.auth)
 
     response = HttpResponse(
@@ -171,7 +168,7 @@ def export_my_data(request):
 
 
 @router.post('/me/import', auth=JWTAuth(), response={200: ImportResultOut, 400: DetailOut})
-@rate_limit('data_import', limit=3, period=3600)
+@rate_limit('data_import', limit=settings.RATE_LIMIT_DATA_IMPORT, period=settings.RATE_LIMIT_DATA_IMPORT_PERIOD)
 def import_my_data(request, data: FullImportIn):
     """
     Import all data from GDPR export.
@@ -202,9 +199,7 @@ def verify_setup_2fa(request, data: TwoFAVerifySetupIn):
 
 @router.post('/me/2fa/disable', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut, 404: DetailOut})
 def disable_2fa(request, data: TwoFADisableIn):
-    if not request.auth.check_password(data.password):
-        return 401, {'detail': 'Invalid current password'}
-    TwoFactorService.disable(request.auth)
+    TwoFactorService.disable(request.auth, data.password)
     return 200, {'message': 'Two-factor authentication has been disabled'}
 
 
@@ -212,6 +207,4 @@ def disable_2fa(request, data: TwoFADisableIn):
     '/me/2fa/regenerate-codes', auth=JWTAuth(), response={200: TwoFARegenerateOut, 401: DetailOut, 404: DetailOut}
 )
 def regenerate_2fa_codes(request, data: TwoFARegenerateIn):
-    if not request.auth.check_password(data.password):
-        return 401, {'detail': 'Invalid current password'}
-    return 200, TwoFactorService.regenerate_codes(request.auth)
+    return 200, TwoFactorService.regenerate_codes(request.auth, data.password)

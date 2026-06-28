@@ -158,6 +158,7 @@ class TestBudgetSummary(ReportsTestCase):
         """Test budget summary with actual transaction data."""
         Transaction.objects.create(
             budget_period=self.period,
+            workspace=self.workspace,
             date=date(2025, 1, 15),
             description='Grocery shopping',
             category=self.category1,
@@ -169,6 +170,7 @@ class TestBudgetSummary(ReportsTestCase):
 
         Transaction.objects.create(
             budget_period=self.period,
+            workspace=self.workspace,
             date=date(2025, 1, 10),
             description='Bus ticket',
             category=self.category2,
@@ -226,6 +228,7 @@ class TestBudgetSummary(ReportsTestCase):
 
         other_period = BudgetPeriod.objects.create(
             budget_account=other_account,
+            workspace=other_workspace,
             name='Other Period',
             start_date=date(2025, 4, 1),
             end_date=date(2025, 4, 30),
@@ -281,6 +284,7 @@ class TestCurrentBalances(ReportsTestCase):
         """Test that current balances returns the latest period balance for each currency."""
         PeriodBalance.objects.create(
             budget_period=self.period2,
+            workspace=self.workspace,
             currency=self.usd,
             opening_balance=Decimal('2000.00'),
             total_income=Decimal('1000.00'),

@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from core.schemas.auth import ValidatedEmail
 
 
 class CurrencyCreate(BaseModel):
@@ -75,7 +77,7 @@ class WorkspaceMemberAdd(BaseModel):
     When adding an existing user, password is ignored.
     """
 
-    email: EmailStr
+    email: ValidatedEmail
     password: str | None = Field(None, min_length=8, max_length=255)
     role: str = Field(..., pattern=r'^(admin|member|viewer)$')
     full_name: str | None = Field(None, max_length=100)

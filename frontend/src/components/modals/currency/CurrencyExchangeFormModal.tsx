@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { X, CircleHelp } from 'lucide-react'
+import { CircleHelp } from 'lucide-react'
 import { currencyExchangesApi, transactionsApi } from '../../../api/client'
 import type { CurrencyExchange } from '../../../types'
 import { useBudgetPeriod } from '../../../contexts/BudgetPeriodContext'
 import { format } from 'date-fns'
 import DatePicker from '../../DatePicker'
+import Switch from '../../common/Switch'
+import Modal from '../../common/Modal'
+import Select from '../../common/Select'
 
 interface Props {
   isOpen: boolean
@@ -148,18 +151,7 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div 
-        className="bg-surface border border-border rounded-sm p-6 w-full max-w-md relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="md" className="p-6">
         <h2 className="font-sans font-semibold text-text text-sm mb-6">
           {exchange ? 'Edit Currency Exchange' : 'New Currency Exchange'}
         </h2>
@@ -189,15 +181,13 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">From Currency *</label>
-              <select
+              <Select
                 value={fromCurrency}
-                onChange={(e) => setFromCurrency(e.target.value)}
-                className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              >
-                {CURRENCIES.map(cur => (
-                  <option key={cur} value={cur}>{cur}</option>
-                ))}
-              </select>
+                onChange={(v) => setFromCurrency(v)}
+                options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                mono
+                aria-label="From Currency"
+              />
             </div>
 
             <div>
@@ -217,15 +207,13 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">To Currency *</label>
-              <select
+              <Select
                 value={toCurrency}
-                onChange={(e) => setToCurrency(e.target.value)}
-                className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              >
-                {CURRENCIES.map(cur => (
-                  <option key={cur} value={cur}>{cur}</option>
-                ))}
-              </select>
+                onChange={(v) => setToCurrency(v)}
+                options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+                mono
+                aria-label="To Currency"
+              />
             </div>
 
             <div>
@@ -254,29 +242,16 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
             <div className="mb-6 space-y-3">
               {/* Toggle 1: Auto-create transactions */}
               <label className="flex items-center gap-3 cursor-pointer group">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoCreateTransactions}
+                <Switch
+                  checked={autoCreateTransactions}
+                  onChange={setAutoCreateTransactions}
                   aria-label="Auto-create transactions"
-                  onClick={() => setAutoCreateTransactions(!autoCreateTransactions)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
-                    autoCreateTransactions
-                      ? 'bg-primary'
-                      : 'bg-surface-muted border border-border'
-                  }`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 bg-white rounded-full transition-transform duration-150 ${
-                    autoCreateTransactions
-                      ? 'translate-x-[19px]'
-                      : 'translate-x-[3px] border border-border'
-                  }`} />
-                </button>
+                />
                 <span className="text-xs text-text flex items-center gap-1.5">
                   Auto-create transactions
                   <span className="relative group/help">
                     <CircleHelp size={13} className="text-text-muted hover:text-text transition-colors" />
-                    <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 px-3 py-2 bg-surface border border-border rounded-sm text-[11px] text-text leading-relaxed opacity-0 invisible group-hover/help:opacity-100 group-hover/help:visible transition-opacity z-50 pointer-events-none shadow-sm">
+                    <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 px-3 py-2 bg-surface border border-border rounded-sm text-[11px] text-text leading-relaxed opacity-0 invisible group-hover/help:opacity-100 group-hover/help:visible transition-opacity z-50 pointer-events-none">
                       Automatically creates two background transactions: an expense for the &quot;from&quot; side and an income for the &quot;to&quot; side. Both without a category.
                     </span>
                   </span>
@@ -285,29 +260,16 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
 
               {/* Toggle 2: Open transaction form */}
               <label className="flex items-center gap-3 cursor-pointer group">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={openTransactionForm}
+                <Switch
+                  checked={openTransactionForm}
+                  onChange={setOpenTransactionForm}
                   aria-label="Open transaction form"
-                  onClick={() => setOpenTransactionForm(!openTransactionForm)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
-                    openTransactionForm
-                      ? 'bg-primary'
-                      : 'bg-surface-muted border border-border'
-                  }`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 bg-white rounded-full transition-transform duration-150 ${
-                    openTransactionForm
-                      ? 'translate-x-[19px]'
-                      : 'translate-x-[3px] border border-border'
-                  }`} />
-                </button>
+                />
                 <span className="text-xs text-text flex items-center gap-1.5">
                   Open transaction form
                   <span className="relative group/help">
                     <CircleHelp size={13} className="text-text-muted hover:text-text transition-colors" />
-                    <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 px-3 py-2 bg-surface border border-border rounded-sm text-[11px] text-text leading-relaxed opacity-0 invisible group-hover/help:opacity-100 group-hover/help:visible transition-opacity z-50 pointer-events-none shadow-sm">
+                    <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 px-3 py-2 bg-surface border border-border rounded-sm text-[11px] text-text leading-relaxed opacity-0 invisible group-hover/help:opacity-100 group-hover/help:visible transition-opacity z-50 pointer-events-none">
                       Opens a pre-filled transaction form after creating the exchange, so you can add a category to the &quot;to&quot; side expense.
                     </span>
                   </span>
@@ -333,7 +295,6 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

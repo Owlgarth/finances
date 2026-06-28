@@ -48,7 +48,7 @@ export default function ConfirmEmailChangePage() {
         <div className="text-center">
           {state === 'loading' && (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-sm animate-spin" />
+              <div className="h-8 w-8 rounded-sm bg-primary animate-pulse" />
               <p className="text-sm text-text-muted">Confirming email change...</p>
             </div>
           )}

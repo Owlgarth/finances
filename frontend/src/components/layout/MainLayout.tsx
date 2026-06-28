@@ -96,10 +96,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
         {mobileOpen && (
           <>
             <div
-              className="fixed inset-0 z-40 bg-[rgba(47,51,51,0.5)] transition-opacity"
+              className="fixed inset-0 z-modal-backdrop bg-scrim backdrop-blur-sm transition-opacity"
               onClick={() => setMobileOpen(false)}
             />
-            <div className="fixed inset-y-0 left-0 z-50 flex">
+            <div className="fixed inset-y-0 left-0 z-modal flex">
               <Sidebar
                 collapsed={false}
                 onToggleCollapse={() => setMobileOpen(false)}

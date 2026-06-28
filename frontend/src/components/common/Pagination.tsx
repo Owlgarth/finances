@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import Select from './Select'
 
 interface Props {
   page: number
@@ -48,17 +49,14 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-border">
       <div className="flex items-center gap-3 text-sm text-text-muted">
         <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">Rows per page</span>
-        <select
+        <Select
           value={page_size}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="bg-surface-hover text-text rounded-none px-2 py-1 text-sm font-mono border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onPageSizeChange(v)}
+          options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
+          mono
+          aria-label="Rows per page"
+          className="w-20"
+        />
         <span className="font-mono">
           {firstItem}&ndash;{lastItem} of {total}
         </span>

@@ -7,6 +7,7 @@ from budget_accounts.schemas import BudgetAccountArchive, BudgetAccountCreate, B
 from budget_accounts.services import BudgetAccountService
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
+from core.schemas.common import DetailOut
 from workspaces.models import ADMIN_ROLES
 
 router = Router(tags=['Budget Accounts'])
@@ -22,14 +23,14 @@ def list_budget_accounts(
     return BudgetAccountService.list(workspace_id, include_inactive)
 
 
-@router.get('/{account_id}', response=BudgetAccountOut, auth=WorkspaceJWTAuth())
+@router.get('/{account_id}', response={200: BudgetAccountOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def get_budget_account(request: HttpRequest, account_id: int):
     """Get a specific budget account."""
     workspace_id = request.auth.current_workspace_id
     return BudgetAccountService.get(account_id, workspace_id)
 
 
-@router.post('', response={201: BudgetAccountOut}, auth=WorkspaceJWTAuth())
+@router.post('', response={201: BudgetAccountOut, 400: DetailOut}, auth=WorkspaceJWTAuth())
 def create_budget_account(request: HttpRequest, data: BudgetAccountCreate):
     """Create a new budget account (requires owner or admin role)."""
     user = request.auth
@@ -38,7 +39,7 @@ def create_budget_account(request: HttpRequest, data: BudgetAccountCreate):
     return 201, BudgetAccountService.create(user, workspace_id, data)
 
 
-@router.put('/{account_id}', response=BudgetAccountOut, auth=WorkspaceJWTAuth())
+@router.put('/{account_id}', response={200: BudgetAccountOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def update_budget_account(request: HttpRequest, account_id: int, data: BudgetAccountUpdate):
     """Update a budget account (requires owner or admin role)."""
     user = request.auth
@@ -47,7 +48,7 @@ def update_budget_account(request: HttpRequest, account_id: int, data: BudgetAcc
     return BudgetAccountService.update(user, workspace_id, account_id, data)
 
 
-@router.delete('/{account_id}', response={204: None}, auth=WorkspaceJWTAuth())
+@router.delete('/{account_id}', response={204: None, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def delete_budget_account(request: HttpRequest, account_id: int):
     """Delete a budget account (requires owner or admin role)."""
     workspace_id = request.auth.current_workspace_id
@@ -56,7 +57,7 @@ def delete_budget_account(request: HttpRequest, account_id: int):
     return 204, None
 
 
-@router.patch('/{account_id}/archive', response=BudgetAccountOut, auth=WorkspaceJWTAuth())
+@router.patch('/{account_id}/archive', response={200: BudgetAccountOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def set_archive_status_budget_account(request: HttpRequest, account_id: int, data: BudgetAccountArchive):
     """Archive or unarchive a budget account (set is_active)."""
     user = request.auth

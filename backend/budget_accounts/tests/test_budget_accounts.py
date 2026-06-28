@@ -1,10 +1,10 @@
 """Tests for budget_accounts API endpoints."""
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
+from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currency_exchanges.factories import CurrencyExchangeFactory
 from currency_exchanges.models import CurrencyExchange
@@ -13,9 +13,6 @@ from planned_transactions.models import PlannedTransaction
 from transactions.factories import TransactionFactory
 from transactions.models import Transaction
 from workspaces.models import WorkspaceMember
-
-User = get_user_model()
-
 
 # =============================================================================
 # Base Test Class
@@ -42,7 +39,7 @@ class BudgetAccountTestCase(APIClientMixin, AuthMixin, TestCase):
             'created_by': self.user,
         }
         defaults.update(kwargs)
-        return BudgetAccount.objects.create(**defaults)
+        return BudgetAccountFactory(**defaults)
 
 
 # =============================================================================
@@ -144,12 +141,13 @@ class TestGetBudgetAccount(BudgetAccountTestCase):
 
         # Create another workspace with account
         other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = User.objects.create_user(
+        other_user = UserFactory(
             email='other@example.com',
-            password='pass123',
             current_workspace=other_workspace,
         )
-        other_account = BudgetAccount.objects.create(
+        other_user.set_password('pass123')
+        other_user.save()
+        other_account = BudgetAccountFactory(
             workspace=other_workspace,
             name='Other Account',
             default_currency=other_workspace.currencies.get(symbol='PLN'),

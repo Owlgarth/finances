@@ -19,6 +19,7 @@ ROLE_HIERARCHY = {Role.OWNER: 4, Role.ADMIN: 3, Role.MEMBER: 2, Role.VIEWER: 1}
 # Commonly used role groups
 WRITE_ROLES = [Role.OWNER, Role.ADMIN, Role.MEMBER]
 ADMIN_ROLES = [Role.OWNER, Role.ADMIN]
+OWNER_ROLES = [Role.OWNER]
 
 
 class Workspace(models.Model):

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
 import { plannedTransactionsApi } from '../../../api/client'
 import DatePicker from '../../DatePicker'
+import Modal from '../../common/Modal'
 
 interface Props {
   isOpen: boolean
@@ -45,16 +45,7 @@ export default function ExecutePlannedModal({ isOpen, onClose, plannedId, planne
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-[rgba(47,51,51,0.5)] flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-      <div className="bg-surface rounded-sm border border-border p-6 w-full max-w-md relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text transition-colors flex items-center justify-center"
-          aria-label="Close modal"
-        >
-          <X size={14} />
-        </button>
-
+    <Modal open={isOpen} onClose={onClose} size="md" className="p-6">
         <h2 className="font-sans font-semibold text-text text-sm mb-6">Mark as Done</h2>
 
         <form onSubmit={handleSubmit}>
@@ -89,7 +80,6 @@ export default function ExecutePlannedModal({ isOpen, onClose, plannedId, planne
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

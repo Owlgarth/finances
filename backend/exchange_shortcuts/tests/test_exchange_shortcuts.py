@@ -6,7 +6,7 @@ from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from exchange_shortcuts.factories import ExchangeShortcutFactory
 from exchange_shortcuts.models import ExchangeShortcut
-from workspaces.factories import WorkspaceFactory
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import WorkspaceMember
 
 # =============================================================================
@@ -366,7 +366,7 @@ class TestShortcutCrossWorkspace(AuthMixin, APIClientMixin, TestCase):
         self.other_user = UserFactory(
             email='other@example.com', full_name='Other User', current_workspace=self.other_workspace
         )
-        WorkspaceMember.objects.create(workspace=self.other_workspace, user=self.other_user, role='owner')
+        WorkspaceMemberFactory(workspace=self.other_workspace, user=self.other_user, role='owner')
         self.other_workspace.owner = self.other_user
         self.other_workspace.save()
 
