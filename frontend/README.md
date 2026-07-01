@@ -95,6 +95,7 @@ frontend/
 | `BudgetAccountSelector` | Account dropdown |
 | `ProtectedRoute` | Auth route wrapper |
 | `Switch` | Accessible toggle switch (`role="switch"`, `aria-checked`) — see `design/components.md` §7 |
+| `DatePicker` | Date input — default click-to-open popup; opt-in `inline` prop renders an always-visible calendar (used in the add-record modals: `TransactionFormModal`, `PlannedTransactionFormModal`, `CurrencyExchangeFormModal`); inline theming scoped to `.rdp-inline` in `src/index.css` |
 | `TotalsSummary` | Aggregated totals tables (transactions, planned, exchanges) with `group_by` support |
 | `SortableTh` | Sortable table header cell (click toggles sort direction; rotating chevron on active column) |
 

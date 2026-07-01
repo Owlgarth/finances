@@ -1139,6 +1139,47 @@ The frontend uses an "Architectural Ledger" design system defined via CSS custom
 
 **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables are defined — avoid adding `box-shadow` utilities for elevation.
 
+### Third-Party Component Theming
+
+When theming a third-party component (e.g. `react-day-picker`) to match the design system, scope CSS overrides to a wrapper class on the variant's container only (e.g. `.rdp-inline`) so other usages of the same component keep their defaults. Never write global overrides that affect every instance. The container carries the scoping class in the component JSX, with a comment stating the popup path is intentionally left at defaults:
+
+```tsx
+if (inline) {
+  return (
+    <div className={`rdp-inline bg-surface rounded-sm border border-border p-3 ${className}`}>
+      <DayPicker ... />
+    </div>
+  )
+}
+```
+
+Override the third-party's own CSS variables (the intended theming mechanism in libraries like react-day-picker v9, which exposes `--rdp-*` vars) to map onto the app's `var(--color-*)` tokens. This makes the widget automatically dark-mode aware with zero `dark:` variants — the tokens invert under `.dark`, so the widget inherits the inversion for free (same pattern as the `.dark .bg-primary.text-white` rule). Never hardcode colors:
+
+```css
+/* Scoped to the inline calendar — the popup path keeps rdp defaults */
+.rdp-inline {
+  --rdp-accent-color: var(--color-primary);
+  --rdp-accent-background-color: var(--color-surface-hover);
+  --rdp-day_button-border-radius: 0.25rem; /* rounded-sm — matches app buttons */
+}
+
+/* Selected day: solid primary fill, background as text color so it inverts
+   correctly in both themes (same root cause as .dark .bg-primary.text-white). */
+.rdp-inline .rdp-selected .rdp-day_button {
+  background-color: var(--color-primary);
+  color: var(--color-background);
+}
+```
+
+For grid/table-based widgets (calendar grids, data tables), set `table-layout: fixed` + `width: 100%` on the grid so columns fill the container and distribute evenly — without it the widget left-aligns with empty space on the right:
+
+```css
+.rdp-inline .rdp-month_grid {
+  width: 100%;
+  table-layout: fixed; /* guarantee 7 equal columns regardless of content */
+}
+```
+
 ### Responsive Breakpoints
 
 Use `md` (768px) as the primary responsive breakpoint for layout changes. This covers tablets in portrait mode — the smallest screen that benefits from a distinct layout. Avoid using `lg` (1024px) as the first breakpoint, as it excludes many tablet devices:
@@ -1242,6 +1283,33 @@ export default function CategoryForm({ id, name, onSave }: Props) {
   )
 }
 ```
+
+### Variant Props on Shared Components
+
+When a shared component needs a new render variant that must NOT change existing call sites, add an opt-in boolean prop (default `false`) with an early-return render branch. Prefer this over creating a sibling component when the variant reuses most of the component's wiring (refs, formatters, context lookups) and differs only in presentation — a sibling duplicates that wiring. Backward-compatible by construction: call sites that don't pass the prop keep the default path.
+
+```tsx
+interface Props {
+  value: string
+  onChange: (value: string) => void
+  inline?: boolean  // opt-in, default false — existing call sites unaffected
+}
+
+export default function DatePicker({ value, onChange, inline = false }: Props) {
+  const { calendarStartDay } = useUserPreferences()  // shared wiring
+  const [isOpen, setIsOpen] = useState(false)
+  const selectedDate = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
+  // ...other shared hooks/helpers...
+
+  if (inline) {
+    return <DayPicker mode="single" selected={selectedDate} weekStartsOn={isoToJsWeekday(calendarStartDay)} />  // always-visible variant
+  }
+
+  return <input value={value} ... />  // default popup variant
+}
+```
+
+**Hooks ordering corollary:** When the variant uses an early-return render branch, all hooks (`useState`, `useRef`, `useEffect`) and helper closures must stay ABOVE the early return — React's rules of hooks forbid conditional hook calls. Place the early return immediately after the last `useEffect`. In the inactive variant, hooks/state that belong to the other path are harmless no-ops (e.g. a click-outside `useEffect` whose `containerRef.current` is null, or a `setIsOpen(false)` never read in that branch) — do not "clean this up" by moving the early return above the hooks.
 
 ### Multi-Step UI Flows
 
