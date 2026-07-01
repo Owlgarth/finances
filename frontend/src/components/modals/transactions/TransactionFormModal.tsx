@@ -125,6 +125,7 @@ export default function TransactionFormModal({ isOpen, onClose, transaction, pre
               onChange={(value) => setDate(value)}
               className="w-full"
               required
+              inline
             />
           </div>
 
