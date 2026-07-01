@@ -164,6 +164,7 @@ export default function CurrencyExchangeFormModal({ isOpen, onClose, exchange, p
               onChange={(value) => setDate(value)}
               className="w-full"
               required
+              inline
             />
           </div>
 

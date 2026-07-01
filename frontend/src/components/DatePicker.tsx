@@ -12,6 +12,7 @@ interface Props {
   disabled?: boolean
   id?: string
   placeholder?: string
+  inline?: boolean
 }
 
 export default function DatePicker({
@@ -22,6 +23,7 @@ export default function DatePicker({
   disabled = false,
   id,
   placeholder = 'Select date',
+  inline = false,
 }: Props) {
   const { calendarStartDay } = useUserPreferences()
   const [isOpen, setIsOpen] = useState(false)
@@ -55,6 +57,23 @@ export default function DatePicker({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Inline mode: always-visible calendar, no input field, no popup logic.
+  // The `rdp-inline` class scopes the compact, full-width, design-token-themed
+  // overrides in index.css — the popup path keeps react-day-picker's defaults.
+  if (inline) {
+    return (
+      <div className={`rdp-inline bg-surface rounded-sm border border-border p-3 ${className}`}>
+        <DayPicker
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleDaySelect}
+          weekStartsOn={isoToJsWeekday(calendarStartDay)}
+          defaultMonth={selectedDate}
+        />
+      </div>
+    )
+  }
 
   return (
     <div ref={containerRef} className="relative">
