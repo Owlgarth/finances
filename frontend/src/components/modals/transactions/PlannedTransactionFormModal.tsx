@@ -108,6 +108,7 @@ export default function PlannedTransactionFormModal({ isOpen, onClose, plannedTr
               onChange={(value) => setPlannedDate(value)}
               className="w-full"
               required
+              inline
             />
           </div>
 

@@ -155,3 +155,91 @@ button {
 .dark * {
   scrollbar-color: rgba(51, 51, 51, 0.6) transparent;
 }
+
+/* --- Inline DatePicker theming (`.rdp-inline`) ---
+   Scoped to the always-visible calendar used in add-record modals. The popup
+   path keeps react-day-picker's defaults (no `.rdp-inline` wrapper). Overrides
+   use the app's design tokens so the calendar is dark-mode aware and matches
+   the monochrome / font-mono / sharp-corner aesthetic — no hardcoded colors. */
+.rdp-inline {
+  /* Accent → primary token (dark-mode aware; same inversion pattern as
+     `.dark .bg-primary.text-white`). Selected day uses background as text
+     color so it inverts correctly against the primary fill. */
+  --rdp-accent-color: var(--color-primary);
+  --rdp-accent-background-color: var(--color-surface-hover);
+
+  /* Compact day cells + buttons (defaults are 44px / 42px circular) */
+  --rdp-day-height: 2.25rem;
+  --rdp-day_button-width: 2rem;
+  --rdp-day_button-height: 2rem;
+  --rdp-day_button-border: none;
+  --rdp-day_button-border-radius: 0.25rem; /* rounded-sm — matches app buttons */
+
+  /* Compact nav arrows */
+  --rdp-nav-height: 2.25rem;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+
+  --rdp-weekday-padding: 0.25rem 0;
+}
+
+.rdp-inline .rdp-root {
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+
+/* Stretch the grid to fill the modal width so the calendar isn't left-aligned
+   with empty space on the right. Columns distribute evenly across 7 days. */
+.rdp-inline .rdp-months {
+  width: 100%;
+  max-width: 100%;
+  justify-content: center;
+}
+.rdp-inline .rdp-month_grid {
+  width: 100%;
+  table-layout: fixed; /* guarantee 7 equal columns regardless of content */
+}
+.rdp-inline .rdp-day {
+  width: auto;            /* let the table distribute columns evenly */
+  text-align: center;
+}
+.rdp-inline .rdp-day_button {
+  display: inline-flex;   /* centered within the td via text-align: center */
+}
+
+/* Weekday header row — tiny uppercase to match the app's label style */
+.rdp-inline .rdp-weekday {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.075em;
+  opacity: 0.6;
+}
+
+/* Caption (month/year) — balanced with the nav arrows on the header row */
+.rdp-inline .rdp-month_caption {
+  font-size: 0.8125rem;
+}
+
+/* Selected day: solid primary fill (like an app primary button), not a ring.
+   `color: var(--color-background)` inverts correctly in both themes. */
+.rdp-inline .rdp-selected {
+  font-size: inherit;
+}
+.rdp-inline .rdp-selected .rdp-day_button {
+  background-color: var(--color-primary);
+  color: var(--color-background);
+}
+
+/* Subtle hover affordance on selectable days (matches app hover tokens) */
+.rdp-inline .rdp-day_button:not(:disabled):hover {
+  background-color: var(--color-surface-hover);
+}
+.rdp-inline .rdp-selected .rdp-day_button:not(:disabled):hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Today marker — emphasis via weight only, keeps the monochrome palette */
+.rdp-inline .rdp-today:not(.rdp-outside) {
+  font-weight: 600;
+}
