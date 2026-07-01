@@ -74,6 +74,7 @@ frontend/src/
 - `EmptyState` - Empty state with action
 - `ConfirmDialog` - Delete confirmation
 - `Switch` - Accessible toggle switch (`role="switch"`, `aria-checked`, visible focus ring); on = `bg-primary`, off = `bg-surface-muted border border-border` (per `design/components.md` §7)
+- `DatePicker` - Date input with two render modes: default click-to-open popup (period modals, Transactions filters, `ExecutePlannedModal`) and an opt-in `inline` always-visible calendar (`inline` prop, default `false`) used in the add-record modals (`TransactionFormModal`, `PlannedTransactionFormModal`, `CurrencyExchangeFormModal`); inline theming is scoped to the `.rdp-inline` class in `src/index.css` via design tokens (the popup path keeps react-day-picker defaults)
 - `PeriodSelector` - Period dropdown
 - `BudgetAccountSelector` - Account dropdown
 - `ProtectedRoute` - Auth route wrapper
