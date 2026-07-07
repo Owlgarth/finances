@@ -61,7 +61,7 @@ Every endpoint must verify resources belong to the user's workspace. Four securi
 
 ## Detailed Conventions (Skills)
 
-Detailed conventions are split into skills under `.claude/skills/`. Load the relevant skill(s) before working on the corresponding area:
+Detailed conventions are split into skills under `.agents/skills/`. Load the relevant skill(s) before working on the corresponding area:
 
 | Skill | Load when working on |
 |-------|----------------------|
