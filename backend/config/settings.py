@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     # Custom apps
     'users',
     'workspaces',
+    'currencies',
     'budget_accounts',
     'budget_periods',
     'categories',

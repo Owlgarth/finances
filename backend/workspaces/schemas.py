@@ -61,6 +61,7 @@ class WorkspaceCreate(BaseModel):
     """Schema for creating a workspace."""
 
     name: str = Field(..., max_length=100)
+    currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
 
     @field_validator('name')
     @classmethod

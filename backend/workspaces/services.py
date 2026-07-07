@@ -7,6 +7,7 @@ from django.db import transaction as db_transaction
 from budget_accounts.models import BudgetAccount
 from common.email import EmailService
 from common.exceptions import ValidationError
+from currencies.services import CurrencyCatalogService
 from workspaces.demo_fixtures import create_demo_fixtures
 from workspaces.exceptions import (
     CurrencyDuplicateSymbolError,
@@ -31,30 +32,30 @@ from workspaces.schemas import WorkspaceMemberOut, WorkspaceOut
 
 User = get_user_model()
 
-DEFAULT_CURRENCIES = [
-    ('USD', 'US Dollar'),
-    ('UAH', 'Ukrainian Hryvnia'),
-    ('PLN', 'Polish Zloty'),
-    ('EUR', 'Euro'),
-]
-
 
 class WorkspaceService:
     @staticmethod
     @db_transaction.atomic
-    def create_workspace(user, name: str, create_demo: bool = False) -> Workspace:
+    def create_workspace(user, name: str, currency_code: str = 'PLN', create_demo: bool = False) -> Workspace:
         """
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
-        - Default currencies (USD, UAH, PLN, EUR)
-        - Default "General" budget account (PLN currency)
+        - One enabled catalog currency + one legacy currency row (removed in B8)
+        - Default "General" budget account (in the chosen currency)
         - Demo fixtures (optional)
         - Sets user.current_workspace to the new workspace
         """
         workspace = Workspace.objects.create(name=name, owner=user)
         WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
-        CurrencyService.create_default_currencies(workspace)
-        default_currency = workspace.currencies.filter(symbol='PLN').first() or workspace.currencies.first()
+        catalog_currency = CurrencyCatalogService.enable(user, workspace.id, currency_code)
+        # Legacy models (BudgetAccount.default_currency etc.) keep working off
+        # this per-workspace row until B8 deletes them.
+        default_currency = Currency.objects.create(
+            workspace=workspace,
+            symbol=currency_code,
+            name=catalog_currency.name,
+            created_by=user,
+        )
         BudgetAccount.objects.create(
             workspace=workspace,
             name='General',
@@ -245,15 +246,6 @@ class CurrencyService:
         if not currency:
             raise CurrencyNotFoundError()
         currency.delete()
-
-    @staticmethod
-    @db_transaction.atomic
-    def create_default_currencies(workspace: Workspace) -> list[Currency]:
-        """Create the four default currencies for a new workspace."""
-        return [
-            Currency.objects.create(workspace=workspace, symbol=symbol, name=name)
-            for symbol, name in DEFAULT_CURRENCIES
-        ]
 
 
 class WorkspaceMemberService:

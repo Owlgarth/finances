@@ -10,6 +10,7 @@ from categories.factories import CategoryFactory
 from categories.models import Category
 from common.exceptions import ValidationError
 from common.tests.factories import UserFactory
+from currencies.services import CurrencyCatalogService
 from currency_exchanges.factories import CurrencyExchangeFactory
 from currency_exchanges.models import CurrencyExchange
 from period_balances.factories import PeriodBalanceFactory
@@ -55,16 +56,36 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertIsNotNone(membership)
         self.assertEqual(membership.role, 'owner')
 
-    def test_creates_default_currencies(self):
-        """Test that create_workspace creates 4 default currencies."""
+    def test_creates_single_currency_and_enablement(self):
+        """create_workspace creates exactly one legacy currency row and one catalog enablement."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
         currencies = list(Currency.objects.filter(workspace=workspace))
-        self.assertEqual(len(currencies), 4)
+        self.assertEqual(len(currencies), 1)
+        self.assertEqual(currencies[0].symbol, 'PLN')
+        self.assertEqual(currencies[0].name, 'Polish Zloty')
 
-        symbols = {c.symbol for c in currencies}
-        self.assertEqual(symbols, {'USD', 'UAH', 'PLN', 'EUR'})
+        enabled = CurrencyCatalogService.list_enabled(workspace.id)
+        self.assertEqual([c.code for c in enabled], ['PLN'])
+
+    def test_creates_workspace_with_explicit_currency(self):
+        """create_workspace honors a non-default currency_code."""
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Euro Workspace', currency_code='EUR', create_demo=False
+        )
+
+        currencies = list(Currency.objects.filter(workspace=workspace))
+        self.assertEqual(len(currencies), 1)
+        self.assertEqual(currencies[0].symbol, 'EUR')
+        self.assertEqual(currencies[0].name, 'Euro')
+
+        enabled = CurrencyCatalogService.list_enabled(workspace.id)
+        self.assertEqual([c.code for c in enabled], ['EUR'])
+
+        account = BudgetAccount.objects.filter(workspace=workspace, name='General').first()
+        self.assertEqual(account.default_currency, currencies[0])
 
     def test_creates_general_budget_account_with_all_fields(self):
         """Test that create_workspace creates General BudgetAccount with all required fields."""
@@ -92,12 +113,12 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertEqual(user.current_workspace, workspace)
 
     def test_with_create_demo_false_skips_demo_fixtures(self):
-        """Test that create_demo=False skips demo fixtures but still creates currencies and account."""
+        """Test that create_demo=False skips demo fixtures but still creates the currency and account."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
         currencies_count = Currency.objects.filter(workspace=workspace).count()
-        self.assertEqual(currencies_count, 4)
+        self.assertEqual(currencies_count, 1)
 
         account_count = BudgetAccount.objects.filter(workspace=workspace).count()
         self.assertEqual(account_count, 1)

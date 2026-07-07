@@ -50,6 +50,7 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     workspace_name: str
+    currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
     accepted_terms_version: str = Field(..., description='Version of Terms of Service accepted')
     accepted_privacy_version: str = Field(..., description='Version of Privacy Policy accepted')
 

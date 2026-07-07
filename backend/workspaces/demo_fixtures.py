@@ -13,11 +13,29 @@ from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
 from budgets.models import Budget
 from categories.models import Category
+from currencies.services import CurrencyCatalogService
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
 from workspaces.models import Currency
+
+# Currencies the demo records below rely on. The workspace is created with a
+# single currency, so the demo creates the missing legacy rows itself and
+# enables each in the catalog.
+DEMO_CURRENCIES = [
+    ('PLN', 'Polish Zloty'),
+    ('USD', 'US Dollar'),
+    ('EUR', 'Euro'),
+]
+
+
+def _ensure_demo_currencies(workspace_id: int | str, user_id: int | str) -> None:
+    """Create legacy currency rows + catalog enablements the demo data needs."""
+    for symbol, name in DEMO_CURRENCIES:
+        if not Currency.objects.filter(workspace_id=workspace_id, symbol=symbol).exists():
+            Currency.objects.create(workspace_id=workspace_id, symbol=symbol, name=name, created_by_id=user_id)
+        CurrencyCatalogService.enable(None, workspace_id, symbol)
 
 
 def get_previous_month_name() -> str:
@@ -56,6 +74,8 @@ def create_demo_fixtures(
     - Sample currency exchanges
     - Period balances
     """
+    _ensure_demo_currencies(workspace_id, user_id)
+
     # Load workspace currencies into a symbol -> Currency map
     currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
 

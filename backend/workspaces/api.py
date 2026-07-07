@@ -6,6 +6,8 @@ from ninja import Router
 from common.auth import JWTAuth, WorkspaceJWTAuth
 from common.permissions import require_role
 from core.schemas import DetailOut, MessageOut
+from currencies.schemas import CurrencyCatalogOut, EnableCurrencyIn
+from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
 from workspaces.schemas import (
@@ -56,6 +58,50 @@ def delete_currency(request: HttpRequest, currency_id: int):
 
 
 # =============================================================================
+# Enabled Currencies Endpoints (global catalog enablement — replaces the
+# legacy per-workspace currency endpoints above, which are removed in B8)
+# =============================================================================
+
+
+@router.get('/enabled-currencies', response=list[CurrencyCatalogOut], auth=WorkspaceJWTAuth())
+def list_enabled_currencies(request: HttpRequest):
+    """List the catalog currencies enabled for the current workspace."""
+    return CurrencyCatalogService.list_enabled(request.auth.current_workspace_id)
+
+
+@router.post(
+    '/enabled-currencies',
+    response={201: CurrencyCatalogOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def enable_currency(request: HttpRequest, data: EnableCurrencyIn):
+    """Enable a catalog currency, or create and enable a custom currency (custom=true)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, ADMIN_ROLES)
+    if data.custom:
+        currency = CurrencyCatalogService.create_custom(
+            user, workspace_id, data.code, data.name, data.symbol, data.decimals
+        )
+    else:
+        currency = CurrencyCatalogService.enable(user, workspace_id, data.code)
+    return 201, currency
+
+
+@router.delete(
+    '/enabled-currencies/{code}',
+    response={204: None, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def disable_currency(request: HttpRequest, code: str):
+    """Disable a currency for the current workspace."""
+    workspace_id = request.auth.current_workspace_id
+    require_role(request.auth, workspace_id, ADMIN_ROLES)
+    CurrencyCatalogService.disable(workspace_id, code)
+    return 204, None
+
+
+# =============================================================================
 # Workspace Endpoints
 # =============================================================================
 
@@ -69,7 +115,9 @@ def list_workspaces(request: HttpRequest):
 @router.post('/', response={201: WorkspaceOut}, auth=JWTAuth())
 def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
     """Create a new workspace. User becomes owner and is auto-switched to it."""
-    workspace = WorkspaceService.create_workspace(user=request.auth, name=data.name, create_demo=False)
+    workspace = WorkspaceService.create_workspace(
+        user=request.auth, name=data.name, currency_code=data.currency_code, create_demo=False
+    )
     return 201, WorkspaceService._to_response(workspace, Role.OWNER)
 
 

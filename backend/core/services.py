@@ -51,7 +51,9 @@ class AuthService:
                 full_name=data.full_name,
             )
 
-            WorkspaceService.create_workspace(user=user, name=data.workspace_name, create_demo=True)
+            WorkspaceService.create_workspace(
+                user=user, name=data.workspace_name, currency_code=data.currency_code, create_demo=True
+            )
 
             UserService.record_consent(user, ConsentType.TERMS_OF_SERVICE, data.accepted_terms_version, ip_address)
             UserService.record_consent(user, ConsentType.PRIVACY_POLICY, data.accepted_privacy_version, ip_address)

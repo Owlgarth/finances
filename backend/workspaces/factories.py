@@ -4,7 +4,15 @@ import factory
 from factory.django import DjangoModelFactory
 
 from workspaces.models import Currency, Workspace, WorkspaceMember
-from workspaces.services import DEFAULT_CURRENCIES
+
+# Legacy per-workspace currency rows created for tests (the old 4-currency
+# default). Removed with the legacy Currency model in B8.
+DEFAULT_CURRENCIES = [
+    ('USD', 'US Dollar'),
+    ('UAH', 'Ukrainian Hryvnia'),
+    ('PLN', 'Polish Zloty'),
+    ('EUR', 'Euro'),
+]
 
 
 class WorkspaceFactory(DjangoModelFactory):
