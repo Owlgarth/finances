@@ -26,7 +26,6 @@ def create_currencies_for_workspaces(apps, schema_editor):
         ('planned_transactions', 'PlannedTransaction', ['currency']),
         ('currency_exchanges', 'CurrencyExchange', ['from_currency', 'to_currency']),
         ('period_balances', 'PeriodBalance', ['currency']),
-        ('budgets', 'Budget', ['currency']),
     ]
     for app_label, model_name, fields in model_fields:
         try:
@@ -53,7 +52,6 @@ class Migration(migrations.Migration):
     dependencies = [
         ('workspaces', '0001_initial'),
         ('budget_accounts', '0002_initial'),
-        ('budgets', '0003_initial'),
         ('currency_exchanges', '0002_initial'),
         ('period_balances', '0002_initial'),
         ('planned_transactions', '0002_initial'),

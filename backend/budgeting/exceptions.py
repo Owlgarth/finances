@@ -36,3 +36,13 @@ class PeriodOverlapError(ValidationError):
 class PeriodNotEditableError(ValidationError):
     default_message = 'Auto-created periods cannot be edited or deleted; only custom periods can'
     default_code = 'period_not_editable'
+
+
+class CategoryBudgetNotFoundError(NotFoundError):
+    default_message = 'Category budget not found'
+    default_code = 'category_budget_not_found'
+
+
+class CategoryBudgetInvalidCategoryError(ValidationError):
+    default_message = 'Category does not belong to this budget'
+    default_code = 'category_budget_invalid_category'

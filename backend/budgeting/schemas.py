@@ -2,6 +2,7 @@
 
 import re
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -150,3 +151,31 @@ class PeriodOut(BaseModel):
     start_date: date
     end_date: date
     is_custom: bool
+
+
+class CategoryBudgetSet(BaseModel):
+    """Schema for upserting a planned amount (period × category × currency)."""
+
+    category_id: int
+    currency_code: str = Field(..., pattern=r'^[A-Z]{3,8}$')
+    amount: Decimal = Field(..., ge=0)
+
+
+class CategoryBudgetOut(BaseModel):
+    """Schema for a planned amount response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    period_id: int
+    category_id: int
+    # Reads the model's `currency` FK; the validator reduces it to its code.
+    currency_code: str = Field(validation_alias=AliasChoices('currency_code', 'currency'))
+    amount: Decimal
+
+    @field_validator('currency_code', mode='before')
+    @classmethod
+    def extract_currency_code(cls, value: Any) -> str:
+        if hasattr(value, 'code'):
+            return value.code
+        return value

@@ -35,10 +35,6 @@ class BudgetPeriodCreate(BudgetPeriodBase):
     budget_account_id: int
 
 
-class BudgetPeriodCopy(BudgetPeriodBase):
-    """Schema for copying a budget period."""
-
-
 class BudgetPeriodUpdate(BaseModel):
     """Schema for updating a budget period."""
 

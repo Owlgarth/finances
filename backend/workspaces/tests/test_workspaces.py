@@ -5,7 +5,7 @@ from datetime import date
 from django.test import TestCase
 
 from budget_periods.factories import BudgetPeriodFactory
-from budgets.factories import BudgetFactory
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
 from categories.factories import CategoryFactory
 from common.auth import create_access_token
 from common.tests.factories import BudgetAccountFactory, UserFactory
@@ -983,7 +983,7 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
             '/api/budget-accounts',
             '/api/workspaces/currencies',
             '/api/transactions',
-            '/api/categories',
+            '/api/budgets',
         ]
 
         for endpoint in endpoints:
@@ -1082,8 +1082,9 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
             end_date=date(2025, 1, 31),
             created_by=self.viewer_user,
         )
+        self.plan_budget = PlanBudgetFactory(workspace=self.workspace)
         self.category = CategoryFactory(
-            budget_period=self.period,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Groceries',
             created_by=self.viewer_user,
@@ -1120,44 +1121,29 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
 
     def test_viewer_cannot_update_category(self):
         payload = {'name': 'Updated Category'}
-        self.put(f'/api/categories/{self.category.id}', payload, **self.auth_headers())
+        self.put(f'/api/budgets/{self.plan_budget.id}/categories/{self.category.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_cannot_delete_category(self):
-        self.delete(f'/api/categories/{self.category.id}', **self.auth_headers())
+        self.delete(f'/api/budgets/{self.plan_budget.id}/categories/{self.category.id}', **self.auth_headers())
         self.assertStatus(403)
 
-    def test_viewer_cannot_create_budget(self):
-        budget = BudgetFactory(
-            budget_period=self.period,
-            workspace=self.workspace,
-            category=self.category,
-            currency=self.pln,
-            amount=100,
-            created_by=self.viewer_user,
-            updated_by=self.viewer_user,
-        )
+    def test_viewer_cannot_set_category_budget(self):
+        from datetime import date as date_cls
+
+        from budgeting.services import PeriodService
+
+        period = PeriodService.get_or_create_for_date(self.viewer_user, self.plan_budget, date_cls(2025, 1, 15))
         payload = {
-            'budget_period_id': self.period.id,
             'category_id': self.category.id,
-            'currency': 'PLN',
+            'currency_code': 'PLN',
             'amount': '200.00',
         }
-        self.post('/api/legacy-budgets', payload, **self.auth_headers())
-        self.assertStatus(403)
-        budget.delete()
-
-    def test_viewer_cannot_delete_budget(self):
-        budget = BudgetFactory(
-            budget_period=self.period,
-            workspace=self.workspace,
-            category=self.category,
-            currency=self.pln,
-            amount=100,
-            created_by=self.viewer_user,
-            updated_by=self.viewer_user,
+        self.put(
+            f'/api/budgets/{self.plan_budget.id}/periods/{period.id}/category-budgets',
+            payload,
+            **self.auth_headers(),
         )
-        self.delete(f'/api/legacy-budgets/{budget.id}', **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_can_read_budget_accounts(self):

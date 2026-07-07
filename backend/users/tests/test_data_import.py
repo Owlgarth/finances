@@ -8,7 +8,7 @@ from django.test import TestCase
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from budget_periods.models import BudgetPeriod
-from budgets.models import Budget
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
 from categories.models import Category
 from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import AuthMixin
@@ -137,15 +137,16 @@ class DataImportTests(AuthMixin, TestCase):
         result = UserService.import_all_data(self.user, self._make_import_input(export_data))
 
         self.assertEqual(result['imported_transactions'], 2)
-        self.assertEqual(result['imported_categories'], 1)
+        # Categories/budgets sections are ignored since B4 (rebuilt in B10 v3 import)
+        self.assertEqual(result['imported_categories'], 0)
 
-    def test_import_creates_budgets(self):
-        """Import should create budgets."""
+    def test_import_ignores_legacy_budgets_section(self):
+        """Legacy per-period budgets sections are ignored since B4 (v3 import arrives in B10)."""
         export_data = self._create_sample_export_with_budgets()
 
         result = UserService.import_all_data(self.user, self._make_import_input(export_data))
 
-        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(result['imported_budgets'], 0)
 
     def test_import_creates_planned_transactions(self):
         """Import should create planned transactions."""
@@ -433,8 +434,8 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         self.assertEqual(restored_counts['accounts'], original_counts['accounts'])
         self.assertEqual(restored_counts['periods'], original_counts['periods'])
         self.assertEqual(restored_counts['transactions'], original_counts['transactions'])
-        self.assertEqual(restored_counts['categories'], original_counts['categories'])
-        self.assertEqual(restored_counts['budgets'], original_counts['budgets'])
+        # Plan data (categories/budgets) is not round-tripped until B10's v3 export
+        self.assertEqual(restored_counts['categories'], 0)
 
     def test_full_cycle_with_multiple_workspaces(self):
         """Test export/import cycle with multiple workspaces."""
@@ -564,8 +565,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
             end_date='2024-01-31',
             created_by=self.user,
         )
+        plan_budget = PlanBudgetFactory(workspace=self.workspace)
         category = Category.objects.create(
-            workspace=self.workspace, budget_period=period, name='Integrity Category', created_by=self.user
+            workspace=self.workspace, budget=plan_budget, name='Integrity Category', created_by=self.user
         )
         Transaction.objects.create(
             workspace=self.workspace,
@@ -576,14 +578,6 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
             currency=pln,
             type='expense',
             category=category,
-            created_by=self.user,
-        )
-        Budget.objects.create(
-            workspace=self.workspace,
-            budget_period=period,
-            category=category,
-            currency=pln,
-            amount=Decimal('500.00'),
             created_by=self.user,
         )
         PlannedTransaction.objects.create(
@@ -610,9 +604,8 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
 
         self.assertEqual(BudgetAccount.objects.filter(workspace_id=ws_id).count(), 2)
         self.assertEqual(BudgetPeriod.objects.filter(workspace_id=ws_id).count(), 1)
-        self.assertEqual(Category.objects.filter(workspace_id=ws_id).count(), 1)
+        # Plan data (categories/budgets) is no longer round-tripped until B10's v3 export
         self.assertEqual(Transaction.objects.filter(workspace_id=ws_id).count(), 1)
-        self.assertEqual(Budget.objects.filter(workspace_id=ws_id).count(), 1)
         self.assertEqual(PlannedTransaction.objects.filter(workspace_id=ws_id).count(), 1)
 
     def _count_records(self, workspace_id: int) -> dict:
@@ -622,7 +615,6 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
             'periods': BudgetPeriod.objects.filter(workspace_id=workspace_id).count(),
             'categories': Category.objects.filter(workspace_id=workspace_id).count(),
             'transactions': Transaction.objects.filter(workspace_id=workspace_id).count(),
-            'budgets': Budget.objects.filter(workspace_id=workspace_id).count(),
             'planned': PlannedTransaction.objects.filter(workspace_id=workspace_id).count(),
             'exchanges': CurrencyExchange.objects.filter(workspace_id=workspace_id).count(),
             'balances': PeriodBalance.objects.filter(workspace_id=workspace_id).count(),
@@ -915,9 +907,10 @@ class V1DataImportTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_workspaces'], 1)
         self.assertEqual(result['imported_budget_accounts'], 1)
         self.assertEqual(result['imported_budget_periods'], 1)
-        self.assertEqual(result['imported_categories'], 2)
+        # Categories/budgets sections are ignored since B4 (rebuilt in B10 v3 import)
+        self.assertEqual(result['imported_categories'], 0)
         self.assertEqual(result['imported_transactions'], 2)
-        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(result['imported_budgets'], 0)
         self.assertEqual(result['imported_planned_transactions'], 1)
         self.assertEqual(result['imported_currency_exchanges'], 1)
 
@@ -965,9 +958,9 @@ class V1DataImportTests(AuthMixin, TestCase):
 
         self.assertEqual(BudgetAccount.objects.filter(workspace_id=ws_id).count(), 1)
         self.assertEqual(BudgetPeriod.objects.filter(workspace_id=ws_id).count(), 1)
-        self.assertEqual(Category.objects.filter(workspace_id=ws_id).count(), 2)
+        # Plan data (categories/budgets) is ignored since B4 (rebuilt in B10 v3 import)
+        self.assertEqual(Category.objects.filter(workspace_id=ws_id).count(), 0)
         self.assertEqual(Transaction.objects.filter(workspace_id=ws_id).count(), 2)
-        self.assertEqual(Budget.objects.filter(workspace_id=ws_id).count(), 1)
         self.assertEqual(PlannedTransaction.objects.filter(workspace_id=ws_id).count(), 1)
         self.assertEqual(CurrencyExchange.objects.filter(workspace_id=ws_id).count(), 1)
 

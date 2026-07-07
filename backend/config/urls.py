@@ -13,8 +13,6 @@ from accounts.api import router as accounts_router
 from budget_accounts.api import router as budget_accounts_router
 from budget_periods.api import router as budget_periods_router
 from budgeting.api import router as budgeting_router
-from budgets.api import router as legacy_budgets_router
-from categories.api import router as categories_router
 from common.exceptions import ServiceError
 from core.api import router as auth_router
 from core.legal_api import router as legal_router
@@ -47,11 +45,7 @@ api.add_router('/users', users_router)
 api.add_router('/accounts', accounts_router)
 api.add_router('/budget-accounts', budget_accounts_router)
 api.add_router('/budget-periods', budget_periods_router)
-# New budgeting app owns /budgets; the legacy allocation app moved to
-# /legacy-budgets until B4 deletes it.
 api.add_router('/budgets', budgeting_router)
-api.add_router('/legacy-budgets', legacy_budgets_router)
-api.add_router('/categories', categories_router)
 api.add_router('/currencies', currencies_router)
 api.add_router('/currency-exchanges', currency_exchanges_router)
 api.add_router('/exchange-shortcuts', exchange_shortcuts_router)

@@ -4,8 +4,9 @@ from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
-from budgets.factories import BudgetFactory
-from budgets.models import Budget
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
+from budgeting.models import Budget as PlanBudget
+from budgeting.models import CategoryBudget
 from categories.factories import CategoryFactory
 from categories.models import Category
 from common.exceptions import ValidationError
@@ -124,19 +125,15 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertEqual(account_count, 1)
 
     def test_create_workspace_with_demo_fixtures(self):
-        """Test that create_demo=True creates demo transactions, categories, budgets, etc."""
+        """Test that create_demo=True creates demo transactions, categories, etc."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Demo WS', create_demo=True)
 
-        self.assertTrue(Transaction.objects.filter(budget_period__budget_account__workspace_id=workspace.id).exists())
-        self.assertTrue(Category.objects.filter(budget_period__budget_account__workspace_id=workspace.id).exists())
-        self.assertTrue(Budget.objects.filter(budget_period__budget_account__workspace_id=workspace.id).exists())
-        self.assertTrue(
-            PlannedTransaction.objects.filter(budget_period__budget_account__workspace_id=workspace.id).exists()
-        )
-        self.assertTrue(
-            CurrencyExchange.objects.filter(budget_period__budget_account__workspace_id=workspace.id).exists()
-        )
+        self.assertTrue(Transaction.objects.for_workspace(workspace.id).exists())
+        self.assertTrue(Category.objects.for_workspace(workspace.id).filter(budget__name='General').exists())
+        self.assertTrue(PlanBudget.objects.for_workspace(workspace.id).filter(name='General').exists())
+        self.assertTrue(PlannedTransaction.objects.for_workspace(workspace.id).exists())
+        self.assertTrue(CurrencyExchange.objects.for_workspace(workspace.id).exists())
 
 
 class TestWorkspaceServiceDeleteWorkspace(TestCase):
@@ -333,20 +330,23 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             end_date=date(2025, 1, 31),
             created_by=user,
         )
+        plan_budget = PlanBudgetFactory(workspace=workspace)
         category = CategoryFactory(
-            budget_period=period,
+            budget=plan_budget,
             workspace=workspace,
             name='Groceries',
             created_by=user,
         )
-        budget = BudgetFactory(
-            budget_period=period,
-            workspace=workspace,
+        from budgeting.services import PeriodService
+
+        plan_period = PeriodService.get_or_create_for_date(user, plan_budget, date(2025, 1, 15))
+        category_budget = CategoryBudget.objects.create(
+            period=plan_period,
+            workspace_id=workspace.id,
             category=category,
-            currency=pln,
+            currency_id=plan_budget.workspace.enabled_currencies.first().currency_id,
             amount=100,
             created_by=user,
-            updated_by=user,
         )
         period_balance = PeriodBalanceFactory(
             budget_period=period,
@@ -361,13 +361,15 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         )
 
         category_id = category.id
-        budget_id = budget.id
+        plan_budget_id = plan_budget.id
+        category_budget_id = category_budget.id
         period_balance_id = period_balance.id
 
         WorkspaceService.delete_workspace(user=user, workspace_id=workspace.id)
 
         self.assertFalse(Category.objects.filter(id=category_id).exists())
-        self.assertFalse(Budget.objects.filter(id=budget_id).exists())
+        self.assertFalse(PlanBudget.objects.filter(id=plan_budget_id).exists())
+        self.assertFalse(CategoryBudget.objects.filter(id=category_budget_id).exists())
         self.assertFalse(PeriodBalance.objects.filter(id=period_balance_id).exists())
 
     def test_delete_workspace_rejects_non_owner(self):

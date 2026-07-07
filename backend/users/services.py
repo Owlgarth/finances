@@ -14,8 +14,6 @@ from django.utils.http import urlsafe_base64_encode
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
-from budgets.models import Budget
-from categories.models import Category
 from common.email import EmailService
 from common.exceptions import ValidationError
 from common.services.base import delete_workspace_financial_records
@@ -568,17 +566,8 @@ class UserService:
                         'name': period.name,
                         'start_date': period.start_date.isoformat(),
                         'end_date': period.end_date.isoformat(),
-                        'categories': list(Category.objects.filter(budget_period=period).values('id', 'name')),
-                        'budgets': [
-                            {
-                                'category_name': b['category__name'],
-                                'amount': b['amount'],
-                                'currency_symbol': b['currency__symbol'],
-                            }
-                            for b in Budget.objects.filter(budget_period=period)
-                            .select_related('category', 'currency')
-                            .values('category__name', 'amount', 'currency__symbol')
-                        ],
+                        # TODO(B10): v3 export rebuilds plan data on budgeting models
+                        # (the period-scoped categories/budgets sections died with B4).
                         'transactions': [
                             {
                                 'date': t['date'].isoformat() if t['date'] else None,
@@ -881,40 +870,11 @@ class UserService:
                     )
                     imported_budget_periods += 1
 
-                    category_map: dict[str, Category] = {}
-                    for cat_data in period_data.get('categories', []):
-                        cat_name = cat_data.get('name')
-                        category = Category.objects.create(
-                            workspace=workspace,
-                            budget_period=period,
-                            name=cat_name,
-                            created_by=user,
-                            updated_by=user,
-                        )
-                        category_map[cat_name] = category
-                        imported_categories += 1
-
-                    for budget_data in period_data.get('budgets', []):
-                        cat_name = budget_data.get('category_name')
-                        currency_symbol = budget_data.get('currency_symbol')
-                        category = category_map.get(cat_name)
-                        currency = currency_map.get(currency_symbol)
-                        if category and currency:
-                            Budget.objects.create(
-                                workspace=workspace,
-                                budget_period=period,
-                                category=category,
-                                currency=currency,
-                                amount=budget_data.get('amount'),
-                                created_by=user,
-                                updated_by=user,
-                            )
-                            imported_budgets += 1
-
+                    # TODO(B10): v3 import rebuilds plan data on budgeting models.
+                    # Categories/budgets sections are ignored since B4 (categories
+                    # are budget-scoped now); transactions import uncategorized.
                     for tx_data in period_data.get('transactions', []):
-                        cat_name = tx_data.get('category_name')
                         currency_symbol = tx_data.get('currency_symbol')
-                        category = category_map.get(cat_name) if cat_name else None
                         currency = currency_map.get(currency_symbol)
                         if currency:
                             Transaction.objects.create(
@@ -924,7 +884,7 @@ class UserService:
                                 description=tx_data.get('description'),
                                 amount=tx_data.get('amount'),
                                 type=tx_data.get('type'),
-                                category=category,
+                                category=None,
                                 currency=currency,
                                 created_by=user,
                                 updated_by=user,

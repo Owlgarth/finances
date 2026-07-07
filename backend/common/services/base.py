@@ -50,7 +50,7 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     Order matters due to PROTECT on Currency FK.
     """
     from budget_accounts.models import BudgetAccount
-    from budgets.models import Budget
+    from budgeting.models import Budget, CategoryBudget
     from categories.models import Category
     from currency_exchanges.models import CurrencyExchange
     from exchange_shortcuts.models import ExchangeShortcut
@@ -62,7 +62,8 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     PlannedTransaction.objects.for_workspace(workspace_id).delete()
     CurrencyExchange.objects.for_workspace(workspace_id).delete()
     PeriodBalance.objects.for_workspace(workspace_id).delete()
-    Budget.objects.for_workspace(workspace_id).delete()
+    CategoryBudget.objects.for_workspace(workspace_id).delete()
     Category.objects.for_workspace(workspace_id).delete()
+    Budget.objects.for_workspace(workspace_id).delete()  # cascades its periods
     BudgetAccount.objects.for_workspace(workspace_id).delete()
     ExchangeShortcut.objects.for_workspace(workspace_id).delete()

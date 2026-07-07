@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
-from budgets.models import Budget
+from budgeting.models import Budget, Cadence
 from categories.models import Category
 from currencies.services import CurrencyCatalogService
 from currency_exchanges.models import CurrencyExchange
@@ -112,7 +112,18 @@ def create_demo_fixtures(
         created_by_id=user_id,
     )
 
-    # Create categories
+    # Create persistent categories under the workspace's General budget (new model).
+    # Legacy period-scoped allocations died with B4; planned amounts arrive via
+    # CategoryBudget when demo data is rewritten in B12.
+    general_budget = Budget.objects.filter(workspace_id=workspace_id, name='General').first()
+    if not general_budget:
+        general_budget = Budget.objects.create(
+            workspace_id=workspace_id,
+            name='General',
+            cadence=Cadence.MONTHLY,
+            created_by_id=user_id,
+        )
+
     categories_data = [
         'Food & Groceries',
         'Transportation',
@@ -125,36 +136,18 @@ def create_demo_fixtures(
 
     categories = []
     for cat_name in categories_data:
-        category = Category.objects.create(
-            budget_period=budget_period,
-            workspace_id=workspace_id,
-            name=cat_name,
-            created_by_id=user_id,
-        )
+        category = Category.objects.filter(budget=general_budget, name__iexact=cat_name).first()
+        if not category:
+            category = Category.objects.create(
+                budget=general_budget,
+                workspace_id=workspace_id,
+                name=cat_name,
+                created_by_id=user_id,
+            )
         categories.append(category)
 
     # Map category names to objects for easy access
     category_map = {cat.name: cat for cat in categories}
-
-    # Create budgets for expense categories
-    budgets_data = [
-        ('Food & Groceries', 'PLN', Decimal('1500.00')),
-        ('Transportation', 'PLN', Decimal('500.00')),
-        ('Entertainment', 'PLN', Decimal('400.00')),
-        ('Bills & Utilities', 'PLN', Decimal('800.00')),
-        ('Shopping', 'PLN', Decimal('600.00')),
-        ('Health & Fitness', 'PLN', Decimal('300.00')),
-    ]
-
-    for cat_name, currency_symbol, amount in budgets_data:
-        Budget.objects.create(
-            budget_period=budget_period,
-            workspace_id=workspace_id,
-            category=category_map[cat_name],
-            currency=currency_map[currency_symbol],
-            amount=amount,
-            created_by_id=user_id,
-        )
 
     # Create sample transactions
     mid_month = start_date + timedelta(days=15)

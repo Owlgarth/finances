@@ -10,12 +10,14 @@ from budgeting.exceptions import (
     BudgetCadenceConfigError,
     BudgetDuplicateNameError,
     BudgetNotFoundError,
+    CategoryBudgetInvalidCategoryError,
+    CategoryBudgetNotFoundError,
     NoPeriodForDateError,
     PeriodNotEditableError,
     PeriodNotFoundError,
     PeriodOverlapError,
 )
-from budgeting.models import Budget, Cadence, Period
+from budgeting.models import Budget, Cadence, CategoryBudget, Period
 from budgeting.schemas import BudgetArchive, BudgetCreate, BudgetUpdate, PeriodCreate, PeriodUpdate
 from currencies.services import CurrencyCatalogService
 
@@ -204,8 +206,28 @@ class PeriodService:
     def copy_forward(period: Period) -> None:
         """Pre-fill a freshly created period's plan from the budget's most recent earlier period.
 
-        B4 copies CategoryBudget amounts from the budget's most recent earlier period.
+        Copies CategoryBudget rows (same category/currency/amount) except those
+        of archived categories. Runs inside the period-creation transaction.
         """
+        previous = period.budget.periods.filter(start_date__lt=period.start_date).order_by('-start_date').first()
+        if not previous:
+            return
+
+        CategoryBudget.objects.bulk_create(
+            [
+                CategoryBudget(
+                    period=period,
+                    workspace_id=period.workspace_id,
+                    category_id=cb.category_id,
+                    currency_id=cb.currency_id,
+                    amount=cb.amount,
+                    created_by=period.created_by,
+                    updated_by=period.updated_by,
+                )
+                for cb in previous.category_budgets.select_related('category').all()
+                if not cb.category.is_archived
+            ]
+        )
 
     @staticmethod
     def list(workspace_id: int, budget_id: int) -> list[Period]:
@@ -276,3 +298,58 @@ class PeriodService:
         if not period.is_custom:
             raise PeriodNotEditableError()
         period.delete()
+
+
+class CategoryBudgetService:
+    @staticmethod
+    def list_for_period(workspace_id: int, budget_id: int, period_id: int) -> list[CategoryBudget]:
+        """List planned amounts of a period."""
+        period = PeriodService._get_period(workspace_id, budget_id, period_id)
+        return list(period.category_budgets.select_related('category', 'currency').order_by('category__name'))
+
+    @staticmethod
+    @db_transaction.atomic
+    def set_amount(
+        user,
+        workspace_id: int,
+        budget_id: int,
+        period_id: int,
+        category_id: int,
+        currency_code: str,
+        amount,
+    ) -> CategoryBudget:
+        """Upsert the planned amount for (period, category, currency)."""
+        from categories.models import Category
+
+        period = PeriodService._get_period(workspace_id, budget_id, period_id)
+
+        category = Category.objects.filter(id=category_id, budget_id=budget_id).first()
+        if not category:
+            raise CategoryBudgetInvalidCategoryError()
+
+        currency = CurrencyCatalogService.get_enabled(workspace_id, currency_code)
+
+        category_budget, _ = CategoryBudget.objects.update_or_create(
+            period=period,
+            category=category,
+            currency=currency,
+            defaults={
+                'workspace_id': workspace_id,
+                'amount': amount,
+                'updated_by': user,
+            },
+        )
+        if category_budget.created_by is None:
+            category_budget.created_by = user
+            category_budget.save(update_fields=['created_by'])
+        return category_budget
+
+    @staticmethod
+    @db_transaction.atomic
+    def remove(workspace_id: int, budget_id: int, period_id: int, category_budget_id: int) -> None:
+        """Delete a planned amount row."""
+        period = PeriodService._get_period(workspace_id, budget_id, period_id)
+        category_budget = period.category_budgets.filter(id=category_budget_id).first()
+        if not category_budget:
+            raise CategoryBudgetNotFoundError()
+        category_budget.delete()

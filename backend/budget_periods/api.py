@@ -7,7 +7,6 @@ from django.http import HttpRequest
 from ninja import Query, Router
 
 from budget_periods.schemas import (
-    BudgetPeriodCopy,
     BudgetPeriodCreate,
     BudgetPeriodOut,
     BudgetPeriodUpdate,
@@ -71,12 +70,3 @@ def delete_period(request: HttpRequest, period_id: int):
     require_role(user, workspace_id, WRITE_ROLES)
     BudgetPeriodService.delete(workspace_id, period_id)
     return 204, None
-
-
-@router.post('{period_id}/copy', response={201: BudgetPeriodOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
-def copy_period(request: HttpRequest, period_id: int, data: BudgetPeriodCopy):
-    """Copy a budget period with all categories, budgets, and planned transactions."""
-    user = request.auth
-    workspace_id = request.auth.current_workspace_id
-    require_role(user, workspace_id, WRITE_ROLES)
-    return 201, BudgetPeriodService.copy(user, workspace_id, period_id, data)

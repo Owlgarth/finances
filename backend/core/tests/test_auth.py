@@ -74,7 +74,7 @@ class TestAuthRegister(AuthTestCase):
 
         from budget_accounts.models import BudgetAccount
         from budget_periods.models import BudgetPeriod
-        from budgets.models import Budget
+        from budgeting.models import Budget as PlanBudget
         from categories.models import Category
         from currency_exchanges.models import CurrencyExchange
         from period_balances.models import PeriodBalance
@@ -109,7 +109,9 @@ class TestAuthRegister(AuthTestCase):
         expected_period_name = last_month_date.strftime('%B %Y')
         self.assertEqual(period.name, expected_period_name)
 
-        categories = Category.objects.filter(budget_period=period)
+        general_budget = PlanBudget.objects.filter(workspace=user.current_workspace, name='General').first()
+        self.assertIsNotNone(general_budget)
+        categories = Category.objects.filter(budget=general_budget)
         self.assertEqual(categories.count(), 7)
         category_names = {cat.name for cat in categories}
         expected_categories = {
@@ -122,9 +124,6 @@ class TestAuthRegister(AuthTestCase):
             'Salary',
         }
         self.assertEqual(category_names, expected_categories)
-
-        budgets = Budget.objects.filter(budget_period=period)
-        self.assertEqual(budgets.count(), 6)
 
         transactions = Transaction.objects.filter(budget_period=period)
         self.assertGreaterEqual(transactions.count(), 10)

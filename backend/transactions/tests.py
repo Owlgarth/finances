@@ -10,6 +10,7 @@ from django.test import TestCase
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from budget_periods.models import BudgetPeriod
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
 from categories.factories import CategoryFactory
 from common.enums import TotalsLabel
 from common.tests.mixins import APIClientMixin, AuthMixin
@@ -47,14 +48,17 @@ class TransactionsTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
+        self.plan_budget = PlanBudgetFactory(workspace=self.workspace)
         self.category1 = CategoryFactory(
-            budget_period=self.period,
+            budget=self.plan_budget,
+            workspace=self.workspace,
             name='Groceries',
             created_by=self.user,
         )
 
         self.category2 = CategoryFactory(
-            budget_period=self.period,
+            budget=self.plan_budget,
+            workspace=self.workspace,
             name='Transport',
             created_by=self.user,
         )

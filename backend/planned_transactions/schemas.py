@@ -66,7 +66,7 @@ class CategoryOut(BaseModel):
     """Schema for category in planned transaction response."""
 
     id: int
-    budget_period_id: int
+    budget_id: int
     name: str
 
     model_config = ConfigDict(from_attributes=True)

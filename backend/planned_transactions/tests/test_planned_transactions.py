@@ -8,6 +8,7 @@ from django.test import TestCase
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
 from categories.factories import CategoryFactory
 from common.enums import TotalsLabel
 from common.tests.helpers import create_other_workspace
@@ -63,16 +64,17 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
             created_by=self.user,
         )
 
-        # Create categories
+        # Create categories (budget-scoped since B4)
+        self.plan_budget = PlanBudgetFactory(workspace=self.workspace)
         self.category1 = CategoryFactory(
-            budget_period=self.period1,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Groceries',
             created_by=self.user,
         )
 
         self.category2 = CategoryFactory(
-            budget_period=self.period1,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Rent',
             created_by=self.user,
@@ -277,7 +279,7 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
     def test_list_ordered_by_category_name_asc(self):
         """ordering=category__name sorts by category name ascending."""
         utilities = CategoryFactory(
-            budget_period=self.period2,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Utilities',
             created_by=self.user,
@@ -292,7 +294,7 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
     def test_list_ordered_by_category_name_desc(self):
         """ordering=-category__name sorts by category name descending."""
         utilities = CategoryFactory(
-            budget_period=self.period2,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Utilities',
             created_by=self.user,
@@ -433,13 +435,13 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
         self.post('/api/planned-transactions', payload, **self.auth_headers())
         self.assertStatus(400)
 
-    def test_create_planned_with_invalid_category_fails(self):
-        """Test that creating with category from different period fails."""
-        # Create a category in period2
-        category_period2 = CategoryFactory(
-            budget_period=self.period2,
+    def test_create_planned_with_archived_category_fails(self):
+        """Creating with an archived category fails (categories are budget-scoped since B4)."""
+        archived = CategoryFactory(
+            budget=self.plan_budget,
             workspace=self.workspace,
-            name='Utilities',
+            name='Retired',
+            is_archived=True,
             created_by=self.user,
         )
 
@@ -448,7 +450,7 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
             'amount': '50.00',
             'currency': 'USD',
             'budget_period_id': self.period1.id,
-            'category_id': category_period2.id,  # Category from period2
+            'category_id': archived.id,
             'planned_date': '2025-01-20',
         }
         self.post('/api/planned-transactions', payload, **self.auth_headers())
@@ -1338,7 +1340,7 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         )
 
         other_category = CategoryFactory(
-            budget_period=other_period,
+            budget=PlanBudgetFactory(workspace=other_workspace),
             workspace=other_workspace,
             name='Secret Category',
             created_by=other_user,

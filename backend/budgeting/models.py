@@ -57,3 +57,19 @@ class Period(WorkspaceScopedModel):
 
     def __str__(self):
         return f'{self.budget.name} - {self.name}'
+
+
+class CategoryBudget(WorkspaceScopedModel):
+    """Planned amount for a category within a period, per currency."""
+
+    period = models.ForeignKey(Period, on_delete=models.CASCADE, related_name='category_budgets')
+    category = models.ForeignKey('categories.Category', on_delete=models.CASCADE, related_name='category_budgets')
+    currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='+')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+
+    class Meta:
+        db_table = 'category_budgets'
+        unique_together = [['period', 'category', 'currency']]
+
+    def __str__(self):
+        return f'{self.category.name} - {self.amount} {self.currency.code}'

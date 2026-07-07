@@ -18,11 +18,15 @@ class CurrencyCatalogService:
     def _reference_count(workspace_id: int, currency: Currency) -> int:
         """Count records in the workspace that reference this catalog currency.
 
-        Extended by B4 (category budgets), B5 (transaction original facet).
+        Extended by B5 (transaction original facet).
         """
         from accounts.models import Account
+        from budgeting.models import CategoryBudget
 
-        return Account.objects.filter(workspace_id=workspace_id, currency=currency).count()
+        return (
+            Account.objects.filter(workspace_id=workspace_id, currency=currency).count()
+            + CategoryBudget.objects.filter(workspace_id=workspace_id, currency=currency).count()
+        )
 
     @staticmethod
     def list_catalog(workspace_id: int) -> QuerySet[Currency]:

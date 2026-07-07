@@ -1,4 +1,8 @@
-"""Tests for reports API endpoints."""
+"""Tests for reports API endpoints.
+
+Budget-summary tests were deleted with the legacy allocation app in B4;
+the report is rebuilt in B8 on budgeting models.
+"""
 
 from datetime import date
 from decimal import Decimal
@@ -6,16 +10,10 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
-from budget_periods.models import BudgetPeriod
-from budgets.factories import BudgetFactory
-from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
-from transactions.models import Transaction
-from workspaces.models import Currency, Workspace, WorkspaceMember
 
 User = get_user_model()
 
@@ -45,50 +43,8 @@ class ReportsTestCase(AuthMixin, APIClientMixin, TestCase):
             created_by=self.user,
         )
 
-        self.category1 = CategoryFactory(
-            budget_period=self.period,
-            name='Groceries',
-            created_by=self.user,
-        )
-
-        self.category2 = CategoryFactory(
-            budget_period=self.period,
-            name='Transport',
-            created_by=self.user,
-        )
-
-        self.category3 = CategoryFactory(
-            budget_period=self.period,
-            name='Entertainment',
-            created_by=self.user,
-        )
-
         self.pln = self.workspace.currencies.filter(symbol='PLN').first()
         self.usd = self.workspace.currencies.filter(symbol='USD').first()
-
-        BudgetFactory(
-            budget_period=self.period,
-            category=self.category1,
-            currency=self.pln,
-            amount=Decimal('1000.00'),
-            created_by=self.user,
-        )
-
-        BudgetFactory(
-            budget_period=self.period,
-            category=self.category2,
-            currency=self.pln,
-            amount=Decimal('500.00'),
-            created_by=self.user,
-        )
-
-        BudgetFactory(
-            budget_period=self.period,
-            category=self.category3,
-            currency=self.usd,
-            amount=Decimal('200.00'),
-            created_by=self.user,
-        )
 
         PeriodBalanceFactory(
             budget_period=self.period,
@@ -125,128 +81,6 @@ class ReportsTestCase(AuthMixin, APIClientMixin, TestCase):
             closing_balance=Decimal('13000.00'),
             created_by=self.user,
         )
-
-
-# =============================================================================
-# Budget Summary Tests
-# =============================================================================
-
-
-class TestBudgetSummary(ReportsTestCase):
-    """Tests for budget summary endpoint."""
-
-    def test_budget_summary_success(self):
-        """Test getting budget summary for a period."""
-        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['period']['id'], self.period.id)
-        self.assertEqual(data['period']['name'], 'January 2025')
-        self.assertIn('PLN', data['currencies'])
-        self.assertIn('USD', data['currencies'])
-
-        # Check PLN currency summary
-        pln_data = data['currencies']['PLN']
-        self.assertEqual(pln_data['total_budget'], '1500.00')  # 1000 + 500
-        self.assertEqual(len(pln_data['categories']), 2)
-
-        # Check balances
-        self.assertIn('PLN', data['balances'])
-        self.assertEqual(data['balances']['PLN']['opening'], '5000.00')
-        self.assertEqual(data['balances']['PLN']['closing'], '10000.00')
-
-    def test_budget_summary_with_actual_spending(self):
-        """Test budget summary with actual transaction data."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            workspace=self.workspace,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln,
-            type='expense',
-            created_by=self.user,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            workspace=self.workspace,
-            date=date(2025, 1, 10),
-            description='Bus ticket',
-            category=self.category2,
-            amount=Decimal('50.00'),
-            currency=self.pln,
-            type='expense',
-            created_by=self.user,
-        )
-
-        data = self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-
-        # Check that actual spending is included
-        pln_data = data['currencies']['PLN']
-        self.assertEqual(pln_data['total_actual'], '300.00')
-
-        # Check category-level actual spending
-        groceries = next(c for c in pln_data['categories'] if c['category'] == 'Groceries')
-        self.assertEqual(groceries['actual'], '250.00')
-        self.assertEqual(groceries['difference'], '750.00')
-
-    def test_budget_summary_period_not_found(self):
-        """Test budget summary with non-existent period."""
-        self.get('/api/reports/budget-summary?budget_period_id=99999', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_budget_summary_from_other_workspace_fails(self):
-        """Test that getting summary from another workspace fails."""
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMember.objects.create(
-            workspace=other_workspace,
-            user=other_user,
-            role='owner',
-        )
-
-        other_currency = Currency.objects.create(
-            workspace=other_workspace,
-            symbol='PLN',
-            name='Polish Zloty',
-        )
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_currency,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriod.objects.create(
-            budget_account=other_account,
-            workspace=other_workspace,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        self.get(f'/api/reports/budget-summary?budget_period_id={other_period.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_budget_summary_without_auth_fails(self):
-        """Test that getting budget summary without authentication fails."""
-        self.get(f'/api/reports/budget-summary?budget_period_id={self.period.id}')
-        self.assertStatus(401)
-
-
-# =============================================================================
-# Current Balances Tests
-# =============================================================================
 
 
 class TestCurrentBalances(ReportsTestCase):

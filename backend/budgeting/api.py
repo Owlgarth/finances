@@ -10,15 +10,19 @@ from budgeting.schemas import (
     BudgetCreate,
     BudgetOut,
     BudgetUpdate,
+    CategoryBudgetOut,
+    CategoryBudgetSet,
     PeriodCreate,
     PeriodOut,
     PeriodUpdate,
 )
-from budgeting.services import BudgetService, PeriodService
+from budgeting.services import BudgetService, CategoryBudgetService, PeriodService
+from categories.schemas import CategoryArchive, CategoryCreate, CategoryOut, CategoryUpdate
+from categories.services import CategoryService
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from core.schemas.common import DetailOut
-from workspaces.models import ADMIN_ROLES
+from workspaces.models import ADMIN_ROLES, WRITE_ROLES
 
 router = Router(tags=['Budgets'])
 
@@ -141,4 +145,112 @@ def delete_custom_period(request: HttpRequest, budget_id: int, period_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     PeriodService.delete(workspace_id, budget_id, period_id)
+    return 204, None
+
+
+# =============================================================================
+# Category Endpoints (day-to-day budgeting: WRITE_ROLES, like transactions)
+# =============================================================================
+
+
+@router.get('/{budget_id}/categories', response={200: list[CategoryOut], 404: DetailOut}, auth=WorkspaceJWTAuth())
+def list_categories(request: HttpRequest, budget_id: int, include_archived: bool = Query(False)):
+    """List categories of a budget."""
+    workspace_id = request.auth.current_workspace_id
+    return CategoryService.list(workspace_id, budget_id, include_archived)
+
+
+@router.post(
+    '/{budget_id}/categories',
+    response={201: CategoryOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def create_category(request: HttpRequest, budget_id: int, data: CategoryCreate):
+    """Create a category under a budget."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return 201, CategoryService.create(user, workspace_id, budget_id, data)
+
+
+@router.put(
+    '/{budget_id}/categories/{category_id}',
+    response={200: CategoryOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def update_category(request: HttpRequest, budget_id: int, category_id: int, data: CategoryUpdate):
+    """Rename a category."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return CategoryService.update(user, workspace_id, budget_id, category_id, data)
+
+
+@router.patch(
+    '/{budget_id}/categories/{category_id}/archive',
+    response={200: CategoryOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def set_category_archive_status(request: HttpRequest, budget_id: int, category_id: int, data: CategoryArchive):
+    """Archive or unarchive a category."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return CategoryService.set_archive_status(user, workspace_id, budget_id, category_id, data)
+
+
+@router.delete(
+    '/{budget_id}/categories/{category_id}',
+    response={204: None, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def delete_category(request: HttpRequest, budget_id: int, category_id: int):
+    """Delete a category (transactions referencing it become uncategorized)."""
+    workspace_id = request.auth.current_workspace_id
+    require_role(request.auth, workspace_id, WRITE_ROLES)
+    CategoryService.delete(workspace_id, budget_id, category_id)
+    return 204, None
+
+
+# =============================================================================
+# CategoryBudget Endpoints (planned amounts per period)
+# =============================================================================
+
+
+@router.get(
+    '/{budget_id}/periods/{period_id}/category-budgets',
+    response={200: list[CategoryBudgetOut], 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def list_category_budgets(request: HttpRequest, budget_id: int, period_id: int):
+    """List planned amounts of a period."""
+    workspace_id = request.auth.current_workspace_id
+    return CategoryBudgetService.list_for_period(workspace_id, budget_id, period_id)
+
+
+@router.put(
+    '/{budget_id}/periods/{period_id}/category-budgets',
+    response={200: CategoryBudgetOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def set_category_budget(request: HttpRequest, budget_id: int, period_id: int, data: CategoryBudgetSet):
+    """Upsert the planned amount for (category, currency) within a period."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return CategoryBudgetService.set_amount(
+        user, workspace_id, budget_id, period_id, data.category_id, data.currency_code, data.amount
+    )
+
+
+@router.delete(
+    '/{budget_id}/periods/{period_id}/category-budgets/{category_budget_id}',
+    response={204: None, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def delete_category_budget(request: HttpRequest, budget_id: int, period_id: int, category_budget_id: int):
+    """Delete a planned amount row."""
+    workspace_id = request.auth.current_workspace_id
+    require_role(request.auth, workspace_id, WRITE_ROLES)
+    CategoryBudgetService.remove(workspace_id, budget_id, period_id, category_budget_id)
     return 204, None

@@ -81,12 +81,15 @@ class TransactionService:
         return period.id
 
     @staticmethod
-    def _validate_category(category_id: int | None, period_id: int) -> None:
-        """Raise exception if category does not belong to the period."""
+    def _validate_category(category_id: int | None, workspace_id: int) -> None:
+        """Raise if the category is missing, in another workspace, or archived.
+
+        Categories are budget-scoped since B4; period linkage no longer applies.
+        """
         if not category_id:
             return
-        category = Category.objects.filter(id=category_id, budget_period_id=period_id).first()
-        if not category:
+        category = Category.objects.for_workspace(workspace_id).filter(id=category_id).first()
+        if not category or category.is_archived:
             raise TransactionCategoryNotFoundError()
 
     @staticmethod
@@ -372,7 +375,7 @@ class TransactionService:
 
         category_id = None if data.type == 'income' else data.category_id
         period_id = TransactionService._resolve_period(workspace_id, data.date, data.budget_period_id)
-        TransactionService._validate_category(category_id, period_id)
+        TransactionService._validate_category(category_id, workspace_id)
 
         trans = Transaction.objects.create(
             workspace_id=workspace_id,
@@ -407,7 +410,7 @@ class TransactionService:
             )
 
         period_id = TransactionService._resolve_period(workspace_id, data.date, data.budget_period_id)
-        TransactionService._validate_category(category_id, period_id)
+        TransactionService._validate_category(category_id, workspace_id)
 
         trans.date = data.date
         trans.description = data.description
@@ -480,10 +483,11 @@ class TransactionService:
 
             category_id = None
             if import_item.type != 'income' and import_item.category_name:
-                category = Category.objects.filter(
-                    name=import_item.category_name,
-                    budget_period_id=period_id,
-                ).first()
+                category = (
+                    Category.objects.for_workspace(workspace_id)
+                    .filter(name__iexact=import_item.category_name, is_archived=False)
+                    .first()
+                )
                 if category:
                     category_id = category.id
 

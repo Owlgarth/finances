@@ -2,15 +2,12 @@
 
 from datetime import date
 
-from dateutil.relativedelta import relativedelta
 from django.db import transaction as db_transaction
 
 from budget_accounts.models import BudgetAccount
 from budget_periods.exceptions import BudgetPeriodAccountNotFoundError, BudgetPeriodNotFoundError
 from budget_periods.models import BudgetPeriod
-from budget_periods.schemas import BudgetPeriodCopy, BudgetPeriodCreate, BudgetPeriodUpdate
-from budgets.models import Budget
-from categories.models import Category
+from budget_periods.schemas import BudgetPeriodCreate, BudgetPeriodUpdate
 from common.services.base import get_workspace_currencies
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
@@ -129,92 +126,3 @@ class BudgetPeriodService:
         PlannedTransaction.objects.filter(budget_period=period).delete()
         CurrencyExchange.objects.filter(budget_period=period).delete()
         period.delete()
-
-    @staticmethod
-    @db_transaction.atomic
-    def copy(user, workspace_id: int, source_period_id: int, data: BudgetPeriodCopy) -> BudgetPeriod:
-        """Copy a period with all categories, budgets, and planned transactions."""
-        source_period = BudgetPeriodService.get(source_period_id, workspace_id)
-
-        new_period = BudgetPeriod.objects.create(
-            budget_account_id=source_period.budget_account_id,
-            workspace_id=workspace_id,
-            name=data.name,
-            start_date=data.start_date,
-            end_date=data.end_date,
-            weeks=data.weeks,
-            created_by=user,
-            updated_by=user,
-        )
-
-        currencies = get_workspace_currencies(workspace_id)
-        PeriodBalance.objects.bulk_create(
-            [
-                PeriodBalance(
-                    budget_period=new_period,
-                    workspace_id=workspace_id,
-                    currency=currency,
-                    opening_balance=0,
-                    total_income=0,
-                    total_expenses=0,
-                    exchanges_in=0,
-                    exchanges_out=0,
-                    closing_balance=0,
-                )
-                for currency in currencies
-            ]
-        )
-
-        date_offset = relativedelta(new_period.start_date, source_period.start_date)
-
-        category_mapping = {}
-        for source_category in source_period.categories.all():
-            new_category = Category.objects.create(
-                budget_period=new_period,
-                workspace_id=workspace_id,
-                name=source_category.name,
-                created_by=user,
-            )
-            category_mapping[source_category.id] = new_category
-
-        Budget.objects.bulk_create(
-            [
-                Budget(
-                    budget_period=new_period,
-                    workspace_id=workspace_id,
-                    category_id=category_mapping[source_budget.category_id].id,
-                    currency=source_budget.currency,
-                    amount=source_budget.amount,
-                )
-                for source_budget in source_period.budgets.all()
-                if source_budget.category_id in category_mapping
-            ]
-        )
-
-        planned_to_create = []
-        for source_planned in source_period.planned_transactions.all():
-            new_category_id = None
-            if source_planned.category_id:
-                new_category = category_mapping.get(source_planned.category_id)
-                if new_category:
-                    new_category_id = new_category.id
-
-            planned_to_create.append(
-                PlannedTransaction(
-                    budget_period=new_period,
-                    workspace_id=workspace_id,
-                    name=source_planned.name,
-                    amount=source_planned.amount,
-                    currency=source_planned.currency,
-                    category_id=new_category_id,
-                    planned_date=source_planned.planned_date + date_offset,
-                    payment_date=None,
-                    status='pending',
-                    transaction_id=None,
-                    created_by=user,
-                )
-            )
-
-        PlannedTransaction.objects.bulk_create(planned_to_create)
-
-        return new_period
