@@ -21,6 +21,8 @@ from core.schemas import (
     DetailOut,
     FullImportIn,
     ImportResultOut,
+    LegacyImportIn,
+    LegacyImportResultOut,
     MessageOut,
     TwoFADisableIn,
     TwoFARegenerateIn,
@@ -177,6 +179,23 @@ def import_my_data(request, data: FullImportIn):
     Rate limited to 3 imports per hour.
     """
     result = services.UserService.import_all_data(request.auth, data)
+    return 200, result
+
+
+@router.post('/import-legacy', auth=JWTAuth(), response={200: LegacyImportResultOut, 400: DetailOut})
+@rate_limit('data_import', limit=settings.RATE_LIMIT_DATA_IMPORT, period=settings.RATE_LIMIT_DATA_IMPORT_PERIOD)
+def import_legacy_data(request, data: LegacyImportIn):
+    """
+    Import data from an old-format (v1/v2) Denarly export.
+
+    Converts the pre-redesign export into the account-based model (accounts,
+    budgets, categories, transactions, transfers) and returns a verification
+    report with per-currency balance checks and deduplicated exchange
+    transactions. Rate limited like the standard import.
+    """
+    from users.legacy_import import LegacyImportService
+
+    result = LegacyImportService.import_legacy(request.auth, data.data, data.conflict_strategy)
     return 200, result
 
 

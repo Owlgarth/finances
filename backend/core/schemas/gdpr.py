@@ -63,3 +63,51 @@ class ImportResultOut(BaseModel):
     imported_planned_transactions: int
     skipped: dict[str, list[str]]
     renamed: dict[str, str]
+
+
+class LegacyImportIn(BaseModel):
+    """Input for the legacy (v1/v2) import endpoint."""
+
+    data: dict = Field(..., description='Legacy export JSON data (v1 or v2)')
+    conflict_strategy: Literal['rename', 'skip'] = Field(
+        'rename',
+        description='How to handle workspace name conflicts',
+    )
+
+
+class LegacyBalanceCheck(BaseModel):
+    """Per-currency balance verification after a legacy import."""
+
+    currency_code: str
+    account_name: str
+    expected_closing_balance: str | None
+    computed_balance: str
+    matches: bool
+
+
+class LegacyDedupedTransaction(BaseModel):
+    """A linked exchange transaction that was skipped to avoid double-counting."""
+
+    date: str | None
+    description: str | None
+    amount: str
+    type: str
+    currency_code: str | None
+
+
+class LegacyWorkspaceReport(BaseModel):
+    """Verification report for one imported workspace."""
+
+    workspace_name: str
+    created: dict[str, int]
+    deduped_transactions: list[LegacyDedupedTransaction]
+    balances: list[LegacyBalanceCheck]
+    warnings: list[str]
+
+
+class LegacyImportResultOut(BaseModel):
+    """Verification report for a legacy import."""
+
+    workspaces: list[LegacyWorkspaceReport]
+    renamed: dict[str, str]
+    skipped_workspaces: list[str]
