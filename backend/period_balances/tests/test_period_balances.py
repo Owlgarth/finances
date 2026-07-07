@@ -12,7 +12,6 @@ from common.tests.mixins import APIClientMixin, AuthMixin
 from currency_exchanges.factories import CurrencyExchangeFactory
 from period_balances.factories import PeriodBalanceFactory
 from period_balances.models import PeriodBalance
-from transactions.factories import TransactionFactory
 from workspaces.models import WorkspaceMember
 
 
@@ -356,31 +355,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         self.assertEqual(balance.currency.symbol, 'PLN')
         self.assertEqual(balance.budget_period_id, new_period.id)
 
-    def test_recalculate_balance_with_transactions(self):
-        """Test recalculation includes transaction totals."""
-        # Create transactions for period1
-        TransactionFactory(
-            workspace=self.workspace,
-            budget_period=self.period1,
-            date=date(2025, 1, 15),
-            description='Salary',
-            amount=Decimal('5000.00'),
-            currency=self.currencies['USD'],
-            type='income',
-            created_by=self.user,
-        )
-
-        TransactionFactory(
-            workspace=self.workspace,
-            budget_period=self.period1,
-            date=date(2025, 1, 20),
-            description='Rent',
-            amount=Decimal('2000.00'),
-            currency=self.currencies['USD'],
-            type='expense',
-            created_by=self.user,
-        )
-
+    def test_recalculate_balance_ignores_transactions(self):
+        """Transactions live on accounts since B5 and no longer feed period balances."""
         payload = {
             'budget_period_id': self.period1.id,
             'currency': 'USD',
@@ -388,9 +364,8 @@ class PeriodBalancesTestCase(AuthMixin, APIClientMixin, TestCase):
         data = self.post('/api/period-balances/recalculate', payload, **self.auth_headers())
         self.assertStatus(200)
 
-        # Verify totals match transaction sums (recalculate from scratch)
-        self.assertEqual(float(data['total_income']), 5000.00)  # Only the new income transaction
-        self.assertEqual(float(data['total_expenses']), 2000.00)  # Only the new expense transaction
+        self.assertEqual(float(data['total_income']), 0.0)
+        self.assertEqual(float(data['total_expenses']), 0.0)
 
     def test_recalculate_balance_with_exchanges(self):
         """Test recalculation includes currency exchange totals."""

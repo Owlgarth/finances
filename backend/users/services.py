@@ -546,6 +546,24 @@ class UserService:
                         'id', 'from_currency', 'to_currency', 'created_at'
                     )
                 ],
+                # Transactions live on accounts since B5 — exported per workspace.
+                # TODO(B10): full v3 export.
+                'transactions': [
+                    {
+                        'date': t.date.isoformat(),
+                        'description': t.description,
+                        'amount': t.amount,
+                        'type': t.type,
+                        'category_name': t.category_name,
+                        'account_name': t.account_name,
+                        'currency_code': t.currency_code,
+                        'original_amount': t.original_amount,
+                        'original_currency_code': t.original_currency_code,
+                    }
+                    for t in Transaction.objects.for_workspace(ws.id).select_related(
+                        'account__currency', 'category', 'original_currency'
+                    )
+                ],
             }
 
             accounts = BudgetAccount.objects.filter(workspace=ws).select_related('default_currency')
@@ -567,20 +585,8 @@ class UserService:
                         'start_date': period.start_date.isoformat(),
                         'end_date': period.end_date.isoformat(),
                         # TODO(B10): v3 export rebuilds plan data on budgeting models
-                        # (the period-scoped categories/budgets sections died with B4).
-                        'transactions': [
-                            {
-                                'date': t['date'].isoformat() if t['date'] else None,
-                                'description': t['description'],
-                                'amount': t['amount'],
-                                'type': t['type'],
-                                'category_name': t['category__name'],
-                                'currency_symbol': t['currency__symbol'],
-                            }
-                            for t in Transaction.objects.filter(budget_period=period)
-                            .select_related('category', 'currency')
-                            .values('date', 'description', 'amount', 'type', 'category__name', 'currency__symbol')
-                        ],
+                        # (the period-scoped categories/budgets/transactions
+                        # sections died with B4/B5).
                         'planned_transactions': [
                             {
                                 'name': pt['name'],
@@ -761,6 +767,43 @@ class UserService:
         return export_data
 
     @staticmethod
+    def _get_or_create_import_account(user, workspace, code: str, cache: dict):
+        """Resolve the 'Main <CODE>' account imported transactions land in.
+
+        Resolves the catalog currency (global first, then workspace custom,
+        creating a custom row as a fallback) and enables it for the workspace.
+        """
+        from accounts.models import Account, AccountType
+        from currencies.models import Currency as CatalogCurrency
+        from currencies.models import WorkspaceCurrency
+
+        if code in cache:
+            return cache[code]
+
+        currency = (
+            CatalogCurrency.objects.filter(workspace__isnull=True, code=code).first()
+            or CatalogCurrency.objects.filter(workspace=workspace, code=code).first()
+        )
+        if not currency:
+            currency = CatalogCurrency.objects.create(
+                code=code, name=code, symbol=code, is_custom=True, workspace=workspace
+            )
+        WorkspaceCurrency.objects.get_or_create(workspace=workspace, currency=currency)
+
+        account, _ = Account.objects.get_or_create(
+            workspace=workspace,
+            name=f'Main {code}',
+            defaults={
+                'type': AccountType.BANK,
+                'currency': currency,
+                'created_by': user,
+                'updated_by': user,
+            },
+        )
+        cache[code] = account
+        return account
+
+    @staticmethod
     @db_transaction.atomic
     def import_all_data(user, data) -> dict:
         """
@@ -838,6 +881,35 @@ class UserService:
                         updated_by=user,
                     )
 
+            # Transactions live on accounts since B5: land workspace-level rows
+            # in per-currency 'Main <CODE>' accounts. Older exports carry them
+            # per period — hoist those first. TODO(B10): full v3 import.
+            if 'transactions' not in ws_data:
+                ws_data['transactions'] = [
+                    tx
+                    for acc in ws_data.get('budget_accounts', [])
+                    for period in acc.get('periods', [])
+                    for tx in period.get('transactions', [])
+                ]
+            import_account_cache: dict[str, object] = {}
+            for tx_data in ws_data.get('transactions', []):
+                code = tx_data.get('currency_code') or tx_data.get('currency_symbol')
+                if not code:
+                    continue
+                tx_account = UserService._get_or_create_import_account(user, workspace, code, import_account_cache)
+                Transaction.objects.create(
+                    workspace=workspace,
+                    account=tx_account,
+                    date=datetime.strptime(tx_data.get('date'), '%Y-%m-%d').date(),
+                    description=tx_data.get('description'),
+                    amount=tx_data.get('amount'),
+                    type=tx_data.get('type'),
+                    category=None,
+                    created_by=user,
+                    updated_by=user,
+                )
+                imported_transactions += 1
+
             for acc_data in ws_data.get('budget_accounts', []):
                 default_currency_symbol = acc_data.get('default_currency')
                 default_currency = currency_map.get(default_currency_symbol)
@@ -872,25 +944,8 @@ class UserService:
 
                     # TODO(B10): v3 import rebuilds plan data on budgeting models.
                     # Categories/budgets sections are ignored since B4 (categories
-                    # are budget-scoped now); transactions import uncategorized.
-                    for tx_data in period_data.get('transactions', []):
-                        currency_symbol = tx_data.get('currency_symbol')
-                        currency = currency_map.get(currency_symbol)
-                        if currency:
-                            Transaction.objects.create(
-                                workspace=workspace,
-                                budget_period=period,
-                                date=datetime.strptime(tx_data.get('date'), '%Y-%m-%d').date(),
-                                description=tx_data.get('description'),
-                                amount=tx_data.get('amount'),
-                                type=tx_data.get('type'),
-                                category=None,
-                                currency=currency,
-                                created_by=user,
-                                updated_by=user,
-                            )
-                            imported_transactions += 1
-
+                    # are budget-scoped now); per-period transactions moved to the
+                    # workspace level in B5 (see below).
                     for pt_data in period_data.get('planned_transactions', []):
                         currency_symbol = pt_data.get('currency_symbol')
                         currency = currency_map.get(currency_symbol)

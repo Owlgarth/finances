@@ -2,21 +2,26 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class TransactionCreate(BaseModel):
-    """Schema for creating a transaction."""
+    """Schema for creating or fully replacing a transaction.
+
+    amount is positive for income/expense and a signed non-zero delta for
+    adjustments (validated in the service, where the type semantics live).
+    """
 
     date: date
     description: str = Field(..., max_length=500)
+    type: str = Field(..., pattern=r'^(income|expense|adjustment)$')
+    amount: Decimal
+    account_id: Optional[int] = None
     category_id: Optional[int] = None
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    type: str = Field(..., pattern=r'^(income|expense)$')
-    budget_period_id: Optional[int] = None
+    original_amount: Optional[Decimal] = Field(None, gt=0)
+    original_currency_code: Optional[str] = Field(None, pattern=r'^[A-Z]{3,8}$')
 
     @field_validator('description')
     @classmethod
@@ -25,34 +30,20 @@ class TransactionCreate(BaseModel):
             raise ValueError('Description cannot be empty')
         return v.strip()
 
-
-class TransactionUpdate(BaseModel):
-    """Schema for updating a transaction."""
-
-    date: date
-    description: str = Field(..., max_length=500)
-    category_id: Optional[int] = None
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    type: str = Field(..., pattern=r'^(income|expense)$')
-    budget_period_id: Optional[int] = None
-
-    @field_validator('description')
-    @classmethod
-    def description_not_empty(cls, v):
-        if not v.strip():
-            raise ValueError('Description cannot be empty')
-        return v.strip()
+    @model_validator(mode='after')
+    def original_facet_both_or_neither(self):
+        if (self.original_amount is None) != (self.original_currency_code is None):
+            raise ValueError('original_amount and original_currency_code must both be set or both be omitted')
+        return self
 
 
 class TransactionImport(BaseModel):
-    """Schema for importing a transaction."""
+    """Schema for importing a transaction row."""
 
     date: date
     description: str = Field(..., max_length=500)
     category_name: Optional[str] = Field(None, max_length=100)
     amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
     type: str = Field(..., pattern=r'^(income|expense)$')
 
     @field_validator('description')
@@ -63,58 +54,39 @@ class TransactionImport(BaseModel):
         return v.strip()
 
 
-class CategoryOut(BaseModel):
-    """Schema for category in transaction response."""
+class TransactionBulkAccountIn(BaseModel):
+    """Schema for bulk account reassignment."""
 
-    model_config = ConfigDict(from_attributes=True)
+    transaction_ids: list[int] = Field(..., min_length=1)
+    account_id: int
 
-    id: int
-    budget_id: int
-    name: str
-    created_at: datetime
+
+class TransactionBulkAccountOut(BaseModel):
+    """Schema for bulk account reassignment response."""
+
+    updated: int
 
 
 class TransactionOut(BaseModel):
     """Schema for transaction response."""
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        arbitrary_types_allowed=True,
-    )
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
-    budget_period_id: Optional[int]
+    workspace_id: int
+    account_id: int
+    account_name: str
+    currency_code: str
     date: date
     description: str
     category_id: Optional[int]
-    category: Optional[CategoryOut] = None
+    category_name: Optional[str] = None
     amount: Decimal
-    currency: str
     type: str
-    created_by: Optional[int] = None
-    updated_by: Optional[int] = None
+    original_amount: Optional[Decimal] = None
+    original_currency_code: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    @field_validator('currency', mode='before')
-    @classmethod
-    def validate_currency(cls, value: Any) -> str:
-        """Extract symbol string from Currency FK object."""
-        if hasattr(value, 'symbol'):
-            return value.symbol
-        return value
-
-    @field_validator('created_by', 'updated_by', mode='before')
-    @classmethod
-    def validate_user_id(cls, value: Any) -> Optional[int]:
-        """Extract user ID from Django User ForeignKey field."""
-        if value is None:
-            return None
-        if hasattr(value, 'id'):
-            return value.id
-        if isinstance(value, int):
-            return value
-        return None
 
 
 class TransactionTotalsItem(BaseModel):

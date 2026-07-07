@@ -9,88 +9,87 @@ from django.db import transaction as db_transaction
 from django.db.models import Count, F, Sum, Value
 from django.db.models.functions import Coalesce, Lower
 
-from budget_periods.models import BudgetPeriod
-from budget_periods.services import BudgetPeriodService
+from accounts.models import Account
+from accounts.services import AccountService
+from budgeting.services import PeriodService
 from categories.models import Category
 from common.enums import TotalsLabel
-from common.exceptions import CurrencyNotFoundInWorkspaceError
-from common.services.base import get_or_create_period_balance, resolve_currency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
+from currencies.models import Currency
 from transactions.exceptions import (
+    AccountRequiredError,
+    TransactionAccountArchivedError,
+    TransactionAdjustmentCategoryError,
+    TransactionAmountInvalidError,
+    TransactionBulkAccountError,
     TransactionCategoryNotFoundError,
     TransactionImportError,
-    TransactionNoActivePeriodError,
     TransactionNotFoundError,
+    TransactionOriginalCurrencyError,
 )
 from transactions.models import Transaction
 from transactions.schemas import TransactionCreate, TransactionImport
-from workspaces.models import Currency
 
 
 class TransactionService:
     @staticmethod
-    def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
-        """Get a transaction and verify it belongs to the workspace."""
-        trans = (
-            Transaction.objects.select_related('category', 'budget_period__budget_account', 'currency')
-            .for_workspace(workspace_id)
-            .filter(id=transaction_id)
-            .first()
-        )
-        if not trans:
-            raise TransactionNotFoundError()
-        return trans
-
-    @staticmethod
-    def update_period_balance(period_id: int, currency, trans_type: str, amount: Decimal, operation: str) -> None:
-        """Add or subtract a transaction amount from the period balance.
-
-        Not atomic on its own: callers MUST wrap the enclosing operation in
-        ``@db_transaction.atomic`` so this read/modify/write of the balance stays
-        consistent with the triggering transaction's row save. All current callers
-        (``create``, ``update``, ``delete``, ``import_data``) already do.
-        """
-        balance = get_or_create_period_balance(period_id, currency)
-        amount_value = amount if operation == 'add' else -amount
-
-        if trans_type == 'income':
-            balance.total_income += amount_value
+    def _resolve_account(workspace_id: int, account_id: int | None) -> Account:
+        """Resolve the target account, defaulting when exactly one active account exists."""
+        if account_id is not None:
+            account = AccountService.get(account_id, workspace_id)
         else:
-            balance.total_expenses += amount_value
-
-        balance.recalculate_closing_balance()
-        balance.save()
-
-    @staticmethod
-    def _resolve_period(workspace_id: int, date, period_id: int | None) -> int:
-        """Return the resolved period_id, raising exception when not found."""
-        if period_id:
-            BudgetPeriodService.get(period_id, workspace_id)
-            return period_id
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace_id,
-                start_date__lte=date,
-                end_date__gte=date,
-            )
-            .first()
-        )
-        if not period:
-            raise TransactionNoActivePeriodError()
-        return period.id
+            account = AccountService.single_active_account(workspace_id)
+            if not account:
+                raise AccountRequiredError()
+        if account.is_archived:
+            raise TransactionAccountArchivedError()
+        return account
 
     @staticmethod
-    def _validate_category(category_id: int | None, workspace_id: int) -> None:
-        """Raise if the category is missing, in another workspace, or archived.
-
-        Categories are budget-scoped since B4; period linkage no longer applies.
-        """
+    def _validate_category(category_id: int | None, workspace_id: int) -> Category | None:
+        """Return the category, or raise if missing, in another workspace, or archived."""
         if not category_id:
-            return
-        category = Category.objects.for_workspace(workspace_id).filter(id=category_id).first()
+            return None
+        category = Category.objects.for_workspace(workspace_id).select_related('budget').filter(id=category_id).first()
         if not category or category.is_archived:
             raise TransactionCategoryNotFoundError()
+        return category
+
+    @staticmethod
+    def _validate_type_amount(trans_type: str, amount: Decimal, category_id: int | None) -> None:
+        """Enforce type semantics: positive income/expense, signed non-zero uncategorized adjustment."""
+        if trans_type == 'adjustment':
+            if amount == 0:
+                raise TransactionAmountInvalidError()
+            if category_id is not None:
+                raise TransactionAdjustmentCategoryError()
+        elif amount <= 0:
+            raise TransactionAmountInvalidError()
+
+    @staticmethod
+    def _resolve_original_currency(workspace_id: int, account: Account, code: str | None) -> Currency | None:
+        """Resolve the original-facet currency: catalog global or this workspace's custom rows.
+
+        Must differ from the account currency — the facet only records what was
+        paid in another currency; the settled amount drives all math.
+        """
+        if code is None:
+            return None
+        currency = (
+            Currency.objects.filter(workspace__isnull=True, code=code).first()
+            or Currency.objects.filter(workspace_id=workspace_id, code=code).first()
+        )
+        if not currency:
+            raise TransactionOriginalCurrencyError(f'Original currency {code} not found in the catalog')
+        if currency.code == account.currency.code:
+            raise TransactionOriginalCurrencyError('Original currency must differ from the account currency')
+        return currency
+
+    @staticmethod
+    def _touch_period(user, category: Category | None, target_date) -> None:
+        """Lazily materialize the period the transaction lands in (category set only)."""
+        if category:
+            PeriodService.get_or_create_for_date(user, category.budget, target_date)
 
     @staticmethod
     def _resolve_display_descriptions(queryset) -> dict[str, str]:
@@ -109,49 +108,33 @@ class TransactionService:
     @staticmethod
     def _build_filtered_queryset(
         workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
-        transaction_type: list | None = None,
+        date_from=None,
+        date_to=None,
+        account_id: int | None = None,
         category_id: list | None = None,
-        currency: list | None = None,
+        budget_id: int | None = None,
+        transaction_type: list | None = None,
         search: str | None = None,
-        start_date=None,
-        end_date=None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
     ):
-        """Build a filtered queryset for transactions. Returns None when current_date matches no period."""
+        """Build a filtered queryset for transactions."""
         queryset = Transaction.objects.for_workspace(workspace_id)
 
-        if budget_period_id:
-            queryset = queryset.filter(budget_period_id=budget_period_id)
-        elif current_date:
-            period = (
-                BudgetPeriod.objects.select_related('budget_account')
-                .filter(
-                    budget_account__workspace_id=workspace_id,
-                    start_date__lte=current_date,
-                    end_date__gte=current_date,
-                )
-                .first()
-            )
-            if period:
-                queryset = queryset.filter(budget_period_id=period.id)
-            else:
-                return None
-
-        if transaction_type:
-            queryset = queryset.filter(type__in=transaction_type)
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        if account_id:
+            queryset = queryset.filter(account_id=account_id)
         if category_id:
             queryset = queryset.filter(category_id__in=category_id)
-        if currency:
-            queryset = queryset.filter(currency__symbol__in=currency)
+        if budget_id:
+            queryset = queryset.filter(category__budget_id=budget_id)
+        if transaction_type:
+            queryset = queryset.filter(type__in=transaction_type)
         if search:
             queryset = queryset.filter(description__icontains=search)
-        if start_date:
-            queryset = queryset.filter(date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(date__lte=end_date)
         if amount_gte is not None:
             queryset = queryset.filter(amount__gte=amount_gte)
         if amount_lte is not None:
@@ -160,16 +143,28 @@ class TransactionService:
         return queryset
 
     @staticmethod
+    def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
+        """Get a transaction and verify it belongs to the workspace."""
+        trans = (
+            Transaction.objects.select_related('account__currency', 'category', 'original_currency')
+            .for_workspace(workspace_id)
+            .filter(id=transaction_id)
+            .first()
+        )
+        if not trans:
+            raise TransactionNotFoundError()
+        return trans
+
+    @staticmethod
     def list(
         workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
-        transaction_type: list | None = None,
+        date_from=None,
+        date_to=None,
+        account_id: int | None = None,
         category_id: list | None = None,
-        currency: list | None = None,
+        budget_id: int | None = None,
+        transaction_type: list | None = None,
         search: str | None = None,
-        start_date=None,
-        end_date=None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
         ordering: str | None = None,
@@ -179,22 +174,18 @@ class TransactionService:
         """List transactions for a workspace with optional filters and pagination."""
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
-            budget_period_id=budget_period_id,
-            current_date=current_date,
-            transaction_type=transaction_type,
+            date_from=date_from,
+            date_to=date_to,
+            account_id=account_id,
             category_id=category_id,
-            currency=currency,
+            budget_id=budget_id,
+            transaction_type=transaction_type,
             search=search,
-            start_date=start_date,
-            end_date=end_date,
             amount_gte=amount_gte,
             amount_lte=amount_lte,
         )
 
-        if queryset is None:
-            return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
-
-        queryset = queryset.select_related('category')
+        queryset = queryset.select_related('account__currency', 'category', 'original_currency')
 
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
@@ -211,98 +202,91 @@ class TransactionService:
     @staticmethod
     def totals(
         workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
-        transaction_type: list | None = None,
+        date_from=None,
+        date_to=None,
+        account_id: int | None = None,
         category_id: list | None = None,
-        currency: list | None = None,
+        budget_id: int | None = None,
+        transaction_type: list | None = None,
         search: str | None = None,
-        start_date=None,
-        end_date=None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
         group_by: str = 'type',
     ) -> list[dict]:
-        """Get aggregated transaction totals grouped by (type, currency) or (category, currency)."""
+        """Aggregated totals grouped by (type, currency) or (category, currency).
+
+        Adjustments are excluded — they affect balances, never income/expense reporting.
+        """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
-            budget_period_id=budget_period_id,
-            current_date=current_date,
-            transaction_type=transaction_type,
+            date_from=date_from,
+            date_to=date_to,
+            account_id=account_id,
             category_id=category_id,
-            currency=currency,
+            budget_id=budget_id,
+            transaction_type=transaction_type,
             search=search,
-            start_date=start_date,
-            end_date=end_date,
             amount_gte=amount_gte,
             amount_lte=amount_lte,
-        )
-
-        if queryset is None:
-            return []
+        ).exclude(type='adjustment')
 
         if group_by == 'category':
             rows = (
                 queryset.annotate(
-                    currency_symbol=F('currency__symbol'),
-                    category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+                    currency_code=F('account__currency__code'),
+                    grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
                 )
-                .values('category_name', 'currency_symbol')
+                .values('grouped_category_name', 'currency_code')
                 .annotate(total=Sum('amount'))
-                .order_by('category_name', 'currency_symbol')
+                .order_by('grouped_category_name', 'currency_code')
             )
-            return [{'group': r['category_name'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+            return [
+                {'group': r['grouped_category_name'], 'currency': r['currency_code'], 'total': r['total']} for r in rows
+            ]
 
         # Default: group by type
         rows = (
-            queryset.annotate(currency_symbol=F('currency__symbol'))
-            .values('type', 'currency_symbol')
+            queryset.annotate(currency_code=F('account__currency__code'))
+            .values('type', 'currency_code')
             .annotate(total=Sum('amount'))
-            .order_by('type', 'currency_symbol')
+            .order_by('type', 'currency_code')
         )
-        return [{'group': r['type'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+        return [{'group': r['type'], 'currency': r['currency_code'], 'total': r['total']} for r in rows]
 
     @staticmethod
     def totals_combined(
         workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
-        transaction_type: list | None = None,
+        date_from=None,
+        date_to=None,
+        account_id: int | None = None,
         category_id: list | None = None,
-        currency: list | None = None,
+        budget_id: int | None = None,
+        transaction_type: list | None = None,
         search: str | None = None,
-        start_date=None,
-        end_date=None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
     ) -> dict:
         """Get both type and category totals in a single DB query.
 
-        Returns {'by_type': [...], 'by_category': [...]}.
-        The base queryset is built once; both groupings are derived from a single
-        database round-trip using Python-side aggregation over the filtered rows.
+        Returns {'by_type': [...], 'by_category': [...]}. Adjustments excluded.
         """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
-            budget_period_id=budget_period_id,
-            current_date=current_date,
-            transaction_type=transaction_type,
+            date_from=date_from,
+            date_to=date_to,
+            account_id=account_id,
             category_id=category_id,
-            currency=currency,
+            budget_id=budget_id,
+            transaction_type=transaction_type,
             search=search,
-            start_date=start_date,
-            end_date=end_date,
             amount_gte=amount_gte,
             amount_lte=amount_lte,
-        )
-
-        if queryset is None:
-            return {'by_type': [], 'by_category': []}
+        ).exclude(type='adjustment')
 
         rows = queryset.annotate(
-            currency_symbol=F('currency__symbol'),
-            category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
-        ).values_list('type', 'category_name', 'currency_symbol', 'amount')
+            currency_code=F('account__currency__code'),
+            grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+        ).values_list('type', 'grouped_category_name', 'currency_code', 'amount')
 
         type_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
         cat_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
@@ -326,8 +310,6 @@ class TransactionService:
     @staticmethod
     def frequent_descriptions(
         workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
         transaction_type: list | None = None,
         limit: int = 10,
     ) -> dict:
@@ -337,19 +319,14 @@ class TransactionService:
         """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
-            budget_period_id=budget_period_id,
-            current_date=current_date,
             transaction_type=transaction_type,
-        )
-
-        if queryset is None:
-            return {'items': []}
+        ).exclude(type='adjustment')
 
         display_map = TransactionService._resolve_display_descriptions(queryset)
 
         rows = (
-            queryset.annotate(lower_desc=Lower('description'), currency_symbol=F('currency__symbol'))
-            .values('lower_desc', 'currency_symbol')
+            queryset.annotate(lower_desc=Lower('description'), currency_code=F('account__currency__code'))
+            .values('lower_desc', 'currency_code')
             .annotate(count=Count('id'), total=Sum('amount'))
             .order_by('-count')[:limit]
         )
@@ -359,7 +336,7 @@ class TransactionService:
                 'description': display_map.get(r['lower_desc'], r['lower_desc']),
                 'count': r['count'],
                 'total': r['total'],
-                'currency': r['currency_symbol'],
+                'currency': r['currency_code'],
             }
             for r in rows
         ]
@@ -368,107 +345,125 @@ class TransactionService:
     @staticmethod
     @db_transaction.atomic
     def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
-        """Create a transaction and update the period balance."""
-        currency = resolve_currency(workspace_id, data.currency)
-        if not currency:
-            raise CurrencyNotFoundInWorkspaceError(data.currency)
-
-        category_id = None if data.type == 'income' else data.category_id
-        period_id = TransactionService._resolve_period(workspace_id, data.date, data.budget_period_id)
-        TransactionService._validate_category(category_id, workspace_id)
+        """Create a transaction on an account, lazily materializing the derived period."""
+        account = TransactionService._resolve_account(workspace_id, data.account_id)
+        TransactionService._validate_type_amount(data.type, data.amount, data.category_id)
+        category = TransactionService._validate_category(data.category_id, workspace_id)
+        original_currency = TransactionService._resolve_original_currency(
+            workspace_id, account, data.original_currency_code
+        )
 
         trans = Transaction.objects.create(
             workspace_id=workspace_id,
-            budget_period_id=period_id,
+            account=account,
             date=data.date,
             description=data.description,
-            category_id=category_id,
+            category=category,
             amount=data.amount,
-            currency=currency,
             type=data.type,
+            original_amount=data.original_amount,
+            original_currency=original_currency,
             created_by=user,
             updated_by=user,
         )
-        TransactionService.update_period_balance(period_id, currency, data.type, data.amount, 'add')
+        TransactionService._touch_period(user, category, data.date)
         return trans
 
     @staticmethod
     @db_transaction.atomic
     def update(user, workspace_id: int, transaction_id: int, data: TransactionCreate) -> Transaction:
-        """Update a transaction, reversing the old balance and applying the new one."""
+        """Fully replace a transaction; account/category/date changes re-derive the period."""
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
 
-        new_currency = resolve_currency(workspace_id, data.currency)
-        if not new_currency:
-            raise CurrencyNotFoundInWorkspaceError(data.currency)
+        account = TransactionService._resolve_account(workspace_id, data.account_id or trans.account_id)
+        TransactionService._validate_type_amount(data.type, data.amount, data.category_id)
+        category = TransactionService._validate_category(data.category_id, workspace_id)
+        original_currency = TransactionService._resolve_original_currency(
+            workspace_id, account, data.original_currency_code
+        )
 
-        category_id = None if data.type == 'income' else data.category_id
-
-        if trans.budget_period_id:
-            TransactionService.update_period_balance(
-                trans.budget_period_id, trans.currency, trans.type, trans.amount, 'subtract'
-            )
-
-        period_id = TransactionService._resolve_period(workspace_id, data.date, data.budget_period_id)
-        TransactionService._validate_category(category_id, workspace_id)
-
+        trans.account = account
         trans.date = data.date
         trans.description = data.description
-        trans.category_id = category_id
+        trans.category = category
         trans.amount = data.amount
-        trans.currency = new_currency
         trans.type = data.type
-        trans.budget_period_id = period_id
+        trans.original_amount = data.original_amount
+        trans.original_currency = original_currency
         trans.updated_by = user
         trans.save()
 
-        TransactionService.update_period_balance(period_id, new_currency, data.type, data.amount, 'add')
+        TransactionService._touch_period(user, category, data.date)
         return trans
 
     @staticmethod
     @db_transaction.atomic
     def delete(workspace_id: int, transaction_id: int) -> None:
-        """Delete a transaction and revert the period balance."""
+        """Delete a transaction. Balances are computed, so nothing else to revert."""
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
-
-        if trans.budget_period_id:
-            TransactionService.update_period_balance(
-                trans.budget_period_id, trans.currency, trans.type, trans.amount, 'subtract'
-            )
         trans.delete()
 
     @staticmethod
-    def export(workspace_id: int, period_id: int, trans_type: str | None = None) -> list[dict]:
-        """Return serialisable transaction data for a period."""
-        BudgetPeriodService.get(period_id, workspace_id)
+    @db_transaction.atomic
+    def bulk_set_account(user, workspace_id: int, transaction_ids: list[int], account_id: int) -> int:
+        """Move transactions to another account in one UPDATE (all-or-nothing)."""
+        account = AccountService.get(account_id, workspace_id)
+        if account.is_archived:
+            raise TransactionAccountArchivedError()
 
-        queryset = (
-            Transaction.objects.for_workspace(workspace_id)
-            .select_related('category', 'currency')
-            .filter(budget_period_id=period_id)
-        )
-        if trans_type:
-            queryset = queryset.filter(type=trans_type)
+        owned = Transaction.objects.for_workspace(workspace_id).filter(id__in=transaction_ids)
+        if owned.count() != len(set(transaction_ids)):
+            raise TransactionBulkAccountError()
+
+        return owned.update(account=account, updated_by=user)
+
+    @staticmethod
+    def export(
+        workspace_id: int,
+        date_from=None,
+        date_to=None,
+        transaction_type: str | None = None,
+    ) -> list[dict]:
+        """Return serialisable transaction data filtered by date range."""
+        queryset = TransactionService._build_filtered_queryset(
+            workspace_id=workspace_id,
+            date_from=date_from,
+            date_to=date_to,
+            transaction_type=[transaction_type] if transaction_type else None,
+        ).select_related('account__currency', 'category', 'original_currency')
 
         return [
             {
                 'date': t.date.isoformat(),
                 'description': t.description,
-                'category_name': t.category.name if t.category else None,
+                'category_name': t.category_name,
                 'amount': str(t.amount),
-                'currency': t.currency.symbol,
+                'account_name': t.account_name,
+                'currency_code': t.currency_code,
                 'type': t.type,
+                'original_amount': str(t.original_amount) if t.original_amount is not None else None,
+                'original_currency_code': t.original_currency_code,
             }
             for t in queryset.order_by('-date')
         ]
 
     @staticmethod
     @db_transaction.atomic
-    def import_data(user, workspace_id: int, period_id: int, data: list) -> int:
-        """Bulk-create transactions from parsed JSON data. Returns count of created records."""
-        BudgetPeriodService.get(period_id, workspace_id)
+    def import_data(user, workspace_id: int, account_id: int, data: list, budget_id: int | None = None) -> int:
+        """Bulk-create transactions into one explicit account. Returns count of created records.
 
-        currency_map = {c.symbol: c for c in Currency.objects.for_workspace(workspace_id)}
+        Categories are matched by name within budget_id when given, else left null.
+        """
+        account = TransactionService._resolve_account(workspace_id, account_id)
+
+        category_map: dict[str, int] = {}
+        if budget_id is not None:
+            category_map = {
+                name.lower(): pk
+                for pk, name in Category.objects.for_workspace(workspace_id)
+                .filter(budget_id=budget_id, is_archived=False)
+                .values_list('id', 'name')
+            }
 
         new_transactions = []
         for item in data:
@@ -477,29 +472,18 @@ class TransactionService:
             except Exception as e:
                 raise TransactionImportError(f'Invalid data format: {e}')
 
-            currency = currency_map.get(import_item.currency)
-            if not currency:
-                raise CurrencyNotFoundInWorkspaceError(import_item.currency)
-
             category_id = None
             if import_item.type != 'income' and import_item.category_name:
-                category = (
-                    Category.objects.for_workspace(workspace_id)
-                    .filter(name__iexact=import_item.category_name, is_archived=False)
-                    .first()
-                )
-                if category:
-                    category_id = category.id
+                category_id = category_map.get(import_item.category_name.lower())
 
             new_transactions.append(
                 Transaction(
                     workspace_id=workspace_id,
-                    budget_period_id=period_id,
+                    account=account,
                     date=import_item.date,
                     description=import_item.description,
                     category_id=category_id,
                     amount=import_item.amount,
-                    currency=currency,
                     type=import_item.type,
                     created_by=user,
                     updated_by=user,
@@ -507,14 +491,4 @@ class TransactionService:
             )
 
         Transaction.objects.bulk_create(new_transactions)
-
-        # Aggregate amounts by (currency, type) to minimise balance update queries.
-        aggregated: dict[tuple, Decimal] = {}
-        for t in new_transactions:
-            key = (t.currency, t.type)
-            aggregated[key] = aggregated.get(key, Decimal(0)) + t.amount
-
-        for (currency, trans_type), total in aggregated.items():
-            TransactionService.update_period_balance(period_id, currency, trans_type, total, 'add')
-
         return len(new_transactions)

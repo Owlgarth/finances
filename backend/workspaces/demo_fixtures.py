@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from accounts.models import Account, AccountType
 from budget_accounts.models import BudgetAccount
 from budget_periods.models import BudgetPeriod
 from budgeting.models import Budget, Cadence
@@ -179,15 +180,27 @@ def create_demo_fixtures(
         (mid_month + timedelta(days=7), 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'PLN', 'expense'),
     ]
 
-    for trans_date, description, cat_name, amount, currency_symbol, trans_type in transactions_data:
+    # Transactions live on accounts since B5 — the demo uses the workspace's
+    # Main account (created by create_workspace; get_or_create for safety).
+    main_account = Account.objects.filter(workspace_id=workspace_id, name='Main').first()
+    if not main_account:
+        pln_catalog = CurrencyCatalogService.get_enabled(workspace_id, 'PLN')
+        main_account = Account.objects.create(
+            workspace_id=workspace_id,
+            name='Main',
+            type=AccountType.BANK,
+            currency=pln_catalog,
+            created_by_id=user_id,
+        )
+
+    for trans_date, description, cat_name, amount, _currency_symbol, trans_type in transactions_data:
         Transaction.objects.create(
             workspace_id=workspace_id,
-            budget_period=budget_period,
+            account=main_account,
             date=trans_date,
             description=description,
             category=category_map[cat_name],
             amount=amount,
-            currency=currency_map[currency_symbol],
             type=trans_type,
             created_by_id=user_id,
         )

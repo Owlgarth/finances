@@ -15,7 +15,6 @@ from currency_exchanges.models import CurrencyExchange
 from period_balances.exceptions import PeriodBalanceNotFoundError, PeriodBalancePeriodNotFoundError
 from period_balances.models import PeriodBalance
 from period_balances.schemas import PeriodBalanceUpdate
-from transactions.models import Transaction
 from workspaces.models import Currency
 
 
@@ -94,13 +93,10 @@ class PeriodBalanceService:
             if prev_balance:
                 opening = prev_balance.closing_balance
 
-        income = Transaction.objects.filter(budget_period_id=period_id, currency=currency, type='income').aggregate(
-            total=Sum('amount')
-        )['total'] or Decimal('0')
-
-        expenses = Transaction.objects.filter(budget_period_id=period_id, currency=currency, type='expense').aggregate(
-            total=Sum('amount')
-        )['total'] or Decimal('0')
+        # Transactions live on accounts since B5 and no longer feed period
+        # balances; stored income/expense stay as-is. This app dies in B8.
+        income = Decimal('0')
+        expenses = Decimal('0')
 
         exchanges_in = CurrencyExchange.objects.filter(budget_period_id=period_id, to_currency=currency).aggregate(
             total=Sum('to_amount')

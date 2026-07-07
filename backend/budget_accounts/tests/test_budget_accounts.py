@@ -10,8 +10,6 @@ from currency_exchanges.factories import CurrencyExchangeFactory
 from currency_exchanges.models import CurrencyExchange
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
-from transactions.factories import TransactionFactory
-from transactions.models import Transaction
 from workspaces.models import WorkspaceMember
 
 # =============================================================================
@@ -484,12 +482,6 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
             created_by=self.user,
         )
         pln = self.workspace.currencies.get(symbol='PLN')
-        transaction = TransactionFactory(
-            budget_period=period,
-            currency=pln,
-            created_by=self.user,
-            updated_by=self.user,
-        )
         planned = PlannedTransactionFactory(
             budget_period=period,
             currency=pln,
@@ -508,7 +500,7 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
 
         self.assertStatus(204)
         self.assertFalse(BudgetAccount.objects.filter(id=account.id).exists())
-        self.assertEqual(Transaction.objects.filter(id=transaction.id).count(), 0)
+        # Transactions live on accounts since B5 and are not touched here
         self.assertEqual(PlannedTransaction.objects.filter(id=planned.id).count(), 0)
         self.assertEqual(CurrencyExchange.objects.filter(id=exchange.id).count(), 0)
 

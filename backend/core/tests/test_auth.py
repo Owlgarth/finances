@@ -125,7 +125,7 @@ class TestAuthRegister(AuthTestCase):
         }
         self.assertEqual(category_names, expected_categories)
 
-        transactions = Transaction.objects.filter(budget_period=period)
+        transactions = Transaction.objects.for_workspace(user.current_workspace_id)
         self.assertGreaterEqual(transactions.count(), 10)
         self.assertGreaterEqual(transactions.filter(type='income').count(), 2)
         self.assertGreaterEqual(transactions.filter(type='expense').count(), 8)

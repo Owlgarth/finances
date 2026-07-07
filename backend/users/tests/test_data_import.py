@@ -448,7 +448,7 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         account2 = BudgetAccountFactory(
             workspace=workspace2, name='Account 2', default_currency=usd, created_by=self.user
         )
-        period2 = BudgetPeriodFactory(
+        BudgetPeriodFactory(
             workspace=workspace2,
             budget_account=account2,
             name='Period 2',
@@ -456,13 +456,15 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
             end_date='2024-01-31',
             created_by=self.user,
         )
+        from accounts.factories import AccountFactory
+
+        account2_new = AccountFactory(workspace=workspace2, name='Main USD')
         Transaction.objects.create(
             workspace=workspace2,
-            budget_period=period2,
+            account=account2_new,
             date='2024-01-15',
             description='Transaction 2',
             amount=Decimal('200.00'),
-            currency=usd,
             type='income',
             created_by=self.user,
         )
@@ -569,13 +571,15 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         category = Category.objects.create(
             workspace=self.workspace, budget=plan_budget, name='Integrity Category', created_by=self.user
         )
+        from accounts.factories import AccountFactory as MoneyAccountFactory
+
+        money_account = MoneyAccountFactory(workspace=self.workspace, name='Main PLN')
         Transaction.objects.create(
             workspace=self.workspace,
-            budget_period=period,
+            account=money_account,
             date='2024-01-15',
             description='Test',
             amount=Decimal('50.00'),
-            currency=pln,
             type='expense',
             category=category,
             created_by=self.user,
@@ -942,9 +946,10 @@ class V1DataImportTests(AuthMixin, TestCase):
         UserService.import_all_data(self.user, self._make_import_input(export))
 
         workspace = Workspace.objects.filter(owner=self.user, name='V1 Test Workspace').first()
-        period = BudgetPeriod.objects.filter(workspace=workspace).first()
 
-        tx_currencies = set(Transaction.objects.filter(budget_period=period).values_list('currency__symbol', flat=True))
+        tx_currencies = set(
+            Transaction.objects.filter(workspace=workspace).values_list('account__currency__code', flat=True)
+        )
         self.assertIn('PLN', tx_currencies)
         self.assertIn('USD', tx_currencies)
 

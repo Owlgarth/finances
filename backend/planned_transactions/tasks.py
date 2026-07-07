@@ -5,8 +5,6 @@ import logging
 from celery import shared_task
 from django.db import transaction as db_transaction
 
-from budget_periods.models import BudgetPeriod
-from planned_transactions.exceptions import PlannedTransactionNoActivePeriodError
 from planned_transactions.models import PlannedTransaction
 from transactions.schemas import TransactionCreate
 from transactions.services import TransactionService
@@ -52,20 +50,11 @@ def execute_planned_transaction(self, planned_id: int) -> None:
         if planned.transaction_id:
             return
 
-        # Find the budget period covering the payment date
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=planned.workspace_id,
-                start_date__lte=payment_date,
-                end_date__gte=payment_date,
-            )
-            .first()
-        )
-        if not period:
-            # Raise to trigger Celery retry — period may be created between retries
-            raise PlannedTransactionNoActivePeriodError()
-
+        # Bridge until B7 aligns PlannedTransaction with accounts: the created
+        # transaction lands on the workspace's single active account (service
+        # defaulting); with multiple accounts AccountRequiredError triggers a
+        # Celery retry and ultimately fails the task. B7 stores the account on
+        # the planned row and passes it explicitly.
         transaction_obj = TransactionService.create(
             planned.created_by,
             planned.workspace_id,
@@ -74,9 +63,7 @@ def execute_planned_transaction(self, planned_id: int) -> None:
                 description=planned.name,
                 category_id=planned.category_id,
                 amount=planned.amount,
-                currency=planned.currency.symbol,
                 type='expense',
-                budget_period_id=period.id,
             ),
         )
 

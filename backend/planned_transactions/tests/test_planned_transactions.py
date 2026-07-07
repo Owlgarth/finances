@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from accounts.factories import AccountFactory
 from budget_accounts.models import BudgetAccount
 from budget_periods.factories import BudgetPeriodFactory
 from budgeting.factories import BudgetFactory as PlanBudgetFactory
@@ -14,7 +15,6 @@ from common.enums import TotalsLabel
 from common.tests.helpers import create_other_workspace
 from common.tests.mixins import APIClientMixin, AuthMixin
 from period_balances.factories import PeriodBalanceFactory
-from period_balances.models import PeriodBalance
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
 from planned_transactions.services import PlannedTransactionService
@@ -42,6 +42,10 @@ class PlannedTransactionTestCase(APIClientMixin, AuthMixin, TestCase):
 
         # Get or create the general budget account
         self.account = BudgetAccount.objects.filter(workspace=self.workspace, name='General').first()
+
+        # Executed planned transactions land on the workspace's single active
+        # account until B7 aligns planned transactions with accounts.
+        self.money_account = AccountFactory(workspace=self.workspace, name='Main')
 
         # Create budget periods
         self.period1 = BudgetPeriodFactory(
@@ -513,7 +517,6 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
     def test_create_planned_with_status_done_creates_transaction(self):
         """Test creating a planned transaction with status done triggers execution."""
         initial_transaction_count = Transaction.objects.count()
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
 
         payload = {
             'name': 'Paid Bill',
@@ -530,9 +533,6 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['payment_date'], '2025-01-10')
         self.assertIsNotNone(data['transaction_id'])
         self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
-
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('200.00'))
 
         transaction = Transaction.objects.get(id=data['transaction_id'])
         self.assertEqual(transaction.description, 'Paid Bill')
@@ -605,7 +605,6 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
     def test_update_status_to_done_creates_transaction(self):
         """Test updating status to done triggers execution side effects."""
         initial_transaction_count = Transaction.objects.count()
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
 
         payload = {
             'name': 'Monthly Rent',
@@ -621,9 +620,6 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['payment_date'], '2025-01-05')
         self.assertIsNotNone(data['transaction_id'])
         self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
-
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
 
     def test_update_cannot_revert_from_done(self):
         """Test that changing status from done to pending raises an error."""
@@ -711,7 +707,6 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
     def test_execute_planned_success(self):
         """Test executing a planned transaction creates an actual transaction."""
         initial_transaction_count = Transaction.objects.count()
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
 
         data = self.post(
             f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05', {}, **self.auth_headers()
@@ -722,12 +717,11 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['payment_date'], '2025-01-05')
         self.assertIsNotNone(data['transaction_id'])
 
-        # Verify transaction was created
+        # Verify transaction was created on the workspace's account
         self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
-
-        # Verify balance was updated
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
+        created = Transaction.objects.get(id=data['transaction_id'])
+        self.assertEqual(created.account_id, self.money_account.id)
+        self.assertEqual(created.amount, Decimal('1200.00'))
 
     def test_execute_planned_twice_fails(self):
         """Test that executing an already executed planned transaction fails."""
@@ -1469,10 +1463,9 @@ class TestPlannedTransactionDateRangeFilter(PlannedTransactionTestCase):
 class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
     """Tests for the execute_planned_transaction Celery task."""
 
-    def test_task_creates_transaction_and_updates_balance(self):
-        """Test that the Celery task creates a Transaction and updates PeriodBalance."""
+    def test_task_creates_transaction_on_account(self):
+        """Test that the Celery task creates a Transaction on the workspace account."""
         initial_transaction_count = Transaction.objects.count()
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
 
         # Set up the planned tx as the service would (status='done', payment_date set)
         self.planned1.status = 'done'
@@ -1484,13 +1477,10 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         # Verify Transaction was created
         self.assertEqual(Transaction.objects.count(), initial_transaction_count + 1)
 
-        # Verify PeriodBalance was updated
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
-
         # Verify the planned transaction has transaction_id set
         self.planned1.refresh_from_db()
         self.assertIsNotNone(self.planned1.transaction_id)
+        self.assertEqual(Transaction.objects.get(id=self.planned1.transaction_id).account_id, self.money_account.id)
 
     def test_task_idempotent_on_duplicate_call(self):
         """Test that calling the task twice does not create duplicate Transactions."""
@@ -1509,10 +1499,6 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         # No additional Transaction should be created
         self.assertEqual(Transaction.objects.count(), transaction_count_after_first)
 
-        # PeriodBalance should not double-count
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, Decimal('1200.00'))
-
     def test_task_handles_missing_planned_transaction_gracefully(self):
         """Test that the task logs and returns (no raise) for non-existent planned tx."""
         non_existent_id = 99999
@@ -1521,16 +1507,17 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         # No Transaction should be created
         self.assertEqual(Transaction.objects.count(), 0)
 
-    def test_task_raises_for_missing_budget_period(self):
-        """Test that the task raises when no period covers the payment date (triggers retry)."""
-        from planned_transactions.exceptions import PlannedTransactionNoActivePeriodError
+    def test_task_raises_without_single_active_account(self):
+        """The B5 bridge raises when no single active account exists (triggers retry)."""
+        from transactions.exceptions import AccountRequiredError
 
-        # Set payment_date to a date outside any period
+        AccountFactory(workspace=self.workspace, name='Second')  # two active accounts now
+
         self.planned1.status = 'done'
-        self.planned1.payment_date = date(2025, 12, 25)  # No period covers Dec 2025
+        self.planned1.payment_date = date(2025, 1, 5)
         self.planned1.save()
 
-        with self.assertRaises(PlannedTransactionNoActivePeriodError):
+        with self.assertRaises(AccountRequiredError):
             execute_planned_transaction(self.planned1.id)
 
         # No Transaction should have been created
@@ -1568,10 +1555,8 @@ class TestExecutePlannedTransactionDispatch(PlannedTransactionTestCase):
         self.assertEqual(self.planned1.payment_date, date(2025, 1, 5))
         self.assertIsNotNone(self.planned1.transaction_id)
 
-    def test_execute_dispatch_updates_period_balance(self):
-        """The dispatched task updates PeriodBalance.total_expenses."""
-        initial_expenses = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD').total_expenses
-
+    def test_execute_dispatch_creates_account_transaction(self):
+        """The dispatched task creates the transaction on the workspace account."""
         PlannedTransactionService.execute(
             user=self.user,
             workspace_id=self.workspace.id,
@@ -1579,9 +1564,10 @@ class TestExecutePlannedTransactionDispatch(PlannedTransactionTestCase):
             payment_date=date(2025, 1, 5),
         )
 
-        # planned1 is $1200 USD in period1; PeriodBalance.total_expenses must reflect it
-        balance = PeriodBalance.objects.get(budget_period=self.period1, currency__symbol='USD')
-        self.assertEqual(balance.total_expenses, initial_expenses + Decimal('1200.00'))
+        self.planned1.refresh_from_db()
+        created = Transaction.objects.get(id=self.planned1.transaction_id)
+        self.assertEqual(created.account_id, self.money_account.id)
+        self.assertEqual(created.amount, Decimal('1200.00'))
 
     def test_execute_returns_planned_with_transaction_id(self):
         """The returned PlannedTransaction reflects the task's writes (refresh_from_db in service)."""

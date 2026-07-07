@@ -12,7 +12,6 @@ from common.services.base import get_workspace_currencies
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
-from transactions.models import Transaction
 
 
 class BudgetPeriodService:
@@ -114,15 +113,13 @@ class BudgetPeriodService:
     @staticmethod
     @db_transaction.atomic
     def delete(workspace_id: int, period_id: int) -> None:
-        """Delete a budget period and all its financial records.
+        """Delete a budget period and its period-scoped legacy records.
 
-        Transaction, PlannedTransaction, and CurrencyExchange have
-        on_delete=SET_NULL on budget_period. Django would orphan them
-        (set budget_period=NULL) rather than cascade-delete them.
-        We delete them explicitly to avoid orphaned records.
+        PlannedTransaction and CurrencyExchange have on_delete=SET_NULL on
+        budget_period; delete them explicitly to avoid orphaned records.
+        Transactions live on accounts since B5 and are untouched.
         """
         period = BudgetPeriodService.get(period_id, workspace_id)
-        Transaction.objects.filter(budget_period=period).delete()
         PlannedTransaction.objects.filter(budget_period=period).delete()
         CurrencyExchange.objects.filter(budget_period=period).delete()
         period.delete()

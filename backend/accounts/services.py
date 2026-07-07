@@ -20,17 +20,28 @@ class AccountService:
     def _record_count(account: Account) -> int:
         """Count financial records referencing this account.
 
-        B5 adds transactions count, B6 adds transfers count.
+        B6 adds transfers count.
         """
-        return 0
+        return account.transactions.count()
 
     @staticmethod
     def _transactions_delta(account: Account) -> Decimal:
         """Net effect of transactions on the account balance.
 
-        B5: + income − expense + signed adjustments (single aggregate query).
+        + income − expense + signed adjustments, in a single aggregate query.
         """
-        return Decimal('0')
+        from django.db.models import Case, DecimalField, F, Sum, When
+
+        result = account.transactions.aggregate(
+            delta=Sum(
+                Case(
+                    When(type='expense', then=-F('amount')),
+                    default=F('amount'),
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                )
+            )
+        )
+        return result['delta'] or Decimal('0')
 
     @staticmethod
     def _transfers_delta(account: Account) -> Decimal:

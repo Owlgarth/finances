@@ -158,13 +158,15 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             created_by=user,
         )
 
+        from accounts.factories import AccountFactory
+
+        account = AccountFactory(workspace=workspace)
         transaction = TransactionFactory(
-            budget_period=period,
+            account=account,
             workspace=workspace,
             date=date(2025, 1, 15),
             description='Test Transaction',
             amount=100,
-            currency=pln,
             type='expense',
             created_by=user,
             updated_by=user,
