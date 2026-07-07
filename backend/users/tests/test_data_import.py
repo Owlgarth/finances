@@ -1,10 +1,11 @@
-"""Tests for GDPR data import (account-based model).
+"""Tests for GDPR v3 data import (same-system restore).
 
-Full v3 round-trip and legacy v1/v2 coverage arrive in B10/B11; these tests
-cover import version handling, workspace conflict strategies, and importing
-the v2-new export shape (accounts / transactions / transfers / planned).
+The main import handles v3 only; legacy v1/v2 files go through the legacy
+import endpoint (B11). These tests cover v3 version gating, conflict
+strategies, hierarchy restore, and the export→wipe→import round-trip.
 """
 
+from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -12,12 +13,17 @@ from django.test import TestCase
 
 from accounts.factories import AccountFactory
 from accounts.models import Account
+from budgeting.factories import BudgetFactory
+from budgeting.models import Budget, CategoryBudget, Period
+from budgeting.services import PeriodService
+from categories.factories import CategoryFactory
+from categories.models import Category
 from common.tests.mixins import AuthMixin
+from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
-from planned_transactions.models import PlannedTransaction
 from transactions.factories import TransactionFactory
 from transactions.models import Transaction
-from transfers.models import Transfer
+from transfers.factories import TransferFactory
 from users.services import UserService
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Workspace
@@ -25,63 +31,57 @@ from workspaces.models import Workspace
 User = get_user_model()
 
 
-class DataImportTests(AuthMixin, TestCase):
-    """Tests for UserService.import_all_data."""
+class V3ImportGatingTests(AuthMixin, TestCase):
+    """Version gating and workspace conflict strategies."""
 
     def _make_import_input(self, data, workspaces=None, conflict_strategy='rename'):
         from core.schemas import FullImportIn
 
         return FullImportIn(data=data, workspaces=workspaces, conflict_strategy=conflict_strategy)
 
-    def _minimal_export(self, name='Imported Workspace', **ws_extra):
-        ws = {'workspace_name': name, 'accounts': [], 'transactions': [], 'transfers': [], 'planned_transactions': []}
+    def _minimal_v3(self, name='Imported Workspace', **ws_extra):
+        ws = {'workspace_name': name, 'enabled_currencies': [], 'accounts': [], 'budgets': []}
         ws.update(ws_extra)
-        return {'export_version': '2.0', 'workspaces': [ws]}
+        return {'export_version': '3.0', 'workspaces': [ws]}
 
-    def test_import_rejects_incompatible_version(self):
+    def test_import_rejects_v2(self):
         from common.exceptions import ValidationError
 
-        export_data = {'export_version': '9.0', 'workspaces': []}
         with self.assertRaises(ValidationError):
-            UserService.import_all_data(self.user, self._make_import_input(export_data))
+            UserService.import_all_data(self.user, self._make_import_input({'export_version': '2.0', 'workspaces': []}))
 
-    def test_import_accepts_version_1_0(self):
-        export_data = {'export_version': '1.0', 'workspaces': []}
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_workspaces'], 0)
+    def test_import_rejects_v1(self):
+        from common.exceptions import ValidationError
 
-    def test_import_accepts_version_2_0(self):
-        export_data = {'export_version': '2.0', 'workspaces': []}
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_workspaces'], 0)
+        with self.assertRaises(ValidationError):
+            UserService.import_all_data(self.user, self._make_import_input({'export_version': '1.0', 'workspaces': []}))
 
-    def test_import_creates_workspace(self):
-        result = UserService.import_all_data(self.user, self._make_import_input(self._minimal_export()))
+    def test_import_accepts_v3(self):
+        result = UserService.import_all_data(self.user, self._make_import_input(self._minimal_v3()))
         self.assertEqual(result['imported_workspaces'], 1)
-        self.assertTrue(Workspace.objects.filter(owner=self.user, name='Imported Workspace').exists())
 
-    def test_import_skips_existing_workspace_with_skip_strategy(self):
-        UserService.import_all_data(self.user, self._make_import_input(self._minimal_export()))
+    def test_import_skip_strategy(self):
+        UserService.import_all_data(self.user, self._make_import_input(self._minimal_v3()))
         result = UserService.import_all_data(
-            self.user, self._make_import_input(self._minimal_export(), conflict_strategy='skip')
+            self.user, self._make_import_input(self._minimal_v3(), conflict_strategy='skip')
         )
         self.assertEqual(result['imported_workspaces'], 0)
         self.assertIn('Imported Workspace', result['skipped']['workspaces'])
 
-    def test_import_renames_workspace_with_rename_strategy(self):
-        UserService.import_all_data(self.user, self._make_import_input(self._minimal_export()))
+    def test_import_rename_strategy(self):
+        UserService.import_all_data(self.user, self._make_import_input(self._minimal_v3()))
         result = UserService.import_all_data(
-            self.user, self._make_import_input(self._minimal_export(), conflict_strategy='rename')
+            self.user, self._make_import_input(self._minimal_v3(), conflict_strategy='rename')
         )
         self.assertEqual(result['imported_workspaces'], 1)
         self.assertIn('Imported Workspace', result['renamed'])
 
     def test_import_filter_workspaces(self):
         export_data = {
-            'export_version': '2.0',
+            'export_version': '3.0',
             'workspaces': [
-                {'workspace_name': 'Workspace A', 'accounts': [], 'transactions': []},
-                {'workspace_name': 'Workspace B', 'accounts': [], 'transactions': []},
+                {'workspace_name': 'Workspace A', 'accounts': [], 'budgets': []},
+                {'workspace_name': 'Workspace B', 'accounts': [], 'budgets': []},
             ],
         }
         result = UserService.import_all_data(
@@ -89,168 +89,134 @@ class DataImportTests(AuthMixin, TestCase):
         )
         self.assertEqual(result['imported_workspaces'], 1)
 
-    def test_import_creates_accounts(self):
-        export_data = self._minimal_export(
-            accounts=[
-                {
-                    'name': 'Checking',
-                    'type': 'bank',
-                    'currency_code': 'PLN',
-                    'opening_balance': '100.00',
-                    'is_archived': False,
-                },
-                {
-                    'name': 'Dollars',
-                    'type': 'bank',
-                    'currency_code': 'USD',
-                    'opening_balance': '0.00',
-                    'is_archived': False,
-                },
-            ]
-        )
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_accounts'], 2)
 
-        workspace = Workspace.objects.get(owner=self.user, name='Imported Workspace')
-        checking = Account.objects.get(workspace=workspace, name='Checking')
-        self.assertEqual(checking.currency.code, 'PLN')
-        self.assertEqual(checking.opening_balance, Decimal('100.00'))
+class V3RoundTripTests(AuthMixin, TestCase):
+    """Export → wipe → import reproduces the full hierarchy and balances."""
 
-    def test_import_lands_transactions_on_named_accounts(self):
-        export_data = self._minimal_export(
-            accounts=[{'name': 'Checking', 'type': 'bank', 'currency_code': 'PLN'}],
-            transactions=[
-                {
-                    'date': '2025-01-15',
-                    'description': 'Groceries',
-                    'amount': '40.00',
-                    'type': 'expense',
-                    'account_name': 'Checking',
-                    'currency_code': 'PLN',
-                },
-            ],
-        )
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_transactions'], 1)
-
-        workspace = Workspace.objects.get(owner=self.user, name='Imported Workspace')
-        tx = Transaction.objects.get(workspace=workspace, description='Groceries')
-        self.assertEqual(tx.account.name, 'Checking')
-
-    def test_import_transactions_without_named_account_use_main_account(self):
-        # Older exports carry only a currency_code — land in per-currency 'Main <CODE>'.
-        export_data = self._minimal_export(
-            transactions=[
-                {
-                    'date': '2025-01-15',
-                    'description': 'Legacy tx',
-                    'amount': '10.00',
-                    'type': 'expense',
-                    'currency_code': 'USD',
-                },
-            ]
-        )
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_transactions'], 1)
-
-        workspace = Workspace.objects.get(owner=self.user, name='Imported Workspace')
-        tx = Transaction.objects.get(workspace=workspace, description='Legacy tx')
-        self.assertEqual(tx.account.name, 'Main USD')
-
-    def test_import_creates_transfers(self):
-        export_data = self._minimal_export(
-            accounts=[
-                {'name': 'Checking', 'type': 'bank', 'currency_code': 'PLN'},
-                {'name': 'Savings', 'type': 'bank', 'currency_code': 'PLN'},
-            ],
-            transfers=[
-                {
-                    'date': '2025-01-20',
-                    'description': 'Savings',
-                    'from_account_name': 'Checking',
-                    'from_amount': '50.00',
-                    'to_account_name': 'Savings',
-                    'to_amount': '50.00',
-                },
-            ],
-        )
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_transfers'], 1)
-
-        workspace = Workspace.objects.get(owner=self.user, name='Imported Workspace')
-        transfer = Transfer.objects.get(workspace=workspace)
-        self.assertEqual(transfer.from_account.name, 'Checking')
-        self.assertEqual(transfer.to_account.name, 'Savings')
-
-    def test_import_creates_planned_transactions(self):
-        export_data = self._minimal_export(
-            accounts=[{'name': 'Checking', 'type': 'bank', 'currency_code': 'PLN'}],
-            planned_transactions=[
-                {
-                    'name': 'Rent',
-                    'amount': '2000.00',
-                    'planned_date': '2025-02-01',
-                    'status': 'pending',
-                    'account_name': 'Checking',
-                    'currency_code': 'PLN',
-                },
-            ],
-        )
-        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
-        self.assertEqual(result['imported_planned_transactions'], 1)
-
-        workspace = Workspace.objects.get(owner=self.user, name='Imported Workspace')
-        self.assertTrue(PlannedTransaction.objects.filter(workspace=workspace, name='Rent').exists())
-
-
-class FullCycleImportExportTests(AuthMixin, TestCase):
-    """Export → wipe → import round-trip on the account-based model."""
-
-    def _make_import_input(self, data, workspaces=None, conflict_strategy='rename'):
+    def _make_import_input(self, data):
         from core.schemas import FullImportIn
 
-        return FullImportIn(data=data, workspaces=workspaces, conflict_strategy=conflict_strategy)
+        return FullImportIn(data=data)
 
-    def test_full_export_import_cycle(self):
-        from workspaces.demo_fixtures import create_demo_fixtures
+    def _build_rich_workspace(self):
+        """Populate self.workspace with the whole domain surface."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
 
-        create_demo_fixtures(workspace_id=self.workspace.id, user_id=self.user.id)
+        checking = AccountFactory(workspace=self.workspace, name='Checking', opening_balance=Decimal('1000.00'))
+        savings = AccountFactory(workspace=self.workspace, name='Savings', opening_balance=Decimal('200.00'))
+        dollars = AccountFactory(workspace=self.workspace, name='Dollars', currency=usd)
 
-        original_tx = Transaction.objects.for_workspace(self.workspace.id).count()
-        original_transfers = Transfer.objects.for_workspace(self.workspace.id).count()
-        original_planned = PlannedTransaction.objects.for_workspace(self.workspace.id).count()
-        original_accounts = Account.objects.for_workspace(self.workspace.id).count()
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        groceries = CategoryFactory(budget=budget, workspace=self.workspace, name='Groceries')
+        CategoryFactory(budget=budget, workspace=self.workspace, name='Retired', is_archived=True)
+        period = PeriodService.get_or_create_for_date(self.user, budget, date(2026, 7, 15))
+        CategoryBudget.objects.create(
+            period=period,
+            workspace_id=self.workspace.id,
+            category=groceries,
+            currency=pln,
+            amount=Decimal('800.00'),
+            created_by=self.user,
+        )
+
+        TransactionFactory(
+            account=checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Weekly shop',
+            category=groceries,
+            amount=Decimal('120.00'),
+            type='expense',
+        )
+        TransactionFactory(
+            account=dollars,
+            workspace=self.workspace,
+            date=date(2026, 7, 6),
+            description='Converted card payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('12.99'),
+            original_currency=pln,
+        )
+        TransferFactory(
+            from_account=checking,
+            to_account=savings,
+            workspace=self.workspace,
+            from_amount=Decimal('100.00'),
+            to_amount=Decimal('100.00'),
+            date=date(2026, 7, 7),
+        )
+        PlannedTransactionFactory(
+            account=checking,
+            workspace=self.workspace,
+            name='Rent',
+            amount=Decimal('2000.00'),
+            category=groceries,
+            planned_date=date(2026, 8, 1),
+            status='pending',
+        )
+        return checking, dollars
+
+    def test_full_round_trip_reproduces_hierarchy_and_balances(self):
+        from accounts.services import AccountService
+
+        checking, dollars = self._build_rich_workspace()
+        checking_balance = AccountService.balance(checking)
+        dollars_balance = AccountService.balance(dollars)
 
         export_data = UserService.export_all_data(self.user)
-        self.assertEqual(export_data['export_version'], '2.0')
+        self.assertEqual(export_data['export_version'], '3.0')
 
         UserService.delete_account(self.user, self.user_password)
         self.assertFalse(User.objects.filter(email=self.user.email).exists())
 
         from common.tests.factories import UserFactory
 
-        new_user = UserFactory(email='restored@test.com', full_name='Restored User')
+        new_user = UserFactory(email='restored@test.com')
         new_user.set_password('newpass123')
         new_user.save()
 
         result = UserService.import_all_data(new_user, self._make_import_input(export_data))
         self.assertEqual(result['imported_workspaces'], 1)
-        self.assertEqual(result['imported_accounts'], original_accounts)
-        self.assertEqual(result['imported_transactions'], original_tx)
-        self.assertEqual(result['imported_transfers'], original_transfers)
-        self.assertEqual(result['imported_planned_transactions'], original_planned)
+        self.assertEqual(result['imported_accounts'], 3)
+        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(result['imported_categories'], 2)
+        self.assertEqual(result['imported_transactions'], 2)
+        self.assertEqual(result['imported_transfers'], 1)
+        self.assertEqual(result['imported_planned_transactions'], 1)
 
-        restored = Workspace.objects.filter(owner=new_user).first()
-        self.assertEqual(Account.objects.for_workspace(restored.id).count(), original_accounts)
-        self.assertEqual(Transaction.objects.for_workspace(restored.id).count(), original_tx)
+        ws = Workspace.objects.get(owner=new_user)
 
-    def test_full_cycle_with_multiple_workspaces(self):
+        # Budgeting hierarchy restored
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        self.assertEqual(Category.objects.filter(budget=budget).count(), 2)
+        self.assertTrue(Category.objects.filter(budget=budget, name='Retired', is_archived=True).exists())
+        self.assertEqual(Period.objects.filter(budget=budget).count(), 1)
+        self.assertEqual(CategoryBudget.objects.filter(workspace=ws).count(), 1)
+
+        # Transaction category + original facet restored
+        converted = Transaction.objects.get(workspace=ws, description='Converted card payment')
+        self.assertEqual(converted.original_amount, Decimal('12.99'))
+        self.assertEqual(converted.original_currency.code, 'PLN')
+        shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
+        self.assertEqual(shop.category.name, 'Groceries')
+
+        # Balances reproduced exactly
+        new_checking = Account.objects.get(workspace=ws, name='Checking')
+        new_dollars = Account.objects.get(workspace=ws, name='Dollars')
+        self.assertEqual(AccountService.balance(new_checking), checking_balance)
+        self.assertEqual(AccountService.balance(new_dollars), dollars_balance)
+
+    def test_multiple_workspaces_round_trip(self):
+        self._build_rich_workspace()
         workspace2 = WorkspaceFactory(name='Second Workspace')
         WorkspaceMemberFactory(workspace=workspace2, user=self.user, role='owner')
         workspace2.owner = self.user
         workspace2.save()
-        account2 = AccountFactory(workspace=workspace2, name='Second Main')
-        TransactionFactory(account=account2, workspace=workspace2, amount=Decimal('200.00'), type='income')
+        AccountFactory(workspace=workspace2, name='Second Main')
 
         export_data = UserService.export_all_data(self.user)
         self.assertEqual(len(export_data['workspaces']), 2)
@@ -261,27 +227,43 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         new_user.set_password('pass12345')
         new_user.save()
         result = UserService.import_all_data(new_user, self._make_import_input(export_data))
-
         self.assertEqual(result['imported_workspaces'], 2)
-        self.assertEqual(Workspace.objects.filter(owner=new_user).count(), 2)
 
-    def test_import_preserves_workspace_scoped_data_integrity(self):
-        account = AccountFactory(workspace=self.workspace, name='Integrity Main')
-        TransactionFactory(account=account, workspace=self.workspace, amount=Decimal('50.00'), type='expense')
-        PlannedTransactionFactory(account=account, workspace=self.workspace, amount=Decimal('100.00'))
 
-        export_data = UserService.export_all_data(self.user)
+class AccountDeletionOrphanTests(AuthMixin, TestCase):
+    """delete_account leaves zero orphans across the PROTECT chains."""
 
+    def test_delete_account_with_custom_currency_and_full_hierarchy(self):
+        CurrencyCatalogService.create_custom(self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g')
+        gold = CurrencyCatalogService.get_enabled(self.workspace.id, 'GOLD')
+        account = AccountFactory(workspace=self.workspace, name='Vault', currency=gold)
+        budget = BudgetFactory(workspace=self.workspace)
+        category = CategoryFactory(budget=budget, workspace=self.workspace, name='Bars')
+        period = PeriodService.get_or_create_for_date(self.user, budget, date(2026, 7, 15))
+        CategoryBudget.objects.create(
+            period=period,
+            workspace_id=self.workspace.id,
+            category=category,
+            currency=gold,
+            amount=Decimal('5.00'),
+            created_by=self.user,
+        )
+        TransactionFactory(
+            account=account, workspace=self.workspace, category=category, amount=Decimal('1'), type='expense'
+        )
+
+        ws_id = self.workspace.id
         UserService.delete_account(self.user, self.user_password)
-        from common.tests.factories import UserFactory
 
-        new_user = UserFactory(email='integrity@test.com')
-        new_user.set_password('pass12345')
-        new_user.save()
-        UserService.import_all_data(new_user, self._make_import_input(export_data))
+        # Everything workspace-scoped is gone; no PROTECT error was raised.
+        self.assertFalse(Workspace.objects.filter(id=ws_id).exists())
+        self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(Transaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(CategoryBudget.objects.filter(workspace_id=ws_id).exists())
+        # The workspace-custom currency row is cleaned up too
+        from currencies.models import Currency, WorkspaceCurrency
 
-        restored = Workspace.objects.filter(owner=new_user).first()
-        ws_id = restored.id
-        self.assertEqual(Transaction.objects.filter(workspace_id=ws_id).count(), 1)
-        self.assertEqual(PlannedTransaction.objects.filter(workspace_id=ws_id).count(), 1)
-        self.assertTrue(all(a.workspace_id == ws_id for a in Account.objects.filter(workspace_id=ws_id)))
+        self.assertFalse(Currency.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(WorkspaceCurrency.objects.filter(workspace_id=ws_id).exists())
+        # Global catalog rows survive
+        self.assertTrue(Currency.objects.filter(workspace__isnull=True, code='PLN').exists())

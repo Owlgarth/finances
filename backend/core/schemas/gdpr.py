@@ -56,6 +56,8 @@ class ImportResultOut(BaseModel):
 
     imported_workspaces: int
     imported_accounts: int
+    imported_budgets: int
+    imported_categories: int
     imported_transactions: int
     imported_transfers: int
     imported_planned_transactions: int
