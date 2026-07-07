@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction as db_transaction
 
+from accounts.models import Account, AccountType
 from budget_accounts.models import BudgetAccount
 from common.email import EmailService
 from common.exceptions import ValidationError
@@ -41,13 +42,22 @@ class WorkspaceService:
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
         - One enabled catalog currency + one legacy currency row (removed in B8)
-        - Default "General" budget account (in the chosen currency)
+        - Default "Main" account (in the chosen currency)
+        - Default "General" budget account (legacy; removed in B8)
         - Demo fixtures (optional)
         - Sets user.current_workspace to the new workspace
         """
         workspace = Workspace.objects.create(name=name, owner=user)
         WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
         catalog_currency = CurrencyCatalogService.enable(user, workspace.id, currency_code)
+        Account.objects.create(
+            workspace=workspace,
+            name='Main',
+            type=AccountType.BANK,
+            currency=catalog_currency,
+            created_by=user,
+            updated_by=user,
+        )
         # Legacy models (BudgetAccount.default_currency etc.) keep working off
         # this per-workspace row until B8 deletes them.
         default_currency = Currency.objects.create(

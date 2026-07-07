@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'users',
     'workspaces',
     'currencies',
+    'accounts',
     'budget_accounts',
     'budget_periods',
     'categories',

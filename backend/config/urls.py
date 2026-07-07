@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.urls import path
 from ninja import NinjaAPI
 
+from accounts.api import router as accounts_router
 from budget_accounts.api import router as budget_accounts_router
 from budget_periods.api import router as budget_periods_router
 from budgets.api import router as budgets_router
@@ -42,6 +43,7 @@ def service_error_handler(request, exc: ServiceError):
 api.add_router('/auth', auth_router)
 api.add_router('/legal', legal_router)
 api.add_router('/users', users_router)
+api.add_router('/accounts', accounts_router)
 api.add_router('/budget-accounts', budget_accounts_router)
 api.add_router('/budget-periods', budget_periods_router)
 api.add_router('/budgets', budgets_router)
