@@ -172,11 +172,10 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             updated_by=user,
         )
         planned = PlannedTransactionFactory(
-            budget_period=period,
+            account=account,
             workspace=workspace,
             name='Test Planned',
             amount=50,
-            currency=pln,
             planned_date=date(2025, 1, 15),
             status='pending',
             created_by=user,

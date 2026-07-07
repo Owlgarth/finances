@@ -559,7 +559,7 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         account = BudgetAccountFactory(
             workspace=self.workspace, name='Integrity Test', default_currency=pln, created_by=self.user
         )
-        period = BudgetPeriodFactory(
+        BudgetPeriodFactory(
             workspace=self.workspace,
             budget_account=account,
             name='Integrity Period',
@@ -586,10 +586,9 @@ class FullCycleImportExportTests(AuthMixin, TestCase):
         )
         PlannedTransaction.objects.create(
             workspace=self.workspace,
-            budget_period=period,
+            account=money_account,
             name='Planned',
             amount=Decimal('100.00'),
-            currency=pln,
             planned_date='2024-01-20',
             status='pending',
             created_by=self.user,

@@ -11,7 +11,6 @@ from budget_periods.schemas import BudgetPeriodCreate, BudgetPeriodUpdate
 from common.services.base import get_workspace_currencies
 from currency_exchanges.models import CurrencyExchange
 from period_balances.models import PeriodBalance
-from planned_transactions.models import PlannedTransaction
 
 
 class BudgetPeriodService:
@@ -115,11 +114,10 @@ class BudgetPeriodService:
     def delete(workspace_id: int, period_id: int) -> None:
         """Delete a budget period and its period-scoped legacy records.
 
-        PlannedTransaction and CurrencyExchange have on_delete=SET_NULL on
-        budget_period; delete them explicitly to avoid orphaned records.
-        Transactions live on accounts since B5 and are untouched.
+        CurrencyExchange has on_delete=SET_NULL on budget_period; delete
+        explicitly to avoid orphans. Transactions/planned transactions live
+        on accounts since B5/B7 and are untouched.
         """
         period = BudgetPeriodService.get(period_id, workspace_id)
-        PlannedTransaction.objects.filter(budget_period=period).delete()
         CurrencyExchange.objects.filter(budget_period=period).delete()
         period.delete()

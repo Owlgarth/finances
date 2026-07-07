@@ -20,7 +20,7 @@ def execute_planned_transaction(self, planned_id: int) -> None:
     the task skips execution — this prevents duplicate Transactions if the task
     is retried after a partial failure.
     """
-    planned = PlannedTransaction.objects.select_related('currency', 'category').filter(id=planned_id).first()
+    planned = PlannedTransaction.objects.select_related('account', 'category').filter(id=planned_id).first()
     if not planned:
         logger.warning('PlannedTransaction %s not found, skipping.', planned_id)
         return
@@ -50,17 +50,13 @@ def execute_planned_transaction(self, planned_id: int) -> None:
         if planned.transaction_id:
             return
 
-        # Bridge until B7 aligns PlannedTransaction with accounts: the created
-        # transaction lands on the workspace's single active account (service
-        # defaulting); with multiple accounts AccountRequiredError triggers a
-        # Celery retry and ultimately fails the task. B7 stores the account on
-        # the planned row and passes it explicitly.
         transaction_obj = TransactionService.create(
             planned.created_by,
             planned.workspace_id,
             TransactionCreate(
                 date=payment_date,
                 description=planned.name,
+                account_id=planned.account_id,
                 category_id=planned.category_id,
                 amount=planned.amount,
                 type='expense',

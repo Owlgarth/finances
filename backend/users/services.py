@@ -546,8 +546,8 @@ class UserService:
                         'id', 'from_currency', 'to_currency', 'created_at'
                     )
                 ],
-                # Transactions live on accounts since B5 — exported per workspace.
-                # TODO(B10): full v3 export.
+                # Transactions and planned transactions live on accounts since
+                # B5/B7 — exported per workspace. TODO(B10): full v3 export.
                 'transactions': [
                     {
                         'date': t.date.isoformat(),
@@ -562,6 +562,21 @@ class UserService:
                     }
                     for t in Transaction.objects.for_workspace(ws.id).select_related(
                         'account__currency', 'category', 'original_currency'
+                    )
+                ],
+                'planned_transactions': [
+                    {
+                        'name': pt.name,
+                        'amount': pt.amount,
+                        'planned_date': pt.planned_date.isoformat() if pt.planned_date else None,
+                        'payment_date': pt.payment_date.isoformat() if pt.payment_date else None,
+                        'status': pt.status,
+                        'category_name': pt.category_name,
+                        'account_name': pt.account_name,
+                        'currency_code': pt.currency_code,
+                    }
+                    for pt in PlannedTransaction.objects.for_workspace(ws.id).select_related(
+                        'account__currency', 'category'
                     )
                 ],
             }
@@ -585,21 +600,8 @@ class UserService:
                         'start_date': period.start_date.isoformat(),
                         'end_date': period.end_date.isoformat(),
                         # TODO(B10): v3 export rebuilds plan data on budgeting models
-                        # (the period-scoped categories/budgets/transactions
-                        # sections died with B4/B5).
-                        'planned_transactions': [
-                            {
-                                'name': pt['name'],
-                                'amount': pt['amount'],
-                                'planned_date': pt['planned_date'].isoformat() if pt['planned_date'] else None,
-                                'payment_date': pt['payment_date'].isoformat() if pt['payment_date'] else None,
-                                'status': pt['status'],
-                                'currency_symbol': pt['currency__symbol'],
-                            }
-                            for pt in PlannedTransaction.objects.filter(budget_period=period)
-                            .select_related('currency')
-                            .values('name', 'amount', 'planned_date', 'payment_date', 'status', 'currency__symbol')
-                        ],
+                        # (the period-scoped categories/budgets/transactions/
+                        # planned sections died with B4/B5/B7).
                         'currency_exchanges': [
                             {
                                 'date': ce['date'].isoformat() if ce['date'] else None,
@@ -891,6 +893,13 @@ class UserService:
                     for period in acc.get('periods', [])
                     for tx in period.get('transactions', [])
                 ]
+            if 'planned_transactions' not in ws_data:
+                ws_data['planned_transactions'] = [
+                    pt
+                    for acc in ws_data.get('budget_accounts', [])
+                    for period in acc.get('periods', [])
+                    for pt in period.get('planned_transactions', [])
+                ]
             import_account_cache: dict[str, object] = {}
             for tx_data in ws_data.get('transactions', []):
                 code = tx_data.get('currency_code') or tx_data.get('currency_symbol')
@@ -909,6 +918,26 @@ class UserService:
                     updated_by=user,
                 )
                 imported_transactions += 1
+
+            for pt_data in ws_data.get('planned_transactions', []):
+                code = pt_data.get('currency_code') or pt_data.get('currency_symbol')
+                if not code:
+                    continue
+                pt_account = UserService._get_or_create_import_account(user, workspace, code, import_account_cache)
+                planned_date_str = pt_data.get('planned_date')
+                payment_date_str = pt_data.get('payment_date')
+                PlannedTransaction.objects.create(
+                    workspace=workspace,
+                    account=pt_account,
+                    name=pt_data.get('name'),
+                    amount=pt_data.get('amount'),
+                    planned_date=datetime.strptime(planned_date_str, '%Y-%m-%d').date() if planned_date_str else None,
+                    payment_date=datetime.strptime(payment_date_str, '%Y-%m-%d').date() if payment_date_str else None,
+                    status=pt_data.get('status', 'pending'),
+                    created_by=user,
+                    updated_by=user,
+                )
+                imported_planned_transactions += 1
 
             for acc_data in ws_data.get('budget_accounts', []):
                 default_currency_symbol = acc_data.get('default_currency')
@@ -943,33 +972,8 @@ class UserService:
                     imported_budget_periods += 1
 
                     # TODO(B10): v3 import rebuilds plan data on budgeting models.
-                    # Categories/budgets sections are ignored since B4 (categories
-                    # are budget-scoped now); per-period transactions moved to the
-                    # workspace level in B5 (see below).
-                    for pt_data in period_data.get('planned_transactions', []):
-                        currency_symbol = pt_data.get('currency_symbol')
-                        currency = currency_map.get(currency_symbol)
-                        if currency:
-                            planned_date_str = pt_data.get('planned_date')
-                            payment_date_str = pt_data.get('payment_date')
-                            PlannedTransaction.objects.create(
-                                workspace=workspace,
-                                budget_period=period,
-                                name=pt_data.get('name'),
-                                amount=pt_data.get('amount'),
-                                planned_date=datetime.strptime(planned_date_str, '%Y-%m-%d').date()
-                                if planned_date_str
-                                else None,
-                                payment_date=datetime.strptime(payment_date_str, '%Y-%m-%d').date()
-                                if payment_date_str
-                                else None,
-                                status=pt_data.get('status', 'pending'),
-                                currency=currency,
-                                created_by=user,
-                                updated_by=user,
-                            )
-                            imported_planned_transactions += 1
-
+                    # Categories/budgets sections are ignored since B4; per-period
+                    # transactions/planned moved to the workspace level in B5/B7.
                     for ce_data in period_data.get('currency_exchanges', []):
                         from_currency_symbol = ce_data.get('from_currency_symbol')
                         to_currency_symbol = ce_data.get('to_currency_symbol')

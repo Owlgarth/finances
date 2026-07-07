@@ -22,11 +22,9 @@ class TestDeleteCascade(TestCase):
     def test_budget_period_delete_cascades_financial_records(self):
         """Deleting a period deletes its period-scoped legacy records.
 
-        Transactions live on accounts since B5 and survive period deletion.
+        Transactions and planned transactions live on accounts since B5/B7
+        and survive period deletion.
         """
-        PlannedTransactionFactory(
-            budget_period=self.period, workspace=self.workspace, currency=self.currency, created_by=self.user
-        )
         CurrencyExchangeFactory(
             budget_period=self.period,
             workspace=self.workspace,
@@ -35,31 +33,22 @@ class TestDeleteCascade(TestCase):
             created_by=self.user,
         )
 
-        self.assertEqual(PlannedTransaction.objects.filter(budget_period=self.period).count(), 1)
         self.assertEqual(CurrencyExchange.objects.filter(budget_period=self.period).count(), 1)
 
         BudgetPeriodService.delete(self.workspace.id, self.period.id)
 
-        self.assertEqual(PlannedTransaction.objects.count(), 0)
         self.assertEqual(CurrencyExchange.objects.count(), 0)
 
     def test_delete_workspace_financial_records_catches_orphans(self):
-        """Orphaned records are deleted by delete_workspace_financial_records."""
+        """All workspace records are deleted by delete_workspace_financial_records."""
         from accounts.factories import AccountFactory
 
         account = AccountFactory(workspace=self.workspace)
         TransactionFactory(account=account, workspace=self.workspace, created_by=self.user)
-        pt = PlannedTransactionFactory(
-            budget_period=self.period, workspace=self.workspace, currency=self.currency, created_by=self.user
-        )
-        PlannedTransactionFactory(
-            budget_period=self.period, workspace=self.workspace, currency=self.currency, created_by=self.user
-        )
+        PlannedTransactionFactory(account=account, workspace=self.workspace, created_by=self.user)
+        PlannedTransactionFactory(account=account, workspace=self.workspace, created_by=self.user)
 
         self.period.delete()
-
-        pt.refresh_from_db()
-        self.assertIsNone(pt.budget_period)
 
         delete_workspace_financial_records(self.workspace.id)
 

@@ -8,66 +8,42 @@ from django.db import transaction as db_transaction
 from django.db.models import F, Sum, Value
 from django.db.models.functions import Coalesce
 
-from budget_periods.models import BudgetPeriod
-from budget_periods.services import BudgetPeriodService
+from accounts.models import Account
+from accounts.services import AccountService
 from categories.models import Category
 from common.enums import TotalsLabel
-from common.exceptions import CurrencyNotFoundInWorkspaceError
-from common.services.base import resolve_currency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from planned_transactions.exceptions import (
+    PlannedTransactionAccountArchivedError,
+    PlannedTransactionAccountRequiredError,
     PlannedTransactionAlreadyExecutedError,
     PlannedTransactionCannotRevertError,
     PlannedTransactionCategoryNotFoundError,
     PlannedTransactionImportError,
-    PlannedTransactionNoActivePeriodError,
     PlannedTransactionNotFoundError,
 )
 from planned_transactions.models import PlannedTransaction
-from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, PlannedTransactionUpdate
+from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport
 from planned_transactions.tasks import execute_planned_transaction
-from workspaces.models import Currency
 
 
 class PlannedTransactionService:
     @staticmethod
-    def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
-        """Get a planned transaction and verify it belongs to the workspace."""
-        planned = (
-            PlannedTransaction.objects.select_related('budget_period__budget_account', 'category', 'currency')
-            .for_workspace(workspace_id)
-            .filter(id=planned_id)
-            .first()
-        )
-        if not planned:
-            raise PlannedTransactionNotFoundError()
-        return planned
-
-    @staticmethod
-    def _resolve_period(workspace_id: int, planned_date: date, period_id: int | None) -> int:
-        """Return the period_id for the planned date, raising when not found."""
-        if period_id:
-            BudgetPeriodService.get(period_id, workspace_id)
-            return period_id
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace_id,
-                start_date__lte=planned_date,
-                end_date__gte=planned_date,
-            )
-            .first()
-        )
-        if not period:
-            raise PlannedTransactionNoActivePeriodError()
-        return period.id
+    def _resolve_account(workspace_id: int, account_id: int | None) -> Account:
+        """Resolve the target account, defaulting when exactly one active account exists."""
+        if account_id is not None:
+            account = AccountService.get(account_id, workspace_id)
+        else:
+            account = AccountService.single_active_account(workspace_id)
+            if not account:
+                raise PlannedTransactionAccountRequiredError()
+        if account.is_archived:
+            raise PlannedTransactionAccountArchivedError()
+        return account
 
     @staticmethod
     def _validate_category(category_id: int | None, workspace_id: int) -> None:
-        """Raise if the category is missing, in another workspace, or archived.
-
-        Categories are budget-scoped since B4; period linkage no longer applies.
-        """
+        """Raise if the category is missing, in another workspace, or archived."""
         if not category_id:
             return
         category = Category.objects.for_workspace(workspace_id).filter(id=category_id).first()
@@ -78,8 +54,7 @@ class PlannedTransactionService:
     def _build_filtered_queryset(
         workspace_id: int,
         status: str | None = None,
-        budget_period_id: int | None = None,
-        currency: list | None = None,
+        account_id: int | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
     ):
@@ -87,10 +62,8 @@ class PlannedTransactionService:
         queryset = PlannedTransaction.objects.for_workspace(workspace_id)
         if status:
             queryset = queryset.filter(status=status)
-        if budget_period_id:
-            queryset = queryset.filter(budget_period_id=budget_period_id)
-        if currency:
-            queryset = queryset.filter(currency__symbol__in=currency)
+        if account_id:
+            queryset = queryset.filter(account_id=account_id)
         if start_date:
             queryset = queryset.filter(planned_date__gte=start_date)
         if end_date:
@@ -98,11 +71,23 @@ class PlannedTransactionService:
         return queryset
 
     @staticmethod
+    def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
+        """Get a planned transaction and verify it belongs to the workspace."""
+        planned = (
+            PlannedTransaction.objects.select_related('account__currency', 'category')
+            .for_workspace(workspace_id)
+            .filter(id=planned_id)
+            .first()
+        )
+        if not planned:
+            raise PlannedTransactionNotFoundError()
+        return planned
+
+    @staticmethod
     def list(
         workspace_id: int,
         status: str | None = None,
-        budget_period_id: int | None = None,
-        currency: list | None = None,
+        account_id: int | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         ordering: str | None = None,
@@ -110,10 +95,10 @@ class PlannedTransactionService:
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         queryset = PlannedTransactionService._build_filtered_queryset(
-            workspace_id, status, budget_period_id, currency, start_date, end_date
+            workspace_id, status, account_id, start_date, end_date
         )
         sort_order = ordering or 'planned_date'
-        queryset = queryset.select_related('category').order_by(sort_order, '-id')
+        queryset = queryset.select_related('account__currency', 'category').order_by(sort_order, '-id')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
@@ -128,56 +113,56 @@ class PlannedTransactionService:
     def totals(
         workspace_id: int,
         status: str | None = None,
-        budget_period_id: int | None = None,
-        currency: list | None = None,
+        account_id: int | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         group_by: str = 'currency',
     ) -> list[dict]:
         """Return aggregated totals grouped by currency or category."""
         queryset = PlannedTransactionService._build_filtered_queryset(
-            workspace_id, status, budget_period_id, currency, start_date, end_date
+            workspace_id, status, account_id, start_date, end_date
         )
 
         if group_by == 'category':
             rows = (
                 queryset.annotate(
-                    currency_symbol=F('currency__symbol'),
-                    category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+                    account_currency_code=F('account__currency__code'),
+                    grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
                 )
-                .values('category_name', 'currency_symbol')
+                .values('grouped_category_name', 'account_currency_code')
                 .annotate(total=Sum('amount'))
-                .order_by('category_name', 'currency_symbol')
+                .order_by('grouped_category_name', 'account_currency_code')
             )
-            return [{'group': r['category_name'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+            return [
+                {'group': r['grouped_category_name'], 'currency': r['account_currency_code'], 'total': r['total']}
+                for r in rows
+            ]
 
         # Default: group by currency
         rows = (
-            queryset.annotate(currency_symbol=F('currency__symbol'))
-            .values('currency_symbol')
+            queryset.annotate(account_currency_code=F('account__currency__code'))
+            .values('account_currency_code')
             .annotate(total=Sum('amount'))
-            .order_by('currency_symbol')
+            .order_by('account_currency_code')
         )
-        return [{'group': r['currency_symbol'], 'currency': r['currency_symbol'], 'total': r['total']} for r in rows]
+        return [
+            {'group': r['account_currency_code'], 'currency': r['account_currency_code'], 'total': r['total']}
+            for r in rows
+        ]
 
     @staticmethod
     def create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
-        """Create a planned transaction."""
-        currency = resolve_currency(workspace_id, data.currency)
-        if not currency:
-            raise CurrencyNotFoundInWorkspaceError(data.currency)
-
-        period_id = PlannedTransactionService._resolve_period(workspace_id, data.planned_date, data.budget_period_id)
+        """Create a planned transaction on an account."""
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
         PlannedTransactionService._validate_category(data.category_id, workspace_id)
 
         if data.status == 'done':
             with db_transaction.atomic():
                 planned = PlannedTransaction.objects.create(
                     workspace_id=workspace_id,
-                    budget_period_id=period_id,
+                    account=account,
                     name=data.name,
                     amount=data.amount,
-                    currency=currency,
                     category_id=data.category_id,
                     planned_date=data.planned_date,
                     status='done',
@@ -191,10 +176,9 @@ class PlannedTransactionService:
 
         planned = PlannedTransaction.objects.create(
             workspace_id=workspace_id,
-            budget_period_id=period_id,
+            account=account,
             name=data.name,
             amount=data.amount,
-            currency=currency,
             category_id=data.category_id,
             planned_date=data.planned_date,
             status=data.status,
@@ -204,24 +188,19 @@ class PlannedTransactionService:
         return planned
 
     @staticmethod
-    def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionUpdate) -> PlannedTransaction:
+    def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
         """Update a planned transaction."""
         planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
         if planned.status == 'done' and data.status != 'done':
             raise PlannedTransactionCannotRevertError()
 
-        currency = resolve_currency(workspace_id, data.currency)
-        if not currency:
-            raise CurrencyNotFoundInWorkspaceError(data.currency)
-
-        period_id = PlannedTransactionService._resolve_period(workspace_id, data.planned_date, data.budget_period_id)
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id or planned.account_id)
         PlannedTransactionService._validate_category(data.category_id, workspace_id)
 
-        planned.budget_period_id = period_id
+        planned.account = account
         planned.name = data.name
         planned.amount = data.amount
-        planned.currency = currency
         planned.category_id = data.category_id
         planned.planned_date = data.planned_date
         planned.updated_by = user
@@ -247,24 +226,11 @@ class PlannedTransactionService:
 
     @staticmethod
     def execute(user, workspace_id: int, planned_id: int, payment_date: date) -> PlannedTransaction:
-        """Execute a planned transaction, creating an actual transaction."""
+        """Execute a planned transaction, creating an actual transaction on its account."""
         planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
         if planned.status == 'done':
             raise PlannedTransactionAlreadyExecutedError()
-
-        # Validate that a period covers the payment date before marking as done
-        period = (
-            BudgetPeriod.objects.select_related('budget_account')
-            .filter(
-                budget_account__workspace_id=workspace_id,
-                start_date__lte=payment_date,
-                end_date__gte=payment_date,
-            )
-            .first()
-        )
-        if not period:
-            raise PlannedTransactionNoActivePeriodError()
 
         planned.status = 'done'
         planned.payment_date = payment_date
@@ -276,31 +242,45 @@ class PlannedTransactionService:
         return planned
 
     @staticmethod
-    def export(workspace_id: int, period_id: int, status: str | None = None) -> list[dict]:
-        """Return serialisable planned transaction data for a period."""
-        BudgetPeriodService.get(period_id, workspace_id)
-
-        queryset = PlannedTransaction.objects.select_related('category', 'currency').filter(budget_period_id=period_id)
-        if status:
-            queryset = queryset.filter(status=status)
+    def export(
+        workspace_id: int,
+        status: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[dict]:
+        """Return serialisable planned transaction data filtered by status and date range."""
+        queryset = PlannedTransactionService._build_filtered_queryset(
+            workspace_id, status=status, start_date=start_date, end_date=end_date
+        ).select_related('account__currency', 'category')
 
         return [
             {
                 'name': pt.name,
                 'amount': str(pt.amount),
-                'currency': pt.currency.symbol,
-                'category_name': pt.category.name if pt.category else None,
+                'account_name': pt.account_name,
+                'currency_code': pt.currency_code,
+                'category_name': pt.category_name,
                 'planned_date': pt.planned_date.isoformat(),
             }
             for pt in queryset.order_by('planned_date')
         ]
 
     @staticmethod
-    def import_data(user, workspace_id: int, period_id: int, data: list) -> int:
-        """Bulk-create planned transactions from parsed JSON data. Returns count of created records."""
-        BudgetPeriodService.get(period_id, workspace_id)
+    def import_data(user, workspace_id: int, account_id: int, data: list, budget_id: int | None = None) -> int:
+        """Bulk-create planned transactions into one explicit account.
 
-        currency_map = {c.symbol: c for c in Currency.objects.for_workspace(workspace_id)}
+        Categories are matched by name within budget_id when given, else left null.
+        """
+        account = PlannedTransactionService._resolve_account(workspace_id, account_id)
+
+        category_map: dict[str, int] = {}
+        if budget_id is not None:
+            category_map = {
+                name.lower(): pk
+                for pk, name in Category.objects.for_workspace(workspace_id)
+                .filter(budget_id=budget_id, is_archived=False)
+                .values_list('id', 'name')
+            }
 
         new_transactions = []
         for item in data:
@@ -309,29 +289,18 @@ class PlannedTransactionService:
             except Exception as e:
                 raise PlannedTransactionImportError(f'Invalid data format: {e}')
 
-            currency = currency_map.get(import_item.currency)
-            if not currency:
-                raise CurrencyNotFoundInWorkspaceError(import_item.currency)
-
             category_id = None
             if import_item.category_name:
-                category = (
-                    Category.objects.for_workspace(workspace_id)
-                    .filter(name__iexact=import_item.category_name, is_archived=False)
-                    .first()
-                )
-                if category:
-                    category_id = category.id
+                category_id = category_map.get(import_item.category_name.lower())
 
             new_transactions.append(
                 PlannedTransaction(
                     workspace_id=workspace_id,
+                    account=account,
                     name=import_item.name,
                     amount=import_item.amount,
-                    currency=currency,
                     planned_date=import_item.planned_date,
                     category_id=category_id,
-                    budget_period_id=period_id,
                     status='pending',
                     created_by=user,
                     updated_by=user,

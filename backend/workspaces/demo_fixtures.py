@@ -228,13 +228,12 @@ def create_demo_fixtures(
         ('Car Insurance', Decimal('450.00'), 'PLN', 'Transportation', start_date + timedelta(days=28), None, 'pending'),
     ]
 
-    for name, amount, currency_symbol, cat_name, planned_date, payment_date, status in planned_data:
+    for name, amount, _currency_symbol, cat_name, planned_date, payment_date, status in planned_data:
         PlannedTransaction.objects.create(
             workspace_id=workspace_id,
-            budget_period=budget_period,
+            account=main_account,
             name=name,
             amount=amount,
-            currency=currency_map[currency_symbol],
             category=category_map[cat_name],
             planned_date=planned_date,
             payment_date=payment_date,

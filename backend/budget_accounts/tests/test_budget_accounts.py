@@ -8,8 +8,6 @@ from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currency_exchanges.factories import CurrencyExchangeFactory
 from currency_exchanges.models import CurrencyExchange
-from planned_transactions.factories import PlannedTransactionFactory
-from planned_transactions.models import PlannedTransaction
 from workspaces.models import WorkspaceMember
 
 # =============================================================================
@@ -482,12 +480,6 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
             created_by=self.user,
         )
         pln = self.workspace.currencies.get(symbol='PLN')
-        planned = PlannedTransactionFactory(
-            budget_period=period,
-            currency=pln,
-            created_by=self.user,
-            updated_by=self.user,
-        )
         exchange = CurrencyExchangeFactory(
             budget_period=period,
             from_currency=pln,
@@ -500,8 +492,7 @@ class TestDeleteBudgetAccount(BudgetAccountTestCase):
 
         self.assertStatus(204)
         self.assertFalse(BudgetAccount.objects.filter(id=account.id).exists())
-        # Transactions live on accounts since B5 and are not touched here
-        self.assertEqual(PlannedTransaction.objects.filter(id=planned.id).count(), 0)
+        # Transactions/planned live on accounts since B5/B7 and are not touched here
         self.assertEqual(CurrencyExchange.objects.filter(id=exchange.id).count(), 0)
 
     def test_delete_requires_auth(self):

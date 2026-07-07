@@ -130,7 +130,7 @@ class TestAuthRegister(AuthTestCase):
         self.assertGreaterEqual(transactions.filter(type='income').count(), 2)
         self.assertGreaterEqual(transactions.filter(type='expense').count(), 8)
 
-        planned_count = PlannedTransaction.objects.filter(budget_period=period).count()
+        planned_count = PlannedTransaction.objects.for_workspace(user.current_workspace_id).count()
         self.assertGreaterEqual(planned_count, 3)
 
         exchanges_count = CurrencyExchange.objects.filter(budget_period=period).count()

@@ -19,7 +19,12 @@ class AccountService:
     @staticmethod
     def _record_count(account: Account) -> int:
         """Count financial records referencing this account."""
-        return account.transactions.count() + account.transfers_in.count() + account.transfers_out.count()
+        return (
+            account.transactions.count()
+            + account.planned_transactions.count()
+            + account.transfers_in.count()
+            + account.transfers_out.count()
+        )
 
     @staticmethod
     def _transactions_delta(account: Account) -> Decimal:
