@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'accounts',
     'budget_accounts',
     'budget_periods',
+    'budgeting',
     'categories',
     'budgets',
     'transactions',

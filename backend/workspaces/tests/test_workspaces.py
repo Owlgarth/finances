@@ -1143,7 +1143,7 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
             'currency': 'PLN',
             'amount': '200.00',
         }
-        self.post('/api/budgets', payload, **self.auth_headers())
+        self.post('/api/legacy-budgets', payload, **self.auth_headers())
         self.assertStatus(403)
         budget.delete()
 
@@ -1157,7 +1157,7 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
             created_by=self.viewer_user,
             updated_by=self.viewer_user,
         )
-        self.delete(f'/api/budgets/{budget.id}', **self.auth_headers())
+        self.delete(f'/api/legacy-budgets/{budget.id}', **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_can_read_budget_accounts(self):

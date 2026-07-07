@@ -6,6 +6,7 @@ from django.db import transaction as db_transaction
 
 from accounts.models import Account, AccountType
 from budget_accounts.models import BudgetAccount
+from budgeting.models import Budget, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
 from currencies.services import CurrencyCatalogService
@@ -55,6 +56,13 @@ class WorkspaceService:
             name='Main',
             type=AccountType.BANK,
             currency=catalog_currency,
+            created_by=user,
+            updated_by=user,
+        )
+        Budget.objects.create(
+            workspace=workspace,
+            name='General',
+            cadence=Cadence.MONTHLY,
             created_by=user,
             updated_by=user,
         )

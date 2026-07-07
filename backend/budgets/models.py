@@ -32,7 +32,9 @@ class Budget(WorkspaceScopedModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2)
 
     class Meta:
-        db_table = 'budgets'
+        # Renamed in B3 so the new budgeting.Budget model can own 'budgets'.
+        # This whole app is deleted in B4.
+        db_table = 'legacy_budgets'
         unique_together = [['budget_period', 'category', 'currency']]
 
     def __str__(self):
