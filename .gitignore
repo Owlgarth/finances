@@ -14,7 +14,9 @@ backend/.env
 .idea/
 
 # AI Tools
+.agents/
 .ipm
+.plans
 .opencode-data/
 
 # Python
