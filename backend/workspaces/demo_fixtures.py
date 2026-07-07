@@ -1,8 +1,10 @@
-"""Demo fixtures service for creating sample data in new workspaces.
+"""Starter and sample data for new workspaces (account-based model).
 
-This module provides functionality to populate new workspaces with example data
-to help users understand how Denarly works. Rewritten for the account-based
-domain model; B12 turns this into opt-in sample data.
+``create_starter_fixtures`` runs for every new workspace: it leaves the
+workspace empty but usable — a General budget with starter categories and the
+current period materialized. ``create_demo_fixtures`` is opt-in and layers
+realistic sample records (extra account, transactions, transfer, planned) on
+top of the starter data.
 """
 
 from datetime import date, timedelta
@@ -17,6 +19,16 @@ from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
 from transfers.models import Transfer
 
+STARTER_CATEGORIES = [
+    'Food & Groceries',
+    'Transportation',
+    'Entertainment',
+    'Bills & Utilities',
+    'Shopping',
+    'Health & Fitness',
+    'Salary',
+]
+
 
 def get_previous_month_date_range() -> tuple[date, date]:
     """Get the start and end dates of the previous month."""
@@ -28,26 +40,64 @@ def get_previous_month_date_range() -> tuple[date, date]:
     return start_date, end_date
 
 
-def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
-    """
-    Create demo fixtures for a new workspace.
-
-    This creates:
-    - A savings account next to the default Main account
-    - Categories under the General budget
-    - Sample transactions and a transfer for the previous month
-    - Sample planned transactions
-    """
-    main_account = Account.objects.filter(workspace_id=workspace_id, name='Main').first()
-    if not main_account:
+def _get_or_create_main_account(workspace_id, user_id) -> Account:
+    account = Account.objects.filter(workspace_id=workspace_id, name='Main').first()
+    if not account:
         pln_catalog = CurrencyCatalogService.enable(None, workspace_id, 'PLN')
-        main_account = Account.objects.create(
+        account = Account.objects.create(
             workspace_id=workspace_id,
             name='Main',
             type=AccountType.BANK,
             currency=pln_catalog,
             created_by_id=user_id,
         )
+    return account
+
+
+def _get_or_create_general_budget(workspace_id, user_id) -> Budget:
+    budget = Budget.objects.filter(workspace_id=workspace_id, name='General').first()
+    if not budget:
+        budget = Budget.objects.create(
+            workspace_id=workspace_id,
+            name='General',
+            cadence=Cadence.MONTHLY,
+            created_by_id=user_id,
+        )
+    return budget
+
+
+def create_starter_fixtures(workspace_id: int | str, user_id: int | str) -> None:
+    """Make a fresh workspace immediately usable (no sample records).
+
+    Ensures the Main account and General budget exist, seeds starter
+    categories, and materializes the current period so the budget view has
+    something to show on first login.
+    """
+    _get_or_create_main_account(workspace_id, user_id)
+    general_budget = _get_or_create_general_budget(workspace_id, user_id)
+
+    for cat_name in STARTER_CATEGORIES:
+        if not Category.objects.filter(budget=general_budget, name__iexact=cat_name).exists():
+            Category.objects.create(
+                budget=general_budget,
+                workspace_id=workspace_id,
+                name=cat_name,
+                created_by_id=user_id,
+            )
+
+    PeriodService.get_or_create_for_date(None, general_budget, date.today())
+
+
+def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
+    """
+    Create opt-in sample data for a new workspace (on top of starter fixtures).
+
+    Adds a savings account, sample transactions and a transfer for the previous
+    month, and sample planned transactions.
+    """
+    create_starter_fixtures(workspace_id, user_id)
+
+    main_account = _get_or_create_main_account(workspace_id, user_id)
 
     savings_account = Account.objects.filter(workspace_id=workspace_id, name='Savings').first()
     if not savings_account:
@@ -60,38 +110,10 @@ def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
             created_by_id=user_id,
         )
 
-    general_budget = Budget.objects.filter(workspace_id=workspace_id, name='General').first()
-    if not general_budget:
-        general_budget = Budget.objects.create(
-            workspace_id=workspace_id,
-            name='General',
-            cadence=Cadence.MONTHLY,
-            created_by_id=user_id,
-        )
+    general_budget = _get_or_create_general_budget(workspace_id, user_id)
 
-    categories_data = [
-        'Food & Groceries',
-        'Transportation',
-        'Entertainment',
-        'Bills & Utilities',
-        'Shopping',
-        'Health & Fitness',
-        'Salary',
-    ]
-
-    categories = []
-    for cat_name in categories_data:
-        category = Category.objects.filter(budget=general_budget, name__iexact=cat_name).first()
-        if not category:
-            category = Category.objects.create(
-                budget=general_budget,
-                workspace_id=workspace_id,
-                name=cat_name,
-                created_by_id=user_id,
-            )
-        categories.append(category)
-
-    category_map = {cat.name: cat for cat in categories}
+    # Starter fixtures already created these; reuse them.
+    category_map = {cat.name: cat for cat in Category.objects.filter(budget=general_budget)}
 
     start_date, _end_date = get_previous_month_date_range()
     mid_month = start_date + timedelta(days=15)

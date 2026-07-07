@@ -31,7 +31,7 @@ class AuthService:
 
     @staticmethod
     def register(data: RegisterIn, ip_address: str | None) -> tuple[int, dict]:
-        """Register a new user with a workspace, consent records, and demo data.
+        """Register a new user with a workspace, consent records, and optional sample data.
 
         Returns:
             (403, {'detail': ...}) when DEMO_MODE is enabled.
@@ -52,7 +52,10 @@ class AuthService:
             )
 
             WorkspaceService.create_workspace(
-                user=user, name=data.workspace_name, currency_code=data.currency_code, create_demo=True
+                user=user,
+                name=data.workspace_name,
+                currency_code=data.currency_code,
+                create_demo=data.start_with_sample_data,
             )
 
             UserService.record_consent(user, ConsentType.TERMS_OF_SERVICE, data.accepted_terms_version, ip_address)

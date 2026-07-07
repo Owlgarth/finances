@@ -9,7 +9,7 @@ from budgeting.models import Budget, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
 from currencies.services import CurrencyCatalogService
-from workspaces.demo_fixtures import create_demo_fixtures
+from workspaces.demo_fixtures import create_demo_fixtures, create_starter_fixtures
 from workspaces.exceptions import (
     WorkspaceMemberAdminInsufficientError,
     WorkspaceMemberAlreadyExistsError,
@@ -41,8 +41,8 @@ class WorkspaceService:
         - WorkspaceMember (owner role)
         - One enabled catalog currency
         - Default "Main" account (in the chosen currency)
-        - Default "General" budget
-        - Demo fixtures (optional)
+        - Default "General" budget + starter categories + current period
+        - Opt-in sample data when ``create_demo`` is True
         - Sets user.current_workspace to the new workspace
         """
         workspace = Workspace.objects.create(name=name, owner=user)
@@ -66,6 +66,9 @@ class WorkspaceService:
 
         if create_demo:
             create_demo_fixtures(workspace_id=workspace.id, user_id=user.id)
+        else:
+            # A fresh workspace is empty but usable: starter categories + current period.
+            create_starter_fixtures(workspace_id=workspace.id, user_id=user.id)
 
         user.current_workspace = workspace
         user.save(update_fields=['current_workspace'])

@@ -35,9 +35,13 @@ class TestAuthRegister(AuthTestCase):
         self.assertEqual(data['token_type'], 'bearer')
         self.assertEqual(len(data['access_token'].split('.')), 3)
 
-    def test_register_creates_workspace(self):
-        """Test that registration creates workspace, member, and default account."""
+    def test_register_creates_empty_but_usable_workspace(self):
+        """Default registration is empty but usable: Main account, General budget, starters."""
         from accounts.models import Account
+        from budgeting.models import Budget as PlanBudget
+        from budgeting.models import Period
+        from categories.models import Category
+        from transactions.models import Transaction
         from workspaces.models import WorkspaceMember
 
         self.post(
@@ -53,25 +57,25 @@ class TestAuthRegister(AuthTestCase):
         self.assertStatus(201)
 
         user = get_user_model().objects.get(email='workspace_test@example.com')
-        self.assertIsNotNone(user.current_workspace)
-
         workspace = Workspace.objects.get(id=user.current_workspace.id)
-        self.assertEqual(workspace.name, 'Test Workspace')
         self.assertEqual(workspace.owner, user)
 
         member = WorkspaceMember.objects.get(workspace=workspace, user=user)
         self.assertEqual(member.role, 'owner')
 
-        # Registration creates demo fixtures: Main + Savings accounts.
+        # Default account only — no sample records.
         account_names = set(Account.objects.filter(workspace=workspace).values_list('name', flat=True))
-        self.assertIn('Main', account_names)
-        self.assertIn('Savings', account_names)
+        self.assertEqual(account_names, {'Main'})
+        self.assertFalse(Transaction.objects.for_workspace(workspace.id).exists())
 
-    def test_register_creates_demo_fixtures(self):
-        """Test that registration creates demo fixtures with example data."""
+        # Usable: General budget with starter categories + current period.
+        general_budget = PlanBudget.objects.get(workspace=workspace, name='General')
+        self.assertEqual(Category.objects.filter(budget=general_budget).count(), 7)
+        self.assertTrue(Period.objects.filter(budget=general_budget).exists())
+
+    def test_register_with_sample_data_flag_adds_records(self):
+        """start_with_sample_data=True populates the workspace with example records."""
         from accounts.models import Account
-        from budgeting.models import Budget as PlanBudget
-        from categories.models import Category
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
         from transfers.models import Transfer
@@ -83,6 +87,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'Demo User',
                 'workspace_name': 'Demo Workspace',
+                'start_with_sample_data': True,
                 'accepted_terms_version': '1.0',
                 'accepted_privacy_version': '1.0',
             },
@@ -94,22 +99,6 @@ class TestAuthRegister(AuthTestCase):
 
         self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Main').exists())
         self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Savings').exists())
-
-        general_budget = PlanBudget.objects.filter(workspace_id=ws_id, name='General').first()
-        self.assertIsNotNone(general_budget)
-        categories = Category.objects.filter(budget=general_budget)
-        self.assertEqual(categories.count(), 7)
-        category_names = {cat.name for cat in categories}
-        expected_categories = {
-            'Food & Groceries',
-            'Transportation',
-            'Entertainment',
-            'Bills & Utilities',
-            'Shopping',
-            'Health & Fitness',
-            'Salary',
-        }
-        self.assertEqual(category_names, expected_categories)
 
         transactions = Transaction.objects.for_workspace(ws_id)
         self.assertGreaterEqual(transactions.count(), 10)
