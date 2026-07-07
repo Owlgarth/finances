@@ -372,11 +372,9 @@ class TestCustomPeriodServiceRules(TestCase):
 
 
 class TestDefaultGeneralBudget(TestCase):
-    """create_workspace provisions the new General Budget alongside the legacy account."""
+    """create_workspace provisions the default General Budget."""
 
-    def test_new_workspace_has_general_budget_and_legacy_account(self):
-        from budget_accounts.models import BudgetAccount
-
+    def test_new_workspace_has_general_budget(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='WS')
 
@@ -384,5 +382,3 @@ class TestDefaultGeneralBudget(TestCase):
         self.assertEqual(len(budgets), 1)
         self.assertEqual(budgets[0].name, 'General')
         self.assertEqual(budgets[0].cadence, Cadence.MONTHLY)
-
-        self.assertTrue(BudgetAccount.objects.filter(workspace=workspace, name='General').exists())

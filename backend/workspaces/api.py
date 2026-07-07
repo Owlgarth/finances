@@ -11,8 +11,6 @@ from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
 from workspaces.schemas import (
-    CurrencyCreate,
-    CurrencyOut,
     MemberPasswordReset,
     WorkspaceCreate,
     WorkspaceMemberAdd,
@@ -21,45 +19,13 @@ from workspaces.schemas import (
     WorkspaceOut,
     WorkspaceUpdate,
 )
-from workspaces.services import CurrencyService, WorkspaceMemberService, WorkspaceService
+from workspaces.services import WorkspaceMemberService, WorkspaceService
 
 router = Router(tags=['Workspaces'])
 
 
 # =============================================================================
-# Currency Endpoints
-# =============================================================================
-
-
-@router.get('/currencies', response=list[CurrencyOut], auth=WorkspaceJWTAuth())
-def list_currencies(request: HttpRequest):
-    """List all currencies for the current workspace."""
-    return CurrencyService.list_currencies(request.auth.current_workspace_id)
-
-
-@router.post('/currencies', response={201: CurrencyOut, 400: DetailOut, 403: DetailOut}, auth=WorkspaceJWTAuth())
-def create_currency(request: HttpRequest, data: CurrencyCreate):
-    """Create a new currency for the current workspace."""
-    workspace_id = request.auth.current_workspace_id
-    require_role(request.auth, workspace_id, ADMIN_ROLES)
-    currency = CurrencyService.create_currency(workspace_id, data)
-    return 201, currency
-
-
-@router.delete(
-    '/currencies/{currency_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
-)
-def delete_currency(request: HttpRequest, currency_id: int):
-    """Delete a currency from the current workspace."""
-    workspace_id = request.auth.current_workspace_id
-    require_role(request.auth, workspace_id, ADMIN_ROLES)
-    CurrencyService.delete_currency(currency_id, workspace_id)
-    return 204, None
-
-
-# =============================================================================
-# Enabled Currencies Endpoints (global catalog enablement — replaces the
-# legacy per-workspace currency endpoints above, which are removed in B8)
+# Enabled Currencies Endpoints (global catalog enablement)
 # =============================================================================
 
 

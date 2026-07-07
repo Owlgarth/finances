@@ -10,16 +10,11 @@ from django.urls import path
 from ninja import NinjaAPI
 
 from accounts.api import router as accounts_router
-from budget_accounts.api import router as budget_accounts_router
-from budget_periods.api import router as budget_periods_router
 from budgeting.api import router as budgeting_router
 from common.exceptions import ServiceError
 from core.api import router as auth_router
 from core.legal_api import router as legal_router
 from currencies.api import router as currencies_router
-from currency_exchanges.api import router as currency_exchanges_router
-from exchange_shortcuts.api import router as exchange_shortcuts_router
-from period_balances.api import router as period_balances_router
 from planned_transactions.api import router as planned_transactions_router
 from reports.api import router as reports_router
 from transactions.api import router as transactions_router
@@ -28,7 +23,7 @@ from users.api import router as users_router
 from workspaces.api import router as workspaces_router
 
 # Create main API instance (single entry point for routing)
-api = NinjaAPI(title='Budget Tracker API', version='1.0.0')
+api = NinjaAPI(title='Denarly API', version='1.0.0')
 
 
 @api.exception_handler(ServiceError)
@@ -44,13 +39,8 @@ api.add_router('/auth', auth_router)
 api.add_router('/legal', legal_router)
 api.add_router('/users', users_router)
 api.add_router('/accounts', accounts_router)
-api.add_router('/budget-accounts', budget_accounts_router)
-api.add_router('/budget-periods', budget_periods_router)
 api.add_router('/budgets', budgeting_router)
 api.add_router('/currencies', currencies_router)
-api.add_router('/currency-exchanges', currency_exchanges_router)
-api.add_router('/exchange-shortcuts', exchange_shortcuts_router)
-api.add_router('/period-balances', period_balances_router)
 api.add_router('/planned-transactions', planned_transactions_router)
 api.add_router('/reports', reports_router)
 api.add_router('/transactions', transactions_router)

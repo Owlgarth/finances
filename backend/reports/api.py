@@ -1,23 +1,24 @@
 """Django-Ninja API endpoints for reports app."""
 
-from ninja import Router
+from ninja import Query, Router
 
 from common.auth import WorkspaceJWTAuth
-from common.services.base import get_workspace_currencies
-from reports.schemas import CurrentBalancesResponse
+from core.schemas import DetailOut
+from reports.schemas import BudgetSummaryResponse, CurrentBalancesResponse
 from reports.services import ReportService
 
 router = Router(tags=['Reports'])
 
-# The budget-summary endpoint was deleted with the legacy allocation app in B4.
-# Rebuilt in B8 on budgeting models.
+
+@router.get('/budget-summary', response={200: BudgetSummaryResponse, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def budget_summary(request, budget_id: int = Query(...), period_id: int = Query(...)):
+    """Planned vs actual per category for a budget's period."""
+    workspace_id = request.auth.current_workspace_id
+    return ReportService.get_budget_summary(workspace_id, budget_id, period_id)
 
 
 @router.get('/current-balances', response=CurrentBalancesResponse, auth=WorkspaceJWTAuth())
-def current_balances(request):
-    """Get the current balances for all currencies in the workspace."""
+def current_balances(request, include_archived: bool = Query(False)):
+    """Computed balance per account plus per-currency totals."""
     workspace_id = request.auth.current_workspace_id
-
-    currencies = get_workspace_currencies(workspace_id)
-    result = ReportService.get_current_balances(workspace_id, currencies)
-    return CurrentBalancesResponse(balances=result)
+    return ReportService.get_current_balances(workspace_id, include_archived)

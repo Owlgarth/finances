@@ -28,7 +28,6 @@ class AccountDeleteCheckOut(BaseModel):
     shared_workspace_memberships: int
     total_transactions: int
     total_planned_transactions: int
-    total_currency_exchanges: int
 
 
 class AccountDeleteOut(BaseModel):
@@ -56,12 +55,9 @@ class ImportResultOut(BaseModel):
     """Schema for import result."""
 
     imported_workspaces: int
-    imported_budget_accounts: int
-    imported_budget_periods: int
-    imported_categories: int
+    imported_accounts: int
     imported_transactions: int
-    imported_budgets: int
+    imported_transfers: int
     imported_planned_transactions: int
-    imported_currency_exchanges: int
     skipped: dict[str, list[str]]
     renamed: dict[str, str]

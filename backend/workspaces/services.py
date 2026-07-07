@@ -5,15 +5,12 @@ from django.contrib.auth import get_user_model
 from django.db import transaction as db_transaction
 
 from accounts.models import Account, AccountType
-from budget_accounts.models import BudgetAccount
 from budgeting.models import Budget, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
 from currencies.services import CurrencyCatalogService
 from workspaces.demo_fixtures import create_demo_fixtures
 from workspaces.exceptions import (
-    CurrencyDuplicateSymbolError,
-    CurrencyNotFoundError,
     WorkspaceMemberAdminInsufficientError,
     WorkspaceMemberAlreadyExistsError,
     WorkspaceMemberCannotChangeOwnRoleError,
@@ -29,7 +26,7 @@ from workspaces.exceptions import (
     WorkspaceOwnerRoleChangeError,
     WorkspacePermissionDeniedError,
 )
-from workspaces.models import Currency, Role, Workspace, WorkspaceMember
+from workspaces.models import Role, Workspace, WorkspaceMember
 from workspaces.schemas import WorkspaceMemberOut, WorkspaceOut
 
 User = get_user_model()
@@ -42,9 +39,9 @@ class WorkspaceService:
         """
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
-        - One enabled catalog currency + one legacy currency row (removed in B8)
+        - One enabled catalog currency
         - Default "Main" account (in the chosen currency)
-        - Default "General" budget account (legacy; removed in B8)
+        - Default "General" budget
         - Demo fixtures (optional)
         - Sets user.current_workspace to the new workspace
         """
@@ -63,24 +60,6 @@ class WorkspaceService:
             workspace=workspace,
             name='General',
             cadence=Cadence.MONTHLY,
-            created_by=user,
-            updated_by=user,
-        )
-        # Legacy models (BudgetAccount.default_currency etc.) keep working off
-        # this per-workspace row until B8 deletes them.
-        default_currency = Currency.objects.create(
-            workspace=workspace,
-            symbol=currency_code,
-            name=catalog_currency.name,
-            created_by=user,
-        )
-        BudgetAccount.objects.create(
-            workspace=workspace,
-            name='General',
-            description='General budget account',
-            default_currency=default_currency,
-            is_active=True,
-            display_order=0,
             created_by=user,
             updated_by=user,
         )
@@ -201,10 +180,6 @@ class WorkspaceService:
 
             delete_workspace_financial_records(workspace_id)
 
-            from budget_accounts.models import BudgetAccount
-
-            BudgetAccount.objects.for_workspace(workspace_id).delete()
-
             workspace.delete()
 
             user.current_workspace_id = next_ws_map.get(user.id)
@@ -230,40 +205,6 @@ class WorkspaceService:
                 'deleter_name': deleter_name,
             },
         )
-
-
-class CurrencyService:
-    @staticmethod
-    def list_currencies(workspace_id: int) -> list[Currency]:
-        """List all currencies for a workspace."""
-        return list(Currency.objects.for_workspace(workspace_id))
-
-    @staticmethod
-    def get_currency(currency_id: int, workspace_id: int) -> Currency | None:
-        """Get a currency by ID within a workspace."""
-        return Currency.objects.for_workspace(workspace_id).filter(id=currency_id).first()
-
-    @staticmethod
-    @db_transaction.atomic
-    def create_currency(workspace_id: int, data) -> Currency:
-        """Create a new currency for a workspace."""
-        if Currency.objects.for_workspace(workspace_id).filter(symbol=data.symbol).exists():
-            raise CurrencyDuplicateSymbolError(data.symbol)
-
-        return Currency.objects.create(
-            workspace_id=workspace_id,
-            name=data.name,
-            symbol=data.symbol,
-        )
-
-    @staticmethod
-    @db_transaction.atomic
-    def delete_currency(currency_id: int, workspace_id: int) -> None:
-        """Delete a currency from a workspace."""
-        currency = CurrencyService.get_currency(currency_id, workspace_id)
-        if not currency:
-            raise CurrencyNotFoundError()
-        currency.delete()
 
 
 class WorkspaceMemberService:

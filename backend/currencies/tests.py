@@ -17,7 +17,6 @@ from currencies.factories import CustomCurrencyFactory, WorkspaceCurrencyFactory
 from currencies.models import Currency, WorkspaceCurrency
 from currencies.services import CurrencyCatalogService
 from workspaces.factories import WorkspaceFactory
-from workspaces.models import Currency as LegacyCurrency
 from workspaces.services import WorkspaceService
 
 User = get_user_model()
@@ -295,7 +294,6 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
         user = User.objects.get(email='eur_user@example.com')
         enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
         self.assertIn('EUR', [c.code for c in enabled])
-        self.assertTrue(LegacyCurrency.objects.filter(workspace_id=user.current_workspace_id, symbol='EUR').exists())
 
     def test_register_defaults_to_pln(self):
         self._register('pln_user@example.com')
@@ -320,7 +318,4 @@ class TestCreateWorkspaceEndpointCurrency(AuthMixin, APIClientMixin, TestCase):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Direct', currency_code='EUR')
 
-        legacy_rows = LegacyCurrency.objects.filter(workspace=workspace)
-        self.assertEqual(legacy_rows.count(), 1)
-        self.assertEqual(legacy_rows.first().symbol, 'EUR')
         self.assertEqual([c.code for c in CurrencyCatalogService.list_enabled(workspace.id)], ['EUR'])

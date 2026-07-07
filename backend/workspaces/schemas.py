@@ -7,31 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from core.schemas.auth import ValidatedEmail
 
 
-class CurrencyCreate(BaseModel):
-    """Schema for creating a currency."""
-
-    name: str = Field(..., max_length=50)
-    symbol: str = Field(..., min_length=3, max_length=3, pattern=r'^[A-Z]{3}$')
-
-    @field_validator('name')
-    @classmethod
-    def name_not_empty(cls, v):
-        if not v.strip():
-            raise ValueError('Name cannot be empty')
-        return v.strip()
-
-
-class CurrencyOut(BaseModel):
-    """Schema for currency response."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    symbol: str
-    created_at: datetime
-
-
 class WorkspaceUpdate(BaseModel):
     """Schema for updating a workspace."""
 

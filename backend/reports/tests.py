@@ -1,136 +1,175 @@
-"""Tests for reports API endpoints.
-
-Budget-summary tests were deleted with the legacy allocation app in B4;
-the report is rebuilt in B8 on budgeting models.
-"""
+"""Tests for reports API endpoints (rebuilt on the account/budgeting models)."""
 
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from budget_periods.factories import BudgetPeriodFactory
+from accounts.factories import AccountFactory
+from budgeting.factories import BudgetFactory
+from budgeting.models import CategoryBudget
+from budgeting.services import PeriodService
+from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
-from period_balances.factories import PeriodBalanceFactory
-from period_balances.models import PeriodBalance
-
-User = get_user_model()
+from currencies.services import CurrencyCatalogService
+from transactions.factories import TransactionFactory
 
 
 class ReportsTestCase(AuthMixin, APIClientMixin, TestCase):
-    """Base test case for reports tests with common setup."""
+    """Base setup: PLN + USD accounts, a monthly budget, categories."""
 
     def setUp(self):
-        """Set up authenticated user and create test data."""
         super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
 
-        self.period = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='January 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            weeks=5,
-            created_by=self.user,
-        )
+        self.checking = AccountFactory(workspace=self.workspace, name='Checking', opening_balance=Decimal('1000.00'))
+        self.dollars = AccountFactory(workspace=self.workspace, name='Dollars', currency=usd)
 
-        self.period2 = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='February 2025',
-            start_date=date(2025, 2, 1),
-            end_date=date(2025, 2, 28),
-            weeks=4,
-            created_by=self.user,
-        )
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.groceries = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Groceries')
+        self.transport = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Transport')
+        self.period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
+        self.pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
 
-        self.pln = self.workspace.currencies.filter(symbol='PLN').first()
-        self.usd = self.workspace.currencies.filter(symbol='USD').first()
 
-        PeriodBalanceFactory(
-            budget_period=self.period,
+class TestBudgetSummary(ReportsTestCase):
+    def setUp(self):
+        super().setUp()
+        CategoryBudget.objects.create(
+            period=self.period,
+            workspace_id=self.workspace.id,
+            category=self.groceries,
             currency=self.pln,
-            opening_balance=Decimal('5000.00'),
-            total_income=Decimal('8000.00'),
-            total_expenses=Decimal('3000.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('10000.00'),
+            amount=Decimal('1000.00'),
             created_by=self.user,
         )
-
-        PeriodBalanceFactory(
-            budget_period=self.period,
-            currency=self.usd,
-            opening_balance=Decimal('1000.00'),
-            total_income=Decimal('2000.00'),
-            total_expenses=Decimal('500.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('2500.00'),
-            created_by=self.user,
-        )
-
-        PeriodBalanceFactory(
-            budget_period=self.period2,
+        CategoryBudget.objects.create(
+            period=self.period,
+            workspace_id=self.workspace.id,
+            category=self.transport,
             currency=self.pln,
-            opening_balance=Decimal('10000.00'),
-            total_income=Decimal('5000.00'),
-            total_expenses=Decimal('2000.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('13000.00'),
+            amount=Decimal('500.00'),
             created_by=self.user,
         )
+
+    def test_budget_summary_planned_vs_actual(self):
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            category=self.groceries,
+            amount=Decimal('250.00'),
+            type='expense',
+        )
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 10),
+            category=self.transport,
+            amount=Decimal('50.00'),
+            type='expense',
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['budget']['id'], self.budget.id)
+        self.assertEqual(data['period']['id'], self.period.id)
+
+        by_category = {item['category_name']: item for item in data['items']}
+        self.assertEqual(by_category['Groceries']['planned'], '1000.00')
+        self.assertEqual(by_category['Groceries']['actual'], '250.00')
+        self.assertEqual(by_category['Groceries']['remaining'], '750.00')
+        self.assertEqual(by_category['Transport']['actual'], '50.00')
+
+        self.assertEqual(data['totals']['PLN']['planned'], '1500.00')
+        self.assertEqual(data['totals']['PLN']['actual'], '300.00')
+
+    def test_budget_summary_excludes_adjustments_and_income(self):
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            category=self.groceries,
+            amount=Decimal('100.00'),
+            type='expense',
+        )
+        # Adjustments are uncategorized and excluded; income is not an actual.
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 6),
+            amount=Decimal('-30.00'),
+            type='adjustment',
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        by_category = {item['category_name']: item for item in data['items']}
+        self.assertEqual(by_category['Groceries']['actual'], '100.00')
+
+    def test_budget_summary_actual_outside_period_ignored(self):
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 8, 5),  # next month
+            category=self.groceries,
+            amount=Decimal('999.00'),
+            type='expense',
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        by_category = {item['category_name']: item for item in data['items']}
+        self.assertEqual(by_category['Groceries']['actual'], '0.00')
+
+    def test_budget_summary_period_not_found(self):
+        self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id=99999',
+            **self.auth_headers(),
+        )
+        self.assertStatus(404)
+
+    def test_budget_summary_without_auth_fails(self):
+        self.get(f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}')
+        self.assertStatus(401)
 
 
 class TestCurrentBalances(ReportsTestCase):
-    """Tests for current balances endpoint."""
-
-    def test_current_balances_success(self):
-        """Test getting current balances for all currencies."""
-        data = self.get('/api/reports/current-balances', **self.auth_headers())
-        self.assertStatus(200)
-
-        # PLN should have the latest balance (period2)
-        self.assertEqual(data['balances']['PLN'], '13000.00')
-
-        # USD should have balance from period1 (latest for USD)
-        self.assertEqual(data['balances']['USD'], '2500.00')
-
-    def test_current_balances_empty_workspace(self):
-        """Test current balances when workspace has no balances."""
-        # Delete all balances for the current workspace
-        PeriodBalance.objects.filter(budget_period__budget_account__workspace=self.workspace).delete()
+    def test_current_balances_per_account_and_currency(self):
+        TransactionFactory(account=self.checking, workspace=self.workspace, amount=Decimal('200.00'), type='income')
+        TransactionFactory(account=self.dollars, workspace=self.workspace, amount=Decimal('50.00'), type='income')
 
         data = self.get('/api/reports/current-balances', **self.auth_headers())
         self.assertStatus(200)
 
-        # All currencies should be 0
-        self.assertEqual(data['balances']['PLN'], '0')
-        self.assertEqual(data['balances']['USD'], '0')
+        by_account = {row['account_name']: row for row in data['accounts']}
+        self.assertEqual(by_account['Checking']['balance'], '1200.00')  # 1000 opening + 200
+        self.assertEqual(by_account['Dollars']['balance'], '50.00')
+
+        self.assertEqual(data['totals']['PLN'], '1200.00')
+        self.assertEqual(data['totals']['USD'], '50.00')
+
+    def test_current_balances_excludes_archived_by_default(self):
+        self.dollars.is_archived = True
+        self.dollars.save()
+
+        data = self.get('/api/reports/current-balances', **self.auth_headers())
+        names = [row['account_name'] for row in data['accounts']]
+        self.assertNotIn('Dollars', names)
+
+        data = self.get('/api/reports/current-balances?include_archived=true', **self.auth_headers())
+        names = [row['account_name'] for row in data['accounts']]
+        self.assertIn('Dollars', names)
 
     def test_current_balances_without_auth_fails(self):
-        """Test that getting current balances without authentication fails."""
         self.get('/api/reports/current-balances')
         self.assertStatus(401)
-
-    def test_current_balances_returns_latest_by_date(self):
-        """Test that current balances returns the latest period balance for each currency."""
-        PeriodBalance.objects.create(
-            budget_period=self.period2,
-            workspace=self.workspace,
-            currency=self.usd,
-            opening_balance=Decimal('2000.00'),
-            total_income=Decimal('1000.00'),
-            total_expenses=Decimal('300.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('2700.00'),
-            created_by=self.user,
-        )
-
-        data = self.get('/api/reports/current-balances', **self.auth_headers())
-        self.assertStatus(200)
-
-        # Should return the period2 balance for USD (latest)
-        self.assertEqual(data['balances']['USD'], '2700.00')

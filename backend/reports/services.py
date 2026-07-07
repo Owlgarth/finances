@@ -1,26 +1,106 @@
-"""Business logic for the reports app."""
+"""Business logic for the reports app (rebuilt on the account/budgeting models)."""
 
+from collections import defaultdict
 from decimal import Decimal
 
-from period_balances.models import PeriodBalance
-from workspaces.models import Currency
+from django.db.models import Sum
 
-# The budget-summary report was deleted with the legacy allocation app in B4.
-# Rebuilt in B8 on budgeting models (planned vs actual per category).
+from accounts.services import AccountService
+from budgeting.services import BudgetService, PeriodService
+from transactions.models import Transaction
 
 
 class ReportService:
     @staticmethod
-    def get_current_balances(workspace_id: int, currencies: list[Currency]) -> dict[str, Decimal]:
-        """Return the latest closing balance per currency for the workspace."""
-        result = {}
-        for currency in currencies:
-            latest_balance = (
-                PeriodBalance.objects.for_workspace(workspace_id)
-                .filter(currency__symbol=currency.symbol)
-                .select_related('budget_period__budget_account', 'currency')
-                .order_by('-budget_period__end_date')
-                .first()
+    def get_budget_summary(workspace_id: int, budget_id: int, period_id: int) -> dict:
+        """Planned vs actual per category for a budget's period.
+
+        Planned amounts come from CategoryBudget rows; actuals are the sums of
+        expense transactions per category (by account currency) within the
+        period's date range. Adjustments and income never count as actuals.
+        """
+        budget = BudgetService.get(budget_id, workspace_id)
+        period = PeriodService._get_period(workspace_id, budget_id, period_id)
+
+        planned_rows = period.category_budgets.select_related('category', 'currency')
+        planned_map: dict[tuple[int, str], Decimal] = {
+            (cb.category_id, cb.currency.code): cb.amount for cb in planned_rows
+        }
+        category_names = {cb.category_id: cb.category.name for cb in planned_rows}
+
+        actual_rows = (
+            Transaction.objects.for_workspace(workspace_id)
+            .filter(
+                category__budget_id=budget_id,
+                type='expense',
+                date__gte=period.start_date,
+                date__lte=period.end_date,
             )
-            result[currency.symbol] = latest_balance.closing_balance if latest_balance else Decimal('0')
-        return result
+            .values('category_id', 'category__name', 'account__currency__code')
+            .annotate(total=Sum('amount'))
+        )
+        actual_map: dict[tuple[int, str], Decimal] = {}
+        for row in actual_rows:
+            actual_map[(row['category_id'], row['account__currency__code'])] = row['total']
+            category_names.setdefault(row['category_id'], row['category__name'])
+
+        cents = Decimal('0.01')
+        items = []
+        for category_id, currency_code in sorted(
+            planned_map.keys() | actual_map.keys(), key=lambda key: (category_names[key[0]].lower(), key[1])
+        ):
+            planned = planned_map.get((category_id, currency_code), Decimal('0')).quantize(cents)
+            actual = actual_map.get((category_id, currency_code), Decimal('0')).quantize(cents)
+            items.append(
+                {
+                    'category_id': category_id,
+                    'category_name': category_names[category_id],
+                    'currency_code': currency_code,
+                    'planned': planned,
+                    'actual': actual,
+                    'remaining': (planned - actual).quantize(cents),
+                }
+            )
+
+        totals: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: {'planned': Decimal('0.00'), 'actual': Decimal('0.00'), 'remaining': Decimal('0.00')}
+        )
+        for item in items:
+            bucket = totals[item['currency_code']]
+            bucket['planned'] += item['planned']
+            bucket['actual'] += item['actual']
+            bucket['remaining'] += item['remaining']
+
+        return {
+            'budget': {'id': budget.id, 'name': budget.name},
+            'period': {
+                'id': period.id,
+                'name': period.name,
+                'start_date': period.start_date,
+                'end_date': period.end_date,
+            },
+            'items': items,
+            'totals': dict(totals),
+        }
+
+    @staticmethod
+    def get_current_balances(workspace_id: int, include_archived: bool = False) -> dict:
+        """Computed balance per account plus per-currency totals."""
+        accounts = AccountService.list(workspace_id, include_archived=include_archived)
+
+        account_rows = []
+        totals: dict[str, Decimal] = defaultdict(lambda: Decimal('0'))
+        for account in accounts:
+            balance = AccountService.balance(account)
+            account_rows.append(
+                {
+                    'account_id': account.id,
+                    'account_name': account.name,
+                    'currency_code': account.currency.code,
+                    'is_archived': account.is_archived,
+                    'balance': balance,
+                }
+            )
+            totals[account.currency.code] += balance
+
+        return {'accounts': account_rows, 'totals': dict(totals)}

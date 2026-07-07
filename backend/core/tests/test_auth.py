@@ -36,8 +36,8 @@ class TestAuthRegister(AuthTestCase):
         self.assertEqual(len(data['access_token'].split('.')), 3)
 
     def test_register_creates_workspace(self):
-        """Test that registration creates workspace, member, and budget account."""
-        from budget_accounts.models import BudgetAccount
+        """Test that registration creates workspace, member, and default account."""
+        from accounts.models import Account
         from workspaces.models import WorkspaceMember
 
         self.post(
@@ -62,24 +62,19 @@ class TestAuthRegister(AuthTestCase):
         member = WorkspaceMember.objects.get(workspace=workspace, user=user)
         self.assertEqual(member.role, 'owner')
 
-        budget_accounts = BudgetAccount.objects.filter(workspace=workspace)
-        self.assertEqual(budget_accounts.count(), 2)
-        account_names = {acc.name for acc in budget_accounts}
-        self.assertIn('General', account_names)
-        self.assertIn('Example Account', account_names)
+        # Registration creates demo fixtures: Main + Savings accounts.
+        account_names = set(Account.objects.filter(workspace=workspace).values_list('name', flat=True))
+        self.assertIn('Main', account_names)
+        self.assertIn('Savings', account_names)
 
     def test_register_creates_demo_fixtures(self):
         """Test that registration creates demo fixtures with example data."""
-        from datetime import date, timedelta
-
-        from budget_accounts.models import BudgetAccount
-        from budget_periods.models import BudgetPeriod
+        from accounts.models import Account
         from budgeting.models import Budget as PlanBudget
         from categories.models import Category
-        from currency_exchanges.models import CurrencyExchange
-        from period_balances.models import PeriodBalance
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
+        from transfers.models import Transfer
 
         self.post(
             '/api/auth/register',
@@ -95,21 +90,12 @@ class TestAuthRegister(AuthTestCase):
         self.assertStatus(201)
 
         user = get_user_model().objects.get(email='demo_fixtures@example.com')
-        example_account = BudgetAccount.objects.get(
-            workspace=user.current_workspace,
-            name='Example Account',
-        )
-        self.assertEqual(example_account.description, 'Example budget account with demo data')
+        ws_id = user.current_workspace_id
 
-        period = BudgetPeriod.objects.get(budget_account=example_account)
+        self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Main').exists())
+        self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Savings').exists())
 
-        today = date.today()
-        first_of_current_month = date(today.year, today.month, 1)
-        last_month_date = first_of_current_month - timedelta(days=1)
-        expected_period_name = last_month_date.strftime('%B %Y')
-        self.assertEqual(period.name, expected_period_name)
-
-        general_budget = PlanBudget.objects.filter(workspace=user.current_workspace, name='General').first()
+        general_budget = PlanBudget.objects.filter(workspace_id=ws_id, name='General').first()
         self.assertIsNotNone(general_budget)
         categories = Category.objects.filter(budget=general_budget)
         self.assertEqual(categories.count(), 7)
@@ -125,21 +111,13 @@ class TestAuthRegister(AuthTestCase):
         }
         self.assertEqual(category_names, expected_categories)
 
-        transactions = Transaction.objects.for_workspace(user.current_workspace_id)
+        transactions = Transaction.objects.for_workspace(ws_id)
         self.assertGreaterEqual(transactions.count(), 10)
         self.assertGreaterEqual(transactions.filter(type='income').count(), 2)
         self.assertGreaterEqual(transactions.filter(type='expense').count(), 8)
 
-        planned_count = PlannedTransaction.objects.for_workspace(user.current_workspace_id).count()
-        self.assertGreaterEqual(planned_count, 3)
-
-        exchanges_count = CurrencyExchange.objects.filter(budget_period=period).count()
-        self.assertGreaterEqual(exchanges_count, 2)
-
-        balances = PeriodBalance.objects.filter(budget_period=period)
-        self.assertEqual(balances.count(), 3)
-        currencies = {bal.currency.symbol for bal in balances}
-        self.assertEqual(currencies, {'PLN', 'EUR', 'USD'})
+        self.assertGreaterEqual(PlannedTransaction.objects.for_workspace(ws_id).count(), 3)
+        self.assertTrue(Transfer.objects.for_workspace(ws_id).exists())
 
     def test_register_duplicate_email(self):
         """Test registration with already registered email."""

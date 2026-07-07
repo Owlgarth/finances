@@ -1,51 +1,21 @@
 """Demo fixtures service for creating sample data in new workspaces.
 
 This module provides functionality to populate new workspaces with example data
-to help users understand how Denarly works.
+to help users understand how Denarly works. Rewritten for the account-based
+domain model; B12 turns this into opt-in sample data.
 """
 
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.utils import timezone
-
 from accounts.models import Account, AccountType
-from budget_accounts.models import BudgetAccount
-from budget_periods.models import BudgetPeriod
 from budgeting.models import Budget, Cadence
+from budgeting.services import PeriodService
 from categories.models import Category
 from currencies.services import CurrencyCatalogService
-from currency_exchanges.models import CurrencyExchange
-from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
-from workspaces.models import Currency
-
-# Currencies the demo records below rely on. The workspace is created with a
-# single currency, so the demo creates the missing legacy rows itself and
-# enables each in the catalog.
-DEMO_CURRENCIES = [
-    ('PLN', 'Polish Zloty'),
-    ('USD', 'US Dollar'),
-    ('EUR', 'Euro'),
-]
-
-
-def _ensure_demo_currencies(workspace_id: int | str, user_id: int | str) -> None:
-    """Create legacy currency rows + catalog enablements the demo data needs."""
-    for symbol, name in DEMO_CURRENCIES:
-        if not Currency.objects.filter(workspace_id=workspace_id, symbol=symbol).exists():
-            Currency.objects.create(workspace_id=workspace_id, symbol=symbol, name=name, created_by_id=user_id)
-        CurrencyCatalogService.enable(None, workspace_id, symbol)
-
-
-def get_previous_month_name() -> str:
-    """Get the name of the previous month in format 'Month YYYY' (e.g., 'October 2025')."""
-    today = date.today()
-    first_of_current_month = date(today.year, today.month, 1)
-    last_month_date = first_of_current_month - timedelta(days=1)
-
-    return last_month_date.strftime('%B %Y')
+from transfers.models import Transfer
 
 
 def get_previous_month_date_range() -> tuple[date, date]:
@@ -58,64 +28,38 @@ def get_previous_month_date_range() -> tuple[date, date]:
     return start_date, end_date
 
 
-def create_demo_fixtures(
-    workspace_id: int | str,
-    user_id: int | str,
-    budget_account: BudgetAccount | None = None,
-) -> None:
+def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
     """
     Create demo fixtures for a new workspace.
 
     This creates:
-    - A budget period for the previous month
-    - Sample categories
-    - Sample budgets
-    - Sample transactions (various types)
+    - A savings account next to the default Main account
+    - Categories under the General budget
+    - Sample transactions and a transfer for the previous month
     - Sample planned transactions
-    - Sample currency exchanges
-    - Period balances
     """
-    _ensure_demo_currencies(workspace_id, user_id)
-
-    # Load workspace currencies into a symbol -> Currency map
-    currency_map = {c.symbol: c for c in Currency.objects.filter(workspace_id=workspace_id)}
-
-    # Get or create budget account
-    if budget_account is None:
-        pln_currency = currency_map.get('PLN')
-        budget_account = BudgetAccount.objects.create(
+    main_account = Account.objects.filter(workspace_id=workspace_id, name='Main').first()
+    if not main_account:
+        pln_catalog = CurrencyCatalogService.enable(None, workspace_id, 'PLN')
+        main_account = Account.objects.create(
             workspace_id=workspace_id,
-            name='Example Account',
-            description='Example budget account with demo data',
-            default_currency=pln_currency,
-            color='#10B981',
-            icon='📊',
-            is_active=True,
-            display_order=0,
+            name='Main',
+            type=AccountType.BANK,
+            currency=pln_catalog,
             created_by_id=user_id,
         )
 
-    # Create budget period for previous month
-    period_name = get_previous_month_name()
-    start_date, end_date = get_previous_month_date_range()
+    savings_account = Account.objects.filter(workspace_id=workspace_id, name='Savings').first()
+    if not savings_account:
+        savings_account = Account.objects.create(
+            workspace_id=workspace_id,
+            name='Savings',
+            type=AccountType.BANK,
+            currency=main_account.currency,
+            opening_balance=Decimal('1000.00'),
+            created_by_id=user_id,
+        )
 
-    # Calculate the number of weeks in the period
-    days = (end_date - start_date).days + 1
-    weeks = max(1, round(days / 7))
-
-    budget_period = BudgetPeriod.objects.create(
-        budget_account=budget_account,
-        workspace_id=workspace_id,
-        name=period_name,
-        start_date=start_date,
-        end_date=end_date,
-        weeks=weeks,
-        created_by_id=user_id,
-    )
-
-    # Create persistent categories under the workspace's General budget (new model).
-    # Legacy period-scoped allocations died with B4; planned amounts arrive via
-    # CategoryBudget when demo data is rewritten in B12.
     general_budget = Budget.objects.filter(workspace_id=workspace_id, name='General').first()
     if not general_budget:
         general_budget = Budget.objects.create(
@@ -147,53 +91,32 @@ def create_demo_fixtures(
             )
         categories.append(category)
 
-    # Map category names to objects for easy access
     category_map = {cat.name: cat for cat in categories}
 
-    # Create sample transactions
+    start_date, _end_date = get_previous_month_date_range()
     mid_month = start_date + timedelta(days=15)
     early_month = start_date + timedelta(days=5)
 
     transactions_data = [
         # Income
-        (start_date, 'Monthly Salary', 'Salary', Decimal('5000.00'), 'PLN', 'income'),
-        (mid_month, 'Freelance Project', 'Salary', Decimal('1500.00'), 'PLN', 'income'),
+        (start_date, 'Monthly Salary', 'Salary', Decimal('5000.00'), 'income'),
+        (mid_month, 'Freelance Project', 'Salary', Decimal('1500.00'), 'income'),
         # Expenses
-        (early_month, 'Weekly Groceries', 'Food & Groceries', Decimal('350.00'), 'PLN', 'expense'),
-        (mid_month, 'Restaurant Dinner', 'Food & Groceries', Decimal('180.00'), 'PLN', 'expense'),
-        (
-            start_date + timedelta(days=3),
-            'Public Transport Card',
-            'Transportation',
-            Decimal('120.00'),
-            'PLN',
-            'expense',
-        ),
-        (mid_month + timedelta(days=2), 'Gas Station', 'Transportation', Decimal('250.00'), 'PLN', 'expense'),
-        (start_date + timedelta(days=10), 'Movie Tickets', 'Entertainment', Decimal('80.00'), 'PLN', 'expense'),
-        (mid_month + timedelta(days=5), 'Streaming Subscription', 'Entertainment', Decimal('49.90'), 'PLN', 'expense'),
-        (start_date + timedelta(days=1), 'Electricity Bill', 'Bills & Utilities', Decimal('320.00'), 'PLN', 'expense'),
-        (start_date + timedelta(days=2), 'Internet Bill', 'Bills & Utilities', Decimal('89.90'), 'PLN', 'expense'),
-        (start_date + timedelta(days=7), 'Clothing Store', 'Shopping', Decimal('299.00'), 'PLN', 'expense'),
-        (mid_month + timedelta(days=3), 'Electronics', 'Shopping', Decimal('450.00'), 'PLN', 'expense'),
-        (start_date + timedelta(days=12), 'Gym Membership', 'Health & Fitness', Decimal('150.00'), 'PLN', 'expense'),
-        (mid_month + timedelta(days=7), 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'PLN', 'expense'),
+        (early_month, 'Weekly Groceries', 'Food & Groceries', Decimal('350.00'), 'expense'),
+        (mid_month, 'Restaurant Dinner', 'Food & Groceries', Decimal('180.00'), 'expense'),
+        (start_date + timedelta(days=3), 'Public Transport Card', 'Transportation', Decimal('120.00'), 'expense'),
+        (mid_month + timedelta(days=2), 'Gas Station', 'Transportation', Decimal('250.00'), 'expense'),
+        (start_date + timedelta(days=10), 'Movie Tickets', 'Entertainment', Decimal('80.00'), 'expense'),
+        (mid_month + timedelta(days=5), 'Streaming Subscription', 'Entertainment', Decimal('49.90'), 'expense'),
+        (start_date + timedelta(days=1), 'Electricity Bill', 'Bills & Utilities', Decimal('320.00'), 'expense'),
+        (start_date + timedelta(days=2), 'Internet Bill', 'Bills & Utilities', Decimal('89.90'), 'expense'),
+        (start_date + timedelta(days=7), 'Clothing Store', 'Shopping', Decimal('299.00'), 'expense'),
+        (mid_month + timedelta(days=3), 'Electronics', 'Shopping', Decimal('450.00'), 'expense'),
+        (start_date + timedelta(days=12), 'Gym Membership', 'Health & Fitness', Decimal('150.00'), 'expense'),
+        (mid_month + timedelta(days=7), 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'expense'),
     ]
 
-    # Transactions live on accounts since B5 — the demo uses the workspace's
-    # Main account (created by create_workspace; get_or_create for safety).
-    main_account = Account.objects.filter(workspace_id=workspace_id, name='Main').first()
-    if not main_account:
-        pln_catalog = CurrencyCatalogService.get_enabled(workspace_id, 'PLN')
-        main_account = Account.objects.create(
-            workspace_id=workspace_id,
-            name='Main',
-            type=AccountType.BANK,
-            currency=pln_catalog,
-            created_by_id=user_id,
-        )
-
-    for trans_date, description, cat_name, amount, _currency_symbol, trans_type in transactions_data:
+    for trans_date, description, cat_name, amount, trans_type in transactions_data:
         Transaction.objects.create(
             workspace_id=workspace_id,
             account=main_account,
@@ -205,30 +128,36 @@ def create_demo_fixtures(
             created_by_id=user_id,
         )
 
-    # Create planned transactions
+    # Materialize the previous-month period for the General budget so the
+    # budget view has something to show right away.
+    PeriodService.get_or_create_for_date(None, general_budget, start_date)
+
+    # A same-currency transfer into savings (replaces the old exchange demo)
+    Transfer.objects.create(
+        workspace_id=workspace_id,
+        from_account=main_account,
+        to_account=savings_account,
+        from_amount=Decimal('500.00'),
+        to_amount=Decimal('500.00'),
+        date=mid_month,
+        description='Monthly savings',
+        created_by_id=user_id,
+    )
+
     planned_data = [
-        (
-            'Rent Payment',
-            Decimal('2000.00'),
-            'PLN',
-            'Bills & Utilities',
-            start_date + timedelta(days=25),
-            None,
-            'pending',
-        ),
+        ('Rent Payment', Decimal('2000.00'), 'Bills & Utilities', start_date + timedelta(days=25), None, 'pending'),
         (
             'Phone Bill',
             Decimal('79.90'),
-            'PLN',
             'Bills & Utilities',
             start_date + timedelta(days=20),
             start_date + timedelta(days=20),
             'done',
         ),
-        ('Car Insurance', Decimal('450.00'), 'PLN', 'Transportation', start_date + timedelta(days=28), None, 'pending'),
+        ('Car Insurance', Decimal('450.00'), 'Transportation', start_date + timedelta(days=28), None, 'pending'),
     ]
 
-    for name, amount, _currency_symbol, cat_name, planned_date, payment_date, status in planned_data:
+    for name, amount, cat_name, planned_date, payment_date, status in planned_data:
         PlannedTransaction.objects.create(
             workspace_id=workspace_id,
             account=main_account,
@@ -238,88 +167,5 @@ def create_demo_fixtures(
             planned_date=planned_date,
             payment_date=payment_date,
             status=status,
-            created_by_id=user_id,
-        )
-
-    # Create currency exchanges
-    exchanges_data = [
-        (
-            start_date + timedelta(days=8),
-            'Exchange EUR to PLN',
-            'EUR',
-            Decimal('200.00'),
-            'PLN',
-            Decimal('860.00'),
-            Decimal('4.3000'),
-        ),
-        (
-            mid_month + timedelta(days=4),
-            'Exchange USD to PLN',
-            'USD',
-            Decimal('100.00'),
-            'PLN',
-            Decimal('395.00'),
-            Decimal('3.9500'),
-        ),
-    ]
-
-    for ex_date, description, from_curr, from_amt, to_curr, to_amt, rate in exchanges_data:
-        CurrencyExchange.objects.create(
-            workspace_id=workspace_id,
-            budget_period=budget_period,
-            date=ex_date,
-            description=description,
-            from_currency=currency_map[from_curr],
-            from_amount=from_amt,
-            to_currency=currency_map[to_curr],
-            to_amount=to_amt,
-            exchange_rate=rate,
-            created_by_id=user_id,
-        )
-
-    # Create period balances
-    pln_income = Decimal('6500.00')  # 5000 + 1500
-    pln_expenses = Decimal('2423.80')  # Sum of all PLN expenses
-    pln_exchanges_in = Decimal('1255.00')  # 860 + 395
-    pln_exchanges_out = Decimal('0.00')
-    pln_opening = Decimal('1000.00')
-    pln_closing = pln_opening + pln_income - pln_expenses + pln_exchanges_in - pln_exchanges_out
-
-    balances_data = [
-        ('PLN', pln_opening, pln_income, pln_expenses, pln_exchanges_in, pln_exchanges_out, pln_closing),
-        (
-            'EUR',
-            Decimal('500.00'),
-            Decimal('0.00'),
-            Decimal('0.00'),
-            Decimal('0.00'),
-            Decimal('200.00'),
-            Decimal('300.00'),
-        ),
-        (
-            'USD',
-            Decimal('250.00'),
-            Decimal('0.00'),
-            Decimal('0.00'),
-            Decimal('0.00'),
-            Decimal('100.00'),
-            Decimal('150.00'),
-        ),
-    ]
-
-    now = timezone.now()
-
-    for currency_symbol, opening, income, expenses, ex_in, ex_out, closing in balances_data:
-        PeriodBalance.objects.create(
-            workspace_id=workspace_id,
-            budget_period=budget_period,
-            currency=currency_map[currency_symbol],
-            opening_balance=opening,
-            total_income=income,
-            total_expenses=expenses,
-            exchanges_in=ex_in,
-            exchanges_out=ex_out,
-            closing_balance=closing,
-            last_calculated_at=now,
             created_by_id=user_id,
         )

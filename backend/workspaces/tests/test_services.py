@@ -1,28 +1,26 @@
-"""Tests for WorkspaceService and CurrencyService."""
+"""Tests for WorkspaceService and WorkspaceMemberService."""
+
+from datetime import date
 
 from django.test import TestCase
 
-from budget_accounts.models import BudgetAccount
-from budget_periods.factories import BudgetPeriodFactory
-from budgeting.factories import BudgetFactory as PlanBudgetFactory
-from budgeting.models import Budget as PlanBudget
-from budgeting.models import CategoryBudget
+from accounts.factories import AccountFactory
+from accounts.models import Account
+from budgeting.factories import BudgetFactory
+from budgeting.models import Budget, CategoryBudget
+from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
 from common.exceptions import ValidationError
 from common.tests.factories import UserFactory
 from currencies.services import CurrencyCatalogService
-from currency_exchanges.factories import CurrencyExchangeFactory
-from currency_exchanges.models import CurrencyExchange
-from period_balances.factories import PeriodBalanceFactory
-from period_balances.models import PeriodBalance
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
 from transactions.factories import TransactionFactory
 from transactions.models import Transaction
+from transfers.factories import TransferFactory
+from transfers.models import Transfer
 from workspaces.exceptions import (
-    CurrencyDuplicateSymbolError,
-    CurrencyNotFoundError,
     WorkspaceMemberAlreadyExistsError,
     WorkspaceMemberCannotChangeOwnRoleError,
     WorkspaceMemberCannotRemoveSelfError,
@@ -37,15 +35,14 @@ from workspaces.exceptions import (
     WorkspacePermissionDeniedError,
 )
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import Currency, Workspace, WorkspaceMember
-from workspaces.services import CurrencyService, WorkspaceMemberService, WorkspaceService
+from workspaces.models import Workspace, WorkspaceMember
+from workspaces.services import WorkspaceMemberService, WorkspaceService
 
 
 class TestWorkspaceServiceCreateWorkspace(TestCase):
     """Tests for WorkspaceService.create_workspace()."""
 
     def test_creates_workspace_with_owner_membership(self):
-        """Test that create_workspace creates workspace with owner membership."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
@@ -57,54 +54,39 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertIsNotNone(membership)
         self.assertEqual(membership.role, 'owner')
 
-    def test_creates_single_currency_and_enablement(self):
-        """create_workspace creates exactly one legacy currency row and one catalog enablement."""
+    def test_creates_single_enabled_currency(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
-
-        currencies = list(Currency.objects.filter(workspace=workspace))
-        self.assertEqual(len(currencies), 1)
-        self.assertEqual(currencies[0].symbol, 'PLN')
-        self.assertEqual(currencies[0].name, 'Polish Zloty')
 
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
         self.assertEqual([c.code for c in enabled], ['PLN'])
 
     def test_creates_workspace_with_explicit_currency(self):
-        """create_workspace honors a non-default currency_code."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(
             user=user, name='Euro Workspace', currency_code='EUR', create_demo=False
         )
 
-        currencies = list(Currency.objects.filter(workspace=workspace))
-        self.assertEqual(len(currencies), 1)
-        self.assertEqual(currencies[0].symbol, 'EUR')
-        self.assertEqual(currencies[0].name, 'Euro')
-
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
         self.assertEqual([c.code for c in enabled], ['EUR'])
 
-        account = BudgetAccount.objects.filter(workspace=workspace, name='General').first()
-        self.assertEqual(account.default_currency, currencies[0])
+        account = Account.objects.filter(workspace=workspace, name='Main').first()
+        self.assertEqual(account.currency.code, 'EUR')
 
-    def test_creates_general_budget_account_with_all_fields(self):
-        """Test that create_workspace creates General BudgetAccount with all required fields."""
+    def test_creates_main_account_and_general_budget(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
-        account = BudgetAccount.objects.filter(workspace=workspace, name='General').first()
+        account = Account.objects.filter(workspace=workspace, name='Main').first()
         self.assertIsNotNone(account)
-        self.assertEqual(account.description, 'General budget account')
-        self.assertEqual(account.display_order, 0)
+        self.assertEqual(account.currency.code, 'PLN')
         self.assertEqual(account.created_by, user)
-        self.assertTrue(account.is_active)
+        self.assertFalse(account.is_archived)
 
-        pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        self.assertEqual(account.default_currency, pln)
+        budget = Budget.objects.filter(workspace=workspace, name='General').first()
+        self.assertIsNotNone(budget)
 
     def test_sets_user_current_workspace(self):
-        """Test that create_workspace sets user.current_workspace to the new workspace."""
         user = UserFactory(current_workspace=None)
         self.assertIsNone(user.current_workspace)
 
@@ -114,103 +96,57 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertEqual(user.current_workspace, workspace)
 
     def test_with_create_demo_false_skips_demo_fixtures(self):
-        """Test that create_demo=False skips demo fixtures but still creates the currency and account."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
-        currencies_count = Currency.objects.filter(workspace=workspace).count()
-        self.assertEqual(currencies_count, 1)
-
-        account_count = BudgetAccount.objects.filter(workspace=workspace).count()
-        self.assertEqual(account_count, 1)
+        self.assertEqual(Account.objects.filter(workspace=workspace).count(), 1)
+        self.assertFalse(Transaction.objects.for_workspace(workspace.id).exists())
 
     def test_create_workspace_with_demo_fixtures(self):
-        """Test that create_demo=True creates demo transactions, categories, etc."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Demo WS', create_demo=True)
 
         self.assertTrue(Transaction.objects.for_workspace(workspace.id).exists())
         self.assertTrue(Category.objects.for_workspace(workspace.id).filter(budget__name='General').exists())
-        self.assertTrue(PlanBudget.objects.for_workspace(workspace.id).filter(name='General').exists())
         self.assertTrue(PlannedTransaction.objects.for_workspace(workspace.id).exists())
-        self.assertTrue(CurrencyExchange.objects.for_workspace(workspace.id).exists())
+        self.assertTrue(Transfer.objects.for_workspace(workspace.id).exists())
 
 
 class TestWorkspaceServiceDeleteWorkspace(TestCase):
     """Tests for WorkspaceService.delete_workspace()."""
 
     def test_deletes_workspace_and_all_data(self):
-        """Test that delete_workspace cascades all data including transactions."""
-        from datetime import date
-
         user = UserFactory()
         WorkspaceService.create_workspace(user=user, name='Fallback', create_demo=False)
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
-        account = BudgetAccount.objects.filter(workspace=workspace).first()
-        pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriodFactory(
-            budget_account=account,
-            workspace=workspace,
-            name='Jan',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=user,
-        )
-
-        from accounts.factories import AccountFactory
-
-        account = AccountFactory(workspace=workspace)
+        account = Account.objects.filter(workspace=workspace, name='Main').first()
+        second = AccountFactory(workspace=workspace, name='Savings', currency=account.currency)
         transaction = TransactionFactory(
-            account=account,
-            workspace=workspace,
-            date=date(2025, 1, 15),
-            description='Test Transaction',
-            amount=100,
-            type='expense',
-            created_by=user,
-            updated_by=user,
+            account=account, workspace=workspace, amount=100, type='expense', created_by=user, updated_by=user
         )
         planned = PlannedTransactionFactory(
-            account=account,
-            workspace=workspace,
-            name='Test Planned',
-            amount=50,
-            planned_date=date(2025, 1, 15),
-            status='pending',
-            created_by=user,
-            updated_by=user,
+            account=account, workspace=workspace, amount=50, status='pending', created_by=user, updated_by=user
         )
-        exchange = CurrencyExchangeFactory(
-            budget_period=period,
-            workspace=workspace,
-            date=date(2025, 1, 10),
-            description='Test Exchange',
-            from_currency=pln,
-            from_amount=100,
-            to_currency=pln,
-            to_amount=25,
-            created_by=user,
-            updated_by=user,
+        transfer = TransferFactory(
+            from_account=account, to_account=second, workspace=workspace, created_by=user, updated_by=user
         )
 
         workspace_id = workspace.id
         transaction_id = transaction.id
         planned_id = planned.id
-        exchange_id = exchange.id
+        transfer_id = transfer.id
 
         WorkspaceService.delete_workspace(user=user, workspace_id=workspace.id)
 
         self.assertFalse(Workspace.objects.filter(id=workspace_id).exists())
         self.assertFalse(WorkspaceMember.objects.filter(workspace_id=workspace_id).exists())
-        self.assertFalse(Currency.objects.filter(workspace_id=workspace_id).exists())
-        self.assertFalse(BudgetAccount.objects.filter(workspace_id=workspace_id).exists())
+        self.assertFalse(Account.objects.filter(workspace_id=workspace_id).exists())
         self.assertFalse(Transaction.objects.filter(id=transaction_id).exists())
         self.assertFalse(PlannedTransaction.objects.filter(id=planned_id).exists())
-        self.assertFalse(CurrencyExchange.objects.filter(id=exchange_id).exists())
+        self.assertFalse(Transfer.objects.filter(id=transfer_id).exists())
 
     def test_switches_user_to_next_workspace(self):
-        """Test that delete_workspace switches requesting user to next workspace."""
         user = UserFactory()
         ws1 = WorkspaceService.create_workspace(user=user, name='Workspace 1', create_demo=False)
         ws2 = WorkspaceService.create_workspace(user=user, name='Workspace 2', create_demo=False)
@@ -224,7 +160,6 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         self.assertEqual(user.current_workspace, ws1)
 
     def test_delete_workspace_succeeds_when_owner_has_no_other_workspace(self):
-        """Test that delete_workspace succeeds and sets owner's current_workspace to None."""
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
@@ -235,7 +170,6 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         self.assertFalse(Workspace.objects.filter(id=workspace.id).exists())
 
     def test_delete_workspace_succeeds_when_member_has_only_this_workspace(self):
-        """Deletion succeeds; sole-workspace member ends up with current_workspace=None."""
         owner = UserFactory()
         member = UserFactory()
         ws = WorkspaceService.create_workspace(user=owner, name='WS', create_demo=False)
@@ -250,7 +184,6 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         self.assertFalse(Workspace.objects.filter(id=ws.id).exists())
 
     def test_switches_all_affected_users(self):
-        """Test that delete_workspace switches ALL users who had this as current workspace."""
         owner = UserFactory()
         member = UserFactory()
 
@@ -273,108 +206,36 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
         self.assertEqual(owner.current_workspace, fallback)
         self.assertEqual(member.current_workspace, fallback)
 
-    def test_deletes_currency_exchange_with_null_budget_period(self):
-        """Orphaned CurrencyExchange rows (budget_period=NULL) are deleted."""
-        from datetime import date
-
+    def test_delete_workspace_cascades_budget_data(self):
         user = UserFactory()
         WorkspaceService.create_workspace(user=user, name='Fallback', create_demo=False)
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
-        account = BudgetAccount.objects.filter(workspace=workspace).first()
-        pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriodFactory(
-            budget_account=account,
-            workspace=workspace,
-            name='Jan',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=user,
-        )
-
-        exchange = CurrencyExchangeFactory(
-            budget_period=period,
-            workspace=workspace,
-            date=date(2025, 1, 10),
-            description='Test Exchange',
-            from_currency=pln,
-            from_amount=100,
-            to_currency=pln,
-            to_amount=25,
-            created_by=user,
-            updated_by=user,
-        )
-        exchange_id = exchange.id
-
-        exchange.budget_period = None
-        exchange.save()
-
-        WorkspaceService.delete_workspace(user=user, workspace_id=workspace.id)
-
-        self.assertFalse(CurrencyExchange.objects.filter(id=exchange_id).exists())
-
-    def test_delete_workspace_cascades_category_budget_periodbalance(self):
-        """Test that delete_workspace cascades to Category, Budget, and PeriodBalance."""
-        from datetime import date
-
-        user = UserFactory()
-        WorkspaceService.create_workspace(user=user, name='Fallback', create_demo=False)
-        workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
-
-        account = BudgetAccount.objects.filter(workspace=workspace).first()
-        pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-        period = BudgetPeriodFactory(
-            budget_account=account,
-            workspace=workspace,
-            name='Jan',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=user,
-        )
-        plan_budget = PlanBudgetFactory(workspace=workspace)
-        category = CategoryFactory(
-            budget=plan_budget,
-            workspace=workspace,
-            name='Groceries',
-            created_by=user,
-        )
-        from budgeting.services import PeriodService
-
+        CurrencyCatalogService.enable(user, workspace.id, 'PLN')
+        plan_budget = BudgetFactory(workspace=workspace)
+        category = CategoryFactory(budget=plan_budget, workspace=workspace, name='Groceries', created_by=user)
         plan_period = PeriodService.get_or_create_for_date(user, plan_budget, date(2025, 1, 15))
+        currency = CurrencyCatalogService.get_enabled(workspace.id, 'PLN')
         category_budget = CategoryBudget.objects.create(
             period=plan_period,
             workspace_id=workspace.id,
             category=category,
-            currency_id=plan_budget.workspace.enabled_currencies.first().currency_id,
+            currency=currency,
             amount=100,
             created_by=user,
-        )
-        period_balance = PeriodBalanceFactory(
-            budget_period=period,
-            workspace=workspace,
-            currency=pln,
-            opening_balance=0,
-            total_income=0,
-            total_expenses=0,
-            exchanges_in=0,
-            exchanges_out=0,
-            closing_balance=0,
         )
 
         category_id = category.id
         plan_budget_id = plan_budget.id
         category_budget_id = category_budget.id
-        period_balance_id = period_balance.id
 
         WorkspaceService.delete_workspace(user=user, workspace_id=workspace.id)
 
         self.assertFalse(Category.objects.filter(id=category_id).exists())
-        self.assertFalse(PlanBudget.objects.filter(id=plan_budget_id).exists())
+        self.assertFalse(Budget.objects.filter(id=plan_budget_id).exists())
         self.assertFalse(CategoryBudget.objects.filter(id=category_budget_id).exists())
-        self.assertFalse(PeriodBalance.objects.filter(id=period_balance_id).exists())
 
     def test_delete_workspace_rejects_non_owner(self):
-        """Non-owner member cannot delete workspace."""
         owner = UserFactory()
         member = UserFactory()
         workspace = WorkspaceService.create_workspace(user=owner, name='Test', create_demo=False)
@@ -384,83 +245,12 @@ class TestWorkspaceServiceDeleteWorkspace(TestCase):
             WorkspaceService.delete_workspace(user=member, workspace_id=workspace.id)
 
     def test_delete_workspace_rejects_non_member(self):
-        """Non-member cannot delete workspace."""
         owner = UserFactory()
         outsider = UserFactory()
         workspace = WorkspaceService.create_workspace(user=owner, name='Test', create_demo=False)
 
         with self.assertRaises(WorkspacePermissionDeniedError):
             WorkspaceService.delete_workspace(user=outsider, workspace_id=workspace.id)
-
-
-class TestCurrencyService(TestCase):
-    """Tests for CurrencyService."""
-
-    def test_list_currencies(self):
-        """Test listing currencies for a workspace."""
-        workspace = WorkspaceFactory()
-        currencies = CurrencyService.list_currencies(workspace.id)
-        self.assertEqual(len(currencies), 4)
-
-    def test_get_currency(self):
-        """Test getting a currency by ID within a workspace."""
-        workspace = WorkspaceFactory()
-        pln = Currency.objects.get(workspace=workspace, symbol='PLN')
-
-        result = CurrencyService.get_currency(pln.id, workspace.id)
-        self.assertEqual(result, pln)
-
-    def test_get_currency_wrong_workspace(self):
-        """Test that get_currency returns None for wrong workspace."""
-        workspace1 = WorkspaceFactory()
-        workspace2 = WorkspaceFactory()
-
-        pln = Currency.objects.get(workspace=workspace1, symbol='PLN')
-        result = CurrencyService.get_currency(pln.id, workspace2.id)
-        self.assertIsNone(result)
-
-    def test_create_currency(self):
-        """Test creating a new currency."""
-        workspace = WorkspaceFactory()
-
-        class Data:
-            symbol = 'GBP'
-            name = 'British Pound'
-
-        currency = CurrencyService.create_currency(workspace.id, Data())
-        self.assertEqual(currency.symbol, 'GBP')
-        self.assertEqual(currency.name, 'British Pound')
-        self.assertEqual(currency.workspace_id, workspace.id)
-
-    def test_create_duplicate_currency_fails(self):
-        """Test that creating duplicate currency symbol raises CurrencyDuplicateSymbolError."""
-        workspace = WorkspaceFactory()
-
-        class Data:
-            symbol = 'PLN'
-            name = 'Polish Zloty'
-
-        with self.assertRaises(CurrencyDuplicateSymbolError):
-            CurrencyService.create_currency(workspace.id, Data())
-
-    def test_delete_currency(self):
-        """Test deleting a currency."""
-        workspace = WorkspaceFactory()
-        usd = Currency.objects.get(workspace=workspace, symbol='USD')
-
-        CurrencyService.delete_currency(usd.id, workspace.id)
-
-        self.assertFalse(Currency.objects.filter(id=usd.id).exists())
-
-    def test_delete_currency_wrong_workspace(self):
-        """Test that deleting currency from wrong workspace raises CurrencyNotFoundError."""
-        workspace1 = WorkspaceFactory()
-        workspace2 = WorkspaceFactory()
-
-        usd = Currency.objects.get(workspace=workspace1, symbol='USD')
-
-        with self.assertRaises(CurrencyNotFoundError):
-            CurrencyService.delete_currency(usd.id, workspace2.id)
 
 
 class TestWorkspaceMemberService(TestCase):

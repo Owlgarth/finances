@@ -12,8 +12,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from budget_accounts.models import BudgetAccount
-from budget_periods.models import BudgetPeriod
+from accounts.models import Account
 from common.email import EmailService
 from common.exceptions import ValidationError
 from common.services.base import delete_workspace_financial_records
@@ -25,11 +24,9 @@ from common.tokens import (
 )
 from core.legal import get_privacy, get_terms
 from core.schemas import UserPreferencesUpdate, UserUpdate
-from currency_exchanges.models import CurrencyExchange
-from exchange_shortcuts.models import ExchangeShortcut
-from period_balances.models import PeriodBalance
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
+from transfers.models import Transfer
 from users.exceptions import (
     UserAlreadyVerifiedError,
     UserConsentNotFoundError,
@@ -42,7 +39,7 @@ from users.exceptions import (
     UserSameEmailError,
 )
 from users.models import ConsentType, FontChoices, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
-from workspaces.models import Currency, Role, Workspace, WorkspaceMember
+from workspaces.models import Role, Workspace, WorkspaceMember
 
 
 class UserService:
@@ -356,7 +353,6 @@ class UserService:
         - shared_workspace_memberships: count of memberships in non-owned workspaces
         - total_transactions: count of transactions created by this user
         - total_planned_transactions: count of planned transactions created by this user
-        - total_currency_exchanges: count of currency exchanges created by this user
         """
         owned_workspaces = Workspace.objects.filter(owner=user)
         blocking = []
@@ -378,7 +374,6 @@ class UserService:
             'shared_workspace_memberships': shared_memberships,
             'total_transactions': Transaction.objects.filter(created_by=user).count(),
             'total_planned_transactions': PlannedTransaction.objects.filter(created_by=user).count(),
-            'total_currency_exchanges': CurrencyExchange.objects.filter(created_by=user).count(),
         }
 
     @staticmethod
@@ -430,11 +425,7 @@ class UserService:
             for ws in owned_workspaces:
                 delete_workspace_financial_records(ws.id)
 
-            # Delete BudgetAccounts (CASCADEs: BudgetPeriod, Category, Budget, PeriodBalance)
-            # BudgetAccount.default_currency has PROTECT, but currencies are deleted with workspace.
-            BudgetAccount.objects.filter(workspace__in=owned_workspaces).delete()
-
-            # Now delete workspaces (CASCADE deletes currencies, members, etc.)
+            # Now delete workspaces (CASCADE deletes enablements, members, etc.)
             owned_workspaces.delete()
 
             # Remove memberships from non-owned workspaces (if any remain)
@@ -533,21 +524,19 @@ class UserService:
                 'workspace_name': ws.name,
                 'role': membership.role,
                 'joined_at': membership.created_at.isoformat(),
-                'budget_accounts': [],
-                'currencies': list(Currency.objects.filter(workspace_id=ws.id).values('id', 'symbol', 'name')),
-                'exchange_shortcuts': [
+                # TODO(B10): full v3 export (budgets/periods/categories/
+                # category-budgets). Legacy per-workspace currency, budget
+                # account, exchange, and period-balance sections died with B8.
+                'accounts': [
                     {
-                        'id': s['id'],
-                        'from_currency': s['from_currency'],
-                        'to_currency': s['to_currency'],
-                        'created_at': s['created_at'].isoformat() if s['created_at'] else None,
+                        'name': a.name,
+                        'type': a.type,
+                        'currency_code': a.currency.code,
+                        'opening_balance': a.opening_balance,
+                        'is_archived': a.is_archived,
                     }
-                    for s in ExchangeShortcut.objects.for_workspace(ws.id).values(
-                        'id', 'from_currency', 'to_currency', 'created_at'
-                    )
+                    for a in Account.objects.for_workspace(ws.id).select_related('currency')
                 ],
-                # Transactions and planned transactions live on accounts since
-                # B5/B7 — exported per workspace. TODO(B10): full v3 export.
                 'transactions': [
                     {
                         'date': t.date.isoformat(),
@@ -562,6 +551,21 @@ class UserService:
                     }
                     for t in Transaction.objects.for_workspace(ws.id).select_related(
                         'account__currency', 'category', 'original_currency'
+                    )
+                ],
+                'transfers': [
+                    {
+                        'date': tr.date.isoformat(),
+                        'description': tr.description,
+                        'from_account_name': tr.from_account.name,
+                        'from_currency_code': tr.from_account.currency.code,
+                        'from_amount': tr.from_amount,
+                        'to_account_name': tr.to_account.name,
+                        'to_currency_code': tr.to_account.currency.code,
+                        'to_amount': tr.to_amount,
+                    }
+                    for tr in Transfer.objects.for_workspace(ws.id).select_related(
+                        'from_account__currency', 'to_account__currency'
                     )
                 ],
                 'planned_transactions': [
@@ -580,78 +584,6 @@ class UserService:
                     )
                 ],
             }
-
-            accounts = BudgetAccount.objects.filter(workspace=ws).select_related('default_currency')
-            for account in accounts:
-                account_entry = {
-                    'budget_account_id': account.id,
-                    'name': account.name,
-                    'description': account.description,
-                    'default_currency': account.default_currency.symbol if account.default_currency else None,
-                    'is_active': account.is_active,
-                    'periods': [],
-                }
-
-                periods = BudgetPeriod.objects.filter(budget_account=account)
-                for period in periods:
-                    period_entry = {
-                        'budget_period_id': period.id,
-                        'name': period.name,
-                        'start_date': period.start_date.isoformat(),
-                        'end_date': period.end_date.isoformat(),
-                        # TODO(B10): v3 export rebuilds plan data on budgeting models
-                        # (the period-scoped categories/budgets/transactions/
-                        # planned sections died with B4/B5/B7).
-                        'currency_exchanges': [
-                            {
-                                'date': ce['date'].isoformat() if ce['date'] else None,
-                                'description': ce['description'],
-                                'from_amount': ce['from_amount'],
-                                'to_amount': ce['to_amount'],
-                                'exchange_rate': ce['exchange_rate'],
-                                'from_currency_symbol': ce['from_currency__symbol'],
-                                'to_currency_symbol': ce['to_currency__symbol'],
-                            }
-                            for ce in CurrencyExchange.objects.filter(budget_period=period)
-                            .select_related('from_currency', 'to_currency')
-                            .values(
-                                'date',
-                                'description',
-                                'from_amount',
-                                'to_amount',
-                                'exchange_rate',
-                                'from_currency__symbol',
-                                'to_currency__symbol',
-                            )
-                        ],
-                        'period_balances': [
-                            {
-                                'currency_symbol': pb['currency__symbol'],
-                                'opening_balance': pb['opening_balance'],
-                                'total_income': pb['total_income'],
-                                'total_expenses': pb['total_expenses'],
-                                'exchanges_in': pb['exchanges_in'],
-                                'exchanges_out': pb['exchanges_out'],
-                                'closing_balance': pb['closing_balance'],
-                                'note': pb['note'],
-                            }
-                            for pb in PeriodBalance.objects.filter(budget_period=period)
-                            .select_related('currency')
-                            .values(
-                                'currency__symbol',
-                                'opening_balance',
-                                'total_income',
-                                'total_expenses',
-                                'exchanges_in',
-                                'exchanges_out',
-                                'closing_balance',
-                                'note',
-                            )
-                        ],
-                    }
-                    account_entry['periods'].append(period_entry)
-
-                ws_entry['budget_accounts'].append(account_entry)
 
             workspace_data.append(ws_entry)
 
@@ -710,25 +642,14 @@ class UserService:
     @staticmethod
     def normalize_export_v1_to_v2(export_data: dict) -> dict:
         """Transform a v1.0 export dict into v2.0 format."""
-        budget_tx_keys = {
+        record_keys = {
             'category__name': 'category_name',
-            'currency__symbol': 'currency_symbol',
-        }
-        planned_tx_keys = {
-            'currency__symbol': 'currency_symbol',
-        }
-        exchange_keys = {
-            'from_currency__symbol': 'from_currency_symbol',
-            'to_currency__symbol': 'to_currency_symbol',
-        }
-        balance_keys = {
             'currency__symbol': 'currency_symbol',
         }
 
         for ws_data in export_data.get('workspaces', []):
             if 'currencies' not in ws_data:
                 ws_data['currencies'] = UserService._discover_currencies(ws_data)
-            ws_data.setdefault('exchange_shortcuts', [])
             ws_data.setdefault('workspace_id', None)
 
             for acc_data in ws_data.get('budget_accounts', []):
@@ -737,27 +658,12 @@ class UserService:
                 for period_data in acc_data.get('periods', []):
                     period_data.setdefault('budget_period_id', None)
 
-                    for cat in period_data.get('categories', []):
-                        cat.setdefault('id', None)
-
-                    period_data['budgets'] = [
-                        UserService._rename_keys(b, budget_tx_keys) for b in period_data.get('budgets', [])
-                    ]
                     period_data['transactions'] = [
-                        UserService._rename_keys(tx, budget_tx_keys) for tx in period_data.get('transactions', [])
+                        UserService._rename_keys(tx, record_keys) for tx in period_data.get('transactions', [])
                     ]
                     period_data['planned_transactions'] = [
-                        UserService._rename_keys(pt, planned_tx_keys)
-                        for pt in period_data.get('planned_transactions', [])
+                        UserService._rename_keys(pt, record_keys) for pt in period_data.get('planned_transactions', [])
                     ]
-                    period_data['currency_exchanges'] = [
-                        UserService._rename_keys(ce, exchange_keys) for ce in period_data.get('currency_exchanges', [])
-                    ]
-                    period_data['period_balances'] = [
-                        UserService._rename_keys(pb, balance_keys) for pb in period_data.get('period_balances', [])
-                    ]
-                    for pb in period_data['period_balances']:
-                        pb.setdefault('note', '')
 
         export_data.setdefault('two_factor', {'is_enabled': False, 'last_used_at': None, 'created_at': None})
         profile = export_data.setdefault('profile', {})
@@ -769,18 +675,14 @@ class UserService:
         return export_data
 
     @staticmethod
-    def _get_or_create_import_account(user, workspace, code: str, cache: dict):
-        """Resolve the 'Main <CODE>' account imported transactions land in.
+    def _resolve_import_currency(workspace, code: str):
+        """Resolve/enable a catalog currency for an imported workspace.
 
-        Resolves the catalog currency (global first, then workspace custom,
-        creating a custom row as a fallback) and enables it for the workspace.
+        Global rows are preferred; a workspace-custom row is created as a
+        fallback for unknown codes. The currency is enabled for the workspace.
         """
-        from accounts.models import Account, AccountType
         from currencies.models import Currency as CatalogCurrency
         from currencies.models import WorkspaceCurrency
-
-        if code in cache:
-            return cache[code]
 
         currency = (
             CatalogCurrency.objects.filter(workspace__isnull=True, code=code).first()
@@ -791,7 +693,22 @@ class UserService:
                 code=code, name=code, symbol=code, is_custom=True, workspace=workspace
             )
         WorkspaceCurrency.objects.get_or_create(workspace=workspace, currency=currency)
+        return currency
 
+    @staticmethod
+    def _get_or_create_import_account(user, workspace, code: str, cache: dict):
+        """Resolve the 'Main <CODE>' account transactions/planned rows land in.
+
+        Used when an imported record references a currency but no named account
+        (older per-period exports). Resolves the catalog currency, enables it,
+        and get-or-creates a per-currency account.
+        """
+        from accounts.models import Account, AccountType
+
+        if code in cache:
+            return cache[code]
+
+        currency = UserService._resolve_import_currency(workspace, code)
         account, _ = Account.objects.get_or_create(
             workspace=workspace,
             name=f'Main {code}',
@@ -808,19 +725,18 @@ class UserService:
     @staticmethod
     @db_transaction.atomic
     def import_all_data(user, data) -> dict:
+        """Import personal data from a GDPR export (v1.x/v2.x normalized).
+
+        Rebuilds accounts, transactions, transfers, and planned transactions on
+        the account-based model. Legacy period-scoped plan data (categories,
+        budgets, exchanges, balances) is not restored — B10 introduces the v3
+        format that carries the full budgeting hierarchy.
         """
-        Import all personal data from a GDPR export.
+        from accounts.models import Account, AccountType
+        from planned_transactions.models import PlannedTransaction
+        from transactions.models import Transaction
+        from transfers.models import Transfer
 
-        Args:
-            user: The user importing data
-            data: FullImportIn schema with export data and options
-
-        Returns:
-            ImportResultOut with statistics and any skipped/renamed items
-
-        Raises:
-            ValidationError: If export version is incompatible
-        """
         export_data = data.data
         workspace_filter = data.workspaces
         conflict_strategy = data.conflict_strategy
@@ -834,25 +750,19 @@ class UserService:
             )
 
         imported_workspaces = 0
-        imported_budget_accounts = 0
-        imported_budget_periods = 0
-        imported_categories = 0
+        imported_accounts = 0
         imported_transactions = 0
-        imported_budgets = 0
+        imported_transfers = 0
         imported_planned_transactions = 0
-        imported_currency_exchanges = 0
-        skipped: dict[str, list[str]] = {'workspaces': [], 'currencies': [], 'errors': []}
+        skipped: dict[str, list[str]] = {'workspaces': [], 'errors': []}
         renamed: dict[str, str] = {}
 
-        workspaces_data = export_data.get('workspaces', [])
-
-        for ws_data in workspaces_data:
+        for ws_data in export_data.get('workspaces', []):
             original_name = ws_data.get('workspace_name')
             if workspace_filter and original_name not in workspace_filter:
                 continue
 
             existing = Workspace.objects.filter(name=original_name).first()
-
             if existing:
                 if conflict_strategy == 'skip':
                     skipped['workspaces'].append(original_name)
@@ -861,31 +771,35 @@ class UserService:
                     new_name = f'{original_name} (imported {datetime.now().strftime("%Y-%m-%d %H:%M")})'
                     renamed[original_name] = new_name
                     original_name = new_name
-                elif conflict_strategy == 'merge':
-                    pass
 
             workspace = Workspace.objects.create(name=original_name, owner=user)
             WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
             imported_workspaces += 1
 
-            currency_map: dict[str, Currency] = {}
-            for curr_data in ws_data.get('currencies', []):
-                symbol = curr_data.get('symbol')
-                if Currency.objects.filter(workspace=workspace, symbol=symbol).exists():
-                    skipped['currencies'].append(f'{original_name}/{symbol}')
-                    currency_map[symbol] = Currency.objects.get(workspace=workspace, symbol=symbol)
-                else:
-                    currency_map[symbol] = Currency.objects.create(
-                        workspace=workspace,
-                        name=curr_data.get('name', symbol),
-                        symbol=symbol,
-                        created_by=user,
-                        updated_by=user,
-                    )
+            account_cache: dict[str, object] = {}
 
-            # Transactions live on accounts since B5: land workspace-level rows
-            # in per-currency 'Main <CODE>' accounts. Older exports carry them
-            # per period — hoist those first. TODO(B10): full v3 import.
+            # Explicit accounts (v2-new format). Named accounts are cached so
+            # transactions/transfers/planned can be matched back to them.
+            for acc_data in ws_data.get('accounts', []):
+                code = acc_data.get('currency_code')
+                if not code:
+                    continue
+                currency = UserService._resolve_import_currency(workspace, code)
+                account = Account.objects.create(
+                    workspace=workspace,
+                    name=acc_data.get('name'),
+                    type=acc_data.get('type', AccountType.BANK),
+                    currency=currency,
+                    opening_balance=acc_data.get('opening_balance', 0),
+                    is_archived=acc_data.get('is_archived', False),
+                    created_by=user,
+                    updated_by=user,
+                )
+                account_cache[account.name] = account
+                imported_accounts += 1
+
+            # Older per-period exports carry transactions/planned inside budget
+            # accounts → periods. Hoist them to workspace level.
             if 'transactions' not in ws_data:
                 ws_data['transactions'] = [
                     tx
@@ -900,15 +814,14 @@ class UserService:
                     for period in acc.get('periods', [])
                     for pt in period.get('planned_transactions', [])
                 ]
-            import_account_cache: dict[str, object] = {}
+
             for tx_data in ws_data.get('transactions', []):
-                code = tx_data.get('currency_code') or tx_data.get('currency_symbol')
-                if not code:
+                account = UserService._resolve_import_named_account(user, workspace, tx_data, account_cache)
+                if not account:
                     continue
-                tx_account = UserService._get_or_create_import_account(user, workspace, code, import_account_cache)
                 Transaction.objects.create(
                     workspace=workspace,
-                    account=tx_account,
+                    account=account,
                     date=datetime.strptime(tx_data.get('date'), '%Y-%m-%d').date(),
                     description=tx_data.get('description'),
                     amount=tx_data.get('amount'),
@@ -919,16 +832,34 @@ class UserService:
                 )
                 imported_transactions += 1
 
-            for pt_data in ws_data.get('planned_transactions', []):
-                code = pt_data.get('currency_code') or pt_data.get('currency_symbol')
-                if not code:
+            for tr_data in ws_data.get('transfers', []):
+                from_account = account_cache.get(tr_data.get('from_account_name'))
+                to_account = account_cache.get(tr_data.get('to_account_name'))
+                if not from_account or not to_account or from_account.id == to_account.id:
+                    skipped['errors'].append(f'{original_name}: transfer references an unknown account')
                     continue
-                pt_account = UserService._get_or_create_import_account(user, workspace, code, import_account_cache)
+                Transfer.objects.create(
+                    workspace=workspace,
+                    from_account=from_account,
+                    to_account=to_account,
+                    from_amount=tr_data.get('from_amount'),
+                    to_amount=tr_data.get('to_amount'),
+                    date=datetime.strptime(tr_data.get('date'), '%Y-%m-%d').date(),
+                    description=tr_data.get('description', ''),
+                    created_by=user,
+                    updated_by=user,
+                )
+                imported_transfers += 1
+
+            for pt_data in ws_data.get('planned_transactions', []):
+                account = UserService._resolve_import_named_account(user, workspace, pt_data, account_cache)
+                if not account:
+                    continue
                 planned_date_str = pt_data.get('planned_date')
                 payment_date_str = pt_data.get('payment_date')
                 PlannedTransaction.objects.create(
                     workspace=workspace,
-                    account=pt_account,
+                    account=account,
                     name=pt_data.get('name'),
                     amount=pt_data.get('amount'),
                     planned_date=datetime.strptime(planned_date_str, '%Y-%m-%d').date() if planned_date_str else None,
@@ -939,95 +870,31 @@ class UserService:
                 )
                 imported_planned_transactions += 1
 
-            for acc_data in ws_data.get('budget_accounts', []):
-                default_currency_symbol = acc_data.get('default_currency')
-                default_currency = currency_map.get(default_currency_symbol)
-                if not default_currency:
-                    skipped['errors'].append(
-                        f'Account {acc_data.get("name")}: currency {default_currency_symbol} not found'
-                    )
-                    continue
-
-                account = BudgetAccount.objects.create(
-                    workspace=workspace,
-                    name=acc_data.get('name'),
-                    description=acc_data.get('description'),
-                    default_currency=default_currency,
-                    is_active=acc_data.get('is_active', True),
-                    created_by=user,
-                    updated_by=user,
-                )
-                imported_budget_accounts += 1
-
-                for period_data in acc_data.get('periods', []):
-                    period = BudgetPeriod.objects.create(
-                        workspace=workspace,
-                        budget_account=account,
-                        name=period_data.get('name'),
-                        start_date=datetime.strptime(period_data.get('start_date'), '%Y-%m-%d').date(),
-                        end_date=datetime.strptime(period_data.get('end_date'), '%Y-%m-%d').date(),
-                        created_by=user,
-                        updated_by=user,
-                    )
-                    imported_budget_periods += 1
-
-                    # TODO(B10): v3 import rebuilds plan data on budgeting models.
-                    # Categories/budgets sections are ignored since B4; per-period
-                    # transactions/planned moved to the workspace level in B5/B7.
-                    for ce_data in period_data.get('currency_exchanges', []):
-                        from_currency_symbol = ce_data.get('from_currency_symbol')
-                        to_currency_symbol = ce_data.get('to_currency_symbol')
-                        from_currency = currency_map.get(from_currency_symbol)
-                        to_currency = currency_map.get(to_currency_symbol)
-                        if from_currency and to_currency:
-                            date_str = ce_data.get('date')
-                            CurrencyExchange.objects.create(
-                                workspace=workspace,
-                                budget_period=period,
-                                date=datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else None,
-                                description=ce_data.get('description'),
-                                from_currency=from_currency,
-                                from_amount=ce_data.get('from_amount'),
-                                to_currency=to_currency,
-                                to_amount=ce_data.get('to_amount'),
-                                exchange_rate=ce_data.get('exchange_rate'),
-                                created_by=user,
-                                updated_by=user,
-                            )
-                            imported_currency_exchanges += 1
-
-                    for pb_data in period_data.get('period_balances', []):
-                        currency_symbol = pb_data.get('currency_symbol')
-                        currency = currency_map.get(currency_symbol)
-                        if currency:
-                            PeriodBalance.objects.create(
-                                workspace=workspace,
-                                budget_period=period,
-                                currency=currency,
-                                opening_balance=pb_data.get('opening_balance', 0),
-                                total_income=pb_data.get('total_income', 0),
-                                total_expenses=pb_data.get('total_expenses', 0),
-                                exchanges_in=pb_data.get('exchanges_in', 0),
-                                exchanges_out=pb_data.get('exchanges_out', 0),
-                                closing_balance=pb_data.get('closing_balance', 0),
-                                note=pb_data.get('note', ''),
-                                created_by=user,
-                                updated_by=user,
-                            )
-
         if imported_workspaces > 0:
             user.current_workspace = Workspace.objects.filter(owner=user).order_by('-id').first()
             user.save(update_fields=['current_workspace'])
 
         return {
             'imported_workspaces': imported_workspaces,
-            'imported_budget_accounts': imported_budget_accounts,
-            'imported_budget_periods': imported_budget_periods,
-            'imported_categories': imported_categories,
+            'imported_accounts': imported_accounts,
             'imported_transactions': imported_transactions,
-            'imported_budgets': imported_budgets,
+            'imported_transfers': imported_transfers,
             'imported_planned_transactions': imported_planned_transactions,
-            'imported_currency_exchanges': imported_currency_exchanges,
             'skipped': skipped,
             'renamed': renamed,
         }
+
+    @staticmethod
+    def _resolve_import_named_account(user, workspace, record: dict, account_cache: dict):
+        """Resolve the account for an imported record.
+
+        Prefers an explicit account_name from the v2-new export; falls back to
+        the per-currency 'Main <CODE>' account for older exports.
+        """
+        name = record.get('account_name')
+        if name and name in account_cache:
+            return account_cache[name]
+        code = record.get('currency_code') or record.get('currency_symbol')
+        if not code:
+            return None
+        return UserService._get_or_create_import_account(user, workspace, code, account_cache)
