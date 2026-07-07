@@ -57,7 +57,9 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     from period_balances.models import PeriodBalance
     from planned_transactions.models import PlannedTransaction
     from transactions.models import Transaction
+    from transfers.models import Transfer
 
+    Transfer.objects.for_workspace(workspace_id).delete()
     Transaction.objects.for_workspace(workspace_id).delete()
     PlannedTransaction.objects.for_workspace(workspace_id).delete()
     CurrencyExchange.objects.for_workspace(workspace_id).delete()

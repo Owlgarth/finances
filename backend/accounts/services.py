@@ -18,11 +18,8 @@ from currencies.services import CurrencyCatalogService
 class AccountService:
     @staticmethod
     def _record_count(account: Account) -> int:
-        """Count financial records referencing this account.
-
-        B6 adds transfers count.
-        """
-        return account.transactions.count()
+        """Count financial records referencing this account."""
+        return account.transactions.count() + account.transfers_in.count() + account.transfers_out.count()
 
     @staticmethod
     def _transactions_delta(account: Account) -> Decimal:
@@ -47,9 +44,13 @@ class AccountService:
     def _transfers_delta(account: Account) -> Decimal:
         """Net effect of transfers on the account balance.
 
-        B6: + Σ transfers_in.to_amount − Σ transfers_out.from_amount.
+        + Σ transfers_in.to_amount − Σ transfers_out.from_amount.
         """
-        return Decimal('0')
+        from django.db.models import Sum
+
+        incoming = account.transfers_in.aggregate(total=Sum('to_amount'))['total'] or Decimal('0')
+        outgoing = account.transfers_out.aggregate(total=Sum('from_amount'))['total'] or Decimal('0')
+        return incoming - outgoing
 
     @staticmethod
     def list(workspace_id: int, include_archived: bool = False) -> list[Account]:

@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'budgeting',
     'categories',
     'transactions',
+    'transfers',
     'currency_exchanges',
     'exchange_shortcuts',
     'planned_transactions',
