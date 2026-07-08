@@ -21,7 +21,7 @@ from categories.models import Category
 from common.tests.mixins import AuthMixin
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
-from transactions.factories import TransactionFactory
+from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
 from users.services import UserService
@@ -122,7 +122,7 @@ class V3RoundTripTests(AuthMixin, TestCase):
             created_by=self.user,
         )
 
-        TransactionFactory(
+        shop = TransactionFactory(
             account=checking,
             workspace=self.workspace,
             date=date(2026, 7, 5),
@@ -130,6 +130,22 @@ class V3RoundTripTests(AuthMixin, TestCase):
             category=groceries,
             amount=Decimal('120.00'),
             type='expense',
+        )
+        TransactionItemFactory(
+            transaction=shop,
+            position=0,
+            name='Bread',
+            quantity=Decimal('1'),
+            unit_price=Decimal('4.99'),
+            line_total=Decimal('4.99'),
+        )
+        TransactionItemFactory(
+            transaction=shop,
+            position=1,
+            name='Tomatoes',
+            quantity=Decimal('0.782'),
+            unit_price=Decimal('9.99'),
+            line_total=Decimal('7.81'),
         )
         TransactionFactory(
             account=dollars,
@@ -203,6 +219,12 @@ class V3RoundTripTests(AuthMixin, TestCase):
         self.assertEqual(converted.original_currency.code, 'PLN')
         shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
         self.assertEqual(shop.category.name, 'Groceries')
+
+        # Line items restored in order
+        items = list(shop.items.all())
+        self.assertEqual([i.name for i in items], ['Bread', 'Tomatoes'])
+        self.assertEqual(items[1].quantity, Decimal('0.782'))
+        self.assertEqual(items[1].line_total, Decimal('7.81'))
 
         # Balances reproduced exactly
         new_checking = Account.objects.get(workspace=ws, name='Checking')

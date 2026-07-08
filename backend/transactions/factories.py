@@ -5,7 +5,7 @@ from decimal import Decimal
 import factory
 from factory.django import DjangoModelFactory
 
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionItem
 
 
 class TransactionFactory(DjangoModelFactory):
@@ -21,3 +21,15 @@ class TransactionFactory(DjangoModelFactory):
     type = 'expense'
     created_by = factory.SubFactory('common.tests.factories.UserFactory')
     updated_by = factory.SubFactory('common.tests.factories.UserFactory')
+
+
+class TransactionItemFactory(DjangoModelFactory):
+    class Meta:
+        model = TransactionItem
+
+    transaction = factory.SubFactory(TransactionFactory)
+    position = factory.Sequence(lambda n: n)
+    name = factory.Faker('word')
+    quantity = Decimal('1')
+    unit_price = Decimal('10.00')
+    line_total = Decimal('10.00')

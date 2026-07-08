@@ -25,7 +25,7 @@ from common.tokens import (
 from core.legal import get_privacy, get_terms
 from core.schemas import UserPreferencesUpdate, UserUpdate
 from planned_transactions.models import PlannedTransaction
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionItem
 from transfers.models import Transfer
 from users.exceptions import (
     UserAlreadyVerifiedError,
@@ -615,10 +615,19 @@ class UserService:
                     'currency_code': t.currency_code,
                     'original_amount': t.original_amount,
                     'original_currency_code': t.original_currency_code,
+                    'items': [
+                        {
+                            'name': item.name,
+                            'quantity': item.quantity,
+                            'unit_price': item.unit_price,
+                            'line_total': item.line_total,
+                        }
+                        for item in t.items.all()
+                    ],
                 }
-                for t in Transaction.objects.for_workspace(ws.id).select_related(
-                    'account__currency', 'category__budget', 'original_currency'
-                )
+                for t in Transaction.objects.for_workspace(ws.id)
+                .select_related('account__currency', 'category__budget', 'original_currency')
+                .prefetch_related('items')
             ],
             'transfers': [
                 {
@@ -807,7 +816,7 @@ class UserService:
                     continue
                 category = category_map.get((tx_data.get('budget_name'), tx_data.get('category_name')))
                 original_code = tx_data.get('original_currency_code')
-                Transaction.objects.create(
+                trans = Transaction.objects.create(
                     workspace=workspace,
                     account=account,
                     date=_date(tx_data.get('date')),
@@ -821,6 +830,17 @@ class UserService:
                     ),
                     created_by=user,
                     updated_by=user,
+                )
+                TransactionItem.objects.bulk_create(
+                    TransactionItem(
+                        transaction=trans,
+                        position=position,
+                        name=item_data.get('name'),
+                        quantity=item_data.get('quantity') or 1,
+                        unit_price=item_data.get('unit_price'),
+                        line_total=item_data.get('line_total'),
+                    )
+                    for position, item_data in enumerate(tx_data.get('items') or [])
                 )
                 counts['imported_transactions'] += 1
 

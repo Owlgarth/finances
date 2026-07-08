@@ -27,7 +27,7 @@ from transactions.exceptions import (
     TransactionNotFoundError,
     TransactionOriginalCurrencyError,
 )
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionItem
 from transactions.schemas import TransactionCreate, TransactionImport
 
 
@@ -402,6 +402,49 @@ class TransactionService:
         """Delete a transaction. Balances are computed, so nothing else to revert."""
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
         trans.delete()
+
+    @staticmethod
+    def list_items(workspace_id: int, transaction_id: int) -> dict:
+        """Return a transaction's ordered items and their sum (for the UI mismatch hint)."""
+        trans = TransactionService.get_transaction(transaction_id, workspace_id)
+        items = list(trans.items.all())
+        return {
+            'items': items,
+            'items_total': TransactionService._items_total(items),
+        }
+
+    @staticmethod
+    @db_transaction.atomic
+    def replace_items(workspace_id: int, transaction_id: int, items_in: list) -> dict:
+        """Replace the full ordered item list (add/edit/reorder/delete atomically)."""
+        trans = TransactionService.get_transaction(transaction_id, workspace_id)
+        trans.items.all().delete()
+        items = TransactionItem.objects.bulk_create(
+            TransactionItem(
+                transaction=trans,
+                position=position,
+                name=item.name,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                line_total=item.line_total,
+            )
+            for position, item in enumerate(items_in)
+        )
+        return {
+            'items': items,
+            'items_total': TransactionService._items_total(items),
+        }
+
+    @staticmethod
+    def _items_total(items) -> Decimal:
+        """Sum of line totals, falling back to quantity × unit price per row."""
+        total = Decimal('0')
+        for item in items:
+            if item.line_total is not None:
+                total += item.line_total
+            elif item.unit_price is not None:
+                total += item.quantity * item.unit_price
+        return total.quantize(Decimal('0.01'))
 
     @staticmethod
     @db_transaction.atomic

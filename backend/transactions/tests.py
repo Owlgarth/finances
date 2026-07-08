@@ -15,7 +15,7 @@ from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionItem
 from transactions.services import TransactionService
 
 
@@ -451,3 +451,86 @@ class TestDerivedPeriodServiceLevel(TestCase):
         period = PeriodService.get_or_create_for_date(user, budget, date(2026, 3, 1))
         self.assertEqual(Period.objects.filter(budget=budget).count(), 1)
         self.assertEqual(period.start_date, date(2026, 3, 1))
+
+
+class TestTransactionItems(TransactionTestCase):
+    """Line items: informational, ordered, replace-all semantics (R2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, amount=Decimal('23.97'), description='Groceries run')
+
+    def _items_url(self):
+        return f'/api/transactions/{self.trans.id}/items'
+
+    def test_empty_by_default(self):
+        data = self.get(self._items_url(), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'], [])
+        self.assertEqual(data['items_total'], '0.00')
+
+    def test_replace_creates_ordered_items(self):
+        payload = {
+            'items': [
+                {'name': 'Bread', 'quantity': '1', 'unit_price': '4.99', 'line_total': '4.99'},
+                {'name': 'Milk', 'quantity': '2', 'unit_price': '3.99', 'line_total': '7.98'},
+                {'name': 'Cheese', 'quantity': '1', 'unit_price': '11.00', 'line_total': '11.00'},
+            ]
+        }
+        data = self.put(self._items_url(), payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([i['name'] for i in data['items']], ['Bread', 'Milk', 'Cheese'])
+        self.assertEqual([i['position'] for i in data['items']], [0, 1, 2])
+        self.assertEqual(data['items_total'], '23.97')
+
+    def test_replace_reorders_and_deletes(self):
+        self.put(
+            self._items_url(),
+            {'items': [{'name': 'A', 'line_total': '1.00'}, {'name': 'B', 'line_total': '2.00'}]},
+            **self.auth_headers(),
+        )
+        data = self.put(
+            self._items_url(),
+            {'items': [{'name': 'B', 'line_total': '2.00'}]},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual([i['name'] for i in data['items']], ['B'])
+        self.assertEqual(TransactionItem.objects.filter(transaction=self.trans).count(), 1)
+
+    def test_items_total_falls_back_to_quantity_times_unit_price(self):
+        data = self.put(
+            self._items_url(),
+            {'items': [{'name': 'Tomatoes', 'quantity': '0.782', 'unit_price': '9.99'}]},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['items_total'], '7.81')
+
+    def test_items_do_not_change_amount_or_balance(self):
+        balance_before = AccountService.balance(self.account)
+        self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '999.99'}]}, **self.auth_headers())
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.amount, Decimal('23.97'))
+        self.assertEqual(AccountService.balance(self.account), balance_before)
+
+    def test_items_deleted_with_transaction(self):
+        self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '1.00'}]}, **self.auth_headers())
+        self.delete(f'/api/transactions/{self.trans.id}', **self.auth_headers())
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=self.trans.id).count(), 0)
+
+    def test_other_workspace_transaction_404(self):
+        other_trans = TransactionFactory()
+        self.get(f'/api/transactions/{other_trans.id}/items', **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_viewer_cannot_replace_items(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.put(self._items_url(), {'items': []}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_blank_name_rejected(self):
+        self.put(self._items_url(), {'items': [{'name': '   ', 'line_total': '1.00'}]}, **self.auth_headers())
+        self.assertStatus(422)

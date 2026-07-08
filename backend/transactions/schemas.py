@@ -123,3 +123,45 @@ class FrequentDescriptionsResponse(BaseModel):
     """Schema for frequent descriptions response."""
 
     items: list[FrequentDescriptionItem]
+
+
+class TransactionItemIn(BaseModel):
+    """One line item in a replace-all items request. Order in the list is the stored order."""
+
+    name: str = Field(..., max_length=300)
+    quantity: Decimal = Field(Decimal('1'), gt=0)
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    line_total: Optional[Decimal] = Field(None, ge=0)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Item name cannot be empty')
+        return v.strip()
+
+
+class TransactionItemsReplace(BaseModel):
+    """Full ordered item list for a transaction (add/edit/reorder/delete in one call)."""
+
+    items: list[TransactionItemIn] = Field(..., max_length=200)
+
+
+class TransactionItemOut(BaseModel):
+    """Schema for a stored line item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    position: int
+    name: str
+    quantity: Decimal
+    unit_price: Optional[Decimal]
+    line_total: Optional[Decimal]
+
+
+class TransactionItemsOut(BaseModel):
+    """Item list plus the sum the UI compares against the transaction amount."""
+
+    items: list[TransactionItemOut]
+    items_total: Decimal

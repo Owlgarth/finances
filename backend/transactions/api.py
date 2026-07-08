@@ -18,6 +18,8 @@ from transactions.schemas import (
     TransactionBulkAccountIn,
     TransactionBulkAccountOut,
     TransactionCreate,
+    TransactionItemsOut,
+    TransactionItemsReplace,
     TransactionOut,
     TransactionTotalsResponse,
 )
@@ -204,3 +206,23 @@ def delete_transaction(request: HttpRequest, transaction_id: int):
     require_role(user, workspace_id, WRITE_ROLES)
     TransactionService.delete(workspace_id, transaction_id)
     return 204, None
+
+
+@router.get('/{transaction_id}/items', response={200: TransactionItemsOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def list_transaction_items(request: HttpRequest, transaction_id: int):
+    """List a transaction's line items with their sum (informational; amount stays authoritative)."""
+    workspace_id = request.auth.current_workspace_id
+    return TransactionService.list_items(workspace_id, transaction_id)
+
+
+@router.put(
+    '/{transaction_id}/items',
+    response={200: TransactionItemsOut, 400: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def replace_transaction_items(request: HttpRequest, transaction_id: int, data: TransactionItemsReplace):
+    """Replace the transaction's full ordered item list (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return TransactionService.replace_items(workspace_id, transaction_id, data.items)

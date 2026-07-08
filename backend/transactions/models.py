@@ -89,3 +89,28 @@ class Transaction(WorkspaceScopedModel):
 
     def __str__(self):
         return f'{self.date} - {self.description} ({self.amount} {self.account.currency.code})'
+
+
+class TransactionItem(models.Model):
+    """An ordered receipt line item attached to a transaction.
+
+    Items are informational only — the transaction's `amount` stays the
+    source of truth. Aggregates never read items; the API returns their sum
+    so the UI can hint at mismatches without blocking anything.
+    """
+
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='items')
+    position = models.PositiveIntegerField()
+    name = models.CharField(max_length=300)
+    # 3 decimal places: weighed goods print quantities like 0.782 kg.
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    unit_price = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    line_total = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        db_table = 'transaction_items'
+        ordering = ['position', 'id']
+        indexes = [models.Index(fields=['transaction', 'position'])]
+
+    def __str__(self):
+        return f'{self.name} x{self.quantity}'
