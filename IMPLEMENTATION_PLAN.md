@@ -371,14 +371,14 @@ docs; cutover guide tested by following it verbatim.
 - [x] B10 GDPR v3 + deletion
 - [x] B11 Legacy import endpoint
 - [x] B12 Demo data + opt-in samples
-- [ ] F1 Navigation shell
-- [ ] F2 Accounts UI
-- [ ] F3 Transfers UI
-- [ ] F4 Budget view
-- [ ] F5 Transactions UI
-- [ ] F6 Dashboard + Planned
-- [ ] F7 Onboarding
-- [ ] F8 Legacy import UI
+- [x] F1 Navigation shell
+- [x] F2 Accounts UI
+- [x] F3 Transfers UI
+- [x] F4 Budget view
+- [x] F5 Transactions UI
+- [x] F6 Dashboard + Planned
+- [x] F7 Onboarding
+- [x] F8 Legacy import UI
 - [ ] P1 Parser contract
 - [ ] P2 Parser service
 - [ ] P3 Quality harness

@@ -10,7 +10,7 @@ import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
 
-import type { ImportResult } from '../types'
+import type { ImportResult, LegacyImportResult } from '../types'
 
 type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
@@ -23,6 +23,9 @@ export default function ProfilePage() {
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
+  const [isLegacyImporting, setIsLegacyImporting] = useState(false)
+  const [legacyResult, setLegacyResult] = useState<LegacyImportResult | null>(null)
+  const legacyFileRef = useRef<HTMLInputElement>(null)
 
   const handleExportData = async () => {
     setIsExporting(true)
@@ -66,6 +69,37 @@ export default function ProfilePage() {
       setIsImporting(false)
       if (importFileRef.current) {
         importFileRef.current.value = ''
+      }
+    }
+  }
+
+  const handleLegacyImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsLegacyImporting(true)
+    setLegacyResult(null)
+    try {
+      const text = await file.text()
+      const exportData = JSON.parse(text)
+      const result = await authApi.importLegacy(exportData)
+      setLegacyResult(result)
+      const warnings = result.workspaces.reduce((n, w) => n + w.warnings.length, 0)
+      if (warnings > 0) {
+        toast(`Imported with ${warnings} balance warning(s) to review.`)
+      } else {
+        toast.success(`Imported ${result.workspaces.length} workspace(s).`)
+      }
+    } catch (error: any) {
+      if (error instanceof SyntaxError) {
+        toast.error('Invalid JSON file. Please select a valid export file.')
+      } else {
+        toast.error(error.response?.data?.detail || 'Failed to import legacy data. Please try again.')
+      }
+    } finally {
+      setIsLegacyImporting(false)
+      if (legacyFileRef.current) {
+        legacyFileRef.current.value = ''
       }
     }
   }
@@ -209,8 +243,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-text mb-2">Import Your Data</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Restore your data from a previously exported JSON file.
-                  Supports both current (v2.0) and legacy (v1.0) export formats.
+                  Restore your data from a Denarly export (v3.0) JSON file.
                   If a workspace with the same name already exists, it will be renamed automatically.
                 </p>
                 <input
@@ -231,22 +264,76 @@ export default function ProfilePage() {
                   <div className="mt-4 p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-1">
                     <p className="font-medium text-text">Import Summary</p>
                     <p className="text-text-muted">Workspaces: {importResult.imported_workspaces}</p>
-                    <p className="text-text-muted">Budget Accounts: {importResult.imported_budget_accounts}</p>
-                    <p className="text-text-muted">Periods: {importResult.imported_budget_periods}</p>
-                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
+                    <p className="text-text-muted">Accounts: {importResult.imported_accounts}</p>
                     <p className="text-text-muted">Budgets: {importResult.imported_budgets}</p>
+                    <p className="text-text-muted">Categories: {importResult.imported_categories}</p>
+                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
+                    <p className="text-text-muted">Transfers: {importResult.imported_transfers}</p>
                     <p className="text-text-muted">Planned Transactions: {importResult.imported_planned_transactions}</p>
-                    <p className="text-text-muted">Currency Exchanges: {importResult.imported_currency_exchanges}</p>
                     {Object.keys(importResult.renamed).length > 0 && (
                       <p className="text-text-muted">
                         Renamed: {Object.entries(importResult.renamed).map(([from, to]) => `${from} → ${to}`).join(', ')}
                       </p>
                     )}
-                    {Object.keys(importResult.skipped).length > 0 && (
-                      <p className="text-text-muted">
-                        Skipped: {Object.entries(importResult.skipped).map(([ws, items]) => `${ws} (${items.join(', ')})`).join(', ')}
-                      </p>
-                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-text mb-2">Import from an older Denarly version</h3>
+                <p className="text-sm text-text-muted mb-4">
+                  Migrating from a previous version? Upload the JSON export from the old app. It will be
+                  converted to the new account-based model — exchanges become transfers, and a verification
+                  report shows each account's balance. Reconcile any warnings with a "Set balance…" on the
+                  Accounts page.
+                </p>
+                <input
+                  ref={legacyFileRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleLegacyImportFile}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => legacyFileRef.current?.click()}
+                  disabled={isLegacyImporting}
+                  className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
+                >
+                  {isLegacyImporting ? 'Importing...' : 'Import legacy export'}
+                </button>
+                {legacyResult && (
+                  <div className="mt-4 space-y-4">
+                    {legacyResult.workspaces.map((ws) => (
+                      <div key={ws.workspace_name} className="p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-2">
+                        <p className="font-medium text-text">{ws.workspace_name}</p>
+                        <p className="text-text-muted">
+                          Created: {Object.entries(ws.created).map(([k, v]) => `${v} ${k}`).join(', ')}
+                        </p>
+                        {ws.deduped_transactions.length > 0 && (
+                          <p className="text-text-muted">
+                            Skipped {ws.deduped_transactions.length} linked exchange transaction(s) to avoid double-counting.
+                          </p>
+                        )}
+                        <div>
+                          <p className="text-text-muted mb-1">Balance verification:</p>
+                          <ul className="space-y-0.5">
+                            {ws.balances.map((b) => (
+                              <li key={b.account_name} className={`font-mono text-xs ${b.matches ? 'text-positive' : 'text-warning'}`}>
+                                {b.account_name}: {b.computed_balance} {b.currency_code}
+                                {!b.matches && b.expected_closing_balance !== null && (
+                                  <> (expected {b.expected_closing_balance} — reconcile)</>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        {ws.warnings.length > 0 && (
+                          <ul className="text-warning text-xs list-disc pl-4">
+                            {ws.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

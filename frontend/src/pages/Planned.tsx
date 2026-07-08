@@ -1,417 +1,102 @@
-import { useEffect, useRef, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Filter } from 'lucide-react'
-import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
+import { Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
+import { plannedTransactionsApi } from '../api/client'
+import type { PlannedTransaction } from '../types'
+import { useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
-import { plannedTransactionsApi, currenciesApi } from '../api/client'
-import type { PlannedTransactionOrdering } from '../api/client'
-import type { PaginatedResponse, PlannedTransaction, Currency } from '../types'
-import PlannedTransactionList from '../components/transactions/PlannedTransactionList'
-import PlannedTransactionFormModal from '../components/modals/transactions/PlannedTransactionFormModal'
-import ExecutePlannedModal from '../components/modals/transactions/ExecutePlannedModal'
+import { formatAmount } from '../utils/format'
+import { getApiErrorMessage } from '../utils/errors'
+import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
-import Loading from '../components/common/Loading'
-import ErrorMessage from '../components/common/ErrorMessage'
-import EmptyState from '../components/common/EmptyState'
-import Pagination from '../components/common/Pagination'
-import TotalsSummary from '../components/common/TotalsSummary'
+import { primaryButtonClass } from '../components/common/formStyles'
+
+const STATUS_STYLE: Record<string, string> = {
+  pending: 'text-warning border-warning/40',
+  done: 'text-positive border-positive/40',
+  cancelled: 'text-text-muted border-border',
+}
 
 export default function Planned() {
-  const [statusFilter, setStatusFilter] = useState<string>('pending')
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false)
-  const [selectedPlanned, setSelectedPlanned] = useState<PlannedTransaction | null>(null)
-  const [executePlanned, setExecutePlanned] = useState<PlannedTransaction | null>(null)
-  const [cancelTarget, setCancelTarget] = useState<PlannedTransaction | null>(null)
-  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
-  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([])
-  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false)
-  const currencyDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [ordering, setOrdering] = useState<string>('planned_date')
+  const { canWrite } = usePermissions()
+  const multiCurrency = useMultiCurrency()
 
-  const handleSort = (field: string) => {
-    setOrdering(prev => {
-      const current = prev.replace(/^-/, '')
-      if (current === field) return prev.startsWith('-') ? field : '-' + field
-      const defaultDesc = field === 'planned_date'
-      return defaultDesc ? '-' + field : field
-    })
-  }
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<PlannedTransaction | null>(null)
+  const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
 
-  const { selectedPeriodId } = useBudgetPeriod()
-  const { canManageBudgetData } = usePermissions()
+  const { data, isLoading } = useQuery({ queryKey: ['planned'], queryFn: () => plannedTransactionsApi.getAll({ page_size: 100 }) })
+  const items = data?.items ?? []
 
-  useEffect(() => {
-    setPage(1)
-  }, [statusFilter, selectedPeriodId, selectedCurrencies, ordering])
-
-  const { data: currencies } = useQuery({
-    queryKey: ['currencies'],
-    queryFn: async () => {
-      const response = await currenciesApi.getAll()
-      return response as Currency[]
+  const executeMutation = useMutation({
+    mutationFn: (p: PlannedTransaction) => plannedTransactionsApi.execute(p.id, new Date().toISOString().slice(0, 10)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['planned'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
+      toast.success('Executed — transaction created')
     },
-  })
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (currencyDropdownRef.current && !currencyDropdownRef.current.contains(event.target as Node)) {
-        setIsCurrencyDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const toggleCurrency = (symbol: string) => {
-    setSelectedCurrencies(prev =>
-      prev.includes(symbol)
-        ? prev.filter(s => s !== symbol)
-        : [...prev, symbol]
-    )
-  }
-
-  const { data: apiResponse, isLoading, error } = useQuery({
-    queryKey: ['planned-transactions', statusFilter, selectedPeriodId, selectedCurrencies, page, pageSize, ordering],
-    queryFn: async () => {
-      const response = await plannedTransactionsApi.getAll({
-        status: statusFilter || undefined,
-        budget_period_id: selectedPeriodId ?? undefined,
-        currency: selectedCurrencies.length > 0 ? selectedCurrencies : undefined,
-        page,
-        page_size: pageSize,
-        ordering: ordering as PlannedTransactionOrdering,
-      })
-      return response.data as PaginatedResponse<PlannedTransaction>
-    },
-  })
-
-  const planned = apiResponse?.items || []
-  const totalItems = apiResponse?.total || 0
-  const totalPages = apiResponse?.total_pages || 0
-
-  const { data: totalsData } = useQuery({
-    queryKey: ['planned-transactions-totals-category', statusFilter, selectedPeriodId, selectedCurrencies],
-    queryFn: async () => {
-      if (!selectedPeriodId) return null
-      return plannedTransactionsApi.getTotals({
-        status: statusFilter || undefined,
-        budget_period_id: selectedPeriodId,
-        currency: selectedCurrencies.length > 0 ? selectedCurrencies : undefined,
-        group_by: 'category',
-      })
-    },
-    enabled: !!selectedPeriodId,
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to execute')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions-totals-category'] })
-      toast.success('Planned transaction deleted successfully!')
-    },
-    onError: () => {
-      toast.error('Failed to delete planned transaction')
-    }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['planned'] }); toast.success('Deleted'); setDeleting(null) },
+    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to delete')); setDeleting(null) },
   })
-
-  const cancelMutation = useMutation({
-    mutationFn: ({ id, transaction }: { id: number; transaction: PlannedTransaction }) =>
-      plannedTransactionsApi.update(id, {
-        budget_period_id: transaction.budget_period_id ?? undefined,
-        name: transaction.name,
-        amount: transaction.amount,
-        currency: transaction.currency,
-        category_id: transaction.category?.id ?? null,
-        planned_date: transaction.planned_date,
-        status: 'cancelled'
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions-totals-category'] })
-      toast.success('Planned transaction cancelled successfully!')
-    },
-    onError: () => {
-      toast.error('Failed to cancel planned transaction')
-    }
-  })
-
-  const importMutation = useMutation({
-    mutationFn: plannedTransactionsApi.import,
-    onSuccess: () => {
-      toast.success('Planned transactions imported successfully!');
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['planned-transactions-totals-category'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to import planned transactions.');
-    },
-  });
-
-  const handleEdit = (planned: PlannedTransaction) => {
-    setSelectedPlanned(planned)
-    setIsFormModalOpen(true)
-  }
-
-  const handleAddNew = () => {
-    setSelectedPlanned(null)
-    setIsFormModalOpen(true)
-  }
-
-  const handleExecute = (planned: PlannedTransaction) => {
-    setExecutePlanned(planned)
-  }
-
-  const handleCancel = (transaction: PlannedTransaction) => {
-    setCancelTarget(transaction)
-  }
-
-  const handleDelete = (id: number) => {
-    setDeleteTargetId(id)
-  }
-
-  const handleExport = async () => {
-    if (!selectedPeriodId) return;
-
-    try {
-      const params: { budget_period_id: number; status?: string } = {
-        budget_period_id: selectedPeriodId
-      };
-      if (statusFilter) {
-        params.status = statusFilter;
-      }
-
-      const response = await plannedTransactionsApi.export(params);
-      const jsonData = JSON.stringify(response.data, null, 2);
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `planned_export_${selectedPeriodId}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      toast.success('Planned transactions exported successfully!');
-    } catch {
-      toast.error('Failed to export planned transactions');
-    }
-  };
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && selectedPeriodId) {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('budget_period_id', selectedPeriodId.toString());
-      importMutation.mutate(formData);
-    }
-    // Reset file input
-    if(event.target) {
-      event.target.value = '';
-    }
-  };
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 sm:mb-12">
-        <h1 className="text-base font-semibold text-text">Planned Transactions</h1>
-        {canManageBudgetData && (
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={handleImportClick}
-              className="px-3 py-1.5 bg-surface border border-border text-text rounded-sm hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
-              disabled={!selectedPeriodId}
-            >
-              Import
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept=".json"
-            />
-            <button
-              onClick={handleExport}
-              className="px-3 py-1.5 bg-surface border border-border text-text rounded-sm hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
-              disabled={!selectedPeriodId || totalItems === 0}
-            >
-              Export
-            </button>
-            <button
-              onClick={handleAddNew}
-              className="bg-primary text-white px-3 py-1.5 rounded-sm hover:bg-primary-hover transition-colors text-xs font-medium"
-            >
-              Add Planned Transaction
-            </button>
-          </div>
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-lg font-semibold text-text">Planned</h1>
+        {canWrite && (
+          <button onClick={() => { setEditing(null); setFormOpen(true) }} className={primaryButtonClass}>
+            <Plus size={13} className="inline mr-1" /> New planned
+          </button>
         )}
       </div>
 
-      <div className="mb-8 flex flex-wrap gap-3">
-        <button
-          onClick={() => setStatusFilter('pending')}
-          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
-            statusFilter === 'pending'
-              ? 'bg-primary text-white'
-              : 'bg-surface border border-border text-text hover:bg-surface-hover'
-          }`}
-        >
-          Pending
-        </button>
-        <button
-          onClick={() => setStatusFilter('done')}
-          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
-            statusFilter === 'done'
-              ? 'bg-primary text-white'
-              : 'bg-surface border border-border text-text hover:bg-surface-hover'
-          }`}
-        >
-          Done
-        </button>
-        <button
-          onClick={() => setStatusFilter('cancelled')}
-          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
-            statusFilter === 'cancelled'
-              ? 'bg-primary text-white'
-              : 'bg-surface border border-border text-text hover:bg-surface-hover'
-          }`}
-        >
-          Cancelled
-        </button>
-        <button
-          onClick={() => setStatusFilter('')}
-          className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
-            statusFilter === ''
-              ? 'bg-primary text-white'
-              : 'bg-surface border border-border text-text hover:bg-surface-hover'
-          }`}
-        >
-          All
-        </button>
-
-        <div className="relative" ref={currencyDropdownRef}>
-          <button
-            onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
-            className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-colors flex items-center gap-2 ${
-              selectedCurrencies.length > 0
-                ? 'bg-primary text-white'
-                : 'bg-surface border border-border text-text hover:bg-surface-hover'
-            }`}
-          >
-            <Filter size={14} />
-            <span>Currency</span>
-            {selectedCurrencies.length > 0 && (
-              <span className="bg-white text-primary text-xs font-semibold rounded-sm h-5 w-5 flex items-center justify-center">
-                {selectedCurrencies.length}
-              </span>
-            )}
-          </button>
-
-          {isCurrencyDropdownOpen && currencies && currencies.length > 0 && (
-            <div className="absolute top-full mt-2 left-0 min-w-[180px] bg-surface border border-border rounded-sm z-dropdown overflow-hidden animate-in fade-in duration-200">
-              {currencies.map((currency) => (
-                <label key={currency.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover cursor-pointer transition-colors duration-150">
-                  <input
-                    type="checkbox"
-                    checked={selectedCurrencies.includes(currency.symbol)}
-                    onChange={() => toggleCurrency(currency.symbol)}
-                    className="w-4 h-4 text-primary border-border rounded-none focus:ring-2 focus:ring-border-focus"
-                  />
-                  <span className="text-text font-mono font-bold">{currency.symbol}</span>
-                  <span className="text-text-muted text-sm">{currency.name}</span>
-                </label>
-              ))}
-              {selectedCurrencies.length > 0 && (
-                <button
-                  onClick={() => setSelectedCurrencies([])}
-                  className="w-full px-4 py-2 text-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors duration-150"
-                >
-                  Clear Selection
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
       {isLoading ? (
-        <Loading />
-      ) : error ? (
-        <ErrorMessage message="Failed to load planned transactions" />
-      ) : totalItems === 0 ? (
-        <EmptyState message={`No ${statusFilter === 'pending' ? 'pending' : statusFilter === 'done' ? 'completed' : statusFilter === 'cancelled' ? 'cancelled' : ''} planned transactions`} />
+        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-text-muted">No planned transactions.</p>
       ) : (
-        <>
-          <PlannedTransactionList
-            transactions={planned}
-            ordering={ordering}
-            onSort={handleSort}
-            onEdit={canManageBudgetData ? handleEdit : undefined}
-            onExecute={canManageBudgetData ? handleExecute : undefined}
-            onCancel={canManageBudgetData ? handleCancel : undefined}
-            onDelete={canManageBudgetData ? handleDelete : undefined}
-          />
-          {totalItems > 0 && totalsData?.totals && totalsData.totals.length > 0 && (
-            <TotalsSummary mode="planned" categoryTotals={totalsData.totals} />
-          )}
-          {totalItems > 0 && (
-            <Pagination
-              page={page}
-              total_pages={totalPages}
-              total={totalItems}
-              page_size={pageSize}
-              onPageChange={setPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size)
-                setPage(1)
-              }}
-            />
-          )}
-        </>
+        <div className="border border-border rounded-sm bg-surface divide-y divide-border">
+          {items.map((p) => (
+            <div key={p.id} className="flex items-center justify-between px-4 py-3 text-sm group">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-text truncate">{p.name}</span>
+                  <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{p.status}</span>
+                </div>
+                <div className="text-[10px] font-mono text-text-muted">
+                  {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-text">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
+                {canWrite && p.status === 'pending' && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
+                    <button onClick={() => { setEditing(p); setFormOpen(true) }} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button onClick={() => setDeleting(p)} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      <PlannedTransactionFormModal
-        isOpen={isFormModalOpen}
-        onClose={() => {
-          setIsFormModalOpen(false)
-          setSelectedPlanned(null)
-        }}
-        plannedTransaction={selectedPlanned}
-      />
-
-      {executePlanned && (
-        <ExecutePlannedModal
-          isOpen={!!executePlanned}
-          onClose={() => setExecutePlanned(null)}
-          plannedId={executePlanned.id}
-          plannedDate={executePlanned.planned_date}
-        />
-      )}
-
+      <PlannedFormModal open={formOpen} onClose={() => setFormOpen(false)} planned={editing} />
       <ConfirmDialog
-        isOpen={cancelTarget !== null}
-        title="Cancel planned transaction"
-        message="Cancel this planned transaction?"
-        onConfirm={() => { if (cancelTarget) { cancelMutation.mutate({ id: cancelTarget.id, transaction: cancelTarget }) } setCancelTarget(null) }}
-        onCancel={() => setCancelTarget(null)}
-      />
-      <ConfirmDialog
-        isOpen={deleteTargetId !== null}
+        isOpen={!!deleting}
         title="Delete planned transaction"
-        message="Delete this planned transaction?"
-        onConfirm={() => { if (deleteTargetId !== null) { deleteMutation.mutate(deleteTargetId) } setDeleteTargetId(null) }}
-        onCancel={() => setDeleteTargetId(null)}
+        message={`Delete "${deleting?.name}"?`}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
       />
     </div>
   )

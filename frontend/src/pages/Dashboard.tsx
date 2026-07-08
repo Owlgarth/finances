@@ -1,59 +1,79 @@
-import { useNavigate } from 'react-router-dom'
-import { useBudgetPeriod } from '../contexts/BudgetPeriodContext'
-import Skeleton, { SkeletonRows } from '../components/common/Skeleton'
-import EmptyState from '../components/common/EmptyState'
-import BalanceSection from '../components/balance/BalanceSection'
-import PeriodHeader from '../components/dashboard/PeriodHeader'
-import BudgetHealthWidget from '../components/dashboard/BudgetHealthWidget'
-import FrequentSpendingWidget from '../components/dashboard/FrequentSpendingWidget'
-import UpcomingPlannedWidget from '../components/dashboard/UpcomingPlannedWidget'
-import ExchangeActivityWidget from '../components/dashboard/ExchangeActivityWidget'
+import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Wallet, PieChart, Receipt } from 'lucide-react'
+import { reportsApi, transactionsApi } from '../api/client'
+import { useMultiCurrency } from '../hooks/useDomain'
+import { formatAmount } from '../utils/format'
 
-export default function Dashboard() {
-  const navigate = useNavigate()
+function BalancesCard() {
+  const multiCurrency = useMultiCurrency()
+  const { data, isLoading } = useQuery({ queryKey: ['current-balances', false], queryFn: () => reportsApi.currentBalances(false) })
 
-  const { selectedPeriod: period, isLoading } = useBudgetPeriod()
-
-  if (isLoading) {
-    return (
-      <div className="max-w-screen-2xl mx-auto space-y-4">
-        <div className="bg-surface border border-border rounded-sm p-4">
-          <Skeleton className="h-5 w-48 mb-2" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-        <div className="bg-surface border border-border rounded-sm p-4">
-          <SkeletonRows count={2} className="space-y-4" rowClassName="h-16 w-full" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="border border-border rounded-sm bg-surface p-4">
-              <Skeleton className="h-4 w-32 mb-3" />
-              <SkeletonRows count={3} rowClassName="h-4 w-full" />
+  return (
+    <div className="border border-border rounded-sm bg-surface p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-text flex items-center gap-2"><Wallet size={14} /> Accounts</h3>
+        <Link to="/accounts" className="text-xs text-primary hover:text-primary-hover">View all →</Link>
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-6 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+      ) : (data?.accounts.length ?? 0) === 0 ? (
+        <p className="text-sm text-text-muted">No accounts.</p>
+      ) : (
+        <div className="space-y-2">
+          {data!.accounts.map((a) => (
+            <div key={a.account_id} className="flex items-center justify-between text-sm">
+              <span className="text-text">{a.account_name}</span>
+              <span className="font-mono text-text">{formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}</span>
             </div>
           ))}
         </div>
-      </div>
-    )
-  }
+      )}
+    </div>
+  )
+}
 
-  if (!period) {
-    return (
-      <EmptyState
-        message="No active budget period found for today's date."
-        action={{ label: "View All Periods", onClick: () => navigate('/budget-periods') }}
-      />
-    )
-  }
+function RecentTransactions() {
+  const multiCurrency = useMultiCurrency()
+  const { data, isLoading } = useQuery({ queryKey: ['transactions', 'recent'], queryFn: () => transactionsApi.getAll({ page_size: 6 }) })
+  const items = data?.items ?? []
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <PeriodHeader period={period} />
-      <BalanceSection periodId={period.id} />
+    <div className="border border-border rounded-sm bg-surface p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-text flex items-center gap-2"><Receipt size={14} /> Recent activity</h3>
+        <Link to="/transactions" className="text-xs text-primary hover:text-primary-hover">View all →</Link>
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-6 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-text-muted">No transactions yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((t) => (
+            <div key={t.id} className="flex items-center justify-between text-sm">
+              <span className="text-text truncate mr-2">{t.description}</span>
+              <span className={`font-mono ${t.type === 'income' ? 'text-positive' : t.type === 'expense' ? 'text-negative' : 'text-warning'}`}>
+                {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}{formatAmount(t.amount)} {multiCurrency ? t.currency_code : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Dashboard() {
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-lg font-semibold text-text mb-6">Dashboard</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <BudgetHealthWidget periodId={period.id} />
-        <FrequentSpendingWidget periodId={period.id} />
-        <UpcomingPlannedWidget />
-        <ExchangeActivityWidget periodId={period.id} />
+        <BalancesCard />
+        <RecentTransactions />
+        <Link to="/budgets" className="border border-border rounded-sm bg-surface p-4 hover:bg-surface-hover transition-colors md:col-span-2 flex items-center gap-2 text-sm text-text">
+          <PieChart size={14} className="text-text-muted" /> Manage budgets and category plans →
+        </Link>
       </div>
     </div>
   )

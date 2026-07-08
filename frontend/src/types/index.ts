@@ -1,94 +1,161 @@
-export interface BudgetPeriod {
+// ============= Domain (account-based model) =============
+
+export type AccountType = 'cash' | 'bank' | 'other';
+
+export interface Account {
   id: number;
-  budget_account_id: number;
+  workspace_id: number;
   name: string;
-  start_date: string;
-  end_date: string;
-  weeks?: number;
+  type: AccountType;
+  currency_code: string;
+  opening_balance: string;
+  is_archived: boolean;
+  display_order: number;
   created_at: string;
 }
 
-export interface Currency {
+export interface AccountBalance {
+  account_id: number;
+  currency_code: string;
+  balance: string;
+}
+
+export interface CatalogCurrency {
   id: number;
+  code: string;
   name: string;
   symbol: string;
+  decimals: number;
+  is_custom: boolean;
+}
+
+export type Cadence = 'monthly' | 'weeks' | 'custom';
+
+export interface Budget {
+  id: number;
+  workspace_id: number;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  is_active: boolean;
+  display_order: number;
+  display_currency_code: string | null;
+  cadence: Cadence;
+  cadence_weeks: number | null;
+  cadence_anchor: string | null;
   created_at: string;
+}
+
+export interface Period {
+  id: number;
+  budget_id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_custom: boolean;
 }
 
 export interface Category {
   id: number;
-  budget_period_id: number;
+  budget_id: number;
   name: string;
+  is_archived: boolean;
   created_at: string;
 }
 
-export interface Budget {
+export interface CategoryBudget {
   id: number;
-  budget_period_id: number;
-  category: Category;
-  currency: string;
-  amount: number;
-  created_at: string;
+  period_id: number;
+  category_id: number;
+  currency_code: string;
+  amount: string;
 }
+
+export type TransactionType = 'income' | 'expense' | 'adjustment';
 
 export interface Transaction {
   id: number;
-  budget_period_id: number | null;
+  workspace_id: number;
+  account_id: number;
+  account_name: string;
+  currency_code: string;
   date: string;
   description: string;
-  category: Category | null;
-  amount: number;
-  currency: string;
-  type: 'expense' | 'income';
+  category_id: number | null;
+  category_name: string | null;
+  amount: string;
+  type: TransactionType;
+  original_amount: string | null;
+  original_currency_code: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
-export interface PeriodBalance {
+export interface Transfer {
   id: number;
-  budget_period_id: number;
-  currency: string;
-  opening_balance: number;
-  total_income: number;
-  total_expenses: number;
-  exchanges_in: number;
-  exchanges_out: number;
-  closing_balance: number;
-  note: string;
-  last_calculated_at: string | null;
-}
-
-export interface CurrencyExchange {
-  id: number;
-  budget_period_id: number | null;
+  workspace_id: number;
+  from_account_id: number;
+  from_account_name: string;
+  from_currency_code: string;
+  from_amount: string;
+  to_account_id: number;
+  to_account_name: string;
+  to_currency_code: string;
+  to_amount: string;
   date: string;
-  description: string | null;
-  from_currency: string;
-  from_amount: number;
-  to_currency: string;
-  to_amount: number;
-  exchange_rate: number | null;
-  created_at: string;
-}
-
-export interface ExchangeShortcut {
-  id: number;
-  from_currency: string;
-  to_currency: string;
+  description: string;
+  rate: string | null;
   created_at: string;
 }
 
 export interface PlannedTransaction {
   id: number;
-  budget_period_id: number | null;
+  workspace_id: number;
+  account_id: number;
+  account_name: string;
+  currency_code: string;
   name: string;
-  amount: number;
-  currency: string;
-  category: Category | null;
+  amount: string;
+  category_id: number | null;
+  category: { id: number; budget_id: number; name: string } | null;
   planned_date: string;
   payment_date: string | null;
   status: 'pending' | 'done' | 'cancelled';
   transaction_id: number | null;
   created_at: string;
+  updated_at: string | null;
+}
+
+// ============= Reports =============
+
+export interface BudgetSummaryItem {
+  category_id: number;
+  category_name: string;
+  currency_code: string;
+  planned: string;
+  actual: string;
+  remaining: string;
+}
+
+export interface BudgetSummaryResponse {
+  budget: { id: number; name: string };
+  period: { id: number; name: string; start_date: string; end_date: string };
+  items: BudgetSummaryItem[];
+  totals: Record<string, { planned: string; actual: string; remaining: string }>;
+}
+
+export interface AccountBalanceRow {
+  account_id: number;
+  account_name: string;
+  currency_code: string;
+  is_archived: boolean;
+  balance: string;
+}
+
+export interface CurrentBalancesResponse {
+  accounts: AccountBalanceRow[];
+  totals: Record<string, string>;
 }
 
 // ============= Auth Types =============
@@ -117,19 +184,6 @@ export interface Workspace {
   user_role?: Role;
 }
 
-export interface BudgetAccount {
-  id: number;
-  workspace_id: number;
-  name: string;
-  description?: string;
-  default_currency: string;
-  color?: string;
-  icon?: string;
-  is_active: boolean;
-  display_order: number;
-  created_at: string;
-}
-
 export interface LoginRequest {
   email: string;
   password: string;
@@ -140,6 +194,8 @@ export interface RegisterRequest {
   password: string;
   full_name?: string;
   workspace_name: string;
+  currency_code?: string;
+  start_with_sample_data?: boolean;
   accepted_terms_version: string;
   accepted_privacy_version: string;
 }
@@ -165,7 +221,6 @@ export interface AccountDeleteCheck {
   shared_workspace_memberships: number;
   total_transactions: number;
   total_planned_transactions: number;
-  total_currency_exchanges: number;
 }
 
 export interface Token {
@@ -244,24 +299,13 @@ export interface TransactionTotalsResponse {
 }
 
 export interface PlannedTransactionTotalItem {
-  group: string; // category name
+  group: string;
   currency: string;
   total: string;
 }
 
 export interface PlannedTransactionTotalsResponse {
   totals: PlannedTransactionTotalItem[];
-}
-
-export interface CurrencyExchangeTotalItem {
-  from_currency: string;
-  to_currency: string;
-  from_total: string;
-  to_total: string;
-}
-
-export interface CurrencyExchangeTotalsResponse {
-  totals: CurrencyExchangeTotalItem[];
 }
 
 // ============= Frequent Descriptions Types =============
@@ -276,23 +320,41 @@ export interface FrequentDescriptionsResponse {
   items: FrequentDescriptionItem[];
 }
 
-// ============= Reports Types =============
-export interface CurrentBalancesResponse {
-  balances: Record<string, string>;
-}
-
 // ============= Import Types =============
 export interface ImportResult {
-  imported_workspaces: number
-  imported_budget_accounts: number
-  imported_budget_periods: number
-  imported_categories: number
-  imported_transactions: number
-  imported_budgets: number
-  imported_planned_transactions: number
-  imported_currency_exchanges: number
-  skipped: Record<string, string[]>
-  renamed: Record<string, string>
+  imported_workspaces: number;
+  imported_accounts: number;
+  imported_budgets: number;
+  imported_categories: number;
+  imported_transactions: number;
+  imported_transfers: number;
+  imported_planned_transactions: number;
+  skipped: Record<string, string[]>;
+  renamed: Record<string, string>;
+}
+
+export interface LegacyImportResult {
+  workspaces: Array<{
+    workspace_name: string;
+    created: Record<string, number>;
+    deduped_transactions: Array<{
+      date: string | null;
+      description: string | null;
+      amount: string;
+      type: string;
+      currency_code: string | null;
+    }>;
+    balances: Array<{
+      currency_code: string;
+      account_name: string;
+      expected_closing_balance: string | null;
+      computed_balance: string;
+      matches: boolean;
+    }>;
+    warnings: string[];
+  }>;
+  renamed: Record<string, string>;
+  skipped_workspaces: string[];
 }
 
 // ============= Enums =============
@@ -300,4 +362,4 @@ export interface ImportResult {
 export const TotalsLabel = {
   /** Display label for records without a category. Synced with backend common.enums.TotalsLabel. */
   UNCATEGORIZED: 'Uncategorized',
-} as const
+} as const;

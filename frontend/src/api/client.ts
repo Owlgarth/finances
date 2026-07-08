@@ -1,22 +1,27 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
-import type { User, Token, LoginRequest, RegisterRequest, Workspace, BudgetAccount, WorkspaceMember, AddMemberRequest, AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus, TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse, PlannedTransactionTotalsResponse, CurrencyExchangeTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse, ImportResult } from '../types';
+import type {
+  User, Token, LoginRequest, RegisterRequest, Workspace, WorkspaceMember, AddMemberRequest,
+  AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus,
+  TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse,
+  PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
+  ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
+  Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
+  BudgetSummaryResponse, PaginatedResponse,
+} from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
 export type TransactionOrdering =
   | '-date' | 'date' | '-description' | 'description'
   | '-amount' | 'amount' | '-type' | 'type'
-  | '-category__name' | 'category__name' | '-currency__symbol' | 'currency__symbol';
-
-export type CurrencyExchangeOrdering =
-  | '-date' | 'date' | '-description' | 'description'
-  | '-from_amount' | 'from_amount' | '-to_amount' | 'to_amount'
-  | '-exchange_rate' | 'exchange_rate';
+  | '-category__name' | 'category__name' | '-account__name' | 'account__name'
+  | '-account__currency__code' | 'account__currency__code';
 
 export type PlannedTransactionOrdering =
   | '-name' | 'name' | '-amount' | 'amount'
   | '-status' | 'status' | '-planned_date' | 'planned_date'
-  | '-category__name' | 'category__name' | '-currency__symbol' | 'currency__symbol';
+  | '-category__name' | 'category__name'
+  | '-account__name' | 'account__name' | '-account__currency__code' | 'account__currency__code';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -149,108 +154,161 @@ export const legalApi = {
     api.get<LegalDoc>('/legal/privacy').then(res => res.data),
 };
 
-export const budgetPeriodsApi = {
-  getAll: (budgetAccountId?: number) => api.get('/budget-periods', { params: budgetAccountId ? { budget_account_id: budgetAccountId } : undefined }),
-  getOne: (id: number) => api.get(`/budget-periods/${id}`),
-  getCurrent: (date: string) => api.get('/budget-periods/current', { params: { current_date: date } }),
-  create: (data: any) => api.post('/budget-periods', data),
-  update: (id: number, data: any) => api.put(`/budget-periods/${id}`, data),
-  delete: (id: number) => api.delete(`/budget-periods/${id}`),
-  copy: (id: number, data: { name: string; start_date: string; end_date: string; weeks?: number }) =>
-    api.post(`/budget-periods/${id}/copy`, data),
+// ============= Currencies API =============
+export const currenciesApi = {
+  catalog: (): Promise<CatalogCurrency[]> =>
+    api.get<CatalogCurrency[]>('/currencies').then(res => res.data),
+  enabled: (): Promise<CatalogCurrency[]> =>
+    api.get<CatalogCurrency[]>('/workspaces/enabled-currencies').then(res => res.data),
+  enable: (code: string): Promise<CatalogCurrency> =>
+    api.post<CatalogCurrency>('/workspaces/enabled-currencies', { code }).then(res => res.data),
+  createCustom: (data: { code: string; name: string; symbol: string; decimals?: number }): Promise<CatalogCurrency> =>
+    api.post<CatalogCurrency>('/workspaces/enabled-currencies', { ...data, custom: true }).then(res => res.data),
+  disable: (code: string): Promise<void> =>
+    api.delete(`/workspaces/enabled-currencies/${code}`).then(() => undefined),
 };
 
-export const categoriesApi = {
-  getAll: (params?: { budget_period_id?: number; current_date?: string; page?: number; page_size?: number }) => api.get('/categories', { params }),
-  getOne: (id: number) => api.get(`/categories/${id}`),
-  create: (data: { budget_period_id: number; name: string }) => api.post('/categories', data),
-  update: (id: number, data: { budget_period_id: number; name: string }) => api.put(`/categories/${id}`, data),
-  delete: (id: number) => api.delete(`/categories/${id}`),
-  import: (data: FormData) => api.post('/categories/import', data, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  }),
-  export: (params: { budget_period_id: number }) => api.get('/categories/export/', { params }),
+// ============= Accounts API =============
+export const accountsApi = {
+  list: (includeArchived = false): Promise<Account[]> =>
+    api.get<Account[]>('/accounts', { params: { include_archived: includeArchived } }).then(res => res.data),
+  get: (id: number): Promise<Account> =>
+    api.get<Account>(`/accounts/${id}`).then(res => res.data),
+  create: (data: { name: string; type: AccountType; currency_code: string; opening_balance?: string; display_order?: number }): Promise<Account> =>
+    api.post<Account>('/accounts', data).then(res => res.data),
+  update: (id: number, data: { name?: string; type?: AccountType; opening_balance?: string; display_order?: number }): Promise<Account> =>
+    api.put<Account>(`/accounts/${id}`, data).then(res => res.data),
+  delete: (id: number) => api.delete(`/accounts/${id}`),
+  setArchive: (id: number, isArchived: boolean): Promise<Account> =>
+    api.patch<Account>(`/accounts/${id}/archive`, { is_archived: isArchived }).then(res => res.data),
+  balance: (id: number): Promise<AccountBalance> =>
+    api.get<AccountBalance>(`/accounts/${id}/balance`).then(res => res.data),
 };
 
+// ============= Budgets & Periods API =============
 export const budgetsApi = {
-  getAll: (periodId?: number) => api.get('/budgets', { params: { budget_period_id: periodId } }),
-  create: (data: { budget_period_id: number; category_id: number; currency: string; amount: number }) => api.post('/budgets', data),
-  update: (id: number, data: { budget_period_id: number; category_id: number; currency: string; amount: number }) => api.put(`/budgets/${id}`, data),
+  list: (includeInactive = false): Promise<Budget[]> =>
+    api.get<Budget[]>('/budgets', { params: { include_inactive: includeInactive } }).then(res => res.data),
+  get: (id: number): Promise<Budget> =>
+    api.get<Budget>(`/budgets/${id}`).then(res => res.data),
+  create: (data: Partial<Budget>): Promise<Budget> =>
+    api.post<Budget>('/budgets', data).then(res => res.data),
+  update: (id: number, data: Partial<Budget>): Promise<Budget> =>
+    api.put<Budget>(`/budgets/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/budgets/${id}`),
+  setArchive: (id: number, isActive: boolean): Promise<Budget> =>
+    api.patch<Budget>(`/budgets/${id}/archive`, { is_active: isActive }).then(res => res.data),
+
+  listPeriods: (budgetId: number): Promise<Period[]> =>
+    api.get<Period[]>(`/budgets/${budgetId}/periods`).then(res => res.data),
+  currentPeriod: (budgetId: number, date?: string): Promise<Period> =>
+    api.get<Period>(`/budgets/${budgetId}/periods/current`, { params: date ? { date } : undefined }).then(res => res.data),
+  createPeriod: (budgetId: number, data: { name: string; start_date: string; end_date: string }): Promise<Period> =>
+    api.post<Period>(`/budgets/${budgetId}/periods`, data).then(res => res.data),
+  updatePeriod: (budgetId: number, periodId: number, data: { name?: string; start_date?: string; end_date?: string }): Promise<Period> =>
+    api.put<Period>(`/budgets/${budgetId}/periods/${periodId}`, data).then(res => res.data),
+  deletePeriod: (budgetId: number, periodId: number) =>
+    api.delete(`/budgets/${budgetId}/periods/${periodId}`),
+
+  listCategories: (budgetId: number, includeArchived = false): Promise<Category[]> =>
+    api.get<Category[]>(`/budgets/${budgetId}/categories`, { params: { include_archived: includeArchived } }).then(res => res.data),
+  createCategory: (budgetId: number, data: { name: string }): Promise<Category> =>
+    api.post<Category>(`/budgets/${budgetId}/categories`, data).then(res => res.data),
+  updateCategory: (budgetId: number, categoryId: number, data: { name: string }): Promise<Category> =>
+    api.put<Category>(`/budgets/${budgetId}/categories/${categoryId}`, data).then(res => res.data),
+  setCategoryArchive: (budgetId: number, categoryId: number, isArchived: boolean): Promise<Category> =>
+    api.patch<Category>(`/budgets/${budgetId}/categories/${categoryId}/archive`, { is_archived: isArchived }).then(res => res.data),
+  deleteCategory: (budgetId: number, categoryId: number) =>
+    api.delete(`/budgets/${budgetId}/categories/${categoryId}`),
+
+  listCategoryBudgets: (budgetId: number, periodId: number): Promise<CategoryBudget[]> =>
+    api.get<CategoryBudget[]>(`/budgets/${budgetId}/periods/${periodId}/category-budgets`).then(res => res.data),
+  setCategoryBudget: (budgetId: number, periodId: number, data: { category_id: number; currency_code: string; amount: string }): Promise<CategoryBudget> =>
+    api.put<CategoryBudget>(`/budgets/${budgetId}/periods/${periodId}/category-budgets`, data).then(res => res.data),
+  deleteCategoryBudget: (budgetId: number, periodId: number, categoryBudgetId: number) =>
+    api.delete(`/budgets/${budgetId}/periods/${periodId}/category-budgets/${categoryBudgetId}`),
 };
+
+// ============= Transactions API =============
+export interface TransactionInput {
+  date: string;
+  description: string;
+  type: TransactionType;
+  amount: string;
+  account_id?: number | null;
+  category_id?: number | null;
+  original_amount?: string | null;
+  original_currency_code?: string | null;
+}
 
 export const transactionsApi = {
-  getAll: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; transaction_type?: string[]; category_id?: number[]; currency?: string[]; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }) => api.get('/transactions', { params }),
-  getTotals: (params?: { budget_period_id?: number; current_date?: string; search?: string; start_date?: string; end_date?: string; transaction_type?: string[]; category_id?: number[]; currency?: string[]; amount_gte?: number; amount_lte?: number; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
+  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number; category_id?: number[]; budget_id?: number; transaction_type?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
+    api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
+  getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number; category_id?: number[]; budget_id?: number; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
-  create: (data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.post('/transactions', data),
-  update: (id: number, data: { date: string; description: string; category_id: number; amount: number; currency: string; type: 'expense' | 'income' }) => api.put(`/transactions/${id}`, data),
+  create: (data: TransactionInput): Promise<Transaction> =>
+    api.post<Transaction>('/transactions', data).then(res => res.data),
+  update: (id: number, data: TransactionInput): Promise<Transaction> =>
+    api.put<Transaction>(`/transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/transactions/${id}`),
-  import: (data: FormData) => api.post('/transactions/import', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  export: (params: { budget_period_id: number; transaction_type?: string }) => api.get('/transactions/export/', { params }),
-  getFrequentDescriptions: (params?: { budget_period_id?: number; current_date?: string; transaction_type?: string; limit?: number }): Promise<FrequentDescriptionsResponse> =>
+  bulkSetAccount: (transactionIds: number[], accountId: number): Promise<{ updated: number }> =>
+    api.post<{ updated: number }>('/transactions/bulk-account', { transaction_ids: transactionIds, account_id: accountId }).then(res => res.data),
+  getFrequentDescriptions: (params?: { transaction_type?: string[]; limit?: number }): Promise<FrequentDescriptionsResponse> =>
     api.get<FrequentDescriptionsResponse>('/transactions/frequent-descriptions', { params }).then(res => res.data),
 };
 
+// ============= Transfers API =============
+export interface TransferInput {
+  from_account_id: number;
+  to_account_id: number;
+  from_amount: string;
+  to_amount?: string | null;
+  date: string;
+  description?: string;
+}
+
+export const transfersApi = {
+  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number; page?: number; page_size?: number }): Promise<PaginatedResponse<Transfer>> =>
+    api.get<PaginatedResponse<Transfer>>('/transfers', { params }).then(res => res.data),
+  get: (id: number): Promise<Transfer> =>
+    api.get<Transfer>(`/transfers/${id}`).then(res => res.data),
+  create: (data: TransferInput): Promise<Transfer> =>
+    api.post<Transfer>('/transfers', data).then(res => res.data),
+  update: (id: number, data: TransferInput): Promise<Transfer> =>
+    api.put<Transfer>(`/transfers/${id}`, data).then(res => res.data),
+  delete: (id: number) => api.delete(`/transfers/${id}`),
+};
+
+// ============= Reports API =============
 export const reportsApi = {
-  budgetSummary: (periodId: number) => api.get('/reports/budget-summary', { params: { budget_period_id: periodId } }),
-  currentBalances: (): Promise<CurrentBalancesResponse> =>
-    api.get<CurrentBalancesResponse>('/reports/current-balances').then(res => res.data),
+  budgetSummary: (budgetId: number, periodId: number): Promise<BudgetSummaryResponse> =>
+    api.get<BudgetSummaryResponse>('/reports/budget-summary', { params: { budget_id: budgetId, period_id: periodId } }).then(res => res.data),
+  currentBalances: (includeArchived = false): Promise<CurrentBalancesResponse> =>
+    api.get<CurrentBalancesResponse>('/reports/current-balances', { params: { include_archived: includeArchived } }).then(res => res.data),
 };
 
-export const periodBalancesApi = {
-  getAll: (periodId?: number) => api.get('/period-balances', { params: { budget_period_id: periodId } }),
-  update: (id: number, data: { opening_balance?: number; note?: string }) => api.put(`/period-balances/${id}`, data),
-  recalculate: (periodId: number, currency: string) =>
-    api.post('/period-balances/recalculate', { budget_period_id: periodId, currency }),
-};
-
-export const currenciesApi = {
-  getAll: () => api.get('/workspaces/currencies').then(res => res.data),
-};
-
-export const currencyExchangesApi = {
-  getAll: (params?: { budget_period_id?: number; page?: number; page_size?: number; ordering?: CurrencyExchangeOrdering }) => api.get('/currency-exchanges', { params }),
-  getTotals: (params?: { budget_period_id?: number }): Promise<CurrencyExchangeTotalsResponse> =>
-    api.get<CurrencyExchangeTotalsResponse>('/currency-exchanges/totals', { params }).then(res => res.data),
-  create: (data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.post('/currency-exchanges', data),
-  update: (id: number, data: { date: string; description?: string; from_currency: string; from_amount: number; to_currency: string; to_amount: number }) => api.put(`/currency-exchanges/${id}`, data),
-  delete: (id: number) => api.delete(`/currency-exchanges/${id}`),
-  import: (data: FormData) => api.post('/currency-exchanges/import', data, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  export: (params: { budget_period_id: number }) => api.get('/currency-exchanges/export/', { params }),
-};
-
-export const exchangeShortcutsApi = {
-  getAll: () => api.get('/exchange-shortcuts'),
-  create: (data: { from_currency: string; to_currency: string }) =>
-    api.post('/exchange-shortcuts', data),
-  update: (id: number, data: { from_currency: string; to_currency: string }) =>
-    api.put(`/exchange-shortcuts/${id}`, data),
-  delete: (id: number) =>
-    api.delete(`/exchange-shortcuts/${id}`),
-};
+// ============= Planned Transactions API =============
+export interface PlannedInput {
+  name: string;
+  amount: string;
+  account_id?: number | null;
+  category_id?: number | null;
+  planned_date: string;
+  status?: 'pending' | 'done' | 'cancelled';
+}
 
 export const plannedTransactionsApi = {
-  getAll: (params?: { status?: string; budget_period_id?: number; currency?: string[]; start_date?: string; end_date?: string; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }) => api.get('/planned-transactions', { params }),
-  getTotals: (params?: { status?: string; budget_period_id?: number; currency?: string[]; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
+  getAll: (params?: { status?: string; account_id?: number; start_date?: string; end_date?: string; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
+    api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
+  getTotals: (params?: { status?: string; account_id?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
-  create: (data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.post('/planned-transactions', data),
-  update: (id: number, data: { budget_period_id?: number; name: string; amount: number; currency: string; category_id?: number | null; planned_date: string; status?: 'pending' | 'done' | 'cancelled' }) => api.put(`/planned-transactions/${id}`, data),
+  create: (data: PlannedInput): Promise<PlannedTransaction> =>
+    api.post<PlannedTransaction>('/planned-transactions', data).then(res => res.data),
+  update: (id: number, data: PlannedInput): Promise<PlannedTransaction> =>
+    api.put<PlannedTransaction>(`/planned-transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),
-  execute: (id: number, paymentDate: string) =>
-    api.post(`/planned-transactions/${id}/execute`, null, { params: { payment_date: paymentDate } }),
-  import: (data: FormData) => api.post('/planned-transactions/import', data, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  }),
-  export: (params: { budget_period_id: number; status?: string }) => api.get('/planned-transactions/export/', { params }),
+  execute: (id: number, paymentDate: string): Promise<PlannedTransaction> =>
+    api.post<PlannedTransaction>(`/planned-transactions/${id}/execute`, null, { params: { payment_date: paymentDate } }).then(res => res.data),
 };
 
 // ============= Auth API =============
@@ -289,6 +347,12 @@ export const authApi = {
     api.post<ImportResult>('/users/me/import', {
       data,
       workspaces: workspaces ?? null,
+      conflict_strategy: conflictStrategy,
+    }).then(res => res.data),
+
+  importLegacy: (data: Record<string, unknown>, conflictStrategy: string = 'rename'): Promise<LegacyImportResult> =>
+    api.post<LegacyImportResult>('/users/import-legacy', {
+      data,
       conflict_strategy: conflictStrategy,
     }).then(res => res.data),
 
@@ -352,32 +416,11 @@ export const workspacesApi = {
   switch: (workspaceId: number) =>
     api.post(`/workspaces/${workspaceId}/switch`).then(res => res.data),
 
-  create: (data: { name: string }): Promise<Workspace> =>
+  create: (data: { name: string; currency_code?: string }): Promise<Workspace> =>
     api.post<Workspace>('/workspaces/', data).then(res => res.data),
 
   delete: (id: number): Promise<void> =>
     api.delete(`/workspaces/${id}`).then(() => undefined),
-};
-
-// ============= Budget Accounts API =============
-export const budgetAccountsApi = {
-  list: (includeInactive = false): Promise<BudgetAccount[]> =>
-    api.get<BudgetAccount[]>('/budget-accounts', { params: { include_inactive: includeInactive } }).then(res => res.data),
-
-  get: (id: number): Promise<BudgetAccount> =>
-    api.get<BudgetAccount>(`/budget-accounts/${id}`).then(res => res.data),
-
-  create: (data: Omit<BudgetAccount, 'id' | 'workspace_id' | 'created_at'>): Promise<BudgetAccount> =>
-    api.post<BudgetAccount>('/budget-accounts', data).then(res => res.data),
-
-  update: (id: number, data: Partial<BudgetAccount>): Promise<BudgetAccount> =>
-    api.put<BudgetAccount>(`/budget-accounts/${id}`, data).then(res => res.data),
-
-  delete: (id: number) =>
-    api.delete(`/budget-accounts/${id}`),
-
-  toggleArchive: (id: number): Promise<BudgetAccount> =>
-    api.patch<BudgetAccount>(`/budget-accounts/${id}/archive`).then(res => res.data),
 };
 
 // ============= Workspace Members API =============
