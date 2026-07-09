@@ -389,8 +389,8 @@ docs; cutover guide tested by following it verbatim.
 - [x] R5 Extraction integration
 - [x] R6 Receipt-first creation
 - [x] R7 Privacy/legal update
-- [ ] U1 Primitive audit + fixes
-- [ ] U2 Interaction patterns
+- [x] U1 Primitive audit + fixes
+- [x] U2 Interaction patterns
 - [x] D1 Documentation rewrite
 
 ## Dependency Graph
