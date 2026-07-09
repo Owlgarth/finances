@@ -7,7 +7,8 @@ import type {
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
-  BudgetSummaryResponse, PaginatedResponse,
+  BudgetSummaryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
+  TransactionAttachment,
 } from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
@@ -255,6 +256,23 @@ export const transactionsApi = {
     api.post<{ updated: number }>('/transactions/bulk-account', { transaction_ids: transactionIds, account_id: accountId }).then(res => res.data),
   getFrequentDescriptions: (params?: { transaction_type?: string[]; limit?: number }): Promise<FrequentDescriptionsResponse> =>
     api.get<FrequentDescriptionsResponse>('/transactions/frequent-descriptions', { params }).then(res => res.data),
+
+  listItems: (transactionId: number): Promise<TransactionItemsResponse> =>
+    api.get<TransactionItemsResponse>(`/transactions/${transactionId}/items`).then(res => res.data),
+  replaceItems: (transactionId: number, items: TransactionItemInput[]): Promise<TransactionItemsResponse> =>
+    api.put<TransactionItemsResponse>(`/transactions/${transactionId}/items`, { items }).then(res => res.data),
+
+  listAttachments: (transactionId: number): Promise<TransactionAttachment[]> =>
+    api.get<TransactionAttachment[]>(`/transactions/${transactionId}/attachments`).then(res => res.data),
+  uploadAttachment: (transactionId: number, file: File): Promise<TransactionAttachment> => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<TransactionAttachment>(`/transactions/${transactionId}/attachments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(res => res.data);
+  },
+  deleteAttachment: (transactionId: number, attachmentId: number): Promise<void> =>
+    api.delete(`/transactions/${transactionId}/attachments/${attachmentId}`).then(() => undefined),
 };
 
 // ============= Transfers API =============

@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
+import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
+import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { Transaction, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
@@ -39,9 +41,11 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   const [otherCurrency, setOtherCurrency] = useState(false)
   const [originalAmount, setOriginalAmount] = useState('')
   const [originalCurrencyCode, setOriginalCurrencyCode] = useState<string | null>(null)
+  const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
 
   useEffect(() => {
     if (!open) return
+    setDetailTab(null)
     if (transaction) {
       setDate(transaction.date)
       setDescription(transaction.description)
@@ -117,7 +121,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   )
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
+    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto">
       <h2 className={modalTitleClass}>{isEdit ? 'Edit transaction' : 'New transaction'}</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
@@ -187,6 +191,27 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
           </button>
         </div>
       </form>
+
+      {isEdit && transaction && (
+        <div className="mt-6 pt-4 border-t border-border">
+          <div className="flex items-center gap-1 mb-3">
+            {(['items', 'receipts'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setDetailTab(tab)}
+                className={`px-3 py-1.5 rounded-sm text-xs font-mono uppercase tracking-wider transition-colors ${
+                  detailTab === tab ? 'bg-surface-hover text-text' : 'text-text-muted hover:text-text hover:bg-surface-hover'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          {detailTab === 'items' && <TransactionItemsEditor transaction={transaction} />}
+          {detailTab === 'receipts' && <TransactionAttachments transaction={transaction} />}
+        </div>
+      )}
     </Modal>
   )
 }

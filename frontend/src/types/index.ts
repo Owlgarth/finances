@@ -92,6 +92,36 @@ export interface Transaction {
   updated_at: string | null;
 }
 
+export interface TransactionItem {
+  id: number;
+  position: number;
+  name: string;
+  quantity: string;
+  unit_price: string | null;
+  line_total: string | null;
+}
+
+export interface TransactionItemInput {
+  name: string;
+  quantity?: string;
+  unit_price?: string | null;
+  line_total?: string | null;
+}
+
+export interface TransactionItemsResponse {
+  items: TransactionItem[];
+  items_total: string;
+}
+
+export interface TransactionAttachment {
+  id: number;
+  filename: string;
+  content_type: string;
+  size: number;
+  created_at: string;
+  download_url: string | null;
+}
+
 export interface Transfer {
   id: number;
   workspace_id: number;
