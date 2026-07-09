@@ -391,7 +391,7 @@ docs; cutover guide tested by following it verbatim.
 - [x] R7 Privacy/legal update
 - [ ] U1 Primitive audit + fixes
 - [ ] U2 Interaction patterns
-- [ ] D1 Documentation rewrite
+- [x] D1 Documentation rewrite
 
 ## Dependency Graph
 ```
