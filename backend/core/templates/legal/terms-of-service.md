@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-effective_date: "2027-01-01"
+version: "2.0"
+effective_date: "2026-07-15"
 ---
 
 ## 1. Acceptance of Terms
@@ -11,11 +11,12 @@ By registering for and using Denarly, you agree to be bound by these Terms of Se
 
 Denarly is a personal finance tracking application that provides:
 
-- Multi-currency budget tracking
-- Period-based budgeting with categories
-- Transaction management (income and expenses)
+- Multi-currency accounts with computed balances
+- Budgets with categories and recurring periods
+- Transaction management (income, expenses, and adjustments)
+- Transfers between accounts
 - Planned transaction scheduling
-- Currency exchange recording
+- Receipt attachments with optional automated line-item extraction
 - Collaborative workspace features with role-based access
 
 ## 3. Account Registration

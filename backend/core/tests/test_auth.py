@@ -25,8 +25,8 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'New User',
                 'workspace_name': 'My Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -50,8 +50,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'workspace_test@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Test Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -88,8 +88,8 @@ class TestAuthRegister(AuthTestCase):
                 'full_name': 'Demo User',
                 'workspace_name': 'Demo Workspace',
                 'start_with_sample_data': True,
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -116,8 +116,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 1',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -128,8 +128,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 2',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(400)
@@ -278,8 +278,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'demouser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Demo Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(403)
@@ -294,8 +294,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'normaluser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Normal Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -536,8 +536,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': email,
                 'password': password,
                 'workspace_name': 'Refresh WS',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -614,8 +614,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': 'register_refresh@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Register WS',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
