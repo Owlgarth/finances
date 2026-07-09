@@ -284,6 +284,25 @@ def extraction_config(request: HttpRequest):
     return ExtractionConfigOut(enabled=parser_client.is_enabled())
 
 
+@router.post('/extraction/parse', response={200: dict, 400: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())
+def parse_receipt_preview(request: HttpRequest, file: UploadedFile = File(...)):
+    """Parse a receipt WITHOUT persisting anything (receipt-first creation, R6).
+
+    Returns the parser's contract JSON so the client can pre-fill a new-transaction
+    form. Nothing is stored — the file and items are only saved if the user confirms.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    if not parser_client.is_enabled():
+        return 503, {'detail': 'Receipt extraction is not configured.'}
+    validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
+    try:
+        return parser_client.parse_receipt(file.read(), file.name or 'receipt', file.content_type or '')
+    except parser_client.ParserServiceError as exc:
+        return 400, {'detail': str(exc)}
+
+
 @router.post(
     '/{transaction_id}/attachments/{attachment_id}/extract',
     response={202: ExtractionResultOut, 400: DetailOut, 404: DetailOut, 503: DetailOut},

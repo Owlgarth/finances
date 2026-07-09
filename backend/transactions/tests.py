@@ -737,3 +737,20 @@ class TestExtraction(TransactionTestCase):
             self.post(self._extract_url(), {}, **self.auth_headers())
         listed = self.get(f'/api/transactions/{self.trans.id}/attachments', **self.auth_headers())
         self.assertEqual(listed[0]['extraction_status'], 'done')
+
+    def test_parse_receipt_preview_persists_nothing(self):
+        before = Transaction.objects.count()
+        upload = SimpleUploadedFile('r.jpg', b'bytes', content_type='image/jpeg')
+        with mock.patch('transactions.parser_client.parse_receipt', return_value=CONTRACT_RESULT):
+            response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], '20.47')
+        # No transaction and no attachment created.
+        self.assertEqual(Transaction.objects.count(), before)
+        self.assertEqual(TransactionAttachment.objects.count(), 1)  # only the setUp attachment
+
+    def test_parse_receipt_preview_disabled_returns_503(self):
+        upload = SimpleUploadedFile('r.jpg', b'bytes', content_type='image/jpeg')
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
+        self.assertEqual(response.status_code, 503)

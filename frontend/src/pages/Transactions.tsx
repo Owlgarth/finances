@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, ScanLine } from 'lucide-react'
 import { transactionsApi } from '../api/client'
 import type { Transaction } from '../types'
-import { useAccounts, useMultiCurrency } from '../hooks/useDomain'
+import { useAccounts, useMultiCurrency, useExtractionEnabled } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
+import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import Select from '../components/common/Select'
@@ -24,6 +25,7 @@ export default function Transactions() {
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
+  const extractionEnabled = useExtractionEnabled()
   const { data: accounts = [] } = useAccounts(false)
 
   const [page, setPage] = useState(1)
@@ -32,6 +34,7 @@ export default function Transactions() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
+  const [receiptOpen, setReceiptOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
 
@@ -75,9 +78,16 @@ export default function Transactions() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Transactions</h1>
         {canWrite && (
-          <button onClick={openNew} className={primaryButtonClass}>
-            <Plus size={13} className="inline mr-1" /> New transaction
-          </button>
+          <div className="flex items-center gap-2">
+            {extractionEnabled && (
+              <button onClick={() => setReceiptOpen(true)} className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1">
+                <ScanLine size={13} /> From receipt
+              </button>
+            )}
+            <button onClick={openNew} className={primaryButtonClass}>
+              <Plus size={13} className="inline mr-1" /> New transaction
+            </button>
+          </div>
         )}
       </div>
 
@@ -156,6 +166,7 @@ export default function Transactions() {
       )}
 
       <TransactionFormModal open={formOpen} onClose={() => setFormOpen(false)} transaction={editing} />
+      <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete transaction"

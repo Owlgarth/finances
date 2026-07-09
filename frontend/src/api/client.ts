@@ -8,7 +8,7 @@ import type {
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
-  TransactionAttachment, ExtractionResult,
+  TransactionAttachment, ExtractionResult, ParsedReceipt,
 } from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
@@ -276,6 +276,13 @@ export const transactionsApi = {
 
   extractionConfig: (): Promise<{ enabled: boolean }> =>
     api.get<{ enabled: boolean }>('/transactions/extraction/config').then(res => res.data),
+  parseReceipt: (file: File): Promise<ParsedReceipt> => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ParsedReceipt>('/transactions/extraction/parse', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(res => res.data);
+  },
   extractAttachment: (transactionId: number, attachmentId: number): Promise<ExtractionResult> =>
     api.post<ExtractionResult>(`/transactions/${transactionId}/attachments/${attachmentId}/extract`).then(res => res.data),
   getExtraction: (transactionId: number, attachmentId: number): Promise<ExtractionResult> =>
