@@ -91,6 +91,33 @@ class Transaction(WorkspaceScopedModel):
         return f'{self.date} - {self.description} ({self.amount} {self.account.currency.code})'
 
 
+class TransactionAttachment(models.Model):
+    """A receipt image/PDF stored in the private media bucket.
+
+    The row holds only metadata; bytes live in S3 under `file_key`. Access is
+    always via short-lived presigned URLs — the bucket has no public policy.
+    Deleting the storage object is the caller's job (services do it) because
+    Django cascades don't reach S3.
+    """
+
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='attachments')
+    file_key = models.CharField(max_length=500, unique=True)
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField()
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'transaction_attachments'
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return self.filename
+
+
 class TransactionItem(models.Model):
     """An ordered receipt line item attached to a transaction.
 

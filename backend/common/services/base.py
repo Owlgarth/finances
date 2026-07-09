@@ -15,8 +15,12 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     from categories.models import Category
     from currencies.models import Currency, WorkspaceCurrency
     from planned_transactions.models import PlannedTransaction
+    from transactions.attachments import AttachmentService
     from transactions.models import Transaction
     from transfers.models import Transfer
+
+    # Stored attachment files first — the row cascade below can't reach S3.
+    AttachmentService.delete_storage_for_transactions(Transaction.objects.for_workspace(workspace_id))
 
     Transfer.objects.for_workspace(workspace_id).delete()
     Transaction.objects.for_workspace(workspace_id).delete()

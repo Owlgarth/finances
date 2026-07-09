@@ -3,7 +3,9 @@
 import json
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from accounts.factories import AccountFactory
@@ -15,7 +17,7 @@ from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory
-from transactions.models import Transaction, TransactionItem
+from transactions.models import Transaction, TransactionAttachment, TransactionItem
 from transactions.services import TransactionService
 
 
@@ -534,3 +536,112 @@ class TestTransactionItems(TransactionTestCase):
     def test_blank_name_rejected(self):
         self.put(self._items_url(), {'items': [{'name': '   ', 'line_total': '1.00'}]}, **self.auth_headers())
         self.assertStatus(422)
+
+
+class TestTransactionAttachments(TransactionTestCase):
+    """Attachment endpoints with StorageService mocked (R1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='With receipt')
+        # Pretend S3 is configured; individual operations are mocked per test.
+        patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
+        self.storage.get_presigned_url.return_value = 'http://signed.example/url'
+        self.storage.delete_file.return_value = True
+
+    def _attachments_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments'
+
+    def _upload(self, name='receipt.jpg', content_type='image/jpeg', content=b'fakebytes'):
+        upload = SimpleUploadedFile(name, content, content_type=content_type)
+        return self.client.post(
+            self._attachments_url(),
+            {'file': upload},
+            **self.auth_headers(),
+        )
+
+    def test_upload_and_list(self):
+        response = self._upload()
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data['filename'], 'receipt.jpg')
+        self.assertEqual(data['content_type'], 'image/jpeg')
+        self.assertEqual(data['download_url'], 'http://signed.example/url')
+
+        listed = self.get(self._attachments_url(), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(listed), 1)
+        self.storage.save_file.assert_called_once()
+        key = self.storage.save_file.call_args[0][1]
+        self.assertTrue(key.startswith(f'attachments/{self.workspace.id}/{self.trans.id}/'))
+        self.assertTrue(key.endswith('.jpg'))
+
+    def test_upload_pdf_ok(self):
+        response = self._upload(name='receipt.pdf', content_type='application/pdf')
+        self.assertEqual(response.status_code, 201)
+
+    def test_unsupported_type_rejected(self):
+        response = self._upload(name='malware.exe', content_type='application/octet-stream')
+        self.assertEqual(response.status_code, 400)
+        self.storage.save_file.assert_not_called()
+
+    def test_storage_disabled_returns_503(self):
+        self.storage._is_enabled.return_value = False
+        response = self._upload()
+        self.assertEqual(response.status_code, 503)
+
+    def test_delete_removes_row_and_storage_object(self):
+        created = self._upload().json()
+        self.delete(f'{self._attachments_url()}/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        self.assertEqual(TransactionAttachment.objects.filter(transaction=self.trans).count(), 0)
+        self.storage.delete_file.assert_called_once()
+
+    def test_transaction_delete_cleans_storage(self):
+        self._upload()
+        self.delete(f'/api/transactions/{self.trans.id}', **self.auth_headers())
+        self.assertStatus(204)
+        self.storage.delete_file.assert_called_once()
+        self.assertEqual(TransactionAttachment.objects.count(), 0)
+
+    def test_workspace_deletion_cleans_storage(self):
+        from common.services.base import delete_workspace_financial_records
+
+        self._upload()
+        delete_workspace_financial_records(self.workspace.id)
+        self.storage.delete_file.assert_called_once()
+        self.assertEqual(TransactionAttachment.objects.count(), 0)
+
+    def test_other_workspace_404(self):
+        other_trans = TransactionFactory()
+        self.get(f'/api/transactions/{other_trans.id}/attachments', **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_viewer_cannot_upload(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        response = self._upload()
+        self.assertEqual(response.status_code, 403)
+
+    def test_gdpr_export_import_round_trip(self):
+        from transactions.attachments import AttachmentService
+
+        self._upload(name='shop.jpg', content=b'originalbytes')
+        # Export reads the stored bytes back as base64.
+        self.storage.get_file.return_value = b'originalbytes'
+        exported = AttachmentService.export_for_transaction(self.trans)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]['filename'], 'shop.jpg')
+        self.assertIsNotNone(exported[0]['content_b64'])
+
+        # Import into a fresh transaction recreates the stored object + row.
+        target = TransactionFactory(account=self.account, description='Restored')
+        created = AttachmentService.import_for_transaction(self.user, target, exported)
+        self.assertEqual(created, 1)
+        self.assertEqual(target.attachments.count(), 1)
+        self.assertEqual(target.attachments.first().filename, 'shop.jpg')

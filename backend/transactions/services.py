@@ -400,7 +400,10 @@ class TransactionService:
     @db_transaction.atomic
     def delete(workspace_id: int, transaction_id: int) -> None:
         """Delete a transaction. Balances are computed, so nothing else to revert."""
+        from transactions.attachments import AttachmentService
+
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
+        AttachmentService.delete_storage_for_transactions(Transaction.objects.filter(id=trans.id))
         trans.delete()
 
     @staticmethod

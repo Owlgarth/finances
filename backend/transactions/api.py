@@ -13,8 +13,10 @@ from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
 from core.schemas.pagination import PaginatedOut
+from transactions.attachments import MAX_ATTACHMENT_SIZE_MB, AttachmentService
 from transactions.schemas import (
     FrequentDescriptionsResponse,
+    TransactionAttachmentOut,
     TransactionBulkAccountIn,
     TransactionBulkAccountOut,
     TransactionCreate,
@@ -226,3 +228,48 @@ def replace_transaction_items(request: HttpRequest, transaction_id: int, data: T
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     return TransactionService.replace_items(workspace_id, transaction_id, data.items)
+
+
+@router.get(
+    '/{transaction_id}/attachments',
+    response={200: list[TransactionAttachmentOut], 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def list_transaction_attachments(request: HttpRequest, transaction_id: int):
+    """List a transaction's attachments with short-lived download URLs."""
+    workspace_id = request.auth.current_workspace_id
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    return AttachmentService.list_with_urls(trans)
+
+
+@router.post(
+    '/{transaction_id}/attachments',
+    response={201: TransactionAttachmentOut, 400: DetailOut, 404: DetailOut, 503: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def upload_transaction_attachment(request: HttpRequest, transaction_id: int, file: UploadedFile = File(...)):
+    """Attach a receipt image/PDF to a transaction (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    attachment = AttachmentService.upload(user, trans, file)
+    result = AttachmentService.list_with_urls(trans)
+    created = next(a for a in result if a['id'] == attachment.id)
+    return 201, created
+
+
+@router.delete(
+    '/{transaction_id}/attachments/{attachment_id}',
+    response={204: None, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def delete_transaction_attachment(request: HttpRequest, transaction_id: int, attachment_id: int):
+    """Delete an attachment and its stored file (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    AttachmentService.delete(trans, attachment_id)
+    return 204, None

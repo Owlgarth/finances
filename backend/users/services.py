@@ -25,6 +25,7 @@ from common.tokens import (
 from core.legal import get_privacy, get_terms
 from core.schemas import UserPreferencesUpdate, UserUpdate
 from planned_transactions.models import PlannedTransaction
+from transactions.attachments import AttachmentService
 from transactions.models import Transaction, TransactionItem
 from transfers.models import Transfer
 from users.exceptions import (
@@ -624,10 +625,11 @@ class UserService:
                         }
                         for item in t.items.all()
                     ],
+                    'attachments': AttachmentService.export_for_transaction(t),
                 }
                 for t in Transaction.objects.for_workspace(ws.id)
                 .select_related('account__currency', 'category__budget', 'original_currency')
-                .prefetch_related('items')
+                .prefetch_related('items', 'attachments')
             ],
             'transfers': [
                 {
@@ -842,6 +844,7 @@ class UserService:
                     )
                     for position, item_data in enumerate(tx_data.get('items') or [])
                 )
+                AttachmentService.import_for_transaction(user, trans, tx_data.get('attachments'))
                 counts['imported_transactions'] += 1
 
             for tr_data in ws_data.get('transfers', []):

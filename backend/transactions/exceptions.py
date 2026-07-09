@@ -1,6 +1,6 @@
 """Custom exceptions for transactions app."""
 
-from common.exceptions import NotFoundError, ValidationError
+from common.exceptions import NotFoundError, ServiceError, ValidationError
 
 
 class TransactionNotFoundError(NotFoundError):
@@ -48,3 +48,19 @@ class TransactionBulkAccountError(ValidationError):
 class TransactionImportError(ValidationError):
     def __init__(self, message: str):
         super().__init__(message, code='import_error')
+
+
+class AttachmentNotFoundError(NotFoundError):
+    default_message = 'Attachment not found'
+    default_code = 'not_found'
+
+
+class AttachmentTypeError(ValidationError):
+    default_message = 'Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF'
+    default_code = 'unsupported_media_type'
+
+
+class AttachmentStorageUnavailableError(ServiceError):
+    http_status = 503
+    default_message = 'File storage is not configured'
+    default_code = 'storage_unavailable'

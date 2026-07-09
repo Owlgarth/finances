@@ -165,3 +165,14 @@ class TransactionItemsOut(BaseModel):
 
     items: list[TransactionItemOut]
     items_total: Decimal
+
+
+class TransactionAttachmentOut(BaseModel):
+    """Attachment metadata with a short-lived presigned download URL."""
+
+    id: int
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime
+    download_url: Optional[str]
