@@ -379,16 +379,16 @@ docs; cutover guide tested by following it verbatim.
 - [x] F6 Dashboard + Planned
 - [x] F7 Onboarding
 - [x] F8 Legacy import UI
-- [ ] P1 Parser contract
-- [ ] P2 Parser service
-- [ ] P3 Quality harness
-- [ ] R1 Attachment storage
-- [ ] R2 Line items backend
-- [ ] R3 Line items UI
-- [ ] R4 Attachments UI
-- [ ] R5 Extraction integration
-- [ ] R6 Receipt-first creation
-- [ ] R7 Privacy/legal update
+- [x] P1 Parser contract
+- [x] P2 Parser service
+- [x] P3 Quality harness
+- [x] R1 Attachment storage
+- [x] R2 Line items backend
+- [x] R3 Line items UI
+- [x] R4 Attachments UI
+- [x] R5 Extraction integration
+- [x] R6 Receipt-first creation
+- [x] R7 Privacy/legal update
 - [ ] U1 Primitive audit + fixes
 - [ ] U2 Interaction patterns
 - [ ] D1 Documentation rewrite
