@@ -31,82 +31,78 @@ Layer 4: Resource Ownership Validation
 
 ## Complete Permissions Matrix
 
-### Budget Account Management
+Two role groups drive enforcement:
+- **`ADMIN_ROLES`** (owner, admin) — structural resources: accounts, budgets,
+  periods, and enabled currencies.
+- **`WRITE_ROLES`** (owner, admin, member) — day-to-day records: transactions,
+  transfers, categories, planned transactions, category budget amounts, receipts.
+
+### Account Management (`ADMIN_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
-| View budget accounts | ✓ | ✓ | ✓ | ✓ |
-| Create budget account | ✓ | ✓ | ✗ | ✗ |
-| Edit budget account | ✓ | ✓ | ✗ | ✗ |
-| Delete budget account | ✓ | ✓ | ✗ | ✗ |
-| Archive/Unarchive | ✓ | ✓ | ✗ | ✗ |
+| View accounts + balances | ✓ | ✓ | ✓ | ✓ |
+| Create account | ✓ | ✓ | ✗ | ✗ |
+| Edit account | ✓ | ✓ | ✗ | ✗ |
+| Archive / Unarchive | ✓ | ✓ | ✗ | ✗ |
+| Delete account (record-free) | ✓ | ✓ | ✗ | ✗ |
 
-### Budget Period Management
+### Currency Management (`ADMIN_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
-| View periods | ✓ | ✓ | ✓ | ✓ |
-| Create period | ✓ | ✓ | ✓ | ✗ |
-| Edit period | ✓ | ✓ | ✓ | ✗ |
-| Delete period | ✓ | ✓ | ✓ | ✗ |
-| Copy period | ✓ | ✓ | ✓ | ✗ |
+| View catalog + enabled currencies | ✓ | ✓ | ✓ | ✓ |
+| Enable / disable / create custom currency | ✓ | ✓ | ✗ | ✗ |
 
-### Category Management
+### Budget & Period Management (`ADMIN_ROLES`)
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| View budgets, periods, summaries | ✓ | ✓ | ✓ | ✓ |
+| Create / edit / archive budget | ✓ | ✓ | ✗ | ✗ |
+| Create / edit / delete period (custom cadence) | ✓ | ✓ | ✗ | ✗ |
+
+### Category & Planned-Amount Management (`WRITE_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View categories | ✓ | ✓ | ✓ | ✓ |
-| Create category | ✓ | ✓ | ✓ | ✗ |
-| Edit category | ✓ | ✓ | ✓ | ✗ |
-| Delete category | ✓ | ✓ | ✓ | ✗ |
-| Import categories | ✓ | ✓ | ✓ | ✗ |
+| Create / edit / archive / delete category | ✓ | ✓ | ✓ | ✗ |
+| Set / clear category budget amount | ✓ | ✓ | ✓ | ✗ |
 
-### Budget Management
-
-| Action | Owner | Admin | Member | Viewer |
-|--------|:-----:|:-----:|:------:|:------:|
-| View budgets | ✓ | ✓ | ✓ | ✓ |
-| Create budget | ✓ | ✓ | ✓ | ✗ |
-| Edit budget | ✓ | ✓ | ✓ | ✗ |
-| Delete budget | ✓ | ✓ | ✓ | ✗ |
-
-### Transaction Management
+### Transaction Management (`WRITE_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View transactions | ✓ | ✓ | ✓ | ✓ |
-| Create transaction | ✓ | ✓ | ✓ | ✗ |
-| Edit transaction | ✓ | ✓ | ✓ | ✗ |
-| Delete transaction | ✓ | ✓ | ✓ | ✗ |
-| View frequent descriptions | ✓ | ✓ | ✓ | ✓ |
+| Create / edit / delete transaction | ✓ | ✓ | ✓ | ✗ |
+| Bulk-reassign account | ✓ | ✓ | ✓ | ✗ |
+| Manage line items | ✓ | ✓ | ✓ | ✗ |
 
-### Planned Transaction Management
+### Receipt Attachment & Extraction (`WRITE_ROLES`)
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| View / download attachments | ✓ | ✓ | ✓ | ✓ |
+| Upload / delete attachment | ✓ | ✓ | ✓ | ✗ |
+| Trigger extraction / parse receipt | ✓ | ✓ | ✓ | ✗ |
+
+> Extraction actions additionally require the parser to be configured
+> (`PARSER_URL`); otherwise the endpoints return `503` and the UI hides them.
+
+### Transfer Management (`WRITE_ROLES`)
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| View transfers | ✓ | ✓ | ✓ | ✓ |
+| Create / edit / delete transfer | ✓ | ✓ | ✓ | ✗ |
+
+### Planned Transaction Management (`WRITE_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View planned | ✓ | ✓ | ✓ | ✓ |
-| Create planned | ✓ | ✓ | ✓ | ✗ |
-| Edit planned | ✓ | ✓ | ✓ | ✗ |
-| Delete planned | ✓ | ✓ | ✓ | ✗ |
-| Execute planned | ✓ | ✓ | ✓ | ✗ |
-| Import planned | ✓ | ✓ | ✓ | ✗ |
-
-### Currency Exchange Management
-
-| Action | Owner | Admin | Member | Viewer |
-|--------|:-----:|:-----:|:------:|:------:|
-| View exchanges | ✓ | ✓ | ✓ | ✓ |
-| Create exchange | ✓ | ✓ | ✓ | ✗ |
-| Edit exchange | ✓ | ✓ | ✓ | ✗ |
-| Delete exchange | ✓ | ✓ | ✓ | ✗ |
-
-### Period Balance Management
-
-| Action | Owner | Admin | Member | Viewer |
-|--------|:-----:|:-----:|:------:|:------:|
-| View balances | ✓ | ✓ | ✓ | ✓ |
-| Edit balance (opening balance, note) | ✓ | ✓ | ✓ | ✗ |
-| Recalculate balances | ✓ | ✓ | ✓ | ✗ |
+| Create / edit / delete / execute planned | ✓ | ✓ | ✓ | ✗ |
 
 ### Workspace Member Management
 
@@ -180,12 +176,15 @@ require_role(request.auth, workspace_id, WRITE_ROLES)
 The frontend hides UI elements based on user role:
 
 ```typescript
-const { canManageBudgetAccounts, canManageBudgetData, canManageMembers } = usePermissions();
+const { canManageAccounts, canWrite, canManageMembers } = usePermissions();
 
 // Button visibility
-{canManageBudgetAccounts && <Button>Add Account</Button>}
-{canManageBudgetData && <Button>Add Transaction</Button>}
-{canManageMembers && <Button>Add Member</Button>}
+{canManageAccounts && <Button>New account</Button>}   // ADMIN_ROLES (also budgets/currencies)
+{canWrite && <Button>New transaction</Button>}         // WRITE_ROLES (records)
+{canManageMembers && <Button>Add member</Button>}
+
+// canManageAccounts / canWrite are the new-model aliases of
+// canManageBudgetAccounts / canManageBudgetData (both still exported).
 ```
 
 ## Error Responses
