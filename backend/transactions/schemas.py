@@ -168,7 +168,7 @@ class TransactionItemsOut(BaseModel):
 
 
 class TransactionAttachmentOut(BaseModel):
-    """Attachment metadata with a short-lived presigned download URL."""
+    """Attachment metadata with a short-lived presigned download URL + extraction state."""
 
     id: int
     filename: str
@@ -176,3 +176,19 @@ class TransactionAttachmentOut(BaseModel):
     size: int
     created_at: datetime
     download_url: Optional[str]
+    extraction_status: str
+    extraction_error: str
+
+
+class ExtractionResultOut(BaseModel):
+    """Extraction state plus the parser's contract result (present when status == done)."""
+
+    status: str
+    error: str
+    result: Optional[dict]
+
+
+class ExtractionConfigOut(BaseModel):
+    """Whether receipt extraction is configured. Drives UI affordance visibility."""
+
+    enabled: bool

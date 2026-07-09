@@ -113,6 +113,8 @@ export interface TransactionItemsResponse {
   items_total: string;
 }
 
+export type ExtractionStatus = 'none' | 'pending' | 'done' | 'failed';
+
 export interface TransactionAttachment {
   id: number;
   filename: string;
@@ -120,6 +122,39 @@ export interface TransactionAttachment {
   size: number;
   created_at: string;
   download_url: string | null;
+  extraction_status: ExtractionStatus;
+  extraction_error: string;
+}
+
+export interface ParsedReceiptItem {
+  name: string;
+  quantity: string;
+  unit_price: string | null;
+  line_total: string | null;
+  confidence: number;
+}
+
+export interface ParsedReceipt {
+  schema_version: string;
+  merchant: string | null;
+  date: string | null;
+  currency: string | null;
+  total: string | null;
+  items: ParsedReceiptItem[];
+  confidence: {
+    merchant: number;
+    date: number;
+    currency: number;
+    total: number;
+    items: number;
+  };
+  warnings: string[];
+}
+
+export interface ExtractionResult {
+  status: ExtractionStatus;
+  error: string;
+  result: ParsedReceipt | null;
 }
 
 export interface Transfer {

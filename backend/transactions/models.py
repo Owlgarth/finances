@@ -100,6 +100,17 @@ class TransactionAttachment(models.Model):
     Django cascades don't reach S3.
     """
 
+    EXTRACTION_NONE = 'none'
+    EXTRACTION_PENDING = 'pending'
+    EXTRACTION_DONE = 'done'
+    EXTRACTION_FAILED = 'failed'
+    EXTRACTION_CHOICES = [
+        (EXTRACTION_NONE, 'None'),
+        (EXTRACTION_PENDING, 'Pending'),
+        (EXTRACTION_DONE, 'Done'),
+        (EXTRACTION_FAILED, 'Failed'),
+    ]
+
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='attachments')
     file_key = models.CharField(max_length=500, unique=True)
     filename = models.CharField(max_length=255)
@@ -109,6 +120,12 @@ class TransactionAttachment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Receipt extraction (R5). Result holds the parser's contract JSON; a review
+    # screen turns it into line items on user confirmation. Failures are retryable.
+    extraction_status = models.CharField(max_length=20, choices=EXTRACTION_CHOICES, default=EXTRACTION_NONE)
+    extraction_result = models.JSONField(null=True, blank=True)
+    extraction_error = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'transaction_attachments'

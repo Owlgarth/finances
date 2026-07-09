@@ -13,8 +13,11 @@ from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
 from core.schemas.pagination import PaginatedOut
+from transactions import parser_client
 from transactions.attachments import MAX_ATTACHMENT_SIZE_MB, AttachmentService
 from transactions.schemas import (
+    ExtractionConfigOut,
+    ExtractionResultOut,
     FrequentDescriptionsResponse,
     TransactionAttachmentOut,
     TransactionBulkAccountIn,
@@ -273,3 +276,44 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     AttachmentService.delete(trans, attachment_id)
     return 204, None
+
+
+@router.get('/extraction/config', response=ExtractionConfigOut, auth=WorkspaceJWTAuth())
+def extraction_config(request: HttpRequest):
+    """Report whether receipt extraction is configured (drives UI affordance visibility)."""
+    return ExtractionConfigOut(enabled=parser_client.is_enabled())
+
+
+@router.post(
+    '/{transaction_id}/attachments/{attachment_id}/extract',
+    response={202: ExtractionResultOut, 400: DetailOut, 404: DetailOut, 503: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def extract_attachment(request: HttpRequest, transaction_id: int, attachment_id: int):
+    """Queue receipt extraction for an attachment (requires write access + configured parser)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    if not parser_client.is_enabled():
+        return 503, {'detail': 'Receipt extraction is not configured.'}
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    attachment = AttachmentService.get_attachment(trans, attachment_id)
+    AttachmentService.dispatch_extraction(attachment)
+    return 202, ExtractionResultOut(status=attachment.extraction_status, error='', result=None)
+
+
+@router.get(
+    '/{transaction_id}/attachments/{attachment_id}/extraction',
+    response={200: ExtractionResultOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def get_extraction(request: HttpRequest, transaction_id: int, attachment_id: int):
+    """Poll extraction state and fetch the parser result when done."""
+    workspace_id = request.auth.current_workspace_id
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    attachment = AttachmentService.get_attachment(trans, attachment_id)
+    return ExtractionResultOut(
+        status=attachment.extraction_status,
+        error=attachment.extraction_error,
+        result=attachment.extraction_result,
+    )

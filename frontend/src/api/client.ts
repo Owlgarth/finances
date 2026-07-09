@@ -8,7 +8,7 @@ import type {
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
-  TransactionAttachment,
+  TransactionAttachment, ExtractionResult,
 } from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
@@ -273,6 +273,13 @@ export const transactionsApi = {
   },
   deleteAttachment: (transactionId: number, attachmentId: number): Promise<void> =>
     api.delete(`/transactions/${transactionId}/attachments/${attachmentId}`).then(() => undefined),
+
+  extractionConfig: (): Promise<{ enabled: boolean }> =>
+    api.get<{ enabled: boolean }>('/transactions/extraction/config').then(res => res.data),
+  extractAttachment: (transactionId: number, attachmentId: number): Promise<ExtractionResult> =>
+    api.post<ExtractionResult>(`/transactions/${transactionId}/attachments/${attachmentId}/extract`).then(res => res.data),
+  getExtraction: (transactionId: number, attachmentId: number): Promise<ExtractionResult> =>
+    api.get<ExtractionResult>(`/transactions/${transactionId}/attachments/${attachmentId}/extraction`).then(res => res.data),
 };
 
 // ============= Transfers API =============

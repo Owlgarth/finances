@@ -274,6 +274,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 # Useful for local debugging. Set to 'true' via env var to enable.
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
 
+# Receipt parser service (optional). When PARSER_URL is empty, extraction is
+# disabled everywhere: the API reports it off and the UI hides every affordance.
+PARSER_URL = os.getenv('PARSER_URL', '').rstrip('/')
+PARSER_API_TOKEN = os.getenv('PARSER_API_TOKEN', '')
+PARSER_TIMEOUT_SECONDS = float(os.getenv('PARSER_TIMEOUT_SECONDS', '120'))
+EXTRACTION_ENABLED = bool(PARSER_URL)
+
 # Email configuration
 # In development, emails are printed to the console.
 # In production, set EMAIL_HOST (and optionally EMAIL_PORT, EMAIL_HOST_USER,

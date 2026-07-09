@@ -48,7 +48,8 @@ class AttachmentService:
         return f'attachments/{workspace_id}/{transaction_id}/{uuid.uuid4().hex}{ext}'
 
     @staticmethod
-    def _get_attachment(trans: Transaction, attachment_id: int) -> TransactionAttachment:
+    def get_attachment(trans: Transaction, attachment_id: int) -> TransactionAttachment:
+        """Fetch an attachment scoped to the transaction, or raise AttachmentNotFoundError."""
         attachment = trans.attachments.filter(id=attachment_id).first()
         if not attachment:
             raise AttachmentNotFoundError()
@@ -101,6 +102,8 @@ class AttachmentService:
                 'download_url': StorageService.get_presigned_url(
                     bucket, a.file_key, expiry=DOWNLOAD_URL_EXPIRY_SECONDS
                 ),
+                'extraction_status': a.extraction_status,
+                'extraction_error': a.extraction_error,
             }
             for a in trans.attachments.all()
         ]
@@ -109,7 +112,7 @@ class AttachmentService:
     @db_transaction.atomic
     def delete(trans: Transaction, attachment_id: int) -> None:
         """Delete the row and its storage object."""
-        attachment = AttachmentService._get_attachment(trans, attachment_id)
+        attachment = AttachmentService.get_attachment(trans, attachment_id)
         file_key = attachment.file_key
         attachment.delete()
         AttachmentService._delete_storage_objects([file_key])
@@ -135,6 +138,36 @@ class AttachmentService:
         bucket = AttachmentService._media_bucket()
         for key in keys:
             StorageService.delete_file(bucket, key)
+
+    # --- Extraction (R5) ---
+
+    @staticmethod
+    def read_bytes(attachment: TransactionAttachment) -> bytes | None:
+        """Fetch the stored file bytes (None if storage is off or the object is missing)."""
+        return StorageService.get_file(AttachmentService._media_bucket(), attachment.file_key)
+
+    @staticmethod
+    def dispatch_extraction(attachment: TransactionAttachment) -> None:
+        """Mark the attachment pending and enqueue the extraction task."""
+        from transactions.tasks import extract_attachment
+
+        attachment.extraction_status = TransactionAttachment.EXTRACTION_PENDING
+        attachment.extraction_error = ''
+        attachment.save(update_fields=['extraction_status', 'extraction_error'])
+        extract_attachment.delay(attachment.id)
+
+    @staticmethod
+    def mark_extraction_done(attachment: TransactionAttachment, result: dict) -> None:
+        attachment.extraction_status = TransactionAttachment.EXTRACTION_DONE
+        attachment.extraction_result = result
+        attachment.extraction_error = ''
+        attachment.save(update_fields=['extraction_status', 'extraction_result', 'extraction_error'])
+
+    @staticmethod
+    def mark_extraction_failed(attachment: TransactionAttachment, message: str) -> None:
+        attachment.extraction_status = TransactionAttachment.EXTRACTION_FAILED
+        attachment.extraction_error = message
+        attachment.save(update_fields=['extraction_status', 'extraction_error'])
 
     # --- GDPR export/import ---
 

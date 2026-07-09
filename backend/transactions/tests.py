@@ -645,3 +645,95 @@ class TestTransactionAttachments(TransactionTestCase):
         self.assertEqual(created, 1)
         self.assertEqual(target.attachments.count(), 1)
         self.assertEqual(target.attachments.first().filename, 'shop.jpg')
+
+
+CONTRACT_RESULT = {
+    'schema_version': '1',
+    'merchant': 'Lidl',
+    'date': '2026-06-14',
+    'currency': 'PLN',
+    'total': '20.47',
+    'items': [
+        {'name': 'Bread', 'quantity': '1', 'unit_price': '4.49', 'line_total': '4.49', 'confidence': 0.98},
+        {'name': 'Butter', 'quantity': '2', 'unit_price': '7.99', 'line_total': '15.98', 'confidence': 0.7},
+    ],
+    'confidence': {'merchant': 0.9, 'date': 0.95, 'currency': 0.99, 'total': 0.98, 'items': 0.8},
+    'warnings': [],
+}
+
+
+class TestExtraction(TransactionTestCase):
+    """Receipt extraction dispatch + polling (R5). Celery runs eager in tests."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='Receipt tx')
+        storage_patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = storage_patcher.start()
+        self.addCleanup(storage_patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
+        self.storage.get_presigned_url.return_value = 'http://signed/url'
+        self.storage.get_file.return_value = b'imagebytes'
+        # Pretend a parser is configured.
+        enabled_patcher = mock.patch('transactions.parser_client.is_enabled', return_value=True)
+        enabled_patcher.start()
+        self.addCleanup(enabled_patcher.stop)
+        self.attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg', filename='r.jpg', content_type='image/jpeg', size=10, uploaded_by=self.user
+        )
+
+    def _extract_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments/{self.attachment.id}/extract'
+
+    def _state_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments/{self.attachment.id}/extraction'
+
+    def test_config_reports_enabled_flag(self):
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            data = self.get('/api/transactions/extraction/config', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertFalse(data['enabled'])
+
+    def test_extract_success_stores_result(self):
+        with mock.patch('transactions.tasks.parse_receipt', return_value=CONTRACT_RESULT) as parse:
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(202)
+        parse.assert_called_once()
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'done')
+        self.assertEqual(state['result']['total'], '20.47')
+
+    def test_extract_failure_records_error(self):
+        from transactions.parser_client import ParserServiceError
+
+        with mock.patch('transactions.tasks.parse_receipt', side_effect=ParserServiceError('boom')):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'failed')
+        self.assertIn('boom', state['error'])
+        self.assertIsNone(state['result'])
+
+    def test_extract_disabled_returns_503(self):
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(503)
+
+    def test_missing_file_marks_failed(self):
+        self.storage.get_file.return_value = None
+        self.post(self._extract_url(), {}, **self.auth_headers())
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'failed')
+
+    def test_viewer_cannot_extract(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_extraction_status_in_attachment_list(self):
+        with mock.patch('transactions.tasks.parse_receipt', return_value=CONTRACT_RESULT):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        listed = self.get(f'/api/transactions/{self.trans.id}/attachments', **self.auth_headers())
+        self.assertEqual(listed[0]['extraction_status'], 'done')

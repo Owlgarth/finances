@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { accountsApi, budgetsApi, currenciesApi } from '../api/client'
+import { accountsApi, budgetsApi, currenciesApi, transactionsApi } from '../api/client'
 
 /** Active (non-archived) accounts for the current workspace. */
 export function useAccounts(includeArchived = false) {
@@ -29,4 +29,14 @@ export function useBudgets(includeInactive = false) {
 export function useMultiCurrency(): boolean {
   const { data } = useEnabledCurrencies()
   return (data?.length ?? 0) > 1
+}
+
+/** Whether receipt extraction is configured. When false, every extraction affordance hides. */
+export function useExtractionEnabled(): boolean {
+  const { data } = useQuery({
+    queryKey: ['extraction-config'],
+    queryFn: () => transactionsApi.extractionConfig(),
+    staleTime: 5 * 60 * 1000,
+  })
+  return data?.enabled ?? false
 }
