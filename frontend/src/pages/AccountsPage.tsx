@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, ArrowLeftRight, Archive, Pencil, Wallet, Landmark, Coins, Repeat } from 'lucide-react'
+import { Plus, ArrowLeftRight, Archive, Pencil, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
 import type { Account, AccountType, Transfer } from '../types'
 import { useMultiCurrency } from '../hooks/useDomain'
@@ -128,6 +128,11 @@ export default function AccountsPage() {
                     >
                       <Archive size={12} /> {account.is_archived ? 'Unarchive' : 'Archive'}
                     </button>
+                    {account.is_archived && (
+                      <button onClick={() => setDeleting(account)} className="text-text-muted hover:text-negative inline-flex items-center gap-1">
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

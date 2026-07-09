@@ -788,3 +788,73 @@ For multi-step flows (copy budget period, complex imports). Maximum **4 steps** 
 | Max steps | **4** — rethink the UX if more are needed |
 | Radius | `rounded-none` — sharp squares, not circles |
 | Shadow | **None** |
+
+---
+
+## 12. Canonical CRUD & Feedback Patterns (U2)
+
+One pattern per action type, implemented uniformly by the redesign screens.
+Everything below is enforced through the shared primitives (`Modal`,
+`ConfirmDialog`, `Select`, `formStyles`) and TanStack Query.
+
+### Create / Edit
+
+- Triggered from a page header button (`+ New X`) or a per-row `Edit`.
+- Opens a **`Modal`** form (never inline). One modal component serves both
+  create and edit, keyed on a nullable `entity` prop (`isEdit = !!entity`).
+- On submit: validate (see below) → `useMutation`.
+- On success: `toast.success('X created' | 'X updated')`, then
+  `queryClient.invalidateQueries` for every affected list/report, then close.
+- No optimistic updates — invalidate-and-refetch keeps computed balances honest.
+
+```
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['transactions'] })
+  queryClient.invalidateQueries({ queryKey: ['current-balances'] })
+  toast.success('Transaction added')
+  onClose()
+}
+```
+
+### Delete (destructive)
+
+- Never a bare button action. Sets a `deleting` state that opens **`ConfirmDialog`**
+  (title, one-line consequence, red confirm).
+- On confirm: `useMutation` → `toast.success` + invalidate; on error, surface the
+  server message via `toast.error(getApiErrorMessage(...))` (e.g. an account that
+  still has records returns 400 — shown, not swallowed).
+- Soft-delete (archive) is preferred where the domain protects records; hard
+  delete is offered only where it is safe (e.g. archived, record-free accounts).
+
+### Validation & error display
+
+- Client-side guards run **before** the mutation and report via `toast.error`
+  with a specific message (`'Amount is required'`, `'Accounts must differ'`).
+- Server/network errors are always surfaced through `toast.error(getApiErrorMessage(error, fallback))` — never silent, never a raw stack.
+- Field-level error styling (negative bg + ring + `AlertCircle`) is available on
+  `Select` and text inputs per components.md §4 for inline validation.
+
+### Empty states
+
+- Dense list/table views use a single muted line: `<p class="text-sm text-text-muted">No X yet.</p>` (or a full-width table row for tables).
+- Standalone/first-run pages use the richer `EmptyState` component (§2) with icon,
+  title, and a CTA.
+
+### Loading states
+
+- Component-level: skeleton pulses (`animate-pulse` on `bg-surface-muted`
+  blocks), never a centered spinner (§3). Lists show a few placeholder rows;
+  cards show sized blocks.
+- In-flight background refresh (e.g. extraction polling): a small inline
+  `Loader2` spinner with a label, scoped to the affected element only.
+
+### Consistency checklist (swept)
+
+| Screen | Create/Edit modal | Delete confirm | toast feedback | skeleton loading | muted empty |
+|---|---|---|---|---|---|
+| Accounts | ✅ | ✅ (archived only) | ✅ | ✅ | ✅ |
+| Transfers | ✅ | — (history is read-only) | ✅ | ✅ | ✅ |
+| Budgets / detail | ✅ | ✅ (archive) | ✅ | ✅ | ✅ |
+| Transactions | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Planned | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | — | — | ✅ | ✅ |
