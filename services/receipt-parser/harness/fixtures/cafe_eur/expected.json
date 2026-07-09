@@ -1,0 +1,20 @@
+{
+  "merchant": "Cafe Central",
+  "date": "2026-05-02",
+  "currency": "EUR",
+  "total": "15.80",
+  "items": [
+    {
+      "name": "Espresso doppio",
+      "line_total": "6.40"
+    },
+    {
+      "name": "Apfelstrudel",
+      "line_total": "5.90"
+    },
+    {
+      "name": "Mineralwasser",
+      "line_total": "3.50"
+    }
+  ]
+}
