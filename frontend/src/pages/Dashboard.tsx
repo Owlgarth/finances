@@ -4,6 +4,7 @@ import { Wallet, PieChart, Receipt } from 'lucide-react'
 import { reportsApi, transactionsApi } from '../api/client'
 import { useMultiCurrency } from '../hooks/useDomain'
 import { formatAmount } from '../utils/format'
+import BudgetInsights from '../components/dashboard/BudgetInsights'
 
 function BalancesCard() {
   const multiCurrency = useMultiCurrency()
@@ -68,6 +69,7 @@ export default function Dashboard() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-lg font-semibold text-text mb-6">Dashboard</h1>
+      <BudgetInsights />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BalancesCard />
         <RecentTransactions />

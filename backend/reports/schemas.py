@@ -46,6 +46,30 @@ class BudgetSummaryResponse(BaseModel):
     totals: dict[str, BudgetSummaryTotals]
 
 
+class BudgetHistoryTotals(BaseModel):
+    """Per-currency planned/actual totals for one period."""
+
+    planned: Decimal
+    actual: Decimal
+
+
+class BudgetHistoryPeriod(BaseModel):
+    """One period's aggregate in the budget history report."""
+
+    id: int
+    name: str
+    start_date: date
+    end_date: date
+    totals: dict[str, BudgetHistoryTotals]
+
+
+class BudgetHistoryResponse(BaseModel):
+    """Planned vs actual totals per period, oldest first."""
+
+    budget: BudgetSummaryBudget
+    periods: list[BudgetHistoryPeriod]
+
+
 class AccountBalanceRow(BaseModel):
     """Computed balance of a single account."""
 

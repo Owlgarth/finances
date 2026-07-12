@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db.models import Sum
 
 from accounts.services import AccountService
+from budgeting.models import CategoryBudget
 from budgeting.services import BudgetService, PeriodService
 from transactions.models import Transaction
 
@@ -82,6 +83,61 @@ class ReportService:
             'items': items,
             'totals': dict(totals),
         }
+
+    @staticmethod
+    def get_budget_history(workspace_id: int, budget_id: int, limit: int = 6) -> dict:
+        """Planned vs actual totals per currency for the budget's most recent periods.
+
+        Returns up to `limit` existing periods, oldest first — never materializes
+        new ones. Same actual semantics as the summary: expense transactions of
+        the budget's categories within each period's date range.
+        """
+        budget = BudgetService.get(budget_id, workspace_id)
+        recent = list(budget.periods.order_by('-start_date')[:limit])
+        recent.reverse()
+
+        planned_rows = (
+            CategoryBudget.objects.filter(period__in=[p.id for p in recent])
+            .values('period_id', 'currency__code')
+            .annotate(total=Sum('amount'))
+        )
+        planned_map: dict[tuple[int, str], Decimal] = {
+            (row['period_id'], row['currency__code']): row['total'] for row in planned_rows
+        }
+
+        cents = Decimal('0.01')
+        periods = []
+        for period in recent:
+            actual_rows = (
+                Transaction.objects.for_workspace(workspace_id)
+                .filter(
+                    category__budget_id=budget_id,
+                    type='expense',
+                    date__gte=period.start_date,
+                    date__lte=period.end_date,
+                )
+                .values('account__currency__code')
+                .annotate(total=Sum('amount'))
+            )
+            actual_map = {row['account__currency__code']: row['total'] for row in actual_rows}
+
+            totals = {}
+            for code in sorted({c for (pid, c) in planned_map if pid == period.id} | set(actual_map)):
+                totals[code] = {
+                    'planned': planned_map.get((period.id, code), Decimal('0')).quantize(cents),
+                    'actual': actual_map.get(code, Decimal('0')).quantize(cents),
+                }
+            periods.append(
+                {
+                    'id': period.id,
+                    'name': period.name,
+                    'start_date': period.start_date,
+                    'end_date': period.end_date,
+                    'totals': totals,
+                }
+            )
+
+        return {'budget': {'id': budget.id, 'name': budget.name}, 'periods': periods}
 
     @staticmethod
     def get_current_balances(workspace_id: int, include_archived: bool = False) -> dict:

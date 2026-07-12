@@ -173,3 +173,73 @@ class TestCurrentBalances(ReportsTestCase):
     def test_current_balances_without_auth_fails(self):
         self.get('/api/reports/current-balances')
         self.assertStatus(401)
+
+
+class TestBudgetHistory(ReportsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.june = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 6, 15))
+        for period, amount in ((self.june, '900.00'), (self.period, '1000.00')):
+            CategoryBudget.objects.create(
+                period=period,
+                workspace_id=self.workspace.id,
+                category=self.groceries,
+                currency=self.pln,
+                amount=Decimal(amount),
+                created_by=self.user,
+            )
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            category=self.groceries,
+            date=date(2026, 6, 20),
+            amount=Decimal('850.00'),
+            type='expense',
+        )
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            category=self.groceries,
+            date=date(2026, 7, 5),
+            amount=Decimal('300.00'),
+            type='expense',
+        )
+
+    def test_history_returns_periods_oldest_first_with_totals(self):
+        data = self.get(f'/api/reports/budget-history?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertStatus(200)
+
+        self.assertEqual(data['budget']['name'], self.budget.name)
+        self.assertEqual([p['name'] for p in data['periods']], ['June 2026', 'July 2026'])
+
+        june, july = data['periods']
+        self.assertEqual(june['totals']['PLN'], {'planned': '900.00', 'actual': '850.00'})
+        self.assertEqual(july['totals']['PLN'], {'planned': '1000.00', 'actual': '300.00'})
+
+    def test_history_respects_limit(self):
+        data = self.get(f'/api/reports/budget-history?budget_id={self.budget.id}&limit=1', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([p['name'] for p in data['periods']], ['July 2026'])
+
+    def test_history_excludes_income_and_uncategorized(self):
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 6),
+            amount=Decimal('99.00'),
+            type='income',
+        )
+        TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 7),
+            amount=Decimal('77.00'),
+            type='expense',
+        )
+        data = self.get(f'/api/reports/budget-history?budget_id={self.budget.id}', **self.auth_headers())
+        july = data['periods'][-1]
+        self.assertEqual(july['totals']['PLN']['actual'], '300.00')
+
+    def test_history_unknown_budget_404(self):
+        self.get('/api/reports/budget-history?budget_id=999999', **self.auth_headers())
+        self.assertStatus(404)

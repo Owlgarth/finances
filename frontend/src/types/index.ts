@@ -211,6 +211,19 @@ export interface BudgetSummaryResponse {
   totals: Record<string, { planned: string; actual: string; remaining: string }>;
 }
 
+export interface BudgetHistoryPeriod {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  totals: Record<string, { planned: string; actual: string }>;
+}
+
+export interface BudgetHistoryResponse {
+  budget: { id: number; name: string };
+  periods: BudgetHistoryPeriod[];
+}
+
 export interface AccountBalanceRow {
   account_id: number;
   account_name: string;
