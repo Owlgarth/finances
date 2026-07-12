@@ -15,6 +15,8 @@ from core.schemas import (
     AccountDeleteCheckOut,
     AccountDeleteIn,
     AccountDeleteOut,
+    AccountResetIn,
+    AccountResetOut,
     ConsentIn,
     ConsentOut,
     ConsentStatusOut,
@@ -145,6 +147,24 @@ def delete_account(request, data: AccountDeleteIn):
     return 200, {
         'message': 'Account and all associated data deleted successfully.',
         'deleted_workspaces': result['deleted_workspaces'],
+    }
+
+
+@router.post('/me/reset', auth=JWTAuth(), response={200: AccountResetOut, 400: DetailOut, 401: DetailOut})
+def reset_account(request, data: AccountResetIn):
+    """
+    Reset the account to a fresh post-registration state.
+
+    Deletes all workspaces the user owns and their data (IRREVERSIBLE), keeps
+    the user account, credentials, preferences and other member users, then
+    creates a fresh default workspace. Requires password confirmation.
+    """
+    result = services.UserService.reset_account(request.auth, data.password, data.workspace_name, data.currency_code)
+    return 200, {
+        'message': 'Account reset. A fresh workspace is ready.',
+        'deleted_workspaces': result['deleted_workspaces'],
+        'workspace_id': result['workspace_id'],
+        'workspace_name': result['workspace_name'],
     }
 
 

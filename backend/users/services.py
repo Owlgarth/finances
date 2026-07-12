@@ -452,6 +452,45 @@ class UserService:
         return {'deleted_workspaces': deleted_workspace_names}
 
     @staticmethod
+    def reset_account(user: User, password: str, workspace_name: str, currency_code: str) -> dict:
+        """
+        Wipe the user's data back to a fresh post-registration state.
+
+        Deletes every workspace the user OWNS (including shared ones — other
+        member users keep their accounts, only their access to the deleted
+        workspaces goes away), then creates a fresh default workspace with the
+        standard starter setup (Main account, General budget, current period,
+        starter categories). Memberships in workspaces owned by other users are
+        left untouched — that data belongs to its owners.
+
+        Unlike delete_account, the user row, credentials, preferences, 2FA and
+        consents all survive: this exists for testing/starting over without
+        re-registering.
+        """
+        from workspaces.services import WorkspaceService
+
+        if not user.check_password(password):
+            raise UserInvalidPasswordError('Invalid password')
+
+        owned_workspaces = Workspace.objects.filter(owner=user)
+        deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
+
+        with db_transaction.atomic():
+            for ws in owned_workspaces:
+                delete_workspace_financial_records(ws.id)
+            owned_workspaces.delete()
+
+            workspace = WorkspaceService.create_workspace(
+                user=user, name=workspace_name, currency_code=currency_code, create_demo=False
+            )
+
+        return {
+            'deleted_workspaces': deleted_workspace_names,
+            'workspace_id': workspace.id,
+            'workspace_name': workspace.name,
+        }
+
+    @staticmethod
     def export_all_data(user: User) -> dict:
         """
         Export all personal data for GDPR compliance (Articles 15, 20).

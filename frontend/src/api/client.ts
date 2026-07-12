@@ -7,7 +7,7 @@ import type {
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
-  BudgetSummaryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
+  BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
   TransactionAttachment, ExtractionResult, ParsedReceipt,
 } from '../types';
 
@@ -315,6 +315,8 @@ export const transfersApi = {
 export const reportsApi = {
   budgetSummary: (budgetId: number, periodId: number): Promise<BudgetSummaryResponse> =>
     api.get<BudgetSummaryResponse>('/reports/budget-summary', { params: { budget_id: budgetId, period_id: periodId } }).then(res => res.data),
+  budgetHistory: (budgetId: number, limit = 6): Promise<BudgetHistoryResponse> =>
+    api.get<BudgetHistoryResponse>('/reports/budget-history', { params: { budget_id: budgetId, limit } }).then(res => res.data),
   currentBalances: (includeArchived = false): Promise<CurrentBalancesResponse> =>
     api.get<CurrentBalancesResponse>('/reports/current-balances', { params: { include_archived: includeArchived } }).then(res => res.data),
 };
@@ -371,6 +373,9 @@ export const authApi = {
 
   deleteAccount: (password: string): Promise<{ message: string; deleted_workspaces: string[] }> =>
     api.delete('/users/me', { data: { password } }).then(res => res.data),
+
+  resetAccount: (data: { password: string; workspace_name?: string; currency_code?: string }): Promise<{ message: string; deleted_workspaces: string[]; workspace_id: number; workspace_name: string }> =>
+    api.post('/users/me/reset', data).then(res => res.data),
 
   exportData: (): Promise<Blob> =>
     api.get('/users/me/export', { responseType: 'blob' }).then(res => res.data),

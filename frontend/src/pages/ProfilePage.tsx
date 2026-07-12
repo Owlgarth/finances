@@ -8,6 +8,7 @@ import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
+import ResetAccountSection from '../components/profile/ResetAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
 import LegacyImportModal from '../components/profile/LegacyImportModal'
 
@@ -277,6 +278,10 @@ export default function ProfilePage() {
                 >
                   {isExporting ? 'Exporting...' : 'Export All My Data'}
                 </button>
+              </div>
+
+              <div className="bg-warning-bg rounded-sm border border-border p-6">
+                <ResetAccountSection />
               </div>
 
               <div className="bg-negative-bg rounded-sm border border-border p-6">

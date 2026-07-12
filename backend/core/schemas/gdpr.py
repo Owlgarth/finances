@@ -11,6 +11,26 @@ class AccountDeleteIn(BaseModel):
     password: str
 
 
+class AccountResetIn(BaseModel):
+    """Input for account reset — requires password confirmation.
+
+    workspace_name/currency_code shape the fresh workspace created after the wipe.
+    """
+
+    password: str
+    workspace_name: str = Field('My Workspace', max_length=100)
+    currency_code: str = Field('PLN', pattern=r'^[A-Z]{3,8}$')
+
+
+class AccountResetOut(BaseModel):
+    """Result of an account reset."""
+
+    message: str
+    deleted_workspaces: list[str]
+    workspace_id: int
+    workspace_name: str
+
+
 class BlockingWorkspace(BaseModel):
     """A workspace that blocks account deletion (user owns it + other members exist)."""
 
