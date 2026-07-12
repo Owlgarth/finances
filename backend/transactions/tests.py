@@ -342,6 +342,28 @@ class TestUpdateDelete(TransactionTestCase):
         self.assertStatus(200)
         self.assertEqual(data['account_id'], self.account.id)
 
+    def test_update_with_null_category(self):
+        """Explicit category_id=null must update fine (modal sends null when budget changes)."""
+        created = self.post(
+            '/api/transactions',
+            self._payload(account_id=self.account.id, category_id=self.groceries.id),
+            **self.auth_headers(),
+        )
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                account_id=self.account.id,
+                category_id=None,
+                original_amount=None,
+                original_currency_code=None,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['category_id'])
+        self.assertIsNone(data['category_budget_id'])
+
     def test_delete(self):
         trans = TransactionFactory(account=self.account, workspace=self.workspace)
         self.delete(f'/api/transactions/{trans.id}', **self.auth_headers())
