@@ -7,6 +7,7 @@ import DatePicker from '../../DatePicker'
 import { budgetsApi, plannedTransactionsApi } from '../../../api/client'
 import type { PlannedTransaction } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
+import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
 
@@ -19,8 +20,12 @@ interface Props {
 export default function PlannedFormModal({ open, onClose, planned }: Props) {
   const isEdit = !!planned
   const queryClient = useQueryClient()
+  const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
+
+  const defaultBudgetId =
+    budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
 
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
@@ -42,12 +47,12 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
       setName('')
       setAmount('')
       setAccountId(accounts.length === 1 ? accounts[0].id : null)
-      setBudgetId(budgets.length === 1 ? budgets[0].id : null)
+      setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setPlannedDate(new Date().toISOString().slice(0, 10))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planned, accounts.length, budgets.length])
+  }, [open, planned, accounts.length, budgets.length, defaultBudgetId])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],

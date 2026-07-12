@@ -448,6 +448,9 @@ export const workspacesApi = {
   switch: (workspaceId: number) =>
     api.post(`/workspaces/${workspaceId}/switch`).then(res => res.data),
 
+  setDefaultBudget: (workspaceId: number, budgetId: number | null): Promise<Workspace> =>
+    api.put<Workspace>(`/workspaces/${workspaceId}/default-budget`, { budget_id: budgetId }).then(res => res.data),
+
   create: (data: { name: string; currency_code?: string }): Promise<Workspace> =>
     api.post<Workspace>('/workspaces/', data).then(res => res.data),
 

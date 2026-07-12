@@ -28,8 +28,15 @@ class WorkspaceOut(BaseModel):
     id: int
     name: str
     owner_id: int | None = None
+    default_budget_id: int | None = None
     created_at: datetime
     user_role: str | None = None
+
+
+class WorkspaceDefaultBudgetIn(BaseModel):
+    """Request to set (or clear) the workspace's default budget."""
+
+    budget_id: int | None = None
 
 
 class WorkspaceCreate(BaseModel):

@@ -9,8 +9,9 @@ import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
+import LegacyImportModal from '../components/profile/LegacyImportModal'
 
-import type { ImportResult, LegacyImportResult } from '../types'
+import type { ImportResult } from '../types'
 
 type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
@@ -23,9 +24,7 @@ export default function ProfilePage() {
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
-  const [isLegacyImporting, setIsLegacyImporting] = useState(false)
-  const [legacyResult, setLegacyResult] = useState<LegacyImportResult | null>(null)
-  const legacyFileRef = useRef<HTMLInputElement>(null)
+  const [legacyImportOpen, setLegacyImportOpen] = useState(false)
 
   const handleExportData = async () => {
     setIsExporting(true)
@@ -69,37 +68,6 @@ export default function ProfilePage() {
       setIsImporting(false)
       if (importFileRef.current) {
         importFileRef.current.value = ''
-      }
-    }
-  }
-
-  const handleLegacyImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setIsLegacyImporting(true)
-    setLegacyResult(null)
-    try {
-      const text = await file.text()
-      const exportData = JSON.parse(text)
-      const result = await authApi.importLegacy(exportData)
-      setLegacyResult(result)
-      const warnings = result.workspaces.reduce((n, w) => n + w.warnings.length, 0)
-      if (warnings > 0) {
-        toast(`Imported with ${warnings} balance warning(s) to review.`)
-      } else {
-        toast.success(`Imported ${result.workspaces.length} workspace(s).`)
-      }
-    } catch (error: any) {
-      if (error instanceof SyntaxError) {
-        toast.error('Invalid JSON file. Please select a valid export file.')
-      } else {
-        toast.error(error.response?.data?.detail || 'Failed to import legacy data. Please try again.')
-      }
-    } finally {
-      setIsLegacyImporting(false)
-      if (legacyFileRef.current) {
-        legacyFileRef.current.value = ''
       }
     }
   }
@@ -287,55 +255,13 @@ export default function ProfilePage() {
                   report shows each account's balance. Reconcile any warnings with a "Set balance…" on the
                   Accounts page.
                 </p>
-                <input
-                  ref={legacyFileRef}
-                  type="file"
-                  accept=".json"
-                  onChange={handleLegacyImportFile}
-                  className="hidden"
-                />
                 <button
-                  onClick={() => legacyFileRef.current?.click()}
-                  disabled={isLegacyImporting}
-                  className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
+                  onClick={() => setLegacyImportOpen(true)}
+                  className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
                 >
-                  {isLegacyImporting ? 'Importing...' : 'Import legacy export'}
+                  Import legacy export
                 </button>
-                {legacyResult && (
-                  <div className="mt-4 space-y-4">
-                    {legacyResult.workspaces.map((ws) => (
-                      <div key={ws.workspace_name} className="p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-2">
-                        <p className="font-medium text-text">{ws.workspace_name}</p>
-                        <p className="text-text-muted">
-                          Created: {Object.entries(ws.created).map(([k, v]) => `${v} ${k}`).join(', ')}
-                        </p>
-                        {ws.deduped_transactions.length > 0 && (
-                          <p className="text-text-muted">
-                            Skipped {ws.deduped_transactions.length} linked exchange transaction(s) to avoid double-counting.
-                          </p>
-                        )}
-                        <div>
-                          <p className="text-text-muted mb-1">Balance verification:</p>
-                          <ul className="space-y-0.5">
-                            {ws.balances.map((b) => (
-                              <li key={b.account_name} className={`font-mono text-xs ${b.matches ? 'text-positive' : 'text-warning'}`}>
-                                {b.account_name}: {b.computed_balance} {b.currency_code}
-                                {!b.matches && b.expected_closing_balance !== null && (
-                                  <> (expected {b.expected_closing_balance} — reconcile)</>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        {ws.warnings.length > 0 && (
-                          <ul className="text-warning text-xs list-disc pl-4">
-                            {ws.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <LegacyImportModal open={legacyImportOpen} onClose={() => setLegacyImportOpen(false)} />
               </div>
 
               <div>

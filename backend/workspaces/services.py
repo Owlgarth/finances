@@ -120,6 +120,26 @@ class WorkspaceService:
         return WorkspaceService._to_response(workspace, user_role)
 
     @staticmethod
+    @db_transaction.atomic
+    def set_default_budget(workspace_id: int, budget_id: int | None, user_role: str) -> WorkspaceOut:
+        """Set (or clear with None) the workspace's default budget.
+
+        Caller is responsible for role authorization. The budget must belong
+        to the workspace and be active.
+        """
+        workspace = Workspace.objects.filter(id=workspace_id).first()
+        if not workspace:
+            raise WorkspaceNotFoundError()
+        budget = None
+        if budget_id is not None:
+            budget = Budget.objects.filter(id=budget_id, workspace_id=workspace_id, is_active=True).first()
+            if not budget:
+                raise ValidationError('Budget not found in this workspace')
+        workspace.default_budget = budget
+        workspace.save(update_fields=['default_budget'])
+        return WorkspaceService._to_response(workspace, user_role)
+
+    @staticmethod
     def switch_workspace(user, workspace_id: int) -> dict:
         """Switch the user's current workspace.
 

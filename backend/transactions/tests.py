@@ -246,6 +246,13 @@ class TestFiltersAndTotals(TransactionTestCase):
         self.assertEqual(data['total'], 1)
         self.assertEqual(data['items'][0]['category_name'], 'Groceries')
 
+    def test_response_includes_category_budget_id(self):
+        data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertEqual(data['items'][0]['category_budget_id'], self.budget.id)
+
+        uncategorized = self.get('/api/transactions?transaction_type=income', **self.auth_headers())
+        self.assertIsNone(uncategorized['items'][0]['category_budget_id'])
+
     def test_filter_by_type(self):
         data = self.get('/api/transactions?transaction_type=income', **self.auth_headers())
         self.assertEqual(data['total'], 1)

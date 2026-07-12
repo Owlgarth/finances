@@ -10,6 +10,8 @@ import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import Pagination from '../components/common/Pagination'
+import SegmentedControl from '../components/common/SegmentedControl'
 import { primaryButtonClass } from '../components/common/formStyles'
 
 const STATUS_STYLE: Record<string, string> = {
@@ -17,6 +19,15 @@ const STATUS_STYLE: Record<string, string> = {
   done: 'text-positive border-positive/40',
   cancelled: 'text-text-muted border-border',
 }
+
+type StatusFilter = 'all' | 'pending' | 'done' | 'cancelled'
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'done', label: 'Done' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
 
 export default function Planned() {
   const queryClient = useQueryClient()
@@ -26,8 +37,19 @@ export default function Planned() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
-  const { data, isLoading } = useQuery({ queryKey: ['planned'], queryFn: () => plannedTransactionsApi.getAll({ page_size: 100 }) })
+  const { data, isLoading } = useQuery({
+    queryKey: ['planned', statusFilter, page, pageSize],
+    queryFn: () =>
+      plannedTransactionsApi.getAll({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        page,
+        page_size: pageSize,
+      }),
+  })
   const items = data?.items ?? []
 
   const executeMutation = useMutation({
@@ -58,10 +80,21 @@ export default function Planned() {
         )}
       </div>
 
+      <div className="mb-4">
+        <SegmentedControl
+          value={statusFilter}
+          onChange={(v) => { setStatusFilter(v); setPage(1) }}
+          options={STATUS_OPTIONS}
+          aria-label="Filter by status"
+        />
+      </div>
+
       {isLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : items.length === 0 ? (
-        <p className="text-sm text-text-muted">No planned transactions.</p>
+        <p className="text-sm text-text-muted">
+          {statusFilter === 'all' ? 'No planned transactions.' : `No ${statusFilter} planned transactions.`}
+        </p>
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
           {items.map((p) => (
@@ -87,6 +120,16 @@ export default function Planned() {
               </div>
             </div>
           ))}
+          {data && data.total_pages > 1 && (
+            <Pagination
+              page={data.page}
+              total_pages={data.total_pages}
+              total={data.total}
+              page_size={data.page_size}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+            />
+          )}
         </div>
       )}
 

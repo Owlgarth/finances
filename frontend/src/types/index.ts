@@ -84,6 +84,7 @@ export interface Transaction {
   description: string;
   category_id: number | null;
   category_name: string | null;
+  category_budget_id: number | null;
   amount: string;
   type: TransactionType;
   original_amount: string | null;
@@ -245,6 +246,7 @@ export interface Workspace {
   id: number;
   name: string;
   owner_id?: number;
+  default_budget_id?: number | null;
   created_at: string;
   user_role?: Role;
 }
@@ -400,8 +402,10 @@ export interface ImportResult {
 
 export interface LegacyImportResult {
   workspaces: Array<{
+    workspace_id: number;
     workspace_name: string;
     created: Record<string, number>;
+    budgets: Array<{ id: number; name: string }>;
     deduped_transactions: Array<{
       date: string | null;
       description: string | null;

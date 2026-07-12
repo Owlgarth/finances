@@ -13,6 +13,7 @@ from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
 from workspaces.schemas import (
     MemberPasswordReset,
     WorkspaceCreate,
+    WorkspaceDefaultBudgetIn,
     WorkspaceMemberAdd,
     WorkspaceMemberOut,
     WorkspaceMemberRoleUpdate,
@@ -115,6 +116,22 @@ def delete_workspace_endpoint(request: HttpRequest, workspace_id: int):
 def switch_workspace(request: HttpRequest, workspace_id: int):
     """Switch to a different workspace."""
     return WorkspaceService.switch_workspace(request.auth, workspace_id)
+
+
+@router.put(
+    '/{workspace_id}/default-budget',
+    response={200: WorkspaceOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=JWTAuth(),
+)
+def set_default_budget(request: HttpRequest, workspace_id: int, data: WorkspaceDefaultBudgetIn):
+    """Set (or clear) the workspace's default budget (requires owner or admin role).
+
+    Takes an explicit workspace id so it works right after a legacy import,
+    which can create several workspaces beyond the current one.
+    """
+    WorkspaceMemberService.validate_access(workspace_id, request.auth)
+    user_role = require_role(request.auth, workspace_id, ADMIN_ROLES)
+    return WorkspaceService.set_default_budget(workspace_id, data.budget_id, user_role)
 
 
 # =============================================================================

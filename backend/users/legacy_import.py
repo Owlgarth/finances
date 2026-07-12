@@ -233,6 +233,7 @@ class LegacyImportService:
             LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
 
         counts = {'budgets': 0, 'periods': 0, 'categories': 0, 'transactions': 0, 'transfers': 0, 'planned': 0}
+        created_budgets: list[Budget] = []
         deduped: list[dict] = []
         # expected final balance per currency = latest period's closing balance
         latest_close: dict[str, tuple] = {}  # code -> (end_date, closing_balance)
@@ -257,6 +258,7 @@ class LegacyImportService:
             )
             if created:
                 counts['budgets'] += 1
+                created_budgets.append(budget)
 
             # (budget, ci-name) -> Category, merged across periods.
             category_map: dict[str, Category] = {}
@@ -310,7 +312,7 @@ class LegacyImportService:
                         continue
                     account = resolve_account(symbol)
                     tx_type = tx.get('type')
-                    category = get_category(tx.get('category_name')) if tx_type != 'income' else None
+                    category = get_category(tx.get('category_name'))
                     Transaction.objects.create(
                         workspace=workspace,
                         account=account,
@@ -396,8 +398,10 @@ class LegacyImportService:
         ]
 
         return {
+            'workspace_id': workspace.id,
             'workspace_name': workspace.name,
             'created': counts,
+            'budgets': [{'id': b.id, 'name': b.name} for b in created_budgets],
             'deduped_transactions': deduped,
             'balances': balance_report,
             'warnings': warnings,

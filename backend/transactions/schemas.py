@@ -81,6 +81,7 @@ class TransactionOut(BaseModel):
     description: str
     category_id: Optional[int]
     category_name: Optional[str] = None
+    category_budget_id: Optional[int] = None
     amount: Decimal
     type: str
     original_amount: Optional[Decimal] = None

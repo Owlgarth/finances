@@ -95,11 +95,20 @@ class LegacyDedupedTransaction(BaseModel):
     currency_code: str | None
 
 
+class LegacyImportedBudget(BaseModel):
+    """A budget created during a legacy import (for default-budget selection)."""
+
+    id: int
+    name: str
+
+
 class LegacyWorkspaceReport(BaseModel):
     """Verification report for one imported workspace."""
 
+    workspace_id: int
     workspace_name: str
     created: dict[str, int]
+    budgets: list[LegacyImportedBudget]
     deduped_transactions: list[LegacyDedupedTransaction]
     balances: list[LegacyBalanceCheck]
     warnings: list[str]

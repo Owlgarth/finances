@@ -9,6 +9,7 @@ import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { Transaction, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
+import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
 
@@ -27,9 +28,13 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 export default function TransactionFormModal({ open, onClose, transaction }: Props) {
   const isEdit = !!transaction
   const queryClient = useQueryClient()
+  const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
   const { data: currencies = [] } = useEnabledCurrencies()
+
+  const defaultBudgetId =
+    budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
@@ -56,21 +61,21 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
       setOtherCurrency(!!transaction.original_currency_code)
       setOriginalAmount(transaction.original_amount ?? '')
       setOriginalCurrencyCode(transaction.original_currency_code)
-      setBudgetId(null)
+      setBudgetId(transaction.category_budget_id)
     } else {
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
       setType('expense')
       setAmount('')
       setAccountId(accounts.length === 1 ? accounts[0].id : null)
-      setBudgetId(budgets.length === 1 ? budgets[0].id : null)
+      setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setOtherCurrency(false)
       setOriginalAmount('')
       setOriginalCurrencyCode(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, accounts.length, budgets.length])
+  }, [open, transaction, accounts.length, budgets.length, defaultBudgetId])
 
   const account = accounts.find((a) => a.id === accountId)
 

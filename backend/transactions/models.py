@@ -84,6 +84,10 @@ class Transaction(WorkspaceScopedModel):
         return self.category.name if self.category else None
 
     @property
+    def category_budget_id(self) -> int | None:
+        return self.category.budget_id if self.category else None
+
+    @property
     def original_currency_code(self) -> str | None:
         return self.original_currency.code if self.original_currency else None
 

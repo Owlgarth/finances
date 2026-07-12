@@ -27,6 +27,10 @@ class Workspace(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_workspaces'
     )
+    # Preselected in record forms when the workspace has more than one budget.
+    default_budget = models.ForeignKey(
+        'budgeting.Budget', on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 

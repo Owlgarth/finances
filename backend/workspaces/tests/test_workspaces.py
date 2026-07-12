@@ -214,6 +214,80 @@ class TestSwitchWorkspace(WorkspaceTestCase):
 
 
 # =============================================================================
+# Set Default Budget Tests
+# =============================================================================
+
+
+class TestSetDefaultBudget(WorkspaceTestCase):
+    """Tests for PUT /api/workspaces/{workspace_id}/default-budget."""
+
+    def setUp(self):
+        super().setUp()
+        self.budget = PlanBudgetFactory(workspace=self.workspace, name='Household')
+
+    def test_set_default_budget_as_owner(self):
+        payload = {'budget_id': self.budget.id}
+        data = self.put(f'/api/workspaces/{self.workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['default_budget_id'], self.budget.id)
+
+        self.workspace.refresh_from_db()
+        self.assertEqual(self.workspace.default_budget_id, self.budget.id)
+
+    def test_clear_default_budget(self):
+        self.workspace.default_budget = self.budget
+        self.workspace.save(update_fields=['default_budget'])
+
+        data = self.put(
+            f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': None}, **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['default_budget_id'])
+
+        self.workspace.refresh_from_db()
+        self.assertIsNone(self.workspace.default_budget_id)
+
+    def test_set_default_budget_works_for_non_current_workspace(self):
+        """Explicit workspace id — must work right after a legacy import creates other workspaces."""
+        other_budget = PlanBudgetFactory(workspace=self.other_workspace, name='Other budget')
+        payload = {'budget_id': other_budget.id}
+        data = self.put(f'/api/workspaces/{self.other_workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['default_budget_id'], other_budget.id)
+
+    def test_budget_from_another_workspace_rejected(self):
+        foreign_budget = PlanBudgetFactory(workspace=self.other_workspace)
+        payload = {'budget_id': foreign_budget.id}
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_archived_budget_rejected(self):
+        archived = PlanBudgetFactory(workspace=self.workspace, is_active=False)
+        self.put(
+            f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': archived.id}, **self.auth_headers()
+        )
+        self.assertStatus(400)
+
+    def test_member_cannot_set_default_budget(self):
+        token = self.create_token_for_user(self.member_user)
+        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': self.budget.id}, **headers)
+        self.assertStatus(403)
+
+    def test_non_member_workspace_returns_404(self):
+        forbidden = WorkspaceFactory(name='Forbidden')
+        forbidden_budget = PlanBudgetFactory(workspace=forbidden)
+        self.put(
+            f'/api/workspaces/{forbidden.id}/default-budget', {'budget_id': forbidden_budget.id}, **self.auth_headers()
+        )
+        self.assertStatus(404)
+
+    def test_requires_auth(self):
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': self.budget.id})
+        self.assertStatus(401)
+
+
+# =============================================================================
 # List Workspace Members Tests
 # =============================================================================
 

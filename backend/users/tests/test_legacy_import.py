@@ -164,6 +164,24 @@ class TestLegacyImportService(AuthMixin, TestCase):
         self.assertEqual(wr['created']['periods'], 1)
         self.assertEqual(wr['created']['categories'], 2)
 
+    def test_income_transaction_keeps_category(self):
+        LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+
+        salary = Transaction.objects.get(workspace=ws, description='Salary')
+        self.assertEqual(salary.type, 'income')
+        self.assertIsNotNone(salary.category)
+        self.assertEqual(salary.category.name, 'Salary')
+
+    def test_report_includes_created_budgets(self):
+        report = LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+
+        wr = report['workspaces'][0]
+        self.assertEqual(wr['workspace_id'], ws.id)
+        self.assertEqual(wr['budgets'], [{'id': budget.id, 'name': 'Household'}])
+
     def test_accounts_created_per_currency(self):
         LegacyImportService.import_legacy(self.user, _legacy_v2_export())
         ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
@@ -310,6 +328,8 @@ class TestLegacyImportEndpoint(AuthMixin, TestCase):
         self.assertEqual(len(body['workspaces']), 1)
         self.assertEqual(body['workspaces'][0]['created']['transactions'], 2)
         self.assertEqual(len(body['workspaces'][0]['deduped_transactions']), 2)
+        self.assertIn('workspace_id', body['workspaces'][0])
+        self.assertEqual([b['name'] for b in body['workspaces'][0]['budgets']], ['Household'])
 
     def test_endpoint_requires_auth(self):
         response = self.client.post(
