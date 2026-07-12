@@ -8,6 +8,7 @@ from budgeting.exceptions import NoPeriodForDateError, PeriodNotEditableError, P
 from budgeting.factories import BudgetFactory, PeriodFactory
 from budgeting.models import Budget, Cadence, Period
 from budgeting.services import PeriodService
+from categories.factories import CategoryFactory
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from workspaces.factories import WorkspaceFactory
@@ -263,6 +264,43 @@ class TestPeriodsAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(200)
         today = date.today()
         self.assertEqual(data['start_date'], today.replace(day=1).isoformat())
+
+    def test_future_month_materializes_with_copied_plan_and_independent_edits(self):
+        """Planning ahead: a future month materializes with the plan copied forward,
+        and editing its amounts never touches the earlier period."""
+        from currencies.services import CurrencyCatalogService
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        category = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Groceries')
+
+        july = self.get(f'/api/budgets/{self.budget.id}/periods/current?date=2026-07-15', **self.auth_headers())
+        self.put(
+            f'/api/budgets/{self.budget.id}/periods/{july["id"]}/category-budgets',
+            {'category_id': category.id, 'currency_code': 'PLN', 'amount': '1500.00'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+
+        # Future month: lazily created, plan copied forward.
+        august = self.get(f'/api/budgets/{self.budget.id}/periods/current?date=2026-08-15', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(august['start_date'], '2026-08-01')
+        rows = self.get(
+            f'/api/budgets/{self.budget.id}/periods/{august["id"]}/category-budgets', **self.auth_headers()
+        )
+        self.assertEqual([(r['category_id'], r['amount']) for r in rows], [(category.id, '1500.00')])
+
+        # Editing August never touches July.
+        self.put(
+            f'/api/budgets/{self.budget.id}/periods/{august["id"]}/category-budgets',
+            {'category_id': category.id, 'currency_code': 'PLN', 'amount': '2000.00'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        july_rows = self.get(
+            f'/api/budgets/{self.budget.id}/periods/{july["id"]}/category-budgets', **self.auth_headers()
+        )
+        self.assertEqual(july_rows[0]['amount'], '1500.00')
 
     def test_current_custom_cadence_without_period_returns_400(self):
         budget = BudgetFactory(workspace=self.workspace, cadence=Cadence.CUSTOM)
