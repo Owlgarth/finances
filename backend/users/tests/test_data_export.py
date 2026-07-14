@@ -58,7 +58,15 @@ class DataExportTests(AuthMixin, TestCase):
         response = self.client.get('/api/users/me/export', **self.auth_headers())
         data = json.loads(response.content)
 
-        required_keys = {'export_version', 'exported_at', 'profile', 'preferences', 'consents', 'workspaces'}
+        required_keys = {
+            'export_version',
+            'exported_at',
+            'profile',
+            'preferences',
+            'consents',
+            'workspaces',
+            'two_factor',
+        }
         self.assertEqual(set(data.keys()), required_keys)
 
     def test_export_excludes_other_users_data(self):

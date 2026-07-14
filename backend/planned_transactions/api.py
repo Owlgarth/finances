@@ -16,12 +16,13 @@ from planned_transactions.schemas import (
     PlannedTransactionCreate,
     PlannedTransactionOut,
     PlannedTransactionTotalsResponse,
-    PlannedTransactionUpdate,
 )
 from planned_transactions.services import PlannedTransactionService
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Planned Transactions'])
+
+ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account__name|account__currency__code))$'
 
 
 # =============================================================================
@@ -33,14 +34,10 @@ router = Router(tags=['Planned Transactions'])
 def list_planned(
     request: HttpRequest,
     status: str | None = Query(None),
-    budget_period_id: int | None = Query(None),
-    currency: list[str] | None = Query(None),
+    account_id: int | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
-    ordering: str | None = Query(
-        None,
-        pattern=r'^(-?(name|amount|status|planned_date|category__name|currency__symbol))$',
-    ),
+    ordering: str | None = Query(None, pattern=ORDERING_PATTERN),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
@@ -49,8 +46,7 @@ def list_planned(
     return PlannedTransactionService.list(
         workspace_id,
         status,
-        budget_period_id,
-        currency,
+        account_id,
         start_date,
         end_date,
         ordering=ordering,
@@ -59,7 +55,7 @@ def list_planned(
     )
 
 
-@router.post('', response={201: PlannedTransactionOut, 400: dict}, auth=WorkspaceJWTAuth())
+@router.post('', response={201: PlannedTransactionOut, 400: dict, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
     """Create a new planned transaction (requires write access)."""
     user = request.auth
@@ -74,8 +70,7 @@ def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
 def planned_totals(
     request: HttpRequest,
     status: str | None = Query(None),
-    budget_period_id: int | None = Query(None),
-    currency: list[str] | None = Query(None),
+    account_id: int | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
     group_by: str = Query('currency', pattern=r'^(currency|category)$'),
@@ -83,9 +78,7 @@ def planned_totals(
     """Get aggregated planned transaction totals grouped by currency or category."""
     workspace_id = request.auth.current_workspace_id
     return {
-        'totals': PlannedTransactionService.totals(
-            workspace_id, status, budget_period_id, currency, start_date, end_date, group_by
-        )
+        'totals': PlannedTransactionService.totals(workspace_id, status, account_id, start_date, end_date, group_by)
     }
 
 
@@ -93,28 +86,30 @@ def planned_totals(
 @router.get('/export/', auth=WorkspaceJWTAuth())
 def export_planned_transactions(
     request: HttpRequest,
-    budget_period_id: int = Query(...),
     status: str | None = Query(None),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ):
-    """Export planned transactions from a budget period as JSON."""
+    """Export planned transactions as JSON."""
     workspace_id = request.auth.current_workspace_id
 
-    export_data = PlannedTransactionService.export(workspace_id, budget_period_id, status)
+    export_data = PlannedTransactionService.export(workspace_id, status, start_date, end_date)
     response = HttpResponse(
         json.dumps(export_data, indent=2),
         content_type='application/json',
     )
-    response['Content-Disposition'] = f'attachment; filename=planned_export_{budget_period_id}.json'
+    response['Content-Disposition'] = 'attachment; filename=planned_export.json'
     return response
 
 
-@router.post('/import', response={201: dict, 400: dict}, auth=WorkspaceJWTAuth())
+@router.post('/import', response={201: dict, 400: dict, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def import_planned_transactions(
     request: HttpRequest,
-    budget_period_id: int = Form(...),
+    account_id: int = Form(...),
+    budget_id: int | None = Form(None),
     file: UploadedFile = File(...),
 ):
-    """Import planned transactions from a JSON file into a budget period (requires write access)."""
+    """Import planned transactions from a JSON file into an account (requires write access)."""
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
@@ -126,7 +121,7 @@ def import_planned_transactions(
     except (json.JSONDecodeError, UnicodeDecodeError):
         return 400, {'detail': 'Invalid JSON file.'}
 
-    count = PlannedTransactionService.import_data(user, workspace_id, budget_period_id, data)
+    count = PlannedTransactionService.import_data(user, workspace_id, account_id, data, budget_id)
     if count == 0:
         return 201, {'message': 'No new planned transactions to import.'}
     return 201, {'message': f'Successfully imported {count} new planned transactions.'}
@@ -143,7 +138,7 @@ def get_planned(request: HttpRequest, planned_id: int):
 @router.put(
     '/{planned_id}', response={200: PlannedTransactionOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
 )
-def update_planned(request: HttpRequest, planned_id: int, data: PlannedTransactionUpdate):
+def update_planned(request: HttpRequest, planned_id: int, data: PlannedTransactionCreate):
     """Update a planned transaction (requires write access)."""
     user = request.auth
     workspace_id = request.auth.current_workspace_id

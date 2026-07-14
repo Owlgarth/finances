@@ -8,7 +8,9 @@ import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
+import ResetAccountSection from '../components/profile/ResetAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
+import LegacyImportModal from '../components/profile/LegacyImportModal'
 
 import type { ImportResult } from '../types'
 
@@ -23,6 +25,7 @@ export default function ProfilePage() {
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
+  const [legacyImportOpen, setLegacyImportOpen] = useState(false)
 
   const handleExportData = async () => {
     setIsExporting(true)
@@ -209,8 +212,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-text mb-2">Import Your Data</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Restore your data from a previously exported JSON file.
-                  Supports both current (v2.0) and legacy (v1.0) export formats.
+                  Restore your data from a Denarly export (v3.0) JSON file.
                   If a workspace with the same name already exists, it will be renamed automatically.
                 </p>
                 <input
@@ -231,24 +233,36 @@ export default function ProfilePage() {
                   <div className="mt-4 p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-1">
                     <p className="font-medium text-text">Import Summary</p>
                     <p className="text-text-muted">Workspaces: {importResult.imported_workspaces}</p>
-                    <p className="text-text-muted">Budget Accounts: {importResult.imported_budget_accounts}</p>
-                    <p className="text-text-muted">Periods: {importResult.imported_budget_periods}</p>
-                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
+                    <p className="text-text-muted">Accounts: {importResult.imported_accounts}</p>
                     <p className="text-text-muted">Budgets: {importResult.imported_budgets}</p>
+                    <p className="text-text-muted">Categories: {importResult.imported_categories}</p>
+                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
+                    <p className="text-text-muted">Transfers: {importResult.imported_transfers}</p>
                     <p className="text-text-muted">Planned Transactions: {importResult.imported_planned_transactions}</p>
-                    <p className="text-text-muted">Currency Exchanges: {importResult.imported_currency_exchanges}</p>
                     {Object.keys(importResult.renamed).length > 0 && (
                       <p className="text-text-muted">
                         Renamed: {Object.entries(importResult.renamed).map(([from, to]) => `${from} → ${to}`).join(', ')}
                       </p>
                     )}
-                    {Object.keys(importResult.skipped).length > 0 && (
-                      <p className="text-text-muted">
-                        Skipped: {Object.entries(importResult.skipped).map(([ws, items]) => `${ws} (${items.join(', ')})`).join(', ')}
-                      </p>
-                    )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-text mb-2">Import from an older Denarly version</h3>
+                <p className="text-sm text-text-muted mb-4">
+                  Migrating from a previous version? Upload the JSON export from the old app. It will be
+                  converted to the new account-based model — exchanges become transfers, and a verification
+                  report shows each account's balance. Reconcile any warnings with a "Set balance…" on the
+                  Accounts page.
+                </p>
+                <button
+                  onClick={() => setLegacyImportOpen(true)}
+                  className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+                >
+                  Import legacy export
+                </button>
+                <LegacyImportModal open={legacyImportOpen} onClose={() => setLegacyImportOpen(false)} />
               </div>
 
               <div>
@@ -264,6 +278,10 @@ export default function ProfilePage() {
                 >
                   {isExporting ? 'Exporting...' : 'Export All My Data'}
                 </button>
+              </div>
+
+              <div className="bg-warning-bg rounded-sm border border-border p-6">
+                <ResetAccountSection />
               </div>
 
               <div className="bg-negative-bg rounded-sm border border-border p-6">

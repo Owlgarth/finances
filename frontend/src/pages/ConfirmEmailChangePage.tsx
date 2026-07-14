@@ -79,7 +79,7 @@ export default function ConfirmEmailChangePage() {
                 This email change link is invalid or has expired.
               </p>
               <Link
-                to="/profile"
+                to="/settings"
                 className="text-primary hover:text-primary-hover text-sm font-medium"
               >
                 Go to Settings

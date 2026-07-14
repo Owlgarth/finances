@@ -33,16 +33,10 @@ class PlannedTransaction(WorkspaceScopedModel):
         ('cancelled', 'Cancelled'),
     ]
 
-    budget_period = models.ForeignKey(
-        'budget_periods.BudgetPeriod',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='planned_transactions',
-    )
+    account = models.ForeignKey('accounts.Account', on_delete=models.PROTECT, related_name='planned_transactions')
     name = models.CharField(max_length=200)
+    # The planned amount is in the account's currency, like transactions.
     amount = models.DecimalField(max_digits=15, decimal_places=2)
-    currency = models.ForeignKey('workspaces.Currency', on_delete=models.PROTECT, related_name='planned_transactions')
     category = models.ForeignKey(
         'categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='planned_transactions'
     )
@@ -60,5 +54,17 @@ class PlannedTransaction(WorkspaceScopedModel):
     class Meta:
         db_table = 'planned_transactions'
 
+    @property
+    def account_name(self) -> str:
+        return self.account.name
+
+    @property
+    def currency_code(self) -> str:
+        return self.account.currency.code
+
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
     def __str__(self):
-        return f'{self.name} - {self.amount} {self.currency} ({self.status})'
+        return f'{self.name} - {self.amount} ({self.status})'

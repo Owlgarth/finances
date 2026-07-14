@@ -1,145 +1,94 @@
-"""Business logic for the categories app."""
+"""Business logic for the categories app (budget-scoped, persistent categories)."""
 
-from __future__ import annotations
+from django.db import transaction as db_transaction
 
-from django.db import IntegrityError
-
-from budget_periods.models import BudgetPeriod
-from budget_periods.services import BudgetPeriodService
-from categories.exceptions import (
-    CategoryDuplicateNameError,
-    CategoryNotFoundError,
-)
+from budgeting.services import BudgetService
+from categories.exceptions import CategoryDuplicateNameError, CategoryNotFoundError
 from categories.models import Category
-from categories.schemas import CategoryCreate, CategoryUpdate
-from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
+from categories.schemas import CategoryArchive, CategoryCreate, CategoryUpdate
 
 
 class CategoryService:
     @staticmethod
-    def get_category(category_id: int, workspace_id: int) -> Category:
+    def _check_ci_duplicate(budget_id: int, name: str, exclude_id: int | None = None) -> None:
+        queryset = Category.objects.filter(budget_id=budget_id, name__iexact=name)
+        if exclude_id is not None:
+            queryset = queryset.exclude(id=exclude_id)
+        if queryset.exists():
+            raise CategoryDuplicateNameError()
+
+    @staticmethod
+    def get(category_id: int, workspace_id: int) -> Category:
         """Get a category and verify it belongs to the workspace."""
-        category = (
-            Category.objects.select_related('budget_period__budget_account')
-            .for_workspace(workspace_id)
-            .filter(id=category_id)
-            .first()
-        )
+        category = Category.objects.for_workspace(workspace_id).filter(id=category_id).first()
         if not category:
             raise CategoryNotFoundError()
         return category
 
     @staticmethod
-    def _empty_paginated(page: int, page_size: int) -> dict:
-        """Return a paginated dict with empty items."""
-        return {'items': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
+    def list(workspace_id: int, budget_id: int, include_archived: bool = False) -> list[Category]:
+        """List categories of a budget, archived ones only on request."""
+        BudgetService.get(budget_id, workspace_id)
+        queryset = Category.objects.filter(budget_id=budget_id)
+        if not include_archived:
+            queryset = queryset.filter(is_archived=False)
+        return list(queryset)
 
     @staticmethod
-    def list(
-        workspace_id: int,
-        budget_period_id: int | None = None,
-        current_date=None,
-        page: int = 1,
-        page_size: int = DEFAULT_PAGE_SIZE,
-    ) -> dict:
-        """List categories for a workspace, optionally filtered by period or date.
+    @db_transaction.atomic
+    def create(user, workspace_id: int, budget_id: int, data: CategoryCreate) -> Category:
+        """Create a category under a budget (case-insensitively unique name per budget)."""
+        BudgetService.get(budget_id, workspace_id)
+        CategoryService._check_ci_duplicate(budget_id, data.name)
 
-        Returns an empty paginated result (not 404) when budget_period_id does not belong to
-        the workspace. This prevents leaking whether a period ID exists elsewhere.
-        """
-        if current_date and not budget_period_id:
-            period = (
-                BudgetPeriod.objects.select_related('budget_account')
-                .for_workspace(workspace_id)
-                .filter(start_date__lte=current_date, end_date__gte=current_date)
-                .first()
-            )
-            if period:
-                budget_period_id = period.id
-            else:
-                return CategoryService._empty_paginated(page, page_size)
-
-        if budget_period_id is None:
-            return CategoryService._empty_paginated(page, page_size)
-
-        if not BudgetPeriod.objects.for_workspace(workspace_id).filter(id=budget_period_id).exists():
-            return CategoryService._empty_paginated(page, page_size)
-
-        queryset = Category.objects.filter(budget_period_id=budget_period_id)
-        items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
-        return {
-            'items': items,
-            'total': total,
-            'page': page,
-            'page_size': page_size,
-            'total_pages': total_pages,
-        }
+        return Category.objects.create(
+            budget_id=budget_id,
+            workspace_id=workspace_id,
+            name=data.name,
+            created_by=user,
+            updated_by=user,
+        )
 
     @staticmethod
-    def create(user, workspace_id: int, data: CategoryCreate) -> Category:
-        """Create a category, validating period ownership."""
-        BudgetPeriodService.get(data.budget_period_id, workspace_id)
+    @db_transaction.atomic
+    def update(user, workspace_id: int, budget_id: int, category_id: int, data: CategoryUpdate) -> Category:
+        """Rename a category (case-insensitive duplicate check)."""
+        category = CategoryService.get(category_id, workspace_id)
+        if category.budget_id != budget_id:
+            raise CategoryNotFoundError()
 
-        try:
-            return Category.objects.create(
-                budget_period_id=data.budget_period_id,
-                workspace_id=workspace_id,
-                name=data.name,
-                created_by=user,
-                updated_by=user,
-            )
-        except IntegrityError:
-            raise CategoryDuplicateNameError()
-
-    @staticmethod
-    def update(user, workspace_id: int, category_id: int, data: CategoryUpdate) -> Category:
-        """Update a category."""
-        category = CategoryService.get_category(category_id, workspace_id)
-
+        if data.name is not None and data.name.lower() != category.name.lower():
+            CategoryService._check_ci_duplicate(budget_id, data.name, exclude_id=category_id)
         if data.name is not None:
             category.name = data.name
 
         category.updated_by = user
         category.save()
-
         return category
 
     @staticmethod
-    def delete(workspace_id: int, category_id: int) -> None:
-        """Delete a category."""
-        category = CategoryService.get_category(category_id, workspace_id)
+    @db_transaction.atomic
+    def set_archive_status(
+        user, workspace_id: int, budget_id: int, category_id: int, data: CategoryArchive
+    ) -> Category:
+        """Archive or unarchive a category. Archived categories keep their history."""
+        category = CategoryService.get(category_id, workspace_id)
+        if category.budget_id != budget_id:
+            raise CategoryNotFoundError()
+        category.is_archived = data.is_archived
+        category.updated_by = user
+        category.save()
+        return category
+
+    @staticmethod
+    @db_transaction.atomic
+    def delete(workspace_id: int, budget_id: int, category_id: int) -> None:
+        """Delete a category. Transaction FKs are SET_NULL, so this uncategorizes records.
+
+        B5: the budget-deletion prompt flow (delete-or-uncategorize transactions)
+        arrives when transactions live on accounts.
+        """
+        category = CategoryService.get(category_id, workspace_id)
+        if category.budget_id != budget_id:
+            raise CategoryNotFoundError()
         category.delete()
-
-    @staticmethod
-    def export(workspace_id: int, period_id: int) -> list[str]:
-        """Return category names for a period."""
-        BudgetPeriodService.get(period_id, workspace_id)
-
-        return list(Category.objects.filter(budget_period_id=period_id).values_list('name', flat=True))
-
-    @staticmethod
-    def import_data(user, workspace_id: int, period_id: int, data: list) -> int:
-        """Bulk-create categories from a list of name strings. Returns count of created records."""
-        BudgetPeriodService.get(period_id, workspace_id)
-
-        existing_names = set(Category.objects.filter(budget_period_id=period_id).values_list('name', flat=True))
-
-        new_categories = []
-        for name in data:
-            if name not in existing_names:
-                new_categories.append(
-                    Category(
-                        name=name,
-                        budget_period_id=period_id,
-                        workspace_id=workspace_id,
-                        created_by=user,
-                        updated_by=user,
-                    )
-                )
-                existing_names.add(name)
-
-        if not new_categories:
-            return 0
-
-        Category.objects.bulk_create(new_categories)
-        return len(new_categories)

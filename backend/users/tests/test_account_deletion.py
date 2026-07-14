@@ -60,7 +60,7 @@ class AccountDeletionTests(AuthMixin, TestCase):
 
     def test_delete_removes_membership_from_others_workspace(self):
         """When deleted, user's memberships in other workspaces are removed."""
-        other_ws, other_owner, _, _ = create_other_workspace(
+        other_ws, other_owner, _ = create_other_workspace(
             owner_email='owner@test.com', workspace_name='Other Workspace'
         )
         WorkspaceMemberFactory(workspace=other_ws, user=self.user, role='member')
