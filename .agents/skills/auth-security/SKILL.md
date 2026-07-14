@@ -16,7 +16,7 @@ description: Denarly's security model and auth patterns — JWT auth classes, ro
 
 ## List Endpoints Return Empty Arrays for Cross-Workspace Resources
 
-When a list endpoint receives a `budget_period_id` or similar filter referencing a resource in another workspace, it returns `[]` rather than 404. This is a deliberate security choice to prevent leaking whether resource IDs exist in other workspaces. Do not "fix" these to return 404 — the empty array behavior is intentional.
+When a list endpoint receives an `account_id`, `budget_id`, or similar filter referencing a resource in another workspace, it returns `[]` rather than 404. This is a deliberate security choice to prevent leaking whether resource IDs exist in other workspaces. Do not "fix" these to return 404 — the empty array behavior is intentional.
 
 ## Rate Limiting
 

@@ -6,19 +6,17 @@ A Django-Ninja REST API for multi-tenant budget tracking with workspace-based ac
 
 ```
 backend/
-├── config/                 # Django project configuration (settings, urls, wsgi)
-├── common/                 # Shared utilities (JWT auth, test mixins)
-├── core/                   # Main API endpoints, schemas, demo data
-├── users/                  # Custom user model (email-based auth)
-├── workspaces/             # Multi-tenant workspace management
-├── budget_accounts/        # Budget accounts within workspaces
-├── budget_periods/         # Time-based budget periods
-├── categories/             # Transaction categories
-├── budgets/                # Budget allocations per category
-├── transactions/           # Income/expense transactions
-├── planned_transactions/   # Future planned transactions
-├── currency_exchanges/     # Multi-currency exchange tracking
-├── period_balances/        # Calculated balances per period
+├── config/                 # Django project configuration (settings, urls, celery)
+├── common/                 # Shared utilities (JWT auth, permissions, storage, mixins)
+├── users/                  # Custom user model, GDPR export/import, legacy import
+├── workspaces/             # Multi-tenant workspaces, members, enabled currencies
+├── currencies/             # Global ISO 4217 catalog + per-workspace enablement
+├── accounts/               # Money-holding accounts + computed balances
+├── budgeting/              # Budget, Period, CategoryBudget
+├── categories/             # Budget-scoped categories
+├── transactions/           # Transactions, line items, attachments, extraction
+├── transfers/              # Transfers between accounts
+├── planned_transactions/   # Scheduled transactions
 └── reports/                # Budget summaries and current balances
 ```
 
@@ -26,17 +24,16 @@ backend/
 
 | App | Purpose |
 |-----|---------|
-| `users` | Custom User model with email authentication (no username) |
-| `workspaces` | Multi-tenant workspaces with role-based access (owner/admin/member/viewer) |
-| `budget_accounts` | Organizes budgets within workspaces (e.g., "Personal", "Business") |
-| `budget_periods` | Time-bound periods for budget tracking (e.g., "October 2025") |
-| `categories` | Transaction categories within periods (e.g., "Food", "Transport") |
-| `budgets` | Allocated amounts per category and currency |
-| `transactions` | Income and expense records |
-| `planned_transactions` | Future transactions with status tracking (pending/done/cancelled) |
-| `currency_exchanges` | Multi-currency exchange records |
-| `period_balances` | Pre-calculated balances per period and currency |
-| `reports` | Budget summaries and current balances by currency |
+| `users` | Custom User model (email auth); GDPR export/import; legacy (pre-redesign) import |
+| `workspaces` | Multi-tenant workspaces, role-based access (owner/admin/member/viewer), enabled currencies |
+| `currencies` | Global ISO 4217 currency catalog; workspaces enable a subset |
+| `accounts` | Money-holding accounts (cash/bank/other); balances computed from transactions ± transfers |
+| `budgeting` | `Budget` (plan + cadence), derived `Period`, `CategoryBudget` (planned amount per period) |
+| `categories` | Persistent, budget-scoped categories |
+| `transactions` | Income/expense/adjustment records; `TransactionItem` (receipt lines); `TransactionAttachment` (+ receipt extraction) |
+| `transfers` | Money moved between accounts, incl. cross-currency with implied rate |
+| `planned_transactions` | Scheduled transactions with status tracking (pending/done/cancelled) |
+| `reports` | Budget summary (planned vs actual) and current balances (per account + per currency) |
 
 ## Common Module (`common/`)
 
@@ -77,7 +74,7 @@ transactions/
 
 Endpoints should not contain database operations beyond workspace validation. All logic that involves multiple model writes, balance updates, or atomic operations lives in services.
 
-Apps with service files: `transactions`, `budget_periods`, `categories`, `budgets`, `currency_exchanges`, `planned_transactions`, `period_balances`, `reports`, `workspaces`.
+Apps with service files: `accounts`, `budgeting`, `categories`, `transactions`, `transfers`, `planned_transactions`, `currencies`, `reports`, `workspaces`.
 
 Apps with Celery tasks: `planned_transactions` (see `tasks.py`). Services dispatch tasks via `task.delay()` directly — no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
 
@@ -132,16 +129,16 @@ The API uses role-based permissions for workspace operations:
 | `member` | Yes | Yes | Yes | Cannot manage members/settings |
 | `viewer` | No | No | No | Read-only access |
 
-## Demo Fixtures
+## Starter & Demo Fixtures
 
-When a new user registers, `create_demo_fixtures()` automatically creates:
-- Budget period for the previous month
-- 7 sample categories (Food, Transport, Entertainment, etc.)
-- Budget allocations for each category
-- 14 sample transactions (income and expenses)
-- 3 planned transactions
-- 2 currency exchanges
-- Period balances in PLN, EUR, USD
+Every new workspace gets a **usable-but-empty** starter setup via
+`create_starter_fixtures()`: a "Main" account, a "General" budget with a few
+starter categories, and the current period.
+
+If the user opts in (the "Start with sample data" checkbox at registration),
+`create_demo_fixtures()` additionally seeds a second (Savings) account, sample
+transactions across categories, a transfer, and a planned transaction — so the
+dashboard and reports have something to show.
 
 ## DEMO Mode
 
@@ -181,8 +178,9 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | DELETE | `/api/users/me/consents/{consent_type}` | Withdraw consent |
 | GET | `/api/users/me/deletion-check` | Pre-check account deletion impact |
 | DELETE | `/api/users/me` | Permanently delete account and all data |
-| GET | `/api/users/me/export` | Export all personal data as JSON (rate limited) |
-| POST | `/api/users/me/import` | Import data from a previously exported JSON file (supports v1.0 and v2.0 formats) |
+| GET | `/api/users/me/export` | Export all personal data as JSON — v3.0 (rate limited) |
+| POST | `/api/users/me/import` | Import data from a v3.0 export (same-system restore) |
+| POST | `/api/users/import-legacy` | Import + convert a legacy (pre-redesign) export |
 
 ### Legal
 
@@ -202,13 +200,14 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | DELETE | `/api/workspaces/{id}` | Delete workspace (owner only) |
 | POST | `/api/workspaces/{workspaceId}/switch` | Switch to another workspace |
 
-### Workspace Currencies
+### Currencies
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/workspaces/currencies` | List currencies for current workspace |
-| POST | `/api/workspaces/currencies` | Create a new currency (admin+) |
-| DELETE | `/api/workspaces/currencies/{id}` | Delete a currency (admin+) |
+| GET | `/api/currencies` | List the global ISO 4217 catalog |
+| GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace |
+| POST | `/api/workspaces/enabled-currencies` | Enable a catalog currency, or create a custom one (`custom: true`) (admin+) |
+| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+) |
 
 ### Workspace Members
 
@@ -221,134 +220,108 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | POST | `/api/workspaces/{workspaceId}/members/leave` | Leave workspace |
 | PUT | `/api/workspaces/{workspaceId}/members/{userId}/reset-password` | Reset member password |
 
-### Budget Accounts
+### Accounts (admin+ to mutate)
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/budget-accounts` | `include_inactive` | List budget accounts |
-| GET | `/api/budget-accounts/{id}` | - | Get specific account |
-| POST | `/api/budget-accounts` | - | Create new account |
-| PUT | `/api/budget-accounts/{id}` | - | Update account |
-| DELETE | `/api/budget-accounts/{id}` | - | Delete account |
-| PATCH | `/api/budget-accounts/{id}/archive` | - | Toggle archive status |
+| GET | `/api/accounts` | `include_archived` | List accounts |
+| GET | `/api/accounts/{id}` | - | Get account |
+| POST | `/api/accounts` | - | Create account |
+| PUT | `/api/accounts/{id}` | - | Update account (currency immutable) |
+| PATCH | `/api/accounts/{id}/archive` | - | Archive / unarchive |
+| DELETE | `/api/accounts/{id}` | - | Delete a record-free account |
+| GET | `/api/accounts/{id}/balance` | - | Computed balance |
 
-### Budget Periods
+### Budgets, Periods, Categories, Category Budgets
 
-| Method | Endpoint | Query Params | Description |
-|--------|----------|--------------|-------------|
-| GET | `/api/budget-periods` | `budget_account_id` | List all budget periods |
-| GET | `/api/budget-periods/{id}` | - | Get specific period |
-| GET | `/api/budget-periods/current` | `current_date` | Get current period |
-| POST | `/api/budget-periods` | - | Create new period |
-| PUT | `/api/budget-periods/{id}` | - | Update period |
-| DELETE | `/api/budget-periods/{id}` | - | Delete period |
-| POST | `/api/budget-periods/{id}/copy` | - | Copy period with budgets/categories |
+Budget + period CRUD is admin+; categories and category-budget amounts are write (member+).
 
-### Categories
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/budgets` | List (`include_inactive`) / create budget |
+| GET/PUT/DELETE | `/api/budgets/{id}` | Get / update / delete budget |
+| PATCH | `/api/budgets/{id}/archive` | Activate / deactivate budget |
+| GET/POST | `/api/budgets/{id}/periods` | List / create period |
+| GET | `/api/budgets/{id}/periods/current` | Current period (`date`) — materialized on demand |
+| PUT/DELETE | `/api/budgets/{id}/periods/{pid}` | Update / delete period |
+| GET/POST | `/api/budgets/{id}/categories` | List (`include_archived`) / create category |
+| PUT/PATCH/DELETE | `/api/budgets/{id}/categories/{cid}` | Update / archive / delete category |
+| GET | `/api/budgets/{id}/periods/{pid}/category-budgets` | List planned amounts |
+| PUT | `/api/budgets/{id}/periods/{pid}/category-budgets` | Set a category's planned amount |
+| DELETE | `/api/budgets/{id}/periods/{pid}/category-budgets/{cbid}` | Clear a planned amount |
 
-| Method | Endpoint | Query Params | Description |
-|--------|----------|--------------|-------------|
-| GET | `/api/categories` | `budget_period_id`, `current_date` | List categories |
-| GET | `/api/categories/{id}` | - | Get specific category |
-| POST | `/api/categories` | - | Create category |
-| PUT | `/api/categories/{id}` | - | Update category |
-| DELETE | `/api/categories/{id}` | - | Delete category |
-| POST | `/api/categories/import` | - | Import categories (FormData) |
-| GET | `/api/categories/export/` | `budget_period_id` | Export categories to JSON |
-
-### Budgets
+### Transactions (write / member+)
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/budgets` | `budget_period_id` | List budgets |
-| POST | `/api/budgets` | - | Create budget |
-| PUT | `/api/budgets/{id}` | - | Update budget |
-| DELETE | `/api/budgets/{id}` | - | Delete budget |
+| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated) |
+| GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` |
+| POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete |
+| POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
+| GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
+| GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items |
+| GET/POST/DELETE | `/api/transactions/{id}/attachments[/{aid}]` | - | List / upload / delete receipt attachments |
+| GET | `/api/transactions/extraction/config` | - | Whether receipt extraction is configured |
+| POST | `/api/transactions/extraction/parse` | - | Parse a receipt without persisting (receipt-first create) |
+| POST | `/api/transactions/{id}/attachments/{aid}/extract` | - | Queue extraction for an attachment |
+| GET | `/api/transactions/{id}/attachments/{aid}/extraction` | - | Poll extraction state / result |
 
-### Transactions
-
-| Method | Endpoint | Query Params | Description |
-|--------|----------|--------------|-------------|
-| GET | `/api/transactions` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `transaction_type[]`, `category_id[]`, `currency[]`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated) |
-| GET | `/api/transactions/totals` | `budget_period_id`, `current_date`, `search`, `start_date`, `end_date`, `transaction_type[]`, `category_id[]`, `currency[]`, `amount_gte`, `amount_lte`, `group_by` | Aggregated totals grouped by `type`, `category`, or `type,category` |
-| POST | `/api/transactions` | - | Create transaction |
-| PUT | `/api/transactions/{id}` | - | Update transaction |
-| DELETE | `/api/transactions/{id}` | - | Delete transaction |
-| POST | `/api/transactions/import` | - | Import transactions (FormData) |
-| GET | `/api/transactions/export/` | `budget_period_id`, `transaction_type` | Export transactions to JSON |
-
-### Planned Transactions
+### Transfers (write / member+)
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/planned-transactions` | `status`, `budget_period_id`, `currency[]`, `ordering`, `page`, `page_size` | List planned transactions (paginated) |
-| GET | `/api/planned-transactions/totals` | `status`, `budget_period_id`, `currency[]`, `group_by` | Aggregated totals grouped by `currency` or `category` |
-| POST | `/api/planned-transactions` | - | Create planned transaction |
-| PUT | `/api/planned-transactions/{id}` | - | Update planned transaction |
-| DELETE | `/api/planned-transactions/{id}` | - | Delete planned transaction |
-| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute planned transaction |
-| POST | `/api/planned-transactions/import` | - | Import planned transactions (FormData) |
-| GET | `/api/planned-transactions/export/` | `budget_period_id`, `status` | Export planned transactions to JSON |
+| GET | `/api/transfers` | `date_from`, `date_to`, `account_id`, `page`, `page_size` | List transfers (paginated) |
+| GET/POST/PUT/DELETE | `/api/transfers[/{id}]` | - | Get / create / update / delete transfer |
 
-### Period Balances
+### Planned Transactions (write / member+)
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/period-balances` | `budget_period_id` | List period balances |
-| PUT | `/api/period-balances/{id}` | - | Update period balance |
-| POST | `/api/period-balances/recalculate` | - | Recalculate period balances |
-
-### Currency Exchanges
-
-| Method | Endpoint | Query Params | Description |
-|--------|----------|--------------|-------------|
-| GET | `/api/currency-exchanges` | `budget_period_id`, `ordering`, `page`, `page_size` | List currency exchanges (paginated) |
-| GET | `/api/currency-exchanges/totals` | `budget_period_id` | Aggregated totals grouped by currency pair |
-| POST | `/api/currency-exchanges` | - | Create currency exchange |
-| PUT | `/api/currency-exchanges/{id}` | - | Update currency exchange |
-| DELETE | `/api/currency-exchanges/{id}` | - | Delete currency exchange |
-| POST | `/api/currency-exchanges/import` | - | Import currency exchanges (FormData) |
-| GET | `/api/currency-exchanges/export/` | `budget_period_id` | Export currency exchanges to JSON |
+| GET | `/api/planned-transactions` | `status`, `account_id`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated) |
+| GET | `/api/planned-transactions/totals` | `status`, `account_id`, `group_by` | Totals grouped by `currency` or `category` |
+| POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Create / update / delete |
+| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction on the planned account) |
 
 ### Column Sorting (`ordering`)
 
-The Transactions, Planned Transactions, and Currency Exchanges list endpoints accept an optional `ordering` query parameter for server-side column sorting. Values are validated against a per-endpoint allowlist (regex); anything outside it returns `422`. Prefix a field with `-` for descending order (ascending is the default).
+Transaction and planned-transaction list endpoints accept an optional `ordering`
+parameter, validated against a per-endpoint allowlist (regex); anything else returns
+`422`. Prefix a field with `-` for descending (ascending is the default). A
+deterministic id tiebreaker is always appended so pagination stays stable.
 
 | Endpoint | Sortable fields | Default |
 |----------|-----------------|---------|
-| `GET /api/transactions` | `date`, `description`, `amount`, `type`, `category__name`, `currency__symbol` | `-date` |
-| `GET /api/planned-transactions` | `name`, `amount`, `status`, `planned_date`, `category__name`, `currency__symbol` | `planned_date` |
-| `GET /api/currency-exchanges` | `date`, `description`, `from_amount`, `to_amount`, `exchange_rate` | `-date` |
-
-Each endpoint appends a deterministic tiebreaker after the chosen sort so pagination stays stable across pages (planned transactions and currency exchanges use `-id`). Example: `GET /api/transactions?budget_period_id=1&ordering=-amount`.
+| `GET /api/transactions` | `date`, `description`, `amount`, `type`, `category__name`, `account__name`, `account__currency__code` | `-date` |
+| `GET /api/planned-transactions` | `name`, `amount`, `status`, `planned_date`, `category__name`, `account__name`, `account__currency__code` | `planned_date` |
 
 ### Reports
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/reports/budget-summary` | `budget_period_id` | Get budget vs actual summary |
-| GET | `/api/reports/current-balances` | - | Get current balances across currencies |
+| GET | `/api/reports/budget-summary` | `budget_id`, `period_id` | Planned vs actual per category |
+| GET | `/api/reports/current-balances` | `include_archived` | Balances per account + per-currency totals |
 
 ## Import/Export
 
-### Full Data Import/Export (GDPR Portability)
+### Full Data Export/Import (GDPR Portability)
 
-The `POST /api/users/me/import` endpoint restores all user data from a JSON file produced by `GET /api/users/me/export`.
+`GET /api/users/me/export` produces a **v3.0** JSON export of all the user's
+workspaces (accounts, budgets, periods, categories, category budgets, transactions
+with line items + attachments, transfers, planned transactions).
 
-- **Supported export versions**: v1.0 and v2.0. v1.0 exports are automatically normalized to v2.0 format by renaming double-underscore keys (e.g., `currency__symbol` → `currency_symbol`), synthesizing missing currencies, and filling in default sections.
-- **Conflict strategy**: `rename` (default) renames duplicate workspace names; `skip` skips conflicting workspaces.
-- **Response**: Returns counts of imported records and any skipped/renamed items.
+`POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
+attachments travel as base64 and are recreated when object storage is configured.
+- **Conflict strategy**: `rename` (default) renames duplicate workspaces; `skip` skips them.
+- **Response**: counts of imported records plus any renamed workspaces.
 
-### Per-Feature Import/Export
+### Legacy Import (pre-redesign data)
 
-Several endpoints support bulk import/export via JSON files using FormData (multipart/form-data):
-
-| Feature | Import Endpoint | Export Endpoint |
-|---------|-----------------|-----------------|
-| Categories | `POST /api/categories/import` | `GET /api/categories/export/?budget_period_id={id}` |
-| Transactions | `POST /api/transactions/import` | `GET /api/transactions/export/?budget_period_id={id}` |
-| Planned Transactions | `POST /api/planned-transactions/import` | `GET /api/planned-transactions/export/?budget_period_id={id}` |
-| Currency Exchanges | `POST /api/currency-exchanges/import` | `GET /api/currency-exchanges/export/?budget_period_id={id}` |
+`POST /api/users/import-legacy` accepts a JSON export from an older
+(period/exchange-based) version and converts it to the account-based model —
+symbol→ISO currencies, one `Main <CODE>` account per currency (opening balance
+solved so computed balances match), exchanges→transfers with linked-transaction
+dedup, and a per-workspace **verification report** (computed vs expected balances,
+deduped transactions, warnings). See the cutover guide in the root README.
 
 ## Testing
 

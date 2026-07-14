@@ -5,40 +5,51 @@ description: Model relationship map, deletion ordering (SET_NULL orphans, PROTEC
 
 # Data Deletion & GDPR Rules
 
-## Model Relationships Reference
+## Model Relationships Reference (account-based model)
 
 | Parent | Child | FK Field | on_delete | related_name |
 |--------|-------|----------|-----------|-------------|
-| Workspace | BudgetAccount | `workspace` | CASCADE | (default) |
-| Workspace | Currency | `workspace` | CASCADE | `currencies` |
-| BudgetAccount | BudgetPeriod | `budget_account` | CASCADE | `budget_periods` |
-| BudgetPeriod | Transaction | `budget_period` | SET_NULL | `transactions` |
-| BudgetPeriod | PlannedTransaction | `budget_period` | SET_NULL | `planned_transactions` |
-| BudgetPeriod | CurrencyExchange | `budget_period` | SET_NULL | `currency_exchanges` |
+| Workspace | WorkspaceCurrency | `workspace` | CASCADE | `enabled_currencies` |
+| Workspace | Account | `workspace` | CASCADE | `accounts` |
+| Workspace | Budget | `workspace` | CASCADE | `budgets` |
+| WorkspaceCurrency | Currency (catalog) | `currency` | PROTECT | — |
+| Account | Transaction | `account` | **PROTECT** | `transactions` |
+| Account | Transfer (from/to) | `from_account`/`to_account` | **PROTECT** | `transfers_out`/`_in` |
+| Account | PlannedTransaction | `account` | **PROTECT** | `planned_transactions` |
+| Budget | Category | `budget` | CASCADE | `categories` |
+| Budget | Period | `budget` | CASCADE | `periods` |
+| Period | CategoryBudget | `period` | CASCADE | `category_budgets` |
+| Transaction | TransactionItem | `transaction` | CASCADE | `items` |
+| Transaction | TransactionAttachment | `transaction` | CASCADE | `attachments` |
 
-## SET_NULL Children Must Be Explicitly Deleted
+## PROTECT Chains Must Be Deleted in Dependency Order
 
-`Transaction`, `PlannedTransaction`, and `CurrencyExchange` have `on_delete=SET_NULL` on their `budget_period` FK. Django does **not** cascade-delete them — it sets `budget_period=NULL`, leaving orphaned rows. These orphans hold FK references to `Currency` (with `on_delete=PROTECT`), which blocks downstream deletions with unhandled 500 errors.
+Accounts are **PROTECT**-referenced by transactions, transfers, and planned
+transactions; catalog currencies are PROTECT-referenced by accounts, category
+budgets, and workspace enablements. Deleting out of order raises an
+`IntegrityError`. The single source of truth is
+`common/services/base.py::delete_workspace_financial_records`, which deletes:
 
-Any `delete()` method on a parent model with `SET_NULL` children must explicitly delete those children first:
-
-```python
-@staticmethod
-@db_transaction.atomic
-def delete(workspace_id: int, account_id: int) -> None:
-    from currency_exchanges.models import CurrencyExchange
-    from planned_transactions.models import PlannedTransaction
-    from transactions.models import Transaction
-
-    account = BudgetAccountService.get(account_id, workspace_id)
-    period_ids = list(account.budget_periods.values_list('id', flat=True))
-    Transaction.objects.filter(budget_period_id__in=period_ids).delete()
-    PlannedTransaction.objects.filter(budget_period_id__in=period_ids).delete()
-    CurrencyExchange.objects.filter(budget_period_id__in=period_ids).delete()
-    account.delete()
+```
+transfers → transactions → planned_transactions → category_budgets
+  → categories → budgets (cascades periods) → accounts
+  → workspace-currency enablements → workspace-custom currency rows
 ```
 
-> **When adding a new model with `on_delete=SET_NULL`**: Update every parent deletion service that could leave orphans. Also update `UserService.delete_account()` and `export_all_data()` per the GDPR rules below.
+Global catalog currencies are shared and never deleted; only workspace-custom
+`Currency` rows are removed, and only after everything referencing them is gone.
+
+> **When adding a new model that PROTECT-references accounts or currencies**:
+> add it to `delete_workspace_financial_records` in the correct order, and to
+> `UserService.delete_account()` / `export_all_data()` per the GDPR rules below.
+
+## Storage Objects Are Not Cascaded
+
+`TransactionAttachment` rows cascade with their transaction, but the **files in
+S3 do not**. `AttachmentService.delete_storage_for_transactions(qs)` must be
+called *before* deleting the transactions (it is, in both the per-transaction
+delete and `delete_workspace_financial_records`). Any new model that owns stored
+objects needs the same explicit pre-delete sweep.
 
 ## Defense-in-Depth Deletion in `delete_account`
 
@@ -60,12 +71,19 @@ user.delete()
 
 ## Import Version Compatibility
 
-`import_all_data` supports older export formats via `normalize_export_v1_to_v2()`, which transforms old key names and adds missing fields **before** processing. The import logic itself only handles the current (v2.0) format — all version-specific transformations live in the normalizer.
+The main `import_all_data` handles the current **v3.0** export only (same-system
+restore). Legacy v1/v2 exports from before the account-based redesign go through a
+separate endpoint, `POST /users/import-legacy` (`LegacyImportService`), which
+converts the old shape — symbol→ISO currencies, `Main <CODE>` accounts,
+exchanges→transfers, linked-transaction dedup, opening-balance solving — and returns
+a per-workspace verification report.
 
-When adding new fields to the export format:
-1. Update `export_all_data()` to include the new field
-2. Update the normalizer to add sensible defaults for older exports missing that field
-3. Bump `export_version` only for breaking changes (new required fields without defaults)
+When adding new fields to the v3 export format:
+1. Update `export_all_data()` (the `_export_workspace_v3` helper) to include the field.
+2. Update `import_all_data()` to read it with a sensible default for older v3 files.
+3. Attachments travel as base64 in the export; items travel inline on each
+   transaction. Keep both round-tripping when you touch the transaction export.
+4. Bump `export_version` only for breaking changes.
 
 ## Legal Documents
 

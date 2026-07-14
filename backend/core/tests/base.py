@@ -25,12 +25,14 @@ class AuthTestCase(APIClientMixin, TestCase):
 
     def register_and_login(self, email='test@example.com', password='testpass123', workspace_name='Test Workspace'):
         """Helper to register a user and return their token."""
+        from core.legal import get_privacy, get_terms
+
         register_data = {
             'email': email,
             'password': password,
             'workspace_name': workspace_name,
-            'accepted_terms_version': '1.0',
-            'accepted_privacy_version': '1.0',
+            'accepted_terms_version': get_terms()['version'],
+            'accepted_privacy_version': get_privacy()['version'],
         }
         self.post('/api/auth/register', register_data)
         self.assertStatus(201)

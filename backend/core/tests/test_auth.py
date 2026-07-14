@@ -25,8 +25,8 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'New User',
                 'workspace_name': 'My Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -35,9 +35,13 @@ class TestAuthRegister(AuthTestCase):
         self.assertEqual(data['token_type'], 'bearer')
         self.assertEqual(len(data['access_token'].split('.')), 3)
 
-    def test_register_creates_workspace(self):
-        """Test that registration creates workspace, member, and budget account."""
-        from budget_accounts.models import BudgetAccount
+    def test_register_creates_empty_but_usable_workspace(self):
+        """Default registration is empty but usable: Main account, General budget, starters."""
+        from accounts.models import Account
+        from budgeting.models import Budget as PlanBudget
+        from budgeting.models import Period
+        from categories.models import Category
+        from transactions.models import Transaction
         from workspaces.models import WorkspaceMember
 
         self.post(
@@ -46,40 +50,35 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'workspace_test@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Test Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
 
         user = get_user_model().objects.get(email='workspace_test@example.com')
-        self.assertIsNotNone(user.current_workspace)
-
         workspace = Workspace.objects.get(id=user.current_workspace.id)
-        self.assertEqual(workspace.name, 'Test Workspace')
         self.assertEqual(workspace.owner, user)
 
         member = WorkspaceMember.objects.get(workspace=workspace, user=user)
         self.assertEqual(member.role, 'owner')
 
-        budget_accounts = BudgetAccount.objects.filter(workspace=workspace)
-        self.assertEqual(budget_accounts.count(), 2)
-        account_names = {acc.name for acc in budget_accounts}
-        self.assertIn('General', account_names)
-        self.assertIn('Example Account', account_names)
+        # Default account only — no sample records.
+        account_names = set(Account.objects.filter(workspace=workspace).values_list('name', flat=True))
+        self.assertEqual(account_names, {'Main'})
+        self.assertFalse(Transaction.objects.for_workspace(workspace.id).exists())
 
-    def test_register_creates_demo_fixtures(self):
-        """Test that registration creates demo fixtures with example data."""
-        from datetime import date, timedelta
+        # Usable: General budget with starter categories + current period.
+        general_budget = PlanBudget.objects.get(workspace=workspace, name='General')
+        self.assertEqual(Category.objects.filter(budget=general_budget).count(), 7)
+        self.assertTrue(Period.objects.filter(budget=general_budget).exists())
 
-        from budget_accounts.models import BudgetAccount
-        from budget_periods.models import BudgetPeriod
-        from budgets.models import Budget
-        from categories.models import Category
-        from currency_exchanges.models import CurrencyExchange
-        from period_balances.models import PeriodBalance
+    def test_register_with_sample_data_flag_adds_records(self):
+        """start_with_sample_data=True populates the workspace with example records."""
+        from accounts.models import Account
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
+        from transfers.models import Transfer
 
         self.post(
             '/api/auth/register',
@@ -88,59 +87,26 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'Demo User',
                 'workspace_name': 'Demo Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'start_with_sample_data': True,
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
 
         user = get_user_model().objects.get(email='demo_fixtures@example.com')
-        example_account = BudgetAccount.objects.get(
-            workspace=user.current_workspace,
-            name='Example Account',
-        )
-        self.assertEqual(example_account.description, 'Example budget account with demo data')
+        ws_id = user.current_workspace_id
 
-        period = BudgetPeriod.objects.get(budget_account=example_account)
+        self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Main').exists())
+        self.assertTrue(Account.objects.filter(workspace_id=ws_id, name='Savings').exists())
 
-        today = date.today()
-        first_of_current_month = date(today.year, today.month, 1)
-        last_month_date = first_of_current_month - timedelta(days=1)
-        expected_period_name = last_month_date.strftime('%B %Y')
-        self.assertEqual(period.name, expected_period_name)
-
-        categories = Category.objects.filter(budget_period=period)
-        self.assertEqual(categories.count(), 7)
-        category_names = {cat.name for cat in categories}
-        expected_categories = {
-            'Food & Groceries',
-            'Transportation',
-            'Entertainment',
-            'Bills & Utilities',
-            'Shopping',
-            'Health & Fitness',
-            'Salary',
-        }
-        self.assertEqual(category_names, expected_categories)
-
-        budgets = Budget.objects.filter(budget_period=period)
-        self.assertEqual(budgets.count(), 6)
-
-        transactions = Transaction.objects.filter(budget_period=period)
+        transactions = Transaction.objects.for_workspace(ws_id)
         self.assertGreaterEqual(transactions.count(), 10)
         self.assertGreaterEqual(transactions.filter(type='income').count(), 2)
         self.assertGreaterEqual(transactions.filter(type='expense').count(), 8)
 
-        planned_count = PlannedTransaction.objects.filter(budget_period=period).count()
-        self.assertGreaterEqual(planned_count, 3)
-
-        exchanges_count = CurrencyExchange.objects.filter(budget_period=period).count()
-        self.assertGreaterEqual(exchanges_count, 2)
-
-        balances = PeriodBalance.objects.filter(budget_period=period)
-        self.assertEqual(balances.count(), 3)
-        currencies = {bal.currency.symbol for bal in balances}
-        self.assertEqual(currencies, {'PLN', 'EUR', 'USD'})
+        self.assertGreaterEqual(PlannedTransaction.objects.for_workspace(ws_id).count(), 3)
+        self.assertTrue(Transfer.objects.for_workspace(ws_id).exists())
 
     def test_register_duplicate_email(self):
         """Test registration with already registered email."""
@@ -150,8 +116,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 1',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -162,8 +128,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 2',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(400)
@@ -312,8 +278,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'demouser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Demo Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(403)
@@ -328,8 +294,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'normaluser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Normal Workspace',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -570,8 +536,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': email,
                 'password': password,
                 'workspace_name': 'Refresh WS',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)
@@ -648,8 +614,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': 'register_refresh@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Register WS',
-                'accepted_terms_version': '1.0',
-                'accepted_privacy_version': '1.0',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
             },
         )
         self.assertStatus(201)

@@ -8,13 +8,18 @@ class PlannedTransactionNotFoundError(NotFoundError):
     default_code = 'not_found'
 
 
-class PlannedTransactionNoActivePeriodError(ValidationError):
-    default_message = 'No active budget period for the planned transaction date'
-    default_code = 'no_active_period'
+class PlannedTransactionAccountRequiredError(ValidationError):
+    default_message = 'Multiple accounts exist — specify account_id'
+    default_code = 'account_required'
+
+
+class PlannedTransactionAccountArchivedError(ValidationError):
+    default_message = 'Account is archived and cannot receive new planned transactions'
+    default_code = 'account_archived'
 
 
 class PlannedTransactionCategoryNotFoundError(ValidationError):
-    default_message = 'Category not found or does not belong to the specified budget period'
+    default_message = 'Category not found, archived, or not in this workspace'
     default_code = 'category_not_found'
 
 

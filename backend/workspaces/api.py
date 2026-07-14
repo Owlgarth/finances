@@ -6,52 +6,65 @@ from ninja import Router
 from common.auth import JWTAuth, WorkspaceJWTAuth
 from common.permissions import require_role
 from core.schemas import DetailOut, MessageOut
+from currencies.schemas import CurrencyCatalogOut, EnableCurrencyIn
+from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
 from workspaces.schemas import (
-    CurrencyCreate,
-    CurrencyOut,
     MemberPasswordReset,
     WorkspaceCreate,
+    WorkspaceDefaultBudgetIn,
     WorkspaceMemberAdd,
     WorkspaceMemberOut,
     WorkspaceMemberRoleUpdate,
     WorkspaceOut,
     WorkspaceUpdate,
 )
-from workspaces.services import CurrencyService, WorkspaceMemberService, WorkspaceService
+from workspaces.services import WorkspaceMemberService, WorkspaceService
 
 router = Router(tags=['Workspaces'])
 
 
 # =============================================================================
-# Currency Endpoints
+# Enabled Currencies Endpoints (global catalog enablement)
 # =============================================================================
 
 
-@router.get('/currencies', response=list[CurrencyOut], auth=WorkspaceJWTAuth())
-def list_currencies(request: HttpRequest):
-    """List all currencies for the current workspace."""
-    return CurrencyService.list_currencies(request.auth.current_workspace_id)
+@router.get('/enabled-currencies', response=list[CurrencyCatalogOut], auth=WorkspaceJWTAuth())
+def list_enabled_currencies(request: HttpRequest):
+    """List the catalog currencies enabled for the current workspace."""
+    return CurrencyCatalogService.list_enabled(request.auth.current_workspace_id)
 
 
-@router.post('/currencies', response={201: CurrencyOut, 400: DetailOut, 403: DetailOut}, auth=WorkspaceJWTAuth())
-def create_currency(request: HttpRequest, data: CurrencyCreate):
-    """Create a new currency for the current workspace."""
+@router.post(
+    '/enabled-currencies',
+    response={201: CurrencyCatalogOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def enable_currency(request: HttpRequest, data: EnableCurrencyIn):
+    """Enable a catalog currency, or create and enable a custom currency (custom=true)."""
+    user = request.auth
     workspace_id = request.auth.current_workspace_id
-    require_role(request.auth, workspace_id, ADMIN_ROLES)
-    currency = CurrencyService.create_currency(workspace_id, data)
+    require_role(user, workspace_id, ADMIN_ROLES)
+    if data.custom:
+        currency = CurrencyCatalogService.create_custom(
+            user, workspace_id, data.code, data.name, data.symbol, data.decimals
+        )
+    else:
+        currency = CurrencyCatalogService.enable(user, workspace_id, data.code)
     return 201, currency
 
 
 @router.delete(
-    '/currencies/{currency_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
+    '/enabled-currencies/{code}',
+    response={204: None, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
 )
-def delete_currency(request: HttpRequest, currency_id: int):
-    """Delete a currency from the current workspace."""
+def disable_currency(request: HttpRequest, code: str):
+    """Disable a currency for the current workspace."""
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
-    CurrencyService.delete_currency(currency_id, workspace_id)
+    CurrencyCatalogService.disable(workspace_id, code)
     return 204, None
 
 
@@ -69,7 +82,9 @@ def list_workspaces(request: HttpRequest):
 @router.post('/', response={201: WorkspaceOut}, auth=JWTAuth())
 def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
     """Create a new workspace. User becomes owner and is auto-switched to it."""
-    workspace = WorkspaceService.create_workspace(user=request.auth, name=data.name, create_demo=False)
+    workspace = WorkspaceService.create_workspace(
+        user=request.auth, name=data.name, currency_code=data.currency_code, create_demo=False
+    )
     return 201, WorkspaceService._to_response(workspace, Role.OWNER)
 
 
@@ -101,6 +116,22 @@ def delete_workspace_endpoint(request: HttpRequest, workspace_id: int):
 def switch_workspace(request: HttpRequest, workspace_id: int):
     """Switch to a different workspace."""
     return WorkspaceService.switch_workspace(request.auth, workspace_id)
+
+
+@router.put(
+    '/{workspace_id}/default-budget',
+    response={200: WorkspaceOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=JWTAuth(),
+)
+def set_default_budget(request: HttpRequest, workspace_id: int, data: WorkspaceDefaultBudgetIn):
+    """Set (or clear) the workspace's default budget (requires owner or admin role).
+
+    Takes an explicit workspace id so it works right after a legacy import,
+    which can create several workspaces beyond the current one.
+    """
+    WorkspaceMemberService.validate_access(workspace_id, request.auth)
+    user_role = require_role(request.auth, workspace_id, ADMIN_ROLES)
+    return WorkspaceService.set_default_budget(workspace_id, data.budget_id, user_role)
 
 
 # =============================================================================
