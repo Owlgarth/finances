@@ -259,6 +259,47 @@ class TestLegacyImportService(AuthMixin, TestCase):
         self.assertIn('Legacy Workspace', report['renamed'])
         self.assertEqual(Workspace.objects.filter(owner=self.user, name__startswith='Legacy Workspace').count(), 2)
 
+    def test_conflict_check_scoped_to_own_workspaces(self):
+        """Another tenant's workspace with the same name must not trigger a rename (or leak)."""
+        from workspaces.factories import WorkspaceFactory
+
+        WorkspaceFactory(name='Legacy Workspace')
+
+        report = LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+
+        self.assertEqual(report['renamed'], {})
+        self.assertTrue(Workspace.objects.filter(owner=self.user, name='Legacy Workspace').exists())
+
+    def test_unparseable_amount_warns_instead_of_masking(self):
+        """Garbled amounts become 0 with a warning — the opening-balance solve must not hide them."""
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][1]['amount'] = 'garbage'
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('unparseable amount' in w for w in warnings), warnings)
+
+    def test_missing_transaction_date_raises_validation_error(self):
+        from common.exceptions import ValidationError
+
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][0]['date'] = None
+
+        with self.assertRaises(ValidationError):
+            LegacyImportService.import_legacy(self.user, export)
+
+    def test_unknown_transaction_type_skipped_with_warning(self):
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][1]['type'] = 'weird'
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('unknown type' in w for w in warnings), warnings)
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        self.assertFalse(Transaction.objects.filter(workspace=ws, description='Groceries').exists())
+
     def test_unmappable_currency_becomes_custom(self):
         export = _legacy_v2_export()
         # A symbol with no ISO catalog match.

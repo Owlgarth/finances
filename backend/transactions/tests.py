@@ -299,6 +299,21 @@ class TestBulkSetAccount(TransactionTestCase):
         self.trans1.refresh_from_db()
         self.assertEqual(self.trans1.account_id, self.account.id)
 
+    def test_bulk_to_other_currency_account_returns_400(self):
+        """A cross-currency move would silently reinterpret amounts."""
+        from currencies.models import Currency
+
+        eur, _ = Currency.objects.get_or_create(
+            code='EUR', workspace=None, defaults={'name': 'Euro', 'symbol': '€', 'decimals': 2}
+        )
+        eur_account = AccountFactory(workspace=self.workspace, name='Euro acct', currency=eur)
+
+        payload = {'transaction_ids': [self.trans1.id, self.trans2.id], 'account_id': eur_account.id}
+        self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(400)
+        self.trans1.refresh_from_db()
+        self.assertEqual(self.trans1.account_id, self.account.id)
+
 
 class TestAccountBalanceWithTransactions(TransactionTestCase):
     def test_balance_formula(self):
@@ -320,6 +335,31 @@ class TestAccountBalanceWithTransactions(TransactionTestCase):
 
 
 class TestUpdateDelete(TransactionTestCase):
+    def test_update_on_archived_account_allowed(self):
+        """Archiving keeps history editable — only retargeting to archived is blocked."""
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+        self.account.is_archived = True
+        self.account.save(update_fields=['is_archived'])
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=self.account.id, description='Fixed typo'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['description'], 'Fixed typo')
+
+    def test_update_retarget_to_archived_account_returns_400(self):
+        archived = AccountFactory(workspace=self.workspace, name='Old', is_archived=True)
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=archived.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
     def test_update_moves_between_accounts(self):
         second = AccountFactory(workspace=self.workspace, name='Second')
         created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())

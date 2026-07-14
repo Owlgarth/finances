@@ -18,14 +18,18 @@ class CurrencyCatalogService:
     def _reference_count(workspace_id: int, currency: Currency) -> int:
         """Count records in the workspace that reference this catalog currency.
 
-        Extended by B5 (transaction original facet).
+        Covers every PROTECT FK to Currency: accounts, category budgets,
+        budget display currencies, and the transaction original-amount facet.
         """
         from accounts.models import Account
-        from budgeting.models import CategoryBudget
+        from budgeting.models import Budget, CategoryBudget
+        from transactions.models import Transaction
 
         return (
             Account.objects.filter(workspace_id=workspace_id, currency=currency).count()
             + CategoryBudget.objects.filter(workspace_id=workspace_id, currency=currency).count()
+            + Budget.objects.filter(workspace_id=workspace_id, display_currency=currency).count()
+            + Transaction.objects.filter(workspace_id=workspace_id, original_currency=currency).count()
         )
 
     @staticmethod

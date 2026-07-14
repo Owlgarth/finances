@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import Depends, FastAPI, Request, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -12,7 +14,12 @@ from app.errors import FileTooLarge, ParserError
 from app.images import decode_to_images
 from app.schemas import ErrorResult, HealthResult, ParseResult
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title='Denarly Receipt Parser', version='1.0.0')
+
+if not settings.api_token:
+    logger.warning('PARSER_API_TOKEN is not set — /parse is unauthenticated. Set it in every real deployment.')
 
 
 @app.exception_handler(ParserError)
@@ -30,8 +37,11 @@ async def health() -> HealthResult:
 
 @app.post('/parse', response_model=ParseResult, responses={400: {'model': ErrorResult}})
 async def parse_receipt(file: UploadFile, _auth: None = Depends(require_token)) -> ParseResult:
-    content = await file.read()
-    if len(content) > settings.max_file_mb * 1024 * 1024:
+    limit = settings.max_file_mb * 1024 * 1024
+    # Read at most limit+1 bytes so an oversized upload is rejected without
+    # buffering the whole body in memory.
+    content = await file.read(limit + 1)
+    if len(content) > limit:
         raise FileTooLarge(f'File exceeds the {settings.max_file_mb} MB limit.')
 
     images, truncated = decode_to_images(content, file.content_type or '')

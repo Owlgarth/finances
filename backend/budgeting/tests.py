@@ -226,6 +226,54 @@ class TestGetOrCreateForDate(TestCase):
         self.assertEqual(period.pk, existing.pk)
         self.assertEqual(Period.objects.filter(budget=self.budget).count(), 1)
 
+    def test_covering_period_from_old_cadence_wins(self):
+        """After a cadence change, dates inside a leftover period resolve to it — never a new overlap."""
+        leftover = Period.objects.create(
+            budget=self.budget,
+            workspace_id=self.budget.workspace_id,
+            name='22 Jun – 5 Jul',
+            start_date=date(2026, 6, 22),
+            end_date=date(2026, 7, 5),
+            is_custom=False,
+        )
+
+        period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 3))
+
+        self.assertEqual(period.pk, leftover.pk)
+        self.assertEqual(Period.objects.filter(budget=self.budget).count(), 1)
+
+    def test_new_period_clamped_after_leftover_from_old_cadence(self):
+        """A freshly derived range starts after the latest leftover period it would overlap."""
+        Period.objects.create(
+            budget=self.budget,
+            workspace_id=self.budget.workspace_id,
+            name='22 Jun – 5 Jul',
+            start_date=date(2026, 6, 22),
+            end_date=date(2026, 7, 5),
+            is_custom=False,
+        )
+
+        period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
+
+        self.assertEqual(period.start_date, date(2026, 7, 6))
+        self.assertEqual(period.end_date, date(2026, 7, 31))
+
+    def test_new_period_clamped_before_future_leftover(self):
+        """A freshly derived range ends before the next leftover period it would overlap."""
+        Period.objects.create(
+            budget=self.budget,
+            workspace_id=self.budget.workspace_id,
+            name='20 Jul – 2 Aug',
+            start_date=date(2026, 7, 20),
+            end_date=date(2026, 8, 2),
+            is_custom=False,
+        )
+
+        period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 10))
+
+        self.assertEqual(period.start_date, date(2026, 7, 1))
+        self.assertEqual(period.end_date, date(2026, 7, 19))
+
     def test_custom_cadence_returns_covering_period(self):
         budget = BudgetFactory(cadence=Cadence.CUSTOM)
         period = Period.objects.create(
@@ -285,9 +333,7 @@ class TestPeriodsAPI(AuthMixin, APIClientMixin, TestCase):
         august = self.get(f'/api/budgets/{self.budget.id}/periods/current?date=2026-08-15', **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(august['start_date'], '2026-08-01')
-        rows = self.get(
-            f'/api/budgets/{self.budget.id}/periods/{august["id"]}/category-budgets', **self.auth_headers()
-        )
+        rows = self.get(f'/api/budgets/{self.budget.id}/periods/{august["id"]}/category-budgets', **self.auth_headers())
         self.assertEqual([(r['category_id'], r['amount']) for r in rows], [(category.id, '1500.00')])
 
         # Editing August never touches July.

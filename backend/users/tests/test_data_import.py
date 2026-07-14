@@ -76,6 +76,35 @@ class V3ImportGatingTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_workspaces'], 1)
         self.assertIn('Imported Workspace', result['renamed'])
 
+    def test_conflict_check_scoped_to_own_workspaces(self):
+        """Another tenant's workspace with the same name must not trigger a rename (or leak)."""
+        WorkspaceFactory(name='Imported Workspace')
+
+        result = UserService.import_all_data(self.user, self._make_import_input(self._minimal_v3()))
+
+        self.assertEqual(result['imported_workspaces'], 1)
+        self.assertEqual(result['renamed'], {})
+        self.assertTrue(Workspace.objects.filter(owner=self.user, name='Imported Workspace').exists())
+
+    def test_invalid_date_raises_validation_error(self):
+        from common.exceptions import ValidationError
+
+        export = self._minimal_v3(
+            accounts=[{'name': 'Main', 'currency_code': 'PLN'}],
+            transactions=[
+                {
+                    'date': 'not-a-date',
+                    'description': 'Bad row',
+                    'amount': '10.00',
+                    'type': 'expense',
+                    'account_name': 'Main',
+                }
+            ],
+        )
+
+        with self.assertRaises(ValidationError):
+            UserService.import_all_data(self.user, self._make_import_input(export))
+
     def test_import_filter_workspaces(self):
         export_data = {
             'export_version': '3.0',

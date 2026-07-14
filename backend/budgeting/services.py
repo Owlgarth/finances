@@ -171,18 +171,39 @@ class PeriodService:
         The single entry point for period resolution (transactions, reports,
         "current period" in the UI). Concurrency-safe via the unique
         (budget, start_date) constraint.
+
+        Any existing period covering target_date wins, and a freshly derived
+        range is clamped against neighbouring periods — cadence changes apply
+        forward only, and periods must never overlap (overlap would double-count
+        actuals in reports, which aggregate by date range).
         """
-        if budget.cadence == Cadence.CUSTOM:
-            period = budget.periods.filter(start_date__lte=target_date, end_date__gte=target_date).first()
-            if not period:
-                raise NoPeriodForDateError()
+        period = budget.periods.filter(start_date__lte=target_date, end_date__gte=target_date).first()
+        if period:
             return period
+        if budget.cadence == Cadence.CUSTOM:
+            raise NoPeriodForDateError()
 
         start, end, name = PeriodService.compute_range(budget, target_date)
 
-        period = budget.periods.filter(start_date=start).first()
-        if period:
-            return period
+        # Clamp against periods left over from an earlier cadence so ranges stay
+        # disjoint. target_date itself is covered by no period (checked above),
+        # so the clamped range always still contains it.
+        previous_end = (
+            budget.periods.filter(start_date__lte=end, end_date__lt=target_date)
+            .order_by('-end_date')
+            .values_list('end_date', flat=True)
+            .first()
+        )
+        if previous_end is not None and previous_end >= start:
+            start = previous_end + timedelta(days=1)
+        next_start = (
+            budget.periods.filter(start_date__gt=target_date, start_date__lte=end)
+            .order_by('start_date')
+            .values_list('start_date', flat=True)
+            .first()
+        )
+        if next_start is not None:
+            end = next_start - timedelta(days=1)
 
         try:
             with db_transaction.atomic():

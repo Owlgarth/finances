@@ -452,7 +452,9 @@ class UserService:
         return {'deleted_workspaces': deleted_workspace_names}
 
     @staticmethod
-    def reset_account(user: User, password: str, workspace_name: str, currency_code: str) -> dict:
+    def reset_account(
+        user: User, password: str, workspace_name: str, currency_code: str, confirm_shared: bool = False
+    ) -> dict:
         """
         Wipe the user's data back to a fresh post-registration state.
 
@@ -462,6 +464,10 @@ class UserService:
         standard starter setup (Main account, General budget, current period,
         starter categories). Memberships in workspaces owned by other users are
         left untouched — that data belongs to its owners.
+
+        Deleting owned workspaces that other members share requires
+        confirm_shared — otherwise a single POST would silently destroy data
+        other people are using.
 
         Unlike delete_account, the user row, credentials, preferences, 2FA and
         consents all survive: this exists for testing/starting over without
@@ -473,6 +479,15 @@ class UserService:
             raise UserInvalidPasswordError('Invalid password')
 
         owned_workspaces = Workspace.objects.filter(owner=user)
+
+        if not confirm_shared:
+            shared = [ws.name for ws in owned_workspaces if WorkspaceMember.objects.filter(workspace=ws).count() > 1]
+            if shared:
+                raise ValidationError(
+                    'These workspaces are shared with other members: '
+                    f'{", ".join(sorted(shared))}. Set confirm_shared to delete them anyway.',
+                    code='reset_shared_workspaces',
+                )
         deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
 
         with db_transaction.atomic():
@@ -745,14 +760,21 @@ class UserService:
         renamed: dict[str, str] = {}
 
         def _date(value):
-            return datetime.strptime(value, '%Y-%m-%d').date() if value else None
+            if not value:
+                return None
+            try:
+                return datetime.strptime(value, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                raise ValidationError(f'Invalid date in import data: {value!r} (expected YYYY-MM-DD)')
 
         for ws_data in export_data.get('workspaces', []):
             original_name = ws_data.get('workspace_name')
             if workspace_filter and original_name not in workspace_filter:
                 continue
 
-            if Workspace.objects.filter(name=original_name).exists():
+            # Conflicts only against workspaces this user can see — a global check
+            # would leak other tenants' workspace names via the rename report.
+            if Workspace.objects.filter(name=original_name, members__user=user).exists():
                 if conflict_strategy == 'skip':
                     skipped['workspaces'].append(original_name)
                     continue

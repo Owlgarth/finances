@@ -15,6 +15,7 @@ export default function ResetAccountSection() {
   const [workspaceName, setWorkspaceName] = useState('My Workspace');
   const [currencyCode, setCurrencyCode] = useState('PLN');
   const [password, setPassword] = useState('');
+  const [confirmShared, setConfirmShared] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
   const handleReset = async (e: React.FormEvent) => {
@@ -27,6 +28,7 @@ export default function ResetAccountSection() {
         password,
         workspace_name: workspaceName.trim() || 'My Workspace',
         currency_code: currencyCode,
+        confirm_shared: confirmShared,
       });
       queryClient.clear();
       toast.success(`Account reset — "${result.workspace_name}" is ready.`);
@@ -82,6 +84,16 @@ export default function ResetAccountSection() {
             </select>
           </div>
         </div>
+
+        <label className="flex items-start gap-2 text-sm text-text-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={confirmShared}
+            onChange={(e) => setConfirmShared(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Also delete workspaces I own that other members are using</span>
+        </label>
 
         <div>
           <label htmlFor="reset-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">

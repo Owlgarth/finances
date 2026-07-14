@@ -168,6 +168,48 @@ class TestCurrencyCatalogService(TestCase):
         codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
         self.assertIn('EUR', codes)
 
+    def test_disable_blocked_by_transaction_original_facet(self):
+        from decimal import Decimal
+
+        from accounts.factories import AccountFactory
+        from transactions.factories import TransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        account = AccountFactory(workspace=self.workspace)
+        TransactionFactory(account=account, original_amount=Decimal('10.00'), original_currency=eur)
+
+        with self.assertRaises(CurrencyInUseError):
+            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+
+    def test_disable_custom_facet_currency_blocked_not_500(self):
+        """A custom currency referenced only by an original facet must block, not ProtectedError."""
+        from decimal import Decimal
+
+        from accounts.factories import AccountFactory
+        from transactions.factories import TransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        custom = CurrencyCatalogService.create_custom(
+            self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g'
+        )
+        account = AccountFactory(workspace=self.workspace)
+        TransactionFactory(account=account, original_amount=Decimal('1.00'), original_currency=custom)
+
+        with self.assertRaises(CurrencyInUseError):
+            CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
+        self.assertTrue(Currency.objects.filter(id=custom.id).exists())
+
+    def test_disable_blocked_by_budget_display_currency(self):
+        from budgeting.factories import BudgetFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        BudgetFactory(workspace=self.workspace, display_currency=eur)
+
+        with self.assertRaises(CurrencyInUseError):
+            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+
 
 class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
     """Tests for GET /api/currencies and /api/workspaces/enabled-currencies as admin/owner."""

@@ -22,6 +22,7 @@ from transactions.exceptions import (
     TransactionAdjustmentCategoryError,
     TransactionAmountInvalidError,
     TransactionBulkAccountError,
+    TransactionBulkCurrencyError,
     TransactionCategoryNotFoundError,
     TransactionImportError,
     TransactionNotFoundError,
@@ -33,15 +34,20 @@ from transactions.schemas import TransactionCreate, TransactionImport
 
 class TransactionService:
     @staticmethod
-    def _resolve_account(workspace_id: int, account_id: int | None) -> Account:
-        """Resolve the target account, defaulting when exactly one active account exists."""
+    def _resolve_account(workspace_id: int, account_id: int | None, allow_archived: bool = False) -> Account:
+        """Resolve the target account, defaulting when exactly one active account exists.
+
+        allow_archived permits editing a transaction whose account was archived
+        after the fact — retargeting to an archived account is rejected by the
+        caller comparing account ids.
+        """
         if account_id is not None:
             account = AccountService.get(account_id, workspace_id)
         else:
             account = AccountService.single_active_account(workspace_id)
             if not account:
                 raise AccountRequiredError()
-        if account.is_archived:
+        if account.is_archived and not allow_archived:
             raise TransactionAccountArchivedError()
         return account
 
@@ -372,10 +378,18 @@ class TransactionService:
     @staticmethod
     @db_transaction.atomic
     def update(user, workspace_id: int, transaction_id: int, data: TransactionCreate) -> Transaction:
-        """Fully replace a transaction; account/category/date changes re-derive the period."""
+        """Fully replace a transaction; account/category/date changes re-derive the period.
+
+        Editing a transaction whose account was archived since is allowed, but
+        retargeting to an archived account is rejected.
+        """
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
 
-        account = TransactionService._resolve_account(workspace_id, data.account_id or trans.account_id)
+        account = TransactionService._resolve_account(
+            workspace_id, data.account_id or trans.account_id, allow_archived=True
+        )
+        if account.id != trans.account_id and account.is_archived:
+            raise TransactionAccountArchivedError()
         TransactionService._validate_type_amount(data.type, data.amount, data.category_id)
         category = TransactionService._validate_category(data.category_id, workspace_id)
         original_currency = TransactionService._resolve_original_currency(
@@ -452,7 +466,13 @@ class TransactionService:
     @staticmethod
     @db_transaction.atomic
     def bulk_set_account(user, workspace_id: int, transaction_ids: list[int], account_id: int) -> int:
-        """Move transactions to another account in one UPDATE (all-or-nothing)."""
+        """Move transactions to another account in one UPDATE (all-or-nothing).
+
+        The target must share the currency of every moved transaction — a
+        transaction's currency IS its account's currency, so a cross-currency
+        move would silently reinterpret amounts (and could equal an original
+        facet's currency, which must always differ).
+        """
         account = AccountService.get(account_id, workspace_id)
         if account.is_archived:
             raise TransactionAccountArchivedError()
@@ -460,6 +480,8 @@ class TransactionService:
         owned = Transaction.objects.for_workspace(workspace_id).filter(id__in=transaction_ids)
         if owned.count() != len(set(transaction_ids)):
             raise TransactionBulkAccountError()
+        if owned.exclude(account__currency=account.currency).exists():
+            raise TransactionBulkCurrencyError()
 
         return owned.update(account=account, updated_by=user)
 

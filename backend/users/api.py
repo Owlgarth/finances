@@ -159,7 +159,9 @@ def reset_account(request, data: AccountResetIn):
     the user account, credentials, preferences and other member users, then
     creates a fresh default workspace. Requires password confirmation.
     """
-    result = services.UserService.reset_account(request.auth, data.password, data.workspace_name, data.currency_code)
+    result = services.UserService.reset_account(
+        request.auth, data.password, data.workspace_name, data.currency_code, data.confirm_shared
+    )
     return 200, {
         'message': 'Account reset. A fresh workspace is ready.',
         'deleted_workspaces': result['deleted_workspaces'],

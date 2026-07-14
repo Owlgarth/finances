@@ -6,6 +6,8 @@ Set it in every real deployment.
 
 from __future__ import annotations
 
+import hmac
+
 from fastapi import Header
 
 from app.config import settings
@@ -16,5 +18,5 @@ def require_token(authorization: str | None = Header(default=None)) -> None:
     if not settings.api_token:
         return
     expected = f'Bearer {settings.api_token}'
-    if authorization != expected:
+    if authorization is None or not hmac.compare_digest(authorization, expected):
         raise Unauthorized('Missing or invalid bearer token.')

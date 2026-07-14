@@ -80,13 +80,23 @@ class AccountResetTests(AuthMixin, TestCase):
         member = UserFactory(email='member@test.com', current_workspace=self.workspace)
         WorkspaceMemberFactory(workspace=self.workspace, user=member, role='member')
 
-        response = self._reset()
+        response = self._reset(confirm_shared=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Workspace.objects.filter(id=self.workspace.id).exists())
         member.refresh_from_db()
         self.assertIsNone(member.current_workspace_id)  # SET_NULL, account intact
         self.assertTrue(User.objects.filter(id=member.id).exists())
+
+    def test_reset_with_shared_workspace_requires_confirmation(self):
+        member = UserFactory(email='member@test.com')
+        WorkspaceMemberFactory(workspace=self.workspace, user=member, role='member')
+
+        response = self._reset()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(self.workspace.name, response.json()['detail'])
+        self.assertTrue(Workspace.objects.filter(id=self.workspace.id).exists())
 
     def test_reset_keeps_membership_in_others_workspace(self):
         other_ws, _, _ = create_other_workspace(owner_email='owner@test.com', workspace_name='Not Mine')

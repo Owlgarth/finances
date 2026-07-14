@@ -15,11 +15,14 @@ class AccountResetIn(BaseModel):
     """Input for account reset — requires password confirmation.
 
     workspace_name/currency_code shape the fresh workspace created after the wipe.
+    confirm_shared must be true when any owned workspace has other members —
+    the reset deletes those workspaces out from under them.
     """
 
     password: str
     workspace_name: str = Field('My Workspace', max_length=100)
     currency_code: str = Field('PLN', pattern=r'^[A-Z]{3,8}$')
+    confirm_shared: bool = False
 
 
 class AccountResetOut(BaseModel):

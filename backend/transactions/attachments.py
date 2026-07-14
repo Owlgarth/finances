@@ -196,18 +196,32 @@ class AttachmentService:
 
     @staticmethod
     def import_for_transaction(user, trans: Transaction, attachments_data: list[dict]) -> int:
-        """Recreate attachments from a GDPR export. Skips entries without content or when storage is off."""
+        """Recreate attachments from a GDPR export.
+
+        Skips entries without content, over the upload size cap, with malformed
+        base64, or when storage is off — the same limits `upload` enforces.
+        """
         import base64
+        import binascii
 
         if not StorageService._is_enabled():
             return 0
+        max_bytes = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024
         created = 0
         for att in attachments_data or []:
             content_b64 = att.get('content_b64')
             content_type = (att.get('content_type') or '').lower()
             if not content_b64 or content_type not in ALLOWED_CONTENT_TYPES:
                 continue
-            content = base64.b64decode(content_b64)
+            # 4/3 base64 expansion: a compliant payload can't exceed this.
+            if len(content_b64) > max_bytes * 4 // 3 + 4:
+                continue
+            try:
+                content = base64.b64decode(content_b64, validate=True)
+            except (binascii.Error, ValueError):
+                continue
+            if len(content) > max_bytes:
+                continue
             key = AttachmentService._build_key(trans.workspace_id, trans.id, content_type)
             stored_key = StorageService.save_file(AttachmentService._media_bucket(), key, content, content_type)
             if stored_key is None:

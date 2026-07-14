@@ -45,6 +45,11 @@ class TransactionBulkAccountError(ValidationError):
     default_code = 'bulk_account_invalid'
 
 
+class TransactionBulkCurrencyError(ValidationError):
+    default_message = 'Target account currency must match the currency of every moved transaction'
+    default_code = 'bulk_currency_mismatch'
+
+
 class TransactionImportError(ValidationError):
     def __init__(self, message: str):
         super().__init__(message, code='import_error')
