@@ -19,6 +19,11 @@ export function usePermissions() {
     const canManageBudgetData = isOwner || isAdmin || isMember;
     const canManageMembers = isOwner || isAdmin;
 
+    // New-model aliases: accounts/budgets/currencies are admin-gated (ADMIN_ROLES);
+    // day-to-day records (transactions, transfers, categories, planned) are WRITE_ROLES.
+    const canManageAccounts = canManageBudgetAccounts;
+    const canWrite = canManageBudgetData;
+
     // Utility function to check if user has any of the specified roles
     const hasRole = (roles: string[]): boolean => {
       return userRole ? roles.includes(userRole) : false;
@@ -59,6 +64,8 @@ export function usePermissions() {
       canManageBudgetAccounts,
       canManageBudgetData,
       canManageMembers,
+      canManageAccounts,
+      canWrite,
 
       // Utility functions
       hasRole,

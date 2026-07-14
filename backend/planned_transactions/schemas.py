@@ -8,34 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class PlannedTransactionCreate(BaseModel):
-    """Schema for creating a planned transaction."""
+    """Schema for creating or fully replacing a planned transaction."""
 
     name: str = Field(..., max_length=200)
     amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
+    account_id: Optional[int] = None
     category_id: Optional[int] = None
     planned_date: date
     status: str = Field(default='pending', pattern=r'^(pending|done|cancelled)$')
-    budget_period_id: Optional[int] = None
-
-    @field_validator('name')
-    @classmethod
-    def name_not_empty(cls, v):
-        if not v.strip():
-            raise ValueError('Name cannot be empty')
-        return v.strip()
-
-
-class PlannedTransactionUpdate(BaseModel):
-    """Schema for updating a planned transaction."""
-
-    name: str = Field(..., max_length=200)
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-    category_id: Optional[int] = None
-    planned_date: date
-    status: str = Field(default='pending', pattern=r'^(pending|done|cancelled)$')
-    budget_period_id: Optional[int] = None
 
     @field_validator('name')
     @classmethod
@@ -50,7 +30,6 @@ class PlannedTransactionImport(BaseModel):
 
     name: str = Field(..., max_length=200)
     amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
     category_name: Optional[str] = Field(None, max_length=100)
     planned_date: date
 
@@ -66,7 +45,7 @@ class CategoryOut(BaseModel):
     """Schema for category in planned transaction response."""
 
     id: int
-    budget_period_id: int
+    budget_id: int
     name: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -75,16 +54,15 @@ class CategoryOut(BaseModel):
 class PlannedTransactionOut(BaseModel):
     """Schema for planned transaction response."""
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        arbitrary_types_allowed=True,
-    )
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
-    budget_period_id: Optional[int]
+    workspace_id: int
+    account_id: int
+    account_name: str
+    currency_code: str
     name: str
     amount: Decimal
-    currency: str
     category_id: Optional[int]
     category: Optional[CategoryOut] = None
     planned_date: date
@@ -95,14 +73,6 @@ class PlannedTransactionOut(BaseModel):
     updated_by: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    @field_validator('currency', mode='before')
-    @classmethod
-    def validate_currency(cls, value: Any) -> str:
-        """Extract symbol string from Currency FK object."""
-        if hasattr(value, 'symbol'):
-            return value.symbol
-        return value
 
     @field_validator('created_by', 'updated_by', mode='before')
     @classmethod
@@ -120,7 +90,7 @@ class PlannedTransactionOut(BaseModel):
 class PlannedTransactionTotalsItem(BaseModel):
     """Schema for a single planned transaction totals group."""
 
-    group: str  # currency symbol (when group_by=currency) or category name (when group_by=category)
+    group: str  # currency code (when group_by=currency) or category name (when group_by=category)
     currency: str
     total: Decimal
 

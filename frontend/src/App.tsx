@@ -1,6 +1,4 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { BudgetPeriodProvider } from './contexts/BudgetPeriodContext'
-import { BudgetAccountProvider } from './contexts/BudgetAccountContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { WorkspaceProvider } from './contexts/WorkspaceContext'
@@ -8,18 +6,14 @@ import { UserPreferencesProvider } from './contexts/UserPreferencesContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
+import AccountsPage from './pages/AccountsPage'
 import BudgetsPage from './pages/BudgetsPage'
-import BudgetPeriod from './pages/BudgetPeriod'
+import BudgetDetailPage from './pages/BudgetDetailPage'
 import Transactions from './pages/Transactions'
 import Planned from './pages/Planned'
-import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
-import BudgetAccountsPage from './pages/BudgetAccountsPage'
-import CategoryPage from './pages/CategoryPage'
-import CurrencyExchangesPage from './pages/CurrencyExchangesPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
-import BalancesPage from './pages/BalancesPage'
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import TermsPage from './pages/TermsPage'
@@ -32,17 +26,13 @@ function AppContent() {
     <MainLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
-        <Route path="/period/:id" element={<BudgetPeriod />} />
+        <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/transactions" element={<Transactions />} />
-        <Route path="/exchanges" element={<CurrencyExchangesPage />} />
-        <Route path="/balances" element={<BalancesPage />} />
         <Route path="/planned" element={<Planned />} />
-        <Route path="/categories" element={<CategoryPage />} />
-        <Route path="/budget-periods" element={<BudgetPeriodsPage />} />
-        <Route path="/budget-accounts" element={<BudgetAccountsPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<ProfilePage />} />
       </Routes>
     </MainLayout>
   )
@@ -53,11 +43,7 @@ function ProtectedApp() {
     <ProtectedRoute>
       <WorkspaceProvider>
         <UserPreferencesProvider>
-          <BudgetAccountProvider>
-            <BudgetPeriodProvider>
-              <AppContent />
-            </BudgetPeriodProvider>
-          </BudgetAccountProvider>
+          <AppContent />
         </UserPreferencesProvider>
       </WorkspaceProvider>
     </ProtectedRoute>

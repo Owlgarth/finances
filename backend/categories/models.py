@@ -1,40 +1,26 @@
-from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 
 from common.models import WorkspaceScopedModel
 
 
 class Category(WorkspaceScopedModel):
-    """Category model for organizing transactions within budget periods."""
+    """A persistent, budget-scoped category for organizing transactions.
 
-    workspace = models.ForeignKey(
-        'workspaces.Workspace',
-        on_delete=models.CASCADE,
-        related_name='categories',
-    )
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='created_categories',
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='updated_categories',
-    )
-    budget_period = models.ForeignKey(
-        'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='categories'
-    )
+    Categories survive across periods; retiring one is an archive, not a delete.
+    """
+
+    budget = models.ForeignKey('budgeting.Budget', on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'categories'
-        unique_together = [['budget_period', 'name']]
+        constraints = [
+            models.UniqueConstraint(Lower('name'), 'budget', name='uniq_category_name_per_budget_ci'),
+        ]
+        ordering = ['name']
         verbose_name_plural = 'Categories'
 
     def __str__(self):
-        return f'{self.budget_period.name} - {self.name}'
+        return f'{self.budget.name} - {self.name}'

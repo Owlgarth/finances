@@ -23,3 +23,17 @@ def seed_legal_documents(django_db_setup, django_db_blocker):
 
     with django_db_blocker.unblock():
         call_command('seed_legal_documents', verbosity=0)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def seed_currencies(django_db_setup, django_db_blocker):
+    """Seed the global ISO 4217 currency catalog once per session.
+
+    WorkspaceService.create_workspace enables the chosen currency from the
+    catalog, so any test creating a workspace via the service needs these rows.
+    The command is idempotent (update_or_create), so it is safe on --reuse-db.
+    """
+    from django.core.management import call_command
+
+    with django_db_blocker.unblock():
+        call_command('seed_currencies', verbosity=0)
