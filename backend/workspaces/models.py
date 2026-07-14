@@ -1,8 +1,6 @@
 from django.conf import settings
 from django.db import models
 
-from common.models import WorkspaceScopedModel
-
 
 class Role(models.TextChoices):
     """User roles for workspace access control."""
@@ -29,6 +27,10 @@ class Workspace(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_workspaces'
     )
+    # Preselected in record forms when the workspace has more than one budget.
+    default_budget = models.ForeignKey(
+        'budgeting.Budget', on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
@@ -37,23 +39,6 @@ class Workspace(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class Currency(WorkspaceScopedModel):
-    """Currency model scoped to a workspace."""
-
-    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='currencies')
-    name = models.CharField(max_length=50)
-    symbol = models.CharField(max_length=3)
-
-    class Meta:
-        db_table = 'currencies'
-        verbose_name_plural = 'currencies'
-        ordering = ['symbol']
-        unique_together = [['symbol', 'workspace']]
-
-    def __str__(self):
-        return f'{self.symbol} ({self.name})'
 
 
 class WorkspaceMember(models.Model):

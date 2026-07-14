@@ -15,12 +15,16 @@ from core.schemas import (
     AccountDeleteCheckOut,
     AccountDeleteIn,
     AccountDeleteOut,
+    AccountResetIn,
+    AccountResetOut,
     ConsentIn,
     ConsentOut,
     ConsentStatusOut,
     DetailOut,
     FullImportIn,
     ImportResultOut,
+    LegacyImportIn,
+    LegacyImportResultOut,
     MessageOut,
     TwoFADisableIn,
     TwoFARegenerateIn,
@@ -146,6 +150,26 @@ def delete_account(request, data: AccountDeleteIn):
     }
 
 
+@router.post('/me/reset', auth=JWTAuth(), response={200: AccountResetOut, 400: DetailOut, 401: DetailOut})
+def reset_account(request, data: AccountResetIn):
+    """
+    Reset the account to a fresh post-registration state.
+
+    Deletes all workspaces the user owns and their data (IRREVERSIBLE), keeps
+    the user account, credentials, preferences and other member users, then
+    creates a fresh default workspace. Requires password confirmation.
+    """
+    result = services.UserService.reset_account(
+        request.auth, data.password, data.workspace_name, data.currency_code, data.confirm_shared
+    )
+    return 200, {
+        'message': 'Account reset. A fresh workspace is ready.',
+        'deleted_workspaces': result['deleted_workspaces'],
+        'workspace_id': result['workspace_id'],
+        'workspace_name': result['workspace_name'],
+    }
+
+
 @router.get('/me/export', auth=JWTAuth())
 @rate_limit('data_export', limit=settings.RATE_LIMIT_DATA_EXPORT, period=settings.RATE_LIMIT_DATA_EXPORT_PERIOD)
 def export_my_data(request):
@@ -177,6 +201,23 @@ def import_my_data(request, data: FullImportIn):
     Rate limited to 3 imports per hour.
     """
     result = services.UserService.import_all_data(request.auth, data)
+    return 200, result
+
+
+@router.post('/import-legacy', auth=JWTAuth(), response={200: LegacyImportResultOut, 400: DetailOut})
+@rate_limit('data_import', limit=settings.RATE_LIMIT_DATA_IMPORT, period=settings.RATE_LIMIT_DATA_IMPORT_PERIOD)
+def import_legacy_data(request, data: LegacyImportIn):
+    """
+    Import data from an old-format (v1/v2) Denarly export.
+
+    Converts the pre-redesign export into the account-based model (accounts,
+    budgets, categories, transactions, transfers) and returns a verification
+    report with per-currency balance checks and deduplicated exchange
+    transactions. Rate limited like the standard import.
+    """
+    from users.legacy_import import LegacyImportService
+
+    result = LegacyImportService.import_legacy(request.auth, data.data, data.conflict_strategy)
     return 200, result
 
 

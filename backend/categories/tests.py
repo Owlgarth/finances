@@ -1,866 +1,231 @@
-"""Tests for categories API endpoints."""
+"""Tests for budget-scoped persistent categories (endpoints live under /budgets)."""
 
-import json
 from datetime import date
 
-from django.contrib.auth import get_user_model
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from budget_periods.factories import BudgetPeriodFactory
+from budgeting.factories import BudgetFactory
+from budgeting.models import CategoryBudget
+from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
-from common.tests.factories import BudgetAccountFactory, UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
-from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import WorkspaceMember
-
-User = get_user_model()
+from currencies.services import CurrencyCatalogService
 
 
-# =============================================================================
-# Base Test Case
-# =============================================================================
-
-
-class CategoriesTestCase(AuthMixin, APIClientMixin, TestCase):
-    """Base test case for categories tests with common setup."""
+class TestCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
+    """Category CRUD nested under a budget."""
 
     def setUp(self):
-        """Set up authenticated user and create test data."""
         super().setUp()
-        self.currencies = {c.symbol: c for c in self.workspace.currencies.all()}
+        self.budget = BudgetFactory(workspace=self.workspace)
 
-        self.other_account = BudgetAccountFactory(
-            workspace=self.workspace,
-            name='Other Account',
-            description='Another budget account',
-            default_currency=self.currencies['USD'],
-            is_active=True,
-            display_order=1,
-            created_by=self.user,
-        )
+    def test_create_category(self):
+        data = self.post(f'/api/budgets/{self.budget.id}/categories', {'name': 'Food'}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['name'], 'Food')
+        self.assertEqual(data['budget_id'], self.budget.id)
+        self.assertFalse(data['is_archived'])
 
-        self.period1 = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='January 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            weeks=5,
-            created_by=self.user,
-        )
-
-        self.period2 = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='February 2025',
-            start_date=date(2025, 2, 1),
-            end_date=date(2025, 2, 28),
-            weeks=4,
-            created_by=self.user,
-        )
-
-        self.other_period = BudgetPeriodFactory(
-            budget_account=self.other_account,
-            name='March 2025',
-            start_date=date(2025, 3, 1),
-            end_date=date(2025, 3, 31),
-            weeks=5,
-            created_by=self.user,
-        )
-
-        self.category1 = CategoryFactory(
-            budget_period=self.period1,
-            name='Groceries',
-            created_by=self.user,
-        )
-
-        self.category2 = CategoryFactory(
-            budget_period=self.period1,
-            name='Transport',
-            created_by=self.user,
-        )
-
-        self.category3 = CategoryFactory(
-            budget_period=self.period2,
-            name='Entertainment',
-            created_by=self.user,
-        )
-
-
-# =============================================================================
-# List Categories Tests
-# =============================================================================
-
-
-class TestListCategories(CategoriesTestCase):
-    """Tests for listing categories."""
-
-    def test_list_categories_with_period_id(self):
-        """Test listing categories filtered by budget period."""
-        data = self.get(f'/api/categories?budget_period_id={self.period1.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 2)
-        category_names = {c['name'] for c in data['items']}
-        self.assertEqual(category_names, {'Groceries', 'Transport'})
-
-    def test_list_categories_with_current_date(self):
-        """Test listing categories using current_date to find period."""
-        data = self.get('/api/categories?current_date=2025-01-15', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 2)
-        category_names = {c['name'] for c in data['items']}
-        self.assertEqual(category_names, {'Groceries', 'Transport'})
-
-    def test_list_categories_with_current_date_no_period(self):
-        """Test listing categories with date that has no period."""
-        data = self.get('/api/categories?current_date=2025-05-15', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-
-    def test_list_categories_without_filters_fails(self):
-        """Test that listing without budget_period_id or current_date fails."""
-        self.get('/api/categories', **self.auth_headers())
+    def test_create_duplicate_name_case_insensitive_returns_400(self):
+        CategoryFactory(budget=self.budget, name='Food')
+        self.post(f'/api/budgets/{self.budget.id}/categories', {'name': 'food'}, **self.auth_headers())
         self.assertStatus(400)
 
-    def test_list_categories_from_other_workspace_returns_empty(self):
-        """Cross-workspace period access returns empty list (200), not 404.
-
-        We intentionally do not raise 404 to avoid leaking whether the period
-        ID exists in another workspace.
-        """
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        CategoryFactory(
-            budget_period=other_period,
-            name='Other Category',
-            created_by=other_user,
-        )
-
-        data = self.get(f'/api/categories?budget_period_id={other_period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-
-    def test_list_categories_without_auth_fails(self):
-        """Test that listing categories without authentication fails."""
-        self.get(f'/api/categories?budget_period_id={self.period1.id}')
-        self.assertStatus(401)
-
-
-# =============================================================================
-# Get Category Tests
-# =============================================================================
-
-
-class TestGetCategory(CategoriesTestCase):
-    """Tests for getting a specific category."""
-
-    def test_get_category_by_id(self):
-        """Test getting a category by ID."""
-        data = self.get(f'/api/categories/{self.category1.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['id'], self.category1.id)
-        self.assertEqual(data['name'], 'Groceries')
-
-    def test_get_category_not_found(self):
-        """Test getting a non-existent category."""
-        self.get('/api/categories/99999', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_get_category_from_other_workspace_fails(self):
-        """Test that getting a category from another workspace fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        other_category = CategoryFactory(
-            budget_period=other_period,
-            name='Other Category',
-            created_by=other_user,
-        )
-
-        self.get(f'/api/categories/{other_category.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_get_category_requires_auth(self):
-        """Test that getting a category requires authentication."""
-        self.get(f'/api/categories/{self.category1.id}')
-        self.assertStatus(401)
-
-
-# =============================================================================
-# Create Category Tests
-# =============================================================================
-
-
-class TestCreateCategory(CategoriesTestCase):
-    """Tests for creating categories."""
-
-    def test_create_category_success(self):
-        """Test creating a new category."""
-        payload = {
-            'name': 'Healthcare',
-            'budget_period_id': self.period1.id,
-        }
-        data = self.post('/api/categories', payload, **self.auth_headers())
+    def test_same_name_across_budgets_ok(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        CategoryFactory(budget=other_budget, name='Food')
+        self.post(f'/api/budgets/{self.budget.id}/categories', {'name': 'Food'}, **self.auth_headers())
         self.assertStatus(201)
-        self.assertEqual(data['name'], 'Healthcare')
-        self.assertEqual(data['budget_period_id'], self.period1.id)
 
-        # Verify category was created in database
-        self.assertTrue(
-            Category.objects.filter(
-                budget_period=self.period1,
-                name='Healthcare',
-            ).exists()
+    def test_list_excludes_archived_by_default(self):
+        CategoryFactory(budget=self.budget, name='Active')
+        CategoryFactory(budget=self.budget, name='Retired', is_archived=True)
+
+        names = [c['name'] for c in self.get(f'/api/budgets/{self.budget.id}/categories', **self.auth_headers())]
+        self.assertEqual(names, ['Active'])
+
+        names = [
+            c['name']
+            for c in self.get(f'/api/budgets/{self.budget.id}/categories?include_archived=true', **self.auth_headers())
+        ]
+        self.assertEqual(names, ['Active', 'Retired'])
+
+    def test_rename_category(self):
+        category = CategoryFactory(budget=self.budget, name='Old')
+        data = self.put(
+            f'/api/budgets/{self.budget.id}/categories/{category.id}', {'name': 'New'}, **self.auth_headers()
         )
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'New')
 
-    def test_create_category_in_different_period(self):
-        """Test creating a category in a different period."""
-        payload = {
-            'name': 'Dining Out',
-            'budget_period_id': self.period2.id,
-        }
-        data = self.post('/api/categories', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['name'], 'Dining Out')
-
-    def test_create_category_duplicate_name_in_period_fails(self):
-        """Test that creating a category with duplicate name in period fails."""
-        payload = {
-            'name': 'Groceries',  # Already exists in period1
-            'budget_period_id': self.period1.id,
-        }
-        data = self.post('/api/categories', payload, **self.auth_headers())
-        # Should get a 400 error for duplicate name
+    def test_rename_to_ci_duplicate_returns_400(self):
+        CategoryFactory(budget=self.budget, name='Food')
+        category = CategoryFactory(budget=self.budget, name='Transport')
+        self.put(f'/api/budgets/{self.budget.id}/categories/{category.id}', {'name': 'FOOD'}, **self.auth_headers())
         self.assertStatus(400)
-        self.assertIn('already exists', data['detail'])
 
-    def test_create_category_with_period_from_other_workspace_fails(self):
-        """Test that creating a category with a period from another workspace fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
+    def test_rename_changing_only_case_ok(self):
+        category = CategoryFactory(budget=self.budget, name='food')
+        data = self.put(
+            f'/api/budgets/{self.budget.id}/categories/{category.id}', {'name': 'Food'}, **self.auth_headers()
         )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        payload = {
-            'name': 'Some Category',
-            'budget_period_id': other_period.id,
-        }
-        self.post('/api/categories', payload, **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_create_category_without_auth_fails(self):
-        """Test that creating a category without authentication fails."""
-        payload = {
-            'name': 'Healthcare',
-            'budget_period_id': self.period1.id,
-        }
-        self.post('/api/categories', payload)
-        self.assertStatus(401)
-
-    def test_viewer_cannot_create_category(self):
-        """Test that a viewer cannot create a category."""
-        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
-        payload = {
-            'name': 'Healthcare',
-            'budget_period_id': self.period1.id,
-        }
-        self.post('/api/categories', payload, **self.auth_headers())
-        self.assertStatus(403)
-
-    def test_member_can_create_category(self):
-        """Test that a member can create a category."""
-        WorkspaceMember.objects.filter(user=self.user).update(role='member')
-        payload = {
-            'name': 'Healthcare',
-            'budget_period_id': self.period1.id,
-        }
-        self.post('/api/categories', payload, **self.auth_headers())
-        self.assertStatus(201)
-
-
-# =============================================================================
-# Update Category Tests
-# =============================================================================
-
-
-class TestUpdateCategory(CategoriesTestCase):
-    """Tests for updating categories."""
-
-    def test_update_category_name(self):
-        """Test updating a category name."""
-        payload = {
-            'name': 'Food & Groceries',
-        }
-        data = self.put(f'/api/categories/{self.category1.id}', payload, **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(data['name'], 'Food & Groceries')
+        self.assertEqual(data['name'], 'Food')
 
-        # Verify in database
-        self.category1.refresh_from_db()
-        self.assertEqual(self.category1.name, 'Food & Groceries')
-
-    def test_update_category_not_found(self):
-        """Test updating a non-existent category."""
-        payload = {'name': 'New Name'}
-        self.put('/api/categories/99999', payload, **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_update_category_from_other_workspace_fails(self):
-        """Test that updating a category from another workspace fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
+    def test_archive_category(self):
+        category = CategoryFactory(budget=self.budget, name='Food')
+        data = self.patch(
+            f'/api/budgets/{self.budget.id}/categories/{category.id}/archive',
+            {'is_archived': True},
+            **self.auth_headers(),
         )
+        self.assertStatus(200)
+        self.assertTrue(data['is_archived'])
 
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        other_category = CategoryFactory(
-            budget_period=other_period,
-            name='Other Category',
-            created_by=other_user,
-        )
-
-        payload = {'name': 'Changed Name'}
-        self.put(f'/api/categories/{other_category.id}', payload, **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_update_category_without_auth_fails(self):
-        """Test that updating a category without authentication fails."""
-        payload = {'name': 'New Name'}
-        self.put(f'/api/categories/{self.category1.id}', payload)
-        self.assertStatus(401)
-
-    def test_viewer_cannot_update_category(self):
-        """Test that a viewer cannot update a category."""
-        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
-        payload = {'name': 'New Name'}
-        self.put(f'/api/categories/{self.category1.id}', payload, **self.auth_headers())
-        self.assertStatus(403)
-
-
-# =============================================================================
-# Delete Category Tests
-# =============================================================================
-
-
-class TestDeleteCategory(CategoriesTestCase):
-    """Tests for deleting categories."""
-
-    def test_delete_category_success(self):
-        """Test deleting a category."""
-        category_id = self.category1.id
-        self.delete(f'/api/categories/{category_id}', **self.auth_headers())
+    def test_delete_category(self):
+        category = CategoryFactory(budget=self.budget, name='Food')
+        self.delete(f'/api/budgets/{self.budget.id}/categories/{category.id}', **self.auth_headers())
         self.assertStatus(204)
+        self.assertFalse(Category.objects.filter(id=category.id).exists())
 
-        # Verify category is deleted
-        self.assertFalse(Category.objects.filter(id=category_id).exists())
-
-    def test_delete_category_not_found(self):
-        """Test deleting a non-existent category."""
-        self.delete('/api/categories/99999', **self.auth_headers())
+    def test_category_from_other_workspace_returns_404(self):
+        other = CategoryFactory()
+        self.put(f'/api/budgets/{other.budget_id}/categories/{other.id}', {'name': 'Hacked'}, **self.auth_headers())
         self.assertStatus(404)
 
-    def test_delete_category_from_other_workspace_fails(self):
-        """Test that deleting a category from another workspace fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
+    def test_category_persists_across_periods(self):
+        category = CategoryFactory(budget=self.budget, name='Food')
+        PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 6, 15))
+        PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
 
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        other_category = CategoryFactory(
-            budget_period=other_period,
-            name='Other Category',
-            created_by=other_user,
-        )
-
-        self.delete(f'/api/categories/{other_category.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_delete_category_without_auth_fails(self):
-        """Test that deleting a category without authentication fails."""
-        self.delete(f'/api/categories/{self.category1.id}')
-        self.assertStatus(401)
-
-    def test_viewer_cannot_delete_category(self):
-        """Test that a viewer cannot delete a category."""
-        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
-        self.delete(f'/api/categories/{self.category1.id}', **self.auth_headers())
-        self.assertStatus(403)
+        self.assertEqual(Category.objects.filter(budget=self.budget).count(), 1)
+        self.assertTrue(Category.objects.filter(id=category.id).exists())
 
 
-# =============================================================================
-# Export Categories Tests
-# =============================================================================
+class TestCategoryRolePermissions(AuthMixin, APIClientMixin, TestCase):
+    """Members can write categories (WRITE_ROLES); viewers cannot."""
 
-
-class TestExportCategories(CategoriesTestCase):
-    """Tests for exporting categories."""
-
-    def test_export_categories_success(self):
-        """Test exporting categories from a budget period."""
-        data = self.get(f'/api/categories/export/?budget_period_id={self.period1.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data), 2)
-        self.assertIn('Groceries', data)
-        self.assertIn('Transport', data)
-
-    def test_export_categories_empty_period(self):
-        """Test exporting categories from a period with no categories."""
-        empty_period = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='Empty Period',
-            start_date=date(2025, 5, 1),
-            end_date=date(2025, 5, 31),
-            created_by=self.user,
-        )
-
-        data = self.get(f'/api/categories/export/?budget_period_id={empty_period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data, [])
-
-    def test_export_categories_from_other_workspace_fails(self):
-        """Test that exporting categories from another workspace fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        CategoryFactory(
-            budget_period=other_period,
-            name='Other Category',
-            created_by=other_user,
-        )
-
-        self.get(f'/api/categories/export/?budget_period_id={other_period.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_export_categories_without_auth_fails(self):
-        """Test that exporting categories without authentication fails."""
-        self.get(f'/api/categories/export/?budget_period_id={self.period1.id}')
-        self.assertStatus(401)
-
-
-# =============================================================================
-# Import Categories Tests
-# =============================================================================
-
-
-class TestImportCategories(CategoriesTestCase):
-    """Tests for importing categories."""
-
-    def post_file(self, path: str, file_data: dict, **kwargs) -> object:
-        """Helper for POST requests with file upload."""
-        response = self.client.post(path, **kwargs, data=file_data)
-        self.response = response
-        return response.json() if response.content else {}
-
-    def test_import_categories_success(self):
-        """Test importing categories from a JSON file."""
-        categories_data = json.dumps(['Dining Out', 'Healthcare', 'Insurance'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period2.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        self.assertIn('Successfully imported 3 new categories', data['message'])
-
-        # Verify categories were created
-        self.assertEqual(Category.objects.filter(budget_period=self.period2).count(), 4)  # 1 existing + 3 new
-        self.assertTrue(Category.objects.filter(budget_period=self.period2, name='Dining Out').exists())
-
-    def test_import_categories_skips_duplicates(self):
-        """Test that importing skips duplicate category names."""
-        categories_data = json.dumps(['Groceries', 'Transport', 'New Category'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        self.assertIn('Successfully imported 1 new categories', data['message'])
-
-        # Verify only new category was created
-        self.assertEqual(Category.objects.filter(budget_period=self.period1).count(), 3)  # 2 existing + 1 new
-        self.assertTrue(Category.objects.filter(budget_period=self.period1, name='New Category').exists())
-
-    def test_import_categories_all_duplicates(self):
-        """Test importing when all categories already exist."""
-        categories_data = json.dumps(['Groceries', 'Transport'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        self.assertEqual(data['message'], 'No new categories to import.')
-
-    def test_import_categories_invalid_json(self):
-        """Test importing with invalid JSON file."""
-        file = SimpleUploadedFile(
-            'categories.json',
-            b'not valid json',
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-    def test_import_categories_invalid_format(self):
-        """Test importing with invalid format (not a list of strings)."""
-        categories_data = json.dumps({'not': 'a list'})
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-    def test_import_categories_invalid_file_type(self):
-        """Test importing with non-JSON file."""
-        file = SimpleUploadedFile(
-            'categories.txt',
-            b'some text content',
-            content_type='text/plain',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-    def test_import_categories_invalid_binary_file_returns_400(self):
-        """A non-JSON / non-UTF-8 upload returns 400, not 500 (UnicodeDecodeError is caught)."""
-        file = SimpleUploadedFile(
-            'categories.json',
-            b'\x89PNG\r\n\x1a\n',
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-    def test_import_categories_from_other_workspace_fails(self):
-        """Test that importing categories to another workspace's period fails."""
-        other_workspace = WorkspaceFactory(name='Other Workspace')
-        other_user = UserFactory(email='other@example.com', current_workspace=other_workspace)
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMemberFactory(workspace=other_workspace, user=other_user, role='owner')
-
-        other_pln = other_workspace.currencies.filter(symbol='PLN').first()
-        other_account = BudgetAccountFactory(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_pln,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriodFactory(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-        )
-
-        categories_data = json.dumps(['New Category'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': other_period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(404)
-
-    def test_import_categories_without_auth_fails(self):
-        """Test that importing categories without authentication fails."""
-        categories_data = json.dumps(['New Category'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-        )
-        self.assertStatus(401)
-
-    def test_viewer_cannot_import_categories(self):
-        """Test that a viewer cannot import categories."""
-        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
-        categories_data = json.dumps(['New Category'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period1.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(403)
-
-    def test_import_categories_duplicates_within_file(self):
-        """Test that importing handles duplicates within the file itself."""
-        categories_data = json.dumps(['New1', 'New2', 'New1', 'New2'])
-        file = SimpleUploadedFile(
-            'categories.json',
-            categories_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/categories/import',
-            {'file': file, 'budget_period_id': self.period2.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        self.assertIn('Successfully imported 2 new categories', data['message'])
-
-        # Verify only 2 unique categories were created
-        self.assertEqual(Category.objects.filter(budget_period=self.period2).count(), 3)  # 1 existing + 2 new
-
-
-# =============================================================================
-# Pagination Tests
-# =============================================================================
-
-
-class TestCategoryPagination(AuthMixin, APIClientMixin, TestCase):
-    """Tests for category list pagination."""
+    user_role = 'viewer'
 
     def setUp(self):
         super().setUp()
-        self.period = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='January 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            weeks=5,
-            created_by=self.user,
+        self.budget = BudgetFactory(workspace=self.workspace)
+
+    def test_viewer_cannot_create(self):
+        self.post(f'/api/budgets/{self.budget.id}/categories', {'name': 'Food'}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_can_list(self):
+        self.get(f'/api/budgets/{self.budget.id}/categories', **self.auth_headers())
+        self.assertStatus(200)
+
+
+class TestCategoryBudgetsAPI(AuthMixin, APIClientMixin, TestCase):
+    """Planned amounts (CategoryBudget) upsert/list/delete."""
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.category = CategoryFactory(budget=self.budget, name='Food')
+        self.period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
+
+    def _put_amount(self, category_id, amount, currency='PLN'):
+        return self.put(
+            f'/api/budgets/{self.budget.id}/periods/{self.period.id}/category-budgets',
+            {'category_id': category_id, 'currency_code': currency, 'amount': amount},
+            **self.auth_headers(),
         )
 
-    def _create_categories(self, count):
-        """Create the given number of categories in the test period."""
-        for i in range(count):
-            CategoryFactory(
-                budget_period=self.period,
-                name=f'Category {i}',
+    def test_upsert_creates_then_overwrites(self):
+        data = self._put_amount(self.category.id, '100.00')
+        self.assertStatus(200)
+        self.assertEqual(data['amount'], '100.00')
+
+        data = self._put_amount(self.category.id, '250.00')
+        self.assertStatus(200)
+        self.assertEqual(data['amount'], '250.00')
+        self.assertEqual(CategoryBudget.objects.filter(period=self.period).count(), 1)
+
+    def test_category_from_another_budget_returns_400(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        foreign_category = CategoryFactory(budget=other_budget, name='Foreign')
+        self._put_amount(foreign_category.id, '100.00')
+        self.assertStatus(400)
+
+    def test_disabled_currency_returns_404(self):
+        self._put_amount(self.category.id, '100.00', currency='USD')
+        self.assertStatus(404)
+
+    def test_negative_amount_returns_422(self):
+        self._put_amount(self.category.id, '-5.00')
+        self.assertStatus(422)
+
+    def test_list_category_budgets(self):
+        self._put_amount(self.category.id, '100.00')
+        data = self.get(
+            f'/api/budgets/{self.budget.id}/periods/{self.period.id}/category-budgets', **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['currency_code'], 'PLN')
+
+    def test_delete_category_budget(self):
+        created = self._put_amount(self.category.id, '100.00')
+        self.delete(
+            f'/api/budgets/{self.budget.id}/periods/{self.period.id}/category-budgets/{created["id"]}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(204)
+        self.assertEqual(CategoryBudget.objects.filter(period=self.period).count(), 0)
+
+
+class TestCopyForward(AuthMixin, APIClientMixin, TestCase):
+    """Copy-forward pre-fills new periods from the most recent earlier period."""
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.food = CategoryFactory(budget=self.budget, name='Food')
+        self.transport = CategoryFactory(budget=self.budget, name='Transport')
+        self.retired = CategoryFactory(budget=self.budget, name='Retired', is_archived=True)
+        self.june = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 6, 15))
+        self.currency = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+
+        for category, amount in ((self.food, '100.00'), (self.transport, '50.00'), (self.retired, '10.00')):
+            CategoryBudget.objects.create(
+                period=self.june,
+                workspace_id=self.workspace.id,
+                category=category,
+                currency=self.currency,
+                amount=amount,
                 created_by=self.user,
             )
 
-    def test_default_pagination(self):
-        """Default page_size=25, page=1."""
-        self._create_categories(35)
-        data = self.get(f'/api/categories?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 25)
-        self.assertEqual(data['total'], 35)
-        self.assertEqual(data['page'], 1)
-        self.assertEqual(data['page_size'], 25)
-        self.assertEqual(data['total_pages'], 2)
+    def test_copy_forward_skips_archived_categories(self):
+        july = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
 
-    def test_custom_page_size(self):
-        """page_size=25 returns 25 items."""
-        self._create_categories(30)
-        data = self.get(f'/api/categories?budget_period_id={self.period.id}&page_size=25', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 25)
-        self.assertEqual(data['total'], 30)
-        self.assertEqual(data['total_pages'], 2)
+        copied = CategoryBudget.objects.filter(period=july)
+        self.assertEqual(copied.count(), 2)
+        self.assertEqual({cb.category_id for cb in copied}, {self.food.id, self.transport.id})
 
-    def test_second_page(self):
-        """page=2 returns correct slice."""
-        self._create_categories(30)
-        data = self.get(
-            f'/api/categories?budget_period_id={self.period.id}&page=2&page_size=25',
+    def test_no_predecessor_no_copy(self):
+        may = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 5, 15))
+        self.assertEqual(CategoryBudget.objects.filter(period=may).count(), 0)
+
+    def test_amounts_editable_independently_per_period(self):
+        july = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
+
+        self.put(
+            f'/api/budgets/{self.budget.id}/periods/{july.id}/category-budgets',
+            {'category_id': self.food.id, 'currency_code': 'PLN', 'amount': '999.00'},
             **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual(len(data['items']), 5)
-        self.assertEqual(data['page'], 2)
 
-    def test_over_page_returns_empty(self):
-        """Requesting page beyond total_pages returns empty items."""
-        data = self.get(
-            f'/api/categories?budget_period_id={self.period.id}&page=999&page_size=25',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 0)
-        self.assertEqual(data['total'], 0)
-
-    def test_invalid_page_size_defaults(self):
-        """Invalid page_size value falls back to default 25."""
-        self._create_categories(30)
-        data = self.get(
-            f'/api/categories?budget_period_id={self.period.id}&page_size=999',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        self.assertEqual(data['page_size'], 25)
-        self.assertEqual(len(data['items']), 25)
-
-    def test_zero_total_when_no_records(self):
-        """Empty result returns total=0, total_pages=0."""
-        data = self.get(f'/api/categories?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-        self.assertEqual(data['total'], 0)
-        self.assertEqual(data['total_pages'], 0)
+        june_amount = CategoryBudget.objects.get(period=self.june, category=self.food).amount
+        july_amount = CategoryBudget.objects.get(period=july, category=self.food).amount
+        self.assertEqual(str(june_amount), '100.00')
+        self.assertEqual(str(july_amount), '999.00')

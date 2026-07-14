@@ -4,13 +4,13 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction as db_transaction
 
-from budget_accounts.models import BudgetAccount
+from accounts.models import Account, AccountType
+from budgeting.models import Budget, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
-from workspaces.demo_fixtures import create_demo_fixtures
+from currencies.services import CurrencyCatalogService
+from workspaces.demo_fixtures import create_demo_fixtures, create_starter_fixtures
 from workspaces.exceptions import (
-    CurrencyDuplicateSymbolError,
-    CurrencyNotFoundError,
     WorkspaceMemberAdminInsufficientError,
     WorkspaceMemberAlreadyExistsError,
     WorkspaceMemberCannotChangeOwnRoleError,
@@ -26,48 +26,49 @@ from workspaces.exceptions import (
     WorkspaceOwnerRoleChangeError,
     WorkspacePermissionDeniedError,
 )
-from workspaces.models import Currency, Role, Workspace, WorkspaceMember
+from workspaces.models import Role, Workspace, WorkspaceMember
 from workspaces.schemas import WorkspaceMemberOut, WorkspaceOut
 
 User = get_user_model()
-
-DEFAULT_CURRENCIES = [
-    ('USD', 'US Dollar'),
-    ('UAH', 'Ukrainian Hryvnia'),
-    ('PLN', 'Polish Zloty'),
-    ('EUR', 'Euro'),
-]
 
 
 class WorkspaceService:
     @staticmethod
     @db_transaction.atomic
-    def create_workspace(user, name: str, create_demo: bool = False) -> Workspace:
+    def create_workspace(user, name: str, currency_code: str = 'PLN', create_demo: bool = False) -> Workspace:
         """
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
-        - Default currencies (USD, UAH, PLN, EUR)
-        - Default "General" budget account (PLN currency)
-        - Demo fixtures (optional)
+        - One enabled catalog currency
+        - Default "Main" account (in the chosen currency)
+        - Default "General" budget + starter categories + current period
+        - Opt-in sample data when ``create_demo`` is True
         - Sets user.current_workspace to the new workspace
         """
         workspace = Workspace.objects.create(name=name, owner=user)
         WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
-        CurrencyService.create_default_currencies(workspace)
-        default_currency = workspace.currencies.filter(symbol='PLN').first() or workspace.currencies.first()
-        BudgetAccount.objects.create(
+        catalog_currency = CurrencyCatalogService.enable(user, workspace.id, currency_code)
+        Account.objects.create(
+            workspace=workspace,
+            name='Main',
+            type=AccountType.BANK,
+            currency=catalog_currency,
+            created_by=user,
+            updated_by=user,
+        )
+        Budget.objects.create(
             workspace=workspace,
             name='General',
-            description='General budget account',
-            default_currency=default_currency,
-            is_active=True,
-            display_order=0,
+            cadence=Cadence.MONTHLY,
             created_by=user,
             updated_by=user,
         )
 
         if create_demo:
             create_demo_fixtures(workspace_id=workspace.id, user_id=user.id)
+        else:
+            # A fresh workspace is empty but usable: starter categories + current period.
+            create_starter_fixtures(workspace_id=workspace.id, user_id=user.id)
 
         user.current_workspace = workspace
         user.save(update_fields=['current_workspace'])
@@ -116,6 +117,26 @@ class WorkspaceService:
         if data.name is not None:
             workspace.name = data.name
             workspace.save(update_fields=['name'])
+        return WorkspaceService._to_response(workspace, user_role)
+
+    @staticmethod
+    @db_transaction.atomic
+    def set_default_budget(workspace_id: int, budget_id: int | None, user_role: str) -> WorkspaceOut:
+        """Set (or clear with None) the workspace's default budget.
+
+        Caller is responsible for role authorization. The budget must belong
+        to the workspace and be active.
+        """
+        workspace = Workspace.objects.filter(id=workspace_id).first()
+        if not workspace:
+            raise WorkspaceNotFoundError()
+        budget = None
+        if budget_id is not None:
+            budget = Budget.objects.filter(id=budget_id, workspace_id=workspace_id, is_active=True).first()
+            if not budget:
+                raise ValidationError('Budget not found in this workspace')
+        workspace.default_budget = budget
+        workspace.save(update_fields=['default_budget'])
         return WorkspaceService._to_response(workspace, user_role)
 
     @staticmethod
@@ -182,10 +203,6 @@ class WorkspaceService:
 
             delete_workspace_financial_records(workspace_id)
 
-            from budget_accounts.models import BudgetAccount
-
-            BudgetAccount.objects.for_workspace(workspace_id).delete()
-
             workspace.delete()
 
             user.current_workspace_id = next_ws_map.get(user.id)
@@ -211,49 +228,6 @@ class WorkspaceService:
                 'deleter_name': deleter_name,
             },
         )
-
-
-class CurrencyService:
-    @staticmethod
-    def list_currencies(workspace_id: int) -> list[Currency]:
-        """List all currencies for a workspace."""
-        return list(Currency.objects.for_workspace(workspace_id))
-
-    @staticmethod
-    def get_currency(currency_id: int, workspace_id: int) -> Currency | None:
-        """Get a currency by ID within a workspace."""
-        return Currency.objects.for_workspace(workspace_id).filter(id=currency_id).first()
-
-    @staticmethod
-    @db_transaction.atomic
-    def create_currency(workspace_id: int, data) -> Currency:
-        """Create a new currency for a workspace."""
-        if Currency.objects.for_workspace(workspace_id).filter(symbol=data.symbol).exists():
-            raise CurrencyDuplicateSymbolError(data.symbol)
-
-        return Currency.objects.create(
-            workspace_id=workspace_id,
-            name=data.name,
-            symbol=data.symbol,
-        )
-
-    @staticmethod
-    @db_transaction.atomic
-    def delete_currency(currency_id: int, workspace_id: int) -> None:
-        """Delete a currency from a workspace."""
-        currency = CurrencyService.get_currency(currency_id, workspace_id)
-        if not currency:
-            raise CurrencyNotFoundError()
-        currency.delete()
-
-    @staticmethod
-    @db_transaction.atomic
-    def create_default_currencies(workspace: Workspace) -> list[Currency]:
-        """Create the four default currencies for a new workspace."""
-        return [
-            Currency.objects.create(workspace=workspace, symbol=symbol, name=name)
-            for symbol, name in DEFAULT_CURRENCIES
-        ]
 
 
 class WorkspaceMemberService:

@@ -32,6 +32,13 @@
   /* Overlays */
   --color-scrim: rgba(23, 23, 23, 0.20);   /* #171717 (primary) at 20% — modal/drawer backdrop */
 
+  /* Data-viz series (validated: CVD ΔE 73.6, lightness band + chroma floor pass on #FFFFFF).
+     Slot 2 is 2.82:1 on the light surface — relief rule: charts using it always ship a
+     legend + table view. --chart-track is the lighter step of slot 1's own ramp (meter track). */
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #1baf7a;
+  --chart-track:    #cde2fb;
+
   font-family: 'Geist', sans-serif;
   line-height: 1.5;
   font-weight: 500;
@@ -103,6 +110,11 @@ button {
 
   /* Overlays */
   --color-scrim: rgba(0, 0, 0, 0.50);      /* pure black at 50% */
+
+  /* Data-viz series — dark steps of the same hues (validated on #171717: all ≥3:1, ΔE 69.8) */
+  --chart-series-1: #3987e5;
+  --chart-series-2: #199e70;
+  --chart-track:    #0d366b;
 }
 
 /*

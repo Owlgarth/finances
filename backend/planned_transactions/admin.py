@@ -9,8 +9,8 @@ from planned_transactions.models import PlannedTransaction
 class PlannedTransactionAdmin(admin.ModelAdmin):
     """Admin interface for PlannedTransaction model."""
 
-    list_display = ('name', 'budget_period', 'amount', 'currency', 'status', 'planned_date', 'created_at')
-    list_filter = ('status', 'currency', 'planned_date', 'created_at')
-    search_fields = ('name', 'category__name')
+    list_display = ('name', 'account', 'amount', 'status', 'planned_date', 'created_at')
+    list_filter = ('status', 'planned_date', 'created_at')
+    search_fields = ('name', 'category__name', 'account__name')
     readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'created_at'

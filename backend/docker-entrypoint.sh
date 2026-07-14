@@ -4,6 +4,9 @@ set -e
 echo "Running database migrations..."
 uv run python manage.py migrate --noinput
 
+echo "Seeding currency catalog..."
+uv run python manage.py seed_currencies
+
 echo "Seeding legal documents..."
 uv run python manage.py seed_legal_documents
 

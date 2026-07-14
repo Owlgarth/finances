@@ -12,11 +12,11 @@ class PlannedTransactionFactory(DjangoModelFactory):
     class Meta:
         model = PlannedTransaction
 
-    budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
-    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace)
+    account = factory.SubFactory('accounts.factories.AccountFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.account.workspace)
     name = factory.Faker('sentence')
     amount = Decimal('100.00')
-    currency = factory.LazyAttribute(lambda obj: obj.budget_period.budget_account.workspace.currencies.first())
+    category = None
     planned_date = factory.Faker('future_date')
     payment_date = None
     status = 'pending'

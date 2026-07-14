@@ -7,31 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from core.schemas.auth import ValidatedEmail
 
 
-class CurrencyCreate(BaseModel):
-    """Schema for creating a currency."""
-
-    name: str = Field(..., max_length=50)
-    symbol: str = Field(..., min_length=3, max_length=3, pattern=r'^[A-Z]{3}$')
-
-    @field_validator('name')
-    @classmethod
-    def name_not_empty(cls, v):
-        if not v.strip():
-            raise ValueError('Name cannot be empty')
-        return v.strip()
-
-
-class CurrencyOut(BaseModel):
-    """Schema for currency response."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    symbol: str
-    created_at: datetime
-
-
 class WorkspaceUpdate(BaseModel):
     """Schema for updating a workspace."""
 
@@ -53,14 +28,22 @@ class WorkspaceOut(BaseModel):
     id: int
     name: str
     owner_id: int | None = None
+    default_budget_id: int | None = None
     created_at: datetime
     user_role: str | None = None
+
+
+class WorkspaceDefaultBudgetIn(BaseModel):
+    """Request to set (or clear) the workspace's default budget."""
+
+    budget_id: int | None = None
 
 
 class WorkspaceCreate(BaseModel):
     """Schema for creating a workspace."""
 
     name: str = Field(..., max_length=100)
+    currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
 
     @field_validator('name')
     @classmethod

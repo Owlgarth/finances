@@ -1901,3 +1901,51 @@ Icons inherit their color from the parent element's text color. Use semantic tok
 | Success | `--color-positive` | `text-positive` |
 | On primary bg | `white` | `text-white` |
 | Disabled | `--color-text-muted` at 40% | `text-text-muted/40` |
+
+---
+
+## Appendix A — Primitive Audit (U1)
+
+Inventory of the React primitives against this spec, recorded 2026-07. The shared
+primitives are the reference implementation; screen-level conformance is swept in U2.
+
+### Primitives & source of truth
+
+| Primitive | File | Notes |
+|---|---|---|
+| Input / label / buttons | `components/common/formStyles.ts` | Class constants reused by every redesign form |
+| Select / dropdown | `components/common/Select.tsx` | Custom trigger + floating panel |
+| Modal | `components/common/Modal.tsx` | Scrim + centered panel, X close |
+| Confirm dialog | `components/common/ConfirmDialog.tsx` | Built on Modal |
+| Date picker | `components/DatePicker.tsx` | react-day-picker, `.rdp-inline` theming in `index.css` |
+| Pagination / Select page-size | `components/common/Pagination.tsx` | |
+| Tables | inline (`BudgetDetailPage`, item/attachment editors) | Ledger tables per §9 |
+
+### Checklist
+
+| Check | Status |
+|---|---|
+| Colors reference tokens only — no hex / `text-gray` / raw rgb in primitives | ✅ (only `text-white` on primary/scrim, intentional) |
+| Dark-mode parity — every primitive uses semantic tokens, dark values resolve automatically | ✅ (no `dark:` overrides needed) |
+| Input focus = `border-border-focus` + `ring-1 ring-border-focus` (was `ring-2`, no border) | ✅ fixed in `formStyles.ts` |
+| Input radius `rounded-none`, buttons/containers/modals `rounded-sm` | ✅ |
+| Input sizing `px-2 py-1.5 text-xs`, `bg-surface`, muted placeholder, `disabled:bg-surface-muted` | ✅ fixed |
+| Labels Geist 11px uppercase `tracking-wider` `mb-1` (was mono 9px) | ✅ fixed |
+| Buttons use `focus-visible:outline-2 outline-offset-2 outline-border-focus` (was `focus:ring-2`) | ✅ fixed |
+| Button disabled `opacity-50 cursor-not-allowed` | ✅ |
+| Dropdown panel: `bg-surface border border-border rounded-sm`, no shadow, `max-h-[280px]` scroll | ✅ |
+| Dropdown corners clip row fills — no fill bleed past corners in either theme | ✅ (overflow establishes the clip; verified light + dark) |
+| Thin scrollbars | ✅ applied globally in `index.css`; no per-element class needed |
+| Modal: 1px border, `rounded-sm`, zero shadow, scrim + X close | ✅ |
+| Table row height 32px, header 10px uppercase | ✅ |
+
+### Open tickets
+
+1. **Primary-button contrast in dark mode.** `components.md` §3 specifies `text-white`
+   for the primary button in all states, but `dark-mode.md` says the primary button
+   inverts to a light surface with dark text. These two docs conflict. Current code
+   follows §3 (`text-white`). Resolve the spec conflict, then align the token/class.
+2. **Dropdown clipping inside scrollable modals.** `Select`'s panel is absolutely
+   positioned, so an ancestor with `overflow-y-auto` (the tall `TransactionFormModal`
+   / `NewFromReceiptModal` / `ExtractionReviewModal`) can clip it when scrolled. Low
+   impact today. Proper fix: render the panel in a portal positioned from the trigger.

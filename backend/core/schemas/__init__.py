@@ -59,8 +59,12 @@ from core.schemas.gdpr import (
     AccountDeleteCheckOut,
     AccountDeleteIn,
     AccountDeleteOut,
+    AccountResetIn,
+    AccountResetOut,
     FullImportIn,
     ImportResultOut,
+    LegacyImportIn,
+    LegacyImportResultOut,
 )
 
 # =============================================================================
@@ -130,6 +134,10 @@ __all__ = [
     'AccountDeleteIn',
     'AccountDeleteCheckOut',
     'AccountDeleteOut',
+    'AccountResetIn',
+    'AccountResetOut',
     'FullImportIn',
     'ImportResultOut',
+    'LegacyImportIn',
+    'LegacyImportResultOut',
 ]

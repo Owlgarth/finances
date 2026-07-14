@@ -1,6 +1,6 @@
 ---
-version: "1.0"
-effective_date: "2027-01-01"
+version: "2.0"
+effective_date: "2026-07-15"
 ---
 
 ## 1. Introduction
@@ -19,11 +19,15 @@ By registering for Denarly, you agree to the collection and use of information i
 
 **Financial data:**
 
-- Transactions (income and expense records)
-- Budgets and categories
-- Planned transactions
-- Currency exchange records
-- Period balances
+- Accounts and their balances
+- Transactions (income, expense, and balance adjustments) and their line items
+- Transfers between your accounts
+- Budgets, categories, and planned transactions
+
+**Receipt attachments:**
+
+- Images or PDFs of receipts you choose to upload and attach to transactions
+- Line items and totals extracted from those receipts (see Section 7)
 
 **Technical data:**
 
@@ -45,6 +49,7 @@ By registering for Denarly, you agree to the collection and use of information i
 - Authenticating your identity via JWT tokens
 - Rate limiting to prevent abuse and protect the service
 - Maintaining an audit trail of your consent (GDPR compliance)
+- Extracting line items and totals from receipts you upload, when you request it (see Section 7)
 
 ## 4. Legal Basis (GDPR Article 6)
 
@@ -67,17 +72,26 @@ By registering for Denarly, you agree to the collection and use of information i
 
 To exercise any rights, use the in-app features above or contact us at {{ contact_email }}.
 
-## 7. Data Sharing
+## 7. Receipt Storage & Extraction
 
-- We do not share your personal data with third parties
+Receipt attachments are personal data and are handled as follows:
+
+- **Storage:** Uploaded receipt files are stored in private object storage. They are never publicly accessible; the app retrieves them only through short-lived, signed links generated for your authenticated session.
+- **Optional extraction:** If you choose "Extract items" (or create a transaction from a receipt), the receipt image is sent to a receipt-extraction service to read its text, so we can pre-fill the total, date, and line items for your review. Extraction is entirely optional — if the operator has not configured an extraction service, the feature is unavailable and no receipt ever leaves our storage.
+- **Where extraction runs:** The extraction service may be self-hosted by the operator or provided by a third-party model provider, depending on this deployment's configuration. When a third-party provider is used, the receipt image is transmitted to that provider solely to perform the extraction. The service is stateless and is not instructed to retain your image; however, a third-party provider's own retention and processing are governed by that provider's terms. Operators who require that no data leaves their infrastructure should configure a self-hosted model.
+- **Deletion:** Deleting a receipt, its transaction, or your account removes the stored file from object storage along with the database records.
+
+## 8. Data Sharing
+
+- Apart from the optional receipt extraction described in Section 7, we do not share your personal data with third parties
 - We do not use analytics or tracking services
 - We do not use advertising networks
 
-## 8. Cookies & Local Storage
+## 9. Cookies & Local Storage
 
 We use `localStorage` to store your authentication token. This is strictly functional — it allows you to stay logged in between sessions. We do not use tracking cookies or analytics cookies. No cookie consent banner is required as we use no tracking storage.
 
-## 9. Data Security
+## 10. Data Security
 
 - All data is transmitted over HTTPS/TLS
 - Passwords are hashed using industry-standard algorithms
@@ -86,7 +100,7 @@ We use `localStorage` to store your authentication token. This is strictly funct
 - Role-based access control for shared workspaces
 - Rate limiting to prevent brute-force attacks
 
-## 10. Contact
+## 11. Contact
 
 For privacy-related questions or to exercise your rights, contact:
 
@@ -96,6 +110,6 @@ For privacy-related questions or to exercise your rights, contact:
 
 Email: {{ contact_email }}
 
-## 11. Changes to This Policy
+## 12. Changes to This Policy
 
 We may update this Privacy Policy when our practices change or when required by law. When we make significant changes, we will notify registered users via email or in-app notification. Continued use of Denarly after changes constitutes acceptance of the updated policy.

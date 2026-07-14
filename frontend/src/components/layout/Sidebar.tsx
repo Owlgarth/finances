@@ -1,83 +1,30 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import {
   Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Home,
   PieChart,
   Receipt,
-  ArrowLeftRight,
-  FileText,
-  Tag,
-  Landmark,
+  Wallet,
+  Settings,
   Users,
 } from 'lucide-react'
-import { useBudgetPeriod } from '../../contexts/BudgetPeriodContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import BudgetAccountSelector from '../BudgetAccountSelector'
-import BudgetPeriodSelectorModal from '../modals/periods/BudgetPeriodSelectorModal'
 import UserMenu from './UserMenu'
 import WorkspaceSelector from './WorkspaceSelector'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: Home, exact: true },
+  { to: '/accounts', label: 'Accounts', icon: Wallet },
   { to: '/budgets', label: 'Budgets', icon: PieChart },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
   { to: '/planned', label: 'Planned', icon: Calendar },
-  { to: '/exchanges', label: 'Exchanges', icon: ArrowLeftRight },
-  { to: '/balances', label: 'Balances', icon: FileText },
-  { to: '/categories', label: 'Categories', icon: Tag },
-  { to: '/budget-periods', label: 'Periods', icon: Calendar },
-  { to: '/budget-accounts', label: 'Accounts', icon: Landmark },
   { to: '/members', label: 'Members', icon: Users },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
-
-function NavigationPeriodSelector({ collapsed }: { collapsed: boolean }) {
-  const location = useLocation()
-  const { selectedPeriod, periods } = useBudgetPeriod()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-
-  if (location.pathname === '/budget-periods' || location.pathname === '/budget-accounts') {
-    return null
-  }
-
-  if (collapsed) return null
-
-  if (periods.length === 0) {
-    return (
-      <span className="text-sm text-text-muted px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider">
-        No periods
-      </span>
-    )
-  }
-
-  return (
-    <>
-      <div className="flex items-center gap-2 bg-surface-muted rounded-sm hover:bg-surface-hover transition-colors">
-        <div className="px-3 py-1.5 flex items-center gap-2 flex-1 min-w-0">
-          <Calendar size={14} className="text-text-muted flex-shrink-0" />
-          <span className="text-sm font-medium text-text truncate">
-            {selectedPeriod?.name || 'Select period'}
-          </span>
-        </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-2 py-1.5 hover:bg-surface-hover transition-colors rounded-r-sm flex items-center justify-center"
-          aria-label="Change budget period"
-        >
-          <ChevronDown size={12} className="text-text-muted" />
-        </button>
-      </div>
-      <BudgetPeriodSelectorModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-    </>
-  )
-}
 
 interface SidebarProps {
   collapsed: boolean
@@ -112,16 +59,10 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
           </button>
         </div>
 
-        {/* Workspace, Account & Period selectors */}
+        {/* Workspace selector */}
         {!collapsed && (
           <div className="p-3 space-y-3 flex-shrink-0 mt-3">
             <WorkspaceSelector onOpenSettings={handleOpenSettings} />
-            {workspace && (
-              <>
-                <BudgetAccountSelector />
-                <NavigationPeriodSelector collapsed={collapsed} />
-              </>
-            )}
           </div>
         )}
 

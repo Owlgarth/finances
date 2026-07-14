@@ -24,7 +24,7 @@ The highest permission level within a workspace.
 
 **Capabilities:**
 - Full control over workspace settings
-- Manage all budget accounts, periods, and data
+- Manage all accounts, budgets, currencies, and records
 - Add, edit, and remove any member
 - Reset password for any member
 - Cannot be removed from workspace
@@ -37,8 +37,8 @@ The highest permission level within a workspace.
 High-level access for workspace management.
 
 **Capabilities:**
-- Manage budget accounts (create, edit, delete)
-- Full access to all budget data
+- Manage accounts (create, edit, archive, delete) and enabled currencies
+- Manage budgets and periods; full access to all records
 - Add new members to workspace
 - Manage members with lower roles (member, viewer)
 - Reset passwords for members and viewers
@@ -55,15 +55,14 @@ High-level access for workspace management.
 Standard access for daily budget operations.
 
 **Capabilities:**
-- Create and manage budget periods
-- Create and manage categories and budgets
-- Record and manage transactions
-- Manage planned transactions
-- Record currency exchanges
+- Create and manage categories and set category budget amounts
+- Record and manage transactions (incl. line items and receipt attachments)
+- Record transfers between accounts
+- Manage and execute planned transactions
 - View all workspace data
 
 **Restrictions:**
-- Cannot create or manage budget accounts
+- Cannot create or manage accounts, budgets, periods, or currencies
 - Cannot manage other users
 - Cannot change workspace settings
 
@@ -74,9 +73,9 @@ Standard access for daily budget operations.
 Read-only access for monitoring and oversight.
 
 **Capabilities:**
-- View all budget accounts and periods
-- View all transactions and budgets
-- View reports and balances
+- View all accounts and balances
+- View all transactions, transfers, budgets, and periods
+- View reports and receipts
 - View workspace member list
 
 **Restrictions:**
@@ -200,9 +199,10 @@ Rules:
    - Password meets requirements (8+ chars)
 3. System creates:
    - User account
-   - Workspace with user as owner
-   - Default "General" budget account
+   - Workspace with user as owner (chosen currency enabled)
+   - Default "Main" account and "General" budget
    - Workspace membership (owner role)
+   - Optional sample data if requested at registration
 4. JWT token returned
 ```
 

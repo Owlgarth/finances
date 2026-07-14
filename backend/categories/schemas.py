@@ -1,16 +1,14 @@
-"""Pydantic schemas for categories API."""
+"""Pydantic schemas for categories."""
 
 from datetime import datetime
-from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CategoryCreate(BaseModel):
-    """Schema for creating a category."""
+    """Schema for creating a category under a budget."""
 
     name: str = Field(..., max_length=100)
-    budget_period_id: int
 
     @field_validator('name')
     @classmethod
@@ -21,9 +19,9 @@ class CategoryCreate(BaseModel):
 
 
 class CategoryUpdate(BaseModel):
-    """Schema for updating a category."""
+    """Schema for renaming a category."""
 
-    name: Optional[str] = Field(None, max_length=100)
+    name: str | None = Field(None, max_length=100)
 
     @field_validator('name')
     @classmethod
@@ -33,29 +31,19 @@ class CategoryUpdate(BaseModel):
         return v.strip() if v is not None else v
 
 
+class CategoryArchive(BaseModel):
+    """Schema for archiving/unarchiving a category."""
+
+    is_archived: bool
+
+
 class CategoryOut(BaseModel):
     """Schema for category response."""
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        arbitrary_types_allowed=True,
-    )
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
-    budget_period_id: int
+    budget_id: int
     name: str
-    created_by: Optional[Any] = None
-    updated_by: Optional[Any] = None
+    is_archived: bool
     created_at: datetime
-
-    @field_validator('created_by', 'updated_by', mode='before')
-    @classmethod
-    def validate_user_id(cls, value: Any) -> Optional[int]:
-        """Extract user ID from Django User ForeignKey field."""
-        if value is None:
-            return None
-        if hasattr(value, 'id'):
-            return value.id
-        if isinstance(value, int):
-            return value
-        return None

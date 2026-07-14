@@ -92,6 +92,9 @@ services:
       - S3_BUCKET_MEDIA=denarly-media
       - S3_BUCKET_LOGS=denarly-logs
       - S3_EXTERNAL_URL=http://localhost:9000
+      # Receipt parser (R5). Unset PARSER_URL to disable extraction entirely.
+      - PARSER_URL=http://denarly_receipt_parser:8100
+      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
@@ -194,6 +197,24 @@ services:
         condition: service_healthy
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+
+  denarly_receipt_parser:
+    build:
+      context: ./services/receipt-parser
+      dockerfile: Dockerfile
+    container_name: denarly_receipt_parser
+    environment:
+      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
+      # Point at your vision model. Defaults to a host-run Ollama on the Docker host.
+      - PARSER_MODEL_BASE_URL=${PARSER_MODEL_BASE_URL:-http://host.docker.internal:11434/v1}
+      - PARSER_MODEL_NAME=${PARSER_MODEL_NAME:-qwen2.5-vl}
+      - PARSER_MODEL_API_KEY=${PARSER_MODEL_API_KEY:-not-needed}
+    ports:
+      - "8100:8100"
+    networks:
+      - denarly-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data_dev:

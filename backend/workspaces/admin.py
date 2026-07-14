@@ -2,18 +2,7 @@
 
 from django.contrib import admin
 
-from workspaces.models import Currency, Workspace, WorkspaceMember
-
-
-@admin.register(Currency)
-class CurrencyAdmin(admin.ModelAdmin):
-    """Admin interface for Currency model."""
-
-    list_display = ('symbol', 'name', 'workspace', 'created_at', 'updated_at')
-    list_filter = ('workspace', 'created_at', 'updated_at')
-    search_fields = ('symbol', 'name', 'workspace__name')
-    readonly_fields = ('created_at', 'updated_at')
-    date_hierarchy = 'created_at'
+from workspaces.models import Workspace, WorkspaceMember
 
 
 @admin.register(Workspace)

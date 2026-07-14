@@ -186,7 +186,7 @@ export default function Select<T extends string | number>({
   const panelClass =
     'absolute z-dropdown mt-1 w-full ' +
     'bg-surface border border-border rounded-sm ' +
-    'max-h-[280px] overflow-y-auto'
+    'max-h-[280px] overflow-y-auto'  // thin scrollbars applied globally (index.css)
 
   return (
     <div ref={wrapperRef} className="relative">

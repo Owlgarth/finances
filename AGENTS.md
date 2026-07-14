@@ -4,7 +4,7 @@ Coding guidelines and commands for agentic coding agents working on the Denarly 
 
 ## Project Overview
 
-Denarly is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It features multi-currency support, period-based budgeting, and collaborative team features.
+Denarly is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It uses an account-based model: money-holding accounts (with computed balances), budgets that plan money over derived periods, transfers between accounts, and multi-currency support via a global ISO 4217 catalog. It also supports receipt attachments with optional automated line-item extraction, and collaborative team features. See `docs/architecture.md`.
 
 ## Build/Lint/Test Commands
 
@@ -25,7 +25,7 @@ python manage.py runserver
 
 # Testing
 pytest                                    # Run all tests
-pytest budget_accounts/tests/test_api.py::TestClass::test_method  # Single test
+pytest transactions/tests.py::TestClass::test_method  # Single test
 pytest -k "test_create"                   # Run tests matching pattern
 pytest --create-db -v                     # Fresh test DB (stale cross-branch migration issues)
 
@@ -49,13 +49,17 @@ npm run lint                              # ESLint check
 
 Always run `npm run lint` after making changes.
 
-## Data Hierarchy
+## Data Model
 
-All data operations follow this hierarchy:
+Money-holding accounts are the centre of gravity; balances and periods are computed/derived, not stored:
 
 ```
-Workspace → BudgetAccount → BudgetPeriod → [Category, Transaction, Budget, ...]
+Workspace → { WorkspaceMember, WorkspaceCurrency,
+              Account → [Transaction → (TransactionItem, TransactionAttachment), Transfer, PlannedTransaction],
+              Budget → [Category, Period → CategoryBudget] }
 ```
+
+Currencies come from a global ISO 4217 catalog that each workspace enables a subset of. See `docs/architecture.md`.
 
 Every endpoint must verify resources belong to the user's workspace. Four security layers: JWT auth (`JWTAuth`/`WorkspaceJWTAuth`), workspace membership, role permissions (`require_role`), and workspace-scoped queries (`Model.objects.for_workspace(workspace_id)`).
 

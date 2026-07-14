@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "qrcode>=8.0",
     "redis>=5.0.0",
+    "requests>=2.32",
     "uvicorn>=0.40.0",
 ]
 

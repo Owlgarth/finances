@@ -93,8 +93,7 @@ export default function DeleteAccountSection() {
           )}
           <p className="text-sm text-negative">
             Total records affected: {check.total_transactions} transactions,{' '}
-            {check.total_planned_transactions} planned transactions,{' '}
-            {check.total_currency_exchanges} currency exchanges.
+            {check.total_planned_transactions} planned transactions.
           </p>
         </div>
       )}

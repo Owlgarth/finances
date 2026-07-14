@@ -22,106 +22,63 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 frontend/
 ├── src/
 │   ├── api/
-│   │   └── client.ts         # Axios instance, API functions
+│   │   └── client.ts         # Axios instance + typed API modules
 │   ├── components/
-│   │   ├── layout/           # MainLayout, Sidebar, UserMenu
-│   │   ├── common/           # Shared components (Loading, Error, Switch, etc.)
-│   │   ├── balance/          # Balance display components
-│   │   ├── budget/           # Budget table components
-│   │   ├── transactions/     # Transaction list components
-│   │   ├── currencyExchanges/ # Currency exchange list component
-│   │   └── modals/           # Form modals organized by feature
-│   │       ├── balance/
-│   │       ├── budget/
-│   │       ├── categories/
-│   │       ├── currency/
-│   │       ├── periods/
-│   │       └── transactions/
+│   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
+│   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
+│   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
+│   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
+│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, NewFromReceiptModal
+│   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
-│   │   ├── AuthContext.tsx          # Authentication state
+│   │   ├── AuthContext.tsx          # Authentication + consent state
 │   │   ├── WorkspaceContext.tsx     # Current workspace and role
-│   │   ├── BudgetAccountContext.tsx # Selected budget account
-│   │   ├── BudgetPeriodContext.tsx  # Selected period
+│   │   ├── UserPreferencesContext.tsx
 │   │   └── ThemeContext.tsx         # Light/dark theme
 │   ├── hooks/
+│   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
-│   └── types/
-│       └── index.ts          # TypeScript interfaces
+│   └── types/index.ts        # TypeScript interfaces
 ├── package.json
 ├── vite.config.ts
-├── tailwind.config.js
 └── tsconfig.json
 ```
 
 ## Pages and Routes
 
+Seven in-app destinations (sidebar) plus auth/legal routes.
+
 | Path | Component | Description |
 |------|-----------|-------------|
-| `/login` | Login | User authentication |
-| `/register` | Register | New user registration |
-| `/` | Dashboard | Period balances and budget summary |
-| `/transactions` | Transactions | Transaction list with filters |
-| `/exchanges` | CurrencyExchangesPage | Currency exchange records |
-| `/planned` | Planned | Planned transactions management |
-| `/categories` | CategoryPage | Category CRUD |
-| `/budget-periods` | BudgetPeriodsPage | Period management |
-| `/budget-accounts` | BudgetAccountsPage | Budget account management |
-| `/members` | WorkspaceMembersPage | Workspace member management |
-| `/period/:id` | BudgetPeriod | Single period detail view |
+| `/login`, `/register` | Login, Register | Auth; registration picks a currency + optional sample data |
+| `/` | Dashboard | Account balances + recent activity |
+| `/accounts` | AccountsPage | Accounts, set-balance, transfers |
+| `/budgets` | BudgetsPage | Budget list |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher |
+| `/transactions` | Transactions | Transaction list, filters, receipt-first create |
+| `/planned` | Planned | Planned transactions |
+| `/members` | WorkspaceMembersPage | Member management |
+| `/settings` | ProfilePage | Profile, preferences, data export/import |
 
 ## Components
 
-### Common Components
+**Layout** (`components/layout/`): `MainLayout` (responsive wrapper), `Sidebar`
+(7 destinations + workspace selector + user menu), `UserMenu`, `WorkspaceSelector`.
 
-**Layout Components** (`components/layout/`):
+**Common** (`components/common/`): `Modal`, `Select` (custom dropdown), `ConfirmDialog`,
+`Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, and `formStyles.ts`
+(the input/label/button class constants — the redesign's form primitives). `DatePicker`
+(react-day-picker) lives at `components/`.
 
-| Component | Description |
-|-----------|-------------|
-| `MainLayout` | Responsive wrapper (mobile drawer / tablet collapsed / desktop persistent) |
-| `Sidebar` | Navigation, account/period selectors, user menu; collapsed/expanded |
-| `UserMenu` | User profile and logout; dark mode toggle is the first dropdown item |
+**Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
+balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
 
-**Common Components** (`components/common/`):
-
-| Component | Description |
-|-----------|-------------|
-| `Loading` | Loading spinner |
-| `ErrorMessage` | Error display with retry |
-| `EmptyState` | Empty state with action button |
-| `ConfirmDialog` | Delete/action confirmation |
-| `PeriodSelector` | Period dropdown |
-| `BudgetAccountSelector` | Account dropdown |
-| `ProtectedRoute` | Auth route wrapper |
-| `Switch` | Accessible toggle switch (`role="switch"`, `aria-checked`) — see `design/components.md` §7 |
-| `DatePicker` | Date input — default click-to-open popup; opt-in `inline` prop renders an always-visible calendar (used in the add-record modals: `TransactionFormModal`, `PlannedTransactionFormModal`, `CurrencyExchangeFormModal`); inline theming scoped to `.rdp-inline` in `src/index.css` |
-| `TotalsSummary` | Aggregated totals tables (transactions, planned, exchanges) with `group_by` support |
-| `SortableTh` | Sortable table header cell (click toggles sort direction; rotating chevron on active column) |
-
-### Feature Components
-
-| Component | Description |
-|-----------|-------------|
-| `BalanceCard` | Single currency balance |
-| `BalanceSection` | All currency balances |
-| `BudgetTable` | Budget vs actual table |
-| `BudgetCategoryRow` | Category budget row |
-| `BudgetSummarySection` | Budget overview |
-| `TransactionList` | Transaction table |
-| `PlannedTransactionList` | Planned transactions table |
-| `CurrencyExchangeList` | Currency exchange table (desktop-only column sorting; mobile cards unchanged) |
-
-### Modal Components
-
-| Category | Modals |
-|----------|--------|
-| Balance | `EditPeriodBalanceModal` |
-| Budget | `CreateBudgetModal`, `EditBudgetModal` |
-| Categories | `CreateCategoryModal`, `EditCategoryModal` |
-| Currency | `CurrencyExchangeFormModal` |
-| Periods | `CreatePeriodModal`, `EditBudgetPeriodModal`, `CopyBudgetPeriodModal` |
-| Transactions | `TransactionFormModal`, `PlannedTransactionFormModal`, `ExecutePlannedModal` |
+**Transactions** (`components/transactions/` + `components/modals/transactions/`):
+`TransactionFormModal` (with Items/Receipts tabs), `TransactionItemsEditor`,
+`TransactionAttachments` (upload + extraction), `ExtractionReviewModal`,
+`PlannedFormModal`, `NewFromReceiptModal`.
 
 ## Contexts
 
@@ -160,33 +117,10 @@ interface WorkspaceContextType {
 }
 ```
 
-### BudgetAccountContext
-
-Manages selected budget account.
-
-```typescript
-interface BudgetAccountContextType {
-  selectedAccount: BudgetAccount | null;
-  selectedAccountId: number | null;
-  setSelectedAccountId: (id: number | null) => void;
-  accounts: BudgetAccount[];
-  isLoading: boolean;
-}
-```
-
-### BudgetPeriodContext
-
-Manages selected budget period.
-
-```typescript
-interface BudgetPeriodContextType {
-  selectedPeriod: BudgetPeriod | null;
-  selectedPeriodId: number | null;
-  setSelectedPeriodId: (id: number | null) => void;
-  periods: BudgetPeriod[];
-  isLoading: boolean;
-}
-```
+> There is no global account or period context. Accounts and budgets are read
+> through the hooks in `hooks/useDomain.ts`; period selection is local state on the
+> Budget detail page (periods are per-budget). The old `BudgetAccountContext` /
+> `BudgetPeriodContext` were removed in the redesign.
 
 ### ThemeContext
 
@@ -236,18 +170,16 @@ const api = axios.create({
 
 | Module | Purpose |
 |--------|---------|
-| `authApi` | Login, register, current user |
+| `authApi` | Login, register, current user, GDPR export/import + legacy import |
 | `workspacesApi` | Workspace management |
 | `workspaceMembersApi` | Member management |
-| `budgetAccountsApi` | Budget accounts |
-| `budgetPeriodsApi` | Periods with copy |
-| `categoriesApi` | Categories with import |
-| `budgetsApi` | Budget amounts |
-| `transactionsApi` | Transactions with filters, totals with `group_by` (type/category/combined) |
-| `plannedTransactionsApi` | Planned with execute, totals with `group_by` (currency/category) |
-| `currencyExchangesApi` | Exchange records, totals by currency pair |
-| `periodBalancesApi` | Balances with recalculate |
-| `reportsApi` | Budget summary, balances |
+| `currenciesApi` | Catalog + enabled currencies (enable/disable/custom) |
+| `accountsApi` | Accounts, archive, computed balance |
+| `budgetsApi` | Budgets + nested periods, categories, category-budgets |
+| `transactionsApi` | Transactions (filters, totals, bulk-account), line items, attachments, extraction, receipt parse |
+| `transfersApi` | Transfers between accounts |
+| `plannedTransactionsApi` | Planned with execute, totals by `currency`/`category` |
+| `reportsApi` | Budget summary (planned vs actual), current balances |
 
 ### Token Management
 
@@ -283,70 +215,55 @@ interface Workspace {
   created_at: string;
 }
 
-interface BudgetAccount {
+interface Account {
   id: number;
   workspace_id: number;
   name: string;
-  description?: string;
-  default_currency: string;
-  color?: string;
-  icon?: string;
-  is_active: boolean;
+  type: 'cash' | 'bank' | 'other';
+  currency_code: string;
+  opening_balance: string;   // balance is computed, not stored
+  is_archived: boolean;
   display_order: number;
   created_at: string;
 }
 
-interface BudgetPeriod {
+interface Budget {
   id: number;
-  budget_account_id: number;
+  workspace_id: number;
   name: string;
-  start_date: string;
-  end_date: string;
-  weeks?: number;
-  created_at: string;
+  cadence: 'monthly' | 'weeks' | 'custom';
+  cadence_weeks: number | null;
+  cadence_anchor: string | null;
+  is_active: boolean;
+  // …description/color/icon/display_currency_code
 }
 
 interface Transaction {
   id: number;
-  budget_period_id: number;
+  account_id: number;
+  account_name: string;
+  currency_code: string;     // == the account's currency
   date: string;
   description: string;
-  category_id?: number;
-  category?: string;
-  amount: number;
-  currency: string;
-  type: 'income' | 'expense';
-  created_at: string;
+  category_id: number | null;
+  amount: string;
+  type: 'income' | 'expense' | 'adjustment';
+  original_amount: string | null;         // "paid in another currency" facet
+  original_currency_code: string | null;
 }
 
-interface PlannedTransaction {
+interface Transfer {
   id: number;
-  budget_period_id: number;
-  name: string;
-  amount: number;
-  currency: string;
-  category_id?: number;
-  category?: string;
-  planned_date: string;
-  payment_date?: string;
-  status: 'pending' | 'done' | 'cancelled';
-  transaction_id?: number;
-  created_at: string;
-}
-
-interface PeriodBalance {
-  id: number;
-  budget_period_id: number;
-  currency: string;
-  opening_balance: number;
-  total_income: number;
-  total_expenses: number;
-  exchanges_in: number;
-  exchanges_out: number;
-  closing_balance: number;
-  last_calculated_at?: string;
+  from_account_id: number; to_account_id: number;
+  from_amount: string; to_amount: string;
+  from_currency_code: string; to_currency_code: string;
+  rate: string | null;       // implied rate for cross-currency
+  date: string; description: string;
 }
 ```
+
+See `src/types/index.ts` for the full set (Period, Category, CategoryBudget,
+PlannedTransaction, TransactionItem, TransactionAttachment, ExtractionResult, …).
 
 ## Running
 
@@ -401,9 +318,11 @@ const queryClient = new QueryClient({
 
 ```typescript
 // Consistent query key patterns
-['budget-accounts']
-['budget-periods', accountId]
-['transactions', periodId]
+['accounts', includeArchived]
+['budgets', includeInactive]
+['budget-summary', budgetId, periodId]
+['transactions', page, filters]
+['current-balances', includeArchived]
 ['workspace-members', workspaceId]
 ```
 
