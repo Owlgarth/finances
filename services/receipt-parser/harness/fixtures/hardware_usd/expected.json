@@ -1,0 +1,20 @@
+{
+  "merchant": "CITY HARDWARE",
+  "date": "2026-06-28",
+  "currency": "USD",
+  "total": "19.48",
+  "items": [
+    {
+      "name": "Wood screws box",
+      "line_total": "4.99"
+    },
+    {
+      "name": "Paint roller",
+      "line_total": "8.49"
+    },
+    {
+      "name": "Masking tape 2pk",
+      "line_total": "6.00"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[project]
+name = "receipt-parser-harness"
+version = "0.1.0"
+description = "Fixture generation + scoring for the receipt parser."
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28",
+    "pillow>=11.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "single"

@@ -2,6 +2,8 @@
 
 from django.test import TestCase
 
+from accounts.factories import AccountFactory
+from accounts.models import Account
 from workspaces.factories import WorkspaceFactory
 
 
@@ -12,46 +14,37 @@ class TestWorkspaceScopedQuerySet(TestCase):
         ws1 = WorkspaceFactory()
         ws2 = WorkspaceFactory()
 
-        ws1_currencies = ws1.currencies.all()
-        ws2_currencies = ws2.currencies.all()
+        AccountFactory(workspace=ws1, name='A1')
+        AccountFactory(workspace=ws1, name='A2')
+        AccountFactory(workspace=ws2, name='B1')
 
-        self.assertEqual(ws1_currencies.count(), 4)
-        self.assertEqual(ws2_currencies.count(), 4)
+        ws1_accounts = Account.objects.for_workspace(ws1.id)
+        ws2_accounts = Account.objects.for_workspace(ws2.id)
 
-        ws1_ids = set(ws1_currencies.values_list('id', flat=True))
-        ws2_ids = set(ws2_currencies.values_list('id', flat=True))
+        self.assertEqual(ws1_accounts.count(), 2)
+        self.assertEqual(ws2_accounts.count(), 1)
 
-        self.assertEqual(len(ws1_ids), 4)
-        self.assertEqual(len(ws2_ids), 4)
+        ws1_ids = set(ws1_accounts.values_list('id', flat=True))
+        ws2_ids = set(ws2_accounts.values_list('id', flat=True))
         self.assertEqual(len(ws1_ids & ws2_ids), 0)
 
-        for currency in ws1_currencies:
-            self.assertEqual(currency.workspace_id, ws1.id)
-        for currency in ws2_currencies:
-            self.assertEqual(currency.workspace_id, ws2.id)
+        for account in ws1_accounts:
+            self.assertEqual(account.workspace_id, ws1.id)
 
     def test_for_workspace_returns_empty_queryset_for_nonexistent_workspace(self):
         WorkspaceFactory()
 
-        from workspaces.models import Currency
-
-        result = Currency.objects.for_workspace(99999)
+        result = Account.objects.for_workspace(99999)
 
         self.assertEqual(result.count(), 0)
         self.assertTrue(result.exists() is False)
 
     def test_for_workspace_raises_valueerror_for_none(self):
-        WorkspaceFactory()
-        from workspaces.models import Currency
-
         with self.assertRaises(ValueError) as context:
-            Currency.objects.for_workspace(None)
+            Account.objects.for_workspace(None)
         self.assertIn('workspace_id is required', str(context.exception))
 
     def test_for_workspace_raises_valueerror_for_zero(self):
-        WorkspaceFactory()
-        from workspaces.models import Currency
-
         with self.assertRaises(ValueError) as context:
-            Currency.objects.for_workspace(0)
+            Account.objects.for_workspace(0)
         self.assertIn('workspace_id is required', str(context.exception))

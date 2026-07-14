@@ -147,6 +147,20 @@ class StorageService:
             return None
 
     @staticmethod
+    def get_file(bucket_name: str, key: str) -> bytes | None:
+        """Download a file's bytes from the specified bucket. Returns None if disabled or missing."""
+        if not StorageService._is_enabled():
+            return None
+
+        client = StorageService._get_client()
+        try:
+            response = client.get_object(Bucket=bucket_name, Key=key)
+            return response['Body'].read()
+        except ClientError:
+            logger.exception('Failed to read file %s from bucket %s', key, bucket_name)
+            return None
+
+    @staticmethod
     def delete_file(bucket_name: str, key: str) -> bool:
         """Delete a file from the specified bucket. Returns True on success."""
         if not StorageService._is_enabled():

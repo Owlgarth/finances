@@ -11,8 +11,8 @@ description: Backend testing conventions for Denarly (pytest, Factory Boy, AuthM
 cd backend
 pytest                                    # Run all tests
 pytest -v                                 # Verbose output
-pytest budget_accounts/tests/             # Run specific app tests
-pytest budget_accounts/tests/test_api.py::TestClass::test_method  # Single test
+pytest transactions/tests.py              # Run specific app tests
+pytest transactions/tests.py::TestClass::test_method  # Single test
 pytest -k "test_create"                   # Run tests matching pattern
 pytest --cov=. --cov-report=html          # With coverage
 pytest --create-db -v                     # Fresh test DB (use when cross-branch migrations cause stale DB issues)
@@ -22,7 +22,7 @@ pytest --create-db -v                     # Fresh test DB (use when cross-branch
 
 Use Factory Boy factories (e.g., `WorkspaceMemberFactory`) instead of direct `Model.objects.create()` calls. Factories exist in `<app>/factories.py` across the codebase.
 
-Prefer factories over service calls for setup — service calls create extra side effects (currencies, budget accounts, memberships) that make assertions unreliable:
+Prefer factories over service calls for setup — service calls create extra side effects (enabled currencies, a Main account, a General budget, memberships) that make assertions unreliable:
 
 ```python
 # Bad: service call creates a full workspace with demo fixtures
@@ -36,17 +36,18 @@ WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
 
 Only use service calls when the test specifically validates service-level behavior (e.g. `test_delete_workspace_*` calling `WorkspaceService.delete_workspace` directly).
 
-**Factory gotcha:** Factories for financial records (`TransactionFactory`, `PlannedTransactionFactory`, `CurrencyExchangeFactory`) default to creating their own `BudgetPeriod` and `User` via `SubFactory`. When tests need records tied to a specific workspace/account/period, pass these explicitly:
+**Factory gotcha:** Factories for financial records (`TransactionFactory`, `TransferFactory`, `PlannedTransactionFactory`) default to creating their own `Account` (and its workspace) and `User` via `SubFactory`. When tests need records tied to a specific workspace/account, pass these explicitly:
 
 ```python
-period = BudgetPeriodFactory(
-    budget_account=account, start_date='2025-01-01', end_date='2025-01-31', created_by=self.user,
-)
-pln = self.workspace.currencies.get(symbol='PLN')
+account = AccountFactory(workspace=self.workspace, name='Main', opening_balance=Decimal('100.00'))
 transaction = TransactionFactory(
-    budget_period=period, currency=pln, created_by=self.user, updated_by=self.user,
+    account=account, workspace=self.workspace, amount=Decimal('50.00'), type='expense',
 )
 ```
+
+A transaction's currency **is** its account's currency — there is no separate
+`currency` FK. Categories belong to a `Budget` (via `CategoryFactory(budget=...)`),
+not to a period.
 
 ## AuthMixin
 
@@ -62,7 +63,7 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(201)
 ```
 
-`AuthMixin` creates a workspace with PLN+USD currencies (via `WorkspaceFactory`), a user, a workspace membership, and a default "General" `BudgetAccount`. It also creates `auth_token` and provides `auth_headers()`. `self.user`, `self.workspace`, `self.auth_token` are available.
+`AuthMixin` creates a bare workspace (via `WorkspaceFactory`), a user, and a workspace membership — it does **not** enable currencies or create accounts/budgets (that keeps assertions clean). Enable a currency and create accounts/budgets explicitly in `setUp` when the test needs them (e.g. `CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')` then `AccountFactory(workspace=self.workspace)`). It also creates `auth_token` and provides `auth_headers()`. `self.user`, `self.workspace`, `self.auth_token` are available.
 
 **Workspace ambiguity:** When tests create additional workspaces for the same user (e.g., via `import_all_data`), filtering by `owner=self.user` alone may return the AuthMixin workspace instead of the new one. Filter by both `owner` and `name`:
 

@@ -5,16 +5,6 @@ from django.conf import settings
 from common.exceptions import NotFoundError, PermissionDeniedError, ValidationError
 
 
-class CurrencyNotFoundError(NotFoundError):
-    default_message = 'Currency not found'
-    default_code = 'not_found'
-
-
-class CurrencyDuplicateSymbolError(ValidationError):
-    def __init__(self, symbol: str):
-        super().__init__(f'Currency with symbol {symbol} already exists in this workspace', code='duplicate_symbol')
-
-
 class WorkspaceNotFoundError(NotFoundError):
     default_message = 'Workspace not found'
     default_code = 'workspace_not_found'

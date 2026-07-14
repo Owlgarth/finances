@@ -1,0 +1,24 @@
+{
+  "merchant": "LIDL",
+  "date": "2026-06-14",
+  "currency": "PLN",
+  "total": "42.97",
+  "items": [
+    {
+      "name": "Chleb wiejski 500g",
+      "line_total": "4.49"
+    },
+    {
+      "name": "Maslo ekstra 200g",
+      "line_total": "15.98"
+    },
+    {
+      "name": "Pomidory luz",
+      "line_total": "7.81"
+    },
+    {
+      "name": "Ser Gouda plastry",
+      "line_total": "14.69"
+    }
+  ]
+}
