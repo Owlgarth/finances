@@ -30,9 +30,9 @@ from workspaces.models import WRITE_ROLES
 
 ## Naming Conventions
 
-- **Files**: snake_case (`transactions/api.py`, `period_balances/models.py`)
-- **Classes**: PascalCase (`TransactionOut`, `BudgetPeriod`)
-- **Functions/Variables**: snake_case (`get_workspace_period`, `budget_period_id`)
+- **Files**: snake_case (`transactions/api.py`, `budgeting/models.py`)
+- **Classes**: PascalCase (`TransactionOut`, `Account`, `Budget`)
+- **Functions/Variables**: snake_case (`resolve_account`, `account_id`, `date_from`)
 - **Constants**: UPPER_SNAKE_CASE (`WRITE_ROLES`, `TOKEN_KEY`)
 - **Schemas**: Suffix with purpose (`TransactionCreate`, `TransactionOut`, `TransactionImport`)
 
@@ -105,10 +105,10 @@ For workspace-scoped endpoints, use `WorkspaceJWTAuth` (auto-validates the user 
 router = Router(tags=['Transactions'])
 
 @router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
-def list_transactions(request: HttpRequest, budget_period_id: int | None = Query(None)):
+def list_transactions(request: HttpRequest, account_id: int | None = Query(None)):
     """Docstring describing the endpoint."""
     workspace_id = request.auth.current_workspace_id
-    return TransactionService.list(workspace_id, budget_period_id)
+    return TransactionService.list(workspace_id, account_id=account_id)
 
 @router.post('', response={201: TransactionOut}, auth=WorkspaceJWTAuth())
 def create_transaction(request: HttpRequest, data: TransactionCreate):
@@ -139,7 +139,7 @@ When a list endpoint accepts a user-controlled `ordering` parameter that flows i
 ```python
 ordering: str | None = Query(
     None,
-    pattern=r'^(-?(date|description|amount|type|category__name|currency__symbol))$',
+    pattern=r'^(-?(date|description|amount|type|category__name|account__name|account__currency__code))$',
 ),
 ```
 
@@ -152,7 +152,7 @@ sort_order = ordering or '-date'
 queryset = queryset.order_by(sort_order, '-id')  # '-id' tiebreaker → stable pagination
 ```
 
-Transactions uses `-created_at` (pre-existing); planned transactions and currency exchanges use `-id`. Either is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
+Transactions use `-date, -id`; transfers and planned transactions use `-date, -id`. Either an id or created_at tiebreak is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
 
 ## Service Layer
 
@@ -303,16 +303,16 @@ if not twofa or not twofa.is_enabled:
 
 When an endpoint or service depends on a resource being in a specific state, validate that state **before** the main operation — a specific error beats a misleading generic one (e.g., check 2FA is enabled before reporting "Invalid verification code").
 
-Also validate and raise **before** creating records — e.g., reject creation when no budget period covers the given date, rather than saving an invisible orphan with `budget_period=None`:
+Also validate and raise **before** creating records — e.g., reject a transaction on a custom-cadence budget when no period covers the date, rather than saving something the UI can't place:
 
 ```python
-period_id = CurrencyExchangeService._find_period_for_date(workspace_id, data.date)
-if not period_id:
-    raise CurrencyExchangeNoPeriodError()
-CurrencyExchange.objects.create(budget_period_id=period_id, ...)
+account = TransactionService._resolve_account(workspace_id, data.account_id)
+if account.is_archived:
+    raise TransactionAccountArchivedError()
+Transaction.objects.create(account=account, workspace_id=workspace_id, ...)
 ```
 
-This applies to both `create` and `update` paths — if a guard exists on create, apply the same guard on update, otherwise updates can silently produce orphans.
+This applies to both `create` and `update` paths — if a guard exists on create, apply the same guard on update.
 
 ## Workspace-Scoped Models
 
@@ -326,35 +326,36 @@ All models that belong to a workspace must inherit from `WorkspaceScopedModel`. 
 from common.models import WorkspaceScopedModel
 
 class Category(WorkspaceScopedModel):
-    """Category model scoped to a workspace."""
+    """Category model scoped to a workspace, owned by a Budget."""
 
-    budget_period = models.ForeignKey(
-        'budget_periods.BudgetPeriod', on_delete=models.CASCADE, related_name='categories'
-    )
+    budget = models.ForeignKey('budgeting.Budget', on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
+    is_archived = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'categories'
-        unique_together = [['name', 'budget_period']]
+        constraints = [
+            models.UniqueConstraint(Lower('name'), 'budget', name='uniq_category_name_per_budget'),
+        ]
 
 # Service usage - always set workspace_id on creation:
-Category.objects.create(budget_period_id=period_id, workspace_id=workspace_id, name='Food', created_by=user)
+Category.objects.create(budget_id=budget_id, workspace_id=workspace_id, name='Food', created_by=user)
 ```
 
-**Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` defaults. Concrete models should set explicit `related_name` on all FKs (e.g., `related_name='created_exchange_shortcuts'` on `created_by`).
+**Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` defaults. Concrete models should set explicit `related_name` on all FKs.
 
 For models with custom querysets:
 
 ```python
-class BudgetPeriodQuerySet(WorkspaceScopedQuerySet):
-    def containing(self, target_date: date):
-        return self.filter(start_date__lte=target_date, end_date__gte=target_date)
+class AccountQuerySet(WorkspaceScopedQuerySet):
+    def active(self):
+        return self.filter(is_archived=False)
 
-class BudgetPeriod(WorkspaceScopedModel):
-    objects = BudgetPeriodQuerySet.as_manager()
+class Account(WorkspaceScopedModel):
+    objects = AccountQuerySet.as_manager()
 ```
 
-**Workspace-scoped queries:** Prefer `Model.objects.for_workspace(workspace_id)` over manual `filter(budget_period__budget_account__workspace_id=...)` chains.
+**Workspace-scoped queries:** Prefer `Model.objects.for_workspace(workspace_id)` over manual FK-chain filters like `filter(account__workspace_id=...)`.
 
 ## Pydantic Schemas
 

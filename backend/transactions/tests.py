@@ -1,1792 +1,825 @@
-"""Tests for transactions API endpoints."""
+"""Tests for account-based transactions (B5 semantics)."""
 
+import json
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
-from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from budget_accounts.models import BudgetAccount
-from budget_periods.factories import BudgetPeriodFactory
-from budget_periods.models import BudgetPeriod
+from accounts.factories import AccountFactory
+from accounts.services import AccountService
+from budgeting.factories import BudgetFactory
+from budgeting.models import Cadence, Period
+from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
-from common.enums import TotalsLabel
 from common.tests.mixins import APIClientMixin, AuthMixin
-from period_balances.factories import PeriodBalanceFactory
-from period_balances.models import PeriodBalance
+from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory
-from transactions.models import Transaction
-from workspaces.models import Currency, Workspace, WorkspaceMember
-
-User = get_user_model()
+from transactions.models import Transaction, TransactionAttachment, TransactionItem
+from transactions.services import TransactionService
 
 
-class TransactionsTestCase(AuthMixin, APIClientMixin, TestCase):
-    """Base test case for transactions tests with common setup."""
+class TransactionTestCase(AuthMixin, APIClientMixin, TestCase):
+    """Base: one active PLN account + a budget with categories."""
 
     def setUp(self):
-        """Set up authenticated user and create test data."""
         super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.account = AccountFactory(workspace=self.workspace, name='Main', opening_balance=Decimal('100.00'))
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.groceries = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Groceries')
 
-        self.period = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='January 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            weeks=5,
-            created_by=self.user,
+    def _payload(self, **overrides):
+        payload = {
+            'date': '2026-07-15',
+            'description': 'Test expense',
+            'type': 'expense',
+            'amount': '50.00',
+        }
+        payload.update(overrides)
+        return payload
+
+
+class TestCreateTransaction(TransactionTestCase):
+    def test_create_with_explicit_account(self):
+        data = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['account_id'], self.account.id)
+        self.assertEqual(data['account_name'], 'Main')
+        self.assertEqual(data['currency_code'], 'PLN')
+        self.assertEqual(data['amount'], '50.00')
+
+    def test_create_defaults_to_single_active_account(self):
+        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['account_id'], self.account.id)
+
+    def test_create_without_account_and_two_active_accounts_returns_400(self):
+        AccountFactory(workspace=self.workspace, name='Second')
+        self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_create_on_archived_account_returns_400(self):
+        archived = AccountFactory(workspace=self.workspace, name='Old', is_archived=True)
+        self.post('/api/transactions', self._payload(account_id=archived.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_create_on_foreign_account_returns_404(self):
+        foreign = AccountFactory()
+        self.post('/api/transactions', self._payload(account_id=foreign.id), **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_create_with_zero_amount_returns_400(self):
+        self.post('/api/transactions', self._payload(amount='0.00'), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_create_with_negative_expense_returns_400(self):
+        self.post('/api/transactions', self._payload(amount='-5.00'), **self.auth_headers())
+        self.assertStatus(400)
+
+
+class TestAdjustments(TransactionTestCase):
+    def test_negative_adjustment_ok(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(type='adjustment', amount='-20.00', description='Reconcile'),
+            **self.auth_headers(),
         )
+        self.assertStatus(201)
+        self.assertEqual(data['amount'], '-20.00')
 
-        self.period2 = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='February 2025',
-            start_date=date(2025, 2, 1),
-            end_date=date(2025, 2, 28),
-            weeks=4,
-            created_by=self.user,
+    def test_zero_adjustment_returns_400(self):
+        self.post('/api/transactions', self._payload(type='adjustment', amount='0.00'), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_adjustment_with_category_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(type='adjustment', amount='-20.00', category_id=self.groceries.id),
+            **self.auth_headers(),
         )
+        self.assertStatus(400)
 
-        self.category1 = CategoryFactory(
-            budget_period=self.period,
-            name='Groceries',
-            created_by=self.user,
+    def test_adjustment_affects_balance_but_not_totals(self):
+        self.post('/api/transactions', self._payload(type='income', amount='50.00'), **self.auth_headers())
+        self.post('/api/transactions', self._payload(type='adjustment', amount='-20.00'), **self.auth_headers())
+
+        balance = self.get(f'/api/accounts/{self.account.id}/balance', **self.auth_headers())
+        self.assertEqual(balance['balance'], '130.00')  # 100 + 50 - 20
+
+        totals = self.get('/api/transactions/totals?group_by=type', **self.auth_headers())
+        groups = {t['group'] for t in totals['totals']}
+        self.assertEqual(groups, {'income'})
+
+
+class TestOriginalFacet(TransactionTestCase):
+    def test_facet_happy_path(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(original_amount='12.99', original_currency_code='USD'),
+            **self.auth_headers(),
         )
+        self.assertStatus(201)
+        self.assertEqual(data['original_amount'], '12.99')
+        self.assertEqual(data['original_currency_code'], 'USD')
 
-        self.category2 = CategoryFactory(
-            budget_period=self.period,
-            name='Transport',
-            created_by=self.user,
+    def test_facet_one_field_only_returns_422(self):
+        self.post('/api/transactions', self._payload(original_amount='12.99'), **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_facet_same_as_account_currency_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(original_amount='12.99', original_currency_code='PLN'),
+            **self.auth_headers(),
         )
+        self.assertStatus(400)
 
-        self.pln_currency = self.workspace.currencies.filter(symbol='PLN').first()
-        self.usd_currency = self.workspace.currencies.filter(symbol='USD').first()
-
-        PeriodBalanceFactory(
-            budget_period=self.period,
-            currency=self.pln_currency,
-            opening_balance=Decimal('5000.00'),
-            total_income=Decimal('8000.00'),
-            total_expenses=Decimal('3000.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('10000.00'),
-            created_by=self.user,
+    def test_facet_unknown_code_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(original_amount='12.99', original_currency_code='XXX'),
+            **self.auth_headers(),
         )
+        self.assertStatus(400)
 
-        PeriodBalanceFactory(
-            budget_period=self.period,
-            currency=self.usd_currency,
-            opening_balance=Decimal('1000.00'),
-            total_income=Decimal('2000.00'),
-            total_expenses=Decimal('500.00'),
-            exchanges_in=Decimal('0'),
-            exchanges_out=Decimal('0'),
-            closing_balance=Decimal('2500.00'),
-            created_by=self.user,
+
+class TestDerivedPeriods(TransactionTestCase):
+    def test_create_with_category_materializes_period(self):
+        self.assertEqual(Period.objects.filter(budget=self.budget).count(), 0)
+
+        self.post('/api/transactions', self._payload(category_id=self.groceries.id), **self.auth_headers())
+        self.assertStatus(201)
+
+        periods = Period.objects.filter(budget=self.budget)
+        self.assertEqual(periods.count(), 1)
+        self.assertEqual(periods.first().start_date, date(2026, 7, 1))
+
+    def test_date_change_materializes_next_period(self):
+        created = self.post('/api/transactions', self._payload(category_id=self.groceries.id), **self.auth_headers())
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(category_id=self.groceries.id, date='2026-08-03'),
+            **self.auth_headers(),
         )
-
-
-# =============================================================================
-# List Transactions Tests
-# =============================================================================
-
-
-class TestListTransactions(TransactionsTestCase):
-    """Tests for listing transactions."""
-
-    def test_list_transactions_with_period_id(self):
-        """Test listing transactions filtered by budget period."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 10),
-            description='Bus ticket',
-            category=self.category2,
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data['items']), 2)
 
-    def test_list_transactions_with_current_date(self):
-        """Test listing transactions using current_date to find period."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
+        starts = set(Period.objects.filter(budget=self.budget).values_list('start_date', flat=True))
+        self.assertEqual(starts, {date(2026, 7, 1), date(2026, 8, 1)})
+
+    def test_no_category_no_period(self):
+        self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(Period.objects.filter(workspace=self.workspace).count(), 0)
+
+    def test_custom_cadence_without_covering_period_returns_400(self):
+        custom_budget = BudgetFactory(workspace=self.workspace, cadence=Cadence.CUSTOM)
+        category = CategoryFactory(budget=custom_budget, workspace=self.workspace, name='Trip Food')
+        self.post('/api/transactions', self._payload(category_id=category.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_archived_category_returns_400(self):
+        archived = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Old', is_archived=True)
+        self.post('/api/transactions', self._payload(category_id=archived.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_foreign_workspace_category_returns_400(self):
+        foreign = CategoryFactory()
+        self.post('/api/transactions', self._payload(category_id=foreign.id), **self.auth_headers())
+        self.assertStatus(400)
+
+
+class TestFiltersAndTotals(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        self.usd_account = AccountFactory(workspace=self.workspace, name='Dollars', currency=usd)
+
+        TransactionFactory(
+            account=self.account,
             workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Groceries run',
+            category=self.groceries,
+            amount=Decimal('40.00'),
+            type='expense',
         )
-
-        data = self.get('/api/transactions?current_date=2025-01-15', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 1)
-
-    def test_list_transactions_with_type_filter(self):
-        """Test listing transactions filtered by type."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 10),
             description='Salary',
-            category=None,
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Groceries',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&transaction_type=expense', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 1)
-        self.assertEqual(data['items'][0]['type'], 'expense')
-
-    def test_list_transactions_with_search(self):
-        """Test listing transactions with search term."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping at Walmart',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Bus ticket',
-            category=self.category2,
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&search=grocery', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 1)
-        self.assertIn('Grocery', data['items'][0]['description'])
-
-    def test_list_transactions_with_amount_filters(self):
-        """Test listing transactions with amount range filters."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Small expense',
-            category=self.category1,
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Large expense',
-            category=self.category2,
             amount=Decimal('500.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
+            type='income',
+        )
+        TransactionFactory(
+            account=self.usd_account,
             workspace=self.workspace,
+            date=date(2026, 6, 10),
+            description='US expense',
+            amount=Decimal('30.00'),
+            type='expense',
+        )
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 12),
+            description='Reconcile',
+            amount=Decimal('-15.00'),
+            type='adjustment',
         )
 
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&amount_gte=100', **self.auth_headers())
+    def test_filter_by_date_range(self):
+        data = self.get('/api/transactions?date_from=2026-07-01&date_to=2026-07-31', **self.auth_headers())
+        self.assertEqual(data['total'], 3)
+
+    def test_filter_by_account(self):
+        data = self.get(f'/api/transactions?account_id={self.usd_account.id}', **self.auth_headers())
+        self.assertEqual(data['total'], 1)
+        self.assertEqual(data['items'][0]['currency_code'], 'USD')
+
+    def test_filter_by_budget(self):
+        data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertEqual(data['total'], 1)
+        self.assertEqual(data['items'][0]['category_name'], 'Groceries')
+
+    def test_response_includes_category_budget_id(self):
+        data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertEqual(data['items'][0]['category_budget_id'], self.budget.id)
+
+        uncategorized = self.get('/api/transactions?transaction_type=income', **self.auth_headers())
+        self.assertIsNone(uncategorized['items'][0]['category_budget_id'])
+
+    def test_filter_by_type(self):
+        data = self.get('/api/transactions?transaction_type=income', **self.auth_headers())
+        self.assertEqual(data['total'], 1)
+
+    def test_totals_grouped_per_account_currency(self):
+        totals = self.get('/api/transactions/totals?group_by=type', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map[('expense', 'PLN')], '40.00')
+        self.assertEqual(as_map[('expense', 'USD')], '30.00')
+        self.assertEqual(as_map[('income', 'PLN')], '500.00')
+        self.assertNotIn(('adjustment', 'PLN'), as_map)
+
+    def test_totals_combined_excludes_adjustments(self):
+        data = self.get('/api/transactions/totals?group_by=type,category', **self.auth_headers())
+        by_type_groups = {t['group'] for t in data['by_type']}
+        self.assertEqual(by_type_groups, {'income', 'expense'})
+
+    def test_workspace_scoping(self):
+        foreign = TransactionFactory()
+        data = self.get('/api/transactions', **self.auth_headers())
+        self.assertNotIn(foreign.id, [t['id'] for t in data['items']])
+
+
+class TestBulkSetAccount(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.second = AccountFactory(workspace=self.workspace, name='Second')
+        self.trans1 = TransactionFactory(account=self.account, workspace=self.workspace)
+        self.trans2 = TransactionFactory(account=self.account, workspace=self.workspace)
+
+    def test_bulk_set_account(self):
+        payload = {'transaction_ids': [self.trans1.id, self.trans2.id], 'account_id': self.second.id}
+        data = self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data['items']), 1)
-        self.assertEqual(data['items'][0]['amount'], '500.00')
+        self.assertEqual(data['updated'], 2)
+        self.trans1.refresh_from_db()
+        self.assertEqual(self.trans1.account_id, self.second.id)
 
-    def test_list_transactions_without_auth_fails(self):
-        """Test that listing transactions without authentication fails."""
-        self.get(f'/api/transactions?budget_period_id={self.period.id}')
-        self.assertStatus(401)
+    def test_bulk_with_foreign_transaction_applies_nothing(self):
+        foreign = TransactionFactory()
+        payload = {'transaction_ids': [self.trans1.id, foreign.id], 'account_id': self.second.id}
+        self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(400)
+        self.trans1.refresh_from_db()
+        self.assertEqual(self.trans1.account_id, self.account.id)
 
-    def test_list_transactions_no_matching_period_returns_empty(self):
-        """When current_date matches no period, return empty list (not 404)."""
-        data = self.get('/api/transactions?current_date=2099-01-01', **self.auth_headers())
+    def test_bulk_to_other_currency_account_returns_400(self):
+        """A cross-currency move would silently reinterpret amounts."""
+        from currencies.models import Currency
+
+        eur, _ = Currency.objects.get_or_create(
+            code='EUR', workspace=None, defaults={'name': 'Euro', 'symbol': '€', 'decimals': 2}
+        )
+        eur_account = AccountFactory(workspace=self.workspace, name='Euro acct', currency=eur)
+
+        payload = {'transaction_ids': [self.trans1.id, self.trans2.id], 'account_id': eur_account.id}
+        self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(400)
+        self.trans1.refresh_from_db()
+        self.assertEqual(self.trans1.account_id, self.account.id)
+
+
+class TestAccountBalanceWithTransactions(TransactionTestCase):
+    def test_balance_formula(self):
+        """opening 100 + income 50 − expense 30 + adjustment(−20) = 100."""
+        TransactionFactory(account=self.account, workspace=self.workspace, amount=Decimal('50.00'), type='income')
+        TransactionFactory(account=self.account, workspace=self.workspace, amount=Decimal('30.00'), type='expense')
+        TransactionFactory(account=self.account, workspace=self.workspace, amount=Decimal('-20.00'), type='adjustment')
+
+        self.assertEqual(AccountService.balance(self.account), Decimal('100.00'))
+
+    def test_account_delete_blocked_with_transactions_archive_allowed(self):
+        TransactionFactory(account=self.account, workspace=self.workspace)
+
+        self.delete(f'/api/accounts/{self.account.id}', **self.auth_headers())
+        self.assertStatus(400)
+
+        self.patch(f'/api/accounts/{self.account.id}/archive', {'is_archived': True}, **self.auth_headers())
+        self.assertStatus(200)
+
+
+class TestUpdateDelete(TransactionTestCase):
+    def test_update_on_archived_account_allowed(self):
+        """Archiving keeps history editable — only retargeting to archived is blocked."""
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+        self.account.is_archived = True
+        self.account.save(update_fields=['is_archived'])
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=self.account.id, description='Fixed typo'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['description'], 'Fixed typo')
+
+    def test_update_retarget_to_archived_account_returns_400(self):
+        archived = AccountFactory(workspace=self.workspace, name='Old', is_archived=True)
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=archived.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_update_moves_between_accounts(self):
+        second = AccountFactory(workspace=self.workspace, name='Second')
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=second.id, description='Moved'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['account_id'], second.id)
+
+    def test_update_keeps_account_when_not_sent(self):
+        AccountFactory(workspace=self.workspace, name='Second')  # two accounts now
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}', self._payload(description='Edited'), **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['account_id'], self.account.id)
+
+    def test_update_with_null_category(self):
+        """Explicit category_id=null must update fine (modal sends null when budget changes)."""
+        created = self.post(
+            '/api/transactions',
+            self._payload(account_id=self.account.id, category_id=self.groceries.id),
+            **self.auth_headers(),
+        )
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                account_id=self.account.id,
+                category_id=None,
+                original_amount=None,
+                original_currency_code=None,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['category_id'])
+        self.assertIsNone(data['category_budget_id'])
+
+    def test_delete(self):
+        trans = TransactionFactory(account=self.account, workspace=self.workspace)
+        self.delete(f'/api/transactions/{trans.id}', **self.auth_headers())
+        self.assertStatus(204)
+        self.assertFalse(Transaction.objects.filter(id=trans.id).exists())
+
+    def test_viewer_cannot_write(self):
+        trans = TransactionFactory(account=self.account, workspace=self.workspace)
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(403)
+        self.delete(f'/api/transactions/{trans.id}', **self.auth_headers())
+        self.assertStatus(403)
+
+
+class TestExportImport(TransactionTestCase):
+    def test_export_includes_account_currency_original(self):
+        usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Converted payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('12.99'),
+            original_currency=usd,
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['account_name'], 'Main')
+        self.assertEqual(rows[0]['currency_code'], 'PLN')
+        self.assertEqual(rows[0]['original_amount'], '12.99')
+        self.assertEqual(rows[0]['original_currency_code'], 'USD')
+
+    def test_import_lands_rows_in_given_account(self):
+        rows = [
+            {'date': '2026-07-01', 'description': 'Imported A', 'amount': '10.00', 'type': 'expense'},
+            {
+                'date': '2026-07-02',
+                'description': 'Imported B',
+                'amount': '20.00',
+                'type': 'expense',
+                'category_name': 'Groceries',
+            },
+        ]
+        upload = self._json_file(rows)
+        response = self.client.post(
+            '/api/transactions/import',
+            {'account_id': self.account.id, 'budget_id': self.budget.id, 'file': upload},
+            **self.auth_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+
+        imported = Transaction.objects.filter(account=self.account, description__startswith='Imported')
+        self.assertEqual(imported.count(), 2)
+        self.assertEqual(imported.get(description='Imported B').category_id, self.groceries.id)
+
+    def test_import_without_budget_leaves_categories_null(self):
+        rows = [
+            {
+                'date': '2026-07-02',
+                'description': 'No budget',
+                'amount': '20.00',
+                'type': 'expense',
+                'category_name': 'Groceries',
+            },
+        ]
+        response = self.client.post(
+            '/api/transactions/import',
+            {'account_id': self.account.id, 'file': self._json_file(rows)},
+            **self.auth_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(Transaction.objects.get(description='No budget').category_id)
+
+    def _json_file(self, rows):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile('rows.json', json.dumps(rows).encode(), content_type='application/json')
+
+
+class TestFrequentDescriptions(TransactionTestCase):
+    def test_frequent_descriptions(self):
+        for _ in range(3):
+            TransactionFactory(
+                account=self.account, workspace=self.workspace, description='Biedronka', amount=Decimal('10.00')
+            )
+        TransactionFactory(account=self.account, workspace=self.workspace, description='Zabka', amount=Decimal('5.00'))
+
+        data = self.get('/api/transactions/frequent-descriptions', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['items'][0]['description'], 'Biedronka')
+        self.assertEqual(data['items'][0]['count'], 3)
+        self.assertEqual(data['items'][0]['currency'], 'PLN')
+
+
+class TestDerivedPeriodServiceLevel(TestCase):
+    """get_or_create_for_date is invoked with the transaction's own date."""
+
+    def test_period_touch_uses_transaction_date(self):
+        from common.tests.factories import UserFactory
+        from workspaces.factories import WorkspaceFactory
+
+        user = UserFactory()
+        workspace = WorkspaceFactory()
+        budget = BudgetFactory(workspace=workspace)
+        category = CategoryFactory(budget=budget, workspace=workspace, name='Food')
+
+        TransactionService._touch_period(user, category, date(2026, 3, 14))
+        period = PeriodService.get_or_create_for_date(user, budget, date(2026, 3, 1))
+        self.assertEqual(Period.objects.filter(budget=budget).count(), 1)
+        self.assertEqual(period.start_date, date(2026, 3, 1))
+
+
+class TestTransactionItems(TransactionTestCase):
+    """Line items: informational, ordered, replace-all semantics (R2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, amount=Decimal('23.97'), description='Groceries run')
+
+    def _items_url(self):
+        return f'/api/transactions/{self.trans.id}/items'
+
+    def test_empty_by_default(self):
+        data = self.get(self._items_url(), **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(data['items'], [])
+        self.assertEqual(data['items_total'], '0.00')
 
-    def test_list_transactions_order_by_date(self):
-        """Test ordering transactions by date ascending and descending."""
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 20),
-            description='Late',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 10),
-            description='Early',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=date', **self.auth_headers())
+    def test_replace_creates_ordered_items(self):
+        payload = {
+            'items': [
+                {'name': 'Bread', 'quantity': '1', 'unit_price': '4.99', 'line_total': '4.99'},
+                {'name': 'Milk', 'quantity': '2', 'unit_price': '3.99', 'line_total': '7.98'},
+                {'name': 'Cheese', 'quantity': '1', 'unit_price': '11.00', 'line_total': '11.00'},
+            ]
+        }
+        data = self.put(self._items_url(), payload, **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Early', 'Late'])
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-date', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Late', 'Early'])
+        self.assertEqual([i['name'] for i in data['items']], ['Bread', 'Milk', 'Cheese'])
+        self.assertEqual([i['position'] for i in data['items']], [0, 1, 2])
+        self.assertEqual(data['items_total'], '23.97')
 
-    def test_list_transactions_order_by_description(self):
-        """Test ordering transactions by description ascending and descending."""
-        for desc in ['Zebra', 'Apple', 'Mango']:
-            TransactionFactory(
-                budget_period=self.period,
-                date=date(2025, 1, 15),
-                description=desc,
-                category=self.category1,
-                amount=Decimal('100.00'),
-                currency=self.pln_currency,
-                type='expense',
-                created_by=self.user,
-                updated_by=self.user,
-            )
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=description', **self.auth_headers()
+    def test_replace_reorders_and_deletes(self):
+        self.put(
+            self._items_url(),
+            {'items': [{'name': 'A', 'line_total': '1.00'}, {'name': 'B', 'line_total': '2.00'}]},
+            **self.auth_headers(),
+        )
+        data = self.put(
+            self._items_url(),
+            {'items': [{'name': 'B', 'line_total': '2.00'}]},
+            **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Apple', 'Mango', 'Zebra'])
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=-description', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Zebra', 'Mango', 'Apple'])
+        self.assertEqual([i['name'] for i in data['items']], ['B'])
+        self.assertEqual(TransactionItem.objects.filter(transaction=self.trans).count(), 1)
 
-    def test_list_transactions_order_by_amount(self):
-        """Test ordering transactions by amount ascending and descending."""
-        for amt in ['300.00', '100.00', '200.00']:
-            TransactionFactory(
-                budget_period=self.period,
-                date=date(2025, 1, 15),
-                description=f'Transaction {amt}',
-                category=self.category1,
-                amount=Decimal(amt),
-                currency=self.pln_currency,
-                type='expense',
-                created_by=self.user,
-                updated_by=self.user,
-            )
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=amount', **self.auth_headers())
+    def test_items_total_falls_back_to_quantity_times_unit_price(self):
+        data = self.put(
+            self._items_url(),
+            {'items': [{'name': 'Tomatoes', 'quantity': '0.782', 'unit_price': '9.99'}]},
+            **self.auth_headers(),
+        )
         self.assertStatus(200)
-        self.assertEqual([t['amount'] for t in data['items']], ['100.00', '200.00', '300.00'])
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-amount', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual([t['amount'] for t in data['items']], ['300.00', '200.00', '100.00'])
+        self.assertEqual(data['items_total'], '7.81')
 
-    def test_list_transactions_order_by_type(self):
-        """Test ordering transactions by type ascending and descending."""
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Expense item',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Income item',
-            category=None,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        # 'expense' sorts before 'income' alphabetically
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=type', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual([t['type'] for t in data['items']], ['expense', 'income'])
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=-type', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual([t['type'] for t in data['items']], ['income', 'expense'])
+    def test_items_do_not_change_amount_or_balance(self):
+        balance_before = AccountService.balance(self.account)
+        self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '999.99'}]}, **self.auth_headers())
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.amount, Decimal('23.97'))
+        self.assertEqual(AccountService.balance(self.account), balance_before)
 
-    def test_list_transactions_order_by_category_name(self):
-        """Test ordering transactions by category name via FK traversal."""
-        # self.category2 = 'Transport' (T), self.category1 = 'Groceries' (G)
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Bus',
-            category=self.category2,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Food',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        # 'Groceries' < 'Transport' alphabetically
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=category__name', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Food', 'Bus'])
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=-category__name', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['Bus', 'Food'])
+    def test_items_deleted_with_transaction(self):
+        self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '1.00'}]}, **self.auth_headers())
+        self.delete(f'/api/transactions/{self.trans.id}', **self.auth_headers())
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=self.trans.id).count(), 0)
 
-    def test_list_transactions_order_by_currency_symbol(self):
-        """Test ordering transactions by currency symbol via FK traversal."""
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='USD item',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.usd_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='PLN item',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        # 'PLN' < 'USD' alphabetically
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=currency__symbol', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['PLN item', 'USD item'])
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&ordering=-currency__symbol', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual([t['description'] for t in data['items']], ['USD item', 'PLN item'])
+    def test_other_workspace_transaction_404(self):
+        other_trans = TransactionFactory()
+        self.get(f'/api/transactions/{other_trans.id}/items', **self.auth_headers())
+        self.assertStatus(404)
 
-    def test_list_transactions_invalid_ordering_rejected(self):
-        """Test that an ordering value not in the allowlist is rejected (422)."""
-        TransactionFactory(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Test',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        self.get(f'/api/transactions?budget_period_id={self.period.id}&ordering=invalid_field', **self.auth_headers())
-        # Django Ninja returns 422 for Query param pattern mismatches.
+    def test_viewer_cannot_replace_items(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.put(self._items_url(), {'items': []}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_blank_name_rejected(self):
+        self.put(self._items_url(), {'items': [{'name': '   ', 'line_total': '1.00'}]}, **self.auth_headers())
         self.assertStatus(422)
 
 
-# =============================================================================
-# Get Transaction Tests
-# =============================================================================
-
-
-class TestGetTransaction(TransactionsTestCase):
-    """Tests for getting a specific transaction."""
-
-    def test_get_transaction_by_id(self):
-        """Test getting a transaction by ID."""
-        trans = Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(f'/api/transactions/{trans.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['id'], trans.id)
-        self.assertEqual(data['description'], 'Grocery shopping')
-
-    def test_get_transaction_not_found(self):
-        """Test getting a non-existent transaction."""
-        self.get('/api/transactions/99999', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_get_transaction_from_other_workspace_fails(self):
-        """Test that getting a transaction from another workspace fails."""
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-
-        WorkspaceMember.objects.create(
-            workspace=other_workspace,
-            user=other_user,
-            role='owner',
-        )
-
-        other_currency = Currency.objects.create(
-            workspace=other_workspace,
-            name='Polish Zloty',
-            symbol='PLN',
-        )
-
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace,
-            name='Other Account',
-            default_currency=other_currency,
-            created_by=other_user,
-        )
-
-        other_period = BudgetPeriod.objects.create(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 4, 1),
-            end_date=date(2025, 4, 30),
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-
-        other_trans = Transaction.objects.create(
-            budget_period=other_period,
-            date=date(2025, 4, 15),
-            description='Other transaction',
-            amount=Decimal('100.00'),
-            currency=other_currency,
-            type='expense',
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-
-        self.get(f'/api/transactions/{other_trans.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-
-# =============================================================================
-# Create Transaction Tests
-# =============================================================================
-
-
-class TestCreateTransaction(TransactionsTestCase):
-    """Tests for creating transactions."""
-
-    def test_create_expense_transaction_success(self):
-        """Test creating an expense transaction."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '250.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['description'], 'Grocery shopping')
-        self.assertEqual(data['amount'], '250.00')
-
-        # Verify balance was updated
-        balance = PeriodBalance.objects.get(budget_period=self.period, currency=self.pln_currency)
-        self.assertEqual(balance.total_expenses, Decimal('3250.00'))  # 3000 + 250
-
-    def test_create_income_transaction_success(self):
-        """Test creating an income transaction."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Salary',
-            'category_id': None,
-            'amount': '5000.00',
-            'currency': 'PLN',
-            'type': 'income',
-            'budget_period_id': self.period.id,
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['type'], 'income')
-
-        # Verify balance was updated
-        balance = PeriodBalance.objects.get(budget_period=self.period, currency=self.pln_currency)
-        self.assertEqual(balance.total_income, Decimal('13000.00'))  # 8000 + 5000
-
-    def test_create_transaction_auto_assign_period(self):
-        """Test creating a transaction with auto-assigned period."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '100.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': None,  # Auto-assign
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['budget_period_id'], self.period.id)
-
-    def test_create_income_with_category_is_ignored(self):
-        """Test that creating an income transaction with a category ignores the category."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Salary',
-            'category_id': self.category1.id,
-            'amount': '5000.00',
-            'currency': 'PLN',
-            'type': 'income',
-            'budget_period_id': self.period.id,
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        self.assertStatus(201)
-        # Category should be ignored (set to None) for income transactions
-        self.assertIsNone(data['category_id'])
-
-    def test_create_transaction_without_auth_fails(self):
-        """Test that creating a transaction without authentication fails."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '250.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        self.post('/api/transactions', payload)
-        self.assertStatus(401)
-
-
-# =============================================================================
-# Update Transaction Tests
-# =============================================================================
-
-
-class TestUpdateTransaction(TransactionsTestCase):
-    """Tests for updating transactions."""
-
-    def test_update_transaction_success(self):
-        """Test updating a transaction."""
-        trans = Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping - Updated',
-            'category_id': self.category1.id,
-            'amount': '300.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        data = self.put(f'/api/transactions/{trans.id}', payload, **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['description'], 'Grocery shopping - Updated')
-        self.assertEqual(data['amount'], '300.00')
-
-    def test_update_transaction_not_found(self):
-        """Test updating a non-existent transaction."""
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Test',
-            'amount': '100.00',
-            'currency': 'PLN',
-            'type': 'expense',
-        }
-        self.put('/api/transactions/99999', payload, **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_update_transaction_balance_reverted_and_applied(self):
-        """Test that updating a transaction reverts old balance and applies new one."""
-        # Create transaction through API (which updates balance)
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '250.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        trans_id = data['id']
-
-        # Get balance after creation
-        balance = PeriodBalance.objects.get(budget_period=self.period, currency=self.pln_currency)
-        self.assertEqual(balance.total_expenses, Decimal('3250.00'))  # 3000 + 250
-
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '400.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        self.put(f'/api/transactions/{trans_id}', payload, **self.auth_headers())
-
-        # Verify balance was updated correctly
-        balance.refresh_from_db()
-        self.assertEqual(balance.total_expenses, Decimal('3400.00'))  # 3000 + 400
-
-
-# =============================================================================
-# Delete Transaction Tests
-# =============================================================================
-
-
-class TestDeleteTransaction(TransactionsTestCase):
-    """Tests for deleting transactions."""
-
-    def test_delete_transaction_success(self):
-        """Test deleting a transaction."""
-        trans = Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        trans_id = trans.id
-        self.delete(f'/api/transactions/{trans_id}', **self.auth_headers())
-        self.assertStatus(204)
-
-        # Verify transaction is deleted
-        self.assertFalse(Transaction.objects.filter(id=trans_id).exists())
-
-    def test_delete_transaction_not_found(self):
-        """Test deleting a non-existent transaction."""
-        self.delete('/api/transactions/99999', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_delete_transaction_balance_reverted(self):
-        """Test that deleting a transaction reverts the balance."""
-        # Create transaction through API (which updates balance)
-        payload = {
-            'date': '2025-01-15',
-            'description': 'Grocery shopping',
-            'category_id': self.category1.id,
-            'amount': '250.00',
-            'currency': 'PLN',
-            'type': 'expense',
-            'budget_period_id': self.period.id,
-        }
-        data = self.post('/api/transactions', payload, **self.auth_headers())
-        trans_id = data['id']
-
-        # Get balance after creation
-        balance = PeriodBalance.objects.get(budget_period=self.period, currency=self.pln_currency)
-        self.assertEqual(balance.total_expenses, Decimal('3250.00'))  # 3000 + 250
-
-        self.delete(f'/api/transactions/{trans_id}', **self.auth_headers())
-
-        # Verify balance was reverted
-        balance.refresh_from_db()
-        self.assertEqual(balance.total_expenses, Decimal('3000.00'))  # Back to original
-
-
-# =============================================================================
-# Export Transactions Tests
-# =============================================================================
-
-
-class TestExportTransactions(TransactionsTestCase):
-    """Tests for exporting transactions."""
-
-    def test_export_transactions_success(self):
-        """Test exporting transactions from a budget period."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        response = self.client.get(
-            f'/api/transactions/export/?budget_period_id={self.period.id}',
-            **self.auth_headers(),
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/json')
-        self.assertIn('attachment', response['Content-Disposition'])
-
-    def test_export_transactions_with_type_filter(self):
-        """Test exporting transactions filtered by type."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Salary',
-            category=None,
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Groceries',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        response = self.client.get(
-            f'/api/transactions/export/?budget_period_id={self.period.id}&transaction_type=expense',
-            **self.auth_headers(),
-        )
-        self.assertEqual(response.status_code, 200)
-
-
-# =============================================================================
-# Import Transactions Tests
-# =============================================================================
-
-
-class TestImportTransactions(TransactionsTestCase):
-    """Tests for importing transactions."""
-
-    def post_file(self, path: str, file_data: dict, **kwargs) -> object:
-        """Helper for POST requests with file upload."""
-        response = self.client.post(path, **kwargs, data=file_data)
-        self.response = response
-        return response.json() if response.content else {}
-
-    def test_import_transactions_success(self):
-        """Test importing transactions from a JSON file."""
-        import json
-
-        transactions_data = json.dumps(
-            [
-                {
-                    'date': '2025-01-15',
-                    'description': 'Grocery shopping',
-                    'category_name': 'Groceries',
-                    'amount': '250.00',
-                    'currency': 'PLN',
-                    'type': 'expense',
-                },
-                {
-                    'date': '2025-01-16',
-                    'description': 'Salary',
-                    'category_name': None,
-                    'amount': '5000.00',
-                    'currency': 'PLN',
-                    'type': 'income',
-                },
-            ]
-        )
-        file = SimpleUploadedFile(
-            'transactions.json',
-            transactions_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        self.assertIn('Successfully imported 2 new transactions', data['message'])
-
-    def test_import_transactions_with_invalid_category_skips(self):
-        """Test that importing transactions with invalid category names skips them."""
-        import json
-
-        transactions_data = json.dumps(
-            [
-                {
-                    'date': '2025-01-15',
-                    'description': 'Grocery shopping',
-                    'category_name': 'NonExistent',
-                    'amount': '250.00',
-                    'currency': 'PLN',
-                    'type': 'expense',
-                },
-            ]
-        )
-        file = SimpleUploadedFile(
-            'transactions.json',
-            transactions_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-        # Transaction should be imported without category
-        self.assertEqual(Transaction.objects.filter(budget_period=self.period).count(), 1)
-
-    def test_import_transactions_income_ignores_category(self):
-        """Test that importing income transactions ignores category names."""
-        import json
-
-        transactions_data = json.dumps(
-            [
-                {
-                    'date': '2025-01-15',
-                    'description': 'Salary',
-                    'category_name': 'SomeCategory',  # Should be ignored
-                    'amount': '5000.00',
-                    'currency': 'PLN',
-                    'type': 'income',
-                },
-            ]
-        )
-        file = SimpleUploadedFile(
-            'transactions.json',
-            transactions_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(201)
-
-        # Verify income transaction has no category
-        trans = Transaction.objects.filter(budget_period=self.period, type='income').first()
-        self.assertIsNone(trans.category_id)
-
-    def test_import_transactions_invalid_json_fails(self):
-        """Test importing with invalid JSON file."""
-        file = SimpleUploadedFile(
-            'transactions.json',
-            b'not valid json',
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-    def test_import_transactions_invalid_binary_file_returns_400(self):
-        """A non-JSON / non-UTF-8 upload returns 400, not 500 (UnicodeDecodeError is caught)."""
-        # A PNG header is not valid UTF-8, so json.loads() raises UnicodeDecodeError
-        # (a ValueError, not a json.JSONDecodeError) which must be caught as a 400.
-        file = SimpleUploadedFile(
-            'transactions.json',
-            b'\x89PNG\r\n\x1a\n',
-            content_type='application/json',
-        )
-
-        data = self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-        self.assertEqual(data['detail'], 'Invalid JSON file.')
-
-    def test_import_transactions_invalid_format_fails(self):
-        """Test importing with invalid data format."""
-        import json
-
-        transactions_data = json.dumps(
-            [
-                {
-                    'date': '2025-01-15',
-                    'description': 'Test',
-                    'amount': '250.00',
-                    'currency': 'PLN',
-                    'type': 'invalid',  # Invalid type
-                },
-            ]
-        )
-        file = SimpleUploadedFile(
-            'transactions.json',
-            transactions_data.encode('utf-8'),
-            content_type='application/json',
-        )
-
-        self.post_file(
-            '/api/transactions/import',
-            {'file': file, 'budget_period_id': self.period.id},
-            **self.auth_headers(),
-        )
-        self.assertStatus(400)
-
-
-# =============================================================================
-# Pagination Tests
-# =============================================================================
-
-
-class TestTransactionPagination(AuthMixin, APIClientMixin, TestCase):
-    """Tests for transaction list pagination."""
+class TestTransactionAttachments(TransactionTestCase):
+    """Attachment endpoints with StorageService mocked (R1)."""
 
     def setUp(self):
         super().setUp()
-        self.period = BudgetPeriodFactory(
-            budget_account=self.workspace.budget_accounts.first(),
-            name='January 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            weeks=5,
-            created_by=self.user,
-        )
-        self.pln_currency = self.workspace.currencies.filter(symbol='PLN').first()
+        self.trans = TransactionFactory(account=self.account, description='With receipt')
+        # Pretend S3 is configured; individual operations are mocked per test.
+        patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
+        self.storage.get_presigned_url.return_value = 'http://signed.example/url'
+        self.storage.delete_file.return_value = True
 
-    def _create_transactions(self, count):
-        """Create the given number of transactions in the test period."""
-        for i in range(count):
-            TransactionFactory(
-                budget_period=self.period,
-                workspace=self.workspace,
-                currency=self.pln_currency,
-                created_by=self.user,
-                updated_by=self.user,
-            )
+    def _attachments_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments'
 
-    def test_default_pagination(self):
-        """Default page_size=25, page=1."""
-        self._create_transactions(35)
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 25)
-        self.assertEqual(data['total'], 35)
-        self.assertEqual(data['page'], 1)
-        self.assertEqual(data['page_size'], 25)
-        self.assertEqual(data['total_pages'], 2)
-
-    def test_custom_page_size(self):
-        """page_size=25 returns 25 items."""
-        self._create_transactions(30)
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}&page_size=25', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 25)
-        self.assertEqual(data['total'], 30)
-        self.assertEqual(data['total_pages'], 2)
-
-    def test_second_page(self):
-        """page=2 returns correct slice."""
-        self._create_transactions(30)
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&page=2&page_size=25',
+    def _upload(self, name='receipt.jpg', content_type='image/jpeg', content=b'fakebytes'):
+        upload = SimpleUploadedFile(name, content, content_type=content_type)
+        return self.client.post(
+            self._attachments_url(),
+            {'file': upload},
             **self.auth_headers(),
         )
+
+    def test_upload_and_list(self):
+        response = self._upload()
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data['filename'], 'receipt.jpg')
+        self.assertEqual(data['content_type'], 'image/jpeg')
+        self.assertEqual(data['download_url'], 'http://signed.example/url')
+
+        listed = self.get(self._attachments_url(), **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data['items']), 5)
-        self.assertEqual(data['page'], 2)
+        self.assertEqual(len(listed), 1)
+        self.storage.save_file.assert_called_once()
+        key = self.storage.save_file.call_args[0][1]
+        self.assertTrue(key.startswith(f'attachments/{self.workspace.id}/{self.trans.id}/'))
+        self.assertTrue(key.endswith('.jpg'))
 
-    def test_over_page_returns_empty(self):
-        """Requesting page beyond total_pages returns empty items."""
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&page=999&page_size=25',
-            **self.auth_headers(),
+    def test_upload_pdf_ok(self):
+        response = self._upload(name='receipt.pdf', content_type='application/pdf')
+        self.assertEqual(response.status_code, 201)
+
+    def test_unsupported_type_rejected(self):
+        response = self._upload(name='malware.exe', content_type='application/octet-stream')
+        self.assertEqual(response.status_code, 400)
+        self.storage.save_file.assert_not_called()
+
+    def test_storage_disabled_returns_503(self):
+        self.storage._is_enabled.return_value = False
+        response = self._upload()
+        self.assertEqual(response.status_code, 503)
+
+    def test_delete_removes_row_and_storage_object(self):
+        created = self._upload().json()
+        self.delete(f'{self._attachments_url()}/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        self.assertEqual(TransactionAttachment.objects.filter(transaction=self.trans).count(), 0)
+        self.storage.delete_file.assert_called_once()
+
+    def test_transaction_delete_cleans_storage(self):
+        self._upload()
+        self.delete(f'/api/transactions/{self.trans.id}', **self.auth_headers())
+        self.assertStatus(204)
+        self.storage.delete_file.assert_called_once()
+        self.assertEqual(TransactionAttachment.objects.count(), 0)
+
+    def test_workspace_deletion_cleans_storage(self):
+        from common.services.base import delete_workspace_financial_records
+
+        self._upload()
+        delete_workspace_financial_records(self.workspace.id)
+        self.storage.delete_file.assert_called_once()
+        self.assertEqual(TransactionAttachment.objects.count(), 0)
+
+    def test_other_workspace_404(self):
+        other_trans = TransactionFactory()
+        self.get(f'/api/transactions/{other_trans.id}/attachments', **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_viewer_cannot_upload(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        response = self._upload()
+        self.assertEqual(response.status_code, 403)
+
+    def test_gdpr_export_import_round_trip(self):
+        from transactions.attachments import AttachmentService
+
+        self._upload(name='shop.jpg', content=b'originalbytes')
+        # Export reads the stored bytes back as base64.
+        self.storage.get_file.return_value = b'originalbytes'
+        exported = AttachmentService.export_for_transaction(self.trans)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]['filename'], 'shop.jpg')
+        self.assertIsNotNone(exported[0]['content_b64'])
+
+        # Import into a fresh transaction recreates the stored object + row.
+        target = TransactionFactory(account=self.account, description='Restored')
+        created = AttachmentService.import_for_transaction(self.user, target, exported)
+        self.assertEqual(created, 1)
+        self.assertEqual(target.attachments.count(), 1)
+        self.assertEqual(target.attachments.first().filename, 'shop.jpg')
+
+
+CONTRACT_RESULT = {
+    'schema_version': '1',
+    'merchant': 'Lidl',
+    'date': '2026-06-14',
+    'currency': 'PLN',
+    'total': '20.47',
+    'items': [
+        {'name': 'Bread', 'quantity': '1', 'unit_price': '4.49', 'line_total': '4.49', 'confidence': 0.98},
+        {'name': 'Butter', 'quantity': '2', 'unit_price': '7.99', 'line_total': '15.98', 'confidence': 0.7},
+    ],
+    'confidence': {'merchant': 0.9, 'date': 0.95, 'currency': 0.99, 'total': 0.98, 'items': 0.8},
+    'warnings': [],
+}
+
+
+class TestExtraction(TransactionTestCase):
+    """Receipt extraction dispatch + polling (R5). Celery runs eager in tests."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='Receipt tx')
+        storage_patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = storage_patcher.start()
+        self.addCleanup(storage_patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
+        self.storage.get_presigned_url.return_value = 'http://signed/url'
+        self.storage.get_file.return_value = b'imagebytes'
+        # Pretend a parser is configured.
+        enabled_patcher = mock.patch('transactions.parser_client.is_enabled', return_value=True)
+        enabled_patcher.start()
+        self.addCleanup(enabled_patcher.stop)
+        self.attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg', filename='r.jpg', content_type='image/jpeg', size=10, uploaded_by=self.user
         )
+
+    def _extract_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments/{self.attachment.id}/extract'
+
+    def _state_url(self):
+        return f'/api/transactions/{self.trans.id}/attachments/{self.attachment.id}/extraction'
+
+    def test_config_reports_enabled_flag(self):
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            data = self.get('/api/transactions/extraction/config', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(len(data['items']), 0)
-        self.assertEqual(data['total'], 0)
-
-    def test_invalid_page_size_defaults(self):
-        """Invalid page_size value falls back to default 25."""
-        self._create_transactions(30)
-        data = self.get(
-            f'/api/transactions?budget_period_id={self.period.id}&page_size=999',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        self.assertEqual(data['page_size'], 25)
-        self.assertEqual(len(data['items']), 25)
-
-    def test_zero_total_when_no_records(self):
-        """Empty result returns total=0, total_pages=0."""
-        data = self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-        self.assertEqual(data['total'], 0)
-        self.assertEqual(data['total_pages'], 0)
-
-
-# =============================================================================
-# Transaction Totals Tests
-# =============================================================================
-
-
-class TestTransactionTotals(TransactionsTestCase):
-    """Tests for transaction totals endpoint."""
-
-    def test_totals_no_filters_multiple_types_and_currencies(self):
-        """Test totals with multiple types and currencies, no filters."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Salary',
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Groceries',
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 17),
-            description='Freelance',
-            amount=Decimal('1000.00'),
-            currency=self.usd_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 18),
-            description='Rent',
-            amount=Decimal('800.00'),
-            currency=self.usd_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(f'/api/transactions/totals?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 4)
-
-        # Verify each group
-        totals_map = {(t['group'], t['currency']): t['total'] for t in totals}
-        self.assertEqual(totals_map[('expense', 'PLN')], '250.00')
-        self.assertEqual(totals_map[('income', 'PLN')], '5000.00')
-        self.assertEqual(totals_map[('expense', 'USD')], '800.00')
-        self.assertEqual(totals_map[('income', 'USD')], '1000.00')
-
-    def test_totals_type_filter(self):
-        """Test totals filtered by type."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Salary',
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Groceries',
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&transaction_type=income',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['group'], 'income')
-        self.assertEqual(totals[0]['total'], '5000.00')
-
-    def test_totals_currency_filter(self):
-        """Test totals filtered by currency."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Salary',
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 17),
-            description='Freelance',
-            amount=Decimal('1000.00'),
-            currency=self.usd_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&currency=PLN',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['currency'], 'PLN')
-        self.assertEqual(totals[0]['total'], '5000.00')
-
-    def test_totals_date_filters(self):
-        """Test totals filtered by date range."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 5),
-            description='Early expense',
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 20),
-            description='Late expense',
-            amount=Decimal('200.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&start_date=2025-01-15&end_date=2025-01-25',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['total'], '200.00')
-
-    def test_totals_search_filter(self):
-        """Test totals filtered by search term."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Grocery shopping',
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Bus ticket',
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&search=grocery',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['total'], '250.00')
-
-    def test_totals_amount_filters(self):
-        """Test totals filtered by amount range."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Small expense',
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Large expense',
-            amount=Decimal('500.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&amount_gte=100',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['total'], '500.00')
-
-    def test_totals_no_results(self):
-        """Test totals returns empty when no transactions match."""
-        data = self.get(f'/api/transactions/totals?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['totals'], [])
-
-    def test_totals_no_matching_period_returns_empty(self):
-        """Test totals returns empty when current_date matches no period."""
-        data = self.get('/api/transactions/totals?current_date=2099-01-01', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['totals'], [])
-
-    def test_totals_cross_workspace_isolation(self):
-        """Test totals only returns transactions from the user's workspace."""
-        # Create transaction in user's workspace
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='My expense',
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        # Create transaction in other workspace
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-        WorkspaceMember.objects.create(workspace=other_workspace, user=other_user, role='owner')
-        other_currency = Currency.objects.create(workspace=other_workspace, name='Polish Zloty', symbol='PLN')
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace, name='Other Account', default_currency=other_currency, created_by=other_user
-        )
-        other_period = BudgetPeriod.objects.create(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-        Transaction.objects.create(
-            budget_period=other_period,
-            date=date(2025, 1, 15),
-            description='Other expense',
-            amount=Decimal('9999.00'),
-            currency=other_currency,
-            type='expense',
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-
-        data = self.get(f'/api/transactions/totals?budget_period_id={self.period.id}', **self.auth_headers())
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['total'], '250.00')
-
-    def test_totals_without_auth_fails(self):
-        """Test that getting totals without authentication fails."""
-        self.get(f'/api/transactions/totals?budget_period_id={self.period.id}')
-        self.assertStatus(401)
-
-    def test_totals_group_by_category(self):
-        """Test totals grouped by category."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Groceries',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Bus',
-            category=self.category2,
-            amount=Decimal('50.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 17),
-            description='More groceries',
-            category=self.category1,
-            amount=Decimal('100.00'),
-            currency=self.usd_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&group_by=category',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 3)
-
-        totals_map = {(t['group'], t['currency']): t['total'] for t in totals}
-        self.assertEqual(totals_map[('Groceries', 'PLN')], '250.00')
-        self.assertEqual(totals_map[('Groceries', 'USD')], '100.00')
-        self.assertEqual(totals_map[('Transport', 'PLN')], '50.00')
-
-    def test_totals_group_by_category_uncategorized(self):
-        """Test totals grouped by category with uncategorized transactions."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Uncategorized expense',
-            category=None,
-            amount=Decimal('100.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Categorized expense',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&group_by=category',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 2)
-
-        totals_map = {(t['group'], t['currency']): t['total'] for t in totals}
-        self.assertEqual(totals_map[('Groceries', 'PLN')], '250.00')
-        self.assertEqual(totals_map[(TotalsLabel.UNCATEGORIZED, 'PLN')], '100.00')
-
-    def test_totals_group_by_category_cross_workspace(self):
-        """Test category totals only returns transactions from the user's workspace."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='My expense',
-            category=self.category1,
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        # Create transaction in other workspace
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other2@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-        WorkspaceMember.objects.create(workspace=other_workspace, user=other_user, role='owner')
-        other_currency = Currency.objects.create(workspace=other_workspace, name='Polish Zloty', symbol='PLN')
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace, name='Other Account', default_currency=other_currency, created_by=other_user
-        )
-        other_period = BudgetPeriod.objects.create(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-        Transaction.objects.create(
-            budget_period=other_period,
-            date=date(2025, 1, 15),
-            description='Other expense',
-            amount=Decimal('9999.00'),
-            currency=other_currency,
-            type='expense',
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&group_by=category',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        totals = data['totals']
-        self.assertEqual(len(totals), 1)
-        self.assertEqual(totals[0]['group'], 'Groceries')
-        self.assertEqual(totals[0]['total'], '250.00')
-
-    def test_totals_group_by_both(self):
-        """Test totals with group_by=type,category returns both groupings."""
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 15),
-            description='Salary',
-            amount=Decimal('5000.00'),
-            currency=self.pln_currency,
-            type='income',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-        Transaction.objects.create(
-            budget_period=self.period,
-            date=date(2025, 1, 16),
-            description='Groceries',
-            amount=Decimal('250.00'),
-            currency=self.pln_currency,
-            type='expense',
-            created_by=self.user,
-            workspace=self.workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/totals?budget_period_id={self.period.id}&group_by=type,category',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        # Should have by_type and by_category; totals should be absent/null
-        self.assertIsNone(data.get('totals'))
-        self.assertEqual(len(data['by_type']), 2)
-        self.assertEqual(len(data['by_category']), 1)  # Both uncategorized
-        by_type_map = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
-        self.assertEqual(by_type_map[('income', 'PLN')], '5000.00')
-        self.assertEqual(by_type_map[('expense', 'PLN')], '250.00')
-
-
-# =============================================================================
-# Frequent Descriptions Tests
-# =============================================================================
-
-
-class TestFrequentDescriptions(TransactionsTestCase):
-    """Tests for the frequent descriptions endpoint."""
-
-    def _create_transaction(self, description, amount, currency, trans_type='expense', period=None):
-        """Helper to create a transaction in the test period."""
-        return Transaction.objects.create(
-            budget_period=period or self.period,
-            date=date(2025, 1, 15),
-            description=description,
-            amount=Decimal(str(amount)),
-            currency=currency,
-            type=trans_type,
-            created_by=self.user,
-            updated_by=self.user,
-            workspace=self.workspace,
-        )
-
-    def test_basic_grouping(self):
-        """Test that transactions are grouped by description."""
-        self._create_transaction('Grocery shopping', '50.00', self.pln_currency)
-        self._create_transaction('Grocery shopping', '75.00', self.pln_currency)
-        self._create_transaction('Bus ticket', '30.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 2)
-
-        # Grocery shopping should be first (count=2)
-        self.assertEqual(items[0]['description'], 'Grocery shopping')
-        self.assertEqual(items[0]['count'], 2)
-        self.assertEqual(items[0]['total'], '125.00')
-        self.assertEqual(items[0]['currency'], 'PLN')
-
-        self.assertEqual(items[1]['description'], 'Bus ticket')
-        self.assertEqual(items[1]['count'], 1)
-        self.assertEqual(items[1]['total'], '30.00')
-
-    def test_case_insensitive_grouping(self):
-        """Test that descriptions are grouped case-insensitively."""
-        self._create_transaction('grocery shopping', '50.00', self.pln_currency)
-        self._create_transaction('Grocery Shopping', '75.00', self.pln_currency)
-        self._create_transaction('GROCERY SHOPPING', '25.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]['count'], 3)
-        self.assertEqual(items[0]['total'], '150.00')
-
-    def test_most_common_casing(self):
-        """Test that the description uses the most common original casing."""
-        self._create_transaction('grocery shopping', '10.00', self.pln_currency)
-        self._create_transaction('Grocery Shopping', '20.00', self.pln_currency)
-        self._create_transaction('Grocery Shopping', '30.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 1)
-        # "Grocery Shopping" appears twice, "grocery shopping" once
-        self.assertEqual(items[0]['description'], 'Grocery Shopping')
-
-    def test_currency_separation(self):
-        """Test that same description in different currencies is grouped separately."""
-        self._create_transaction('Coffee', '15.00', self.pln_currency)
-        self._create_transaction('Coffee', '5.00', self.usd_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 2)
-
-        currencies = {item['currency'] for item in items}
-        self.assertIn('PLN', currencies)
-        self.assertIn('USD', currencies)
-
-    def test_limit_parameter(self):
-        """Test that the limit parameter restricts results."""
-        for i in range(5):
-            self._create_transaction(f'Transaction {i}', '10.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}&limit=3',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 3)
-
-    def test_default_limit(self):
-        """Test that default limit is 10."""
-        for i in range(15):
-            self._create_transaction(f'Transaction {i}', '10.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual(len(data['items']), 10)
-
-    def test_empty_results(self):
-        """Test that empty period returns empty items."""
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-
-    def test_ordering_by_count_desc(self):
-        """Test that items are ordered by count descending."""
-        self._create_transaction('Bus ticket', '10.00', self.pln_currency)
-        self._create_transaction('Grocery shopping', '50.00', self.pln_currency)
-        self._create_transaction('Grocery shopping', '25.00', self.pln_currency)
-        self._create_transaction('Grocery shopping', '30.00', self.pln_currency)
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 2)
-        # Grocery shopping (count=3) should be before Bus ticket (count=1)
-        self.assertEqual(items[0]['description'], 'Grocery shopping')
-        self.assertEqual(items[0]['count'], 3)
-        self.assertEqual(items[1]['description'], 'Bus ticket')
-        self.assertEqual(items[1]['count'], 1)
-
-    def test_transaction_type_filter(self):
-        """Test filtering by transaction type."""
-        self._create_transaction('Salary', '5000.00', self.pln_currency, trans_type='income')
-        self._create_transaction('Coffee', '15.00', self.pln_currency, trans_type='expense')
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}&transaction_type=expense',
-            **self.auth_headers(),
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]['description'], 'Coffee')
-
-    def test_auth_required(self):
-        """Test that authentication is required."""
-        self.get(f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}')
-        self.assertStatus(401)
-
-    def test_no_matching_period_returns_empty(self):
-        """Test that current_date matching no period returns empty items."""
-        data = self.get('/api/transactions/frequent-descriptions?current_date=2099-01-01', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(data['items'], [])
-
-    def test_cross_workspace_isolation(self):
-        """Test that frequent descriptions only returns data from the user's workspace."""
-        self._create_transaction('My coffee', '15.00', self.pln_currency)
-
-        # Create transaction in another workspace
-        other_workspace = Workspace.objects.create(name='Other Workspace')
-        other_user = User.objects.create_user(
-            email='other@example.com',
-            password='otherpass123',
-            current_workspace=other_workspace,
-        )
-        other_workspace.owner = other_user
-        other_workspace.save()
-        WorkspaceMember.objects.create(workspace=other_workspace, user=other_user, role='owner')
-        other_currency = Currency.objects.create(workspace=other_workspace, name='Polish Zloty', symbol='PLN')
-        other_account = BudgetAccount.objects.create(
-            workspace=other_workspace, name='Other Account', default_currency=other_currency, created_by=other_user
-        )
-        other_period = BudgetPeriod.objects.create(
-            budget_account=other_account,
-            name='Other Period',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=other_user,
-            workspace=other_workspace,
-        )
-        Transaction.objects.create(
-            budget_period=other_period,
-            date=date(2025, 1, 15),
-            description='Other coffee',
-            amount=Decimal('9999.00'),
-            currency=other_currency,
-            type='expense',
-            created_by=other_user,
-            updated_by=other_user,
-            workspace=other_workspace,
-        )
-
-        data = self.get(
-            f'/api/transactions/frequent-descriptions?budget_period_id={self.period.id}', **self.auth_headers()
-        )
-        self.assertStatus(200)
-        items = data['items']
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]['description'], 'My coffee')
+        self.assertFalse(data['enabled'])
+
+    def test_extract_success_stores_result(self):
+        with mock.patch('transactions.tasks.parse_receipt', return_value=CONTRACT_RESULT) as parse:
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(202)
+        parse.assert_called_once()
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'done')
+        self.assertEqual(state['result']['total'], '20.47')
+
+    def test_extract_failure_records_error(self):
+        from transactions.parser_client import ParserServiceError
+
+        with mock.patch('transactions.tasks.parse_receipt', side_effect=ParserServiceError('boom')):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'failed')
+        self.assertIn('boom', state['error'])
+        self.assertIsNone(state['result'])
+
+    def test_extract_disabled_returns_503(self):
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(503)
+
+    def test_missing_file_marks_failed(self):
+        self.storage.get_file.return_value = None
+        self.post(self._extract_url(), {}, **self.auth_headers())
+        state = self.get(self._state_url(), **self.auth_headers())
+        self.assertEqual(state['status'], 'failed')
+
+    def test_viewer_cannot_extract(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self.post(self._extract_url(), {}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_extraction_status_in_attachment_list(self):
+        with mock.patch('transactions.tasks.parse_receipt', return_value=CONTRACT_RESULT):
+            self.post(self._extract_url(), {}, **self.auth_headers())
+        listed = self.get(f'/api/transactions/{self.trans.id}/attachments', **self.auth_headers())
+        self.assertEqual(listed[0]['extraction_status'], 'done')
+
+    def test_parse_receipt_preview_persists_nothing(self):
+        before = Transaction.objects.count()
+        upload = SimpleUploadedFile('r.jpg', b'bytes', content_type='image/jpeg')
+        with mock.patch('transactions.parser_client.parse_receipt', return_value=CONTRACT_RESULT):
+            response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], '20.47')
+        # No transaction and no attachment created.
+        self.assertEqual(Transaction.objects.count(), before)
+        self.assertEqual(TransactionAttachment.objects.count(), 1)  # only the setUp attachment
+
+    def test_parse_receipt_preview_disabled_returns_503(self):
+        upload = SimpleUploadedFile('r.jpg', b'bytes', content_type='image/jpeg')
+        with mock.patch('transactions.parser_client.is_enabled', return_value=False):
+            response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
+        self.assertEqual(response.status_code, 503)

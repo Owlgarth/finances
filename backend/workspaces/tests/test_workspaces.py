@@ -1,17 +1,19 @@
 """Tests for workspaces and workspace_members API endpoints."""
 
-from datetime import date
+from datetime import date  # noqa: F401 (used by rewritten viewer tests)
 
 from django.test import TestCase
 
-from budget_periods.factories import BudgetPeriodFactory
-from budgets.factories import BudgetFactory
+from accounts.factories import AccountFactory
+from budgeting.factories import BudgetFactory as PlanBudgetFactory
+from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from common.auth import create_access_token
-from common.tests.factories import BudgetAccountFactory, UserFactory
+from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
-from workspaces.factories import CurrencyFactory, WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import Currency, Workspace, WorkspaceMember
+from currencies.services import CurrencyCatalogService
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
+from workspaces.models import Workspace, WorkspaceMember
 from workspaces.services import WorkspaceService
 
 # =============================================================================
@@ -208,6 +210,80 @@ class TestSwitchWorkspace(WorkspaceTestCase):
     def test_switch_workspace_without_auth_fails(self):
         """Test that switching workspace without authentication fails."""
         self.post(f'/api/workspaces/{self.other_workspace.id}/switch', {})
+        self.assertStatus(401)
+
+
+# =============================================================================
+# Set Default Budget Tests
+# =============================================================================
+
+
+class TestSetDefaultBudget(WorkspaceTestCase):
+    """Tests for PUT /api/workspaces/{workspace_id}/default-budget."""
+
+    def setUp(self):
+        super().setUp()
+        self.budget = PlanBudgetFactory(workspace=self.workspace, name='Household')
+
+    def test_set_default_budget_as_owner(self):
+        payload = {'budget_id': self.budget.id}
+        data = self.put(f'/api/workspaces/{self.workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['default_budget_id'], self.budget.id)
+
+        self.workspace.refresh_from_db()
+        self.assertEqual(self.workspace.default_budget_id, self.budget.id)
+
+    def test_clear_default_budget(self):
+        self.workspace.default_budget = self.budget
+        self.workspace.save(update_fields=['default_budget'])
+
+        data = self.put(
+            f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': None}, **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['default_budget_id'])
+
+        self.workspace.refresh_from_db()
+        self.assertIsNone(self.workspace.default_budget_id)
+
+    def test_set_default_budget_works_for_non_current_workspace(self):
+        """Explicit workspace id — must work right after a legacy import creates other workspaces."""
+        other_budget = PlanBudgetFactory(workspace=self.other_workspace, name='Other budget')
+        payload = {'budget_id': other_budget.id}
+        data = self.put(f'/api/workspaces/{self.other_workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['default_budget_id'], other_budget.id)
+
+    def test_budget_from_another_workspace_rejected(self):
+        foreign_budget = PlanBudgetFactory(workspace=self.other_workspace)
+        payload = {'budget_id': foreign_budget.id}
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', payload, **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_archived_budget_rejected(self):
+        archived = PlanBudgetFactory(workspace=self.workspace, is_active=False)
+        self.put(
+            f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': archived.id}, **self.auth_headers()
+        )
+        self.assertStatus(400)
+
+    def test_member_cannot_set_default_budget(self):
+        token = self.create_token_for_user(self.member_user)
+        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': self.budget.id}, **headers)
+        self.assertStatus(403)
+
+    def test_non_member_workspace_returns_404(self):
+        forbidden = WorkspaceFactory(name='Forbidden')
+        forbidden_budget = PlanBudgetFactory(workspace=forbidden)
+        self.put(
+            f'/api/workspaces/{forbidden.id}/default-budget', {'budget_id': forbidden_budget.id}, **self.auth_headers()
+        )
+        self.assertStatus(404)
+
+    def test_requires_auth(self):
+        self.put(f'/api/workspaces/{self.workspace.id}/default-budget', {'budget_id': self.budget.id})
         self.assertStatus(401)
 
 
@@ -865,98 +941,6 @@ class TestLeaveWorkspaceCurrentWorkspace(WorkspaceTestCase):
         self.assertNotEqual(self.member_user.current_workspace_id, ws_to_leave.id)
 
 
-class TestCurrencyEndpoints(WorkspaceTestCase):
-    """Tests for currency CRUD API endpoints."""
-
-    def test_list_currencies_success(self):
-        """Test listing currencies returns 200 for workspace member."""
-        data = self.get('/api/workspaces/currencies', **self.auth_headers())
-        self.assertStatus(200)
-        self.assertEqual(len(data), 4)
-
-    def test_list_currencies_without_auth_returns_401(self):
-        """Test listing currencies without authentication returns 401."""
-        self.get('/api/workspaces/currencies')
-        self.assertStatus(401)
-
-    def test_create_currency_success(self):
-        """Test creating currency as owner returns 201."""
-        payload = {'symbol': 'GBP', 'name': 'British Pound'}
-        data = self.post('/api/workspaces/currencies', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['symbol'], 'GBP')
-        self.assertEqual(data['name'], 'British Pound')
-
-    def test_create_duplicate_currency_returns_400(self):
-        """Test creating duplicate currency symbol returns 400."""
-        payload = {'symbol': 'PLN', 'name': 'Polish Zloty'}
-        self.post('/api/workspaces/currencies', payload, **self.auth_headers())
-        self.assertStatus(400)
-
-    def test_create_currency_as_member_returns_403(self):
-        """Test that member cannot create currencies."""
-        self.member_user.current_workspace = self.workspace
-        self.member_user.save()
-
-        token = self.create_token_for_user(self.member_user)
-        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
-
-        payload = {'symbol': 'GBP', 'name': 'British Pound'}
-        self.post('/api/workspaces/currencies', payload, **headers)
-        self.assertStatus(403)
-
-    def test_create_currency_as_viewer_returns_403(self):
-        """Test that viewer cannot create currencies."""
-        self.viewer_user.current_workspace = self.workspace
-        self.viewer_user.save()
-
-        token = self.create_token_for_user(self.viewer_user)
-        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
-
-        payload = {'symbol': 'GBP', 'name': 'British Pound'}
-        self.post('/api/workspaces/currencies', payload, **headers)
-        self.assertStatus(403)
-
-    def test_delete_currency_success(self):
-        """Test deleting currency as owner returns 204."""
-        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
-        self.delete(f'/api/workspaces/currencies/{gbp.id}', **self.auth_headers())
-        self.assertStatus(204)
-
-    def test_delete_currency_wrong_workspace_returns_404(self):
-        """Test deleting currency from other workspace returns 404."""
-        other_ws = WorkspaceFactory(name='Other')
-        other_currency = CurrencyFactory(workspace=other_ws, symbol='GBP', name='British Pound')
-        self.delete(f'/api/workspaces/currencies/{other_currency.id}', **self.auth_headers())
-        self.assertStatus(404)
-
-    def test_delete_currency_as_member_returns_403(self):
-        """Test that member cannot delete currencies."""
-        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
-
-        self.member_user.current_workspace = self.workspace
-        self.member_user.save()
-
-        token = self.create_token_for_user(self.member_user)
-        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
-
-        self.delete(f'/api/workspaces/currencies/{gbp.id}', **headers)
-        self.assertStatus(403)
-
-    def test_delete_currency_as_viewer_returns_403(self):
-        """Test that viewer cannot delete currencies."""
-        gbp = CurrencyFactory(workspace=self.workspace, symbol='GBP', name='British Pound')
-
-        self.viewer_user.current_workspace = self.workspace
-        self.viewer_user.save()
-
-        token = self.create_token_for_user(self.viewer_user)
-        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
-
-        self.delete(f'/api/workspaces/currencies/{gbp.id}', **headers)
-        self.assertStatus(403)
-
-
 class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
     """Tests for WorkspaceJWTAuth returning 400 when no workspace is active."""
 
@@ -980,10 +964,10 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
 
         endpoints = [
             '/api/workspaces/current',
-            '/api/budget-accounts',
-            '/api/workspaces/currencies',
+            '/api/accounts',
+            '/api/workspaces/enabled-currencies',
             '/api/transactions',
-            '/api/categories',
+            '/api/budgets',
         ]
 
         for endpoint in endpoints:
@@ -1003,14 +987,13 @@ class TestWorkspaceJWTAuth400(APIClientMixin, TestCase):
                 'date': '2025-01-15',
                 'description': 'x',
                 'amount': '10',
-                'currency': 'PLN',
                 'type': 'expense',
             },
             **headers,
         )
         self.assertStatus(400)
 
-        self.delete('/api/budget-accounts/1', **headers)
+        self.delete('/api/accounts/1', **headers)
         self.assertStatus(400)
 
 
@@ -1029,7 +1012,7 @@ class TestWorkspaceJWTAuthMembership(APIClientMixin, TestCase):
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        self.get('/api/budget-accounts', **headers)
+        self.get('/api/accounts', **headers)
         self.assertStatus(403)
 
     def test_workspace_scoped_endpoint_returns_200_for_valid_member(self):
@@ -1041,7 +1024,7 @@ class TestWorkspaceJWTAuthMembership(APIClientMixin, TestCase):
         token = create_access_token(user)
         headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 
-        self.get('/api/budget-accounts', **headers)
+        self.get('/api/accounts', **headers)
         self.assertStatus(200)
 
 
@@ -1064,26 +1047,11 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
 
         self.auth_token = create_access_token(self.viewer_user)
 
-        self.pln = Currency.objects.get(workspace=self.workspace, symbol='PLN')
-        self.account = BudgetAccountFactory(
-            workspace=self.workspace,
-            name='General',
-            default_currency=self.pln,
-            is_active=True,
-            display_order=0,
-            created_by=self.viewer_user,
-            updated_by=self.viewer_user,
-        )
-        self.period = BudgetPeriodFactory(
-            budget_account=self.account,
-            workspace=self.workspace,
-            name='Jan 2025',
-            start_date=date(2025, 1, 1),
-            end_date=date(2025, 1, 31),
-            created_by=self.viewer_user,
-        )
+        CurrencyCatalogService.enable(self.viewer_user, self.workspace.id, 'PLN')
+        self.account = AccountFactory(workspace=self.workspace, name='Main')
+        self.plan_budget = PlanBudgetFactory(workspace=self.workspace)
         self.category = CategoryFactory(
-            budget_period=self.period,
+            budget=self.plan_budget,
             workspace=self.workspace,
             name='Groceries',
             created_by=self.viewer_user,
@@ -1092,18 +1060,18 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
     def auth_headers(self):
         return {'HTTP_AUTHORIZATION': f'Bearer {self.auth_token}'}
 
-    def test_viewer_cannot_create_budget_account(self):
-        payload = {'name': 'New Account', 'default_currency_id': self.pln.id}
-        self.post('/api/budget-accounts', payload, **self.auth_headers())
+    def test_viewer_cannot_create_account(self):
+        payload = {'name': 'New Account', 'currency_code': 'PLN'}
+        self.post('/api/accounts', payload, **self.auth_headers())
         self.assertStatus(403)
 
-    def test_viewer_cannot_update_budget_account(self):
+    def test_viewer_cannot_update_account(self):
         payload = {'name': 'Updated Name'}
-        self.put(f'/api/budget-accounts/{self.account.id}', payload, **self.auth_headers())
+        self.put(f'/api/accounts/{self.account.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
-    def test_viewer_cannot_delete_budget_account(self):
-        self.delete(f'/api/budget-accounts/{self.account.id}', **self.auth_headers())
+    def test_viewer_cannot_delete_account(self):
+        self.delete(f'/api/accounts/{self.account.id}', **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_cannot_create_transaction(self):
@@ -1111,59 +1079,39 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
             'date': '2025-01-15',
             'description': 'Test',
             'amount': '100.00',
-            'currency': 'PLN',
             'type': 'expense',
-            'budget_period_id': self.period.id,
+            'account_id': self.account.id,
         }
         self.post('/api/transactions', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_cannot_update_category(self):
         payload = {'name': 'Updated Category'}
-        self.put(f'/api/categories/{self.category.id}', payload, **self.auth_headers())
+        self.put(f'/api/budgets/{self.plan_budget.id}/categories/{self.category.id}', payload, **self.auth_headers())
         self.assertStatus(403)
 
     def test_viewer_cannot_delete_category(self):
-        self.delete(f'/api/categories/{self.category.id}', **self.auth_headers())
+        self.delete(f'/api/budgets/{self.plan_budget.id}/categories/{self.category.id}', **self.auth_headers())
         self.assertStatus(403)
 
-    def test_viewer_cannot_create_budget(self):
-        budget = BudgetFactory(
-            budget_period=self.period,
-            workspace=self.workspace,
-            category=self.category,
-            currency=self.pln,
-            amount=100,
-            created_by=self.viewer_user,
-            updated_by=self.viewer_user,
-        )
+    def test_viewer_cannot_set_category_budget(self):
+        period = PeriodService.get_or_create_for_date(self.viewer_user, self.plan_budget, date(2025, 1, 15))
         payload = {
-            'budget_period_id': self.period.id,
             'category_id': self.category.id,
-            'currency': 'PLN',
+            'currency_code': 'PLN',
             'amount': '200.00',
         }
-        self.post('/api/budgets', payload, **self.auth_headers())
-        self.assertStatus(403)
-        budget.delete()
-
-    def test_viewer_cannot_delete_budget(self):
-        budget = BudgetFactory(
-            budget_period=self.period,
-            workspace=self.workspace,
-            category=self.category,
-            currency=self.pln,
-            amount=100,
-            created_by=self.viewer_user,
-            updated_by=self.viewer_user,
+        self.put(
+            f'/api/budgets/{self.plan_budget.id}/periods/{period.id}/category-budgets',
+            payload,
+            **self.auth_headers(),
         )
-        self.delete(f'/api/budgets/{budget.id}', **self.auth_headers())
         self.assertStatus(403)
 
-    def test_viewer_can_read_budget_accounts(self):
-        self.get('/api/budget-accounts', **self.auth_headers())
+    def test_viewer_can_read_accounts(self):
+        self.get('/api/accounts', **self.auth_headers())
         self.assertStatus(200)
 
     def test_viewer_can_read_transactions(self):
-        self.get(f'/api/transactions?budget_period_id={self.period.id}', **self.auth_headers())
+        self.get('/api/transactions', **self.auth_headers())
         self.assertStatus(200)

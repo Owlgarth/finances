@@ -3,45 +3,34 @@
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
-class BudgetSummaryCategoryItem(BaseModel):
-    """Schema for a single category in the budget summary."""
+class BudgetSummaryItem(BaseModel):
+    """Planned vs actual for one category in one currency."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
     category_id: int
-    category: str
-    currency: str
-    budget: Decimal
+    category_name: str
+    currency_code: str
+    planned: Decimal
     actual: Decimal
-    difference: Decimal
+    remaining: Decimal
 
 
-class CurrencySummary(BaseModel):
-    """Schema for currency summary in budget report."""
+class BudgetSummaryTotals(BaseModel):
+    """Per-currency totals across the summary."""
 
-    total_budget: Decimal
-    total_actual: Decimal
-    categories: list[BudgetSummaryCategoryItem]
-
-
-class CurrencyBalances(BaseModel):
-    """Schema for currency balances in summary."""
-
-    opening: Decimal
-    income: Decimal
-    expenses: Decimal
-    closing: Decimal
+    planned: Decimal
+    actual: Decimal
+    remaining: Decimal
 
 
-class BudgetSummaryOut(BaseModel):
-    """Schema for budget summary period info."""
+class BudgetSummaryBudget(BaseModel):
+    id: int
+    name: str
 
-    model_config = ConfigDict(from_attributes=True)
 
+class BudgetSummaryPeriod(BaseModel):
     id: int
     name: str
     start_date: date
@@ -49,14 +38,50 @@ class BudgetSummaryOut(BaseModel):
 
 
 class BudgetSummaryResponse(BaseModel):
-    """Schema for complete budget summary response."""
+    """Schema for the budget summary response."""
 
-    period: BudgetSummaryOut
-    currencies: dict[str, CurrencySummary]
-    balances: dict[str, CurrencyBalances]
+    budget: BudgetSummaryBudget
+    period: BudgetSummaryPeriod
+    items: list[BudgetSummaryItem]
+    totals: dict[str, BudgetSummaryTotals]
+
+
+class BudgetHistoryTotals(BaseModel):
+    """Per-currency planned/actual totals for one period."""
+
+    planned: Decimal
+    actual: Decimal
+
+
+class BudgetHistoryPeriod(BaseModel):
+    """One period's aggregate in the budget history report."""
+
+    id: int
+    name: str
+    start_date: date
+    end_date: date
+    totals: dict[str, BudgetHistoryTotals]
+
+
+class BudgetHistoryResponse(BaseModel):
+    """Planned vs actual totals per period, oldest first."""
+
+    budget: BudgetSummaryBudget
+    periods: list[BudgetHistoryPeriod]
+
+
+class AccountBalanceRow(BaseModel):
+    """Computed balance of a single account."""
+
+    account_id: int
+    account_name: str
+    currency_code: str
+    is_archived: bool
+    balance: Decimal
 
 
 class CurrentBalancesResponse(BaseModel):
     """Schema for current balances response."""
 
-    balances: dict[str, Decimal]
+    accounts: list[AccountBalanceRow]
+    totals: dict[str, Decimal]

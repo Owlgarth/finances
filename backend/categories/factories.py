@@ -10,7 +10,8 @@ class CategoryFactory(DjangoModelFactory):
     class Meta:
         model = Category
 
-    budget_period = factory.SubFactory('budget_periods.factories.BudgetPeriodFactory')
-    workspace = factory.LazyAttribute(lambda obj: obj.budget_period.workspace)
-    name = factory.Faker('word')
+    budget = factory.SubFactory('budgeting.factories.BudgetFactory')
+    workspace = factory.LazyAttribute(lambda obj: obj.budget.workspace)
+    name = factory.Sequence(lambda n: f'Category {n}')
+    is_archived = False
     created_by = factory.SubFactory('common.tests.factories.UserFactory')

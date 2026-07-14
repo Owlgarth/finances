@@ -238,24 +238,24 @@ export default function VerifyPage() {
 
 ## Dashboard Widget Component Pattern
 
-Period-scoped widgets follow this structure:
+Filter-scoped widgets (e.g. account- or budget-scoped) follow this structure:
 
 ```tsx
 interface Props {
-  periodId: number | null
+  budgetId: number | null
 }
 
-export default function MyWidget({ periodId }: Props) {
+export default function MyWidget({ budgetId }: Props) {
   const { data, isLoading } = useQuery({
-    queryKey: ['my-data', periodId],
+    queryKey: ['my-data', budgetId],
     queryFn: async () => {
-      if (!periodId) return null
-      return myApi.getData({ budget_period_id: periodId })
+      if (!budgetId) return null
+      return myApi.getData({ budget_id: budgetId })
     },
-    enabled: !!periodId,
+    enabled: !!budgetId,
   })
 
-  if (!periodId) return null
+  if (!budgetId) return null
   const items = data?.items ?? []
 
   return (
@@ -280,9 +280,13 @@ export default function MyWidget({ periodId }: Props) {
 }
 ```
 
-**Key conventions:** early-return `null` when `periodId` is null (no skeleton); `enabled: !!periodId` on `useQuery`; three rendering states (loading skeleton / empty message / data); always a `<Link>` to the detail page; skeletons use `bg-surface-muted rounded-sm animate-pulse`; container uses `border border-border rounded-sm bg-surface p-4`.
+**Key conventions:** early-return `null` when `budgetId` is null (no skeleton); `enabled: !!budgetId` on `useQuery`; three rendering states (loading skeleton / empty message / data); always a `<Link>` to the detail page; skeletons use `bg-surface-muted rounded-sm animate-pulse`; container uses `border border-border rounded-sm bg-surface p-4`.
 
-**Context-based variant:** A widget tightly coupled to the dashboard may call `useBudgetPeriod()` directly instead of taking a `periodId` prop — simpler parent JSX, less portable. Use sparingly.
+**Shared domain hooks:** Widgets read workspace data through the hooks in
+`hooks/useDomain.ts` (`useAccounts`, `useBudgets`, `useEnabledCurrencies`,
+`useMultiCurrency`, `useExtractionEnabled`) rather than threading props. Periods are
+per-budget, so period selection is local state on the Budget detail page — there is
+no global period context.
 
 ## State Refresh After Mutations
 
@@ -297,11 +301,13 @@ updateUser(updatedUser)
 ## API Client Pattern
 
 ```typescript
-export const categoriesApi = {
-  getAll: (params?: { budget_period_id?: number }) => api.get('/categories', { params }),
-  create: (data: { budget_period_id: number; name: string }) => api.post('/categories', data),
-  update: (id: number, data: { budget_period_id: number; name: string }) => api.put(`/categories/${id}`, data),
-  delete: (id: number) => api.delete(`/categories/${id}`),
+// Categories are nested under a budget (see budgetsApi in client.ts):
+export const budgetsApi = {
+  listCategories: (budgetId: number, includeArchived = false): Promise<Category[]> =>
+    api.get<Category[]>(`/budgets/${budgetId}/categories`, { params: { include_archived: includeArchived } }).then(r => r.data),
+  createCategory: (budgetId: number, data: { name: string }): Promise<Category> =>
+    api.post<Category>(`/budgets/${budgetId}/categories`, data).then(r => r.data),
+  // …update / archive / delete follow the same nested shape
 }
 ```
 
@@ -312,15 +318,16 @@ export const categoriesApi = {
 export type TransactionOrdering =
   | '-date' | 'date' | '-description' | 'description'
   | '-amount' | 'amount' | '-type' | 'type'
-  | '-category__name' | 'category__name' | '-currency__symbol' | 'currency__symbol';
+  | '-category__name' | 'category__name'
+  | '-account__name' | 'account__name' | '-account__currency__code' | 'account__currency__code';
 ```
 
 ## Contexts
 
 ```typescript
 const { user, isAuthenticated } = useAuth()
-const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace } = useWorkspace()
-const { selectedPeriod, selectedPeriodId } = useBudgetPeriod()
+const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace, userRole } = useWorkspace()
+// No global account/period context — use hooks/useDomain.ts and page-local period state.
 ```
 
 ## Naming Conventions
