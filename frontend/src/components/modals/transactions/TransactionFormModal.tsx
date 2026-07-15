@@ -138,7 +138,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
             <label htmlFor="tx-amount" className={labelClass}>
               {type === 'adjustment' ? 'Delta amount' : 'Amount'} {account ? `(${account.currency_code})` : ''}
             </label>
-            <input id="tx-amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus />
+            <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus />
           </div>
         </div>
 
@@ -182,7 +182,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
             </label>
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
-                <input type="number" step="0.01" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder="Original amount" className={inputClass} />
+                <input type="number" inputMode="decimal" step="0.01" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder="Original amount" className={inputClass} />
                 <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder="Currency" aria-label="Original currency" mono />
               </div>
             )}
