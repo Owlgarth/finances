@@ -14,7 +14,7 @@ function BalancesCard() {
     <div className="border border-border rounded-sm bg-surface p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-text flex items-center gap-2"><Wallet size={14} /> Accounts</h3>
-        <Link to="/accounts" className="text-xs text-primary hover:text-primary-hover">View all →</Link>
+        <Link to="/accounts" className="text-xs text-primary hover:text-primary-hover touch-hit">View all →</Link>
       </div>
       {isLoading ? (
         <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-6 bg-surface-muted rounded-sm animate-pulse" />)}</div>
@@ -24,8 +24,8 @@ function BalancesCard() {
         <div className="space-y-2">
           {data!.accounts.map((a) => (
             <div key={a.account_id} className="flex items-center justify-between text-sm">
-              <span className="text-text">{a.account_name}</span>
-              <span className="font-mono text-text">{formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}</span>
+              <span className="text-text truncate mr-2">{a.account_name}</span>
+              <span className="font-mono text-text whitespace-nowrap">{formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}</span>
             </div>
           ))}
         </div>
@@ -43,7 +43,7 @@ function RecentTransactions() {
     <div className="border border-border rounded-sm bg-surface p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-text flex items-center gap-2"><Receipt size={14} /> Recent activity</h3>
-        <Link to="/transactions" className="text-xs text-primary hover:text-primary-hover">View all →</Link>
+        <Link to="/transactions" className="text-xs text-primary hover:text-primary-hover touch-hit">View all →</Link>
       </div>
       {isLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-6 bg-surface-muted rounded-sm animate-pulse" />)}</div>
@@ -54,7 +54,7 @@ function RecentTransactions() {
           {items.map((t) => (
             <div key={t.id} className="flex items-center justify-between text-sm">
               <span className="text-text truncate mr-2">{t.description}</span>
-              <span className={`font-mono ${t.type === 'income' ? 'text-positive' : t.type === 'expense' ? 'text-negative' : 'text-warning'}`}>
+              <span className={`font-mono whitespace-nowrap ${t.type === 'income' ? 'text-positive' : t.type === 'expense' ? 'text-negative' : 'text-warning'}`}>
                 {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}{formatAmount(t.amount)} {multiCurrency ? t.currency_code : ''}
               </span>
             </div>
@@ -67,7 +67,7 @@ function RecentTransactions() {
 
 export default function Dashboard() {
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <h1 className="text-lg font-semibold text-text mb-6">Dashboard</h1>
       <BudgetInsights />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
