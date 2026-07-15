@@ -190,6 +190,26 @@ export default function Select<T extends string | number>({
     }
   }
 
+  // The search inputs are focusable, so keys pressed there bypass the trigger
+  // handler. Escape must be consumed here too (same reason as the trigger:
+  // a surrounding Modal's document-level listener would close the dialog),
+  // and Enter must not trigger implicit submission of a surrounding <form> —
+  // it picks the highlighted/first match instead.
+  function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      closePanel(true)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredOptions.length === 0) return
+      // Desktop keeps highlightedIndex valid on each keystroke; the mobile
+      // sheet has no highlight, so fall back to the first match.
+      const i = highlightedIndex >= 0 && highlightedIndex < filteredOptions.length ? highlightedIndex : 0
+      selectIndex(i)
+    }
+  }
+
   const triggerClass =
     'w-full flex items-center justify-between ' +
     'bg-surface border border-border rounded-none px-2 py-1.5 ' +
@@ -246,6 +266,7 @@ export default function Select<T extends string | number>({
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Search…"
                 aria-label="Search options"
                 className="w-full bg-background border border-border rounded-none px-2 py-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
@@ -297,6 +318,7 @@ export default function Select<T extends string | number>({
                   setSearchQuery(e.target.value)
                   setHighlightedIndex(0)
                 }}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Search…"
                 className="w-full bg-background border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
               />
