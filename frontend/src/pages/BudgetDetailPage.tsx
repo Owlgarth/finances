@@ -437,8 +437,9 @@ export default function BudgetDetailPage() {
         </form>
       )}
 
-      <Modal open={orderConfigOpen} onClose={() => setOrderConfigOpen(false)} size="sm" className="p-4">
-        <h2 className="text-base font-semibold text-text mb-1">Currency order</h2>
+      <Modal open={orderConfigOpen} onClose={() => setOrderConfigOpen(false)} size="sm" className="p-6">
+        {/* pr-8 keeps the heading clear of the absolute-positioned close X. */}
+        <h2 className="text-base font-semibold text-text mb-1 pr-8">Currency order</h2>
         <p className="text-xs text-text-muted mb-4">
           The switcher cycles through currencies in this order; the first one is shown by default.
         </p>
