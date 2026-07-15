@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Trash2, TriangleAlert, X } from 'lucide-react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { useOverlay } from '../../hooks/useOverlay'
 import toast from 'react-hot-toast'
 import { getApiErrorMessage } from '../../utils/errors'
 
@@ -26,14 +27,9 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
     }
   }, [isOpen])
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  // Stack-aware Escape + scroll lock + focus restore. Without the stack, this
+  // panel's own Escape listener would co-fire with a sheet opened above it.
+  const panelRef = useOverlay(isOpen && !!workspace, onClose)
 
   const isOwner = userRole === 'owner'
   const canEditName = userRole === 'owner' || userRole === 'admin'
@@ -76,15 +72,18 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
       <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
         <div className="fixed inset-0 bg-scrim backdrop-blur-sm transition-opacity" onClick={onClose} aria-hidden="true" />
 
-        <div className="relative transform overflow-hidden rounded-sm bg-surface border border-border text-left transition-all sm:my-8 sm:w-full sm:max-w-lg">
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          className="relative transform overflow-hidden rounded-sm bg-surface border border-border text-left transition-all outline-none sm:my-8 sm:w-full sm:max-w-lg"
+        >
           <div className="px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
             <div className="flex items-center justify-between mb-4">
               <h3 id="ws-settings-title" className="text-base font-semibold text-text">Workspace Settings</h3>
               <button
                 onClick={onClose}
-                autoFocus
                 aria-label="Close settings"
-                className="rounded-sm text-text-muted hover:text-text"
+                className="rounded-sm text-text-muted hover:text-text touch-hit"
               >
                 <X size={16} />
               </button>

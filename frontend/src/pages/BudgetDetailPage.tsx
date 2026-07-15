@@ -153,25 +153,26 @@ export default function BudgetDetailPage() {
     }))
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <Link to="/budgets" className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4">
+    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
+      <Link to="/budgets" className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]">
         <ArrowLeft size={13} /> Budgets
       </Link>
 
-      <div className="flex items-center justify-between mb-6">
+      {/* Mobile: title first line, period switcher wraps to a full-width row below. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-lg font-semibold text-text">{budget?.name ?? 'Budget'}</h1>
         {allPeriods.length > 0 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 max-sm:w-full">
             <button
               type="button"
               onClick={() => goToPeriod(-1)}
               disabled={!hasPrev}
               aria-label="Previous period"
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
             >
               <ChevronLeft size={14} />
             </button>
-            <div className="w-56">
+            <div className="w-56 max-sm:w-auto max-sm:flex-1">
               <Select
                 value={periodId}
                 onChange={setPeriodId}
@@ -186,7 +187,7 @@ export default function BudgetDetailPage() {
               disabled={!hasNext || isPlanningNext}
               aria-label="Next period"
               title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? 'Plan the next period' : undefined}
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
             >
               <ChevronRight size={14} />
             </button>
@@ -209,14 +210,15 @@ export default function BudgetDetailPage() {
             <thead>
               {multiCurrency && (
                 <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
-                  <th />
+                  <th className="sticky left-0 z-10 bg-surface" />
                   {activeCurrencies.map((code) => (
                     <th key={code} colSpan={3} className="text-center px-4 py-2 border-l border-border">{code}</th>
                   ))}
                 </tr>
               )}
               <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
-                <th className="text-left px-4 py-2">Category</th>
+                {/* Sticky: row identity stays put while amount columns scroll (S3). */}
+                <th className="text-left px-4 py-2 sticky left-0 z-10 bg-surface">Category</th>
                 {activeCurrencies.map((code) => (
                   <Fragment key={code}>
                     <th className={`text-right px-4 py-2 ${multiCurrency ? 'border-l border-border' : ''}`}>Planned</th>
@@ -229,7 +231,9 @@ export default function BudgetDetailPage() {
             <tbody className="divide-y divide-border">
               {rows.map(({ category, cells }) => (
                 <tr key={category.id}>
-                  <td className="px-4 py-2 text-text whitespace-nowrap">{category.name}</td>
+                  <td className="px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 bg-surface max-sm:max-w-[9rem] overflow-hidden text-ellipsis">
+                    {category.name}
+                  </td>
                   {cells.map(({ currencyCode, planned, actual, remaining }) => {
                     const cellKey = `${category.id}:${currencyCode}`
                     return (
@@ -239,17 +243,19 @@ export default function BudgetDetailPage() {
                             <span className="inline-flex items-center gap-1">
                               <input
                                 type="number"
+                                inputMode="decimal"
                                 step="0.01"
                                 value={cellValue}
                                 onChange={(e) => setCellValue(e.target.value)}
                                 className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                                 autoFocus
                               />
-                              <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode }); setEditingCell(null) }} className="text-positive"><Check size={14} /></button>
-                              <button onClick={() => setEditingCell(null)} className="text-text-muted"><X size={14} /></button>
+                              <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode }); setEditingCell(null) }} className="text-positive touch-hit"><Check size={14} /></button>
+                              <button onClick={() => setEditingCell(null)} className="text-text-muted touch-hit"><X size={14} /></button>
                             </span>
                           ) : canEditPlan ? (
-                            <button onClick={() => { setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary">
+                            /* Whole cell is the tap target, not just the digits. */
+                            <button onClick={() => { setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
                               {formatAmount(planned)}
                             </button>
                           ) : (
