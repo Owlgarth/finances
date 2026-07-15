@@ -29,10 +29,9 @@ const navItems = [
 interface SidebarProps {
   collapsed: boolean
   onToggleCollapse: () => void
-  onClose?: () => void
 }
 
-export default function Sidebar({ collapsed, onToggleCollapse, onClose }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { workspace } = useWorkspace()
 
@@ -42,7 +41,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
     <>
       <aside
         className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-200 z-50
-          ${collapsed ? 'w-16' : 'w-60'}`}
+          ${collapsed ? 'w-14' : 'w-60'}`}
       >
         {/* Logo + collapse toggle */}
         <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
@@ -50,7 +49,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
             <span className="font-sans font-semibold text-primary text-base tracking-tight select-none">Denarly</span>
           )}
           <button
-            onClick={onClose ?? onToggleCollapse}
+            onClick={onToggleCollapse}
             className={`p-1.5 rounded-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors
               ${collapsed ? 'mx-auto' : ''}`}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -59,12 +58,10 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
           </button>
         </div>
 
-        {/* Workspace selector */}
-        {!collapsed && (
-          <div className="p-3 space-y-3 flex-shrink-0 mt-3">
-            <WorkspaceSelector onOpenSettings={handleOpenSettings} />
-          </div>
-        )}
+        {/* Workspace selector — icon-only in the collapsed rail (responsive.md tablet spec) */}
+        <div className={`flex-shrink-0 mt-3 ${collapsed ? 'p-2' : 'p-3 space-y-3'}`}>
+          <WorkspaceSelector onOpenSettings={handleOpenSettings} collapsed={collapsed} />
+        </div>
 
         {/* Nav links */}
         {workspace ? (
@@ -74,7 +71,6 @@ export default function Sidebar({ collapsed, onToggleCollapse, onClose }: Sideba
                 key={item.to}
                 to={item.to}
                 end={item.exact}
-                onClick={onClose}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1 group
                   ${isActive

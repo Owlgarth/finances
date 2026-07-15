@@ -94,7 +94,7 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
           <label htmlFor="acc-opening" className={labelClass}>Opening balance</label>
           <input
             id="acc-opening"
-            type="number"
+            type="number" inputMode="decimal"
             step="0.01"
             value={openingBalance}
             onChange={(e) => setOpeningBalance(e.target.value)}

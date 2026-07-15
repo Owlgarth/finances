@@ -59,7 +59,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="budget-weeks" className={labelClass}>Every N weeks</label>
-              <input id="budget-weeks" type="number" min="1" value={weeks} onChange={(e) => setWeeks(e.target.value)} className={inputClass} />
+              <input id="budget-weeks" type="number" inputMode="numeric" min="1" value={weeks} onChange={(e) => setWeeks(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Anchor date</label>
@@ -84,7 +84,7 @@ export default function BudgetsPage() {
   const [createOpen, setCreateOpen] = useState(false)
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Budgets</h1>
         {canManageAccounts && (
@@ -101,7 +101,7 @@ export default function BudgetsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {budgets.map((b) => (
-            <Link key={b.id} to={`/budgets/${b.id}`} className="border border-border rounded-sm bg-surface p-4 hover:bg-surface-hover transition-colors">
+            <Link key={b.id} to={`/budgets/${b.id}`} className="border border-border rounded-sm bg-surface p-4 hover:bg-surface-hover active:bg-surface-hover transition-colors">
               <div className="flex items-center gap-2">
                 <PieChart size={16} className="text-text-muted" />
                 <span className="text-sm font-medium text-text">{b.name}</span>
