@@ -149,6 +149,32 @@ export default function BudgetDetailPage() {
     setEditingCell(null)
   }
 
+  // Shared between the desktop table header and the mobile card list header.
+  const currencySwitcher = multiCurrency && (
+    <div className="flex items-center justify-center gap-1">
+      <button
+        type="button"
+        onClick={() => goToCurrency(-1)}
+        aria-label="Previous currency"
+        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+      >
+        <ChevronLeft size={12} />
+      </button>
+      <span aria-live="polite" className="min-w-[6ch] text-center text-text">
+        {activeCurrency}
+        <span className="ml-1.5 text-text-muted">{currencyIdx + 1}/{activeCurrencies.length}</span>
+      </span>
+      <button
+        type="button"
+        onClick={() => goToCurrency(1)}
+        aria-label="Next currency"
+        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+      >
+        <ChevronRight size={12} />
+      </button>
+    </div>
+  )
+
   // Rows: one per active category, with planned/actual/remaining for the
   // currency currently shown.
   const rows = categories
@@ -216,35 +242,16 @@ export default function BudgetDetailPage() {
       {summaryLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : (
-        <div className="border border-border rounded-sm bg-surface overflow-x-auto">
+        <>
+        {/* Desktop: ledger table. Hidden on mobile in favor of the card list below. */}
+        <div className="border border-border rounded-sm bg-surface overflow-x-auto max-sm:hidden">
           <table className="w-full text-sm">
             <thead>
               {multiCurrency && (
                 <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                   <th className="sticky left-0 z-10 bg-surface" />
                   <th colSpan={3} className="px-4 py-1 font-medium">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => goToCurrency(-1)}
-                        aria-label="Previous currency"
-                        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-                      >
-                        <ChevronLeft size={12} />
-                      </button>
-                      <span aria-live="polite" className="min-w-[6ch] text-center text-text">
-                        {activeCurrency}
-                        <span className="ml-1.5 text-text-muted">{currencyIdx + 1}/{activeCurrencies.length}</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => goToCurrency(1)}
-                        aria-label="Next currency"
-                        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-                      >
-                        <ChevronRight size={12} />
-                      </button>
-                    </div>
+                    {currencySwitcher}
                   </th>
                 </tr>
               )}
@@ -301,6 +308,76 @@ export default function BudgetDetailPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile: card per category — full-width numbers so thousands stay legible. */}
+        <div className="sm:hidden space-y-2">
+          {multiCurrency && (
+            <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted py-0.5">
+              {currencySwitcher}
+            </div>
+          )}
+          {rows.map(({ category, planned, actual, remaining }) => {
+            const cellKey = `${category.id}:${activeCurrency}`
+            return (
+              <div key={category.id} className="border border-border rounded-sm bg-surface">
+                <div className="px-4 py-2 border-b border-border text-sm font-medium text-text text-center truncate">
+                  {category.name}
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border text-center">
+                  <div className="px-2 py-2 min-w-0">
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Planned</div>
+                    {editingCell === cellKey ? (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          value={cellValue}
+                          onChange={(e) => setCellValue(e.target.value)}
+                          className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
+                          autoFocus
+                        />
+                        <div className="flex items-center gap-5">
+                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label="Save planned amount" className="text-positive touch-hit"><Check size={16} /></button>
+                          <button onClick={() => setEditingCell(null)} aria-label="Cancel" className="text-text-muted touch-hit"><X size={16} /></button>
+                        </div>
+                      </div>
+                    ) : canEditPlan ? (
+                      <button
+                        onClick={() => { setEditingCell(cellKey); setCellValue(planned) }}
+                        className="w-full min-h-[36px] font-mono text-sm text-text hover:text-primary truncate touch-hit"
+                      >
+                        {formatAmount(planned)}
+                      </button>
+                    ) : (
+                      <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-text truncate">
+                        {formatAmount(planned)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-2 py-2 min-w-0">
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Actual</div>
+                    <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-text-muted truncate">
+                      {formatAmount(actual)}
+                    </div>
+                  </div>
+                  <div className="px-2 py-2 min-w-0">
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Remaining</div>
+                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-text'}`}>
+                      {formatAmount(remaining)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          {rows.length === 0 && (
+            <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">
+              No categories yet.
+            </div>
+          )}
+        </div>
+        </>
       )}
 
       {canWrite && (
