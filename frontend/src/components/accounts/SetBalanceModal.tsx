@@ -66,7 +66,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
           <label htmlFor="target-balance" className={labelClass}>New balance</label>
           <input
             id="target-balance"
-            type="number"
+            type="number" inputMode="decimal"
             step="0.01"
             value={target}
             onChange={(e) => setTarget(e.target.value)}

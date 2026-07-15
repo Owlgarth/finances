@@ -8,6 +8,9 @@ import { useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { useIsTouch } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
+import ActionSheet from '../components/common/ActionSheet'
 import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
@@ -20,7 +23,10 @@ export default function AccountsPage() {
   const queryClient = useQueryClient()
   const { canManageAccounts, canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
+  const isTouch = useIsTouch()
   const [showArchived, setShowArchived] = useState(false)
+  // Touch replacement for the small inline card action links (plan decision 7).
+  const [cardAction, setCardAction] = useState<Account | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
@@ -71,12 +77,13 @@ export default function AccountsPage() {
   const openTransfer = (repeat: Transfer | null = null) => { setRepeatTransfer(repeat); setTransferOpen(true) }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Accounts</h1>
         <div className="flex items-center gap-2">
+          {/* Hidden on mobile: the FAB quick-add has Transfer. */}
           {canWrite && (
-            <button onClick={() => openTransfer()} className={secondaryButtonClass}>
+            <button onClick={() => openTransfer()} className={`${secondaryButtonClass} max-sm:hidden`}>
               <ArrowLeftRight size={13} className="inline mr-1" /> Transfer
             </button>
           )}
@@ -100,7 +107,13 @@ export default function AccountsPage() {
             const Icon = TYPE_ICON[account.type]
             const balance = balanceByAccount.get(account.id) ?? account.opening_balance
             return (
-              <div key={account.id} className="border border-border rounded-sm bg-surface p-4">
+              <div
+                key={account.id}
+                {...(isTouch && canManageAccounts ? tappableProps(() => setCardAction(account)) : {})}
+                className={`border border-border rounded-sm bg-surface p-4 ${
+                  isTouch && canManageAccounts ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                }`}
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <Icon size={16} className="text-text-muted flex-shrink-0" />
@@ -118,7 +131,8 @@ export default function AccountsPage() {
                 <div className="mt-3 font-mono text-xl text-text">
                   {formatAmount(balance)} {multiCurrency ? '' : account.currency_code}
                 </div>
-                {canManageAccounts && (
+                {/* Inline links are pointer-fine only — card tap opens the sheet on touch. */}
+                {canManageAccounts && !isTouch && (
                   <div className="mt-3 flex items-center gap-3 text-xs">
                     <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">Set balance…</button>
                     <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> Edit</button>
@@ -142,7 +156,7 @@ export default function AccountsPage() {
       )}
 
       <div className="mt-4">
-        <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">
+        <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer max-sm:min-h-[44px]">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Show archived accounts
         </label>
@@ -155,18 +169,26 @@ export default function AccountsPage() {
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {transfers!.items.map((t) => (
               <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <span className="text-text">{t.from_account_name} → {t.to_account_name}</span>
-                  {t.description && <span className="text-text-muted ml-2 truncate">{t.description}</span>}
+                <div className="min-w-0 flex-1">
+                  <div className="text-text truncate">
+                    {t.from_account_name} → {t.to_account_name}
+                    {t.description && <span className="text-text-muted"> · {t.description}</span>}
+                  </div>
                   <div className="text-[10px] font-mono text-text-muted">{t.date}</div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-text">
-                    {formatAmount(t.from_amount)} {t.from_currency_code}
-                    {t.from_currency_code !== t.to_currency_code && ` → ${formatAmount(t.to_amount)} ${t.to_currency_code}`}
+                <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                  {/* Cross-currency: second small line instead of one long string
+                      that would overflow 375px. */}
+                  <span className="font-mono text-text text-right">
+                    <span className="whitespace-nowrap">{formatAmount(t.from_amount)} {t.from_currency_code}</span>
+                    {t.from_currency_code !== t.to_currency_code && (
+                      <span className="block text-[10px] text-text-muted whitespace-nowrap">
+                        → {formatAmount(t.to_amount)} {t.to_currency_code}
+                      </span>
+                    )}
                   </span>
                   {canWrite && (
-                    <button onClick={() => openTransfer(t)} className="text-text-muted hover:text-primary" title="Repeat">
+                    <button onClick={() => openTransfer(t)} className="text-text-muted hover:text-primary touch-hit" title="Repeat" aria-label="Repeat transfer">
                       <Repeat size={13} />
                     </button>
                   )}
@@ -177,6 +199,24 @@ export default function AccountsPage() {
         </div>
       )}
 
+      <ActionSheet
+        open={!!cardAction}
+        onClose={() => setCardAction(null)}
+        title={cardAction?.name}
+        actions={[
+          { label: 'Set balance…', icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
+          { label: 'Edit', icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
+          {
+            label: cardAction?.is_archived ? 'Unarchive' : 'Archive',
+            icon: Archive,
+            onSelect: () =>
+              cardAction && archiveMutation.mutate({ id: cardAction.id, archived: !cardAction.is_archived }),
+          },
+          ...(cardAction?.is_archived
+            ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => cardAction && setDeleting(cardAction) }]
+            : []),
+        ]}
+      />
       <AccountFormModal open={formOpen} onClose={() => setFormOpen(false)} account={editing} />
       {setBalanceFor && (
         <SetBalanceModal open={!!setBalanceFor} onClose={() => setSetBalanceFor(null)} account={setBalanceFor} />

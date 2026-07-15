@@ -255,3 +255,118 @@ button {
 .rdp-inline .rdp-today:not(.rdp-outside) {
   font-weight: 600;
 }
+
+/* ============================================================
+   Mobile foundation (M1) — safe areas + iOS input-zoom fix
+   ============================================================ */
+
+/* Safe-area padding for fixed bars on notched devices (requires viewport-fit=cover).
+   Compose with regular padding on a child, or calc() at point of use, when both are needed. */
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+}
+
+/* iOS Safari zooms the page when a focused form control's font-size is below 16px.
+   Plan decision 9: on mobile, all text-entry controls render at 16px — a deliberate
+   exception to the 11–16px type scale, applied once here at the primitive level.
+   !important is required to beat per-component utilities like `text-xs`. */
+@media (max-width: 639.98px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================================
+   Overlay motion (M2) — durations/easings per design/patterns.md §1
+   (bottom sheet in 120ms ease-out, out 80ms ease-in; scrim fades along)
+   ============================================================ */
+
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scrim-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.animate-sheet-in  { animation: sheet-in 120ms cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-sheet-out { animation: sheet-out 80ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-scrim-in  { animation: scrim-in 120ms ease-out; }
+.animate-scrim-out { animation: scrim-out 80ms ease-in forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-in,
+  .animate-sheet-out,
+  .animate-scrim-in,
+  .animate-scrim-out {
+    animation-duration: 1ms; /* keep `forwards` end-state semantics, skip the motion */
+  }
+}
+
+/* ============================================================
+   Date sheet (M6) — the rdp-inline calendar inside a mobile bottom
+   sheet gets 44px touch targets; desktop popup/inline keep the
+   compact geometry above.
+   ============================================================ */
+.rdp-sheet {
+  --rdp-day-height: 2.75rem;         /* 44px */
+  --rdp-day_button-width: 2.75rem;
+  --rdp-day_button-height: 2.75rem;
+  --rdp-nav_button-height: 2.75rem;
+  --rdp-nav_button-width: 2.75rem;
+}
+.rdp-sheet .rdp-root {
+  font-size: 0.875rem;
+}
+
+/* ============================================================
+   Touch interaction (M7)
+   ============================================================ */
+
+/* We provide our own press feedback via active: states. */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hit-area expansion for small icon buttons (responsive.md recipe):
+   visual size unchanged, tappable area grows 8px per side. */
+@layer utilities {
+  .touch-hit { position: relative; }
+  .touch-hit::after { content: ''; position: absolute; inset: -8px; }
+}
+
+/* Hover-revealed elements that must stay visible on touch devices
+   (attachment tile actions). Declared after @tailwind utilities on
+   purpose: ties with `.opacity-0` resolve in favor of this rule. */
+@media (pointer: coarse) {
+  .touch-reveal { opacity: 1; }
+}
+
+/* ============================================================
+   Reduced motion (N2) — collapse all transitions/animations to
+   near-zero while preserving `forwards` end states. The sheet
+   classes above already opt out individually; this catches the
+   rest (sidebar width, FAB scale, hovers).
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

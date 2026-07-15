@@ -1,412 +1,253 @@
-# Denarly — Ultimate Implementation Plan
+# Denarly — Mobile-Native UI Implementation Plan
 
-**Status: approved.** This is the single source of truth for the redesign and roadmap work.
-It supersedes `.ipm/IMPLEMENTATION_PLAN.md`. Authoritative design details live in
-`docs/design/domain-redesign.md` (the design doc); feature verdicts in `docs/audit-2026-07.md`;
-product framing in `docs/roadmap.md`. Tasks below are deliberately small; each is implementable
-in isolation once its dependencies are done. Tasks specify behavior ("how it should work"), not
-code — expand into a code-level spec when picking one up.
+**Status: approved.** Single source of truth for the mobile-native responsive UI
+work. It supersedes the completed domain-redesign plan, archived verbatim at
+`docs/plans/2026-06-domain-redesign-plan.md`. Authoritative design details live in
+`design/responsive.md`, `design/components.md` (§19 Bottom Navigation), `design/patterns.md`,
+and `design/tokens.md`. Tasks below are deliberately small; each is implementable in isolation
+once its dependencies are done. Tasks specify behavior ("how it should work"), not code —
+expand into a code-level spec when picking one up.
 
 ---
 
 ## Part I — Context (everything a task implementer needs to know)
 
-### What Denarly is
-A self-hostable personal-finance web app: Django 6 + Django Ninja + PostgreSQL + Celery/Redis
-backend (`backend/`), React 19 + TypeScript + Vite + TanStack Query frontend (`frontend/`),
-JWT auth, multi-tenant workspaces with roles (owner/admin/member/viewer), GDPR export/import,
-2FA, legal-consent machinery. Conventions live in `AGENTS.md` and the `.agents/skills/` folder
-(django-backend, frontend-react, backend-testing, data-deletion-gdpr, auth-security,
-celery-tasks, email-sending, docker-infra) — **all mandatory reading for the files you touch**.
+### Goal
+Make Denarly on a phone feel like a native application, not a shrunken website: bottom tab
+navigation, bottom sheets instead of dropdowns and centered modals, 44px touch targets, no
+hover-dependent affordances, safe-area awareness. The mobile web UX doubles as the **interaction
+spec for future mobile clients** — every pattern shipped here (sheet anatomy, tab composition,
+quick-add flow) is a decision a future native/Capacitor client inherits. Web and mobile may
+diverge in *interaction* (dropdown vs. option-list sheet) but never in *capability* or data rules.
 
-### Current (old) domain model — being replaced
-`Workspace → BudgetAccount → BudgetPeriod → {period-scoped Category, Budget(allocation),
-Transaction, PlannedTransaction, CurrencyExchange, PeriodBalance}` plus per-workspace `Currency`
-rows (4 created per workspace, PLN-biased) and an `ExchangeShortcut` app. Pain: 6 concepts before
-a first transaction, categories die each period, money implicitly lives "in currencies" inside
-periods, stored balance caches with user-facing recalculate endpoints.
+### The core architectural pattern: adaptive components
+Callers never branch on device. A shared component decides its presentation internally:
 
-### Target domain model
+```tsx
+export default function Select<T>(props: SelectProps<T>) {
+  const { isMobile } = useBreakpoint()
+  if (isMobile) return <SelectSheet {...props} />   // bottom sheet, full-width option rows
+  return <SelectDropdown {...props} />               // anchored dropdown panel (current)
+}
 ```
-Workspace
-├── WorkspaceMember                  (roles unchanged)
-├── WorkspaceCurrency                (enabled ISO currencies; usually one)
-├── Account                          holds money: name, type cash|bank|other, currency,
-│   │                                opening_balance, archived, display_order
-│   │                                balance = opening + Σrecords (COMPUTED, never stored)
-│   ├── Transaction                  income|expense|adjustment; account FK, category FK, date,
-│   │                                amount (in account currency), description,
-│   │                                original_amount?/original_currency? (info facet),
-│   │                                period DERIVED from category→budget + date (no period FK)
-│   ├── Transfer                     from/to account, from/to amount (equal if same currency),
-│   │                                date, description; not income/expense
-│   └── PlannedTransaction           same shape as Transaction (status pending|done|cancelled)
-└── Budget                           plans money: name, description, color, icon, is_active,
-    │                                display_order, cadence (monthly | every-N-weeks anchored)
-    ├── Category                     PERSISTENT, budget-scoped, archivable
-    ├── Period                       auto-created lazily per cadence; is_custom for manual ranges
-    └── CategoryBudget               planned amount per period × category × currency
-```
-Removed concepts: `CurrencyExchange` (→ Transfer), `ExchangeShortcut`, `PeriodBalance`
-(→ computed balances + adjustment transactions), per-workspace `Currency` rows, the `weeks`
-field, the period copy feature, demo data forced on registration.
 
-### Decisions already made (do not re-litigate; details in the design doc §)
-| # | Decision | § |
+Same props, same `onChange` contract, different presentation — every existing call site gets the
+mobile behavior for free. Form/selection **state lives above the variant components**, so a
+rotation or resize mid-interaction (variants swap live via media query) never loses user input.
+
+Three levels of "different on mobile", used together, cheapest that suffices:
+1. **CSS breakpoints** — same interaction, different layout (spacing, columns, wrapping).
+2. **Adaptive rendering** (`useBreakpoint`) — different interaction pattern (dropdown → sheet,
+   hover actions → action sheet, drawer → bottom nav).
+3. **Capability detection** (`pointer: coarse`) — touch-specific behavior independent of width.
+
+### Where we are vs. the design spec
+`design/responsive.md` + `design/components.md` §19 already specify the target mobile system.
+The implementation predates the spec and diverges:
+
+| Area | Spec says | Code does today |
 |---|---|---|
-| 1 | Budgets are spending plans, **not envelopes** (no reservation of account money) | 2.1 |
-| 2 | Periods auto-create **lazily on access**, unique-constraint-guarded, no scheduler; per-budget cadence monthly or every N weeks; custom ranges advanced; cadence changes apply forward only | 2.2 |
-| 3 | Period membership of records is **derived from date**, never a stored FK | 2.3 |
-| 4 | Balances always **computed** (indexed aggregates); reconciliation = **adjustment** transaction; no recalculate endpoints, no snapshots unless profiling demands | 2.4 |
-| 5 | Transfer ergonomics replace shortcuts: last-used pair preselected, auto-fill at 2 accounts, "Repeat" on history rows; converted card payments = **one expense** with optional original_amount/original_currency facet (settled amount drives all math; lands in the settled currency's budget) | 2.5 |
-| 6 | **Global ISO 4217 currency table** + per-workspace enablement; one currency at workspace creation; `is_custom` escape hatch; single enabled currency ⇒ zero currency UI | 2.6 |
-| 7 | Single-account invisibility: exactly one active account ⇒ no pickers/columns anywhere | 2.7 |
-| 8 | Accounts with history are **archived, never deleted** (PROTECT); budget deletion prompts delete-or-uncategorize its transactions | 7 |
-| 9 | Plan history is per period: copy-forward pre-fills only; past periods immutable views | 2.2 |
-| 10 | **Fresh schema**: all Django migrations deleted and regenerated; **no data migrations**; history preserved via the **legacy import endpoint** | 6 |
-| 11 | GDPR export bumps to **v3**; main import handles v3 only; all v1/v2 knowledge lives in the legacy importer | 7 |
-| 12 | Receipt parser = standalone FastAPI service in this monorepo (`services/receipt-parser/`), OpenAI-compatible client, optional to run | roadmap §6 |
+| Mobile breakpoint | ≤640px | `max-width: 767px` (`MainLayout.tsx`) |
+| Mobile nav | Bottom nav, 5 slots, center FAB | Hamburger top bar + slide-in drawer |
+| Tablet (641–1024) | 56px icon-only sidebar + tooltips | Auto-collapse at 768–1023 (close, unverified) |
+| Modals on mobile | Bottom sheet, slide-up 120ms | Partially: `Modal.tsx` has `max-sm:` sheet styling, no animation/handle/scroll-lock |
+| Select | (unspecified for mobile) | Anchored dropdown at all sizes |
+| Row actions | Never hover-only on touch | `Transactions.tsx` uses `opacity-0 group-hover:opacity-100` |
+| Touch targets | 44×44px minimum | Icon buttons ~26px (`p-1` + 13–14px icon) |
+| Safe areas | `env(safe-area-inset-bottom)` on fixed bars | Not used; `viewport-fit=cover` missing from `index.html` |
 
-### Cutover for existing deployments
-Old version → GDPR export (v2 JSON) → deploy new version on a **fresh database** → register →
-`POST /users/import-legacy` with the file. The importer (task B11) creates `Main <CODE>` accounts,
-converts exchanges to transfers, **dedupes the linked transactions** the old FE auto-created per
-exchange (expense of `from_amount` in `from_currency` + income of `to_amount` in `to_currency`,
-same date, description = exchange description or `Currency exchange: <FROM> → <TO>`; manual
-convention `<FROM> to <TO>`, e.g. "PLN to USD"), solves opening balances so computed balances
-equal the export's latest closing balances, and returns a verification report. Full algorithm:
-design doc §6.1.
+Existing assets to build on: `useMediaQuery` hook, `Modal.tsx` scrim/panel structure, the
+`z-bottom-nav`/`z-modal` z-index tokens in `tailwind.config.js`, `Transactions.tsx` already
+renders a row list (not a table), Accounts/Budgets already render cards.
 
-### Naming discipline
-One name per concept across models/API/UI/docs. Forbidden after redesign: "budget account",
-"period balance", "exchange" as a record noun ("exchange currency" as a verb on a cross-currency
-transfer is fine). "Account" means only money-holding accounts; the auth entity is "user"/"profile".
+### Decisions already made (do not re-litigate)
+| # | Decision |
+|---|---|
+| 1 | Canonical breakpoints per `design/responsive.md`: **mobile ≤640px, tablet 641–1024px, desktop ≥1025px**. One `useBreakpoint()` hook is the single definition; `MainLayout`'s 767px and the `frontend-react` skill's "md-first" rule are updated to match (skill update in D1, code in M1). |
+| 2 | Adaptive components share one API; the variant switch lives inside the component; callers are device-agnostic; state lives above the variants (rotation-safe). |
+| 3 | The **bottom sheet is the universal mobile container**: modals, selects, action menus, date picker, "More" navigation all use one `BottomSheet` primitive (drag handle, scrim dismiss, ≤92dvh, safe-area padding, body scroll-lock). |
+| 4 | `Select` on mobile = sheet with full-width 44px option rows (check mark on selected); `searchable` keeps a pinned search input at the sheet top. |
+| 5 | Mobile nav = bottom bar per `components.md` §19: **Dashboard · Transactions · [FAB] · Budgets · More**. The More sheet holds Accounts, Planned, Members, Settings, workspace switcher, user menu. Final tab composition may be revisited once in the task spec (M4), then frozen. |
+| 6 | The center **FAB opens a quick-add action sheet**: New transaction, Transfer, From receipt (only when extraction enabled), Planned — available from every page. |
+| 7 | Touch row actions: **tap the row → action sheet** (or detail). No hover reveals, no swipe/long-press for v1 — this *revises* `responsive.md`'s "swipe or long-press" line (doc updated in D1); swipe is a possible later enhancement. |
+| 8 | Density is kept: 32px rows, 11–16px type. True tables (Budget detail, Members) horizontally scroll on mobile per spec — no table→card conversions; list-style rows (Transactions) stay lists. |
+| 9 | Text inputs get **≥16px font-size on mobile** (iOS auto-zoom prevention) — a deliberate, documented exception to the type scale, applied at the primitive level. |
+| 10 | Design docs in `design/` remain authoritative. Where implementation must deviate, the doc is updated in the same PR — never silently. |
+| 11 | PWA-ready shell (manifest, standalone display, safe areas) ships in this plan; an actual store-distributed client (Capacitor/native) is **out of scope**, only enabled by it. |
 
-### Sidebar target
-Dashboard · Accounts · Budgets · Transactions · Planned · Members · Settings (7 destinations;
-removed pages: Exchanges, Balances, Budget Periods, Budget Accounts, top-level Categories).
+### Verification standard (every task)
+Follow the `frontend-react` skill; `npm run lint` clean. Verify in browser devtools at
+**390×844** and **375×667** (portrait) plus a desktop width for regression; anything with fixed
+bars or sheets also checked in landscape. Real-device (or simulator) check for tasks touching
+safe areas, keyboard, or scroll behavior (M2, M4, S1, N2). Dark mode checked on every screen pass.
 
 ---
 
 ## Part II — Tasks
 
 Sizing: **S** ≈ half a day, **M** ≈ a day, **L** ≈ 2–3 days of focused work.
-Every backend task: follow `django-backend` + `backend-testing` skills, ruff check/format, tests
-for every service path. Every frontend task: `frontend-react` skill, design tokens, `npm run lint`.
+**Detailed task specs** live in `docs/tasks/` (e.g. `docs/tasks/M1-breakpoint-foundation.md`) —
+when a spec exists, it overrides the summary below. Specs are written in waves, only for tasks
+whose dependencies are done or in flight. Wave 1: M1–M4.
 
-**Detailed task specs** live in `docs/tasks/` (e.g. `docs/tasks/B1-global-currencies.md`) — when
-a spec exists, it overrides the summary below. Specs are written in waves: only for tasks whose
-dependencies are done or in flight, so they never describe code that later tasks will reshape.
-Wave 1 (specs ready): B1–B6, P1, P2.
+**Branching:** tasks are individually mergeable to `main` — the desktop experience must never
+regress mid-track. The only ordering constraint is the dependency graph.
 
-**Migrations during the redesign:** B1–B8 generate migrations normally — they are throwaway
-(databases are disposable, decision 10). B9 deletes every migration file and regenerates clean
-initials.
+### Track M — Mobile foundation (primitives; sequential unless noted)
 
-**Branching:** the whole B/F redesign happens on one long-lived feature branch. Between B4 and
-the end of the F-track, parts of the legacy frontend are intentionally broken against the new
-backend — the specs call out each breakage. Merge to main only when F-track restores parity.
+**M1 — Breakpoint + device foundation (S)** · deps: —
+Single `useBreakpoint()` hook (`{ isMobile, isTablet, isDesktop }`, decision 1 ranges, built on
+`useMediaQuery`) + `useIsTouch()` (`pointer: coarse`). Migrate `MainLayout` off its ad-hoc
+767px/1023px queries. `index.html`: `viewport-fit=cover`; app icon replaces the Vite favicon.
+Safe-area utilities (e.g. `pb-safe`) in the Tailwind layer. Mobile input font-size ≥16px at the
+form-primitive level (decision 9). *Done:* grep finds no ad-hoc mobile max-width queries outside
+the hook; a notched-phone simulator shows no content under the home indicator; focusing an input
+on iOS does not zoom.
 
-### Track B — Backend domain redesign (sequential unless noted)
+**M2 — BottomSheet primitive + Modal unification (M)** · deps: M1
+`common/BottomSheet.tsx`: scrim (tap to dismiss), drag-handle bar, slide-up 120ms
+`cubic-bezier(0.32,0.72,0,1)` / slide-down 80ms exit, `max-h-[92dvh]` with internal scroll,
+safe-area bottom padding, **body scroll-lock while open**, Escape + focus return. `Modal.tsx`
+delegates to it on mobile (replacing the current static `max-sm:` classes) — all existing modals
+become animated sheets with zero call-site changes. Plus `common/ActionSheet.tsx` on top of it:
+a titled list of 44px action rows + destructive styling + cancel. *Done:* every existing modal
+opens as a sheet on mobile with the spec'd motion; background never scrolls behind an open sheet;
+desktop modals pixel-identical to before.
 
-**B1 — Global currencies (M)** · deps: —
-New `Currency` global table (ISO 4217: code, name, symbol, decimals; seeded by a management
-command) + `is_custom` workspace-owned rows + `WorkspaceCurrency` enablement join.
-`WorkspaceService.create_workspace` takes exactly one currency code (no 4-currency default).
-Endpoints: `GET /currencies` (global list), `GET/POST/DELETE /workspaces/{id}/currencies`;
-disabling blocked while referenced. *Done:* single-currency workspace never needs a currency
-param anywhere downstream; enable/disable rules tested.
+**M3 — Adaptive Select (M)** · deps: M2
+Split `common/Select.tsx` per the Part I pattern: desktop keeps the current anchored dropdown
+verbatim; mobile renders a `BottomSheet` — options as full-width 44px rows, `Check` on the
+selected row, `searchable` pins the search input at the top, `error`/`disabled`/`mono` behave
+identically. Same exported API, zero call-site changes. *Done:* every Select in the app (filters,
+forms, pagination page-size) opens as a sheet on mobile; keyboard/type-ahead behavior on desktop
+unchanged; a resize across 640px mid-open doesn't lose the selection in the parent form.
 
-**B2 — Accounts app (M)** · deps: B1
-New `accounts` app: model per Part I diagram; service + CRUD API (`/accounts`), admin-role gated,
-workspace-scoped; archive/unarchive (archived hidden from pickers, kept in history); balance
-endpoint (`GET /accounts/{id}/balance`) computing opening + Σ transactions ± transfers via
-aggregates; default `Main` account created with every workspace (workspace currency). Deleting
-allowed only with zero records (else API says archive). *Done:* balance correct under
-income/expense/adjustment/transfer fixtures; default account exists for new workspaces;
-PROTECT verified.
+**M4 — Mobile navigation shell (L)** · deps: M2
+Implement `components.md` §19 in `MainLayout`/new `layout/BottomNav.tsx`: 5 slots per decision 5,
+`z-bottom-nav`, safe-area padding, 44px targets, active = `text-primary`. **More** opens a sheet
+listing the remaining destinations + workspace switcher + user menu (reusing `WorkspaceSelector`/
+`UserMenu` logic). **FAB** opens the quick-add sheet (decision 6) wired to the existing
+transaction/transfer/receipt/planned modals from any route. Remove the hamburger drawer; the
+mobile top bar slims to page context. Content gets `padding-bottom` clearing the bar. *Done:*
+drawer code deleted; all 7 destinations reachable in ≤2 taps; recording an expense from the
+Dashboard = FAB → New transaction → form; no layout shift on route change; tablet/desktop
+untouched.
 
-**B3 — Budgeting app: Budget + Period (L)** · deps: B1 · spec: `docs/tasks/B3-budgeting-app.md`
-New consolidated app **`budgeting`** with `Budget` (successor of BudgetAccount; optional display
-currency; cadence `monthly` | `every N weeks` + anchor | `custom`) and `Period` (no `weeks`
-field; `is_custom`). Lazy auto-creation: on any access to a budget+date without a covering
-period, create it (get_or_create + unique `(budget, start_date)`, concurrency-safe) and run the
-copy-forward hook (filled by B4). Custom periods: explicit ranges, non-overlapping; only custom
-periods editable/deletable. Legacy apps stay running until B4/B8. *Done:* touching a fresh month
-materializes the period; concurrent creation yields one row; N-weeks cadence slices correctly
-from the anchor incl. dates before it; changing cadence never reshapes existing periods.
+**M5 — Tablet sidebar spec alignment (S)** · deps: M1
+Verify/align 641–1024px against `responsive.md`: 56px icon-only sidebar, tooltips on nav icons,
+workspace selector and user menu icon-only. Fix drift found. *Done:* the `responsive.md` tablet
+table matches reality item by item.
 
-**B4 — Categories re-parent + CategoryBudget (M/L)** · deps: B3 · spec:
-`docs/tasks/B4-categories-categorybudgets.md`
-`Category` becomes budget-scoped and persistent (ci-unique name per budget, `is_archived`).
-New `CategoryBudget` in the budgeting app (period × category × currency, unique per triple);
-copy-forward implemented. **Deletes the legacy allocation app `budgets`** and patches/removes
-dependent legacy code (period copy service, legacy budget-summary report, export sections).
-API nests under `/budgets/...` (design §3/§4). *Done:* categories survive across periods;
-per-period planned amounts independent (editing July never touches June — tested).
+**M6 — Adaptive DatePicker (S/M)** · deps: M2
+`DatePicker.tsx` mobile variant: inline calendar inside a `BottomSheet`, ≥44px day cells
+(react-day-picker theming per the `frontend-react` third-party rules), today/clear affordances.
+Desktop popover unchanged. *Done:* picking a date in the transaction form is comfortable
+one-handed on 375px; no `rdp` style leaks to the desktop popover.
 
-**B5 — Transactions rework (L)** · deps: B2, B4
-`Transaction`: add `account` FK (PROTECT), `adjustment` to type choices, optional
-`original_amount`/`original_currency` (must both be set or both null; original_currency must
-differ from the account currency), drop `budget_period` FK and `currency` FK (currency = the
-account's). Server defaults `account` when exactly one active account exists. Period/budget
-derivation helper: category→budget + date→period (creating the period lazily via B3). Editing may
-change account, category, date — derivation follows. Composite indexes: `(account, date)`,
-`(workspace, date)`, `(category, date)`. Category is optional (uncategorized affects account
-balance, excluded from budget actuals). *Done:* CRUD + derivation + single-account defaulting +
-facet validation tested; adjustment type affects balance but is excluded from income/expense
-reporting.
+**M7 — Touch interaction sweep (M)** · deps: M2, and pairs with S-track
+Repo-wide sweep: no `opacity-0 group-hover:` action reveals on touch — list rows get tap → 
+`ActionSheet` (Edit / Delete / row-specific actions); interactive icons get ≥44px hit areas
+(padding or `::after` expansion per `responsive.md`); pressed feedback via `active:` states;
+UA tap-highlight replaced by ours. *Done:* auditing every screen with a mouse unplugged
+(touch-emulation) reaches every action; no dead hover affordances remain on mobile.
 
-**B6 — Transfers (M)** · deps: B2
-New `Transfer` model per diagram + service + `/transfers` CRUD. Same currency ⇒ one amount (both
-sides equal, validated); different currencies ⇒ both amounts required (rate implied, not stored).
-Affects both account balances; never income/expense. From/to must differ and belong to the
-workspace. *Done:* both variants move balances correctly; validation matrix tested.
+### Track S — Screen passes (after M-track lands; S1–S6 parallelizable)
 
-**B7 — Planned transactions alignment (S)** · deps: B5
-`PlannedTransaction` gets the same shape: account FK, no period FK, no own currency FK; the
-execute-planned Celery task creates the real transaction on the planned account (idempotency
-guard kept, `celery-tasks` skill). *Done:* execution produces a correct transaction; task retry
-semantics unchanged.
+**S1 — Transactions mobile pass (M)** · deps: M3, M4, M7
+Filters compact into a mobile filter row (account/type via adaptive Select or a filter sheet);
+active-filter chips dismissible; row tap → action sheet (Edit / Delete); amount/description
+layout tightened for 375px (truncation rules per `data-formatting.md`); form + receipt modals as
+sheets with keyboard-safe submit; pagination controls 44px. *Done:* add-expense flow is
+one-handed; long descriptions and multi-currency amounts never collide or wrap rows taller
+than spec.
 
-**B8 — Remove legacy apps + rebuild reports (M/L)** · deps: B5, B6, B7
-Delete apps `currency_exchanges`, `exchange_shortcuts`, `period_balances`, **`budget_accounts`,
-`budget_periods`** (routers, services, tests, factories), the legacy per-workspace
-`workspaces.Currency` model and its `/workspaces/currencies` endpoints, and the legacy `General`
-BudgetAccount creation in `create_workspace`. Rebuild `reports`: `budget-summary` (planned vs
-actual per category for a budget+period, computed from budgeting models + transactions) and
-`current-balances` (per account + per currency totals). *Done:* no references to deleted apps
-anywhere; report numbers match fixtures computed by hand.
+**S2 — Accounts + Transfers mobile pass (S/M)** · deps: M3, M7
+Account cards full-width, tap → action sheet (Edit / Set balance / Transfer / Archive);
+transfer + set-balance forms verified as sheets (amount inputs `inputmode="decimal"`); archived
+toggle reachable. *Done:* full account lifecycle + a cross-currency transfer completed on 375px
+without zooming or horizontal scroll.
 
-**B9 — Fresh migrations + test infrastructure (M)** · deps: B1–B8
-Delete **all** migration files in every app; generate new initial migrations; rebuild Factory Boy
-factories, `conftest.py`, and seeds for the new schema; full test suite green on a fresh database.
-Decision 10 applies: no schema-evolution compatibility with old databases, anywhere. *Done:*
-`manage.py migrate` from empty DB succeeds; whole suite passes; `makemigrations --check` clean.
+**S3 — Budgets + Budget detail mobile pass (M/L)** · deps: M3, M7
+Budget cards full-width. Detail page: category table keeps 32px rows with horizontal scroll
+(decision 8) — category name column sticky, amount columns never truncated; planned-cell editing
+on touch = tap → numeric editor (`inputmode="decimal"`); period switcher + budget settings +
+category management as sheets. *Done:* the monthly ritual (open budget, tweak 5 planned amounts,
+check remaining) is comfortable on a phone; sticky column scrolls correctly in both themes.
 
-**B10 — GDPR v3 export + account deletion (M)** · deps: B9
-`export_all_data` v3: accounts, transfers, budgets/periods/categories/category-budgets,
-transactions (incl. original facet), planned — no period balances, no shortcuts. Main import
-accepts v3 only. `delete_account` explicit deletion order per design doc §7 (transfers,
-transactions, planned, category budgets, periods, categories, budgets, accounts, workspace
-currencies, workspace) — defense-in-depth per `data-deletion-gdpr`. *Done:* export→wipe→import
-round-trip reproduces balances exactly; deletion leaves zero orphans (tested against PROTECT
-chains).
+**S4 — Dashboard + Planned mobile pass (M)** · deps: M4, M7
+Dashboard: balance cards 1-per-row, budget progress readable at 375px, recent records tappable;
+`BudgetInsights` table scrolls horizontally within its container (page body never scrolls
+sideways). Planned: rows + execute/edit/cancel via action sheet. *Done:* first screen after
+mobile login is fully informative with zero horizontal page scroll.
 
-**B11 — Legacy import endpoint (L)** · deps: B10
-`POST /users/import-legacy` implementing design doc §6.1 in full: v1→v2 normalization reuse;
-ISO mapping with `is_custom` fallback; idempotent `Main <CODE>` account creation; budget
-accounts→Budgets; periods→`is_custom` Periods preserving exact ranges; category merge by
-case-insensitive name per budget; allocations→CategoryBudgets; transactions→`Main <CODE>` by
-currency; exchanges→Transfers; **linked-transaction dedup** (exact match first: date + amount +
-currency + type + description equal to the exchange's; fallback: date/amount/currency/type +
-description matching `Currency exchange: * → *` or `<FROM> to <TO>` case-insensitive; each
-transaction consumed at most once); opening balances solved from latest exported closing
-balances; response = verification report (per-currency computed vs expected balance, created
-counts, deduped list) with mismatches as warnings, not failures. Rate-limited like GDPR import.
-*Done:* fixture built from a real old-format export imports with balances matching and both
-linked-pair conventions deduped; re-import doesn't duplicate accounts.
+**S5 — Members mobile pass (M)** · deps: M3, M7
+`WorkspaceMembersPage` (largest page, desktop table): mobile = member rows (name, role badge,
+status) with tap → action sheet (change role / remove / resend invite); invite flow as sheet;
+desktop table unchanged. *Done:* an owner can invite and change a role entirely from a phone.
 
-**B12 — Demo data + opt-in sample data (S)** · deps: B9
-Rewrite `workspaces/demo_fixtures.py` for the new model (accounts, transfers, budgets with
-cadences, categories). Registration gains a "start with sample data" flag (default **off**);
-`create_workspace(create_demo=...)` honors it. *Done:* fresh registration is empty but usable
-(default account, default budget, current period, starter categories); flag adds sample records.
+**S6 — Settings/Profile + auth + legal mobile pass (M)** · deps: M2
+`ProfilePage` sections stack single-column; 2FA setup, recovery codes (copy targets 44px),
+legacy import, delete/reset flows verified as sheets; Login/Register single-column with ≥16px
+inputs; legal/consent pages readable. *Done:* register → 2FA setup → legacy import all
+completable on a phone.
 
-### Track F — Frontend (F1 after B-track API stabilizes; F2–F6 parallelizable after F1)
+### Track N — Native shell readiness (N1 anytime after M1)
 
-**F1 — Navigation shell (M)** · deps: B8
-New sidebar per Part I target; routes added (`/accounts`) and removed (`/exchanges`, `/balances`,
-`/budget-periods`, `/budget-accounts`, top-level `/categories`); workspace switcher stays top.
-Old pages/components deleted with their routes. *Done:* 7 destinations; no dead links; removed
-concepts absent from all labels.
+**N1 — PWA shell (S)** · deps: M1
+Web app manifest (name, short_name, icons incl. maskable, `display: standalone`, theme/background
+colors for both themes), iOS meta tags (`apple-mobile-web-app-*`, apple-touch-icon), Vite asset
+wiring. No service worker / offline in this task. *Done:* Add to Home Screen on iOS + Android
+launches full-screen with correct icon, name, and status-bar color in both themes.
 
-**F2 — Accounts UI (M)** · deps: F1, B2
-Accounts section: card per account (name, type icon, balance, currency chip only when
-multi-currency); create/edit/archive; "Set balance…" opens an adjustment flow (user types the
-real balance, app computes and shows the delta before saving). Archived accounts behind a toggle.
-*Done:* full lifecycle through UI; single-account workspace shows one card and no account
-concepts elsewhere.
-
-**F3 — Transfers UI (M)** · deps: F2, B6
-Transfer form (from Accounts + the global add action): last-used pair preselected (persisted per
-user/workspace), auto-filled when exactly two active accounts; cross-currency shows both amount
-fields + implied rate readout; same-currency shows one. Transfer history list with "Repeat"
-(prefills all but amounts/date). Delete exchange modals/pages and shortcut management UI.
-*Done:* weekly PLN→USD flow takes amounts-only typing after the first time; no exchange UI
-remains.
-
-**F4 — Budget view (L)** · deps: F1, B3, B4
-Budget page = category table (planned | actual | remaining, per currency column group when
-multi-currency) + period switcher (current period default; past periods read as historical
-plan-vs-actual, decision 9) + inline category management (add/rename/archive) + budget settings
-(name, color/icon, cadence with N-weeks input, custom-period management for `is_custom` budgets).
-Planned-amount cells editable in place. *Done:* monthly ritual = tweak pre-filled numbers;
-history browsable; cadence changes visible from next period only.
-
-**F5 — Transactions UI (M)** · deps: F1, B5
-List: account column + filter (hidden at one account), adjustment rows visually distinct,
-original-amount secondary line ("−51.20 zł · $12.99"). Form: account picker (hidden at one
-account), "Paid in another currency?" toggle revealing original amount+currency, category
-optional, date inline picker kept. Editing can move a transaction between accounts (bulk
-reassignment of a filtered selection — needed post-legacy-import to split `Main`). *Done:*
-single-currency single-account user sees zero new complexity; bulk account reassignment works.
-
-**F6 — Dashboard + Planned rebuild (M)** · deps: F2, F4
-Dashboard on the new model: account balance cards, current-period budget progress, recent
-records. Planned page aligned to account-based records. *Done:* no component reads removed
-endpoints; dashboard follows `dataviz`-consistent styling with existing tokens.
-
-**F7 — Onboarding (S)** · deps: F1, B12
-Registration: workspace name + **one currency** + optional sample-data checkbox (default off).
-First login lands on a usable workspace (default account/budget/period/starter categories from
-B12). *Done:* register → first expense recorded in ≤ 3 interactions after login.
-
-**F8 — Legacy import UI (S)** · deps: F1, B11
-Settings/profile: upload legacy export JSON → progress → render the verification report
-(per-currency balance check, created counts, deduped linked transactions) with guidance to
-reconcile warnings via account adjustments. *Done:* full old→new cutover achievable by a
-non-technical user from the UI.
-
-### Track P — Receipt parser service (independent; anytime)
-
-**P1 — Contract (S)** · deps: —
-`services/receipt-parser/CONTRACT.md`: versioned JSON schema — items (name, quantity, unit price,
-line total), total, optional currency/date/merchant, per-field confidence + warnings, structured
-error shape. ≥ 3 worked examples (typical, partial, unreadable). *Done:* schema reviewed and
-frozen as v1.
-
-**P2 — FastAPI service (M)** · deps: P1
-`POST /parse` (multipart JPEG/PNG/HEIC/PDF → contract JSON), `GET /health`; bearer token (env);
-OpenAI-compatible chat-completions client (env: base URL, model, key) — local (Ollama/vLLM) or
-hosted by config only; PDF pages rendered to images, multi-page merge; stateless, nothing
-persisted; unreadable input → contract error, never 500. Dockerfile + compose service + README.
-*Done:* contract tests green against a mocked model; provider swap = env change.
-
-**P3 — Quality harness (M)** · deps: P2
-Fixture receipts (incl. PLN, multiple formats/languages) with expected outputs; scoring script
-(item recall, totals accuracy); document a recommended local vision model and its measured
-scores. *Done:* one command prints per-fixture scores against a live model.
-
-### Phase 2 — Receipts in Denarly (after Track B+F merged)
-
-**R1 — Attachment storage backend (M)** · deps: B9
-`TransactionAttachment` model (multiple per transaction; image/PDF; size-capped); private bucket
-in existing S3-compatible storage, short-lived signed URLs (`docker-infra` dual-URL rules);
-upload/download/delete endpoints role-gated like the transaction. GDPR: files in export, deleted
-with transaction/account/user. *Done:* round-trip works; direct bucket access denied; deletion
-verified in storage.
-
-**R2 — Line items backend (S)** · deps: B9
-`TransactionItem` (ordered; name, quantity, unit price, line total) child of Transaction; CRUD
-nested under the transaction. Items are informational — transaction `amount` stays the source of
-truth; API returns items sum so the UI can hint mismatches. In GDPR v3 export. *Done:* CRUD +
-ordering tested; export includes items.
-
-**R3 — Line items editor UI (M)** · deps: R2, F5
-Items table in transaction detail: add/edit/reorder/delete; non-blocking mismatch hint when
-Σitems ≠ amount. Fully functional with no parser configured. *Done:* manual item entry pleasant
-(keyboard row-to-row); hint never blocks saving.
-
-**R4 — Attachments UI (S)** · deps: R1, F5
-Upload (file picker + mobile camera capture), thumbnail/preview via signed URLs, PDF indicator,
-delete with confirm. *Done:* attach/view/remove from transaction detail on desktop + mobile
-viewport.
-
-**R5 — Extraction integration (L)** · deps: R3, R4, P2
-Env-configured parser URL + token; unset ⇒ every extraction affordance hidden (UI identical to
-manual-only). "Extract items" on an attachment dispatches a Celery task calling the parser;
-pending state on the transaction; result opens a **review screen** (low-confidence fields
-flagged per contract warnings; user edits then confirms replace/append); failure = retryable
-error state, never silent, never blocking manual work. *Done:* end-to-end against a live parser;
-outage degrades gracefully; no-config renders zero dead buttons.
-
-**R6 — Receipt-first creation (M)** · deps: R5
-"New transaction from receipt": upload → extraction → pre-filled transaction form (amount =
-detected total, date if detected, items populated, attachment linked); user picks
-account/category, confirms; cancel saves nothing. *Done:* grocery receipt → confirmed transaction
-in one flow; cancel leaves no residue (incl. stored file).
-
-**R7 — Privacy/legal update (S)** · deps: R1
-Receipts are personal data processed partly by a configurable LLM service: update
-`privacy-policy.md` (+ terms if needed), bump version for re-consent, `seed_legal_documents`.
-*Done:* legal pages describe attachment storage and optional external processing; re-consent
-triggers.
-
-### Phase 3 — UI/UX consistency (after Track F)
-
-**U1 — Primitive audit + fixes (M)** · deps: F1–F6
-Inventory every primitive (inputs, selects, buttons, modals, date pickers, tables) against
-`design/tokens.md`: borders (the known dropdown-border defect), focus rings, radii, spacing,
-hover/disabled, dark-mode parity. Fix at primitive level; checklist recorded in
-`design/components.md`. *Done:* inventory complete; all listed defects fixed or ticketed;
-dropdown borders correct in both themes everywhere.
-
-**U2 — Interaction patterns + sweep (M)** · deps: U1
-One canonical pattern each: create/edit/delete flow, destructive confirm, validation + error
-display, empty states, loading states — documented in `design/patterns.md`; sweep all screens to
-conform. *Done:* same action type behaves identically everywhere; deviations fixed.
+**N2 — Mobile polish pass (M)** · deps: M2, M4
+`overscroll-behavior` so sheet/list scrolling never chains to the page; momentum scrolling inside
+sheets; keyboard avoidance for sheet forms (visualViewport — submit button never hidden behind
+the keyboard); scroll position restoration per tab; `prefers-reduced-motion` disables sheet/nav
+animations. *Done:* a form in a sheet with the keyboard open keeps its submit button visible on a
+real device; no rubber-band scroll leaks; reduced-motion verified.
 
 ### Docs
 
-**D1 — Documentation rewrite (M)** · deps: B12, F8
-`docs/architecture.md` (new hierarchy + diagram), `README.md` (features, quick start incl. parser
-service + legacy import cutover guide), `AGENTS.md` + affected `.agents/skills/` (model map in
-`data-deletion-gdpr`, scoping in `django-backend`), `docs/permissions.md`. Delete/rewrite stale
-references to removed concepts. *Done:* grep for forbidden terms (Part I) returns nothing in
-docs; cutover guide tested by following it verbatim.
+**D1 — Design docs + skill alignment (S/M)** · deps: M1–M7 (start after M-track, finalize last)
+Update `design/responsive.md` (breakpoint hook as canonical source, bottom nav shipped, row
+actions = tap → action sheet per decision 7, 16px mobile input exception), `design/components.md`
+(BottomSheet, ActionSheet, adaptive Select/DatePicker anatomy), `design/patterns.md` (adaptive
+component pattern, quick-add flow), and the `frontend-react` skill (breakpoint rule replacing
+"md-first", adaptive-component pattern, BottomSheet usage, input font-size rule). Add a short
+`docs/mobile-ux.md` capturing the interaction spec for future mobile clients (decision framing
+from Part I). *Done:* docs match shipped behavior; grep for "hamburger", "drawer", "swipe or
+long-press" in design docs returns nothing stale.
 
 ---
 
 ## Progress Tracker
-- [x] B1 Global currencies
-- [x] B2 Accounts app
-- [x] B3 Budget + Period rework
-- [x] B4 Categories + CategoryBudget
-- [x] B5 Transactions rework
-- [x] B6 Transfers
-- [x] B7 Planned alignment
-- [x] B8 Remove legacy apps + reports
-- [x] B9 Fresh migrations + test infra
-- [x] B10 GDPR v3 + deletion
-- [x] B11 Legacy import endpoint
-- [x] B12 Demo data + opt-in samples
-- [x] F1 Navigation shell
-- [x] F2 Accounts UI
-- [x] F3 Transfers UI
-- [x] F4 Budget view
-- [x] F5 Transactions UI
-- [x] F6 Dashboard + Planned
-- [x] F7 Onboarding
-- [x] F8 Legacy import UI
-- [x] P1 Parser contract
-- [x] P2 Parser service
-- [x] P3 Quality harness
-- [x] R1 Attachment storage
-- [x] R2 Line items backend
-- [x] R3 Line items UI
-- [x] R4 Attachments UI
-- [x] R5 Extraction integration
-- [x] R6 Receipt-first creation
-- [x] R7 Privacy/legal update
-- [x] U1 Primitive audit + fixes
-- [x] U2 Interaction patterns
-- [x] D1 Documentation rewrite
+- [x] M1 Breakpoint + device foundation
+- [x] M2 BottomSheet primitive + Modal unification
+- [x] M3 Adaptive Select
+- [x] M4 Mobile navigation shell
+- [x] M5 Tablet sidebar spec alignment
+- [x] M6 Adaptive DatePicker
+- [x] M7 Touch interaction sweep
+- [x] S1 Transactions mobile pass
+- [x] S2 Accounts + Transfers mobile pass
+- [x] S3 Budgets + Budget detail mobile pass
+- [x] S4 Dashboard + Planned mobile pass
+- [x] S5 Members mobile pass
+- [x] S6 Settings/Profile + auth + legal mobile pass
+- [x] N1 PWA shell
+- [x] N2 Mobile polish pass
+- [x] D1 Design docs + skill alignment
 
 ## Dependency Graph
 ```
-B1 ─► B2 ─► B5 ─► B7 ─┐         P1 ─► P2 ─► P3   (independent track)
-B1 ─► B3 ─► B4 ─► B5  │
-      B2 ─► B6 ─┬► B8 ─► B9 ─► B10 ─► B11 ─► F8
-      B5 ───────┘        B9 ─► B12 ─► F7
-B8 ─► F1 ─► F2 ─► F3          B9 ─► R1 ─► R4 ─► R5 ─► R6
-      F1 ─► F4 ─► F6          B9 ─► R2 ─► R3 ─► R5   (R5 also needs P2)
-      F1 ─► F5                R1 ─► R7
-F1–F6 ─► U1 ─► U2             B12,F8 ─► D1
+M1 ─► M2 ─► M3 ─► S1, S2, S3, S5        M1 ─► N1
+M1 ─► M4 ─► S1, S4                      M2, M4 ─► N2
+M1 ─► M5                                M2 ─► M6, M7, S6
+M7 ─► S1, S2, S3, S4, S5                M1–M7 ─► D1 (finalize after S/N)
 ```
 
 ## Suggested execution order
-1. B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9 (the redesign core; P1–P3 in parallel anytime)
-2. B10 → B11 → B12, then F1 → (F2, F4, F5 in parallel) → F3, F6 → F7, F8
-3. R1 + R2 in parallel → R3, R4 → R5 → R6, R7
-4. U1 → U2 → D1
+1. M1 → M2 (the two everything depends on)
+2. M3 + M4 in parallel → M5, M6, M7
+3. S1 (highest-traffic screen first) → S3 → S2, S4, S5, S6 in any order / parallel
+4. N1 anytime after M1; N2 after the shell settles; D1 closes the plan

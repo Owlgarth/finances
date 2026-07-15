@@ -38,34 +38,50 @@ Override the library's own CSS variables (e.g. `--rdp-*` in react-day-picker v9)
 
 For grid/table-based widgets (calendar grids, data tables), set `table-layout: fixed` + `width: 100%` on the grid so columns fill the container evenly.
 
-## Responsive Breakpoints
+## Responsive Breakpoints & Adaptive Components
 
-Use `md` (768px) as the primary responsive breakpoint for layout changes — it covers tablets in portrait. Avoid `lg` (1024px) as the first breakpoint:
+Canonical device tiers (see `design/responsive.md`): **mobile <640px, tablet 640–1023px,
+desktop ≥1024px**, snapped to Tailwind's `sm`/`lg`. In JS use `useBreakpoint()` from
+`hooks/useBreakpoint.ts` — never write ad-hoc `useMediaQuery('(max-width: …)')` calls. In CSS,
+mobile = `max-sm:`, desktop = `lg:`. For grid layouts `md:` remains fine as a middle step:
 
 ```tsx
-// Good — tablet users (768px+) get the adapted layout
 <div className="grid grid-cols-1 md:grid-cols-3">
 ```
 
+Input-device behavior (hover reveals, hit areas) keys on `useIsTouch()` (`pointer: coarse`),
+not width. Never gate an action behind hover on touch: list rows open a `common/ActionSheet`
+on tap instead, and the hover-revealed buttons are **not rendered** when `isTouch` (invisible
+`opacity-0` buttons still intercept taps).
+
+**Adaptive component pattern** (`design/patterns.md` §13): when a component needs a different
+mobile presentation, branch *inside* the component on `useBreakpoint()` and keep one exported
+API — zero call-site changes. State lives above the variants so a resize across the breakpoint
+mid-interaction loses nothing. `Modal`, `Select`, and `DatePicker` already do this.
+
+Mobile rules: text-entry controls are forced to 16px on mobile globally in `index.css` (iOS
+zoom prevention — don't undo per-input); amount inputs get `inputMode="decimal"`; interactive
+elements meet 44px (shared button classes and `SegmentedControl` carry `max-sm:min-h-[44px]`;
+small icon buttons use the `.touch-hit` utility, but not on adjacent buttons whose expanded
+hit areas would overlap).
+
 ## Modal Pattern
 
-Fixed overlay, centered content, X close button:
+Use `common/Modal.tsx` — it renders a centered panel on desktop and delegates to
+`common/BottomSheet.tsx` on mobile (animated bottom sheet with scroll-lock, stack-aware
+Escape, focus return, keyboard avoidance). Don't hand-roll fixed-overlay markup:
 
 ```tsx
-{isOpen && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center">
-    <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-    <div className="relative z-10 w-full max-w-md rounded-sm bg-surface p-6">
-      <button onClick={onClose} className="absolute right-4 top-4 text-text-muted hover:text-text">
-        <X size={20} />
-      </button>
-      {/* Modal content */}
-    </div>
-  </div>
-)}
+<Modal open={isOpen} onClose={onClose} size="md" className="p-6">
+  <h2 className={modalTitleClass}>Title</h2>
+  {/* content */}
+</Modal>
 ```
 
-When a component manages multiple modals, use separate boolean state for each. Modals can chain by closing one and opening another (`onEdit={() => { setShowDetail(false); setShowEdit(true) }}`).
+Non-modal sheets (pickers, action menus) use `BottomSheet` / `ActionSheet` directly
+(`design/components.md` §21).
+
+When a component manages multiple modals, use separate boolean state for each. Modals can chain by closing one and opening another (`onEdit={() => { setShowDetail(false); setShowEdit(true) }}`). `ActionSheet` actions close the sheet before running, so they chain safely.
 
 ## File Structure
 

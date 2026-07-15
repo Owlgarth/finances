@@ -7,9 +7,12 @@ import { usePermissions } from '../hooks/usePermissions'
 import toast from 'react-hot-toast'
 import Skeleton from '../components/common/Skeleton'
 import EmptyState from '../components/common/EmptyState'
+import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
 import type { WorkspaceMember, AddMemberRequest } from '../types'
 import {
   KeyRound,
@@ -28,6 +31,9 @@ export default function WorkspaceMembersPage() {
   const [removingMember, setRemovingMember] = useState<WorkspaceMember | null>(null)
   const [resetPasswordMember, setResetPasswordMember] = useState<WorkspaceMember | null>(null)
   const [isChangeMyPasswordModalOpen, setIsChangeMyPasswordModalOpen] = useState(false)
+  // Mobile card list: tap → action sheet (plan decision 7).
+  const [actionMember, setActionMember] = useState<WorkspaceMember | null>(null)
+  const { isMobile } = useBreakpoint()
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const { workspace, isLoading: workspaceLoading } = useWorkspace()
@@ -41,6 +47,10 @@ export default function WorkspaceMembersPage() {
   })
 
   const { canManageMembers, canResetPasswordFor, isOwner } = usePermissions()
+
+  // Same per-member permission math as MemberRow, shared with the mobile card path.
+  const memberCanEdit = (m: WorkspaceMember) =>
+    canManageMembers && m.role !== 'owner' && m.user_id !== user?.id && (isOwner || m.role !== 'admin')
 
   const addMutation = useMutation({
     mutationFn: (data: AddMemberRequest) => workspaceMembersApi.add(workspaceId!, data),
@@ -165,7 +175,7 @@ export default function WorkspaceMembersPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setIsChangeMyPasswordModalOpen(true)}
-            className="flex items-center gap-2 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+            className="flex items-center gap-2 bg-surface border border-border text-text px-3 py-1.5 max-sm:min-h-[44px] rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             title="Change My Password"
           >
             <KeyRound size={14} />
@@ -174,7 +184,7 @@ export default function WorkspaceMembersPage() {
           {canManageMembers && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
+              className="flex items-center gap-2 bg-primary text-white px-3 py-1.5 max-sm:min-h-[44px] rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
             >
               <UserPlus size={14} />
               <span className="hidden sm:inline">Add Member</span>
@@ -187,6 +197,22 @@ export default function WorkspaceMembersPage() {
         <EmptyState
           message="No members in this workspace yet."
         />
+      ) : isMobile ? (
+        /* Mobile: card list, tap → action sheet — the 4-column table can't fit 375px. */
+        <div className="bg-surface rounded-sm border border-border divide-y divide-border">
+          {members?.map((member) => {
+            const tappable = memberCanEdit(member) || canResetPasswordFor(member)
+            return (
+              <MemberCard
+                key={member.id}
+                member={member}
+                isCurrentUser={member.user_id === user?.id}
+                tappable={tappable}
+                onTap={() => setActionMember(member)}
+              />
+            )
+          })}
+        </div>
       ) : (
         <div className="bg-surface rounded-sm overflow-hidden border border-border">
           <table className="min-w-full">
@@ -226,6 +252,28 @@ export default function WorkspaceMembersPage() {
           </table>
         </div>
       )}
+
+      {/* Mobile member actions */}
+      <ActionSheet
+        open={!!actionMember}
+        onClose={() => setActionMember(null)}
+        title={actionMember?.full_name || actionMember?.email}
+        actions={
+          actionMember
+            ? [
+                ...(memberCanEdit(actionMember)
+                  ? [{ label: 'Edit role', icon: Pencil, onSelect: () => setEditingMember(actionMember) }]
+                  : []),
+                ...(canResetPasswordFor(actionMember)
+                  ? [{ label: 'Reset password', icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
+                  : []),
+                ...(memberCanEdit(actionMember)
+                  ? [{ label: 'Remove from workspace', icon: Trash2, destructive: true, onSelect: () => setRemovingMember(actionMember) }]
+                  : []),
+              ]
+            : []
+        }
+      />
 
       {/* Add Member Modal */}
       {isAddModalOpen && (
@@ -311,6 +359,57 @@ function getRoleBadgeColor(role: string) {
     default:
       return 'bg-surface-hover text-text-muted'
   }
+}
+
+interface MemberCardProps {
+  member: WorkspaceMember
+  isCurrentUser: boolean
+  /** Whether tapping opens the action sheet (any permitted action exists). */
+  tappable: boolean
+  onTap: () => void
+}
+
+/** Mobile list row (S5) — same identity/badges as the table, stacked. */
+function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps) {
+  return (
+    <div
+      {...(tappable ? tappableProps(onTap) : {})}
+      className={`flex items-center gap-3 px-4 py-3 ${
+        tappable ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+      }`}
+    >
+      <div className="flex-shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
+        <span className="text-text-muted font-medium">{member.email[0].toUpperCase()}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-text flex items-center gap-2">
+          <span className="truncate">{member.full_name || member.email}</span>
+          {isCurrentUser && (
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border flex-shrink-0">
+              You
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border font-mono text-[10px] font-bold uppercase tracking-wider ${getRoleBadgeColor(member.role)}`}
+          >
+            {getRoleIcon(member.role)}
+            {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+          </span>
+          <span
+            className={`inline-flex px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider rounded-sm border ${
+              member.is_active
+                ? 'bg-positive-bg text-positive border-positive/30'
+                : 'bg-negative-bg text-negative border-negative/30'
+            }`}
+          >
+            {member.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface MemberRowProps {

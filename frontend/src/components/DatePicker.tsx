@@ -3,6 +3,8 @@ import { DayPicker } from 'react-day-picker'
 import { format, parse } from 'date-fns'
 import 'react-day-picker/style.css'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import BottomSheet from './common/BottomSheet'
 
 interface Props {
   value: string
@@ -26,6 +28,7 @@ export default function DatePicker({
   inline = false,
 }: Props) {
   const { calendarStartDay } = useUserPreferences()
+  const { isMobile } = useBreakpoint()
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -83,15 +86,18 @@ export default function DatePicker({
         id={id}
         value={value}
         onChange={handleInputChange}
-        onFocus={() => setIsOpen(true)}
+        /* Mobile opens on click, not focus: the sheet's focus-return would
+           re-fire onFocus and immediately reopen it. */
+        onFocus={() => { if (!isMobile) setIsOpen(true) }}
+        onClick={() => { if (isMobile) setIsOpen(true) }}
         className={`bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all ${className}`}
         required={required}
         disabled={disabled}
         placeholder={placeholder}
         readOnly
       />
-      {isOpen && (
-        <div 
+      {isOpen && !isMobile && (
+        <div
           className="absolute z-50 mt-2 bg-surface rounded-sm border border-border p-4"
         >
           <DayPicker
@@ -102,6 +108,30 @@ export default function DatePicker({
             defaultMonth={selectedDate}
           />
         </div>
+      )}
+
+      {/* Mobile: calendar in a bottom sheet with 44px day targets (rdp-sheet scope). */}
+      {isMobile && (
+        <BottomSheet open={isOpen} onClose={() => setIsOpen(false)} aria-label="Select date">
+          <div className="rdp-inline rdp-sheet px-4 pb-2">
+            <DayPicker
+              mode="single"
+              selected={selectedDate}
+              onSelect={handleDaySelect}
+              weekStartsOn={isoToJsWeekday(calendarStartDay)}
+              defaultMonth={selectedDate}
+            />
+          </div>
+          <div className="px-4 pb-3">
+            <button
+              type="button"
+              onClick={() => handleDaySelect(new Date())}
+              className="w-full min-h-[44px] bg-surface border border-border rounded-sm text-sm font-medium text-text transition-colors active:bg-surface-hover"
+            >
+              Today
+            </button>
+          </div>
+        </BottomSheet>
       )}
     </div>
   )

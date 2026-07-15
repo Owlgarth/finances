@@ -130,7 +130,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
             </label>
             <input
               id="from-amount"
-              type="number"
+              type="number" inputMode="decimal"
               step="0.01"
               value={fromAmount}
               onChange={(e) => setFromAmount(e.target.value)}
@@ -143,7 +143,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
               <label htmlFor="to-amount" className={labelClass}>Amount received ({toAccount?.currency_code})</label>
               <input
                 id="to-amount"
-                type="number"
+                type="number" inputMode="decimal"
                 step="0.01"
                 value={toAmount}
                 onChange={(e) => setToAmount(e.target.value)}

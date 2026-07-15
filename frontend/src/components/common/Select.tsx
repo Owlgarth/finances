@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AlertCircle, Check, ChevronDown } from 'lucide-react'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import BottomSheet from './BottomSheet'
 
 export interface SelectOption<T extends string | number> {
   value: T
@@ -56,11 +58,17 @@ export default function Select<T extends string | number>({
   error,
   className,
 }: SelectProps<T>) {
+  // Adaptive variant (plan decision 4): shared trigger/state, panel presentation
+  // switches — anchored dropdown on desktop, bottom sheet on mobile. `open`,
+  // filtering and onChange live here, so a resize mid-open loses nothing.
+  const { isMobile } = useBreakpoint()
+
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [searchQuery, setSearchQuery] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const sheetListRef = useRef<HTMLDivElement>(null)
   const typeAheadRef = useRef<{ buffer: string; t: number }>({ buffer: '', t: 0 })
 
   const baseId = useId()
@@ -92,6 +100,14 @@ export default function Select<T extends string | number>({
       setHighlightedIndex(-1)
     }
   }, [open])
+
+  // Sheet: bring the selected option into view on open (long lists — currencies, categories).
+  useEffect(() => {
+    if (!open || !isMobile) return
+    sheetListRef.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: 'center' })
+  }, [open, isMobile])
 
   function openPanel() {
     setOpen(true)
@@ -148,6 +164,9 @@ export default function Select<T extends string | number>({
         break
       case 'Escape':
         e.preventDefault()
+        // Consume the key: without this, a surrounding Modal's document-level
+        // Escape listener (useOverlay) fires too and closes the whole dialog.
+        e.stopPropagation()
         closePanel(true)
         break
       case 'Tab':
@@ -168,6 +187,26 @@ export default function Select<T extends string | number>({
           if (idx >= 0) setHighlightedIndex(idx)
         }
         break
+    }
+  }
+
+  // The search inputs are focusable, so keys pressed there bypass the trigger
+  // handler. Escape must be consumed here too (same reason as the trigger:
+  // a surrounding Modal's document-level listener would close the dialog),
+  // and Enter must not trigger implicit submission of a surrounding <form> —
+  // it picks the highlighted/first match instead.
+  function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      closePanel(true)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filteredOptions.length === 0) return
+      // Desktop keeps highlightedIndex valid on each keystroke; the mobile
+      // sheet has no highlight, so fall back to the first match.
+      const i = highlightedIndex >= 0 && highlightedIndex < filteredOptions.length ? highlightedIndex : 0
+      selectIndex(i)
     }
   }
 
@@ -198,7 +237,7 @@ export default function Select<T extends string | number>({
         aria-expanded={open}
         aria-label={ariaLabel}
         aria-disabled={disabled || undefined}
-        aria-activedescendant={open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
+        aria-activedescendant={open && !isMobile && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openPanel())}
         onKeyDown={handleTriggerKeyDown}
@@ -213,7 +252,63 @@ export default function Select<T extends string | number>({
         />
       </button>
 
-      {open && (
+      {/* Mobile panel: bottom sheet of 44px option rows. Rendered whenever mobile
+          (not gated on `open`) so BottomSheet can play its exit animation. */}
+      {isMobile && (
+        <BottomSheet
+          open={open}
+          onClose={() => closePanel(true)}
+          aria-label={ariaLabel ?? placeholder ?? 'Select an option'}
+        >
+          {searchable && (
+            /* top-4 sits just below BottomSheet's 16px drag-handle row */
+            <div className="sticky top-4 z-10 bg-surface px-4 pb-2">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search…"
+                aria-label="Search options"
+                className="w-full bg-background border border-border rounded-none px-2 py-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
+              />
+            </div>
+          )}
+
+          <div ref={sheetListRef} role="listbox" className="pb-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-text-muted">No options</div>
+            ) : (
+              filteredOptions.map((opt, i) => {
+                const selected = opt.value === value
+                return (
+                  <button
+                    key={`${String(opt.value)}-${i}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => selectIndex(i)}
+                    className={
+                      'w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover ' +
+                      (selected ? 'font-medium bg-surface-muted ' : '') +
+                      (mono ? 'font-mono ' : '')
+                    }
+                  >
+                    {selected ? (
+                      <Check size={16} className="text-primary flex-shrink-0" />
+                    ) : (
+                      <span className="w-4 flex-shrink-0" />
+                    )}
+                    <span className="truncate">{opt.label}</span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Desktop panel: anchored dropdown with keyboard nav + type-ahead. */}
+      {open && !isMobile && (
         <div role="listbox" className={panelClass}>
           {searchable && (
             <div className="px-2 pb-1">
@@ -223,6 +318,7 @@ export default function Select<T extends string | number>({
                   setSearchQuery(e.target.value)
                   setHighlightedIndex(0)
                 }}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Search…"
                 className="w-full bg-background border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
               />

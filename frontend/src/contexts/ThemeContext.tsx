@@ -10,8 +10,18 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+// Must match the theme-color metas in index.html (--color-background in both themes).
+const THEME_COLOR = { light: '#FAFAFA', dark: '#0A0A0A' } as const
+
 function applyDark(isDark: boolean) {
   document.documentElement.classList.toggle('dark', isDark)
+  // Sync browser/PWA chrome with the *app* theme. The static metas in
+  // index.html are media-gated on the OS preference, which diverges from the
+  // app theme once the user toggles it; writing both metas makes either match.
+  const color = isDark ? THEME_COLOR.dark : THEME_COLOR.light
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute('content', color))
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -21,6 +31,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState<boolean>(() =>
     document.documentElement.classList.contains('dark'),
   )
+
+  // Re-apply on mount: the FOUC script only sets the <html> class, so a stored
+  // theme that differs from the OS preference needs its theme-color synced here.
+  useEffect(() => {
+    applyDark(isDark)
+  }, [isDark])
 
   const setDark = (dark: boolean) => {
     setIsDark(dark)
