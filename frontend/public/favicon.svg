@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Denarly mark: monochrome "D" on the primary ink, rounded-sm proportions.
+       #171717 with a hairline border reads on both light and dark browser tabs. -->
+  <rect x="1" y="1" width="62" height="62" rx="8" fill="#171717" stroke="#404040" stroke-width="2"/>
+  <path d="M22 18 h11 a13 14 0 0 1 0 28 h-11 z M29 25 v14 h4 a6 7 0 0 0 0 -14 z" fill="#FAFAFA" fill-rule="evenodd"/>
+  <rect x="22" y="50" width="24" height="3" fill="#737373"/>
+</svg>

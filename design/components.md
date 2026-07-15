@@ -1904,6 +1904,46 @@ Icons inherit their color from the parent element's text color. Use semantic tok
 
 ---
 
+## 21. Bottom Sheet & Action Sheet (Mobile)
+
+The **bottom sheet is the universal mobile container**: modals, selects, action menus, the
+date picker, and the "More" navigation all render inside one primitive on mobile.
+
+### BottomSheet (`common/BottomSheet.tsx`)
+
+Same `{ open, onClose, children, className }` contract as `Modal` (which delegates to it on
+mobile — call sites never branch on device).
+
+| Property | Value |
+|---|---|
+| Panel | full-width, pinned bottom, `bg-surface border border-border rounded-t-sm` (top corners only) |
+| Height | `max-h-[92dvh]`, internal scroll, `overscroll-contain` |
+| Drag handle | centered `h-1 w-9 bg-surface-muted` bar, sticky at top (visual affordance; drag gesture not implemented) |
+| Scrim | `bg-scrim backdrop-blur-sm`, tap dismisses |
+| Motion | slide-up 120ms `ease-out`, slide-down 80ms `ease-in` (patterns.md §1); reduced-motion disables |
+| Safe area | `pb-safe` on the panel |
+| Behavior | body scroll-lock (refcounted), stack-aware Escape (topmost only), focus capture/restore — via `hooks/useOverlay.ts` |
+| Keyboard | lifts above the on-screen keyboard via `visualViewport` |
+
+### ActionSheet (`common/ActionSheet.tsx`)
+
+The touch replacement for hover-revealed row actions: tapping a list row/card opens a titled
+sheet of actions. `{ open, onClose, title?, actions: { label, icon?, onSelect, destructive?,
+disabled? }[] }`.
+
+- Rows: full-width, `min-h-[44px] px-4 text-sm`, 16px Lucide icons, `text-negative` when
+  destructive, `active:bg-surface-hover` press feedback; trailing full-width **Cancel** row.
+- Selecting **closes the sheet first, then runs the action** — safe for chaining into a
+  modal (`ConfirmDialog`, edit form).
+
+### Adaptive components
+
+`Select` and `DatePicker` are adaptive: one exported API, desktop keeps the anchored
+dropdown/popover, mobile presents a sheet (44px option rows with check mark; 44px calendar
+day cells via the `rdp-sheet` scope). See `design/patterns.md` §13 for the pattern rules.
+
+---
+
 ## Appendix A — Primitive Audit (U1)
 
 Inventory of the React primitives against this spec, recorded 2026-07. The shared

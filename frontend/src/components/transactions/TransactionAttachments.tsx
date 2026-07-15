@@ -106,7 +106,7 @@ export default function TransactionAttachments({ transaction }: Props) {
               <button
                 type="button"
                 onClick={() => remove.mutate(a.id)}
-                className="absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
                 aria-label="Remove attachment"
               >
                 <Trash2 size={12} />
@@ -122,7 +122,7 @@ export default function TransactionAttachments({ transaction }: Props) {
                     <button
                       type="button"
                       onClick={() => startExtraction.mutate(a.id)}
-                      className="flex items-center justify-center gap-1 w-full bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-primary hover:bg-surface opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="flex items-center justify-center gap-1 w-full bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-primary hover:bg-surface opacity-0 group-hover:opacity-100 touch-reveal transition-opacity"
                     >
                       {a.extraction_status === 'failed' ? <RotateCw size={11} /> : <Sparkles size={11} />}
                       {a.extraction_status === 'failed' ? 'Retry' : 'Extract items'}

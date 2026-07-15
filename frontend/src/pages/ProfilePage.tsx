@@ -126,7 +126,7 @@ export default function ProfilePage() {
           <nav className="flex flex-wrap gap-1">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
+              className={`py-2.5 px-4 max-sm:min-h-[44px] text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'profile'
                   ? 'bg-surface-hover text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
@@ -136,7 +136,7 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={() => setActiveTab('password')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
+              className={`py-2.5 px-4 max-sm:min-h-[44px] text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'password'
                   ? 'bg-surface-hover text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
@@ -146,7 +146,7 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={() => setActiveTab('security')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
+              className={`py-2.5 px-4 max-sm:min-h-[44px] text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'security'
                   ? 'bg-surface-hover text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
@@ -156,7 +156,7 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={() => setActiveTab('preferences')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
+              className={`py-2.5 px-4 max-sm:min-h-[44px] text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'preferences'
                   ? 'bg-surface-hover text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
@@ -166,7 +166,7 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={() => setActiveTab('account')}
-              className={`py-2.5 px-4 text-sm font-medium rounded-sm transition-colors ${
+              className={`py-2.5 px-4 max-sm:min-h-[44px] text-sm font-medium rounded-sm transition-colors ${
                 activeTab === 'account'
                   ? 'bg-surface-hover text-text'
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
@@ -177,7 +177,7 @@ export default function ProfilePage() {
           </nav>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 max-sm:p-4">
           {activeTab === 'profile' && (
             <EditProfileForm
               user={user}
