@@ -2,15 +2,29 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Check, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Plus, Check, Settings2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
 import { inputClass, primaryButtonClass } from '../components/common/formStyles'
+
+// Per-budget currency-switcher order — a display preference, stored client-side
+// like the theme ('denarly_theme'), keyed per budget since currency sets differ.
+const currencyOrderKey = (budgetId: number) => `denarly_currency_order:${budgetId}`
+
+function loadCurrencyOrder(budgetId: number): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(currencyOrderKey(budgetId)) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 /** The day after an ISO date, as an ISO date (local, no TZ shifts). */
 function nextDayIso(isoDate: string): string {
@@ -124,16 +138,26 @@ export default function BudgetDetailPage() {
 
   const items = useMemo(() => summary?.items ?? [], [summary])
 
+  // Saved switcher order for this budget; empty = enabled-currency order.
+  const [currencyOrder, setCurrencyOrder] = useState<string[]>(() => loadCurrencyOrder(budgetId))
+  useEffect(() => {
+    setCurrencyOrder(loadCurrencyOrder(budgetId))
+  }, [budgetId])
+
   // Currency column groups: every currency present in the summary (enabled-currency
-  // order first), falling back to the primary currency for an empty period.
+  // order first), falling back to the primary currency for an empty period. The
+  // saved switcher order wins where set; unordered currencies keep their place
+  // after the ordered ones (stable sort). First in the result = default view.
   const activeCurrencies = useMemo(() => {
     const present = new Set(items.map((i) => i.currency_code))
     const ordered = currencies.map((c) => c.code).filter((code) => present.has(code))
     for (const code of present) {
       if (!ordered.includes(code)) ordered.push(code)
     }
+    const rank = new Map(currencyOrder.map((code, i) => [code, i]))
+    ordered.sort((a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER))
     return ordered.length > 0 ? ordered : [primaryCurrency]
-  }, [items, currencies, primaryCurrency])
+  }, [items, currencies, primaryCurrency, currencyOrder])
   const multiCurrency = activeCurrencies.length > 1
 
   // Currency carousel: one currency's Planned/Actual/Remaining at a time.
@@ -146,6 +170,21 @@ export default function BudgetDetailPage() {
   const goToCurrency = (dir: 1 | -1) => {
     const len = activeCurrencies.length
     setViewCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
+    setEditingCell(null)
+  }
+
+  // Switcher-order config: each move persists the full current arrangement,
+  // so the saved order always covers every currency the user has seen.
+  const [orderConfigOpen, setOrderConfigOpen] = useState(false)
+  const moveCurrency = (idx: number, dir: 1 | -1) => {
+    const target = idx + dir
+    if (target < 0 || target >= activeCurrencies.length) return
+    const next = [...activeCurrencies]
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    setCurrencyOrder(next)
+    localStorage.setItem(currencyOrderKey(budgetId), JSON.stringify(next))
+    // With no explicit selection the first currency is shown, so a reorder can
+    // switch the visible currency — don't leave an editor open across that.
     setEditingCell(null)
   }
 
@@ -171,6 +210,14 @@ export default function BudgetDetailPage() {
         className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
       >
         <ChevronRight size={12} />
+      </button>
+      <button
+        type="button"
+        onClick={() => setOrderConfigOpen(true)}
+        aria-label="Configure currency order"
+        className="w-7 h-7 ml-1 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+      >
+        <Settings2 size={12} />
       </button>
     </div>
   )
@@ -389,6 +436,48 @@ export default function BudgetDetailPage() {
           <button type="submit" className={primaryButtonClass}><Plus size={13} /></button>
         </form>
       )}
+
+      <Modal open={orderConfigOpen} onClose={() => setOrderConfigOpen(false)} size="sm" className="p-4">
+        <h2 className="text-base font-semibold text-text mb-1">Currency order</h2>
+        <p className="text-xs text-text-muted mb-4">
+          The switcher cycles through currencies in this order; the first one is shown by default.
+        </p>
+        <ul className="border border-border rounded-sm divide-y divide-border">
+          {activeCurrencies.map((code, idx) => (
+            <li key={code} className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm text-text">
+                <span className="font-mono">{code}</span>
+                <span className="ml-2 text-xs text-text-muted">
+                  {currencies.find((c) => c.code === code)?.name ?? ''}
+                </span>
+                {idx === 0 && (
+                  <span className="ml-2 text-[9px] font-mono uppercase tracking-widest text-text-muted">Default</span>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => moveCurrency(idx, -1)}
+                  disabled={idx === 0}
+                  aria-label={`Move ${code} up`}
+                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+                >
+                  <ArrowUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveCurrency(idx, 1)}
+                  disabled={idx === activeCurrencies.length - 1}
+                  aria-label={`Move ${code} down`}
+                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+                >
+                  <ArrowDown size={13} />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </div>
   )
 }
