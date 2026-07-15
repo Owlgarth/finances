@@ -34,9 +34,9 @@ export default function ActionSheet({ open, onClose, title, actions }: ActionShe
       )}
 
       <div className="border-t border-border divide-y divide-border">
-        {actions.map((action) => (
+        {actions.map((action, i) => (
           <button
-            key={action.label}
+            key={`${action.label}-${i}`}
             type="button"
             disabled={action.disabled}
             onClick={() => {

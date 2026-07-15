@@ -10,6 +10,15 @@ const overlayStack: symbol[] = []
 let lockCount = 0
 let previousBodyOverflow = ''
 
+/**
+ * True while any blocking overlay (Modal/BottomSheet) is open. Lets non-blocking
+ * poppers with their own document-level Escape listeners (WorkspaceSelector)
+ * yield the key to the overlay stack instead of co-firing.
+ */
+export function hasActiveOverlay(): boolean {
+  return overlayStack.length > 0
+}
+
 function acquireScrollLock() {
   if (lockCount === 0) {
     previousBodyOverflow = document.body.style.overflow

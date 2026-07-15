@@ -164,6 +164,9 @@ export default function Select<T extends string | number>({
         break
       case 'Escape':
         e.preventDefault()
+        // Consume the key: without this, a surrounding Modal's document-level
+        // Escape listener (useOverlay) fires too and closes the whole dialog.
+        e.stopPropagation()
         closePanel(true)
         break
       case 'Tab':

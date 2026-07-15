@@ -20,9 +20,10 @@ wrapper later reuses these assets).
   they actually engage.)
 
 ## Known limitation
-`theme-color` follows the OS scheme, not the in-app `denarly_theme` override (a user forcing
-dark in a light OS gets a light status bar). Fixable later by stamping `theme-color` from the
-theme context; not worth JS in the install shell now.
+~~`theme-color` follows the OS scheme, not the in-app `denarly_theme` override.~~ Resolved
+post-review: `ThemeContext.applyDark` now stamps both `theme-color` metas with the app
+theme's background, on mount and on every toggle. The manifest's `theme_color` stays light —
+it's a static install-time value; the runtime metas win once the app loads.
 
 ## Done
 Lighthouse "installable" checks pass (manifest + icons + viewport); Add to Home Screen on

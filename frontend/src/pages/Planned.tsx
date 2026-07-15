@@ -9,6 +9,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -107,9 +108,9 @@ export default function Planned() {
           {items.map((p) => (
             <div
               key={p.id}
-              onClick={
-                isTouch && canWrite && p.status === 'pending' ? () => setActionTarget(p) : undefined
-              }
+              {...(isTouch && canWrite && p.status === 'pending'
+                ? tappableProps(() => setActionTarget(p))
+                : {})}
               className={`flex items-center justify-between px-4 py-3 text-sm group ${
                 isTouch && canWrite && p.status === 'pending'
                   ? 'active:bg-surface-hover transition-colors cursor-pointer'

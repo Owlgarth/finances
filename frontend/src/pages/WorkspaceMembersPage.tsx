@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
 import type { WorkspaceMember, AddMemberRequest } from '../types'
 import {
   KeyRound,
@@ -372,7 +373,7 @@ interface MemberCardProps {
 function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps) {
   return (
     <div
-      onClick={tappable ? onTap : undefined}
+      {...(tappable ? tappableProps(onTap) : {})}
       className={`flex items-center gap-3 px-4 py-3 ${
         tappable ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
       }`}

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Check, Plus, Settings, Landmark, ChevronDown, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { hasActiveOverlay } from '../../hooks/useOverlay'
 import { getApiErrorMessage } from '../../utils/errors'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
 import type { Workspace } from '../../types'
@@ -33,7 +34,9 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
   useEffect(() => {
     if (!isOpen) return
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      // Yield Escape while a Modal/BottomSheet is open — the overlay stack
+      // owns the key then (topmost-only close).
+      if (event.key === 'Escape' && !hasActiveOverlay()) {
         setIsOpen(false)
         setIsCreating(false)
       }

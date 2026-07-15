@@ -45,11 +45,11 @@ export default function Modal({
     </button>
   )
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3).
+  // Mobile: same API, bottom-sheet presentation (plan decision 3). The X lives
+  // in the sheet's sticky handle row so it doesn't scroll away with the body.
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={onClose} className={className}>
-        {closeButton}
+      <BottomSheet open={open} onClose={onClose} className={className} showClose>
         {children}
       </BottomSheet>
     )

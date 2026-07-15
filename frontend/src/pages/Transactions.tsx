@@ -9,6 +9,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
 import ActionSheet from '../components/common/ActionSheet'
@@ -123,7 +124,7 @@ export default function Transactions() {
           {items.map((t) => (
             <div
               key={t.id}
-              onClick={isTouch && canWrite ? () => setActionTarget(t) : undefined}
+              {...(isTouch && canWrite ? tappableProps(() => setActionTarget(t)) : {})}
               className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
                 isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}

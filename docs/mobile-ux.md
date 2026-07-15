@@ -58,3 +58,5 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 - Sheet drag-to-dismiss gesture (handle is currently visual only on web).
 - Swipe actions on rows (action sheet is the v1 pattern).
 - Offline/service worker — the PWA shell is install-only.
+- Tab scroll restoration restores before data loads, so on a slow fetch the browser clamps
+  to the skeleton height and deep positions in long lists are lost.

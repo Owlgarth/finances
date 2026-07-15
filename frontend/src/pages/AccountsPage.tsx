@@ -9,6 +9,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
+import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
 import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
@@ -108,7 +109,7 @@ export default function AccountsPage() {
             return (
               <div
                 key={account.id}
-                onClick={isTouch && canManageAccounts ? () => setCardAction(account) : undefined}
+                {...(isTouch && canManageAccounts ? tappableProps(() => setCardAction(account)) : {})}
                 className={`border border-border rounded-sm bg-surface p-4 ${
                   isTouch && canManageAccounts ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
                 }`}
