@@ -858,3 +858,41 @@ onSuccess: () => {
 | Transactions | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Planned | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Dashboard | — | — | — | ✅ | ✅ |
+
+---
+
+## 13. Adaptive Components (Mobile)
+
+Web and mobile may diverge in *interaction* (dropdown vs. option-list sheet) but never in
+*capability* or data rules. The mechanism:
+
+**Callers never branch on device.** A shared component decides its presentation internally:
+
+```tsx
+export default function Select<T>(props: SelectProps<T>) {
+  const { isMobile } = useBreakpoint()
+  if (isMobile) return <SelectSheet {...props} />   // bottom sheet, 44px option rows
+  return <SelectDropdown {...props} />               // anchored dropdown panel
+}
+```
+
+Rules:
+1. **One exported API** — same props, same `onChange` contract; zero call-site changes when a
+   component gains a mobile variant.
+2. **State lives above the variants.** Media queries re-render live, so a resize/rotation
+   across the breakpoint swaps presentation mid-interaction — form values and selection must
+   survive it.
+3. Pick the cheapest level that suffices: CSS breakpoints (layout) → `useBreakpoint()`
+   (different interaction pattern) → `useIsTouch()` (input-device behavior: hover reveals,
+   hit areas).
+
+Adaptive today: `Modal` (→ BottomSheet), `Select`, `DatePicker`, `MainLayout` (sidebar ↔
+bottom nav), Members list (table ↔ card list).
+
+### Quick-add flow (mobile)
+
+The bottom-nav FAB opens an `ActionSheet`: **New transaction · Transfer · From receipt (only
+when extraction is enabled) · Planned transaction** — wired to the same modals the pages use,
+available from every route. Page-header creation buttons that duplicate a FAB action are
+hidden on mobile (`max-sm:hidden`); actions the FAB does *not* cover (e.g. "New account")
+stay visible.

@@ -8,9 +8,11 @@ import type { Workspace } from '../../types'
 
 interface WorkspaceSelectorProps {
   onOpenSettings: () => void
+  /** Icon-only trigger for the 56px tablet/collapsed rail; the panel widens past the rail. */
+  collapsed?: boolean
 }
 
-export default function WorkspaceSelector({ onOpenSettings }: WorkspaceSelectorProps) {
+export default function WorkspaceSelector({ onOpenSettings, collapsed = false }: WorkspaceSelectorProps) {
   const { workspace, workspaces, switchWorkspace, isLoading } = useWorkspace()
   const [isOpen, setIsOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -69,20 +71,36 @@ export default function WorkspaceSelector({ onOpenSettings }: WorkspaceSelectorP
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        disabled={isLoading}
-        className="flex items-center gap-2 w-full px-3 py-2 rounded-sm border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
-      >
-        <Landmark size={14} className={`flex-shrink-0 ${workspace ? 'text-text-muted' : 'text-text-muted'}`} />
-        <span className="text-sm font-medium text-text truncate flex-1 text-left">
-          {workspace ? workspace.name : 'No workspace'}
-        </span>
-        <ChevronDown size={14} className={`text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+      {collapsed ? (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          disabled={isLoading}
+          title={workspace ? workspace.name : 'No workspace'}
+          aria-label={workspace ? `Workspace: ${workspace.name}` : 'No workspace'}
+          className="flex items-center justify-center w-full py-2 min-h-[44px] rounded-sm text-text-muted hover:bg-surface-hover hover:text-text transition-colors disabled:opacity-50"
+        >
+          <Landmark size={14} className="flex-shrink-0" />
+        </button>
+      ) : (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          disabled={isLoading}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-sm border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
+        >
+          <Landmark size={14} className={`flex-shrink-0 ${workspace ? 'text-text-muted' : 'text-text-muted'}`} />
+          <span className="text-sm font-medium text-text truncate flex-1 text-left">
+            {workspace ? workspace.name : 'No workspace'}
+          </span>
+          <ChevronDown size={14} className={`text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-sm z-dropdown max-h-80 overflow-y-auto">
+        <div
+          className={`absolute top-full mt-1 bg-surface border border-border rounded-sm z-dropdown max-h-80 overflow-y-auto ${
+            collapsed ? 'left-0 w-64' : 'left-0 right-0'
+          }`}
+        >
           {isCreating ? (
             <CreateWorkspaceForm
               compact

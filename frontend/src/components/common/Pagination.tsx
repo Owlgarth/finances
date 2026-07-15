@@ -66,7 +66,7 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
           aria-label="Previous page"
         >
           <ChevronLeft size={14} />
@@ -95,7 +95,7 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= total_pages}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
           aria-label="Next page"
         >
           <ChevronRight size={14} />

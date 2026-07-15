@@ -7,11 +7,20 @@
 
 ## Breakpoints
 
-| Name | Range | Sidebar | Navigation |
-|---|---|---|---|
-| Mobile | `≤640px` | Hidden | Bottom Navigation (fixed) |
-| Tablet | `641px–1024px` | `56px` icon-only, collapsed | Sidebar (icons + tooltips) |
-| Desktop | `≥1025px` | `240px` full | Sidebar (icons + labels) |
+Boundaries snap to Tailwind's `sm` (640px) and `lg` (1024px) screens so JS and CSS can never
+disagree at a boundary pixel. The **single source of truth** is
+`frontend/src/hooks/useBreakpoint.ts` (`useBreakpoint()` → `{ isMobile, isTablet, isDesktop }`);
+in CSS, mobile = `max-sm:`, desktop = `lg:`. Never write ad-hoc width media queries.
+
+| Name | Range | JS / CSS | Sidebar | Navigation |
+|---|---|---|---|---|
+| Mobile | `<640px` | `isMobile` / `max-sm:` | Hidden | Bottom Navigation (fixed) |
+| Tablet | `640–1023px` | `isTablet` | `56px` icon-only, collapsed | Sidebar (icons + tooltips) |
+| Desktop | `≥1024px` | `isDesktop` / `lg:` | `240px` full | Sidebar (icons + labels) |
+
+Input-device concerns (hover reveals, hit areas) key on `useIsTouch()` (`pointer: coarse`),
+not viewport width — a narrow desktop window keeps hover; a landscape tablet gets touch
+behavior.
 
 ---
 
@@ -118,11 +127,14 @@ Fixed at the bottom of the viewport. Uses Architectural Ledger tokens.
 
 | Nav Item State | Styling |
 |---|---|
-| Active | `text-text` with Lucide icon + label |
-| Inactive | `text-text-muted` with Lucide icon only (no label) |
-| Hover / Tap | `bg-surface-hover` |
+| Active | `text-primary`, Lucide icon + label |
+| Inactive | `text-text-muted`, Lucide icon + label (labels always shown — no layout shift on tab change; matches `components.md` §19) |
+| Hover / Tap | `active:` press feedback |
 
-Each nav item is a 44×44px minimum touch target. Icons are Lucide at 14px, 1.5px stroke.
+Each nav item is a 44×44px minimum touch target. Icons are Lucide at 20px (`h-5 w-5`), 1.5px
+stroke — the one deliberate size exception to the global 14px icon rule.
+Implementation: `frontend/src/components/layout/BottomNav.tsx` (bar + More sheet + FAB
+quick-add action sheet).
 
 ---
 
@@ -182,6 +194,16 @@ All interactive elements on mobile must meet a minimum touch target of **44×44p
 | Form inputs | `44px` min height |
 | Chips / tags | `44px` min height when interactive |
 
+The hit-area expansion above ships as the `.touch-hit` utility (`index.css`); shared button
+classes (`formStyles.ts`) and `SegmentedControl` carry `max-sm:min-h-[44px]`.
+
+### Mobile input font-size exception
+
+On mobile (`<640px`), **all text-entry controls render at 16px** regardless of the type
+scale — iOS Safari zooms the page when focusing any control below 16px. This is a deliberate,
+global exception applied once in `index.css` (`!important`, to beat `text-xs` utilities).
+Do not "fix" individual inputs back down.
+
 ---
 
 ## Content Density Across Breakpoints
@@ -190,7 +212,7 @@ All interactive elements on mobile must meet a minimum touch target of **44×44p
 |---|---|---|---|
 | Table row height | `32px` strict (`h-8`) | `32px` strict (`h-8`) | `32px` strict (`h-8`) |
 | Category chips | Always visible | Always visible | May be hidden; show on expand |
-| Row actions | Inline text ("Edit", "Delete") | Inline text | Hidden; reveal via swipe or long-press |
+| Row actions | Inline / hover-revealed | Inline | Hidden; **row tap opens an action sheet** (`ActionSheet`) — hover reveals are never rendered on touch |
 | Major section spacing | `56–64px` | `48px` | `32px` |
 | Page content padding | `28px 32px` | `24px` | `20px 16px` |
 | Balance card columns | 3 | 2 | 1–2 |

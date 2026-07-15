@@ -13,14 +13,17 @@ export const inputClass =
 export const labelClass = 'block text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1'
 
 // §3 Primary Button: flat, focus-visible outline (not a ring).
+// max-sm:min-h-[44px]: mobile touch-target floor (responsive.md), M7.
 export const primaryButtonClass =
   'bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors ' +
+  'max-sm:min-h-[44px] ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
 // §3 Secondary Button.
 export const secondaryButtonClass =
   'bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors ' +
+  'max-sm:min-h-[44px] ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 

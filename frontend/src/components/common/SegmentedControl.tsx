@@ -97,7 +97,7 @@ export default function SegmentedControl<T extends string | number>({
             onClick={() => onChange(opt.value)}
             onKeyDown={(e) => handleKeyDown(e, i)}
             className={
-              'flex-1 py-1.5 text-xs font-medium transition-colors ' +
+              'flex-1 py-1.5 max-sm:min-h-[44px] text-xs font-medium transition-colors ' +
               (selected
                 ? tone === 'positive'
                   ? 'bg-positive text-white '

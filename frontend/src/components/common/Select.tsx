@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AlertCircle, Check, ChevronDown } from 'lucide-react'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import BottomSheet from './BottomSheet'
 
 export interface SelectOption<T extends string | number> {
   value: T
@@ -56,11 +58,17 @@ export default function Select<T extends string | number>({
   error,
   className,
 }: SelectProps<T>) {
+  // Adaptive variant (plan decision 4): shared trigger/state, panel presentation
+  // switches — anchored dropdown on desktop, bottom sheet on mobile. `open`,
+  // filtering and onChange live here, so a resize mid-open loses nothing.
+  const { isMobile } = useBreakpoint()
+
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [searchQuery, setSearchQuery] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const sheetListRef = useRef<HTMLDivElement>(null)
   const typeAheadRef = useRef<{ buffer: string; t: number }>({ buffer: '', t: 0 })
 
   const baseId = useId()
@@ -92,6 +100,14 @@ export default function Select<T extends string | number>({
       setHighlightedIndex(-1)
     }
   }, [open])
+
+  // Sheet: bring the selected option into view on open (long lists — currencies, categories).
+  useEffect(() => {
+    if (!open || !isMobile) return
+    sheetListRef.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: 'center' })
+  }, [open, isMobile])
 
   function openPanel() {
     setOpen(true)
@@ -198,7 +214,7 @@ export default function Select<T extends string | number>({
         aria-expanded={open}
         aria-label={ariaLabel}
         aria-disabled={disabled || undefined}
-        aria-activedescendant={open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
+        aria-activedescendant={open && !isMobile && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openPanel())}
         onKeyDown={handleTriggerKeyDown}
@@ -213,7 +229,62 @@ export default function Select<T extends string | number>({
         />
       </button>
 
-      {open && (
+      {/* Mobile panel: bottom sheet of 44px option rows. Rendered whenever mobile
+          (not gated on `open`) so BottomSheet can play its exit animation. */}
+      {isMobile && (
+        <BottomSheet
+          open={open}
+          onClose={() => closePanel(true)}
+          aria-label={ariaLabel ?? placeholder ?? 'Select an option'}
+        >
+          {searchable && (
+            /* top-4 sits just below BottomSheet's 16px drag-handle row */
+            <div className="sticky top-4 z-10 bg-surface px-4 pb-2">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search…"
+                aria-label="Search options"
+                className="w-full bg-background border border-border rounded-none px-2 py-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
+              />
+            </div>
+          )}
+
+          <div ref={sheetListRef} role="listbox" className="pb-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-text-muted">No options</div>
+            ) : (
+              filteredOptions.map((opt, i) => {
+                const selected = opt.value === value
+                return (
+                  <button
+                    key={`${String(opt.value)}-${i}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => selectIndex(i)}
+                    className={
+                      'w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover ' +
+                      (selected ? 'font-medium bg-surface-muted ' : '') +
+                      (mono ? 'font-mono ' : '')
+                    }
+                  >
+                    {selected ? (
+                      <Check size={16} className="text-primary flex-shrink-0" />
+                    ) : (
+                      <span className="w-4 flex-shrink-0" />
+                    )}
+                    <span className="truncate">{opt.label}</span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Desktop panel: anchored dropdown with keyboard nav + type-ahead. */}
+      {open && !isMobile && (
         <div role="listbox" className={panelClass}>
           {searchable && (
             <div className="px-2 pb-1">

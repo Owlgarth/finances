@@ -8,8 +8,10 @@ import { useAccounts, useMultiCurrency, useExtractionEnabled } from '../hooks/us
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
+import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import Select from '../components/common/Select'
@@ -33,10 +35,14 @@ export default function Transactions() {
   const [accountFilter, setAccountFilter] = useState<number | null>(null)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
 
+  const isTouch = useIsTouch()
+
   const [formOpen, setFormOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  // Touch replacement for the hover-revealed row actions (plan decision 7).
+  const [actionTarget, setActionTarget] = useState<Transaction | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', page, pageSize, accountFilter, typeFilter],
@@ -74,11 +80,12 @@ export default function Transactions() {
   ]
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Transactions</h1>
+        {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
         {canWrite && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-sm:hidden">
             {extractionEnabled && (
               <button onClick={() => setReceiptOpen(true)} className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1">
                 <ScanLine size={13} /> From receipt
@@ -93,15 +100,15 @@ export default function Transactions() {
 
       <div className="flex flex-wrap gap-3 mb-4">
         {showAccountColumn && (
-          <div className="w-48">
+          <div className="w-48 max-sm:w-auto max-sm:flex-1">
             <Select value={accountFilter} onChange={(v) => { setAccountFilter(v); setPage(1) }} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
           </div>
         )}
-        <div className="w-40">
+        <div className="w-40 max-sm:w-auto max-sm:flex-1">
           <Select value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1) }} options={typeOptions} placeholder="All types" aria-label="Filter by type" />
         </div>
         {(accountFilter || typeFilter) && (
-          <button onClick={() => { setAccountFilter(null); setTypeFilter(null); setPage(1) }} className="text-xs text-text-muted hover:text-text">
+          <button onClick={() => { setAccountFilter(null); setTypeFilter(null); setPage(1) }} className="text-xs text-text-muted hover:text-text max-sm:min-h-[44px] max-sm:w-full max-sm:text-left">
             Clear filters
           </button>
         )}
@@ -114,7 +121,13 @@ export default function Transactions() {
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
           {items.map((t) => (
-            <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm group">
+            <div
+              key={t.id}
+              onClick={isTouch && canWrite ? () => setActionTarget(t) : undefined}
+              className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
+                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+              }`}
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-text truncate">{t.description}</span>
@@ -122,15 +135,17 @@ export default function Transactions() {
                     <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">Adj</span>
                   )}
                 </div>
-                <div className="text-[10px] font-mono text-text-muted flex items-center gap-2">
-                  <span>{t.date}</span>
-                  {t.category_name && <span>· {t.category_name}</span>}
-                  {showAccountColumn && <span>· {t.account_name}</span>}
+                {/* Single truncating string — a flex row here would wrap on long
+                    category/account names and grow the row past spec height. */}
+                <div className="text-[10px] font-mono text-text-muted truncate">
+                  {[t.date, t.category_name, showAccountColumn ? t.account_name : null]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-shrink-0 pl-3">
                 <div className="text-right">
-                  <span className={`font-mono ${TYPE_STYLE[t.type]}`}>
+                  <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[t.type]}`}>
                     {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}
                     {formatAmount(t.amount)} {multiCurrency ? t.currency_code : ''}
                   </span>
@@ -140,7 +155,9 @@ export default function Transactions() {
                     </div>
                   )}
                 </div>
-                {canWrite && (
+                {/* Hover reveals are pointer-fine only — on touch they'd be
+                    invisible tap targets; the row tap opens the sheet instead. */}
+                {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEdit(t)} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                     <button onClick={() => setDeleting(t)} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
@@ -165,6 +182,15 @@ export default function Transactions() {
         </div>
       )}
 
+      <ActionSheet
+        open={!!actionTarget}
+        onClose={() => setActionTarget(null)}
+        title={actionTarget?.description}
+        actions={[
+          { label: 'Edit', icon: Pencil, onSelect: () => actionTarget && openEdit(actionTarget) },
+          { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => actionTarget && setDeleting(actionTarget) },
+        ]}
+      />
       <TransactionFormModal open={formOpen} onClose={() => setFormOpen(false)} transaction={editing} />
       <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <ConfirmDialog

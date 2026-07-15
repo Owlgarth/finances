@@ -8,7 +8,9 @@ import { useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
+import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
@@ -34,9 +36,13 @@ export default function Planned() {
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
 
+  const isTouch = useIsTouch()
+
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
+  // Touch replacement for the hover-revealed row actions (plan decision 7).
+  const [actionTarget, setActionTarget] = useState<PlannedTransaction | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -70,11 +76,12 @@ export default function Planned() {
   })
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Planned</h1>
+        {/* Hidden on mobile: the FAB quick-add has Planned (plan decision 6). */}
         {canWrite && (
-          <button onClick={() => { setEditing(null); setFormOpen(true) }} className={primaryButtonClass}>
+          <button onClick={() => { setEditing(null); setFormOpen(true) }} className={`${primaryButtonClass} max-sm:hidden`}>
             <Plus size={13} className="inline mr-1" /> New planned
           </button>
         )}
@@ -98,7 +105,17 @@ export default function Planned() {
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
           {items.map((p) => (
-            <div key={p.id} className="flex items-center justify-between px-4 py-3 text-sm group">
+            <div
+              key={p.id}
+              onClick={
+                isTouch && canWrite && p.status === 'pending' ? () => setActionTarget(p) : undefined
+              }
+              className={`flex items-center justify-between px-4 py-3 text-sm group ${
+                isTouch && canWrite && p.status === 'pending'
+                  ? 'active:bg-surface-hover transition-colors cursor-pointer'
+                  : ''
+              }`}
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-text truncate">{p.name}</span>
@@ -108,9 +125,11 @@ export default function Planned() {
                   {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-text">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
-                {canWrite && p.status === 'pending' && (
+              <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
+                {/* Hover reveals are pointer-fine only — on touch the row tap
+                    opens the action sheet instead. */}
+                {canWrite && !isTouch && p.status === 'pending' && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
                     <button onClick={() => { setEditing(p); setFormOpen(true) }} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
@@ -133,6 +152,16 @@ export default function Planned() {
         </div>
       )}
 
+      <ActionSheet
+        open={!!actionTarget}
+        onClose={() => setActionTarget(null)}
+        title={actionTarget?.name}
+        actions={[
+          { label: 'Execute now', icon: CheckCircle, onSelect: () => actionTarget && executeMutation.mutate(actionTarget) },
+          { label: 'Edit', icon: Pencil, onSelect: () => { if (actionTarget) { setEditing(actionTarget); setFormOpen(true) } } },
+          { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => actionTarget && setDeleting(actionTarget) },
+        ]}
+      />
       <PlannedFormModal open={formOpen} onClose={() => setFormOpen(false)} planned={editing} />
       <ConfirmDialog
         isOpen={!!deleting}

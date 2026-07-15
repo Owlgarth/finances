@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Maskable/apple-touch source: full-bleed ink (the platform applies its own
+       corner mask), mark scaled into the central safe zone. -->
+  <rect width="64" height="64" fill="#171717"/>
+  <g transform="translate(8.32,8.32) scale(0.74)">
+    <path d="M22 18 h11 a13 14 0 0 1 0 28 h-11 z M29 25 v14 h4 a6 7 0 0 0 0 -14 z" fill="#FAFAFA" fill-rule="evenodd"/>
+    <rect x="22" y="50" width="24" height="3" fill="#737373"/>
+  </g>
+</svg>
