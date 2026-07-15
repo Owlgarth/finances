@@ -37,7 +37,7 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 |---|---|
 | Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); filters full-width, values visible in place |
 | Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
-| Budget detail | Ledger table, horizontal scroll, sticky category column; planned cell tap → numeric editor; period switcher = arrows + sheet picker |
+| Budget detail | Ledger table, sticky category column; one currency at a time (Planned/Actual/Remaining) with a prev/next currency switcher in the header; planned cell tap → numeric editor; period switcher = arrows + sheet picker |
 | Planned | Rows; pending-row tap → action sheet (Execute now, Edit, Delete) |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |

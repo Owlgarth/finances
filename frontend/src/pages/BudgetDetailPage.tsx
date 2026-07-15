@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -136,21 +136,32 @@ export default function BudgetDetailPage() {
   }, [items, currencies, primaryCurrency])
   const multiCurrency = activeCurrencies.length > 1
 
-  // Rows: one per active category, with planned/actual/remaining per currency.
+  // Currency carousel: one currency's Planned/Actual/Remaining at a time.
+  // Tracked by code, not index, so the view survives a period change; when the
+  // selected currency isn't present in the new period, fall back to the first.
+  const [viewCurrency, setViewCurrency] = useState<string | null>(null)
+  const currencyIdx = viewCurrency ? Math.max(0, activeCurrencies.indexOf(viewCurrency)) : 0
+  const activeCurrency = activeCurrencies[currencyIdx]
+
+  const goToCurrency = (dir: 1 | -1) => {
+    const len = activeCurrencies.length
+    setViewCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
+    setEditingCell(null)
+  }
+
+  // Rows: one per active category, with planned/actual/remaining for the
+  // currency currently shown.
   const rows = categories
     .filter((c) => !c.is_archived)
-    .map((c) => ({
-      category: c,
-      cells: activeCurrencies.map((code) => {
-        const item = items.find((i) => i.category_id === c.id && i.currency_code === code)
-        return {
-          currencyCode: code,
-          planned: item?.planned ?? '0',
-          actual: item?.actual ?? '0',
-          remaining: item?.remaining ?? '0',
-        }
-      }),
-    }))
+    .map((c) => {
+      const item = items.find((i) => i.category_id === c.id && i.currency_code === activeCurrency)
+      return {
+        category: c,
+        planned: item?.planned ?? '0',
+        actual: item?.actual ?? '0',
+        remaining: item?.remaining ?? '0',
+      }
+    })
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
@@ -211,68 +222,81 @@ export default function BudgetDetailPage() {
               {multiCurrency && (
                 <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                   <th className="sticky left-0 z-10 bg-surface" />
-                  {activeCurrencies.map((code) => (
-                    <th key={code} colSpan={3} className="text-center px-4 py-2 border-l border-border">{code}</th>
-                  ))}
+                  <th colSpan={3} className="px-4 py-1 font-medium">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => goToCurrency(-1)}
+                        aria-label="Previous currency"
+                        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+                      >
+                        <ChevronLeft size={12} />
+                      </button>
+                      <span aria-live="polite" className="min-w-[6ch] text-center text-text">
+                        {activeCurrency}
+                        <span className="ml-1.5 text-text-muted">{currencyIdx + 1}/{activeCurrencies.length}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => goToCurrency(1)}
+                        aria-label="Next currency"
+                        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+                      >
+                        <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  </th>
                 </tr>
               )}
               <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                 {/* Sticky: row identity stays put while amount columns scroll (S3). */}
                 <th className="text-left px-4 py-2 sticky left-0 z-10 bg-surface">Category</th>
-                {activeCurrencies.map((code) => (
-                  <Fragment key={code}>
-                    <th className={`text-right px-4 py-2 ${multiCurrency ? 'border-l border-border' : ''}`}>Planned</th>
-                    <th className="text-right px-4 py-2">Actual</th>
-                    <th className="text-right px-4 py-2">Remaining</th>
-                  </Fragment>
-                ))}
+                <th className="text-right px-4 py-2">Planned</th>
+                <th className="text-right px-4 py-2">Actual</th>
+                <th className="text-right px-4 py-2">Remaining</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ category, cells }) => (
-                <tr key={category.id}>
-                  <td className="px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 bg-surface max-sm:max-w-[9rem] overflow-hidden text-ellipsis">
-                    {category.name}
-                  </td>
-                  {cells.map(({ currencyCode, planned, actual, remaining }) => {
-                    const cellKey = `${category.id}:${currencyCode}`
-                    return (
-                      <Fragment key={currencyCode}>
-                        <td className={`px-4 py-2 text-right font-mono ${multiCurrency ? 'border-l border-border' : ''}`}>
-                          {editingCell === cellKey ? (
-                            <span className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                value={cellValue}
-                                onChange={(e) => setCellValue(e.target.value)}
-                                className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
-                                autoFocus
-                              />
-                              <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode }); setEditingCell(null) }} className="text-positive touch-hit"><Check size={14} /></button>
-                              <button onClick={() => setEditingCell(null)} className="text-text-muted touch-hit"><X size={14} /></button>
-                            </span>
-                          ) : canEditPlan ? (
-                            /* Whole cell is the tap target, not just the digits. */
-                            <button onClick={() => { setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
-                              {formatAmount(planned)}
-                            </button>
-                          ) : (
-                            formatAmount(planned)
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono text-text-muted">{formatAmount(actual)}</td>
-                        <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-text'}`}>
-                          {formatAmount(remaining)}
-                        </td>
-                      </Fragment>
-                    )
-                  })}
-                </tr>
-              ))}
+              {rows.map(({ category, planned, actual, remaining }) => {
+                const cellKey = `${category.id}:${activeCurrency}`
+                return (
+                  <tr key={category.id}>
+                    <td className="px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 bg-surface max-sm:max-w-[9rem] overflow-hidden text-ellipsis">
+                      {category.name}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono">
+                      {editingCell === cellKey ? (
+                        <span className="inline-flex items-center gap-1">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            value={cellValue}
+                            onChange={(e) => setCellValue(e.target.value)}
+                            className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
+                            autoFocus
+                          />
+                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} className="text-positive touch-hit"><Check size={14} /></button>
+                          <button onClick={() => setEditingCell(null)} className="text-text-muted touch-hit"><X size={14} /></button>
+                        </span>
+                      ) : canEditPlan ? (
+                        /* Whole cell is the tap target, not just the digits. */
+                        <button onClick={() => { setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
+                          {formatAmount(planned)}
+                        </button>
+                      ) : (
+                        formatAmount(planned)
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono text-text-muted">{formatAmount(actual)}</td>
+                    <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-text'}`}>
+                      {formatAmount(remaining)}
+                    </td>
+                  </tr>
+                )
+              })}
               {rows.length === 0 && (
-                <tr><td colSpan={1 + activeCurrencies.length * 3} className="px-4 py-6 text-center text-text-muted">No categories yet.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No categories yet.</td></tr>
               )}
             </tbody>
           </table>
