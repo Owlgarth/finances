@@ -97,6 +97,11 @@ export default function BudgetDetailPage() {
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [cellValue, setCellValue] = useState('')
 
+  // Row/card highlight — a purely visual "where was I looking" marker; click
+  // toggles it, nothing else reads it.
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
+  const toggleSelected = (id: number) => setSelectedCategory((prev) => (prev === id ? null : id))
+
   const selectedPeriod = allPeriods.find((p) => p.id === periodId) ?? null
   const todayIso = new Date().toISOString().slice(0, 10)
   const isPast = !!selectedPeriod && selectedPeriod.end_date < todayIso
@@ -313,14 +318,21 @@ export default function BudgetDetailPage() {
             <tbody className="divide-y divide-border">
               {rows.map(({ category, planned, actual, remaining }) => {
                 const cellKey = `${category.id}:${activeCurrency}`
+                const isSelected = selectedCategory === category.id
                 return (
-                  <tr key={category.id}>
-                    <td className="px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 bg-surface max-sm:max-w-[9rem] overflow-hidden text-ellipsis">
+                  <tr
+                    key={category.id}
+                    onClick={() => toggleSelected(category.id)}
+                    className={`cursor-pointer ${isSelected ? 'bg-surface-hover' : ''}`}
+                  >
+                    {/* Sticky cell needs its own solid bg, so it mirrors the row state;
+                        the inset shadow is the selection accent bar. */}
+                    <td className={`px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 max-sm:max-w-[9rem] overflow-hidden text-ellipsis ${isSelected ? 'bg-surface-hover shadow-[inset_2px_0_0_var(--color-border-focus)]' : 'bg-surface'}`}>
                       {category.name}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono">
+                    <td className="px-4 py-2 text-right font-mono text-planned">
                       {editingCell === cellKey ? (
-                        <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="number"
                             inputMode="decimal"
@@ -335,15 +347,15 @@ export default function BudgetDetailPage() {
                         </span>
                       ) : canEditPlan ? (
                         /* Whole cell is the tap target, not just the digits. */
-                        <button onClick={() => { setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
                           {formatAmount(planned)}
                         </button>
                       ) : (
                         formatAmount(planned)
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-text-muted">{formatAmount(actual)}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-text'}`}>
+                    <td className="px-4 py-2 text-right font-mono text-actual">{formatAmount(actual)}</td>
+                    <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </td>
                   </tr>
@@ -365,16 +377,32 @@ export default function BudgetDetailPage() {
           )}
           {rows.map(({ category, planned, actual, remaining }) => {
             const cellKey = `${category.id}:${activeCurrency}`
+            const isSelected = selectedCategory === category.id
             return (
-              <div key={category.id} className="border border-border rounded-sm bg-surface">
-                <div className="px-4 py-2 border-b border-border text-sm font-medium text-text text-center truncate">
+              <div
+                key={category.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                onClick={() => toggleSelected(category.id)}
+                onKeyDown={(e) => {
+                  // Only when the card itself is focused — Enter/Space inside the
+                  // planned editor must keep their native behavior.
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault()
+                    toggleSelected(category.id)
+                  }
+                }}
+                className={`border rounded-sm bg-surface cursor-pointer transition-colors ${isSelected ? 'border-border-focus' : 'border-border'}`}
+              >
+                <div className={`px-4 py-2 border-b text-sm font-medium text-text text-center truncate ${isSelected ? 'border-border-focus' : 'border-border'}`}>
                   {category.name}
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-border text-center">
                   <div className="px-2 py-2 min-w-0">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Planned</div>
                     {editingCell === cellKey ? (
-                      <div className="flex flex-col items-center gap-1.5">
+                      <div className="flex flex-col items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="number"
                           inputMode="decimal"
@@ -391,26 +419,26 @@ export default function BudgetDetailPage() {
                       </div>
                     ) : canEditPlan ? (
                       <button
-                        onClick={() => { setEditingCell(cellKey); setCellValue(planned) }}
-                        className="w-full min-h-[36px] font-mono text-sm text-text hover:text-primary truncate touch-hit"
+                        onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey); setCellValue(planned) }}
+                        className="w-full min-h-[36px] font-mono text-sm text-planned hover:text-primary truncate touch-hit"
                       >
                         {formatAmount(planned)}
                       </button>
                     ) : (
-                      <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-text truncate">
+                      <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-planned truncate">
                         {formatAmount(planned)}
                       </div>
                     )}
                   </div>
                   <div className="px-2 py-2 min-w-0">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Actual</div>
-                    <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-text-muted truncate">
+                    <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-actual truncate">
                       {formatAmount(actual)}
                     </div>
                   </div>
                   <div className="px-2 py-2 min-w-0">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Remaining</div>
-                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-text'}`}>
+                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </div>
                   </div>
