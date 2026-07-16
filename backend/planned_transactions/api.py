@@ -2,6 +2,7 @@
 
 import json
 from datetime import date
+from decimal import Decimal
 
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Form, Query, Router
@@ -34,14 +35,19 @@ ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account
 def list_planned(
     request: HttpRequest,
     status: str | None = Query(None),
-    account_id: int | None = Query(None),
+    account_id: list[int] | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    category_id: list[int] | None = Query(None),
+    budget_id: list[int] | None = Query(None),
+    search: str | None = Query(None),
+    amount_gte: Decimal | None = Query(None),
+    amount_lte: Decimal | None = Query(None),
     ordering: str | None = Query(None, pattern=ORDERING_PATTERN),
     page: int = Query(1, ge=1),
     page_size: int = Query(25),
 ):
-    """List planned transactions for the current workspace."""
+    """List planned transactions for the current workspace with optional filters."""
     workspace_id = request.auth.current_workspace_id
     return PlannedTransactionService.list(
         workspace_id,
@@ -49,6 +55,11 @@ def list_planned(
         account_id,
         start_date,
         end_date,
+        category_id=category_id,
+        budget_id=budget_id,
+        search=search,
+        amount_gte=amount_gte,
+        amount_lte=amount_lte,
         ordering=ordering,
         page=page,
         page_size=page_size,
@@ -70,15 +81,32 @@ def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
 def planned_totals(
     request: HttpRequest,
     status: str | None = Query(None),
-    account_id: int | None = Query(None),
+    account_id: list[int] | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
+    category_id: list[int] | None = Query(None),
+    budget_id: list[int] | None = Query(None),
+    search: str | None = Query(None),
+    amount_gte: Decimal | None = Query(None),
+    amount_lte: Decimal | None = Query(None),
     group_by: str = Query('currency', pattern=r'^(currency|category)$'),
 ):
     """Get aggregated planned transaction totals grouped by currency or category."""
     workspace_id = request.auth.current_workspace_id
     return {
-        'totals': PlannedTransactionService.totals(workspace_id, status, account_id, start_date, end_date, group_by)
+        'totals': PlannedTransactionService.totals(
+            workspace_id,
+            status,
+            account_id,
+            start_date,
+            end_date,
+            category_id=category_id,
+            budget_id=budget_id,
+            search=search,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
+            group_by=group_by,
+        )
     }
 
 

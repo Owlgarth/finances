@@ -103,6 +103,41 @@ class TestCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertTrue(Category.objects.filter(id=category.id).exists())
 
 
+class TestWorkspaceCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
+    """Workspace-wide category listing at /budgets/categories (cross-budget filters)."""
+
+    def setUp(self):
+        super().setUp()
+        self.budget_a = BudgetFactory(workspace=self.workspace)
+        self.budget_b = BudgetFactory(workspace=self.workspace)
+
+    def test_lists_categories_across_budgets(self):
+        CategoryFactory(budget=self.budget_a, name='Food')
+        CategoryFactory(budget=self.budget_b, name='Travel')
+
+        data = self.get('/api/budgets/categories', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(
+            {(c['name'], c['budget_id']) for c in data},
+            {('Food', self.budget_a.id), ('Travel', self.budget_b.id)},
+        )
+
+    def test_excludes_archived_by_default(self):
+        CategoryFactory(budget=self.budget_a, name='Active')
+        CategoryFactory(budget=self.budget_a, name='Retired', is_archived=True)
+
+        names = [c['name'] for c in self.get('/api/budgets/categories', **self.auth_headers())]
+        self.assertEqual(names, ['Active'])
+
+        names = [c['name'] for c in self.get('/api/budgets/categories?include_archived=true', **self.auth_headers())]
+        self.assertEqual(sorted(names), ['Active', 'Retired'])
+
+    def test_workspace_scoping(self):
+        foreign = CategoryFactory()
+        data = self.get('/api/budgets/categories', **self.auth_headers())
+        self.assertNotIn(foreign.id, [c['id'] for c in data])
+
+
 class TestCategoryRolePermissions(AuthMixin, APIClientMixin, TestCase):
     """Members can write categories (WRITE_ROLES); viewers cannot."""
 
