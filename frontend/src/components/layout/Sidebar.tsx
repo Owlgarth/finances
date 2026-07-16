@@ -7,11 +7,13 @@ import {
   Home,
   PieChart,
   Receipt,
+  Search,
   Wallet,
   Settings,
   Users,
 } from 'lucide-react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { isMacLike, openPageSearch } from '../common/CommandPalette'
 import UserMenu from './UserMenu'
 import WorkspaceSelector from './WorkspaceSelector'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
@@ -66,6 +68,22 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         {/* Nav links */}
         {workspace ? (
           <nav className="flex-1 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={openPageSearch}
+              title={collapsed ? 'Search' : undefined}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1 text-text-muted hover:bg-surface-hover hover:text-text"
+            >
+              <Search size={14} className="flex-shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="font-mono text-xs uppercase tracking-wider flex-1 text-left">Search</span>
+                  <kbd className="text-[10px] font-mono border border-border rounded-sm px-1 py-0.5 text-text-muted">
+                    {isMacLike ? '⌘K' : 'Ctrl K'}
+                  </kbd>
+                </>
+              )}
+            </button>
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
