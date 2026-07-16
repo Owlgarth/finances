@@ -6,6 +6,7 @@ backend/.env
 .env
 *.env
 !example.env
+IMPLEMENTATION_PLAN.md
 
 # OS
 .DS_Store
