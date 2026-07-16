@@ -120,6 +120,36 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         self.assertEqual(rent['currency_code'], 'PLN')
         self.assertEqual(rent['category']['name'], 'Rent')
 
+    def test_list_filtered_by_search(self):
+        data = self.get('/api/planned-transactions?search=RENT', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['name'], 'Monthly Rent')
+
+    def test_list_filtered_by_category(self):
+        data = self.get(f'/api/planned-transactions?category_id={self.groceries.id}', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['name'], 'Grocery Shopping')
+
+        data = self.get(
+            f'/api/planned-transactions?category_id={self.groceries.id}&category_id={self.rent.id}',
+            **self.auth_headers(),
+        )
+        self.assertEqual(len(data['items']), 2)
+
+    def test_list_filtered_by_budget(self):
+        # planned3 has no category, so it falls outside any budget filter.
+        data = self.get(f'/api/planned-transactions?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertEqual(len(data['items']), 2)
+
+        other_budget = BudgetFactory(workspace=self.workspace)
+        data = self.get(f'/api/planned-transactions?budget_id={other_budget.id}', **self.auth_headers())
+        self.assertEqual(len(data['items']), 0)
+
+    def test_list_filtered_by_amount_range(self):
+        data = self.get('/api/planned-transactions?amount_gte=100&amount_lte=200', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['name'], 'Grocery Shopping')
+
     def test_workspace_scoping(self):
         foreign = PlannedTransactionFactory()
         data = self.get('/api/planned-transactions', **self.auth_headers())

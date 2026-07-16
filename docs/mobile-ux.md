@@ -24,22 +24,25 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 
 - **Bottom tab bar, 5 slots**: Home · Transactions · **[+]** · Budgets · More. Labels always
   visible, active tab in the primary color, safe-area padded.
-- **More** opens a sheet: Accounts, Planned, Members, Settings, then workspace switching
+- **More** opens a sheet: Search (global page search), Accounts, Planned, Members, Settings,
+  then workspace switching
   (with role badges), workspace settings, dark mode, disable-zoom toggle (opt-in,
   per-device: kills double-tap/pinch zoom for a native feel), logout.
 - **The center FAB is the global create action**: New transaction · Transfer · From receipt
   (only when extraction is configured) · Planned. Available from every screen; screens hide
   their own creation buttons when the FAB covers them. Viewers (read-only role) get no FAB.
 - Each tab remembers its scroll position (native stack behavior).
+- **Global page search**: jump to any page or budget by name — ⌘K/Ctrl+K and a Search entry
+  in the desktop sidebar; the Search row in the More sheet on mobile (sheet presentation).
 
 ## Per-screen patterns
 
 | Screen | Mobile pattern |
 |---|---|
-| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); filters full-width, values visible in place |
+| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search + Filters disclosure (account, type, budget, category, amount range, date range) with an active-count badge; filter state lives in the URL |
 | Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
 | Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time with a prev/next currency switcher above the cards (gear → reorder sheet, order saved per budget); desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker |
-| Planned | Rows; pending-row tap → action sheet (Execute now, Edit, Delete) |
+| Planned | Rows; pending-row tap → action sheet (Execute now, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (account, budget, category, amount range, planned-date range), URL-synced |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |
 
