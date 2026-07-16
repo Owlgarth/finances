@@ -193,6 +193,25 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         self.assertEqual(len(data['totals']), 1)
         self.assertEqual(data['totals'][0]['total'], '150.00')
 
+    def test_totals_filtered_by_budget(self):
+        # The uncategorized USD subscription falls outside any budget filter.
+        data = self.get(f'/api/planned-transactions/totals?budget_id={self.budget.id}', **self.auth_headers())
+        as_map = {t['currency']: t['total'] for t in data['totals']}
+        self.assertEqual(as_map, {'PLN': '1350.00'})
+
+    def test_totals_filtered_by_search_and_amount(self):
+        data = self.get('/api/planned-transactions/totals?search=rent&amount_gte=1000', **self.auth_headers())
+        self.assertEqual(len(data['totals']), 1)
+        self.assertEqual(data['totals'][0]['total'], '1200.00')
+
+    def test_totals_filtered_by_multiple_accounts(self):
+        data = self.get(
+            f'/api/planned-transactions/totals?account_id={self.account.id}&account_id={self.usd_account.id}',
+            **self.auth_headers(),
+        )
+        as_map = {t['currency']: t['total'] for t in data['totals']}
+        self.assertEqual(as_map, {'PLN': '1350.00', 'USD': '30.00'})
+
     def test_totals_cross_workspace_isolation(self):
         PlannedTransactionFactory(amount=Decimal('9999.00'))
         data = self.get('/api/planned-transactions/totals', **self.auth_headers())
