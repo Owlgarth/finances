@@ -17,6 +17,7 @@ import {
   Settings,
   Users,
   Wallet,
+  ZoomIn,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -26,6 +27,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionEnabled } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
+import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
 import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
@@ -95,6 +97,8 @@ export default function BottomNav() {
   const extractionEnabled = useExtractionEnabled()
 
   const [moreOpen, setMoreOpen] = useState(false)
+  // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
+  const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
   const [switchingToId, setSwitchingToId] = useState<number | null>(null)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
@@ -260,6 +264,21 @@ export default function BottomNav() {
                   Dark mode
                 </span>
                 <Switch checked={isDark} onChange={() => toggleTheme()} aria-label="Dark mode" />
+              </div>
+              <div className="flex items-center justify-between min-h-[44px] px-4">
+                <span className="flex items-center gap-3 text-sm text-text">
+                  <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                  Disable zoom
+                </span>
+                <Switch
+                  checked={zoomLocked}
+                  onChange={() => {
+                    const next = !zoomLocked
+                    setZoomLocked(next)
+                    setZoomDisabled(next)
+                  }}
+                  aria-label="Disable zoom"
+                />
               </div>
               <button
                 type="button"
