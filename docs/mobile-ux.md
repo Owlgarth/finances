@@ -18,14 +18,15 @@ but inherits these *decisions*. Web implementation details live in `design/respo
    (`inputMode="decimal"`) for amounts.
 5. **Density is kept.** 32px table rows and the 11–16px scale survive on mobile; wide tables
    scroll horizontally with a sticky identity column — no table→card explosions except where
-   a card list is the better native idiom (Members).
+   a card list is the better native idiom (Members, Budget detail).
 
 ## Navigation
 
 - **Bottom tab bar, 5 slots**: Home · Transactions · **[+]** · Budgets · More. Labels always
   visible, active tab in the primary color, safe-area padded.
 - **More** opens a sheet: Accounts, Planned, Members, Settings, then workspace switching
-  (with role badges), workspace settings, dark mode, logout.
+  (with role badges), workspace settings, dark mode, disable-zoom toggle (opt-in,
+  per-device: kills double-tap/pinch zoom for a native feel), logout.
 - **The center FAB is the global create action**: New transaction · Transfer · From receipt
   (only when extraction is configured) · Planned. Available from every screen; screens hide
   their own creation buttons when the FAB covers them. Viewers (read-only role) get no FAB.
@@ -37,7 +38,7 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 |---|---|
 | Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); filters full-width, values visible in place |
 | Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
-| Budget detail | Ledger table, horizontal scroll, sticky category column; planned cell tap → numeric editor; period switcher = arrows + sheet picker |
+| Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time with a prev/next currency switcher above the cards (gear → reorder sheet, order saved per budget); desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker |
 | Planned | Rows; pending-row tap → action sheet (Execute now, Edit, Delete) |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |

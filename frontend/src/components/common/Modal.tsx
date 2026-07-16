@@ -15,6 +15,10 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg'
   /** Extra classes appended to the PANEL div (padding, overflow, max-height, flex layout). Never the scrim. */
   className?: string
+  /** Optional dialog title. When set, the title and close X render as one flex
+      header row (the X gets a reserved slot, so it can never overlap the title)
+      instead of the floating absolute-positioned X. */
+  title?: string
 }
 
 const SIZE_CLASS = {
@@ -29,6 +33,7 @@ export default function Modal({
   children,
   size = 'md',
   className = '',
+  title,
 }: ModalProps) {
   const { isMobile } = useBreakpoint()
   // Desktop-only wiring — BottomSheet runs its own useOverlay on mobile.
@@ -45,11 +50,27 @@ export default function Modal({
     </button>
   )
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3). The X lives
-  // in the sheet's sticky handle row so it doesn't scroll away with the body.
+  const header = title ? (
+    <div className="flex items-start justify-between gap-3 mb-4">
+      <h2 className="text-base font-semibold text-text">{title}</h2>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="-mt-1 -mr-1 flex-shrink-0 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
+      >
+        <X size={14} strokeWidth={1.5} />
+      </button>
+    </div>
+  ) : null
+
+  // Mobile: same API, bottom-sheet presentation (plan decision 3). Without a
+  // title the X lives in the sheet's sticky handle row so it doesn't scroll
+  // away with the body; with one, the header row owns it instead.
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={onClose} className={className} showClose>
+      <BottomSheet open={open} onClose={onClose} className={className} showClose={!title} aria-label={title}>
+        {header}
         {children}
       </BottomSheet>
     )
@@ -77,11 +98,12 @@ export default function Modal({
           ref={panelRef}
           role="dialog"
           aria-modal="true"
+          aria-label={title}
           tabIndex={-1}
           className={`relative bg-surface border border-border rounded-sm w-full outline-none ${SIZE_CLASS[size]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {closeButton}
+          {title ? header : closeButton}
           {children}
         </div>
       </div>

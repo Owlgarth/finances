@@ -34,6 +34,11 @@ export default {
         "warning":        "var(--color-warning)",
         "warning-bg":     "var(--color-warning-bg)",
 
+        // Budget ledger columns (muted "pastel" accents)
+        "planned":        "var(--color-planned)",
+        "actual":         "var(--color-actual)",
+        "remaining":      "var(--color-remaining)",
+
         // Overlays
         "scrim":          "var(--color-scrim)",
       },
