@@ -145,6 +145,13 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         data = self.get(f'/api/planned-transactions?budget_id={other_budget.id}', **self.auth_headers())
         self.assertEqual(len(data['items']), 0)
 
+    def test_list_filtered_by_multiple_accounts(self):
+        data = self.get(
+            f'/api/planned-transactions?account_id={self.account.id}&account_id={self.usd_account.id}',
+            **self.auth_headers(),
+        )
+        self.assertEqual(len(data['items']), 3)
+
     def test_list_filtered_by_amount_range(self):
         data = self.get('/api/planned-transactions?amount_gte=100&amount_lte=200', **self.auth_headers())
         self.assertEqual(len(data['items']), 1)

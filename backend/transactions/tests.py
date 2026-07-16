@@ -241,6 +241,13 @@ class TestFiltersAndTotals(TransactionTestCase):
         self.assertEqual(data['total'], 1)
         self.assertEqual(data['items'][0]['currency_code'], 'USD')
 
+    def test_filter_by_multiple_accounts(self):
+        data = self.get(
+            f'/api/transactions?account_id={self.account.id}&account_id={self.usd_account.id}',
+            **self.auth_headers(),
+        )
+        self.assertEqual(data['total'], 4)
+
     def test_filter_by_budget(self):
         data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
         self.assertEqual(data['total'], 1)

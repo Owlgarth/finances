@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -16,7 +16,7 @@ import NewFromReceiptModal from '../components/modals/transactions/NewFromReceip
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
-import Select from '../components/common/Select'
+import MultiSelect from '../components/common/MultiSelect'
 import SearchInput from '../components/common/SearchInput'
 import AmountInput from '../components/common/AmountInput'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
@@ -40,6 +40,16 @@ function intParam(params: URLSearchParams, key: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
+/** Comma-separated int list URL param (garbage entries dropped). */
+function intListParam(params: URLSearchParams, key: string): number[] {
+  const raw = params.get(key)
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0)
+}
+
 /** Amount param → number for the API, or undefined when unset/garbage. */
 function amountParam(raw: string): number | undefined {
   if (raw === '') return undefined
@@ -59,10 +69,12 @@ export default function Transactions() {
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('search') ?? ''
-  const accountFilter = intParam(searchParams, 'account')
-  const typeFilter = searchParams.get('type')
-  const budgetFilter = intParam(searchParams, 'budget')
-  const categoryFilter = intParam(searchParams, 'category')
+  const accountFilter = intListParam(searchParams, 'account')
+  const typeFilter = (searchParams.get('type') ?? '')
+    .split(',')
+    .filter((v) => TYPE_OPTIONS.some((o) => o.value === v))
+  const budgetFilter = intListParam(searchParams, 'budget')
+  const categoryFilter = intListParam(searchParams, 'category')
   const amountMin = searchParams.get('amount_min') ?? ''
   const amountMax = searchParams.get('amount_max') ?? ''
   const dateFrom = searchParams.get('from') ?? ''
@@ -71,15 +83,16 @@ export default function Transactions() {
 
   const [pageSize, setPageSize] = useState(25)
 
-  const updateParams = (patch: Record<string, string | number | null>) => {
+  const updateParams = (patch: Record<string, string | number | (string | number)[] | null>) => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
         // Any filter change invalidates the current page number.
         if (!('page' in patch)) next.delete('page')
         for (const [key, value] of Object.entries(patch)) {
-          if (value === null || value === '') next.delete(key)
-          else next.set(key, String(value))
+          const str = Array.isArray(value) ? value.join(',') : value
+          if (str === null || str === '') next.delete(key)
+          else next.set(key, String(str))
         }
         return next
       },
@@ -87,13 +100,14 @@ export default function Transactions() {
     )
   }
 
+  // Each facet counts once, however many values it holds.
   const activeFilterCount = [
-    accountFilter,
-    typeFilter,
-    budgetFilter,
-    categoryFilter,
-    amountMin || amountMax ? 1 : null,
-    dateFrom || dateTo ? 1 : null,
+    accountFilter.length > 0,
+    typeFilter.length > 0,
+    budgetFilter.length > 0,
+    categoryFilter.length > 0,
+    Boolean(amountMin || amountMax),
+    Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
 
   // Deep links with filters land with the panel already open.
@@ -112,16 +126,16 @@ export default function Transactions() {
   const [actionTarget, setActionTarget] = useState<Transaction | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, pageSize, search, accountFilter, typeFilter, budgetFilter, categoryFilter, amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['transactions', page, pageSize, search, accountFilter.join(','), typeFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       transactionsApi.getAll({
         page,
         page_size: pageSize,
         search: search || undefined,
-        account_id: accountFilter ?? undefined,
-        transaction_type: typeFilter ? [typeFilter] : undefined,
-        budget_id: budgetFilter ?? undefined,
-        category_id: categoryFilter ? [categoryFilter] : undefined,
+        account_id: accountFilter.length ? accountFilter : undefined,
+        transaction_type: typeFilter.length ? typeFilter : undefined,
+        budget_id: budgetFilter.length ? budgetFilter : undefined,
+        category_id: categoryFilter.length ? categoryFilter : undefined,
         amount_gte: amountParam(amountMin),
         amount_lte: amountParam(amountMax),
         date_from: dateFrom || undefined,
@@ -148,27 +162,26 @@ export default function Transactions() {
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
-  const budgetNames = useMemo(() => new Map(budgets.map((b) => [b.id, b.name])), [budgets])
-  // Budget filter narrows the category picker; without one, cross-budget
-  // categories disambiguate with their budget's name.
-  const categoryOptions = useMemo(
-    () =>
-      categories
-        .filter((c) => !budgetFilter || c.budget_id === budgetFilter)
-        .map((c) => ({
-          value: c.id,
-          label:
-            !budgetFilter && budgets.length > 1
-              ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}`
-              : c.name,
-        })),
-    [categories, budgetFilter, budgets.length, budgetNames],
-  )
+  const budgetNames = new Map(budgets.map((b) => [b.id, b.name]))
+  // Budget filter narrows the category picker; unless it pins categories to a
+  // single budget, cross-budget names disambiguate with their budget's name.
+  const budgetSet = new Set(budgetFilter)
+  const showBudgetSuffix = budgets.length > 1 && budgetFilter.length !== 1
+  const categoryOptions = categories
+    .filter((c) => budgetSet.size === 0 || budgetSet.has(c.budget_id))
+    .map((c) => ({
+      value: c.id,
+      label: showBudgetSuffix ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}` : c.name,
+    }))
 
-  const setBudgetFilter = (value: number) => {
-    const category = categories.find((c) => c.id === categoryFilter)
-    // Keep the category only if it belongs to the newly chosen budget.
-    updateParams({ budget: value, category: category && category.budget_id === value ? category.id : null })
+  const setBudgetFilter = (values: number[]) => {
+    // Keep only categories that still belong to the selected budgets.
+    const budgetSet = new Set(values)
+    const kept = categoryFilter.filter((id) => {
+      const category = categories.find((c) => c.id === id)
+      return category !== undefined && (budgetSet.size === 0 || budgetSet.has(category.budget_id))
+    })
+    updateParams({ budget: values, category: kept })
   }
 
   return (
@@ -205,20 +218,20 @@ export default function Transactions() {
         <FilterPanel onClear={activeFilterCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
             <FilterField label="Account">
-              <Select value={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
             </FilterField>
           )}
           <FilterField label="Type">
-            <Select value={typeFilter} onChange={(v) => updateParams({ type: v })} options={TYPE_OPTIONS} placeholder="All types" aria-label="Filter by type" />
+            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={TYPE_OPTIONS} placeholder="All types" aria-label="Filter by type" />
           </FilterField>
           {budgets.length > 0 && (
             <FilterField label="Budget">
-              <Select value={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder="All budgets" aria-label="Filter by budget" />
+              <MultiSelect values={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder="All budgets" aria-label="Filter by budget" />
             </FilterField>
           )}
           {categories.length > 0 && (
             <FilterField label="Category">
-              <Select value={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder="All categories" aria-label="Filter by category" searchable />
+              <MultiSelect values={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder="All categories" aria-label="Filter by category" searchable />
             </FilterField>
           )}
           <FilterField label="Amount">

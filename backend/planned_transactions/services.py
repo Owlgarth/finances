@@ -55,11 +55,11 @@ class PlannedTransactionService:
     def _build_filtered_queryset(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -69,7 +69,7 @@ class PlannedTransactionService:
         if status:
             queryset = queryset.filter(status=status)
         if account_id:
-            queryset = queryset.filter(account_id=account_id)
+            queryset = queryset.filter(account_id__in=account_id)
         if start_date:
             queryset = queryset.filter(planned_date__gte=start_date)
         if end_date:
@@ -77,7 +77,7 @@ class PlannedTransactionService:
         if category_id:
             queryset = queryset.filter(category_id__in=category_id)
         if budget_id:
-            queryset = queryset.filter(category__budget_id=budget_id)
+            queryset = queryset.filter(category__budget_id__in=budget_id)
         if search:
             queryset = queryset.filter(name__icontains=search)
         if amount_gte is not None:
@@ -103,11 +103,11 @@ class PlannedTransactionService:
     def list(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -143,11 +143,11 @@ class PlannedTransactionService:
     def totals(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
