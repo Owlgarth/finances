@@ -48,6 +48,15 @@ def create_budget(request: HttpRequest, data: BudgetCreate):
     return 201, BudgetService.create(user, workspace_id, data)
 
 
+# Registered before /{budget_id}; the int converter also keeps 'categories' from
+# ever matching that route.
+@router.get('/categories', response=list[CategoryOut], auth=WorkspaceJWTAuth())
+def list_workspace_categories(request: HttpRequest, include_archived: bool = Query(False)):
+    """List categories across all budgets of the current workspace (filter pickers)."""
+    workspace_id = request.auth.current_workspace_id
+    return CategoryService.list_workspace(workspace_id, include_archived)
+
+
 @router.get('/{budget_id}', response={200: BudgetOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def get_budget(request: HttpRequest, budget_id: int):
     """Get a specific budget."""

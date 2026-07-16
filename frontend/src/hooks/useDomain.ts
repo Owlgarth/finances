@@ -25,6 +25,14 @@ export function useBudgets(includeInactive = false) {
   })
 }
 
+/** Categories across all budgets of the workspace (cross-budget filter pickers). */
+export function useWorkspaceCategories(includeArchived = false) {
+  return useQuery({
+    queryKey: ['workspace-categories', includeArchived],
+    queryFn: () => budgetsApi.listAllCategories(includeArchived),
+  })
+}
+
 /** True when the workspace has more than one enabled currency (drives currency UI). */
 export function useMultiCurrency(): boolean {
   const { data } = useEnabledCurrencies()
