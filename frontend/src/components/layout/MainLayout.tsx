@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
+import CommandPalette from '../common/CommandPalette'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
 
@@ -93,6 +94,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
         </main>
         <BottomNav />
+        <CommandPalette />
       </div>
     )
   }
@@ -108,6 +110,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       <main className="flex-1 overflow-y-auto p-6">
         {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
       </main>
+      <CommandPalette />
     </div>
   )
 }
