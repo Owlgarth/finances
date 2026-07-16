@@ -211,6 +211,8 @@ export const budgetsApi = {
   deletePeriod: (budgetId: number, periodId: number) =>
     api.delete(`/budgets/${budgetId}/periods/${periodId}`),
 
+  listAllCategories: (includeArchived = false): Promise<Category[]> =>
+    api.get<Category[]>('/budgets/categories', { params: { include_archived: includeArchived } }).then(res => res.data),
   listCategories: (budgetId: number, includeArchived = false): Promise<Category[]> =>
     api.get<Category[]>(`/budgets/${budgetId}/categories`, { params: { include_archived: includeArchived } }).then(res => res.data),
   createCategory: (budgetId: number, data: { name: string }): Promise<Category> =>
@@ -243,9 +245,9 @@ export interface TransactionInput {
 }
 
 export const transactionsApi = {
-  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number; category_id?: number[]; budget_id?: number; transaction_type?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
+  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
     api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
-  getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number; category_id?: number[]; budget_id?: number; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
+  getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
   create: (data: TransactionInput): Promise<Transaction> =>
     api.post<Transaction>('/transactions', data).then(res => res.data),
@@ -332,9 +334,9 @@ export interface PlannedInput {
 }
 
 export const plannedTransactionsApi = {
-  getAll: (params?: { status?: string; account_id?: number; start_date?: string; end_date?: string; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
+  getAll: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
-  getTotals: (params?: { status?: string; account_id?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
+  getTotals: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
   create: (data: PlannedInput): Promise<PlannedTransaction> =>
     api.post<PlannedTransaction>('/planned-transactions', data).then(res => res.data),
