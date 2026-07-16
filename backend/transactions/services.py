@@ -116,9 +116,9 @@ class TransactionService:
         workspace_id: int,
         date_from=None,
         date_to=None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         transaction_type: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
@@ -132,11 +132,11 @@ class TransactionService:
         if date_to:
             queryset = queryset.filter(date__lte=date_to)
         if account_id:
-            queryset = queryset.filter(account_id=account_id)
+            queryset = queryset.filter(account_id__in=account_id)
         if category_id:
             queryset = queryset.filter(category_id__in=category_id)
         if budget_id:
-            queryset = queryset.filter(category__budget_id=budget_id)
+            queryset = queryset.filter(category__budget_id__in=budget_id)
         if transaction_type:
             queryset = queryset.filter(type__in=transaction_type)
         if search:
@@ -166,9 +166,9 @@ class TransactionService:
         workspace_id: int,
         date_from=None,
         date_to=None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         transaction_type: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
@@ -210,9 +210,9 @@ class TransactionService:
         workspace_id: int,
         date_from=None,
         date_to=None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         transaction_type: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
@@ -264,9 +264,9 @@ class TransactionService:
         workspace_id: int,
         date_from=None,
         date_to=None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         category_id: list | None = None,
-        budget_id: int | None = None,
+        budget_id: list | None = None,
         transaction_type: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,

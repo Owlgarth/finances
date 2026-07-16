@@ -241,6 +241,13 @@ class TestFiltersAndTotals(TransactionTestCase):
         self.assertEqual(data['total'], 1)
         self.assertEqual(data['items'][0]['currency_code'], 'USD')
 
+    def test_filter_by_multiple_accounts(self):
+        data = self.get(
+            f'/api/transactions?account_id={self.account.id}&account_id={self.usd_account.id}',
+            **self.auth_headers(),
+        )
+        self.assertEqual(data['total'], 4)
+
     def test_filter_by_budget(self):
         data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
         self.assertEqual(data['total'], 1)
@@ -264,6 +271,22 @@ class TestFiltersAndTotals(TransactionTestCase):
         self.assertEqual(as_map[('expense', 'USD')], '30.00')
         self.assertEqual(as_map[('income', 'PLN')], '500.00')
         self.assertNotIn(('adjustment', 'PLN'), as_map)
+
+    def test_totals_filtered_by_multiple_accounts(self):
+        totals = self.get(
+            f'/api/transactions/totals?account_id={self.account.id}&account_id={self.usd_account.id}',
+            **self.auth_headers(),
+        )['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map[('expense', 'PLN')], '40.00')
+        self.assertEqual(as_map[('expense', 'USD')], '30.00')
+        self.assertEqual(as_map[('income', 'PLN')], '500.00')
+
+    def test_totals_filtered_by_budget(self):
+        # Only the categorized grocery expense belongs to the budget.
+        totals = self.get(f'/api/transactions/totals?budget_id={self.budget.id}', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {('expense', 'PLN'): '40.00'})
 
     def test_totals_combined_excludes_adjustments(self):
         data = self.get('/api/transactions/totals?group_by=type,category', **self.auth_headers())

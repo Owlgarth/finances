@@ -14,6 +14,7 @@ import {
   Plus,
   Receipt,
   ScanLine,
+  Search,
   Settings,
   Users,
   Wallet,
@@ -28,6 +29,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionEnabled } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
+import { openPageSearch } from '../common/CommandPalette'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
 import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
@@ -199,6 +201,17 @@ export default function BottomNav() {
           </div>
         ) : (
           <div className="pb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false)
+                openPageSearch()
+              }}
+              className={moreRowClass}
+            >
+              <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              Search
+            </button>
             {MORE_DESTINATIONS.map((d) => (
               <NavLink
                 key={d.to}

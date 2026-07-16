@@ -35,6 +35,16 @@ class CategoryService:
         return list(queryset)
 
     @staticmethod
+    def list_workspace(workspace_id: int, include_archived: bool = False) -> 'list[Category]':
+        # NOTE: the annotation is quoted — `list` is shadowed by the staticmethod above
+        # inside this class body.
+        """List categories across all budgets of a workspace (for cross-budget filters)."""
+        queryset = Category.objects.for_workspace(workspace_id).order_by('budget_id', 'name')
+        if not include_archived:
+            queryset = queryset.filter(is_archived=False)
+        return list(queryset)
+
+    @staticmethod
     @db_transaction.atomic
     def create(user, workspace_id: int, budget_id: int, data: CategoryCreate) -> Category:
         """Create a category under a budget (case-insensitively unique name per budget)."""

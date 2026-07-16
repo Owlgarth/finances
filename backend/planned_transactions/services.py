@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from django.db import transaction as db_transaction
 from django.db.models import F, Sum, Value
@@ -54,20 +55,35 @@ class PlannedTransactionService:
     def _build_filtered_queryset(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        category_id: list | None = None,
+        budget_id: list | None = None,
+        search: str | None = None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
     ):
         """Build a filtered queryset for planned transactions."""
         queryset = PlannedTransaction.objects.for_workspace(workspace_id)
         if status:
             queryset = queryset.filter(status=status)
         if account_id:
-            queryset = queryset.filter(account_id=account_id)
+            queryset = queryset.filter(account_id__in=account_id)
         if start_date:
             queryset = queryset.filter(planned_date__gte=start_date)
         if end_date:
             queryset = queryset.filter(planned_date__lte=end_date)
+        if category_id:
+            queryset = queryset.filter(category_id__in=category_id)
+        if budget_id:
+            queryset = queryset.filter(category__budget_id__in=budget_id)
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        if amount_gte is not None:
+            queryset = queryset.filter(amount__gte=amount_gte)
+        if amount_lte is not None:
+            queryset = queryset.filter(amount__lte=amount_lte)
         return queryset
 
     @staticmethod
@@ -87,15 +103,29 @@ class PlannedTransactionService:
     def list(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        category_id: list | None = None,
+        budget_id: list | None = None,
+        search: str | None = None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
         ordering: str | None = None,
         page: int = 1,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         queryset = PlannedTransactionService._build_filtered_queryset(
-            workspace_id, status, account_id, start_date, end_date
+            workspace_id,
+            status,
+            account_id,
+            start_date,
+            end_date,
+            category_id=category_id,
+            budget_id=budget_id,
+            search=search,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
         )
         sort_order = ordering or 'planned_date'
         queryset = queryset.select_related('account__currency', 'category').order_by(sort_order, '-id')
@@ -113,14 +143,28 @@ class PlannedTransactionService:
     def totals(
         workspace_id: int,
         status: str | None = None,
-        account_id: int | None = None,
+        account_id: list | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        category_id: list | None = None,
+        budget_id: list | None = None,
+        search: str | None = None,
+        amount_gte: Decimal | None = None,
+        amount_lte: Decimal | None = None,
         group_by: str = 'currency',
     ) -> list[dict]:
         """Return aggregated totals grouped by currency or category."""
         queryset = PlannedTransactionService._build_filtered_queryset(
-            workspace_id, status, account_id, start_date, end_date
+            workspace_id,
+            status,
+            account_id,
+            start_date,
+            end_date,
+            category_id=category_id,
+            budget_id=budget_id,
+            search=search,
+            amount_gte=amount_gte,
+            amount_lte=amount_lte,
         )
 
         if group_by == 'category':
