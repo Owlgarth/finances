@@ -14,7 +14,14 @@ dependencies = [
     "pillow>=11.0",
     "pillow-heif>=0.21",
     "rapidocr-onnxruntime>=1.4.4",
+    "opencv-python-headless>=4.10",
 ]
+
+[tool.uv]
+# rapidocr depends on GUI opencv-python, which needs X11/GL libs absent from the
+# slim server image; the headless wheel above provides cv2 instead. Mirrored by
+# the overrides file in the Dockerfile (uv pip does not read this section).
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
 
 [dependency-groups]
 dev = [
