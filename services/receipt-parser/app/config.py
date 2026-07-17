@@ -25,5 +25,8 @@ class Settings(BaseSettings):
     pdf_render_scale: float = 2.0  # ~144 DPI at scale 2; enough for thermal receipts.
     pdf_max_pages: int = 10
 
+    # Machine-extracted transcript (PDF text layer / OCR) sent alongside images.
+    transcript_max_chars: int = 8000
+
 
 settings = Settings()
