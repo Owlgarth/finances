@@ -6,6 +6,10 @@ currency mapping, per-currency ``Main <CODE>`` accounts, budget accounts →
 budgets, periods → custom periods, category merge, allocations →
 category budgets, exchanges → transfers, linked-transaction dedup, and
 opening-balance solving, returning a verification report.
+
+Known limitation (§6.1 rule 6): linked-exchange dedup only searches the
+exchange's own period, so a pair recorded in an adjacent period double-counts
+that side; the opening-balance solve re-anchors the final balance either way.
 """
 
 from __future__ import annotations
@@ -31,6 +35,8 @@ from workspaces.models import Role, Workspace, WorkspaceMember
 _EXCHANGE_DESC_RE = re.compile(r'^currency exchange:\s*.+\s*→\s*.+$', re.IGNORECASE)
 # Manual convention, e.g. "PLN to USD".
 _CODE_TO_CODE_RE = re.compile(r'^[a-z]{3,8}\s+to\s+[a-z]{3,8}$', re.IGNORECASE)
+
+_PLANNED_STATUSES = ('pending', 'done', 'cancelled')
 
 
 def _dec(value, warnings: list[str] | None = None, context: str = '') -> Decimal:
@@ -65,6 +71,14 @@ def _required_date(value, context: str):
     return parsed
 
 
+def _required_str(value, context: str) -> str:
+    """Require a non-empty name — a null/blank one would otherwise surface as
+    an opaque NOT NULL IntegrityError 500."""
+    if value is None or not str(value).strip():
+        raise ValidationError(f'{context}: name is missing')
+    return str(value)
+
+
 class LegacyImportService:
     @staticmethod
     def _normalize_v1(export_data: dict) -> dict:
@@ -90,10 +104,16 @@ class LegacyImportService:
         return export_data
 
     @staticmethod
-    def _map_currency(workspace, symbol: str, name: str | None, cache: dict) -> Currency:
+    def _map_currency(
+        workspace, symbol: str, name: str | None, cache: dict, warnings: list[str] | None = None
+    ) -> Currency:
         """Map an exported currency symbol to a catalog currency, enabling it.
 
-        Global ISO rows win; unmappable symbols become workspace-custom rows.
+        Matches the global table by ISO code, then by unique currency name,
+        then by unambiguous display symbol — old exports stored display
+        symbols (``zł``, ``€``), not necessarily codes, and symbols like
+        ``$`` are shared by several ISO currencies. Unmappable symbols become
+        workspace-custom rows, with a warning so the report shows the fallback.
         """
         if symbol in cache:
             return cache[symbol]
@@ -101,10 +121,23 @@ class LegacyImportService:
             Currency.objects.filter(workspace__isnull=True, code=symbol).first()
             or Currency.objects.filter(workspace=workspace, code=symbol).first()
         )
+        if not currency and name:
+            currency = Currency.objects.filter(workspace__isnull=True, name__iexact=name).first()
         if not currency:
+            by_symbol = list(Currency.objects.filter(workspace__isnull=True, symbol=symbol)[:2])
+            if len(by_symbol) == 1:
+                currency = by_symbol[0]
+            elif by_symbol and warnings is not None:
+                warnings.append(f'currency {symbol!r}: display symbol is ambiguous in the ISO catalog')
+        if not currency:
+            code = symbol[:8]
+            if len(symbol) > 8 and warnings is not None:
+                warnings.append(f'currency {symbol!r}: symbol too long, truncated to {code!r}')
             currency = Currency.objects.create(
-                code=symbol, name=name or symbol, symbol=symbol, is_custom=True, workspace=workspace
+                code=code, name=(name or symbol)[:64], symbol=code, is_custom=True, workspace=workspace
             )
+            if warnings is not None:
+                warnings.append(f'currency {symbol!r}: no ISO catalog match, created as workspace-custom')
         WorkspaceCurrency.objects.get_or_create(workspace=workspace, currency=currency)
         cache[symbol] = currency
         return currency
@@ -155,13 +188,15 @@ class LegacyImportService:
         """Return (indices to skip, deduped descriptors) for linked exchange transactions.
 
         Each exchange auto-created an expense (from side) and income (to side).
-        For each exchange we consume at most one matching expense and one income;
-        matched transactions are skipped so the Transfer is not double-counted.
+        For each exchange we consume at most one matching expense and one
+        income, preferring an exact description match over the pattern
+        fallback (§6.1 rule 6) so a coincidentally pattern-named genuine
+        transaction is not consumed while the actual linked record survives.
         """
         consumed: set[int] = set()
         deduped: list[dict] = []
 
-        def matches(tx: dict, ex: dict, side: str) -> bool:
+        def base_matches(tx: dict, ex: dict, side: str) -> bool:
             if side == 'from':
                 amount, symbol, tx_type = ex.get('from_amount'), ex.get('from_currency_symbol'), 'expense'
             else:
@@ -172,12 +207,14 @@ class LegacyImportService:
                 return False
             if _dec(tx.get('amount')) != _dec(amount):
                 return False
-            if tx.get('date') != ex.get('date'):
-                return False
-            desc = (tx.get('description') or '').strip()
+            return tx.get('date') == ex.get('date')
+
+        def exact_desc(tx: dict, ex: dict) -> bool:
             ex_desc = (ex.get('description') or '').strip()
-            if ex_desc and desc == ex_desc:
-                return True
+            return bool(ex_desc) and (tx.get('description') or '').strip() == ex_desc
+
+        def fallback_desc(tx: dict, ex: dict) -> bool:
+            desc = (tx.get('description') or '').strip()
             code_pair = f'{ex.get("from_currency_symbol")} to {ex.get("to_currency_symbol")}'
             return bool(
                 _EXCHANGE_DESC_RE.match(desc) or _CODE_TO_CODE_RE.match(desc) or desc.lower() == code_pair.lower()
@@ -185,21 +222,28 @@ class LegacyImportService:
 
         for ex in exchanges:
             for side in ('from', 'to'):
-                for idx, tx in enumerate(transactions):
-                    if idx in consumed:
-                        continue
-                    if matches(tx, ex, side):
-                        consumed.add(idx)
-                        deduped.append(
-                            {
-                                'date': tx.get('date'),
-                                'description': tx.get('description'),
-                                'amount': str(_dec(tx.get('amount'))),
-                                'type': tx.get('type'),
-                                'currency_code': tx.get('currency_symbol'),
-                            }
-                        )
-                        break
+                match_idx = next(
+                    (
+                        idx
+                        for desc_ok in (exact_desc, fallback_desc)
+                        for idx, tx in enumerate(transactions)
+                        if idx not in consumed and base_matches(tx, ex, side) and desc_ok(tx, ex)
+                    ),
+                    None,
+                )
+                if match_idx is None:
+                    continue
+                consumed.add(match_idx)
+                tx = transactions[match_idx]
+                deduped.append(
+                    {
+                        'date': tx.get('date'),
+                        'description': tx.get('description'),
+                        'amount': str(_dec(tx.get('amount'))),
+                        'type': tx.get('type'),
+                        'currency_code': tx.get('currency_symbol'),
+                    }
+                )
         return consumed, deduped
 
     @staticmethod
@@ -215,7 +259,7 @@ class LegacyImportService:
         skipped_workspaces: list[str] = []
 
         for ws_data in export_data.get('workspaces', []):
-            original_name = ws_data.get('workspace_name')
+            original_name = _required_str(ws_data.get('workspace_name'), 'workspace')
 
             # Conflicts only against workspaces this user can see — a global check
             # would leak other tenants' workspace names via the rename report.
@@ -224,7 +268,12 @@ class LegacyImportService:
                     skipped_workspaces.append(original_name)
                     continue
                 if conflict_strategy == 'rename':
-                    new_name = f'{original_name} (imported {datetime.now().strftime("%Y-%m-%d %H:%M")})'
+                    stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    new_name = f'{original_name} (imported {stamp})'
+                    suffix = 2
+                    while Workspace.objects.filter(name=new_name, members__user=user).exists():
+                        new_name = f'{original_name} (imported {stamp} #{suffix})'
+                        suffix += 1
                     renamed[original_name] = new_name
                     original_name = new_name
 
@@ -246,35 +295,43 @@ class LegacyImportService:
     def _import_workspace(user, workspace, ws_data: dict) -> dict:
         currency_cache: dict[str, Currency] = {}
         account_cache: dict[str, Account] = {}
-
-        # Pre-map declared currencies (keeps names) and provision their accounts.
-        for cur_data in ws_data.get('currencies', []):
-            currency = LegacyImportService._map_currency(
-                workspace, cur_data.get('symbol'), cur_data.get('name'), currency_cache
-            )
-            LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
-
-        counts = {'budgets': 0, 'periods': 0, 'categories': 0, 'transactions': 0, 'transfers': 0, 'planned': 0}
-        created_budgets: list[Budget] = []
-        deduped: list[dict] = []
         parse_warnings: list[str] = []
-        # expected final balance per currency = latest period's closing balance
-        latest_close: dict[str, tuple] = {}  # code -> (end_date, closing_balance)
 
-        def resolve_currency(symbol: str) -> Currency:
-            return LegacyImportService._map_currency(workspace, symbol, None, currency_cache)
+        def resolve_currency(symbol: str, name: str | None = None) -> Currency:
+            return LegacyImportService._map_currency(workspace, symbol, name, currency_cache, parse_warnings)
 
         def resolve_account(symbol: str) -> Account:
             currency = resolve_currency(symbol)
             return LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
 
+        # Pre-map declared currencies (keeps names) and provision their accounts.
+        for cur_data in ws_data.get('currencies', []):
+            symbol = cur_data.get('symbol')
+            if not symbol:
+                parse_warnings.append(f'currency {cur_data.get("name")!r}: missing symbol, skipped')
+                continue
+            currency = resolve_currency(symbol, cur_data.get('name'))
+            LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
+
+        counts = {'budgets': 0, 'periods': 0, 'categories': 0, 'transactions': 0, 'transfers': 0, 'planned': 0}
+        created_budgets: list[Budget] = []
+        deduped: list[dict] = []
+        # Expected final balance per currency. Each legacy budget account held
+        # its own money, so this is the SUM of every budget account's latest
+        # closing balance (§6.1 rule 7), not the single latest across them.
+        expected_close: dict[str, Decimal] = {}
+
         for acc_data in ws_data.get('budget_accounts', []):
+            budget_name = _required_str(acc_data.get('name'), 'budget account')
+            default_symbol = acc_data.get('default_currency')
             budget, created = Budget.objects.get_or_create(
                 workspace=workspace,
-                name=acc_data.get('name'),
+                name=budget_name,
                 defaults={
                     'description': acc_data.get('description'),
                     'cadence': Cadence.MONTHLY,
+                    'is_active': acc_data.get('is_active') is not False,
+                    'display_currency': resolve_currency(default_symbol) if default_symbol else None,
                     'created_by': user,
                     'updated_by': user,
                 },
@@ -285,13 +342,15 @@ class LegacyImportService:
 
             # (budget, ci-name) -> Category, merged across periods.
             category_map: dict[str, Category] = {}
+            # code -> (end_date, closing balance), latest within THIS budget account.
+            acc_latest: dict[str, tuple] = {}
 
             for period_data in acc_data.get('periods', []):
-                period_ctx = f'{budget.name} / period {period_data.get("name")!r}'
+                period_ctx = f'{budget_name} / period {period_data.get("name")!r}'
                 period = Period.objects.create(
                     workspace=workspace,
                     budget=budget,
-                    name=period_data.get('name'),
+                    name=_required_str(period_data.get('name'), period_ctx),
                     start_date=_required_date(period_data.get('start_date'), period_ctx),
                     end_date=_required_date(period_data.get('end_date'), period_ctx),
                     is_custom=True,
@@ -308,20 +367,21 @@ class LegacyImportService:
                     get_category(cat_data.get('name'))
 
                 for alloc in period_data.get('budgets', []):
+                    alloc_ctx = f'{period_ctx} / allocation {alloc.get("category_name")!r}'
+                    symbol = alloc.get('currency_symbol')
+                    if not symbol:
+                        parse_warnings.append(f'{alloc_ctx}: missing currency, skipped')
+                        continue
                     category = get_category(alloc.get('category_name'))
                     if not category:
                         continue
                     CategoryBudget.objects.update_or_create(
                         period=period,
                         category=category,
-                        currency=resolve_currency(alloc.get('currency_symbol')),
+                        currency=resolve_currency(symbol),
                         defaults={
                             'workspace_id': workspace.id,
-                            'amount': _dec(
-                                alloc.get('amount'),
-                                parse_warnings,
-                                f'{period_ctx} / allocation {alloc.get("category_name")!r}',
-                            ),
+                            'amount': _dec(alloc.get('amount'), parse_warnings, alloc_ctx),
                             'created_by': user,
                             'updated_by': user,
                         },
@@ -335,14 +395,23 @@ class LegacyImportService:
                 for idx, tx in enumerate(transactions):
                     if idx in skip_indices:
                         continue
+                    tx_ctx = f'{period_ctx} / transaction {tx.get("description")!r}'
                     symbol = tx.get('currency_symbol')
                     if not symbol:
+                        parse_warnings.append(f'{tx_ctx}: missing currency, skipped')
                         continue
-                    tx_ctx = f'{period_ctx} / transaction {tx.get("description")!r}'
                     tx_type = tx.get('type')
                     if tx_type not in ('income', 'expense', 'adjustment'):
                         parse_warnings.append(f'{tx_ctx}: unknown type {tx_type!r}, skipped')
                         continue
+                    amount = _dec(tx.get('amount'), parse_warnings, tx_ctx)
+                    if tx_type in ('income', 'expense') and amount < 0:
+                        # The old balance math applied the sign anyway (+income,
+                        # −expense); keep the same delta as a signed adjustment
+                        # rather than corrupting income/expense aggregates.
+                        parse_warnings.append(f'{tx_ctx}: negative {tx_type} amount {amount}, imported as adjustment')
+                        amount = amount if tx_type == 'income' else -amount
+                        tx_type = 'adjustment'
                     account = resolve_account(symbol)
                     category = get_category(tx.get('category_name'))
                     Transaction.objects.create(
@@ -350,7 +419,7 @@ class LegacyImportService:
                         account=account,
                         date=_required_date(tx.get('date'), tx_ctx),
                         description=tx.get('description') or '',
-                        amount=_dec(tx.get('amount'), parse_warnings, tx_ctx),
+                        amount=amount,
                         type=tx_type,
                         category=category,
                         created_by=user,
@@ -359,36 +428,70 @@ class LegacyImportService:
                     counts['transactions'] += 1
 
                 for pt in period_data.get('planned_transactions', []):
+                    pt_ctx = f'{period_ctx} / planned {pt.get("name")!r}'
                     symbol = pt.get('currency_symbol')
                     if not symbol:
+                        parse_warnings.append(f'{pt_ctx}: missing currency, skipped')
                         continue
-                    pt_ctx = f'{period_ctx} / planned {pt.get("name")!r}'
+                    status = pt.get('status') or 'pending'
+                    if status not in _PLANNED_STATUSES:
+                        parse_warnings.append(f'{pt_ctx}: unknown status {status!r}, imported as pending')
+                        status = 'pending'
                     account = resolve_account(symbol)
+                    category = get_category(pt.get('category_name'))
                     PlannedTransaction.objects.create(
                         workspace=workspace,
                         account=account,
-                        name=pt.get('name'),
+                        name=_required_str(pt.get('name'), pt_ctx),
+                        category=category,
                         amount=_dec(pt.get('amount'), parse_warnings, pt_ctx),
                         planned_date=_required_date(pt.get('planned_date'), pt_ctx),
                         payment_date=_date(pt.get('payment_date'), pt_ctx),
-                        status=pt.get('status', 'pending'),
+                        status=status,
                         created_by=user,
                         updated_by=user,
                     )
                     counts['planned'] += 1
 
                 for ex in exchanges:
-                    from_account = resolve_account(ex.get('from_currency_symbol'))
-                    to_account = resolve_account(ex.get('to_currency_symbol'))
-                    if from_account.id == to_account.id:
+                    from_symbol = ex.get('from_currency_symbol')
+                    to_symbol = ex.get('to_currency_symbol')
+                    ex_ctx = f'{period_ctx} / exchange {from_symbol}→{to_symbol}'
+                    if not from_symbol or not to_symbol:
+                        parse_warnings.append(f'{ex_ctx}: missing currency, skipped')
                         continue
-                    ex_ctx = f'{period_ctx} / exchange {ex.get("from_currency_symbol")}→{ex.get("to_currency_symbol")}'
+                    from_account = resolve_account(from_symbol)
+                    to_account = resolve_account(to_symbol)
+                    from_amount = _dec(ex.get('from_amount'), parse_warnings, ex_ctx)
+                    to_amount = _dec(ex.get('to_amount'), parse_warnings, ex_ctx)
+                    if from_account.id == to_account.id:
+                        # Both sides land on one account, so no Transfer; any
+                        # fee/spread must survive as an adjustment or the
+                        # opening-balance solve would silently absorb it.
+                        delta = to_amount - from_amount
+                        if delta:
+                            Transaction.objects.create(
+                                workspace=workspace,
+                                account=from_account,
+                                date=_required_date(ex.get('date'), ex_ctx),
+                                description=ex.get('description') or f'Currency exchange: {from_symbol} → {to_symbol}',
+                                amount=delta,
+                                type='adjustment',
+                                created_by=user,
+                                updated_by=user,
+                            )
+                            counts['transactions'] += 1
+                        parse_warnings.append(
+                            f'{ex_ctx}: both sides map to account {from_account.name!r}; transfer skipped'
+                            + (f', difference {delta} kept as adjustment' if delta else '')
+                        )
+                        continue
                     Transfer.objects.create(
                         workspace=workspace,
                         from_account=from_account,
                         to_account=to_account,
-                        from_amount=_dec(ex.get('from_amount'), parse_warnings, ex_ctx),
-                        to_amount=_dec(ex.get('to_amount'), parse_warnings, ex_ctx),
+                        from_amount=from_amount,
+                        to_amount=to_amount,
                         date=_required_date(ex.get('date'), ex_ctx),
                         description=ex.get('description') or '',
                         created_by=user,
@@ -396,24 +499,28 @@ class LegacyImportService:
                     )
                     counts['transfers'] += 1
 
-                # Track latest closing balance per currency for opening-balance solve.
+                # Track this budget account's latest closing balance per currency.
                 end_date = period.end_date
                 for pb in period_data.get('period_balances', []):
                     symbol = pb.get('currency_symbol')
                     if not symbol:
+                        parse_warnings.append(f'{period_ctx} / period balance: missing currency, skipped')
                         continue
                     code = resolve_currency(symbol).code
-                    if code not in latest_close or end_date >= latest_close[code][0]:
-                        latest_close[code] = (
+                    if code not in acc_latest or end_date >= acc_latest[code][0]:
+                        acc_latest[code] = (
                             end_date,
                             _dec(pb.get('closing_balance'), parse_warnings, f'{period_ctx} / closing balance {code}'),
                         )
+
+            for code, (_, closing) in acc_latest.items():
+                expected_close[code] = expected_close.get(code, Decimal('0')) + closing
 
         # Solve opening balances so computed balances match the exported closings.
         balance_report = []
         for code, account in account_cache.items():
             net = AccountService._transactions_delta(account) + AccountService._transfers_delta(account)
-            expected = latest_close[code][1] if code in latest_close else None
+            expected = expected_close.get(code)
             if expected is not None:
                 account.opening_balance = expected - net
                 account.save(update_fields=['opening_balance'])
