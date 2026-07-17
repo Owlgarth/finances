@@ -316,6 +316,23 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertIsNotNone(data['transaction_id'])
         self.assertEqual(Transaction.objects.count(), initial_count + 1)
 
+    def test_update_done_recategorizes_without_revert_or_reexecution(self):
+        """Editing a done planned (status echoed back) recategorizes it without
+        tripping the revert guard and without executing again."""
+        self.planned1.status = 'done'
+        self.planned1.save()
+        initial_count = Transaction.objects.count()
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(status='done', category_id=self.groceries.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['status'], 'done')
+        self.assertEqual(data['category']['name'], 'Groceries')
+        self.assertEqual(Transaction.objects.count(), initial_count)
+
     def test_update_cannot_revert_from_done(self):
         self.planned1.status = 'done'
         self.planned1.save()
