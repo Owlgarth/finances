@@ -4,8 +4,10 @@ All knowledge of the pre-redesign export format lives here and nowhere else
 (the main import path is v3-only). Implements design doc §6.1: symbol→ISO
 currency mapping, per-currency ``Main <CODE>`` accounts, budget accounts →
 budgets, periods → custom periods, category merge, allocations →
-category budgets, exchanges → transfers, linked-transaction dedup, and
-opening-balance solving, returning a verification report.
+category budgets, exchanges → transfers, linked-transaction dedup,
+planned-transaction category inference (old exports carry no category on
+planned records), and opening-balance solving, returning a verification
+report.
 
 Known limitation (§6.1 rule 6): linked-exchange dedup only searches the
 exchange's own period, so a pair recorded in an adjacent period double-counts
@@ -15,6 +17,7 @@ that side; the opening-balance solve re-anchors the final balance either way.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -313,7 +316,15 @@ class LegacyImportService:
             currency = resolve_currency(symbol, cur_data.get('name'))
             LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
 
-        counts = {'budgets': 0, 'periods': 0, 'categories': 0, 'transactions': 0, 'transfers': 0, 'planned': 0}
+        counts = {
+            'budgets': 0,
+            'periods': 0,
+            'categories': 0,
+            'transactions': 0,
+            'transfers': 0,
+            'planned': 0,
+            'planned_categorized': 0,
+        }
         created_budgets: list[Budget] = []
         deduped: list[dict] = []
         # Expected final balance per currency. Each legacy budget account held
@@ -344,6 +355,21 @@ class LegacyImportService:
             category_map: dict[str, Category] = {}
             # code -> (end_date, closing balance), latest within THIS budget account.
             acc_latest: dict[str, tuple] = {}
+
+            # Old exports carry no category on planned transactions; infer one
+            # from this budget's transactions (any period) whose description
+            # equals the planned name. ci-description -> ci-category counts,
+            # plus the original spelling for creation.
+            desc_categories: dict[str, Counter] = {}
+            category_display: dict[str, str] = {}
+            for period_data in acc_data.get('periods', []):
+                for tx in period_data.get('transactions', []):
+                    desc = (tx.get('description') or '').strip().lower()
+                    cat_name = tx.get('category_name')
+                    if desc and cat_name:
+                        key = cat_name.strip().lower()
+                        category_display.setdefault(key, cat_name)
+                        desc_categories.setdefault(desc, Counter())[key] += 1
 
             for period_data in acc_data.get('periods', []):
                 period_ctx = f'{budget_name} / period {period_data.get("name")!r}'
@@ -437,8 +463,25 @@ class LegacyImportService:
                     if status not in _PLANNED_STATUSES:
                         parse_warnings.append(f'{pt_ctx}: unknown status {status!r}, imported as pending')
                         status = 'pending'
+                    category_name = pt.get('category_name')
+                    if not category_name:
+                        candidates = desc_categories.get((pt.get('name') or '').strip().lower())
+                        if candidates:
+                            top_key, _ = candidates.most_common(1)[0]
+                            category_name = category_display[top_key]
+                            counts['planned_categorized'] += 1
+                            if len(candidates) > 1:
+                                parse_warnings.append(
+                                    f'{pt_ctx}: matching transactions span {len(candidates)} categories, '
+                                    f'assigned most frequent {category_name!r}'
+                                )
+                        else:
+                            parse_warnings.append(
+                                f'{pt_ctx}: no category in export and no matching transaction to infer one, '
+                                'left uncategorized'
+                            )
                     account = resolve_account(symbol)
-                    category = get_category(pt.get('category_name'))
+                    category = get_category(category_name)
                     PlannedTransaction.objects.create(
                         workspace=workspace,
                         account=account,

@@ -692,6 +692,158 @@ class TestLegacyImportService(AuthMixin, TestCase):
         self.assertEqual(len(names), 3)
         self.assertEqual(len(names), len(set(names)))
 
+    def test_planned_category_inferred_from_matching_transactions(self):
+        """v2 exports carry no category on planned records: infer one from a
+        same-budget transaction (any period) whose description matches the name."""
+        export = _minimal_export(
+            planned_transactions=[
+                {
+                    'name': 'Rent',
+                    'amount': '2000.00',
+                    'planned_date': '2025-01-25',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+        # The categorized transaction lives in a *later* period of the same budget.
+        export['workspaces'][0]['budget_accounts'][0]['periods'].append(
+            {
+                'name': 'Feb 2025',
+                'start_date': '2025-02-01',
+                'end_date': '2025-02-28',
+                'categories': [],
+                'budgets': [],
+                'transactions': [
+                    {
+                        'date': '2025-02-03',
+                        'description': 'Rent',
+                        'amount': '2000.00',
+                        'type': 'expense',
+                        'category_name': 'Housing',
+                        'currency_symbol': 'PLN',
+                    }
+                ],
+                'planned_transactions': [],
+                'currency_exchanges': [],
+                'period_balances': [],
+            }
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
+        self.assertIsNotNone(planned.category)
+        self.assertEqual(planned.category.name, 'Housing')
+        wr = report['workspaces'][0]
+        self.assertEqual(wr['created']['planned_categorized'], 1)
+        self.assertEqual(wr['warnings'], [])
+
+    def test_planned_category_inference_ambiguous_picks_most_frequent(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-05',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Entertainment',
+                    'currency_symbol': 'PLN',
+                },
+                {
+                    'date': '2025-01-12',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Entertainment',
+                    'currency_symbol': 'PLN',
+                },
+                {
+                    'date': '2025-01-20',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Bills',
+                    'currency_symbol': 'PLN',
+                },
+            ],
+            planned_transactions=[
+                {
+                    'name': 'Netflix',
+                    'amount': '15.00',
+                    'planned_date': '2025-01-28',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Netflix')
+        self.assertEqual(planned.category.name, 'Entertainment')
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('assigned most frequent' in w for w in warnings), warnings)
+
+    def test_planned_without_category_or_match_left_uncategorized_with_warning(self):
+        export = _minimal_export(
+            planned_transactions=[
+                {
+                    'name': 'Mystery bill',
+                    'amount': '10.00',
+                    'planned_date': '2025-01-28',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Mystery bill')
+        self.assertIsNone(planned.category)
+        wr = report['workspaces'][0]
+        self.assertEqual(wr['created']['planned_categorized'], 0)
+        self.assertTrue(any('left uncategorized' in w for w in wr['warnings']), wr['warnings'])
+
+    def test_explicit_planned_category_wins_over_inference(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-05',
+                    'description': 'Rent',
+                    'amount': '2000.00',
+                    'type': 'expense',
+                    'category_name': 'Housing',
+                    'currency_symbol': 'PLN',
+                },
+            ],
+            planned_transactions=[
+                {
+                    'name': 'Rent',
+                    'amount': '2000.00',
+                    'planned_date': '2025-01-25',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'category_name': 'Fixed costs',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
+        self.assertEqual(planned.category.name, 'Fixed costs')
+        self.assertEqual(report['workspaces'][0]['created']['planned_categorized'], 0)
+
     def test_budget_metadata_imported(self):
         export = _legacy_v2_export()
         export['workspaces'][0]['budget_accounts'][0]['is_active'] = False
