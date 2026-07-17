@@ -1,8 +1,22 @@
 import base64
 import io
+from unittest import mock
 
 import pytest
 from PIL import Image
+
+from app import ocr
+
+
+@pytest.fixture(autouse=True)
+def _no_real_ocr():
+    """Tests stay offline/deterministic: the real ONNX engine is never initialized.
+
+    transcribe() swallows the error and returns None; tests that need OCR output
+    patch ocr.transcribe (orchestration) or ocr._engine (test_ocr) themselves.
+    """
+    with mock.patch.object(ocr, '_engine', side_effect=RuntimeError('real OCR disabled in tests')):
+        yield
 
 
 def make_text_pdf(pages: list[list[str]]) -> bytes:

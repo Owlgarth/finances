@@ -1,10 +1,13 @@
-"""Tests for decode_to_images — in particular the PDF text-layer fast path:
-born-digital PDFs carry their transcript, scanned/empty ones don't."""
+"""Tests for decode_to_images — the PDF text-layer fast path (born-digital PDFs
+carry their transcript) and the OCR fallback for photos and scanned PDFs
+(transcribe is mocked; the engine never runs here)."""
 
 import io
+from unittest import mock
 
 import pypdfium2 as pdfium
 
+from app import ocr
 from app.images import decode_to_images
 from tests.conftest import make_text_pdf
 
@@ -27,11 +30,14 @@ def _blank_pdf() -> bytes:
 
 
 def test_born_digital_pdf_yields_transcript():
-    decoded = decode_to_images(make_text_pdf([RECEIPT_LINES]), 'application/pdf')
+    with mock.patch.object(ocr, 'transcribe') as transcribe:
+        decoded = decode_to_images(make_text_pdf([RECEIPT_LINES]), 'application/pdf')
     assert len(decoded.images_b64) == 1
     assert decoded.transcript_source == 'pdf_text'
     assert 'SUMA PLN 12.47' in decoded.transcript
     assert 'Mleko UHT' in decoded.transcript
+    assert decoded.ocr_unavailable is False
+    transcribe.assert_not_called()  # the text layer wins; OCR is not attempted
 
 
 def test_multi_page_pdf_joins_pages_with_form_feed():
@@ -41,11 +47,20 @@ def test_multi_page_pdf_joins_pages_with_form_feed():
     assert decoded.multi_page_truncated is False
 
 
-def test_scanned_pdf_has_no_transcript():
-    decoded = decode_to_images(_blank_pdf(), 'application/pdf')
+def test_scanned_pdf_falls_back_to_ocr():
+    with mock.patch.object(ocr, 'transcribe', return_value='SUMA 12.47'):
+        decoded = decode_to_images(_blank_pdf(), 'application/pdf')
+    assert decoded.transcript == 'SUMA 12.47'
+    assert decoded.transcript_source == 'ocr'
+    assert decoded.ocr_unavailable is False
+
+
+def test_scanned_pdf_with_failed_ocr_has_no_transcript():
+    decoded = decode_to_images(_blank_pdf(), 'application/pdf')  # autouse fixture: OCR fails
     assert len(decoded.images_b64) == 1
     assert decoded.transcript is None
     assert decoded.transcript_source is None
+    assert decoded.ocr_unavailable is True
 
 
 def test_sparse_text_pdf_fails_born_digital_heuristic():
@@ -53,9 +68,19 @@ def test_sparse_text_pdf_fails_born_digital_heuristic():
     # with a tiny OCR'd header) — must not be trusted as a transcript.
     decoded = decode_to_images(make_text_pdf([['Lidl']]), 'application/pdf')
     assert decoded.transcript is None
+    assert decoded.ocr_unavailable is True  # OCR fallback was attempted and failed
 
 
-def test_plain_image_has_no_transcript(png_bytes):
-    decoded = decode_to_images(png_bytes, 'image/png')
+def test_photo_gets_ocr_transcript(png_bytes):
+    with mock.patch.object(ocr, 'transcribe', return_value='Mleko 3.99\nSUMA 3.99'):
+        decoded = decode_to_images(png_bytes, 'image/png')
+    assert decoded.transcript == 'Mleko 3.99\nSUMA 3.99'
+    assert decoded.transcript_source == 'ocr'
+    assert decoded.ocr_unavailable is False
+
+
+def test_photo_with_unavailable_ocr_has_no_transcript(png_bytes):
+    decoded = decode_to_images(png_bytes, 'image/png')  # autouse fixture: OCR fails
     assert decoded.transcript is None
     assert decoded.transcript_source is None
+    assert decoded.ocr_unavailable is True
