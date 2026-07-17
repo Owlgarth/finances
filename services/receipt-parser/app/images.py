@@ -35,6 +35,19 @@ class DecodedInput:
     multi_page_truncated: bool = False
 
 
+# A PDF whose pages average more extracted characters than this is treated as
+# born-digital (email receipt/invoice): its text layer is the transcript and no
+# OCR is needed. Scanned PDFs typically extract nothing at all.
+PDF_TEXT_MIN_CHARS_PER_PAGE = 80
+
+
+def _pdf_page_text(page: pdfium.PdfPage) -> str:
+    try:
+        return page.get_textpage().get_text_bounded() or ''
+    except Exception:  # noqa: BLE001 - a broken text layer must not break rendering
+        return ''
+
+
 def _encode_png(image: Image.Image) -> str:
     if image.mode not in ('RGB', 'L'):
         image = image.convert('RGB')
@@ -53,12 +66,26 @@ def _render_pdf(data: bytes) -> DecodedInput:
     page_count = len(pdf)
     truncated = page_count > settings.pdf_max_pages
     images: list[str] = []
+    page_texts: list[str] = []
     for index in range(min(page_count, settings.pdf_max_pages)):
-        bitmap = pdf[index].render(scale=settings.pdf_render_scale)
+        page = pdf[index]
+        bitmap = page.render(scale=settings.pdf_render_scale)
         images.append(_encode_png(bitmap.to_pil()))
+        page_texts.append(_pdf_page_text(page))
     if not images:
         raise UnreadableInput('The PDF has no renderable pages.')
-    return DecodedInput(images_b64=images, multi_page_truncated=truncated)
+
+    transcript = None
+    transcript_source = None
+    if sum(len(text.strip()) for text in page_texts) > PDF_TEXT_MIN_CHARS_PER_PAGE * len(images):
+        transcript = '\f'.join(page_texts)
+        transcript_source = 'pdf_text'
+    return DecodedInput(
+        images_b64=images,
+        transcript=transcript,
+        transcript_source=transcript_source,
+        multi_page_truncated=truncated,
+    )
 
 
 def decode_to_images(content: bytes, content_type: str) -> DecodedInput:
