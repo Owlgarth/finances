@@ -129,5 +129,5 @@ def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
 
 
 async def parse(decoded: DecodedInput) -> ParseResult:
-    raw_text = await llm.extract(decoded.images_b64)
+    raw_text = await llm.extract(decoded.images_b64, decoded.transcript)
     return normalize(raw_text, decoded)

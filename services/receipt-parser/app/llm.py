@@ -29,11 +29,21 @@ SYSTEM_PROMPT = (
 )
 
 
-async def extract(images_b64: list[str]) -> str:
-    """Send images to the model and return the raw text response."""
+TRANSCRIPT_PREAMBLE = (
+    'Below is a machine-extracted text transcript of the same receipt. Its digits and '
+    'amounts are reliable, but its layout and word order may be imperfect. Prefer the '
+    "transcript's digits whenever the image is ambiguous or hard to read.\n\n"
+)
+
+
+async def extract(images_b64: list[str], transcript: str | None = None) -> str:
+    """Send images (plus an optional machine transcript) to the model and return the raw text response."""
     content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
     for image in images_b64:
         content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
+    if transcript:
+        snippet = transcript[: settings.transcript_max_chars]
+        content.append({'type': 'text', 'text': TRANSCRIPT_PREAMBLE + snippet})
 
     payload = {
         'model': settings.model_name,
