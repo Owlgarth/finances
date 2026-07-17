@@ -13,18 +13,44 @@ a hosted provider without touching code.
 Extraction is **hybrid**: the vision model sees the receipt image(s), and — when
 available — a machine-extracted text transcript whose digits are deterministic:
 
+```
+file ──► decode (app/images.py)
+          │  images:     base64 PNGs — PDF pages rasterized; extreme-aspect
+          │              photos split into overlapping vertical tiles
+          │  transcript: PDF text layer (born-digital, > ~80 chars/page)
+          │              or RapidOCR (photos & scanned PDFs, app/ocr.py)
+          │              or none (ocr_unavailable warning)
+          ▼
+         extract (app/llm.py) — images + advisory transcript
+          │  response_format: json_schema, falling back to json_object
+          ▼
+         normalize (app/parser.py) — defensive coercion, arithmetic checks,
+          │                          transcript grounding of confidence
+          ▼
+         contract JSON (CONTRACT.md v1)
+```
+
 1. **Decode** (`app/images.py`) — the upload becomes base64 PNGs (PDF pages are
-   rasterized). Born-digital PDFs (> ~80 extracted chars/page) also yield a
-   transcript from their embedded text layer.
+   rasterized). Born-digital PDFs (> ~80 extracted chars/page) yield a
+   transcript from their embedded text layer; photos and scanned PDFs are
+   transcribed with RapidOCR (`app/ocr.py`, CPU, models baked into the image).
+   **Multi-image inputs**: multi-page PDFs send one image per page, and very
+   long receipt photos (height > 2.5× width and > 2000 px) are split into
+   vertical tiles with ~15% overlap — the prompt tells the model not to
+   duplicate items from the overlap. OCR always runs on the whole image.
 2. **Extract** (`app/llm.py`) — images plus the transcript (framed as
    machine-extracted: digits reliable, layout imperfect) go to the model, which
-   returns contract-shaped JSON.
+   returns contract-shaped JSON, schema-constrained when the endpoint supports
+   it.
 3. **Normalize** (`app/parser.py`) — every field is defensively coerced, and all
    consistency warnings are derived here, never trusted from the model:
    arithmetic checks (`item_math_mismatch`, `total_mismatch`) plus transcript
    grounding — the total and item line totals are looked up among the
    transcript's money tokens and `confidence.total`/`confidence.items` are
    floored or capped accordingly (see `CONTRACT.md` → *Confidence grounding*).
+
+Every stage degrades gracefully: OCR off or broken means vision-only extraction
+plus an `ocr_unavailable` warning — never a 5xx.
 
 ## Endpoints
 
@@ -38,9 +64,21 @@ the check is disabled (local/testing only) — **always set it in deployments.**
 
 ## Configuration
 
-Copy `.env.example` to `.env` and edit. All variables are prefixed `PARSER_`.
-Key ones: `PARSER_API_TOKEN`, `PARSER_MODEL_BASE_URL`, `PARSER_MODEL_NAME`,
-`PARSER_MODEL_API_KEY`.
+Copy `.env.example` to `.env` and edit. All variables are prefixed `PARSER_`:
+
+| variable | default | purpose |
+|----------|---------|---------|
+| `PARSER_API_TOKEN` | *(empty)* | Bearer token required from callers. Empty disables auth — local/testing only. |
+| `PARSER_MODEL_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible chat-completions endpoint. |
+| `PARSER_MODEL_NAME` | `qwen2.5-vl` | Model id at that endpoint. |
+| `PARSER_MODEL_API_KEY` | `not-needed` | Key for the endpoint (any value for local runtimes). |
+| `PARSER_MODEL_TIMEOUT_SECONDS` | `90` | Per-request model timeout. |
+| `PARSER_STRUCTURED_OUTPUT` | `json_schema` | `json_schema` constrains decoding to the contract shape; a 4xx rejection falls back to `json_object` for the rest of the process. |
+| `PARSER_MAX_FILE_MB` | `15` | Upload size cap. |
+| `PARSER_PDF_RENDER_SCALE` | `2.0` | PDF rasterization scale (~144 DPI at 2.0). |
+| `PARSER_PDF_MAX_PAGES` | `10` | Pages beyond this are dropped (adds `multi_page_merged`). |
+| `PARSER_TRANSCRIPT_MAX_CHARS` | `8000` | Transcript truncation before it is sent to the model. |
+| `PARSER_OCR_ENABLED` | `true` | RapidOCR grounding for photos/scans; off or failing degrades to vision-only. |
 
 ## Run locally
 
@@ -73,9 +111,10 @@ the backend hides every extraction affordance — the service is entirely option
 uv run pytest
 ```
 
-Tests mock the model call, so they run offline and deterministically. `parser.py`
-derives arithmetic-consistency warnings itself (never trusting the model), so the
-contract holds regardless of model quality.
+Tests mock both the model call and the OCR engine, so they run offline and
+deterministically. `parser.py` derives arithmetic-consistency warnings and
+transcript grounding itself (never trusting the model), so the contract holds
+regardless of model quality.
 
 ## Choosing a model
 
