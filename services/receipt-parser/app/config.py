@@ -5,6 +5,8 @@ Provider selection is env-only: point MODEL_BASE_URL at a local runtime
 The service code never changes between providers.
 """
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +21,9 @@ class Settings(BaseSettings):
     model_name: str = 'qwen2.5-vl'
     model_api_key: str = 'not-needed'
     model_timeout_seconds: float = 90.0
+    # json_schema constrains decoding to the contract shape; endpoints that
+    # reject it (4xx) fall back to json_object once per process.
+    structured_output: Literal['json_schema', 'json_object'] = 'json_schema'
 
     # Upload limits and rendering.
     max_file_mb: int = 15
