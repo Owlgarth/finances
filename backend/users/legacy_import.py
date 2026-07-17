@@ -136,8 +136,12 @@ class LegacyImportService:
             code = symbol[:8]
             if len(symbol) > 8 and warnings is not None:
                 warnings.append(f'currency {symbol!r}: symbol too long, truncated to {code!r}')
-            currency = Currency.objects.create(
-                code=code, name=(name or symbol)[:64], symbol=code, is_custom=True, workspace=workspace
+            # get_or_create: two long symbols truncating to the same code must
+            # share the row, not violate the per-workspace code uniqueness.
+            currency, _ = Currency.objects.get_or_create(
+                workspace=workspace,
+                code=code,
+                defaults={'name': (name or symbol)[:64], 'symbol': code, 'is_custom': True},
             )
             if warnings is not None:
                 warnings.append(f'currency {symbol!r}: no ISO catalog match, created as workspace-custom')
@@ -342,7 +346,6 @@ class LegacyImportService:
                     'description': acc_data.get('description'),
                     'cadence': Cadence.MONTHLY,
                     'is_active': acc_data.get('is_active') is not False,
-                    'display_currency': resolve_currency(default_symbol) if default_symbol else None,
                     'created_by': user,
                     'updated_by': user,
                 },
@@ -350,6 +353,10 @@ class LegacyImportService:
             if created:
                 counts['budgets'] += 1
                 created_budgets.append(budget)
+                # Resolved only on creation so the get path stays side-effect-free.
+                if default_symbol:
+                    budget.display_currency = resolve_currency(default_symbol)
+                    budget.save(update_fields=['display_currency'])
 
             # (budget, ci-name) -> Category, merged across periods.
             category_map: dict[str, Category] = {}
@@ -549,7 +556,9 @@ class LegacyImportService:
                     if not symbol:
                         parse_warnings.append(f'{period_ctx} / period balance: missing currency, skipped')
                         continue
-                    code = resolve_currency(symbol).code
+                    # Provision the account too: a currency that appears only in
+                    # period balances still needs one to carry the opening solve.
+                    code = resolve_account(symbol).currency.code
                     if code not in acc_latest or end_date >= acc_latest[code][0]:
                         acc_latest[code] = (
                             end_date,

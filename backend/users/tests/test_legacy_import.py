@@ -477,6 +477,52 @@ class TestLegacyImportService(AuthMixin, TestCase):
 
         ws = Workspace.objects.get(owner=self.user, name='Mini')
         self.assertTrue(Account.objects.filter(workspace=ws, name='Main USD').exists())
+        self.assertFalse(Currency.objects.filter(workspace=ws, is_custom=True).exists())
+
+    def test_balance_only_currency_gets_account_and_opening_balance(self):
+        """A currency appearing only in period balances still needs an account
+        to carry the opening-balance solve — it must not vanish silently."""
+        export = _minimal_export(
+            period_balances=[{'currency_symbol': 'USD', 'closing_balance': '250.00'}],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        usd = Account.objects.get(workspace=ws, name='Main USD')
+        self.assertEqual(AccountService.balance(usd), Decimal('250.00'))
+        wr = report['workspaces'][0]
+        self.assertTrue(all(row['matches'] for row in wr['balances']), wr['balances'])
+
+    def test_colliding_truncated_symbols_share_custom_currency(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'One',
+                    'amount': '1.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'LONGCODE-A',
+                },
+                {
+                    'date': '2025-01-03',
+                    'description': 'Two',
+                    'amount': '2.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'LONGCODE-B',
+                },
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertEqual(Currency.objects.filter(workspace=ws, code='LONGCODE').count(), 1)
+        self.assertEqual(report['workspaces'][0]['created']['transactions'], 2)
+        warnings = report['workspaces'][0]['warnings']
+        self.assertEqual(sum('truncated' in w for w in warnings), 2)
 
     def test_ambiguous_symbol_without_name_becomes_custom_with_warning(self):
         export = _minimal_export(

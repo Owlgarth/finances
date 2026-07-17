@@ -333,6 +333,49 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['category']['name'], 'Groceries')
         self.assertEqual(Transaction.objects.count(), initial_count)
 
+    def test_update_done_propagates_to_linked_transaction(self):
+        """Editing a done planned re-applies its fields to the executed mirror
+        transaction, so the pair cannot desync (the date stays the payment date)."""
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Monthly Rent', amount='1200.00', status='done'),
+            **self.auth_headers(),
+        )
+        transaction_id = data['transaction_id']
+        original_date = Transaction.objects.get(id=transaction_id).date
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(
+                name='Rent (corrected)',
+                amount='1250.00',
+                status='done',
+                category_id=self.groceries.id,
+                planned_date='2025-01-07',
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+
+        mirror = Transaction.objects.get(id=transaction_id)
+        self.assertEqual(mirror.description, 'Rent (corrected)')
+        self.assertEqual(mirror.amount, Decimal('1250.00'))
+        self.assertEqual(mirror.category_id, self.groceries.id)
+        self.assertEqual(mirror.date, original_date)
+
+    def test_update_cancelled_planned_allowed(self):
+        self.planned1.status = 'cancelled'
+        self.planned1.save()
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Renamed', status='cancelled', category_id=self.groceries.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['status'], 'cancelled')
+        self.assertEqual(data['name'], 'Renamed')
+
     def test_update_cannot_revert_from_done(self):
         self.planned1.status = 'done'
         self.planned1.save()
