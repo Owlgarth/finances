@@ -8,6 +8,7 @@ the contract holds regardless of model quality.
 from __future__ import annotations
 
 import json
+import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app import llm
@@ -16,6 +17,17 @@ from app.images import DecodedInput
 from app.schemas import Confidence, Item, ParseResult
 
 _CENTS = Decimal('0.01')
+
+# Money-shaped tokens in a machine transcript: `87.43`, `87,43`, `1,234.56`,
+# `1.234,56`, `1 234,56`, `1234.56` — always exactly two decimal digits.
+_MONEY_TOKEN_RE = re.compile(r'(?<![\d.,])(?:\d{1,3}(?:[ .,\u00a0]\d{3})+|\d+)[.,]\d{2}(?!\d)')
+
+# Grounding thresholds: a value found verbatim in the transcript is near-certain
+# (floor), one absent from it is suspect (cap + warning for the total).
+_GROUNDED_FLOOR = 0.9
+_UNGROUNDED_CAP = 0.5
+_ITEMS_FLOOR_RATIO = 0.8
+_ITEMS_CAP_RATIO = 0.5
 
 
 def _to_decimal_string(value) -> str | None:
@@ -56,6 +68,42 @@ def _extract_json(text: str) -> dict:
         return json.loads(text[start : end + 1])
     except json.JSONDecodeError as exc:
         raise UnreadableInput('The model returned malformed JSON.') from exc
+
+
+def _transcript_money_tokens(transcript: str) -> set[str]:
+    """Canonical 2-decimal strings for every money-shaped token in the transcript."""
+    tokens: set[str] = set()
+    for match in _MONEY_TOKEN_RE.finditer(transcript):
+        raw = match.group()
+        integer_digits = re.sub(r'\D', '', raw[:-3])
+        tokens.add(str(Decimal(f'{integer_digits}.{raw[-2:]}')))
+    return tokens
+
+
+def _apply_grounding(
+    transcript: str, total: str | None, items: list[Item], confidence: Confidence, warnings: set[str]
+) -> None:
+    """Cross-check model numbers against the transcript; adjust confidence deterministically.
+
+    The transcript is machine-extracted, so its digits are trustworthy: a total found
+    verbatim is near-certain, a total absent from it is suspect. Same idea for the
+    fraction of item line_totals found.
+    """
+    tokens = _transcript_money_tokens(transcript)
+    if total is not None:
+        if total in tokens:
+            confidence.total = max(confidence.total, _GROUNDED_FLOOR)
+        else:
+            warnings.add('total_not_in_source')
+            confidence.total = min(confidence.total, _UNGROUNDED_CAP)
+
+    line_totals = [item.line_total for item in items if item.line_total is not None]
+    if line_totals:
+        ratio = sum(1 for value in line_totals if value in tokens) / len(line_totals)
+        if ratio >= _ITEMS_FLOOR_RATIO:
+            confidence.items = max(confidence.items, _GROUNDED_FLOOR)
+        elif ratio < _ITEMS_CAP_RATIO:
+            confidence.items = min(confidence.items, _UNGROUNDED_CAP)
 
 
 def _sum_line_totals(items: list[Item]) -> Decimal:
@@ -116,6 +164,8 @@ def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
             warnings.add('total_mismatch')
     if decoded.multi_page_truncated:
         warnings.add('multi_page_merged')
+    if decoded.transcript:
+        _apply_grounding(decoded.transcript, total, items, confidence, warnings)
 
     return ParseResult(
         merchant=(str(data['merchant']).strip() if data.get('merchant') else None),
