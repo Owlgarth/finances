@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Machine-extracted transcript (PDF text layer / OCR) sent alongside images.
     transcript_max_chars: int = 8000
+    ocr_enabled: bool = True
 
 
 settings = Settings()

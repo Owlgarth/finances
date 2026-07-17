@@ -13,6 +13,7 @@ dependencies = [
     "pypdfium2>=4.30",
     "pillow>=11.0",
     "pillow-heif>=0.21",
+    "rapidocr-onnxruntime>=1.4.4",
 ]
 
 [dependency-groups]
