@@ -44,8 +44,8 @@ async def parse_receipt(file: UploadFile, _auth: None = Depends(require_token)) 
     if len(content) > limit:
         raise FileTooLarge(f'File exceeds the {settings.max_file_mb} MB limit.')
 
-    images, truncated = decode_to_images(content, file.content_type or '')
-    return await parser.parse(images, truncated)
+    decoded = decode_to_images(content, file.content_type or '')
+    return await parser.parse(decoded)
 
 
 @app.get('/')
