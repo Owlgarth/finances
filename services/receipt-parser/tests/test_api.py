@@ -109,3 +109,14 @@ class TestAuth:
                 headers={'Authorization': 'Bearer secret'},
             )
         assert response.status_code == 200
+
+
+def test_parse_photo_with_ocr_down_warns_but_succeeds(png_bytes):
+    # The autouse fixture breaks the OCR engine — extraction must still work,
+    # vision-only, with the ocr_unavailable warning surfaced.
+    with mock.patch('app.parser.llm.extract', new=mock.AsyncMock(return_value=GOOD_MODEL_JSON)):
+        response = client.post('/parse', files={'file': ('receipt.png', png_bytes, 'image/png')})
+    assert response.status_code == 200
+    body = response.json()
+    assert body['total'] == '7.98'
+    assert 'ocr_unavailable' in body['warnings']

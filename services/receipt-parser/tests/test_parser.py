@@ -167,3 +167,8 @@ class TestTranscriptGrounding:
         result = normalize(_model_json(total='21.47'), _decoded())
         assert 'total_not_in_source' not in result.warnings
         assert result.confidence.total == 0.98
+
+
+def test_ocr_unavailable_warning_surfaces():
+    result = normalize(_model_json(), _decoded(ocr_unavailable=True))
+    assert 'ocr_unavailable' in result.warnings

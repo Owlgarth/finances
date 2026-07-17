@@ -164,6 +164,8 @@ def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
             warnings.add('total_mismatch')
     if decoded.multi_page_truncated:
         warnings.add('multi_page_merged')
+    if decoded.ocr_unavailable:
+        warnings.add('ocr_unavailable')
     if decoded.transcript:
         _apply_grounding(decoded.transcript, total, items, confidence, warnings)
 

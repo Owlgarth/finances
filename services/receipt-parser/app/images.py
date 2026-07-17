@@ -14,6 +14,7 @@ import pypdfium2 as pdfium
 from PIL import Image
 from pillow_heif import register_heif_opener
 
+from app import ocr
 from app.config import settings
 from app.errors import UnreadableInput, UnsupportedMediaType
 
@@ -33,6 +34,9 @@ class DecodedInput:
     transcript: str | None = None
     transcript_source: str | None = None  # 'pdf_text' | 'ocr' | None
     multi_page_truncated: bool = False
+    # True when OCR would have grounded this input but produced nothing
+    # (disabled, broken, or no detections) — extraction is vision-only.
+    ocr_unavailable: bool = False
 
 
 # A PDF whose pages average more extracted characters than this is treated as
@@ -65,26 +69,35 @@ def _render_pdf(data: bytes) -> DecodedInput:
 
     page_count = len(pdf)
     truncated = page_count > settings.pdf_max_pages
-    images: list[str] = []
+    pages: list[Image.Image] = []
     page_texts: list[str] = []
     for index in range(min(page_count, settings.pdf_max_pages)):
         page = pdf[index]
-        bitmap = page.render(scale=settings.pdf_render_scale)
-        images.append(_encode_png(bitmap.to_pil()))
+        pages.append(page.render(scale=settings.pdf_render_scale).to_pil())
         page_texts.append(_pdf_page_text(page))
-    if not images:
+    if not pages:
         raise UnreadableInput('The PDF has no renderable pages.')
 
     transcript = None
     transcript_source = None
-    if sum(len(text.strip()) for text in page_texts) > PDF_TEXT_MIN_CHARS_PER_PAGE * len(images):
+    ocr_unavailable = False
+    if sum(len(text.strip()) for text in page_texts) > PDF_TEXT_MIN_CHARS_PER_PAGE * len(pages):
         transcript = '\f'.join(page_texts)
         transcript_source = 'pdf_text'
+    else:
+        # Scanned PDF — the text layer is useless; OCR the rendered pages.
+        ocr_texts = [ocr.transcribe(page) or '' for page in pages]
+        if any(ocr_texts):
+            transcript = '\f'.join(ocr_texts)
+            transcript_source = 'ocr'
+        else:
+            ocr_unavailable = True
     return DecodedInput(
-        images_b64=images,
+        images_b64=[_encode_png(page) for page in pages],
         transcript=transcript,
         transcript_source=transcript_source,
         multi_page_truncated=truncated,
+        ocr_unavailable=ocr_unavailable,
     )
 
 
@@ -102,4 +115,11 @@ def decode_to_images(content: bytes, content_type: str) -> DecodedInput:
         image.load()
     except Exception as exc:  # noqa: BLE001 - Pillow raises varied errors
         raise UnreadableInput('The image could not be decoded.') from exc
-    return DecodedInput(images_b64=[_encode_png(image)])
+
+    transcript = ocr.transcribe(image)
+    return DecodedInput(
+        images_b64=[_encode_png(image)],
+        transcript=transcript,
+        transcript_source='ocr' if transcript else None,
+        ocr_unavailable=transcript is None,
+    )

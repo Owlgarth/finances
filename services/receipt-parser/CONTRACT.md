@@ -91,7 +91,7 @@ reach its configured model provider, `503` with the error shape otherwise.
 | `multi_page_merged` | Input was a multi-page PDF; pages were merged into one result. |
 | `discount_lines_folded` | Discount/deposit lines were folded into adjacent items. |
 | `total_not_in_source` | `total` was not found among the money tokens of the machine-extracted transcript (PDF text layer or OCR); `confidence.total` is capped at 0.5. |
-| `ocr_unavailable` | OCR was enabled but could not produce a transcript; the result is vision-only, without transcript grounding. |
+| `ocr_unavailable` | OCR could not ground this input (disabled, failing, or no detections); the result is vision-only, without transcript grounding. |
 
 ### Confidence grounding
 
