@@ -7,7 +7,12 @@ import json
 import pytest
 
 from app.errors import UnreadableInput
+from app.images import DecodedInput
 from app.parser import normalize
+
+
+def _decoded(**overrides) -> DecodedInput:
+    return DecodedInput(images_b64=['img-b64'], **overrides)
 
 
 def _model_json(**overrides) -> str:
@@ -28,7 +33,7 @@ def _model_json(**overrides) -> str:
 
 
 def test_typical_receipt_normalizes():
-    result = normalize(_model_json(), multi_page_truncated=False)
+    result = normalize(_model_json(), _decoded())
     assert result.schema_version == '1'
     assert result.currency == 'PLN'  # uppercased
     assert result.total == '20.47'
@@ -44,7 +49,7 @@ def test_money_values_are_decimal_strings():
                 {'name': 'X', 'quantity': 1, 'unit_price': 3, 'line_total': 3},
             ],
         ),
-        multi_page_truncated=False,
+        _decoded(),
     )
     assert result.total == '20.50'
     assert result.items[0].unit_price == '3.00'
@@ -52,17 +57,17 @@ def test_money_values_are_decimal_strings():
 
 
 def test_comma_decimals_coerced():
-    result = normalize(_model_json(total='12,99', items=[]), multi_page_truncated=False)
+    result = normalize(_model_json(total='12,99', items=[]), _decoded())
     assert result.total == '12.99'
 
 
 def test_total_mismatch_warning():
-    result = normalize(_model_json(total='99.99'), multi_page_truncated=False)
+    result = normalize(_model_json(total='99.99'), _decoded())
     assert 'total_mismatch' in result.warnings
 
 
 def test_total_missing_warning():
-    result = normalize(_model_json(total=None), multi_page_truncated=False)
+    result = normalize(_model_json(total=None), _decoded())
     assert result.total is None
     assert 'total_missing' in result.warnings
 
@@ -73,29 +78,29 @@ def test_item_math_mismatch_warning():
             total='10.00',
             items=[{'name': 'Odd', 'quantity': '2', 'unit_price': '3.00', 'line_total': '10.00'}],
         ),
-        multi_page_truncated=False,
+        _decoded(),
     )
     assert 'item_math_mismatch' in result.warnings
 
 
 def test_multi_page_merged_warning():
-    result = normalize(_model_json(), multi_page_truncated=True)
+    result = normalize(_model_json(), _decoded(multi_page_truncated=True))
     assert 'multi_page_merged' in result.warnings
 
 
 def test_model_reported_unreadable_raises():
     with pytest.raises(UnreadableInput):
-        normalize(json.dumps({'error': 'unreadable'}), multi_page_truncated=False)
+        normalize(json.dumps({'error': 'unreadable'}), _decoded())
 
 
 def test_malformed_json_raises():
     with pytest.raises(UnreadableInput):
-        normalize('the receipt says hello', multi_page_truncated=False)
+        normalize('the receipt says hello', _decoded())
 
 
 def test_json_with_surrounding_prose_is_extracted():
     text = 'Here is your data:\n```json\n' + _model_json(items=[]) + '\n```\nHope that helps!'
-    result = normalize(text, multi_page_truncated=False)
+    result = normalize(text, _decoded())
     assert result.merchant == 'Lidl'
 
 
@@ -105,7 +110,7 @@ def test_confidence_clamped_and_items_skip_nameless():
             confidence={'merchant': 5, 'date': -1, 'currency': 'x', 'total': 0.5, 'items': 0.5},
             items=[{'name': '', 'line_total': '1.00'}, {'name': 'Real', 'line_total': '1.00'}],
         ),
-        multi_page_truncated=False,
+        _decoded(),
     )
     assert result.confidence.merchant == 1.0
     assert result.confidence.date == 0.0

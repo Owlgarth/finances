@@ -12,6 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app import llm
 from app.errors import UnreadableInput
+from app.images import DecodedInput
 from app.schemas import Confidence, Item, ParseResult
 
 _CENTS = Decimal('0.01')
@@ -67,7 +68,7 @@ def _sum_line_totals(items: list[Item]) -> Decimal:
     return total.quantize(_CENTS, rounding=ROUND_HALF_UP)
 
 
-def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
+def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
     """Coerce raw model text into a contract-valid ParseResult with derived warnings."""
     data = _extract_json(raw_text)
 
@@ -113,7 +114,7 @@ def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
     elif items:
         if abs(_sum_line_totals(items) - Decimal(total)) > _CENTS:
             warnings.add('total_mismatch')
-    if multi_page_truncated:
+    if decoded.multi_page_truncated:
         warnings.add('multi_page_merged')
 
     return ParseResult(
@@ -127,6 +128,6 @@ def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
     )
 
 
-async def parse(images_b64: list[str], multi_page_truncated: bool) -> ParseResult:
-    raw_text = await llm.extract(images_b64)
-    return normalize(raw_text, multi_page_truncated)
+async def parse(decoded: DecodedInput) -> ParseResult:
+    raw_text = await llm.extract(decoded.images_b64)
+    return normalize(raw_text, decoded)
