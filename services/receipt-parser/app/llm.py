@@ -7,10 +7,14 @@ be swapped or mocked wholesale in tests.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from app.config import settings
 from app.errors import ModelUnavailable
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     'You are a receipt-extraction engine. You are given one or more images of a single '
@@ -29,6 +33,46 @@ SYSTEM_PROMPT = (
 )
 
 
+# The contract shape (CONTRACT.md v1) as a JSON schema for constrained decoding.
+# Deliberately permissive — no top-level `required`, no additionalProperties:false —
+# so the {"error": "unreadable"} reply stays expressible and lax OpenAI-compatible
+# servers (vLLM, llama.cpp, Ollama) accept it. normalize() re-validates everything.
+_MONEY = {'type': ['string', 'null']}
+_SCORE = {'type': 'number'}
+RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'merchant': {'type': ['string', 'null']},
+        'date': {'type': ['string', 'null']},
+        'currency': {'type': ['string', 'null']},
+        'total': _MONEY,
+        'items': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'name': {'type': 'string'},
+                    'quantity': {'type': 'string'},
+                    'unit_price': _MONEY,
+                    'line_total': _MONEY,
+                    'confidence': _SCORE,
+                },
+                'required': ['name'],
+            },
+        },
+        'confidence': {
+            'type': 'object',
+            'properties': {field: _SCORE for field in ('merchant', 'date', 'currency', 'total', 'items')},
+        },
+        'warnings': {'type': 'array', 'items': {'type': 'string'}},
+        'error': {'type': 'string'},
+    },
+}
+
+# Set once when the endpoint rejects json_schema (4xx) so every later request in
+# this process goes straight to json_object.
+_schema_rejected = False
+
 TRANSCRIPT_PREAMBLE = (
     'Below is a machine-extracted text transcript of the same receipt. Its digits and '
     'amounts are reliable, but its layout and word order may be imperfect. Prefer the '
@@ -36,15 +80,11 @@ TRANSCRIPT_PREAMBLE = (
 )
 
 
-async def extract(images_b64: list[str], transcript: str | None = None) -> str:
-    """Send images (plus an optional machine transcript) to the model and return the raw text response."""
-    content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
-    for image in images_b64:
-        content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
-    if transcript:
-        snippet = transcript[: settings.transcript_max_chars]
-        content.append({'type': 'text', 'text': TRANSCRIPT_PREAMBLE + snippet})
+def _json_schema_format() -> dict:
+    return {'type': 'json_schema', 'json_schema': {'name': 'receipt_extraction', 'schema': RESPONSE_SCHEMA}}
 
+
+async def _complete(content: list[dict], response_format: dict) -> str:
     payload = {
         'model': settings.model_name,
         'messages': [
@@ -52,20 +92,44 @@ async def extract(images_b64: list[str], transcript: str | None = None) -> str:
             {'role': 'user', 'content': content},
         ],
         'temperature': 0,
-        'response_format': {'type': 'json_object'},
+        'response_format': response_format,
     }
     headers = {'Authorization': f'Bearer {settings.model_api_key}'}
+    async with httpx.AsyncClient(timeout=settings.model_timeout_seconds) as client:
+        response = await client.post(
+            f'{settings.model_base_url.rstrip("/")}/chat/completions',
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+    return data['choices'][0]['message']['content']
+
+
+async def extract(images_b64: list[str], transcript: str | None = None) -> str:
+    """Send images (plus an optional machine transcript) to the model and return the raw text response."""
+    global _schema_rejected
+    content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
+    for image in images_b64:
+        content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
+    if transcript:
+        snippet = transcript[: settings.transcript_max_chars]
+        content.append({'type': 'text', 'text': TRANSCRIPT_PREAMBLE + snippet})
 
     try:
-        async with httpx.AsyncClient(timeout=settings.model_timeout_seconds) as client:
-            response = await client.post(
-                f'{settings.model_base_url.rstrip("/")}/chat/completions',
-                json=payload,
-                headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
-        return data['choices'][0]['message']['content']
+        if settings.structured_output == 'json_schema' and not _schema_rejected:
+            try:
+                return await _complete(content, _json_schema_format())
+            except httpx.HTTPStatusError as exc:
+                if not (400 <= exc.response.status_code < 500):
+                    raise
+                _schema_rejected = True
+                logger.warning(
+                    'Model endpoint rejected json_schema response_format (HTTP %s); '
+                    'falling back to json_object for the rest of this process.',
+                    exc.response.status_code,
+                )
+        return await _complete(content, {'type': 'json_object'})
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
         raise ModelUnavailable('The extraction model is unavailable or returned an unexpected response.') from exc
 
