@@ -44,6 +44,25 @@ class DecodedInput:
 # OCR is needed. Scanned PDFs typically extract nothing at all.
 PDF_TEXT_MIN_CHARS_PER_PAGE = 80
 
+# Long thermal receipts get downscaled into illegibility by vision encoders.
+# Images beyond both bounds are split into vertical tiles that overlap enough
+# for no row to be lost at a seam.
+TILE_MAX_ASPECT = 2.5  # height/width ratio above which tiling kicks in
+TILE_MIN_HEIGHT = 2000  # px — short images are never tiled
+TILE_OVERLAP = 0.15
+
+
+def _tile_tall_image(image: Image.Image) -> list[Image.Image]:
+    """Split an extreme-aspect image into overlapping vertical tiles (or return it whole)."""
+    width, height = image.size
+    if height <= TILE_MIN_HEIGHT or height <= width * TILE_MAX_ASPECT:
+        return [image]
+    tile_height = int(width * TILE_MAX_ASPECT)
+    step = max(1, int(tile_height * (1 - TILE_OVERLAP)))
+    tops = list(range(0, height - tile_height, step))
+    tops.append(height - tile_height)  # final tile is bottom-aligned so nothing is cut off
+    return [image.crop((0, top, width, top + tile_height)) for top in tops]
+
 
 def _pdf_page_text(page: pdfium.PdfPage) -> str:
     try:
@@ -116,9 +135,10 @@ def decode_to_images(content: bytes, content_type: str) -> DecodedInput:
     except Exception as exc:  # noqa: BLE001 - Pillow raises varied errors
         raise UnreadableInput('The image could not be decoded.') from exc
 
+    # OCR sees the full image (one pass, no seam duplicates); the model gets tiles.
     transcript = ocr.transcribe(image)
     return DecodedInput(
-        images_b64=[_encode_png(image)],
+        images_b64=[_encode_png(tile) for tile in _tile_tall_image(image)],
         transcript=transcript,
         transcript_source='ocr' if transcript else None,
         ocr_unavailable=transcript is None,
