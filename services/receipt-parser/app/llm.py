@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     'You are a receipt-extraction engine. You are given one or more images of a single '
-    'purchase receipt (multiple images are pages of the same receipt). Extract structured '
-    'data and reply with ONE JSON object only — no prose, no code fences.\n\n'
+    'purchase receipt (multiple images are pages of the same receipt, or overlapping '
+    'vertical tiles of one long receipt — do not duplicate items that appear in an '
+    'overlap). Extract structured data and reply with ONE JSON object only — no prose, '
+    'no code fences.\n\n'
     'JSON shape:\n'
     '{"merchant": str|null, "date": "YYYY-MM-DD"|null, "currency": ISO4217|null, '
     '"total": decimal-string|null, '
