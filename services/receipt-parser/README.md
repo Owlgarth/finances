@@ -8,6 +8,24 @@ It talks to any **OpenAI-compatible** vision chat-completions endpoint, selected
 entirely by environment variables. Point it at a local runtime (Ollama, vLLM) or
 a hosted provider without touching code.
 
+## Pipeline
+
+Extraction is **hybrid**: the vision model sees the receipt image(s), and — when
+available — a machine-extracted text transcript whose digits are deterministic:
+
+1. **Decode** (`app/images.py`) — the upload becomes base64 PNGs (PDF pages are
+   rasterized). Born-digital PDFs (> ~80 extracted chars/page) also yield a
+   transcript from their embedded text layer.
+2. **Extract** (`app/llm.py`) — images plus the transcript (framed as
+   machine-extracted: digits reliable, layout imperfect) go to the model, which
+   returns contract-shaped JSON.
+3. **Normalize** (`app/parser.py`) — every field is defensively coerced, and all
+   consistency warnings are derived here, never trusted from the model:
+   arithmetic checks (`item_math_mismatch`, `total_mismatch`) plus transcript
+   grounding — the total and item line totals are looked up among the
+   transcript's money tokens and `confidence.total`/`confidence.items` are
+   floored or capped accordingly (see `CONTRACT.md` → *Confidence grounding*).
+
 ## Endpoints
 
 | Method | Path | Purpose |

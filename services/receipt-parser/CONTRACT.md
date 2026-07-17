@@ -90,6 +90,23 @@ reach its configured model provider, `503` with the error shape otherwise.
 | `partially_readable` | Part of the receipt was unreadable; items may be missing. |
 | `multi_page_merged` | Input was a multi-page PDF; pages were merged into one result. |
 | `discount_lines_folded` | Discount/deposit lines were folded into adjacent items. |
+| `total_not_in_source` | `total` was not found among the money tokens of the machine-extracted transcript (PDF text layer or OCR); `confidence.total` is capped at 0.5. |
+| `ocr_unavailable` | OCR was enabled but could not produce a transcript; the result is vision-only, without transcript grounding. |
+
+### Confidence grounding
+
+When the service obtains a machine-extracted transcript of the receipt (the text
+layer of a born-digital PDF, or OCR of a photo), it deterministically cross-checks
+the model's numbers against it and adjusts confidence — the model's self-reported
+confidence is never trusted on its own:
+
+- `total` found verbatim among the transcript's money tokens ⇒ `confidence.total`
+  is **floored at 0.9**; not found ⇒ `total_not_in_source` warning and
+  `confidence.total` **capped at 0.5**.
+- The fraction of item `line_total`s found in the transcript floors (≥ 80% found)
+  or caps (< 50% found) `confidence.items` with the same 0.9/0.5 bounds.
+
+Without a transcript, confidence values pass through unchanged (clamped to 0..1).
 
 ## Error response
 
