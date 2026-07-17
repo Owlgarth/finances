@@ -63,7 +63,9 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
   const mutation = useMutation({
     mutationFn: () => {
       const payload = { name: name.trim(), amount, account_id: accountId, category_id: categoryId, planned_date: plannedDate }
-      return isEdit ? plannedTransactionsApi.update(planned.id, payload) : plannedTransactionsApi.create(payload)
+      // Echo the current status back on edit: the schema defaults a missing
+      // status to 'pending', which the backend rejects as a revert for done rows.
+      return isEdit ? plannedTransactionsApi.update(planned.id, { ...payload, status: planned.status }) : plannedTransactionsApi.create(payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })

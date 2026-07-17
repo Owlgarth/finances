@@ -92,6 +92,7 @@ def _legacy_v2_export():
                                         'planned_date': '2025-01-25',
                                         'payment_date': None,
                                         'status': 'pending',
+                                        'category_name': 'Food',
                                         'currency_symbol': 'PLN',
                                     },
                                 ],
@@ -132,6 +133,32 @@ def _legacy_v2_export():
                         ],
                     }
                 ],
+            }
+        ],
+    }
+
+
+def _minimal_export(workspace_name='Mini', currencies=None, **period_fields):
+    """A single-workspace, single-budget, single-period export skeleton."""
+    period = {
+        'name': 'Jan 2025',
+        'start_date': '2025-01-01',
+        'end_date': '2025-01-31',
+        'categories': [],
+        'budgets': [],
+        'transactions': [],
+        'planned_transactions': [],
+        'currency_exchanges': [],
+        'period_balances': [],
+    }
+    period.update(period_fields)
+    return {
+        'export_version': '2.0',
+        'workspaces': [
+            {
+                'workspace_name': workspace_name,
+                'currencies': currencies or [],
+                'budget_accounts': [{'name': 'Mini Budget', 'periods': [period]}],
             }
         ],
     }
@@ -243,6 +270,15 @@ class TestLegacyImportService(AuthMixin, TestCase):
         planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
         self.assertEqual(planned.account.name, 'Main PLN')
         self.assertEqual(planned.amount, Decimal('2000.00'))
+        # Category resolves to the merged budget-scoped row, so budget
+        # membership is derived the same way as for regular transactions.
+        self.assertIsNotNone(planned.category)
+        self.assertEqual(planned.category.name, 'Food')
+        self.assertEqual(planned.category.budget, Budget.objects.get(workspace=ws, name='Household'))
+        food = Category.objects.get(workspace=ws, name='Food')
+        self.assertEqual(planned.category_id, food.id)
+        expense = Transaction.objects.get(workspace=ws, description='Groceries')
+        self.assertEqual(expense.category_id, planned.category_id)
 
     def test_reimport_does_not_duplicate_accounts(self):
         LegacyImportService.import_legacy(self.user, _legacy_v2_export())
@@ -354,6 +390,516 @@ class TestLegacyImportService(AuthMixin, TestCase):
         tx = Transaction.objects.get(workspace=ws, description='Shop')
         self.assertEqual(tx.category.name, 'Food')
         self.assertEqual(tx.account.name, 'Main PLN')
+
+    def test_multi_budget_account_closings_summed(self):
+        """§6.1 rule 7: the expected balance per currency sums each legacy
+        budget account's latest closing — not the single latest across them."""
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'].append(
+            {
+                'name': 'Savings',
+                'periods': [
+                    {
+                        'name': 'January 2025',
+                        'start_date': '2025-01-01',
+                        'end_date': '2025-01-31',
+                        'categories': [],
+                        'budgets': [],
+                        'transactions': [
+                            {
+                                'date': '2025-01-05',
+                                'description': 'Deposit',
+                                'amount': '1000.00',
+                                'type': 'income',
+                                'category_name': None,
+                                'currency_symbol': 'PLN',
+                            },
+                        ],
+                        'planned_transactions': [],
+                        'currency_exchanges': [],
+                        'period_balances': [{'currency_symbol': 'PLN', 'closing_balance': '1000.00'}],
+                    }
+                ],
+            }
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        pln = Account.objects.get(workspace=ws, name='Main PLN')
+        self.assertEqual(AccountService.balance(pln), Decimal('5300.00'))  # 4300 + 1000
+        wr = report['workspaces'][0]
+        self.assertTrue(all(row['matches'] for row in wr['balances']), wr['balances'])
+        self.assertEqual(wr['warnings'], [])
+
+    def test_display_symbol_maps_to_iso_currency(self):
+        """Old exports stored display symbols; ``zł`` + name must map to PLN,
+        not fragment into a workspace-custom currency."""
+        export = _minimal_export(
+            currencies=[{'symbol': 'zł', 'name': 'Polish Zloty'}],
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'Shop',
+                    'amount': '10.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'zł',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        account = Account.objects.get(workspace=ws)
+        self.assertEqual(account.name, 'Main PLN')
+        self.assertFalse(account.currency.is_custom)
+        self.assertEqual(report['workspaces'][0]['warnings'], [])
+
+    def test_ambiguous_symbol_disambiguated_by_name(self):
+        """``$`` is shared by several ISO currencies; the declared name decides."""
+        export = _minimal_export(
+            currencies=[{'symbol': '$', 'name': 'US Dollar'}],
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'Coffee',
+                    'amount': '4.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': '$',
+                }
+            ],
+        )
+
+        LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertTrue(Account.objects.filter(workspace=ws, name='Main USD').exists())
+        self.assertFalse(Currency.objects.filter(workspace=ws, is_custom=True).exists())
+
+    def test_balance_only_currency_gets_account_and_opening_balance(self):
+        """A currency appearing only in period balances still needs an account
+        to carry the opening-balance solve — it must not vanish silently."""
+        export = _minimal_export(
+            period_balances=[{'currency_symbol': 'USD', 'closing_balance': '250.00'}],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        usd = Account.objects.get(workspace=ws, name='Main USD')
+        self.assertEqual(AccountService.balance(usd), Decimal('250.00'))
+        wr = report['workspaces'][0]
+        self.assertTrue(all(row['matches'] for row in wr['balances']), wr['balances'])
+
+    def test_colliding_truncated_symbols_share_custom_currency(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'One',
+                    'amount': '1.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'LONGCODE-A',
+                },
+                {
+                    'date': '2025-01-03',
+                    'description': 'Two',
+                    'amount': '2.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'LONGCODE-B',
+                },
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertEqual(Currency.objects.filter(workspace=ws, code='LONGCODE').count(), 1)
+        self.assertEqual(report['workspaces'][0]['created']['transactions'], 2)
+        warnings = report['workspaces'][0]['warnings']
+        self.assertEqual(sum('truncated' in w for w in warnings), 2)
+
+    def test_ambiguous_symbol_without_name_becomes_custom_with_warning(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'Coffee',
+                    'amount': '4.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': '$',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertTrue(Currency.objects.filter(workspace=ws, code='$', is_custom=True).exists())
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('ambiguous' in w for w in warnings), warnings)
+
+    def test_long_symbol_truncated_with_warning(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-02',
+                    'description': 'Tokens',
+                    'amount': '4.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'VERYLONGSYMBOL',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertTrue(Currency.objects.filter(workspace=ws, code='VERYLONG', is_custom=True).exists())
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('truncated' in w for w in warnings), warnings)
+
+    def test_missing_transaction_currency_warns(self):
+        """A skipped record must never vanish silently — the opening-balance
+        solve would absorb the missing amount and mask the loss."""
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][1]['currency_symbol'] = None
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        self.assertFalse(Transaction.objects.filter(workspace=ws, description='Groceries').exists())
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('missing currency' in w and 'Groceries' in w for w in warnings), warnings)
+
+    def test_missing_allocation_currency_skipped_with_warning(self):
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['budgets'][0]['currency_symbol'] = None
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        self.assertFalse(CategoryBudget.objects.filter(workspace=ws).exists())
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('allocation' in w and 'missing currency' in w for w in warnings), warnings)
+
+    def test_missing_workspace_name_raises_validation_error(self):
+        from common.exceptions import ValidationError
+
+        export = _legacy_v2_export()
+        export['workspaces'][0]['workspace_name'] = None
+
+        with self.assertRaises(ValidationError):
+            LegacyImportService.import_legacy(self.user, export)
+
+    def test_missing_planned_name_raises_validation_error(self):
+        from common.exceptions import ValidationError
+
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['planned_transactions'][0]['name'] = None
+
+        with self.assertRaises(ValidationError):
+            LegacyImportService.import_legacy(self.user, export)
+
+    def test_unknown_planned_status_imported_as_pending_with_warning(self):
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['planned_transactions'][0]['status'] = 'paid'
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
+        self.assertEqual(planned.status, 'pending')
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('unknown status' in w for w in warnings), warnings)
+
+    def test_null_planned_status_defaults_to_pending(self):
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['planned_transactions'][0]['status'] = None
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        self.assertEqual(PlannedTransaction.objects.get(workspace=ws, name='Rent').status, 'pending')
+        self.assertEqual(report['workspaces'][0]['warnings'], [])
+
+    def test_negative_expense_imported_as_adjustment(self):
+        """A negative income/expense would silently flip the balance math;
+        the legacy delta is preserved as a signed adjustment instead."""
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['periods'][0]['transactions'][1]['amount'] = '-300.00'
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        groceries = Transaction.objects.get(workspace=ws, description='Groceries')
+        self.assertEqual(groceries.type, 'adjustment')
+        self.assertEqual(groceries.amount, Decimal('300.00'))
+        wr = report['workspaces'][0]
+        self.assertTrue(any('negative expense' in w for w in wr['warnings']), wr['warnings'])
+        self.assertTrue(all(row['matches'] for row in wr['balances']), wr['balances'])
+
+    def test_same_currency_exchange_fee_kept_as_adjustment(self):
+        export = _minimal_export(
+            currency_exchanges=[
+                {
+                    'date': '2025-01-10',
+                    'description': '',
+                    'from_amount': '400.00',
+                    'to_amount': '380.00',
+                    'from_currency_symbol': 'PLN',
+                    'to_currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        self.assertEqual(Transfer.objects.filter(workspace=ws).count(), 0)
+        adjustment = Transaction.objects.get(workspace=ws, type='adjustment')
+        self.assertEqual(adjustment.amount, Decimal('-20.00'))
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('transfer skipped' in w for w in warnings), warnings)
+
+    def test_dedup_prefers_exact_description_match(self):
+        """A genuine transaction that happens to match the fallback pattern
+        must not be consumed when the exactly-described linked record exists."""
+        export = _minimal_export(
+            currencies=[
+                {'symbol': 'PLN', 'name': 'Polish Zloty'},
+                {'symbol': 'USD', 'name': 'US Dollar'},
+            ],
+            transactions=[
+                # Genuine record whose description matches the "<CODE> to <CODE>" fallback.
+                {
+                    'date': '2025-01-15',
+                    'description': 'PLN to USD',
+                    'amount': '400.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'PLN',
+                },
+                # The actual auto-created linked pair, described like the exchange.
+                {
+                    'date': '2025-01-15',
+                    'description': 'January swap',
+                    'amount': '400.00',
+                    'type': 'expense',
+                    'category_name': None,
+                    'currency_symbol': 'PLN',
+                },
+                {
+                    'date': '2025-01-15',
+                    'description': 'January swap',
+                    'amount': '100.00',
+                    'type': 'income',
+                    'category_name': None,
+                    'currency_symbol': 'USD',
+                },
+            ],
+            currency_exchanges=[
+                {
+                    'date': '2025-01-15',
+                    'description': 'January swap',
+                    'from_amount': '400.00',
+                    'to_amount': '100.00',
+                    'from_currency_symbol': 'PLN',
+                    'to_currency_symbol': 'USD',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        imported = list(Transaction.objects.filter(workspace=ws).values_list('description', flat=True))
+        self.assertEqual(imported, ['PLN to USD'])
+        deduped = report['workspaces'][0]['deduped_transactions']
+        self.assertEqual({d['description'] for d in deduped}, {'January swap'})
+
+    def test_rename_collisions_get_unique_names(self):
+        LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+        LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+        LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+
+        names = list(
+            Workspace.objects.filter(owner=self.user, name__startswith='Legacy Workspace').values_list(
+                'name', flat=True
+            )
+        )
+        self.assertEqual(len(names), 3)
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_planned_category_inferred_from_matching_transactions(self):
+        """v2 exports carry no category on planned records: infer one from a
+        same-budget transaction (any period) whose description matches the name."""
+        export = _minimal_export(
+            planned_transactions=[
+                {
+                    'name': 'Rent',
+                    'amount': '2000.00',
+                    'planned_date': '2025-01-25',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+        # The categorized transaction lives in a *later* period of the same budget.
+        export['workspaces'][0]['budget_accounts'][0]['periods'].append(
+            {
+                'name': 'Feb 2025',
+                'start_date': '2025-02-01',
+                'end_date': '2025-02-28',
+                'categories': [],
+                'budgets': [],
+                'transactions': [
+                    {
+                        'date': '2025-02-03',
+                        'description': 'Rent',
+                        'amount': '2000.00',
+                        'type': 'expense',
+                        'category_name': 'Housing',
+                        'currency_symbol': 'PLN',
+                    }
+                ],
+                'planned_transactions': [],
+                'currency_exchanges': [],
+                'period_balances': [],
+            }
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
+        self.assertIsNotNone(planned.category)
+        self.assertEqual(planned.category.name, 'Housing')
+        wr = report['workspaces'][0]
+        self.assertEqual(wr['created']['planned_categorized'], 1)
+        self.assertEqual(wr['warnings'], [])
+
+    def test_planned_category_inference_ambiguous_picks_most_frequent(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-05',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Entertainment',
+                    'currency_symbol': 'PLN',
+                },
+                {
+                    'date': '2025-01-12',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Entertainment',
+                    'currency_symbol': 'PLN',
+                },
+                {
+                    'date': '2025-01-20',
+                    'description': 'Netflix',
+                    'amount': '15.00',
+                    'type': 'expense',
+                    'category_name': 'Bills',
+                    'currency_symbol': 'PLN',
+                },
+            ],
+            planned_transactions=[
+                {
+                    'name': 'Netflix',
+                    'amount': '15.00',
+                    'planned_date': '2025-01-28',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Netflix')
+        self.assertEqual(planned.category.name, 'Entertainment')
+        warnings = report['workspaces'][0]['warnings']
+        self.assertTrue(any('assigned most frequent' in w for w in warnings), warnings)
+
+    def test_planned_without_category_or_match_left_uncategorized_with_warning(self):
+        export = _minimal_export(
+            planned_transactions=[
+                {
+                    'name': 'Mystery bill',
+                    'amount': '10.00',
+                    'planned_date': '2025-01-28',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Mystery bill')
+        self.assertIsNone(planned.category)
+        wr = report['workspaces'][0]
+        self.assertEqual(wr['created']['planned_categorized'], 0)
+        self.assertTrue(any('left uncategorized' in w for w in wr['warnings']), wr['warnings'])
+
+    def test_explicit_planned_category_wins_over_inference(self):
+        export = _minimal_export(
+            transactions=[
+                {
+                    'date': '2025-01-05',
+                    'description': 'Rent',
+                    'amount': '2000.00',
+                    'type': 'expense',
+                    'category_name': 'Housing',
+                    'currency_symbol': 'PLN',
+                },
+            ],
+            planned_transactions=[
+                {
+                    'name': 'Rent',
+                    'amount': '2000.00',
+                    'planned_date': '2025-01-25',
+                    'payment_date': None,
+                    'status': 'pending',
+                    'category_name': 'Fixed costs',
+                    'currency_symbol': 'PLN',
+                }
+            ],
+        )
+
+        report = LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Mini')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Rent')
+        self.assertEqual(planned.category.name, 'Fixed costs')
+        self.assertEqual(report['workspaces'][0]['created']['planned_categorized'], 0)
+
+    def test_budget_metadata_imported(self):
+        export = _legacy_v2_export()
+        export['workspaces'][0]['budget_accounts'][0]['is_active'] = False
+
+        LegacyImportService.import_legacy(self.user, export)
+
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        self.assertFalse(budget.is_active)
+        self.assertEqual(budget.display_currency.code, 'PLN')
 
 
 class TestLegacyImportEndpoint(AuthMixin, TestCase):
