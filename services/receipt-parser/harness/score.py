@@ -118,10 +118,13 @@ def main() -> int:
         )
 
     if scored:
+
         def mean(key):
-            return sum(1 if r[key] else 0 for r in scored) / len(scored) if isinstance(scored[0][key], bool) else sum(
-                r[key] for r in scored
-            ) / len(scored)
+            return (
+                sum(1 if r[key] else 0 for r in scored) / len(scored)
+                if isinstance(scored[0][key], bool)
+                else sum(r[key] for r in scored) / len(scored)
+            )
 
         print('-' * len(header))
         print(
