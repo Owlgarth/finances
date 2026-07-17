@@ -267,13 +267,9 @@ export default function Planned() {
           {items.map((p) => (
             <div
               key={p.id}
-              {...(isTouch && canWrite && p.status === 'pending'
-                ? tappableProps(() => setActionTarget(p))
-                : {})}
+              {...(isTouch && canWrite ? tappableProps(() => setActionTarget(p)) : {})}
               className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                isTouch && canWrite && p.status === 'pending'
-                  ? 'active:bg-surface-hover transition-colors cursor-pointer'
-                  : ''
+                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
             >
               <div className="min-w-0 flex-1">
@@ -289,9 +285,11 @@ export default function Planned() {
                 <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
                 {/* Hover reveals are pointer-fine only — on touch the row tap
                     opens the action sheet instead. */}
-                {canWrite && !isTouch && p.status === 'pending' && (
+                {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
+                    {p.status === 'pending' && (
+                      <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
+                    )}
                     <button onClick={() => { setEditing(p); setFormOpen(true) }} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                     <button onClick={() => setDeleting(p)} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
@@ -317,7 +315,9 @@ export default function Planned() {
         onClose={() => setActionTarget(null)}
         title={actionTarget?.name}
         actions={[
-          { label: 'Execute now', icon: CheckCircle, onSelect: () => actionTarget && executeMutation.mutate(actionTarget) },
+          ...(actionTarget?.status === 'pending'
+            ? [{ label: 'Execute now', icon: CheckCircle, onSelect: () => actionTarget && executeMutation.mutate(actionTarget) }]
+            : []),
           { label: 'Edit', icon: Pencil, onSelect: () => { if (actionTarget) { setEditing(actionTarget); setFormOpen(true) } } },
           { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => actionTarget && setDeleting(actionTarget) },
         ]}

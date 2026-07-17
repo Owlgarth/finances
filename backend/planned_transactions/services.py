@@ -26,6 +26,7 @@ from planned_transactions.exceptions import (
 from planned_transactions.models import PlannedTransaction
 from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport
 from planned_transactions.tasks import execute_planned_transaction
+from transactions.models import Transaction
 
 
 class PlannedTransactionService:
@@ -233,7 +234,12 @@ class PlannedTransactionService:
 
     @staticmethod
     def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
-        """Update a planned transaction."""
+        """Update a planned transaction.
+
+        Editing a done planned re-applies name/amount/category/account to the
+        transaction its execution created, so the two never desync; the
+        transaction keeps its own date (the payment date).
+        """
         planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
         if planned.status == 'done' and data.status != 'done':
@@ -259,7 +265,17 @@ class PlannedTransactionService:
             return planned
 
         planned.status = data.status
-        planned.save()
+        with db_transaction.atomic():
+            planned.save()
+            if planned.transaction_id:
+                mirror = Transaction.objects.filter(id=planned.transaction_id, workspace_id=workspace_id).first()
+                if mirror:
+                    mirror.description = planned.name
+                    mirror.amount = planned.amount
+                    mirror.category_id = planned.category_id
+                    mirror.account_id = planned.account_id
+                    mirror.updated_by = user
+                    mirror.save()
         return planned
 
     @staticmethod
