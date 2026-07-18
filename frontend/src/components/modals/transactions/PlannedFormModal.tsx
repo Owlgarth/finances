@@ -137,7 +137,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
             <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder="Uncategorized" aria-label="Category" disabled={!budgetId} />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-2">
+        <div className="flex flex-wrap items-center gap-2 pt-2 pb-4">
           {/* Separate, individually clickable actions (never a menu). */}
           {isEdit && planned && (
             <div className="flex items-center gap-2">
