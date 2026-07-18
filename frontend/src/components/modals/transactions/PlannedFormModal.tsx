@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { CheckCircle, Copy, Trash2 } from 'lucide-react'
+import { Ban, CheckCircle, Copy, Trash2 } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
@@ -29,13 +29,21 @@ interface Props {
   /** Edit mode only, pending rows: renders an Execute button in the footer.
       Caller closes this modal and runs the execute mutation. */
   onExecute?: (planned: PlannedTransaction) => void
+  /** Edit mode only, pending rows: renders a "Cancel plan" button in the
+      footer (status → cancelled — softer than delete, the row stays).
+      Caller closes this modal and runs the cancel mutation. */
+  onCancelPlan?: (planned: PlannedTransaction) => void
 }
 
 // Positive counterpart of destructiveButtonClass, for Execute.
 const executeButtonClass =
   secondaryButtonClass.replace('text-text ', 'text-positive ').replace('hover:bg-surface-hover ', 'hover:bg-positive-bg ')
 
-export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute }: Props) {
+// Warning counterpart, for Cancel plan.
+const cancelPlanButtonClass =
+  secondaryButtonClass.replace('text-text ', 'text-warning ').replace('hover:bg-surface-hover ', 'hover:bg-warning-bg ')
+
+export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute, onCancelPlan }: Props) {
   const isEdit = !!planned
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
@@ -152,6 +160,11 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
               {onCopy && (
                 <button type="button" onClick={() => onCopy(planned)} className={secondaryButtonClass}>
                   <Copy size={13} className="inline mr-1" /> Copy
+                </button>
+              )}
+              {onCancelPlan && planned.status === 'pending' && (
+                <button type="button" onClick={() => onCancelPlan(planned)} className={cancelPlanButtonClass}>
+                  <Ban size={13} className="inline mr-1" /> Cancel plan
                 </button>
               )}
               {onDelete && (

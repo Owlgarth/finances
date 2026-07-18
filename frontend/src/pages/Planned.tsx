@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, Copy, Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi } from '../api/client'
 import type { PlannedTransaction } from '../types'
 import { useAccounts, useBudgets, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
@@ -185,6 +185,25 @@ export default function Planned() {
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to execute')),
   })
 
+  // Cancel keeps the row (status → cancelled) — softer than delete. PUT wants
+  // the full payload, so echo the row's fields with only the status changed.
+  const cancelMutation = useMutation({
+    mutationFn: (p: PlannedTransaction) =>
+      plannedTransactionsApi.update(p.id, {
+        name: p.name,
+        amount: p.amount,
+        account_id: p.account_id,
+        category_id: p.category_id,
+        planned_date: p.planned_date,
+        status: 'cancelled',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['planned'] })
+      toast.success('Plan cancelled')
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to cancel')),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['planned'] }); toast.success('Deleted'); setDeleting(null) },
@@ -295,6 +314,9 @@ export default function Planned() {
                     {p.status === 'pending' && (
                       <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
                     )}
+                    {p.status === 'pending' && (
+                      <button onClick={() => cancelMutation.mutate(p)} className="text-text-muted hover:text-warning p-1" title="Cancel plan"><Ban size={13} /></button>
+                    )}
                     <button onClick={() => openEdit(p)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                     <button onClick={() => openCopy(p)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
                     <button onClick={() => setDeleting(p)} title="Delete" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
@@ -324,6 +346,7 @@ export default function Planned() {
         onCopy={openCopy}
         onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
         onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
+        onCancelPlan={(p) => { setFormOpen(false); cancelMutation.mutate(p) }}
       />
       <ConfirmDialog
         isOpen={!!deleting}
