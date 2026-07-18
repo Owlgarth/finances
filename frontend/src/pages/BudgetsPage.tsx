@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, PieChart } from 'lucide-react'
+import { Plus, PieChart, Trash2 } from 'lucide-react'
 import Modal from '../components/common/Modal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 import { budgetsApi } from '../api/client'
-import type { Cadence } from '../types'
+import type { Budget, Cadence } from '../types'
 import { useBudgets } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
@@ -79,9 +80,25 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 export default function BudgetsPage() {
+  const queryClient = useQueryClient()
   const { canManageAccounts } = usePermissions()
   const { data: budgets = [], isLoading } = useBudgets(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [deleting, setDeleting] = useState<Budget | null>(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => budgetsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      queryClient.invalidateQueries({ queryKey: ['workspace-categories'] })
+      toast.success('Budget deleted')
+      setDeleting(null)
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to delete budget'))
+      setDeleting(null)
+    },
+  })
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
@@ -104,7 +121,17 @@ export default function BudgetsPage() {
             <Link key={b.id} to={`/budgets/${b.id}`} className="border border-border rounded-sm bg-surface p-4 hover:bg-surface-hover active:bg-surface-hover transition-colors">
               <div className="flex items-center gap-2">
                 <PieChart size={16} className="text-text-muted" />
-                <span className="text-sm font-medium text-text">{b.name}</span>
+                <span className="text-sm font-medium text-text truncate">{b.name}</span>
+                {canManageAccounts && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
+                    className="ml-auto text-text-muted hover:text-negative touch-hit"
+                    title="Delete"
+                    aria-label={`Delete budget ${b.name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
               <div className="mt-2 text-[10px] font-mono uppercase tracking-wider text-text-muted">
                 {b.cadence === 'weeks' ? `Every ${b.cadence_weeks} weeks` : b.cadence}
@@ -115,6 +142,13 @@ export default function BudgetsPage() {
       )}
 
       <CreateBudgetModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <ConfirmDialog
+        isOpen={!!deleting}
+        title="Delete budget"
+        message={`Delete "${deleting?.name}"? Its periods and categories will be deleted, and transactions in those categories will become uncategorized. This cannot be undone.`}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   )
 }
