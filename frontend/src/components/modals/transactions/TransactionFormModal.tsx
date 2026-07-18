@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Copy, Trash2 } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
@@ -17,6 +18,15 @@ interface Props {
   open: boolean
   onClose: () => void
   transaction?: Transaction | null
+  /** Copy mode: prefill every field from this transaction except the date
+      (today instead) and save as a NEW transaction. Ignored while editing. */
+  copyFrom?: Transaction | null
+  /** Edit mode only: renders a Delete button in the footer. Caller owns the
+      confirm flow (and closing this modal). */
+  onDelete?: (transaction: Transaction) => void
+  /** Edit mode only: renders a Copy button in the footer. Caller switches the
+      modal into copy mode (transaction=null, copyFrom=t). */
+  onCopy?: (transaction: Transaction) => void
 }
 
 const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
@@ -25,7 +35,11 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
   { value: 'adjustment', label: 'Adjustment' },
 ]
 
-export default function TransactionFormModal({ open, onClose, transaction }: Props) {
+// Outline-destructive footer button — chains into the caller's confirm dialog.
+const deleteButtonClass =
+  secondaryButtonClass.replace('text-text ', 'text-negative ').replace('hover:bg-surface-hover ', 'hover:bg-negative-bg ')
+
+export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy }: Props) {
   const isEdit = !!transaction
   const queryClient = useQueryClient()
   const { workspace } = useWorkspace()
@@ -51,17 +65,19 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   useEffect(() => {
     if (!open) return
     setDetailTab(null)
-    if (transaction) {
-      setDate(transaction.date)
-      setDescription(transaction.description)
-      setType(transaction.type)
-      setAmount(transaction.amount)
-      setAccountId(transaction.account_id)
-      setCategoryId(transaction.category_id)
-      setOtherCurrency(!!transaction.original_currency_code)
-      setOriginalAmount(transaction.original_amount ?? '')
-      setOriginalCurrencyCode(transaction.original_currency_code)
-      setBudgetId(transaction.category_budget_id)
+    // Copy mode prefills like edit, except the date: always today (D4).
+    const source = transaction ?? copyFrom
+    if (source) {
+      setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
+      setDescription(source.description)
+      setType(source.type)
+      setAmount(source.amount)
+      setAccountId(source.account_id)
+      setCategoryId(source.category_id)
+      setOtherCurrency(!!source.original_currency_code)
+      setOriginalAmount(source.original_amount ?? '')
+      setOriginalCurrencyCode(source.original_currency_code)
+      setBudgetId(source.category_budget_id)
     } else {
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
@@ -75,7 +91,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
       setOriginalCurrencyCode(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, accounts.length, budgets.length, defaultBudgetId])
+  }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId])
 
   const account = accounts.find((a) => a.id === accountId)
 
@@ -188,11 +204,28 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
-          <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}
-          </button>
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          {/* Two separate, individually clickable actions (never a menu). */}
+          {isEdit && transaction && (
+            <div className="flex items-center gap-2">
+              {onCopy && (
+                <button type="button" onClick={() => onCopy(transaction)} className={secondaryButtonClass}>
+                  <Copy size={13} className="inline mr-1" /> Copy
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" onClick={() => onDelete(transaction)} className={deleteButtonClass}>
+                  <Trash2 size={13} className="inline mr-1" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
+              {mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}
+            </button>
+          </div>
         </div>
       </form>
 

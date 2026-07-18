@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, ScanLine } from 'lucide-react'
+import { Copy, Plus, Pencil, Trash2, ScanLine } from 'lucide-react'
 import { transactionsApi } from '../api/client'
 import type { Transaction } from '../types'
 import { useAccounts, useBudgets, useMultiCurrency, useExtractionEnabled, useWorkspaceCategories } from '../hooks/useDomain'
@@ -14,7 +14,6 @@ import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
-import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import MultiSelect from '../components/common/MultiSelect'
@@ -122,9 +121,8 @@ export default function Transactions() {
   const [formOpen, setFormOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
+  const [copySource, setCopySource] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
-  // Touch replacement for the hover-revealed row actions (plan decision 7).
-  const [actionTarget, setActionTarget] = useState<Transaction | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', page, pageSize, search, accountFilter.join(','), typeFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
@@ -155,8 +153,11 @@ export default function Transactions() {
     onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to delete')); setDeleting(null) },
   })
 
-  const openNew = () => { setEditing(null); setFormOpen(true) }
-  const openEdit = (t: Transaction) => { setEditing(t); setFormOpen(true) }
+  const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
+  const openEdit = (t: Transaction) => { setEditing(t); setCopySource(null); setFormOpen(true) }
+  // Copy = new-transaction form prefilled from t, date reset to today. Also
+  // reachable from inside the edit modal, which then morphs into copy mode.
+  const openCopy = (t: Transaction) => { setEditing(null); setCopySource(t); setFormOpen(true) }
 
   const showAccountColumn = accounts.length > 1
   const items = data?.items ?? []
@@ -263,7 +264,7 @@ export default function Transactions() {
           {items.map((t) => (
             <div
               key={t.id}
-              {...(isTouch && canWrite ? tappableProps(() => setActionTarget(t)) : {})}
+              {...(isTouch && canWrite ? tappableProps(() => openEdit(t)) : {})}
               className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
                 isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
@@ -299,8 +300,9 @@ export default function Transactions() {
                     invisible tap targets; the row tap opens the sheet instead. */}
                 {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(t)} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button onClick={() => setDeleting(t)} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                    <button onClick={() => openEdit(t)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button onClick={() => openCopy(t)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                    <button onClick={() => setDeleting(t)} title="Delete" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
                 )}
               </div>
@@ -322,16 +324,14 @@ export default function Transactions() {
         </div>
       )}
 
-      <ActionSheet
-        open={!!actionTarget}
-        onClose={() => setActionTarget(null)}
-        title={actionTarget?.description}
-        actions={[
-          { label: 'Edit', icon: Pencil, onSelect: () => actionTarget && openEdit(actionTarget) },
-          { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => actionTarget && setDeleting(actionTarget) },
-        ]}
+      <TransactionFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        transaction={editing}
+        copyFrom={copySource}
+        onCopy={openCopy}
+        onDelete={(t) => { setFormOpen(false); setDeleting(t) }}
       />
-      <TransactionFormModal open={formOpen} onClose={() => setFormOpen(false)} transaction={editing} />
       <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <ConfirmDialog
         isOpen={!!deleting}
