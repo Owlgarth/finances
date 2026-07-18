@@ -24,6 +24,14 @@ export const primaryButtonClass =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
+// Outline-destructive variant of the secondary button — footer Delete actions
+// that chain into a confirm dialog (not the solid-negative confirm button).
+export const destructiveButtonClass =
+  'bg-surface border border-border text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors ' +
+  `${controlHeightClass} ` +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed'
+
 // §3 Secondary Button.
 export const secondaryButtonClass =
   'bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors ' +

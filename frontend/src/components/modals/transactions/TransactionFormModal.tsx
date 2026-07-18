@@ -12,7 +12,7 @@ import type { Transaction, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
+import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -34,10 +34,6 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
   { value: 'income', label: 'Income' },
   { value: 'adjustment', label: 'Adjustment' },
 ]
-
-// Outline-destructive footer button — chains into the caller's confirm dialog.
-const deleteButtonClass =
-  secondaryButtonClass.replace('text-text ', 'text-negative ').replace('hover:bg-surface-hover ', 'hover:bg-negative-bg ')
 
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy }: Props) {
   const isEdit = !!transaction
@@ -214,7 +210,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
                 </button>
               )}
               {onDelete && (
-                <button type="button" onClick={() => onDelete(transaction)} className={deleteButtonClass}>
+                <button type="button" onClick={() => onDelete(transaction)} className={destructiveButtonClass}>
                   <Trash2 size={13} className="inline mr-1" /> Delete
                 </button>
               )}

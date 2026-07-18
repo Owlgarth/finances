@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { CheckCircle, Copy, Trash2 } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
@@ -9,15 +10,31 @@ import type { PlannedTransaction } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
+import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
   onClose: () => void
   planned?: PlannedTransaction | null
+  /** Copy mode: prefill every field from this planned transaction except the
+      date (today instead) and save as a NEW pending one. Ignored while editing. */
+  copyFrom?: PlannedTransaction | null
+  /** Edit mode only: renders a Delete button in the footer. Caller owns the
+      confirm flow (and closing this modal). */
+  onDelete?: (planned: PlannedTransaction) => void
+  /** Edit mode only: renders a Copy button in the footer. Caller switches the
+      modal into copy mode (planned=null, copyFrom=p). */
+  onCopy?: (planned: PlannedTransaction) => void
+  /** Edit mode only, pending rows: renders an Execute button in the footer.
+      Caller closes this modal and runs the execute mutation. */
+  onExecute?: (planned: PlannedTransaction) => void
 }
 
-export default function PlannedFormModal({ open, onClose, planned }: Props) {
+// Positive counterpart of destructiveButtonClass, for Execute.
+const executeButtonClass =
+  secondaryButtonClass.replace('text-text ', 'text-positive ').replace('hover:bg-surface-hover ', 'hover:bg-positive-bg ')
+
+export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute }: Props) {
   const isEdit = !!planned
   const queryClient = useQueryClient()
   const { workspace } = useWorkspace()
@@ -36,13 +53,15 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
 
   useEffect(() => {
     if (!open) return
-    if (planned) {
-      setName(planned.name)
-      setAmount(planned.amount)
-      setAccountId(planned.account_id)
-      setCategoryId(planned.category_id)
-      setBudgetId(planned.category?.budget_id ?? null)
-      setPlannedDate(planned.planned_date)
+    // Copy mode prefills like edit, except the date: always today (D4).
+    const source = planned ?? copyFrom
+    if (source) {
+      setName(source.name)
+      setAmount(source.amount)
+      setAccountId(source.account_id)
+      setCategoryId(source.category_id)
+      setBudgetId(source.category?.budget_id ?? null)
+      setPlannedDate(planned ? source.planned_date : new Date().toISOString().slice(0, 10))
     } else {
       setName('')
       setAmount('')
@@ -52,7 +71,7 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
       setPlannedDate(new Date().toISOString().slice(0, 10))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planned, accounts.length, budgets.length, defaultBudgetId])
+  }, [open, planned, copyFrom, accounts.length, budgets.length, defaultBudgetId])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -118,9 +137,31 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
             <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder="Uncategorized" aria-label="Category" disabled={!budgetId} />
           </div>
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
-          <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}</button>
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          {/* Separate, individually clickable actions (never a menu). */}
+          {isEdit && planned && (
+            <div className="flex items-center gap-2">
+              {onExecute && planned.status === 'pending' && (
+                <button type="button" onClick={() => onExecute(planned)} className={executeButtonClass}>
+                  <CheckCircle size={13} className="inline mr-1" /> Execute
+                </button>
+              )}
+              {onCopy && (
+                <button type="button" onClick={() => onCopy(planned)} className={secondaryButtonClass}>
+                  <Copy size={13} className="inline mr-1" /> Copy
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" onClick={() => onDelete(planned)} className={destructiveButtonClass}>
+                  <Trash2 size={13} className="inline mr-1" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}</button>
+          </div>
         </div>
       </form>
     </Modal>
