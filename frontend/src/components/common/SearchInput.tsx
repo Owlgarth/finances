@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { useDebouncedField } from '../../hooks/useDebouncedField'
+import { controlHeightClass } from './formStyles'
 
 interface SearchInputProps {
   /** Committed value (usually from URL search params). */
@@ -34,7 +35,7 @@ export default function SearchInput({
         placeholder={placeholder}
         aria-label={ariaLabel ?? placeholder}
         // 16px font floor on mobile so iOS doesn't zoom the input (mobile-ux §4).
-        className="w-full bg-surface border border-border rounded-none pl-7 pr-7 py-1.5 font-mono text-xs max-sm:text-base max-sm:min-h-[44px] text-text placeholder:text-text-muted focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus transition-colors [&::-webkit-search-cancel-button]:hidden"
+        className={`w-full bg-surface border border-border rounded-none pl-7 pr-7 py-1.5 font-mono text-xs max-sm:text-base ${controlHeightClass} text-text placeholder:text-text-muted focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus transition-colors [&::-webkit-search-cancel-button]:hidden`}
       />
       {draft !== '' && (
         <button

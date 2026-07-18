@@ -2,17 +2,17 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, Copy, Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi } from '../api/client'
 import type { PlannedTransaction } from '../types'
 import { useAccounts, useBudgets, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
-import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
@@ -72,9 +72,17 @@ export default function Planned() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
+  const [copySource, setCopySource] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
-  // Touch replacement for the hover-revealed row actions (plan decision 7).
-  const [actionTarget, setActionTarget] = useState<PlannedTransaction | null>(null)
+  // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
+  // click on the hover-revealed Ban icon must not fire the mutation directly.
+  const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
+
+  const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
+  const openEdit = (p: PlannedTransaction) => { setEditing(p); setCopySource(null); setFormOpen(true) }
+  // Copy = new-planned form prefilled from p, date reset to today. Also
+  // reachable from inside the edit modal, which then morphs into copy mode.
+  const openCopy = (p: PlannedTransaction) => { setEditing(null); setCopySource(p); setFormOpen(true) }
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -92,7 +100,7 @@ export default function Planned() {
   const dateTo = searchParams.get('to') ?? ''
   const page = intParam(searchParams, 'page') ?? 1
 
-  const [pageSize, setPageSize] = useState(25)
+  const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   const updateParams = (patch: Record<string, string | number | (string | number)[] | null>) => {
     setSearchParams(
@@ -180,6 +188,26 @@ export default function Planned() {
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to execute')),
   })
 
+  // Cancel keeps the row (status → cancelled) — softer than delete. PUT wants
+  // the full payload, so echo the row's fields with only the status changed.
+  const cancelMutation = useMutation({
+    mutationFn: (p: PlannedTransaction) =>
+      plannedTransactionsApi.update(p.id, {
+        name: p.name,
+        amount: p.amount,
+        account_id: p.account_id,
+        category_id: p.category_id,
+        planned_date: p.planned_date,
+        status: 'cancelled',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['planned'] })
+      toast.success('Plan cancelled')
+      setCancelling(null)
+    },
+    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to cancel')); setCancelling(null) },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['planned'] }); toast.success('Deleted'); setDeleting(null) },
@@ -192,7 +220,7 @@ export default function Planned() {
         <h1 className="text-lg font-semibold text-text">Planned</h1>
         {/* Hidden on mobile: the FAB quick-add has Planned (plan decision 6). */}
         {canWrite && (
-          <button onClick={() => { setEditing(null); setFormOpen(true) }} className={`${primaryButtonClass} max-sm:hidden`}>
+          <button onClick={openNew} className={`${primaryButtonClass} max-sm:hidden`}>
             <Plus size={13} className="inline mr-1" /> New planned
           </button>
         )}
@@ -267,7 +295,7 @@ export default function Planned() {
           {items.map((p) => (
             <div
               key={p.id}
-              {...(isTouch && canWrite ? tappableProps(() => setActionTarget(p)) : {})}
+              {...(isTouch && canWrite ? tappableProps(() => openEdit(p)) : {})}
               className={`flex items-center justify-between px-4 py-3 text-sm group ${
                 isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
@@ -284,14 +312,18 @@ export default function Planned() {
               <div className="flex items-center gap-3 flex-shrink-0 pl-3">
                 <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
                 {/* Hover reveals are pointer-fine only — on touch the row tap
-                    opens the action sheet instead. */}
+                    opens the edit modal instead. */}
                 {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {p.status === 'pending' && (
                       <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
                     )}
-                    <button onClick={() => { setEditing(p); setFormOpen(true) }} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button onClick={() => setDeleting(p)} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                    {p.status === 'pending' && (
+                      <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title="Cancel plan"><Ban size={13} /></button>
+                    )}
+                    <button onClick={() => openEdit(p)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button onClick={() => openCopy(p)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                    <button onClick={() => setDeleting(p)} title="Delete" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
                 )}
               </div>
@@ -304,31 +336,36 @@ export default function Planned() {
               total={data.total}
               page_size={data.page_size}
               onPageChange={(p) => updateParams({ page: p })}
-              onPageSizeChange={(s) => { setPageSize(s); updateParams({ page: null }) }}
+              onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
             />
           )}
         </div>
       )}
 
-      <ActionSheet
-        open={!!actionTarget}
-        onClose={() => setActionTarget(null)}
-        title={actionTarget?.name}
-        actions={[
-          ...(actionTarget?.status === 'pending'
-            ? [{ label: 'Execute now', icon: CheckCircle, onSelect: () => actionTarget && executeMutation.mutate(actionTarget) }]
-            : []),
-          { label: 'Edit', icon: Pencil, onSelect: () => { if (actionTarget) { setEditing(actionTarget); setFormOpen(true) } } },
-          { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => actionTarget && setDeleting(actionTarget) },
-        ]}
+      <PlannedFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        planned={editing}
+        copyFrom={copySource}
+        onCopy={openCopy}
+        onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
+        onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
+        onCancelPlan={(p) => { setFormOpen(false); setCancelling(p) }}
       />
-      <PlannedFormModal open={formOpen} onClose={() => setFormOpen(false)} planned={editing} />
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete planned transaction"
         message={`Delete "${deleting?.name}"?`}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        isOpen={!!cancelling}
+        title="Cancel plan"
+        message={`Mark "${cancelling?.name}" as cancelled? The row stays in the list but can no longer be executed.`}
+        confirmLabel="Cancel plan"
+        onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
+        onCancel={() => setCancelling(null)}
       />
     </div>
   )
