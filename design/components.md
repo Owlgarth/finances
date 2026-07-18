@@ -405,11 +405,18 @@ Uses standard HTML `<input type="color">` with border treatment matching other i
 
 ### Input Specs Summary
 
+Heights are **enforced** by `controlHeightClass` (`min-h-[44px] sm:min-h-8` in
+`components/common/formStyles.ts`): 44px touch floor on mobile, 32px from `sm` up.
+Every control that can share a row — text inputs, Select/MultiSelect triggers,
+date trigger, search input, buttons, FilterBar toggle — composes it, so mixed rows
+(e.g. a Select next to a text input) always align.
+
 | Element | Height | Padding | Radius |
 |---|---|---|---|
-| Text input | `32px` | `px-2 py-1.5` | `rounded-none` |
-| Select (native) | `32px` | `px-2 py-1.5` | `rounded-none` |
-| Date trigger | `32px` | `px-2 py-1.5` | `rounded-none` |
+| Text input | `32px` (44px mobile) | `px-2 py-1.5` | `rounded-none` |
+| Select trigger | `32px` (44px mobile) | `px-2 py-1.5` | `rounded-none` |
+| Date trigger | `32px` (44px mobile) | `px-2 py-1.5` | `rounded-none` |
+| Buttons (§3) | `32px` (44px mobile) | `px-3 py-1.5` | `rounded-sm` |
 | Color picker | `32px` | N/A | `rounded-none` |
 
 ### Validation Timing
@@ -1253,7 +1260,7 @@ Standard vertical form used inside modals and pages. Adapts the Architectural Le
 | Group gap | `24px` between logical field groups (`space-y-6` between groups) |
 | Label | Geist, 11px, weight 500, `uppercase`, `tracking-wider`, `text-muted` — `4px` (`mb-1`) above input |
 | Required indicator | `*` in `negative` color, placed after label text |
-| Input height | `32px` (`py-1.5` + text) — matches row height |
+| Input height | `32px` (`controlHeightClass`: `min-h-[44px] sm:min-h-8`) — matches row height; 44px on mobile |
 | Input radius | `rounded-none` (0px) |
 | Input border | `border border-border`; focus → `border-border-focus` + `ring-1 ring-border-focus` |
 | Error input bg | `bg-negative-bg` with `border-negative/30` |
