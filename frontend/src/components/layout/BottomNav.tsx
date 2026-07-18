@@ -13,6 +13,7 @@ import {
   PieChart,
   Plus,
   Receipt,
+  RotateCw,
   ScanLine,
   Search,
   Settings,
@@ -285,6 +286,11 @@ export default function BottomNav() {
 
             <div className="border-t border-border mt-2">
               <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
+              {/* PWA has no browser chrome to refresh with. */}
+              <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
+                <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                Reload
+              </button>
               <div className="flex items-center justify-between min-h-[44px] px-4">
                 <span className="flex items-center gap-3 text-sm text-text">
                   <Moon size={16} strokeWidth={1.5} className="flex-shrink-0" />
