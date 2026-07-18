@@ -1,25 +1,45 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Ban, CheckCircle, Copy, Trash2 } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import { budgetsApi, plannedTransactionsApi } from '../../../api/client'
 import type { PlannedTransaction } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
+import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
+import { destructiveButtonClass, inputClass, labelClass, positiveButtonClass, primaryButtonClass, secondaryButtonClass, warningButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
   onClose: () => void
   planned?: PlannedTransaction | null
+  /** Copy mode: prefill every field from this planned transaction except the
+      date (today instead) and save as a NEW pending one. Ignored while editing. */
+  copyFrom?: PlannedTransaction | null
+  /** Edit mode only: renders a Delete button in the footer. Caller owns the
+      confirm flow (and closing this modal). */
+  onDelete?: (planned: PlannedTransaction) => void
+  /** Edit mode only: renders a Copy button in the footer. Caller switches the
+      modal into copy mode (planned=null, copyFrom=p). */
+  onCopy?: (planned: PlannedTransaction) => void
+  /** Edit mode only, pending rows: renders an Execute button in the footer.
+      Caller closes this modal and runs the execute mutation. */
+  onExecute?: (planned: PlannedTransaction) => void
+  /** Edit mode only, pending rows: renders a "Cancel plan" button in the
+      footer (status → cancelled — softer than delete, the row stays).
+      Caller closes this modal and owns the confirm flow. */
+  onCancelPlan?: (planned: PlannedTransaction) => void
 }
 
-export default function PlannedFormModal({ open, onClose, planned }: Props) {
+export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute, onCancelPlan }: Props) {
   const isEdit = !!planned
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
@@ -36,13 +56,15 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
 
   useEffect(() => {
     if (!open) return
-    if (planned) {
-      setName(planned.name)
-      setAmount(planned.amount)
-      setAccountId(planned.account_id)
-      setCategoryId(planned.category_id)
-      setBudgetId(planned.category?.budget_id ?? null)
-      setPlannedDate(planned.planned_date)
+    // Copy mode prefills like edit, except the date: always today (D4).
+    const source = planned ?? copyFrom
+    if (source) {
+      setName(source.name)
+      setAmount(source.amount)
+      setAccountId(source.account_id)
+      setCategoryId(source.category_id)
+      setBudgetId(source.category?.budget_id ?? null)
+      setPlannedDate(planned ? source.planned_date : new Date().toISOString().slice(0, 10))
     } else {
       setName('')
       setAmount('')
@@ -52,7 +74,7 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
       setPlannedDate(new Date().toISOString().slice(0, 10))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planned, accounts.length, budgets.length, defaultBudgetId])
+  }, [open, planned, copyFrom, accounts.length, budgets.length, defaultBudgetId])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -84,12 +106,11 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>{isEdit ? 'Edit planned' : 'New planned transaction'}</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? 'Edit planned' : 'New planned transaction'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="planned-name" className={labelClass}>Name</label>
-          <input id="planned-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="planned-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -119,9 +140,36 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
             <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder="Uncategorized" aria-label="Category" disabled={!budgetId} />
           </div>
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
-          <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}</button>
+        <div className="flex flex-wrap items-center gap-2 pt-2 pb-4">
+          {/* Separate, individually clickable actions (never a menu). */}
+          {isEdit && planned && (
+            <div className="flex items-center gap-2">
+              {onExecute && planned.status === 'pending' && (
+                <button type="button" onClick={() => onExecute(planned)} className={positiveButtonClass}>
+                  <CheckCircle size={13} className="inline mr-1" /> Execute
+                </button>
+              )}
+              {onCopy && (
+                <button type="button" onClick={() => onCopy(planned)} className={secondaryButtonClass}>
+                  <Copy size={13} className="inline mr-1" /> Copy
+                </button>
+              )}
+              {onCancelPlan && planned.status === 'pending' && (
+                <button type="button" onClick={() => onCancelPlan(planned)} className={warningButtonClass}>
+                  <Ban size={13} className="inline mr-1" /> Cancel plan
+                </button>
+              )}
+              {onDelete && (
+                <button type="button" onClick={() => onDelete(planned)} className={destructiveButtonClass}>
+                  <Trash2 size={13} className="inline mr-1" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}</button>
+          </div>
         </div>
       </form>
     </Modal>

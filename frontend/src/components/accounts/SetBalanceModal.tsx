@@ -6,7 +6,8 @@ import { accountsApi, transactionsApi } from '../../api/client'
 import type { Account } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
 import { formatAmount } from '../../utils/format'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../common/formStyles'
+import { useIsTouch } from '../../hooks/useBreakpoint'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
   open: boolean
@@ -17,6 +18,8 @@ interface Props {
 /** "Set balance to X" — records an adjustment transaction for the computed delta. */
 export default function SetBalanceModal({ open, onClose, account }: Props) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const [target, setTarget] = useState('')
 
   const { data: balance } = useQuery({
@@ -56,8 +59,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>Set balance — {account.name}</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title={`Set balance — ${account.name}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-text-muted">
           Current balance: <span className="font-mono text-text">{formatAmount(current)} {account.currency_code}</span>
@@ -71,7 +73,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             className={inputClass}
-            autoFocus
+            autoFocus={!isTouch}
           />
         </div>
         {delta !== null && delta !== 0 && (

@@ -1,3 +1,5 @@
+import plugin from 'tailwindcss/plugin'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -63,5 +65,9 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Touch-target floor keys on pointer coarseness, not viewport width:
+    // tablets and landscape phones above `sm` are still touch devices.
+    plugin(({ addVariant }) => addVariant('pointer-coarse', '@media (pointer: coarse)')),
+  ],
 }

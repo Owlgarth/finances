@@ -5,6 +5,7 @@ import 'react-day-picker/style.css'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import BottomSheet from './common/BottomSheet'
+import { inputClass } from './common/formStyles'
 
 interface Props {
   value: string
@@ -90,7 +91,7 @@ export default function DatePicker({
            re-fire onFocus and immediately reopen it. */
         onFocus={() => { if (!isMobile) setIsOpen(true) }}
         onClick={() => { if (isMobile) setIsOpen(true) }}
-        className={`bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all ${className}`}
+        className={`${inputClass} ${className}`}
         required={required}
         disabled={disabled}
         placeholder={placeholder}
