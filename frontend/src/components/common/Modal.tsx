@@ -50,7 +50,7 @@ export default function Modal({
       <button
         type="button"
         onClick={onClose}
-        className="-mr-1 flex-shrink-0 flex items-center gap-1.5 px-2 py-1 max-sm:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+        className="-mr-1 flex-shrink-0 flex items-center gap-1.5 px-2 py-1 pointer-coarse:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
       >
         <X size={14} strokeWidth={1.5} />
         Close

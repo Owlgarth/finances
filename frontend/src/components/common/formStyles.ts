@@ -2,10 +2,11 @@
 // (§3 Buttons, §4 Form Inputs). These are the single source of truth for the
 // redesign's forms — audited against the spec in U1.
 
-// Shared control height: 44px touch floor on mobile, 32px (§4 input height,
-// matching §9 table rows) from `sm` up. Composed into every control that can
-// share a row — inputs, selects, buttons, pickers — so they always align.
-export const controlHeightClass = 'min-h-[44px] sm:min-h-8'
+// Shared control height: 32px (§4 input height, matching §9 table rows), with
+// a 44px floor on coarse pointers — keyed on the pointer, not viewport width,
+// so tablets above `sm` keep full touch targets. Composed into every control
+// that can share a row — inputs, selects, buttons, pickers — so they always align.
+export const controlHeightClass = 'min-h-8 pointer-coarse:min-h-[44px]'
 
 // §4 Standard Text Input: bg-surface, rounded-none, px-2 py-1.5, mono text-xs,
 // focus = border-focus + ring-1 (not ring-2), muted placeholder, muted disabled bg.
@@ -28,6 +29,20 @@ export const primaryButtonClass =
 // that chain into a confirm dialog (not the solid-negative confirm button).
 export const destructiveButtonClass =
   'bg-surface border border-border text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors ' +
+  `${controlHeightClass} ` +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed'
+
+// Positive counterpart of destructiveButtonClass — footer Execute actions.
+export const positiveButtonClass =
+  'bg-surface border border-border text-positive px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-positive-bg transition-colors ' +
+  `${controlHeightClass} ` +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed'
+
+// Warning counterpart of destructiveButtonClass — footer Cancel-plan actions.
+export const warningButtonClass =
+  'bg-surface border border-border text-warning px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-warning-bg transition-colors ' +
   `${controlHeightClass} ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'

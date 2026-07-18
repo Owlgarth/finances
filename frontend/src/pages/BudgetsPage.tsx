@@ -165,12 +165,14 @@ export default function BudgetsPage() {
                 <PieChart size={16} className="text-text-muted" />
                 <span className="text-sm font-medium text-text truncate">{b.name}</span>
                 {canManageAccounts && (
-                  /* Adjacent icon buttons: padded hit areas instead of .touch-hit,
-                     whose expanded areas would overlap (responsive.md). */
+                  /* Adjacent icon buttons: real padded hit areas instead of
+                     .touch-hit, whose expanded areas would overlap
+                     (responsive.md). On coarse pointers they grow to the 44px
+                     floor; -my keeps the card header height unchanged. */
                   <span className="ml-auto flex items-center gap-1">
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(b) }}
-                      className="p-1.5 text-text-muted hover:text-text"
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
                       title="Rename"
                       aria-label={`Rename budget ${b.name}`}
                     >
@@ -178,7 +180,7 @@ export default function BudgetsPage() {
                     </button>
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
-                      className="p-1.5 text-text-muted hover:text-negative"
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
                       title="Delete"
                       aria-label={`Delete budget ${b.name}`}
                     >

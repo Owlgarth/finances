@@ -11,7 +11,7 @@ import { useAccounts, useBudgets } from '../../../hooks/useDomain'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
+import { destructiveButtonClass, inputClass, labelClass, positiveButtonClass, primaryButtonClass, secondaryButtonClass, warningButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -31,17 +31,9 @@ interface Props {
   onExecute?: (planned: PlannedTransaction) => void
   /** Edit mode only, pending rows: renders a "Cancel plan" button in the
       footer (status → cancelled — softer than delete, the row stays).
-      Caller closes this modal and runs the cancel mutation. */
+      Caller closes this modal and owns the confirm flow. */
   onCancelPlan?: (planned: PlannedTransaction) => void
 }
-
-// Positive counterpart of destructiveButtonClass, for Execute.
-const executeButtonClass =
-  secondaryButtonClass.replace('text-text ', 'text-positive ').replace('hover:bg-surface-hover ', 'hover:bg-positive-bg ')
-
-// Warning counterpart, for Cancel plan.
-const cancelPlanButtonClass =
-  secondaryButtonClass.replace('text-text ', 'text-warning ').replace('hover:bg-surface-hover ', 'hover:bg-warning-bg ')
 
 export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute, onCancelPlan }: Props) {
   const isEdit = !!planned
@@ -153,7 +145,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
           {isEdit && planned && (
             <div className="flex items-center gap-2">
               {onExecute && planned.status === 'pending' && (
-                <button type="button" onClick={() => onExecute(planned)} className={executeButtonClass}>
+                <button type="button" onClick={() => onExecute(planned)} className={positiveButtonClass}>
                   <CheckCircle size={13} className="inline mr-1" /> Execute
                 </button>
               )}
@@ -163,7 +155,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
                 </button>
               )}
               {onCancelPlan && planned.status === 'pending' && (
-                <button type="button" onClick={() => onCancelPlan(planned)} className={cancelPlanButtonClass}>
+                <button type="button" onClick={() => onCancelPlan(planned)} className={warningButtonClass}>
                   <Ban size={13} className="inline mr-1" /> Cancel plan
                 </button>
               )}

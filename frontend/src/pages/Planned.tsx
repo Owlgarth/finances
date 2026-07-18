@@ -74,6 +74,9 @@ export default function Planned() {
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
   const [copySource, setCopySource] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
+  // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
+  // click on the hover-revealed Ban icon must not fire the mutation directly.
+  const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
 
   const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
   const openEdit = (p: PlannedTransaction) => { setEditing(p); setCopySource(null); setFormOpen(true) }
@@ -200,8 +203,9 @@ export default function Planned() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
       toast.success('Plan cancelled')
+      setCancelling(null)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to cancel')),
+    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to cancel')); setCancelling(null) },
   })
 
   const deleteMutation = useMutation({
@@ -315,7 +319,7 @@ export default function Planned() {
                       <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
                     )}
                     {p.status === 'pending' && (
-                      <button onClick={() => cancelMutation.mutate(p)} className="text-text-muted hover:text-warning p-1" title="Cancel plan"><Ban size={13} /></button>
+                      <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title="Cancel plan"><Ban size={13} /></button>
                     )}
                     <button onClick={() => openEdit(p)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                     <button onClick={() => openCopy(p)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
@@ -346,7 +350,7 @@ export default function Planned() {
         onCopy={openCopy}
         onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
         onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
-        onCancelPlan={(p) => { setFormOpen(false); cancelMutation.mutate(p) }}
+        onCancelPlan={(p) => { setFormOpen(false); setCancelling(p) }}
       />
       <ConfirmDialog
         isOpen={!!deleting}
@@ -354,6 +358,14 @@ export default function Planned() {
         message={`Delete "${deleting?.name}"?`}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        isOpen={!!cancelling}
+        title="Cancel plan"
+        message={`Mark "${cancelling?.name}" as cancelled? The row stays in the list but can no longer be executed.`}
+        confirmLabel="Cancel plan"
+        onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
+        onCancel={() => setCancelling(null)}
       />
     </div>
   )

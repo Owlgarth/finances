@@ -4,11 +4,13 @@ interface Props {
   isOpen: boolean
   title: string
   message: string
+  /** Confirm-button label. Defaults to 'Delete' (the most common use). */
+  confirmLabel?: string
   onConfirm: () => void
   onCancel: () => void
 }
 
-export default function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: Props) {
+export default function ConfirmDialog({ isOpen, title, message, confirmLabel = 'Delete', onConfirm, onCancel }: Props) {
   return (
     <Modal open={isOpen} onClose={onCancel} size="sm" className="p-4" title={title}>
       <p className="text-text-muted mb-6">{message}</p>
@@ -25,7 +27,7 @@ export default function ConfirmDialog({ isOpen, title, message, onConfirm, onCan
           onClick={onConfirm}
           className="px-3 py-1.5 bg-negative text-white rounded-sm text-xs font-medium hover:bg-negative/90 transition-colors"
         >
-          Delete
+          {confirmLabel}
         </button>
       </div>
     </Modal>
