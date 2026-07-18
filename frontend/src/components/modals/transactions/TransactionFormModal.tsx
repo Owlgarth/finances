@@ -11,7 +11,7 @@ import type { Transaction, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -126,8 +126,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   )
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto">
-      <h2 className={modalTitleClass}>{isEdit ? 'Edit transaction' : 'New transaction'}</h2>
+    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? 'Edit transaction' : 'New transaction'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>

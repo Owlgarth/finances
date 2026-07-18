@@ -8,7 +8,7 @@ import { transfersApi } from '../../api/client'
 import type { Account, Transfer } from '../../types'
 import { useAccounts } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 const LAST_PAIR_KEY = 'denarly-last-transfer-pair'
 
@@ -109,8 +109,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
   const options = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>Transfer</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title="Transfer">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>

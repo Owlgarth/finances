@@ -7,17 +7,17 @@ import BottomSheet from './BottomSheet'
 interface ModalProps {
   /** Whether the modal is visible. Caller still owns the source of truth. */
   open: boolean
-  /** Called when the user requests close (X button, scrim click, Escape). */
+  /** Called when the user requests close (Close button, scrim click, Escape). */
   onClose: () => void
-  /** Panel body — caller provides header/form/footer/list markup. */
+  /** Panel body — caller provides form/footer/list markup below the header row. */
   children: ReactNode
   /** Panel max-width. Defaults to 'md'. Ignored on mobile (sheets are full-width). */
   size?: 'sm' | 'md' | 'lg'
   /** Extra classes appended to the PANEL div (padding, overflow, max-height, flex layout). Never the scrim. */
   className?: string
-  /** Optional dialog title. When set, the title and close X render as one flex
-      header row (the X gets a reserved slot, so it can never overlap the title)
-      instead of the floating absolute-positioned X. */
+  /** Dialog title, rendered on the left of the header row. The labeled Close
+      button always occupies the right side of that row, so it can never
+      overlap the title. */
   title?: string
 }
 
@@ -39,37 +39,31 @@ export default function Modal({
   // Desktop-only wiring — BottomSheet runs its own useOverlay on mobile.
   const panelRef = useOverlay(open && !isMobile, onClose)
 
-  const closeButton = (
-    <button
-      type="button"
-      onClick={onClose}
-      aria-label="Close"
-      className="absolute right-4 top-4 -mr-1 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
-    >
-      <X size={14} strokeWidth={1.5} />
-    </button>
-  )
-
-  const header = title ? (
+  // Header row: title left, labeled Close right, always rendered.
+  const header = (
     <div className="flex items-start justify-between gap-3 mb-4">
-      <h2 className="text-base font-semibold text-text">{title}</h2>
+      {title ? (
+        <h2 className="text-base font-semibold text-text">{title}</h2>
+      ) : (
+        <span aria-hidden="true" />
+      )}
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close"
-        className="-mt-1 -mr-1 flex-shrink-0 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
+        className="-mr-1 flex-shrink-0 flex items-center gap-1.5 px-2 py-1 max-sm:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
       >
         <X size={14} strokeWidth={1.5} />
+        Close
       </button>
     </div>
-  ) : null
+  )
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3). Without a
-  // title the X lives in the sheet's sticky handle row so it doesn't scroll
-  // away with the body; with one, the header row owns it instead.
+  // Mobile: same API, bottom-sheet presentation (plan decision 3). The header
+  // row (with the labeled Close button) renders inside the sheet body, below
+  // the drag handle.
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={onClose} className={className} showClose={!title} aria-label={title}>
+      <BottomSheet open={open} onClose={onClose} className={className} aria-label={title}>
         {header}
         {children}
       </BottomSheet>
@@ -103,7 +97,7 @@ export default function Modal({
           className={`relative bg-surface border border-border rounded-sm w-full outline-none ${SIZE_CLASS[size]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {title ? header : closeButton}
+          {header}
           {children}
         </div>
       </div>

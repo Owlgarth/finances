@@ -1156,7 +1156,8 @@ Overlay panels for focused tasks — forms, confirmations, detail views. Zero sh
 | Header padding | `px-4 pt-4 pb-3` |
 | Header border | `border-b border-border` |
 | Title | Geist, 14px (`text-sm`), weight 600 (`font-semibold`), `text-text` |
-| Close icon | Lucide `X`, 14px (`h-3.5 w-3.5`) |
+| Header row | Always rendered: title left, Close button right (`flex items-start justify-between`), `mb-4` before content — the Close button has a reserved slot and can never overlap the title |
+| Close button | Labeled: Lucide `X` 14px + "Close" text (`text-xs font-medium`), `text-text-muted hover:text-text hover:bg-surface-hover`, right-aligned, `min-h-[44px]` on mobile |
 | Body padding | `px-4 py-3` — scrollable with `scrollbar-thin` |
 | Footer padding | `px-4 pt-3 pb-4` |
 | Footer border | `border-t border-border` |
@@ -1955,7 +1956,7 @@ primitives are the reference implementation; screen-level conformance is swept i
 |---|---|---|
 | Input / label / buttons | `components/common/formStyles.ts` | Class constants reused by every redesign form |
 | Select / dropdown | `components/common/Select.tsx` | Custom trigger + floating panel |
-| Modal | `components/common/Modal.tsx` | Scrim + centered panel, X close |
+| Modal | `components/common/Modal.tsx` | Scrim + centered panel, labeled "Close" button in header row |
 | Confirm dialog | `components/common/ConfirmDialog.tsx` | Built on Modal |
 | Date picker | `components/DatePicker.tsx` | react-day-picker, `.rdp-inline` theming in `index.css` |
 | Pagination / Select page-size | `components/common/Pagination.tsx` | |
@@ -1976,7 +1977,7 @@ primitives are the reference implementation; screen-level conformance is swept i
 | Dropdown panel: `bg-surface border border-border rounded-sm`, no shadow, `max-h-[280px]` scroll | ✅ |
 | Dropdown corners clip row fills — no fill bleed past corners in either theme | ✅ (overflow establishes the clip; verified light + dark) |
 | Thin scrollbars | ✅ applied globally in `index.css`; no per-element class needed |
-| Modal: 1px border, `rounded-sm`, zero shadow, scrim + X close | ✅ |
+| Modal: 1px border, `rounded-sm`, zero shadow, scrim + labeled "Close" header button | ✅ |
 | Table row height 32px, header 10px uppercase | ✅ |
 
 ### Open tickets

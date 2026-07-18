@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { X } from 'lucide-react'
 import { useOverlay } from '../../hooks/useOverlay'
 
 interface BottomSheetProps {
@@ -14,8 +13,6 @@ interface BottomSheetProps {
   className?: string
   /** Accessible dialog name; set it when the children don't start with a heading. */
   'aria-label'?: string
-  /** Render an X in the sticky handle row (Modal delegation) — stays visible while the body scrolls. */
-  showClose?: boolean
 }
 
 /**
@@ -76,7 +73,6 @@ export default function BottomSheet({
   children,
   className = '',
   'aria-label': ariaLabel,
-  showClose = false,
 }: BottomSheetProps) {
   const mounted = useDelayedUnmount(open, 80) // matches sheet-out duration
   const panelRef = useOverlay(open, onClose)
@@ -113,21 +109,11 @@ export default function BottomSheet({
           style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px)` } : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Drag-handle bar (+ optional close, pinned with it) */}
+          {/* Drag-handle bar */}
           <div className="sticky top-0 z-10 bg-surface">
             <div className="flex justify-center pt-2 pb-1" aria-hidden="true">
               <div className="h-1 w-9 rounded-sm bg-surface-muted" />
             </div>
-            {showClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="absolute right-3 top-1 flex items-center justify-center p-1 text-text-muted hover:text-text active:bg-surface-hover transition-colors touch-hit"
-              >
-                <X size={14} strokeWidth={1.5} />
-              </button>
-            )}
           </div>
 
           {children}

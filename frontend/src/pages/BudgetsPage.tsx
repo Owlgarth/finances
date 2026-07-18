@@ -10,7 +10,7 @@ import type { Budget, Cadence } from '../types'
 import { useBudgets } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../components/common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 import Select from '../components/common/Select'
 import DatePicker from '../components/DatePicker'
 
@@ -45,8 +45,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   })
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>New budget</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title="New budget">
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
           <label htmlFor="budget-name" className={labelClass}>Name</label>

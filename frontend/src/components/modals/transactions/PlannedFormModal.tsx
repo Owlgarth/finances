@@ -9,7 +9,7 @@ import type { PlannedTransaction } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -84,8 +84,7 @@ export default function PlannedFormModal({ open, onClose, planned }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>{isEdit ? 'Edit planned' : 'New planned transaction'}</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? 'Edit planned' : 'New planned transaction'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="planned-name" className={labelClass}>Name</label>
