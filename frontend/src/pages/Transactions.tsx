@@ -9,6 +9,7 @@ import { useAccounts, useBudgets, useMultiCurrency, useExtractionEnabled, useWor
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
@@ -81,7 +82,7 @@ export default function Transactions() {
   const dateTo = searchParams.get('to') ?? ''
   const page = intParam(searchParams, 'page') ?? 1
 
-  const [pageSize, setPageSize] = useState(25)
+  const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   const updateParams = (patch: Record<string, string | number | (string | number)[] | null>) => {
     setSearchParams(
@@ -316,7 +317,7 @@ export default function Transactions() {
             total={data.total}
             page_size={data.page_size}
             onPageChange={(p) => updateParams({ page: p })}
-            onPageSizeChange={(s) => { setPageSize(s); updateParams({ page: null }) }}
+            onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
           />
         </div>
       )}
