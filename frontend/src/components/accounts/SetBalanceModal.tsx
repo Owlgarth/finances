@@ -6,6 +6,7 @@ import { accountsApi, transactionsApi } from '../../api/client'
 import type { Account } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
 import { formatAmount } from '../../utils/format'
+import { useIsTouch } from '../../hooks/useBreakpoint'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
 /** "Set balance to X" — records an adjustment transaction for the computed delta. */
 export default function SetBalanceModal({ open, onClose, account }: Props) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const [target, setTarget] = useState('')
 
   const { data: balance } = useQuery({
@@ -70,7 +73,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             className={inputClass}
-            autoFocus
+            autoFocus={!isTouch}
           />
         </div>
         {delta !== null && delta !== 0 && (

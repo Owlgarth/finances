@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
 import { useBudgets } from '../hooks/useDomain'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
@@ -22,6 +23,8 @@ const CADENCE_OPTIONS: { value: Cadence; label: string }[] = [
 
 function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const [name, setName] = useState('')
   const [cadence, setCadence] = useState<Cadence>('monthly')
   const [weeks, setWeeks] = useState('2')
@@ -49,7 +52,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
           <label htmlFor="budget-name" className={labelClass}>Name</label>
-          <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div>
           <label className={labelClass}>Cadence</label>
@@ -80,6 +83,8 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
 
 function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose: () => void }) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const [name, setName] = useState('')
 
   useEffect(() => {
@@ -102,7 +107,7 @@ function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
           <label htmlFor="budget-rename" className={labelClass}>Name</label>
-          <input id="budget-rename" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="budget-rename" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>

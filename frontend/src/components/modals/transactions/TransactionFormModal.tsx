@@ -10,6 +10,7 @@ import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { Transaction, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
+import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
@@ -38,6 +39,9 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy }: Props) {
   const isEdit = !!transaction
   const queryClient = useQueryClient()
+  // No autofocus on touch: focusing an input on open yanks the keyboard up
+  // over the fresh modal. The user taps the field they want first.
+  const isTouch = useIsTouch()
   const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
@@ -149,7 +153,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             <label htmlFor="tx-amount" className={labelClass}>
               {type === 'adjustment' ? 'Delta amount' : 'Amount'} {account ? `(${account.currency_code})` : ''}
             </label>
-            <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus />
+            <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
           </div>
         </div>
 

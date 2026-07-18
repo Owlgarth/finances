@@ -8,6 +8,7 @@ import DatePicker from '../../DatePicker'
 import { budgetsApi, plannedTransactionsApi } from '../../../api/client'
 import type { PlannedTransaction } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
+import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
@@ -37,6 +38,8 @@ const executeButtonClass =
 export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute }: Props) {
   const isEdit = !!planned
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
@@ -107,7 +110,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="planned-name" className={labelClass}>Name</label>
-          <input id="planned-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="planned-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

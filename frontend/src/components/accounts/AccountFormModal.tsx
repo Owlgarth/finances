@@ -6,6 +6,7 @@ import Select from '../common/Select'
 import { accountsApi } from '../../api/client'
 import type { Account, AccountType } from '../../types'
 import { useEnabledCurrencies } from '../../hooks/useDomain'
+import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
@@ -24,6 +25,8 @@ const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
 export default function AccountFormModal({ open, onClose, account }: Props) {
   const isEdit = !!account
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const { data: currencies = [] } = useEnabledCurrencies()
 
   const [name, setName] = useState(account?.name ?? '')
@@ -66,7 +69,7 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="acc-name" className={labelClass}>Name</label>
-          <input id="acc-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="acc-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
 
         <div>

@@ -7,6 +7,7 @@ import DatePicker from '../DatePicker'
 import { transfersApi } from '../../api/client'
 import type { Account, Transfer } from '../../types'
 import { useAccounts } from '../../hooks/useDomain'
+import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
@@ -25,6 +26,8 @@ function accountById(accounts: Account[], id: number | null): Account | undefine
 
 export default function TransferModal({ open, onClose, repeatFrom }: Props) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const { data: accounts = [] } = useAccounts(false)
 
   const [fromId, setFromId] = useState<number | null>(null)
@@ -134,7 +137,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
               value={fromAmount}
               onChange={(e) => setFromAmount(e.target.value)}
               className={inputClass}
-              autoFocus
+              autoFocus={!isTouch}
             />
           </div>
           {crossCurrency && (
