@@ -224,6 +224,20 @@ export default function BottomNav() {
                 {d.label}
               </NavLink>
             ))}
+            {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
+                the bottom row sits right where the thumb tapped "More" and was
+                collecting accidental logouts. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false)
+                logout()
+              }}
+              className={moreRowClass}
+            >
+              <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              Logout
+            </button>
 
             <div className="border-t border-border mt-2">
               <SectionLabel>Workspace</SectionLabel>
@@ -293,17 +307,10 @@ export default function BottomNav() {
                   aria-label="Disable zoom"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false)
-                  logout()
-                }}
-                className={moreRowClass}
-              >
-                <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Logout
-              </button>
+              {/* Inert spacer in Logout's old slot: absorbs the double-tap
+                  misclick after opening the sheet, and keeps Dark mode /
+                  Disable zoom from sliding down into that zone. */}
+              <div aria-hidden="true" className="min-h-[44px]" />
             </div>
           </div>
         )}

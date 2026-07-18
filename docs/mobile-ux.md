@@ -25,9 +25,11 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 - **Bottom tab bar, 5 slots**: Home · Transactions · **[+]** · Budgets · More. Labels always
   visible, active tab in the primary color, safe-area padded.
 - **More** opens a sheet: Search (global page search), Accounts, Planned, Members, Settings,
-  then workspace switching
+  logout, then workspace switching
   (with role badges), workspace settings, dark mode, disable-zoom toggle (opt-in,
-  per-device: kills double-tap/pinch zoom for a native feel), logout.
+  per-device: kills double-tap/pinch zoom for a native feel). The bottom-most row is an
+  inert spacer: logout used to live there — directly above the just-tapped More button —
+  and collected accidental logouts, so that slot deliberately does nothing.
 - **The center FAB is the global create action**: New transaction · Transfer · From receipt
   (only when extraction is configured) · Planned. Available from every screen; screens hide
   their own creation buttons when the FAB covers them. Viewers (read-only role) get no FAB.
