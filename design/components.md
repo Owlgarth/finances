@@ -405,11 +405,20 @@ Uses standard HTML `<input type="color">` with border treatment matching other i
 
 ### Input Specs Summary
 
+Heights are **enforced** by `controlHeightClass` (`min-h-8 pointer-coarse:min-h-[44px]`
+in `components/common/formStyles.ts`): 32px base, 44px floor on coarse pointers.
+The floor keys on `@media (pointer: coarse)` (custom `pointer-coarse:` variant in
+`tailwind.config.js`), not viewport width, so tablets and landscape phones above
+`sm` keep full touch targets. Every control that can share a row — text inputs,
+Select/MultiSelect triggers, date trigger, search input, buttons, FilterBar
+toggle — composes it, so mixed rows (e.g. a Select next to a text input) always align.
+
 | Element | Height | Padding | Radius |
 |---|---|---|---|
-| Text input | `32px` | `px-2 py-1.5` | `rounded-none` |
-| Select (native) | `32px` | `px-2 py-1.5` | `rounded-none` |
-| Date trigger | `32px` | `px-2 py-1.5` | `rounded-none` |
+| Text input | `32px` (44px touch) | `px-2 py-1.5` | `rounded-none` |
+| Select trigger | `32px` (44px touch) | `px-2 py-1.5` | `rounded-none` |
+| Date trigger | `32px` (44px touch) | `px-2 py-1.5` | `rounded-none` |
+| Buttons (§3) | `32px` (44px touch) | `px-3 py-1.5` | `rounded-sm` |
 | Color picker | `32px` | N/A | `rounded-none` |
 
 ### Validation Timing
@@ -1156,7 +1165,8 @@ Overlay panels for focused tasks — forms, confirmations, detail views. Zero sh
 | Header padding | `px-4 pt-4 pb-3` |
 | Header border | `border-b border-border` |
 | Title | Geist, 14px (`text-sm`), weight 600 (`font-semibold`), `text-text` |
-| Close icon | Lucide `X`, 14px (`h-3.5 w-3.5`) |
+| Header row | Always rendered: title left, Close button right (`flex items-start justify-between`), `mb-4` before content — the Close button has a reserved slot and can never overlap the title |
+| Close button | Labeled: Lucide `X` 14px + "Close" text (`text-xs font-medium`), `text-text-muted hover:text-text hover:bg-surface-hover`, right-aligned, `min-h-[44px]` on coarse pointers |
 | Body padding | `px-4 py-3` — scrollable with `scrollbar-thin` |
 | Footer padding | `px-4 pt-3 pb-4` |
 | Footer border | `border-t border-border` |
@@ -1252,7 +1262,7 @@ Standard vertical form used inside modals and pages. Adapts the Architectural Le
 | Group gap | `24px` between logical field groups (`space-y-6` between groups) |
 | Label | Geist, 11px, weight 500, `uppercase`, `tracking-wider`, `text-muted` — `4px` (`mb-1`) above input |
 | Required indicator | `*` in `negative` color, placed after label text |
-| Input height | `32px` (`py-1.5` + text) — matches row height |
+| Input height | `32px` (`controlHeightClass`: `min-h-8 pointer-coarse:min-h-[44px]`) — matches row height; 44px on coarse pointers |
 | Input radius | `rounded-none` (0px) |
 | Input border | `border border-border`; focus → `border-border-focus` + `ring-1 ring-border-focus` |
 | Error input bg | `bg-negative-bg` with `border-negative/30` |
@@ -1955,7 +1965,7 @@ primitives are the reference implementation; screen-level conformance is swept i
 |---|---|---|
 | Input / label / buttons | `components/common/formStyles.ts` | Class constants reused by every redesign form |
 | Select / dropdown | `components/common/Select.tsx` | Custom trigger + floating panel |
-| Modal | `components/common/Modal.tsx` | Scrim + centered panel, X close |
+| Modal | `components/common/Modal.tsx` | Scrim + centered panel, labeled "Close" button in header row |
 | Confirm dialog | `components/common/ConfirmDialog.tsx` | Built on Modal |
 | Date picker | `components/DatePicker.tsx` | react-day-picker, `.rdp-inline` theming in `index.css` |
 | Pagination / Select page-size | `components/common/Pagination.tsx` | |
@@ -1976,7 +1986,7 @@ primitives are the reference implementation; screen-level conformance is swept i
 | Dropdown panel: `bg-surface border border-border rounded-sm`, no shadow, `max-h-[280px]` scroll | ✅ |
 | Dropdown corners clip row fills — no fill bleed past corners in either theme | ✅ (overflow establishes the clip; verified light + dark) |
 | Thin scrollbars | ✅ applied globally in `index.css`; no per-element class needed |
-| Modal: 1px border, `rounded-sm`, zero shadow, scrim + X close | ✅ |
+| Modal: 1px border, `rounded-sm`, zero shadow, scrim + labeled "Close" header button | ✅ |
 | Table row height 32px, header 10px uppercase | ✅ |
 
 ### Open tickets

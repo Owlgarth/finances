@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Check, ChevronDown } from 'lucide-react'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import BottomSheet from './BottomSheet'
+import { controlHeightClass } from './formStyles'
 
 export interface MultiSelectOption<T extends string | number> {
   value: T
@@ -205,7 +206,7 @@ export default function MultiSelect<T extends string | number>({
   const triggerClass =
     'w-full flex items-center justify-between ' +
     'bg-surface border border-border rounded-none px-2 py-1.5 ' +
-    'min-h-[44px] md:min-h-[36px] ' +
+    `${controlHeightClass} ` +
     'text-xs text-text text-left ' +
     'hover:bg-surface-hover ' +
     'focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
