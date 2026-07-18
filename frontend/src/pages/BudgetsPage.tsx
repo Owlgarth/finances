@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, PieChart, Trash2 } from 'lucide-react'
+import { Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
 import { useBudgets } from '../hooks/useDomain'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../components/common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 import Select from '../components/common/Select'
 import DatePicker from '../components/DatePicker'
 
@@ -22,6 +23,8 @@ const CADENCE_OPTIONS: { value: Cadence; label: string }[] = [
 
 function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
   const [name, setName] = useState('')
   const [cadence, setCadence] = useState<Cadence>('monthly')
   const [weeks, setWeeks] = useState('2')
@@ -45,12 +48,11 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   })
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>New budget</h2>
+    <Modal open={open} onClose={onClose} className="p-6" title="New budget">
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
           <label htmlFor="budget-name" className={labelClass}>Name</label>
-          <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus />
+          <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div>
           <label className={labelClass}>Cadence</label>
@@ -79,11 +81,51 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   )
 }
 
+function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  const isTouch = useIsTouch()
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (budget) setName(budget.name)
+  }, [budget])
+
+  const mutation = useMutation({
+    mutationFn: () => budgetsApi.update(budget!.id, { name: name.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      queryClient.invalidateQueries({ queryKey: ['budget', budget!.id] })
+      toast.success('Budget renamed')
+      onClose()
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to rename budget')),
+  })
+
+  return (
+    <Modal open={!!budget} onClose={onClose} className="p-6" title="Rename budget">
+      <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
+        <div>
+          <label htmlFor="budget-rename" className={labelClass}>Name</label>
+          <input id="budget-rename" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
+            {mutation.isPending ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function BudgetsPage() {
   const queryClient = useQueryClient()
   const { canManageAccounts } = usePermissions()
   const { data: budgets = [], isLoading } = useBudgets(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [renaming, setRenaming] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
 
   const deleteMutation = useMutation({
@@ -123,14 +165,28 @@ export default function BudgetsPage() {
                 <PieChart size={16} className="text-text-muted" />
                 <span className="text-sm font-medium text-text truncate">{b.name}</span>
                 {canManageAccounts && (
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
-                    className="ml-auto text-text-muted hover:text-negative touch-hit"
-                    title="Delete"
-                    aria-label={`Delete budget ${b.name}`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  /* Adjacent icon buttons: real padded hit areas instead of
+                     .touch-hit, whose expanded areas would overlap
+                     (responsive.md). On coarse pointers they grow to the 44px
+                     floor; -my keeps the card header height unchanged. */
+                  <span className="ml-auto flex items-center gap-1">
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(b) }}
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
+                      title="Rename"
+                      aria-label={`Rename budget ${b.name}`}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
+                      title="Delete"
+                      aria-label={`Delete budget ${b.name}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </span>
                 )}
               </div>
               <div className="mt-2 text-[10px] font-mono uppercase tracking-wider text-text-muted">
@@ -142,6 +198,7 @@ export default function BudgetsPage() {
       )}
 
       <CreateBudgetModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <RenameBudgetModal budget={renaming} onClose={() => setRenaming(null)} />
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete budget"
