@@ -19,6 +19,7 @@ import {
   Settings,
   Users,
   Wallet,
+  X,
   ZoomIn,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -313,10 +314,20 @@ export default function BottomNav() {
                   aria-label="Disable zoom"
                 />
               </div>
-              {/* Inert spacer in Logout's old slot: absorbs the double-tap
-                  misclick after opening the sheet, and keeps Dark mode /
-                  Disable zoom from sliding down into that zone. */}
-              <div aria-hidden="true" className="min-h-[44px]" />
+              {/* Logout's old slot (the double-tap misclick zone): only the
+                  left-side Close button is interactive — the rest of the row
+                  deliberately does nothing, so a stray tap can't trigger
+                  anything. Do NOT stretch the button to the full row. */}
+              <div className="flex items-center min-h-[44px] px-4">
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen(false)}
+                  className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
+                >
+                  <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}
