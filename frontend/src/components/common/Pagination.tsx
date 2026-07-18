@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Select from './Select'
+import { PAGE_SIZE_OPTIONS } from '../../utils/pageSize'
 
 interface Props {
   page: number
@@ -9,8 +10,6 @@ interface Props {
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
 }
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200]
 
 function getPageNumbers(current: number, total: number): (number | 'ellipsis')[] {
   if (total <= 7) {

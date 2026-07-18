@@ -13,11 +13,13 @@ import {
   PieChart,
   Plus,
   Receipt,
+  RotateCw,
   ScanLine,
   Search,
   Settings,
   Users,
   Wallet,
+  X,
   ZoomIn,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -224,6 +226,20 @@ export default function BottomNav() {
                 {d.label}
               </NavLink>
             ))}
+            {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
+                the bottom row sits right where the thumb tapped "More" and was
+                collecting accidental logouts. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false)
+                logout()
+              }}
+              className={moreRowClass}
+            >
+              <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              Logout
+            </button>
 
             <div className="border-t border-border mt-2">
               <SectionLabel>Workspace</SectionLabel>
@@ -271,6 +287,11 @@ export default function BottomNav() {
 
             <div className="border-t border-border mt-2">
               <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
+              {/* PWA has no browser chrome to refresh with. */}
+              <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
+                <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                Reload
+              </button>
               <div className="flex items-center justify-between min-h-[44px] px-4">
                 <span className="flex items-center gap-3 text-sm text-text">
                   <Moon size={16} strokeWidth={1.5} className="flex-shrink-0" />
@@ -293,17 +314,20 @@ export default function BottomNav() {
                   aria-label="Disable zoom"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false)
-                  logout()
-                }}
-                className={moreRowClass}
-              >
-                <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Logout
-              </button>
+              {/* Logout's old slot (the double-tap misclick zone): only the
+                  left-side Close button is interactive — the rest of the row
+                  deliberately does nothing, so a stray tap can't trigger
+                  anything. Do NOT stretch the button to the full row. */}
+              <div className="flex items-center min-h-[44px] px-4">
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen(false)}
+                  className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
+                >
+                  <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

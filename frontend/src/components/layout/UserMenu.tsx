@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Moon, User } from 'lucide-react'
+import { LogOut, Moon, RotateCw, User } from 'lucide-react'
 import Switch from '../common/Switch'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -39,7 +39,14 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
           <div 
             className="absolute bottom-full left-0 mb-2 w-48 bg-surface rounded-sm border border-border py-1 z-20"
           >
-            {/* Dark mode — first item */}
+            {/* Reload — mirrors the mobile More sheet (PWA-friendly refresh). */}
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full text-left px-4 py-2 text-sm text-text hover:bg-surface-hover transition-colors flex items-center gap-2"
+            >
+              <RotateCw size={14} />
+              Reload
+            </button>
             <div className="flex items-center justify-between px-4 py-2 hover:bg-surface-hover transition-colors">
               <span className="flex items-center gap-2 text-sm text-text">
                 <Moon size={14} className="flex-shrink-0" />

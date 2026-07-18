@@ -524,8 +524,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6">
-        <h2 className="text-sm font-medium text-text mb-4">Add Member</h2>
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Add Member">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
@@ -630,8 +629,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6">
-        <h2 className="text-sm font-medium text-text mb-4">Change Role</h2>
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Change Role">
         <p className="text-text-muted mb-4">
           Update role for <strong className="text-text">{member.full_name || member.email}</strong>
         </p>
@@ -704,8 +702,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6">
-        <h2 className="text-sm font-medium text-text mb-2">Reset Password</h2>
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Reset Password">
         <p className="text-text-muted mb-4">
           Resetting password for <strong className="text-text">{member.full_name || member.email}</strong>
         </p>
@@ -813,8 +810,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6">
-        <h2 className="text-sm font-medium text-text mb-2">Change My Password</h2>
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Change My Password">
         <p className="text-text-muted mb-4">
           Update your account password
         </p>

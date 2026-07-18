@@ -6,7 +6,7 @@ import Modal from '../common/Modal'
 import { authApi, workspacesApi } from '../../api/client'
 import type { LegacyImportResult } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
-import { primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../common/formStyles'
+import { primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
   open: boolean
@@ -90,8 +90,7 @@ export default function LegacyImportModal({ open, onClose }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={handleClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto">
-      <h2 className={modalTitleClass}>Import from an older Denarly version</h2>
+    <Modal open={open} onClose={handleClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title="Import from an older Denarly version">
 
       {phase === 'select' && (
         <div className="space-y-4">

@@ -26,7 +26,7 @@ export default function AmountInput({
       onChange={(e) => setDraft(e.target.value)}
       placeholder={placeholder}
       aria-label={ariaLabel}
-      className={`${inputClass} max-sm:min-h-[44px]`}
+      className={inputClass}
     />
   )
 }

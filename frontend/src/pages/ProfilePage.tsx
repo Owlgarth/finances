@@ -7,6 +7,7 @@ import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
+import LocalSettingsSection from '../components/profile/LocalSettingsSection'
 import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 import ResetAccountSection from '../components/profile/ResetAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
@@ -200,11 +201,14 @@ export default function ProfilePage() {
           </div>
 
           {activeTab === 'preferences' && (
-            <PreferencesForm
-              preferences={preferences || null}
-              onSubmit={(data) => updatePreferencesMutation.mutate(data)}
-              isLoading={updatePreferencesMutation.isPending}
-            />
+            <>
+              <PreferencesForm
+                preferences={preferences || null}
+                onSubmit={(data) => updatePreferencesMutation.mutate(data)}
+                isLoading={updatePreferencesMutation.isPending}
+              />
+              <LocalSettingsSection />
+            </>
           )}
 
           {activeTab === 'account' && (

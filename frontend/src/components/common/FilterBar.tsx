@@ -1,6 +1,6 @@
 import { SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { labelClass } from './formStyles'
+import { controlHeightClass, labelClass } from './formStyles'
 
 /**
  * List-page filter scaffolding (Transactions, Planned): a toggle button with an
@@ -21,7 +21,7 @@ export function FiltersToggle({ open, count, onToggle }: FiltersToggleProps) {
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 max-sm:min-h-[44px] flex-shrink-0"
+      className={`bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 ${controlHeightClass} flex-shrink-0`}
     >
       <SlidersHorizontal size={13} />
       Filters
