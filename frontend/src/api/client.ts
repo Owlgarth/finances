@@ -242,6 +242,7 @@ export interface TransactionInput {
   category_id?: number | null;
   original_amount?: string | null;
   original_currency_code?: string | null;
+  items?: TransactionItemInput[];
 }
 
 export const transactionsApi = {
@@ -249,8 +250,10 @@ export const transactionsApi = {
     api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
   getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
-  create: (data: TransactionInput): Promise<Transaction> =>
-    api.post<Transaction>('/transactions', data).then(res => res.data),
+  create: (data: TransactionInput, opts?: { idempotencyKey?: string }): Promise<Transaction> =>
+    api.post<Transaction>('/transactions', data, {
+      ...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {}),
+    }).then(res => res.data),
   update: (id: number, data: TransactionInput): Promise<Transaction> =>
     api.put<Transaction>(`/transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/transactions/${id}`),
