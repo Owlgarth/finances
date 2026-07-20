@@ -93,17 +93,57 @@ curl -s http://localhost:8100/parse \
 
 ## Run with Docker
 
-Built and wired into the repo's top-level `docker-compose.yml` as the `parser`
-service, started with `./dev.sh up parser`. Or standalone:
+In development it is built and wired into the repo's top-level
+`docker-compose.yml` as the `parser` service, started with `./dev.sh up parser` —
+the backend reaches it at `http://parser:8100` inside the compose network (see
+`PARSER_URL` in the backend env). Or standalone:
 
 ```bash
+docker compose up -d --build          # uses this directory's docker-compose.yml
+# or standalone:
 docker build -t denarly-receipt-parser .
 docker run --rm -p 8100:8100 --env-file .env denarly-receipt-parser
 ```
 
-The Denarly backend reaches it at `http://parser:8100` inside the
-compose network (see `PARSER_URL` in the backend env). If `PARSER_URL` is unset,
-the backend hides every extraction affordance — the service is entirely optional.
+## Deployment
+
+In production the parser is **not** part of the repo's top-level stack. That
+stack (Django, React, postgres, redis, celery) runs on a VPS for 24/7
+availability; the parser deploys on the **home server** alongside the LLM, so
+the parser→LLM hop and OCR stay local to the GPU box:
+
+```
+   VPS (always on)                        home server (intermittent, GPU)
+ ┌───────────────────────┐   tailnet    ┌──────────────────────────────────┐
+ │ django + celery       │─────────────►│ receipt-parser :8100  ─► LLM     │
+ │   PARSER_URL ─────────┼──────────────┤ (docker compose here)  (host)    │
+ └───────────────────────┘              └──────────────────────────────────┘
+```
+
+**Wiring it up:**
+
+1. Install [Tailscale](https://tailscale.com/) on both hosts (`tailscale up`) and
+   note the home server's tailnet IP (`tailscale ip -4`, a `100.x.y.z` address).
+2. On the home server, set `PARSER_BIND_ADDR` to that IP in `.env` and start the
+   stack. The port binds to the tailnet interface only — never `0.0.0.0`, which
+   would expose a path toward the LLM. The default (`127.0.0.1`) fails safe.
+3. On the VPS, set `PARSER_URL=http://100.x.y.z:8100` and
+   `PARSER_API_TOKEN` (matching the parser's) in the backend env.
+
+`PARSER_API_TOKEN` stays required as defense-in-depth even on a private mesh.
+
+**The home server is intermittently available, and that is a normal state, not an
+error.** When it is off the backend degrades rather than failing:
+
+- `GET /api/transactions/extraction/config` reports `reachable: false` (live probe,
+  short-TTL cached), so the UI relabels the "From receipt" affordance as offline
+  instead of letting an upload fail.
+- Queued attachment extractions stay retryable — the Celery task retries with
+  exponential backoff over roughly a day, so receipts uploaded while the home
+  server is down are picked up when it returns.
+
+If `PARSER_URL` is unset entirely, the backend hides every extraction affordance —
+the service is fully optional.
 
 ## Tests
 

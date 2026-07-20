@@ -1,0 +1,44 @@
+# Home-server deployment for the receipt parser.
+#
+# This service does NOT belong to the repo's top-level stack (VPS: Django, React,
+# postgres, redis, celery). It runs on the home server so the parser→LLM hop and
+# OCR stay local to the GPU box, and the VPS backend reaches it over the tailnet
+# via PARSER_URL. See README.md § Deployment.
+#
+#   docker compose up -d --build
+#
+# The LLM itself is not managed here — llama.cpp/Ollama run on the host with GPU
+# access, reached through host.docker.internal.
+
+name: denarly-receipt-parser
+
+services:
+  denarly_receipt_parser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: denarly_receipt_parser
+    restart: unless-stopped
+    env_file:
+      # Optional so the stack still starts from a bare checkout; every setting
+      # has a default in app/config.py. Copy .env.example to .env on the host.
+      - path: .env
+        required: false
+    environment:
+      # Model endpoint on the host (llama.cpp / Ollama with the GPU).
+      - PARSER_MODEL_BASE_URL=${PARSER_MODEL_BASE_URL:-http://host.docker.internal:8090/v1}
+    # Bind to the tailnet interface ONLY — never 0.0.0.0. Set PARSER_BIND_ADDR to
+    # this host's tailnet IP (`tailscale ip -4`); the loopback default is a safe
+    # no-op that keeps the port off the LAN and the internet if it is forgotten.
+    ports:
+      - "${PARSER_BIND_ADDR:-127.0.0.1}:8100:8100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # /health probes the model endpoint, so an unhealthy container also means
+      # "the LLM is down" — exactly what the backend should see as offline.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/', timeout=3).status == 200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
