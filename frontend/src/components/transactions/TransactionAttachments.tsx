@@ -83,7 +83,13 @@ export default function TransactionAttachments({ transaction }: Props) {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const isExtracting = (a: TransactionAttachment) => pendingId === a.id || a.extraction_status === 'pending'
+  const isExtracting = (a: TransactionAttachment) =>
+    pendingId === a.id ||
+    a.extraction_status === 'pending' ||
+    // Cover the click → mutation.onSuccess gap so the user sees immediate
+    // feedback (and the button disappears, preventing double-clicks that
+    // queue redundant extraction jobs).
+    (startExtraction.isPending && startExtraction.variables === a.id)
 
   const reviewAttachment = review && attachments.find((a) => a.id === review.attachmentId)
 
