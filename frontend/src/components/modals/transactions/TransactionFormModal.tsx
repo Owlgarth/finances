@@ -6,13 +6,13 @@ import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
+import TransactionItemsTable, { type Row } from '../../transactions/TransactionItemsTable'
 import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { formatAmount } from '../../../utils/format'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
 
 interface Props {
@@ -28,6 +28,27 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 ]
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
+
+/** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
+const itemsToRows = (items: TransactionItemInput[]): Row[] =>
+  items.map((i) => ({
+    name: i.name,
+    quantity: i.quantity ?? '1',
+    unit_price: i.unit_price ?? '',
+    line_total: i.line_total ?? '',
+  }))
+
+/** Row[] (table editing shape) → TransactionItemInput[] (API payload shape).
+ * Drops rows with no name, defaults quantity to '1', converts '' → null. */
+const rowsToItems = (rows: Row[]): TransactionItemInput[] =>
+  rows
+    .filter((r) => r.name.trim())
+    .map((r) => ({
+      name: r.name.trim(),
+      quantity: r.quantity || '1',
+      unit_price: r.unit_price === '' ? null : r.unit_price,
+      line_total: r.line_total === '' ? null : r.line_total,
+    }))
 
 export default function TransactionFormModal({ open, onClose, transaction }: Props) {
   const isEdit = !!transaction
@@ -55,7 +76,6 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingItems, setPendingItems] = useState<TransactionItemInput[]>([])
-  const [parsedTotal, setParsedTotal] = useState<string | null>(null)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
@@ -69,7 +89,6 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
           line_total: i.line_total,
         })),
       )
-      setParsedTotal(result.total)
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
       // Merchant fills description only when the user hasn't typed one — matches
@@ -92,7 +111,6 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
     // Clear any receipt-upload state from a previous session.
     setPendingFile(null)
     setPendingItems([])
-    setParsedTotal(null)
     parse.reset()
     if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
@@ -123,6 +141,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   }, [open, transaction, accounts.length, budgets.length, defaultBudgetId])
 
   const account = accounts.find((a) => a.id === accountId)
+  const pendingRows = useMemo(() => itemsToRows(pendingItems), [pendingItems])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -280,15 +299,14 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
           </div>
         )}
 
-        {/* Parsed line-items preview — read-only. Editing happens after create, in edit mode. */}
-        {!isEdit && pendingItems.length > 0 && (
-          <div className="text-xs text-text-muted">
-            {pendingItems.length} line item{pendingItems.length > 1 ? 's' : ''} will be attached
-            {parsedTotal
-              ? ` (items total ${formatAmount(pendingItems.reduce((s, i) => s + parseFloat(i.line_total ?? '0'), 0))})`
-              : ''}
-            .
-          </div>
+        {/* Editable line items — create mode only. Edit mode has its own items tab below. */}
+        {!isEdit && (
+          <TransactionItemsTable
+            rows={pendingRows}
+            onChange={(rows) => setPendingItems(rowsToItems(rows))}
+            amount={amount}
+            currencyCode={account?.currency_code ?? null}
+          />
         )}
 
         <div className="flex justify-end gap-2 pt-2">
