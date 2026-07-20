@@ -116,8 +116,18 @@ async def _complete(content: list[dict], response_format: dict) -> str:
 
 
 async def extract(images_b64: list[str], transcript: str | None = None) -> str:
-    """Send images (plus an optional machine transcript) to the model and return the raw text response."""
+    """Send images (plus an optional machine transcript) to the model and return the raw text response.
+
+    Dispatches on PARSER_MODEL_PROVIDER; the rest of this module is the
+    OpenAI-compatible backend.
+    """
     global _schema_rejected
+    if settings.model_provider == 'gemini':
+        # Imported lazily: gemini.py imports this module for the shared prompt
+        # and schema, so a top-level import here would be circular.
+        from app import gemini
+
+        return await gemini.extract(images_b64, transcript)
     content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
     for image in images_b64:
         content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
@@ -145,6 +155,10 @@ async def extract(images_b64: list[str], transcript: str | None = None) -> str:
 
 async def ping() -> None:
     """Lightweight reachability check for /health. Raises ModelUnavailable on failure."""
+    if settings.model_provider == 'gemini':
+        from app import gemini
+
+        return await gemini.ping()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
