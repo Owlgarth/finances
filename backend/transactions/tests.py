@@ -1,7 +1,7 @@
 """Tests for account-based transactions (B5 semantics)."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -10,6 +10,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 
 from accounts.factories import AccountFactory
 from accounts.services import AccountService
@@ -17,13 +18,22 @@ from budgeting.factories import BudgetFactory
 from budgeting.models import Cadence, Period
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
+from common.auth import create_access_token
+from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory, TransactionItemFactory
-from transactions.models import Transaction, TransactionAttachment, TransactionItem
+from transactions.models import (
+    Transaction,
+    TransactionAttachment,
+    TransactionIdempotencyKey,
+    TransactionItem,
+)
 from transactions.parser_client import ParserServiceError, ParserUnavailableError, parse_receipt
+from transactions.schemas import TransactionCreate
 from transactions.services import TransactionService
 from transactions.tasks import extract_attachment
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 
 
 class TransactionTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -136,6 +146,263 @@ class TestCreateTransactionWithItems(TransactionTestCase):
         self.assertEqual(trans.amount, Decimal('50.00'))  # not 999.99
         # opening_balance 100.00 − expense 50.00
         self.assertEqual(AccountService.balance(self.account), balance_before - Decimal('50.00'))
+
+
+class TestIdempotencyKey(TransactionTestCase):
+    """Idempotency-Key header on POST /transactions — Stripe-style dedup."""
+
+    def test_create_with_key_returns_same_transaction_on_replay(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+
+        second = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+
+    def test_create_with_key_different_payload_still_returns_original(self):
+        """Stripe semantics: same key = same result, regardless of payload.
+
+        The user replayed the request — they don't want a second transaction.
+        The new payload is ignored; the original transaction is returned.
+        """
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/transactions', self._payload(amount='50.00'), **headers)
+        self.assertStatus(201)
+
+        second = self.post(
+            '/api/transactions',
+            self._payload(description='Different description', amount='99.99'),
+            **headers,
+        )
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(second['amount'], '50.00')
+        self.assertEqual(second['description'], 'Test expense')
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_create_without_key_bypasses_dedup(self):
+        """No header → no dedup → two POSTs create two transactions (backward compat)."""
+        first = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        second = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 0)
+
+    def test_blank_key_bypasses_dedup(self):
+        """An empty Idempotency-Key header is treated as absent."""
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': ''}
+        first = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        second = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+
+    def test_same_key_different_user_is_independent(self):
+        """Unique constraint is (key, user) — no cross-user collision.
+
+        AuthMixin mints a JWT only for `self.user`. To authenticate a second
+        user via the HTTP layer we mint a token directly via the public
+        `common.auth.create_access_token` helper and add the user as a
+        workspace member so WorkspaceJWTAuth accepts them.
+        """
+        other = UserFactory(email='other@example.com', current_workspace=self.workspace)
+        WorkspaceMemberFactory(workspace=self.workspace, user=other, role='member')
+        other_headers = {'HTTP_AUTHORIZATION': f'Bearer {create_access_token(other)}'}
+
+        first = self.post(
+            '/api/transactions',
+            self._payload(),
+            **{**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'shared-key'},
+        )
+        self.assertStatus(201)
+
+        second = self.post(
+            '/api/transactions',
+            self._payload(),
+            **{**other_headers, 'HTTP_IDEMPOTENCY_KEY': 'shared-key'},
+        )
+        self.assertStatus(201)
+
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 2)
+        # Same key, distinct users — both rows live side by side.
+        keys = list(TransactionIdempotencyKey.objects.values_list('user_id', flat=True))
+        self.assertEqual(sorted(keys), sorted([self.user.id, other.id]))
+
+    def test_key_after_24h_treated_as_new(self):
+        """After the 24h TTL, the same key creates a new transaction.
+
+        The unique constraint is unconditional on (key, user), so the service
+        sweeps expired records before inserting — the old dedup row is
+        replaced (not left as cruft). What matters is that the second request
+        produces a NEW transaction; the dedup record count stays at 1.
+        """
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+
+        # Mock timezone.now forward 25h for BOTH the lookup cutoff and the new
+        # record's auto_now_add. The codebase does NOT use freezegun; patch
+        # django.utils.timezone.now directly. Apply the patch around the whole
+        # second request because the lookup AND the create both consult now().
+        original_now = timezone.now()
+        future = original_now + timedelta(hours=25)
+        with mock.patch('django.utils.timezone.now', return_value=future):
+            second = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 2)
+        # Exactly one dedup record — the expired one was swept before insert.
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+
+    def test_user_delete_cascades_to_idempotency_key(self):
+        """CASCADE on user FK — UserService.delete_account() needs no code change."""
+        from users.models import User
+
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+
+        # Direct delete — exercises the FK on_delete behavior at the DB level.
+        # (UserService.delete_account also CASCADEs through owned_workspaces,
+        # but a direct user.delete() is the minimal verification.)
+        user_id = self.user.id
+        User.objects.filter(id=user_id).delete()
+
+        self.assertEqual(TransactionIdempotencyKey.objects.filter(user_id=user_id).count(), 0)
+
+    def test_workspace_delete_cascades_to_idempotency_key(self):
+        """CASCADE on workspace FK.
+
+        Direct `workspace.delete()` would fail with ProtectedError because
+        accounts are PROTECT-referenced by transactions — production code
+        (`UserService.delete_account`, `WorkspaceService.delete_workspace`)
+        always calls `delete_workspace_financial_records` first. Mirror that
+        here.
+        """
+        from common.services.base import delete_workspace_financial_records
+        from workspaces.models import Workspace
+
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        ws_id = self.workspace.id
+
+        # Match production: drop PROTECT-referenced financial records first,
+        # then delete the workspace (which CASCADEs the dedup record).
+        delete_workspace_financial_records(ws_id)
+        Workspace.objects.filter(id=ws_id).delete()
+        self.assertEqual(TransactionIdempotencyKey.objects.filter(workspace_id=ws_id).count(), 0)
+
+    def test_transaction_delete_sets_null_not_cascade(self):
+        """SET_NULL on transaction FK — record survives a transaction delete."""
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        record = TransactionIdempotencyKey.objects.get()
+        tx_id = record.transaction_id
+        self.assertIsNotNone(tx_id)
+
+        Transaction.objects.filter(id=tx_id).delete()
+
+        record.refresh_from_db()
+        self.assertIsNone(record.transaction_id)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+
+        # And a replay after the delete should create a fresh transaction
+        # (the stale-record branch in TransactionService.create kicks in).
+        replay = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(replay['id'], tx_id)
+
+    def test_viewer_cannot_use_idempotency_key(self):
+        """require_role runs before the header is read — viewer gets 403.
+
+        AuthMixin mints a JWT only for `self.user`, so we add a viewer member
+        and mint their token via the public `create_access_token` helper.
+        """
+        viewer = UserFactory(email='viewer@example.com', current_workspace=self.workspace)
+        WorkspaceMemberFactory(workspace=self.workspace, user=viewer, role='viewer')
+        viewer_headers = {'HTTP_AUTHORIZATION': f'Bearer {create_access_token(viewer)}'}
+
+        # Even with an oversized key (which would normally trigger 400),
+        # require_role denies first → 403, no record written, no transaction.
+        long_key = 'k' * 101
+        self.post(
+            '/api/transactions',
+            self._payload(),
+            **{**viewer_headers, 'HTTP_IDEMPOTENCY_KEY': long_key},
+        )
+        self.assertStatus(403)
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 0)
+
+    def test_oversized_key_returns_400(self):
+        """Keys longer than 100 chars are rejected with 400 (not truncated)."""
+        long_key = 'k' * 101
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': long_key}
+        data = self.post('/api/transactions', self._payload(), **headers)
+        self.assertStatus(400)
+        self.assertIn('100 characters', data['detail'])
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 0)
+
+    def test_race_condition_two_concurrent_inserts_returns_one_transaction(self):
+        """Force the IntegrityError branch by pre-inserting a winner's record.
+
+        A true concurrent-request race is hard to test deterministically. To
+        exercise the `except IntegrityError` branch in `TransactionService.create`,
+        we (1) commit a winner's record directly (it lives in the test's outer
+        transaction, so the wrapper's savepoint rollback won't undo it), (2)
+        mock the FIRST lookup to return None so the wrapper proceeds to insert
+        (and hits the unique constraint), and (3) let the SECOND lookup run for
+        real so the wrapper finds the winner and returns their transaction.
+        """
+        # Pre-commit the winner: a different transaction + dedup record for
+        # the same (key, user). This is what the concurrent request would have
+        # committed in a real race.
+        winner_tx = TransactionFactory(account=self.account, workspace=self.workspace)
+        TransactionIdempotencyKey.objects.create(
+            key='race-key',
+            user=self.user,
+            workspace_id=self.workspace.id,
+            transaction=winner_tx,
+        )
+
+        # Mock the lookup: first call (before insert) returns None, simulating
+        # "no record yet" — the wrapper then tries to insert and collides with
+        # the pre-committed winner above. The second call (after IntegrityError,
+        # inside the except branch) delegates to the real lookup, which finds
+        # the winner.
+        real_lookup = TransactionService._lookup_idempotency_key
+        call_count = [0]
+
+        def fake_lookup(user, key):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return None
+            return real_lookup(user, key)
+
+        with mock.patch.object(TransactionService, '_lookup_idempotency_key', side_effect=fake_lookup):
+            result = TransactionService.create(
+                self.user,
+                self.workspace.id,
+                TransactionCreate(**self._payload()),
+                idempotency_key='race-key',
+            )
+
+        # The wrapper caught IntegrityError, re-read the winner, returned it.
+        self.assertEqual(result.id, winner_tx.id)
+        # Exactly one dedup record survives — the wrapper's own insert was
+        # rolled back by the savepoint, leaving only the pre-committed winner.
+        self.assertEqual(TransactionIdempotencyKey.objects.filter(key='race-key', user=self.user).count(), 1)
 
 
 class TestAdjustments(TransactionTestCase):
@@ -592,7 +859,6 @@ class TestDerivedPeriodServiceLevel(TestCase):
 
     def test_period_touch_uses_transaction_date(self):
         from common.tests.factories import UserFactory
-        from workspaces.factories import WorkspaceFactory
 
         user = UserFactory()
         workspace = WorkspaceFactory()

@@ -184,11 +184,25 @@ def get_transaction(request: HttpRequest, transaction_id: int):
 
 @router.post('', response={201: TransactionOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_transaction(request: HttpRequest, data: TransactionCreate):
-    """Create a new transaction (requires write access)."""
+    """Create a new transaction (requires write access).
+
+    Optional `Idempotency-Key` request header: if present, a replay with the
+    same key (per user, within 24h) returns the original transaction instead
+    of creating a duplicate. See `TransactionService.create`.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    trans = TransactionService.create(user, workspace_id, data)
+
+    idempotency_key = request.headers.get('Idempotency-Key')
+    if idempotency_key is not None:
+        idempotency_key = idempotency_key.strip()
+        if len(idempotency_key) > 100:
+            return 400, {'detail': 'Idempotency-Key header must be at most 100 characters.'}
+        if idempotency_key == '':
+            idempotency_key = None
+
+    trans = TransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
     return 201, trans
 
 
