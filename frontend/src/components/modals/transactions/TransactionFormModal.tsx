@@ -89,6 +89,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingItems, setPendingItems] = useState<TransactionItemInput[]>([])
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
@@ -140,6 +141,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOriginalAmount(source.original_amount ?? '')
       setOriginalCurrencyCode(source.original_currency_code)
       setBudgetId(source.category_budget_id)
+      // Edit mode bypasses the idempotency-key dedup — only create-mode
+      // submissions carry a key (Q5=A: no items on update, same rationale).
+      // Copy mode IS a create, so it gets a fresh key like the else branch.
+      setIdempotencyKey(transaction ? null : crypto.randomUUID())
     } else {
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
@@ -151,6 +156,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(false)
       setOriginalAmount('')
       setOriginalCurrencyCode(null)
+      // Fresh key per open in create mode. Persists across mutation retries
+      // within this open session — that's what makes a double-click or a
+      // network-blip replay return the original 201 instead of a duplicate.
+      setIdempotencyKey(crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId])
@@ -179,13 +188,21 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       if (isEdit) {
         return transactionsApi.update(transaction.id, payload)
       }
-      const trans = await transactionsApi.create(payload)
-      // Receipt-first add: upload the file, then save the parsed line items.
-      // The create has already succeeded by this point — these calls decorate
-      // the transaction. Order matches NewFromReceiptModal (attachment first).
-      if (pendingFile) await transactionsApi.uploadAttachment(trans.id, pendingFile)
-      if (pendingItems.length > 0) {
-        await transactionsApi.replaceItems(trans.id, pendingItems)
+      // Inline the items on the create call (Task 1 backend) and send the
+      // idempotency key as a header (Task 2 backend). This is the atomic
+      // tx + items commit — once it returns, the data is durable.
+      const trans = await transactionsApi.create(
+        { ...payload, items: rowsToItems(pendingRows) },
+        { idempotencyKey: idempotencyKey ?? undefined },
+      )
+      // Attachment upload is best-effort: the tx and its items are already
+      // committed. A failure here (e.g. S3 blip) is no longer fatal — surface
+      // a non-blocking toast and let onSuccess proceed. The user can re-add
+      // the receipt in edit mode.
+      try {
+        if (pendingFile) await transactionsApi.uploadAttachment(trans.id, pendingFile)
+      } catch {
+        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
       }
       return trans
     },
