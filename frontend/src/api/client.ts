@@ -8,7 +8,7 @@ import type {
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
-  TransactionAttachment, ExtractionResult, ParsedReceipt,
+  TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
@@ -276,8 +276,8 @@ export const transactionsApi = {
   deleteAttachment: (transactionId: number, attachmentId: number): Promise<void> =>
     api.delete(`/transactions/${transactionId}/attachments/${attachmentId}`).then(() => undefined),
 
-  extractionConfig: (): Promise<{ enabled: boolean }> =>
-    api.get<{ enabled: boolean }>('/transactions/extraction/config').then(res => res.data),
+  extractionConfig: (): Promise<ExtractionConfig> =>
+    api.get<ExtractionConfig>('/transactions/extraction/config').then(res => res.data),
   parseReceipt: (file: File): Promise<ParsedReceipt> => {
     const form = new FormData();
     form.append('file', file);

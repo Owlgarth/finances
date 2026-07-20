@@ -120,6 +120,23 @@ file, calls the parser's `/parse`, and records `done` + the contract result or a
 retryable `failed` + error. It never raises, so manual work is never blocked. The UI
 polls `GET .../extraction`.
 
+The parser is self-hosted on a machine that is not always powered on, so
+"configured but offline" is a normal state rather than an error:
+
+- `parser_client` splits failures into `ParserUnavailableError` (connection
+  failure or 5xx — transient) and `ParserServiceError` (4xx — the file was
+  rejected, retrying is pointless). Only the former retries.
+- The async path is the resilient one: unreachable leaves the attachment
+  `pending` and `extract_attachment` retries with exponential backoff (~12h by
+  default) so receipts queued while the host is down are picked up when it
+  returns.
+- The synchronous "From receipt" preview cannot wait, so it returns **503**
+  (not 400) when the host is off, letting the UI say "offline" instead of
+  blaming the receipt.
+- `GET /transactions/extraction/config` reports `{enabled, reachable}`, where
+  `reachable` is a live `/health` probe cached for `PARSER_HEALTH_CACHE_SECONDS`.
+  The UI disables and relabels extraction affordances instead of hiding them.
+
 ### Authentication Layers
 
 1. **JWT token** validates user identity.
@@ -216,6 +233,8 @@ do not change to 404.
 | `SECRET_KEY`, `JWT_SECRET_KEY` | Django + token signing |
 | `USE_S3_STORAGE`, `S3_*` | Object storage for attachments |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
+| `PARSER_HEALTH_TIMEOUT_SECONDS`, `PARSER_HEALTH_CACHE_SECONDS` | Reachability probe timeout (3s) and cache TTL (30s) |
+| `PARSER_EXTRACT_MAX_RETRIES`, `PARSER_EXTRACT_RETRY_BACKOFF`, `PARSER_EXTRACT_RETRY_BACKOFF_MAX` | Extraction retry window while the parser host is down (12 / 60s / 2h ≈ 12h) |
 | `DEMO_MODE` | Disable registration when true |
 
 ### Frontend
@@ -228,8 +247,13 @@ do not change to 404.
 ## Deployment
 
 `docker-compose.yml` runs: `denarly_db` (Postgres), `denarly_redis`, `denarly_storage`
-(S3-compatible), `denarly_api`, `denarly_celery_worker`, `denarly_celery_beat`,
-`denarly_ui`, and `denarly_receipt_parser` (optional; port 8100).
+(S3-compatible), `denarly_api`, `denarly_celery_worker`, `denarly_celery_beat`, and
+`denarly_ui`.
 
-The receipt parser is fully optional: with `PARSER_URL` unset, the backend reports
+The receipt parser is **not** in that stack — it deploys separately, next to the
+self-hosted vision model, and the backend reaches it over a private mesh
+(Tailscale) via `PARSER_URL`. See `services/receipt-parser/docker-compose.yml`
+and that service's README § Deployment.
+
+The parser is fully optional: with `PARSER_URL` unset, the backend reports
 extraction as disabled and the UI hides every extraction affordance.

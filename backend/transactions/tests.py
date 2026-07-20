@@ -5,6 +5,9 @@ from datetime import date
 from decimal import Decimal
 from unittest import mock
 
+import requests
+from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
@@ -18,7 +21,9 @@ from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory
 from transactions.models import Transaction, TransactionAttachment, TransactionItem
+from transactions.parser_client import ParserServiceError, ParserUnavailableError, parse_receipt
 from transactions.services import TransactionService
+from transactions.tasks import extract_attachment
 
 
 class TransactionTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -846,3 +851,181 @@ class TestExtraction(TransactionTestCase):
         with mock.patch('transactions.parser_client.is_enabled', return_value=False):
             response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
         self.assertEqual(response.status_code, 503)
+
+    def test_parse_receipt_preview_offline_returns_503_not_400(self):
+        """A powered-off parser host is not a bad upload — the client must be able
+        to tell "try later" apart from "this receipt was rejected"."""
+        from transactions.parser_client import ParserUnavailableError
+
+        upload = SimpleUploadedFile('r.jpg', b'bytes', content_type='image/jpeg')
+        with mock.patch(
+            'transactions.parser_client.parse_receipt', side_effect=ParserUnavailableError('connection refused')
+        ):
+            response = self.client.post('/api/transactions/extraction/parse', {'file': upload}, **self.auth_headers())
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('offline', response.json()['detail'].lower())
+
+
+class TestParserReachability(TransactionTestCase):
+    """Live reachability probing (T14) — the parser host is intermittently powered on."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()  # locmem cache persists across tests in a process
+        self.addCleanup(cache.clear)
+
+    def _config(self):
+        return self.get('/api/transactions/extraction/config', **self.auth_headers())
+
+    def test_config_reports_reachable_when_health_answers(self):
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.get') as get,
+        ):
+            get.return_value = mock.Mock(status_code=200)
+            data = self._config()
+        self.assertStatus(200)
+        self.assertTrue(data['enabled'])
+        self.assertTrue(data['reachable'])
+
+    def test_config_reports_unreachable_when_host_is_down(self):
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch(
+                'transactions.parser_client.requests.get', side_effect=requests.ConnectionError('no route to host')
+            ),
+        ):
+            data = self._config()
+        # Configured but offline: the UI relabels the affordance instead of hiding it.
+        self.assertTrue(data['enabled'])
+        self.assertFalse(data['reachable'])
+
+    def test_disabled_parser_is_never_probed(self):
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=False),
+            mock.patch('transactions.parser_client.requests.get') as get,
+        ):
+            data = self._config()
+        self.assertFalse(data['reachable'])
+        get.assert_not_called()
+
+    def test_probe_result_is_cached(self):
+        """One probe per TTL — an offline host must not stall every config poll."""
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.get') as get,
+        ):
+            get.return_value = mock.Mock(status_code=200)
+            self._config()
+            self._config()
+            self._config()
+        get.assert_called_once()
+
+    def test_health_probe_uses_short_timeout(self):
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.get') as get,
+        ):
+            get.return_value = mock.Mock(status_code=200)
+            self._config()
+        self.assertEqual(get.call_args.kwargs['timeout'], settings.PARSER_HEALTH_TIMEOUT_SECONDS)
+
+
+class TestParserClientErrorClassification(TestCase):
+    """Transient (retryable) vs permanent parser failures."""
+
+    def _parse(self):
+        return parse_receipt(b'bytes', 'r.jpg', 'image/jpeg')
+
+    def test_connection_error_is_retryable(self):
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.post', side_effect=requests.ConnectionError('down')),
+            self.assertRaises(ParserUnavailableError),
+        ):
+            self._parse()
+
+    def test_model_unavailable_503_is_retryable(self):
+        response = mock.Mock(status_code=503)
+        response.json.return_value = {'error': {'message': 'The extraction model is unavailable.'}}
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.post', return_value=response),
+            self.assertRaises(ParserUnavailableError),
+        ):
+            self._parse()
+
+    def test_rejected_file_4xx_is_permanent(self):
+        response = mock.Mock(status_code=422)
+        response.json.return_value = {'error': {'message': 'The receipt is unreadable.'}}
+        with (
+            mock.patch('transactions.parser_client.is_enabled', return_value=True),
+            mock.patch('transactions.parser_client.requests.post', return_value=response),
+            self.assertRaises(ParserServiceError) as caught,
+        ):
+            self._parse()
+        self.assertNotIsInstance(caught.exception, ParserUnavailableError)
+
+
+class TestExtractionRetries(TransactionTestCase):
+    """The extraction task must survive the parser host being off for hours (T14)."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='Receipt tx')
+        storage_patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = storage_patcher.start()
+        self.addCleanup(storage_patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.get_file.return_value = b'imagebytes'
+        self.attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg', filename='r.jpg', content_type='image/jpeg', size=10, uploaded_by=self.user
+        )
+
+    def _status(self):
+        self.attachment.refresh_from_db()
+        return self.attachment.extraction_status
+
+    def test_transient_failure_retries_and_succeeds_when_host_returns(self):
+        """Home server off, then back: the receipt is extracted without user action."""
+        with mock.patch(
+            'transactions.tasks.parse_receipt', side_effect=[ParserUnavailableError('host down'), CONTRACT_RESULT]
+        ) as parse:
+            extract_attachment.apply(args=[self.attachment.id])
+        self.assertEqual(parse.call_count, 2)
+        self.assertEqual(self._status(), 'done')
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.extraction_result['total'], '20.47')
+
+    def test_exhausted_retries_mark_failed_with_offline_message(self):
+        with (
+            mock.patch.object(extract_attachment, 'max_retries', 1),
+            mock.patch('transactions.tasks.parse_receipt', side_effect=ParserUnavailableError('host down')) as parse,
+        ):
+            extract_attachment.apply(args=[self.attachment.id])
+        self.assertEqual(parse.call_count, 2)  # initial attempt + one retry
+        self.assertEqual(self._status(), 'failed')
+        self.attachment.refresh_from_db()
+        self.assertIn('unavailable', self.attachment.extraction_error.lower())
+
+    def test_rejected_file_fails_immediately_without_retrying(self):
+        with mock.patch(
+            'transactions.tasks.parse_receipt', side_effect=ParserServiceError('Parser returned 422: unreadable')
+        ) as parse:
+            extract_attachment.apply(args=[self.attachment.id])
+        parse.assert_called_once()  # retrying sends identical bytes — pointless
+        self.assertEqual(self._status(), 'failed')
+
+    def test_missing_attachment_is_a_no_op(self):
+        with mock.patch('transactions.tasks.parse_receipt') as parse:
+            extract_attachment.apply(args=[self.attachment.id + 999])
+        parse.assert_not_called()
+
+
+class TestExtractionTaskConfig(TestCase):
+    def test_retry_config_covers_hours_of_downtime(self):
+        self.assertEqual(extract_attachment.autoretry_for, (ParserUnavailableError,))
+        self.assertEqual(extract_attachment.max_retries, settings.PARSER_EXTRACT_MAX_RETRIES)
+        self.assertEqual(extract_attachment.retry_backoff, settings.PARSER_EXTRACT_RETRY_BACKOFF)
+        self.assertEqual(extract_attachment.retry_backoff_max, settings.PARSER_EXTRACT_RETRY_BACKOFF_MAX)
+        self.assertTrue(extract_attachment.retry_jitter)

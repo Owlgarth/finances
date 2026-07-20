@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Calendar,
   Check,
+  CloudOff,
   Home,
   Landmark,
   Loader2,
@@ -26,7 +27,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
-import { useExtractionEnabled } from '../../hooks/useDomain'
+import { useExtractionConfig } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
 import { openPageSearch } from '../common/CommandPalette'
@@ -96,7 +97,7 @@ export default function BottomNav() {
   const { isDark, toggleTheme } = useTheme()
   const { workspace, workspaces, switchWorkspace } = useWorkspace()
   const { canWrite } = usePermissions()
-  const extractionEnabled = useExtractionEnabled()
+  const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
 
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
@@ -136,8 +137,14 @@ export default function BottomNav() {
   const quickAddActions: ActionSheetAction[] = [
     { label: 'New transaction', icon: Receipt, onSelect: () => setTransactionOpen(true) },
     { label: 'Transfer', icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
+    // Shown disabled rather than dropped while the self-hosted scanner is off,
+    // so the action list doesn't silently change shape.
     ...(extractionEnabled
-      ? [{ label: 'From receipt', icon: ScanLine, onSelect: () => setReceiptOpen(true) }]
+      ? [
+          extractionReachable
+            ? { label: 'From receipt', icon: ScanLine, onSelect: () => setReceiptOpen(true) }
+            : { label: 'Scanning offline', icon: CloudOff, onSelect: () => {}, disabled: true },
+        ]
       : []),
     { label: 'Planned transaction', icon: Calendar, onSelect: () => setPlannedOpen(true) },
   ]

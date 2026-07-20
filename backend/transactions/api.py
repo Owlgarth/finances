@@ -280,8 +280,8 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
 
 @router.get('/extraction/config', response=ExtractionConfigOut, auth=WorkspaceJWTAuth())
 def extraction_config(request: HttpRequest):
-    """Report whether receipt extraction is configured (drives UI affordance visibility)."""
-    return ExtractionConfigOut(enabled=parser_client.is_enabled())
+    """Report whether receipt extraction is configured and currently answering."""
+    return ExtractionConfigOut(enabled=parser_client.is_enabled(), reachable=parser_client.is_reachable())
 
 
 @router.post('/extraction/parse', response={200: dict, 400: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())
@@ -299,6 +299,10 @@ def parse_receipt_preview(request: HttpRequest, file: UploadedFile = File(...)):
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     try:
         return parser_client.parse_receipt(file.read(), file.name or 'receipt', file.content_type or '')
+    except parser_client.ParserUnavailableError:
+        # Nothing is wrong with the upload — the scanning host is simply off.
+        # 503 (not 400) so the client shows "offline", not "bad receipt".
+        return 503, {'detail': 'Receipt scanning is temporarily offline. Please try again later.'}
     except parser_client.ParserServiceError as exc:
         return 400, {'detail': str(exc)}
 
