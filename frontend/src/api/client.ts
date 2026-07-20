@@ -221,6 +221,8 @@ export const budgetsApi = {
     api.put<Category>(`/budgets/${budgetId}/categories/${categoryId}`, data).then(res => res.data),
   setCategoryArchive: (budgetId: number, categoryId: number, isArchived: boolean): Promise<Category> =>
     api.patch<Category>(`/budgets/${budgetId}/categories/${categoryId}/archive`, { is_archived: isArchived }).then(res => res.data),
+  mergeCategory: (budgetId: number, categoryId: number, sourceCategoryId: number): Promise<Category> =>
+    api.post<Category>(`/budgets/${budgetId}/categories/${categoryId}/merge`, { source_category_id: sourceCategoryId }).then(res => res.data),
   deleteCategory: (budgetId: number, categoryId: number) =>
     api.delete(`/budgets/${budgetId}/categories/${categoryId}`),
 

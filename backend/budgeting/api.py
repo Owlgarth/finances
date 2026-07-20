@@ -17,7 +17,7 @@ from budgeting.schemas import (
     PeriodUpdate,
 )
 from budgeting.services import BudgetService, CategoryBudgetService, PeriodService
-from categories.schemas import CategoryArchive, CategoryCreate, CategoryOut, CategoryUpdate
+from categories.schemas import CategoryArchive, CategoryCreate, CategoryMerge, CategoryOut, CategoryUpdate
 from categories.services import CategoryService
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
@@ -206,6 +206,19 @@ def set_category_archive_status(request: HttpRequest, budget_id: int, category_i
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     return CategoryService.set_archive_status(user, workspace_id, budget_id, category_id, data)
+
+
+@router.post(
+    '/{budget_id}/categories/{category_id}/merge',
+    response={200: CategoryOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def merge_category(request: HttpRequest, budget_id: int, category_id: int, data: CategoryMerge):
+    """Merge another category into this one; the source category is deleted."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return CategoryService.merge(user, workspace_id, budget_id, category_id, data)
 
 
 @router.delete(
