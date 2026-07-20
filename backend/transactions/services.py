@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction as db_transaction
 from django.db.models import Count, F, Sum, Value
@@ -462,6 +462,89 @@ class TransactionService:
             elif item.unit_price is not None:
                 total += item.quantity * item.unit_price
         return total.quantize(Decimal('0.01'))
+
+    @staticmethod
+    def _build_items_from_parsed(trans: Transaction, items: list) -> list[TransactionItem]:
+        """Convert parser-contract item dicts into unsaved TransactionItem instances.
+
+        Defensive against malformed rows: a row with no name or a non-parseable
+        decimal is skipped, never raised on. Position is assigned in printed
+        order across the rows that survive. See services/receipt-parser/CONTRACT.md
+        for the input shape (decimal strings; unit_price/line_total may be null).
+        """
+        built: list[TransactionItem] = []
+        position = 0
+        for raw in items:
+            name = (raw.get('name') or '').strip()
+            if not name:
+                continue
+            try:
+                quantity = Decimal(str(raw.get('quantity') or '1'))
+                unit_price_raw = raw.get('unit_price')
+                unit_price = Decimal(str(unit_price_raw)) if unit_price_raw is not None else None
+                line_total_raw = raw.get('line_total')
+                line_total = Decimal(str(line_total_raw)) if line_total_raw is not None else None
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+            built.append(
+                TransactionItem(
+                    transaction=trans,
+                    position=position,
+                    name=name[:300],
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    line_total=line_total,
+                )
+            )
+            position += 1
+        return built
+
+    @staticmethod
+    @db_transaction.atomic
+    def auto_fill_from_extraction(trans: Transaction, result: dict) -> bool:
+        """Auto-fill a transaction's line items and description from a parsed receipt.
+
+        Called from `extract_attachment` after `AttachmentService.mark_extraction_done`
+        so the parser result is already durable on the attachment row — a failure
+        here can never lose the parsed data.
+
+        This is the server-side twin of the "if blank or 'Receipt', fill from
+        parsed merchant" rule that already lives in two client-side spots:
+        `ExtractionReviewModal.merchantFillsDescription`
+        (frontend/src/components/transactions/ExtractionReviewModal.tsx, L53–59)
+        and `NewFromReceiptModal`, which seeds `description = 'Receipt'` while
+        the receipt-first flow is in progress. All three agree an intentional
+        description is never overwritten.
+
+        Rules (idempotent — a second call is a no-op):
+        - Items are created only when the transaction currently has zero. Never clobbers user-entered rows.
+        - Decimal strings from the parser are converted defensively; malformed rows are skipped, never raised on.
+        - The description is set from `result['merchant']` only when the current
+          description (stripped) is `''` or `'Receipt'`, and the merchant is truthy.
+
+        Re-fetches the transaction by id defensively (this method runs in a task
+        long after it was queued; the transaction may have been deleted).
+
+        Returns True when at least one item row was created.
+        """
+        trans = Transaction.objects.filter(id=trans.id).first()
+        if trans is None:
+            return False
+
+        created_items = False
+        if not trans.items.exists():
+            built = TransactionService._build_items_from_parsed(trans, result.get('items') or [])
+            if built:
+                TransactionItem.objects.bulk_create(built)
+                created_items = True
+
+        merchant = result.get('merchant')
+        current = trans.description.strip()
+        if merchant and (current == '' or current == 'Receipt'):
+            trans.description = merchant
+            trans.save(update_fields=['description'])
+
+        return created_items
 
     @staticmethod
     @db_transaction.atomic
