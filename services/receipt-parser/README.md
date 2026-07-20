@@ -12,8 +12,13 @@ Model access is selected entirely by environment variables, with two backends:
   self-hosted box is down or a hosted fallback is preferred:
   `PARSER_MODEL_PROVIDER=gemini` + `PARSER_GEMINI_API_KEY=<key>`.
 
-Both backends share the same prompt, transcript grounding, and contract-shaped
-structured output; switching is one env change.
+Both backends share the same prompt, transcript grounding, and contract shape;
+switching is one env change. The openai backend uses `json_schema` constrained
+decoding; the gemini backend deliberately uses plain JSON mode — on
+`gemini-3.1-flash-lite`, `responseSchema` forced schema-ordered keys and
+scrambled fields into `warnings`, and `propertyOrdering` fixed that at a ~30×
+output-token cost (whitespace runaway). The prompt carries the shape and
+`normalize()` re-validates everything regardless.
 
 ## Pipeline
 

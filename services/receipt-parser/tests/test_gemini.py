@@ -1,6 +1,8 @@
-"""Gemini backend tests — schema conversion, request payload shape, response
-parsing, the response_schema → plain-JSON fallback, and provider dispatch.
-The HTTP client is faked so nothing leaves the process."""
+"""Gemini backend tests — request payload shape, response parsing, and provider
+dispatch. The HTTP client is faked so nothing leaves the process.
+
+Note there is deliberately NO responseSchema in the payload — see the module
+docstring in app/gemini.py for the measured pathology behind that choice."""
 
 from unittest import mock
 
@@ -20,9 +22,7 @@ def _gemini_settings():
         mock.patch.object(settings, 'gemini_api_key', 'test-key'),
         mock.patch.object(settings, 'gemini_thinking_level', 'low'),
     ):
-        gemini._schema_rejected = False
         yield
-    gemini._schema_rejected = False
 
 
 class _FakeResponse:
@@ -71,30 +71,6 @@ def _fake_http(responses: list[_FakeResponse] | None = None) -> tuple[list, mock
     return requests, patcher
 
 
-class TestSchemaConversion:
-    def test_null_union_becomes_nullable(self):
-        assert gemini._to_gemini_schema({'type': ['string', 'null']}) == {'type': 'STRING', 'nullable': True}
-
-    def test_plain_type_is_uppercased(self):
-        assert gemini._to_gemini_schema({'type': 'number'}) == {'type': 'NUMBER'}
-
-    def test_recurses_properties_items_and_required(self):
-        schema = {
-            'type': 'object',
-            'properties': {'rows': {'type': 'array', 'items': {'type': 'object', 'required': ['name']}}},
-        }
-        converted = gemini._to_gemini_schema(schema)
-        assert converted['type'] == 'OBJECT'
-        assert converted['properties']['rows']['type'] == 'ARRAY'
-        assert converted['properties']['rows']['items'] == {'type': 'OBJECT', 'required': ['name']}
-
-    def test_contract_schema_keeps_unreadable_expressible(self):
-        # No top-level required — {"error": "unreadable"} must stay a valid reply
-        # (mirrors the deliberate looseness of llm.RESPONSE_SCHEMA).
-        assert 'required' not in gemini.GEMINI_RESPONSE_SCHEMA
-        assert gemini.GEMINI_RESPONSE_SCHEMA['properties']['total'] == {'type': 'STRING', 'nullable': True}
-
-
 class TestRequestPayload:
     async def test_payload_shape(self, png_b64):
         requests, patcher = _fake_http()
@@ -117,8 +93,10 @@ class TestRequestPayload:
         config = payload['generationConfig']
         assert config['temperature'] == 0
         assert config['responseMimeType'] == 'application/json'
-        assert config['responseSchema'] == gemini.GEMINI_RESPONSE_SCHEMA
         assert config['thinkingConfig'] == {'thinkingLevel': 'LOW'}
+        # No schema by design — constrained decoding scrambles fields on this
+        # model family (see module docstring). The prompt carries the shape.
+        assert 'responseSchema' not in config
 
     async def test_transcript_is_truncated(self, png_b64):
         requests, patcher = _fake_http()
@@ -158,31 +136,10 @@ class TestResponseParsing:
         with patcher, pytest.raises(ModelUnavailable):
             await gemini.extract([png_b64])
 
-
-class TestSchemaFallback:
-    async def test_400_falls_back_to_plain_json_and_is_remembered(self, png_b64):
-        requests, patcher = _fake_http([_FakeResponse(status_code=400)])
-        with patcher:
-            result = await gemini.extract([png_b64])
-        assert result == RAW_JSON
-        assert 'responseSchema' in requests[0]['json']['generationConfig']
-        assert 'responseSchema' not in requests[1]['json']['generationConfig']
-        # JSON output mode itself is kept — only the schema constraint drops.
-        assert requests[1]['json']['generationConfig']['responseMimeType'] == 'application/json'
-
-        # Subsequent calls in the same process skip the schema entirely.
-        requests, patcher = _fake_http()
-        with patcher:
-            await gemini.extract([png_b64])
-        assert len(requests) == 1
-        assert 'responseSchema' not in requests[0]['json']['generationConfig']
-
-    async def test_server_error_does_not_trigger_fallback(self, png_b64):
-        requests, patcher = _fake_http([_FakeResponse(status_code=503)])
+    async def test_http_error_raises_model_unavailable(self, png_b64):
+        _, patcher = _fake_http([_FakeResponse(status_code=503)])
         with patcher, pytest.raises(ModelUnavailable):
             await gemini.extract([png_b64])
-        assert len(requests) == 1
-        assert gemini._schema_rejected is False
 
 
 class TestProviderDispatch:
