@@ -12,6 +12,11 @@ class TransactionCreate(BaseModel):
 
     amount is positive for income/expense and a signed non-zero delta for
     adjustments (validated in the service, where the type semantics live).
+
+    items is optional (defaults to empty list). When present, the service
+    bulk-creates them in the same atomic block as the transaction. Omitting
+    it — as planned_transactions/tasks.py does — leaves the transaction with
+    zero items, preserving the historical behavior.
     """
 
     date: date
@@ -22,6 +27,7 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     original_amount: Optional[Decimal] = Field(None, gt=0)
     original_currency_code: Optional[str] = Field(None, pattern=r'^[A-Z]{3,8}$')
+    items: list['TransactionItemIn'] = Field(default_factory=list, max_length=200)
 
     @field_validator('description')
     @classmethod
