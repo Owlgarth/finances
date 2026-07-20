@@ -6,6 +6,16 @@ import pytest
 from PIL import Image
 
 from app import ocr
+from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _default_provider():
+    """A local .env (real deployment config, e.g. PARSER_MODEL_PROVIDER=gemini)
+    must not leak into the suite: tests assume the openai default and select
+    the gemini path explicitly where they mean to."""
+    with mock.patch.object(settings, 'model_provider', 'openai'):
+        yield
 
 
 @pytest.fixture(autouse=True)

@@ -108,4 +108,5 @@ absolute benchmark.
 
 | Model | Date | total | curr | date | merch | items |
 |-------|------|-------|------|------|-------|-------|
-| _run `score.py` to fill in_ | | | | | | |
+| gemini-3.1-flash-lite (hybrid, OCR on) | 2026-07-20 | 100% | 100% | 100% | 100% | 100% |
+| gemini-3.1-flash-lite (vision-only, OCR off) | 2026-07-20 | 100% | 100% | 100% | 100% | 100% |
