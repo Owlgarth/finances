@@ -2,17 +2,16 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, ScanLine, CloudOff } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { transactionsApi } from '../api/client'
 import type { Transaction } from '../types'
-import { useAccounts, useBudgets, useMultiCurrency, useExtractionConfig, useWorkspaceCategories } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
-import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
@@ -61,7 +60,6 @@ export default function Transactions() {
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
-  const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
   const { data: categories = [] } = useWorkspaceCategories(false)
@@ -119,7 +117,6 @@ export default function Transactions() {
   const isTouch = useIsTouch()
 
   const [formOpen, setFormOpen] = useState(false)
-  const [receiptOpen, setReceiptOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
   // Touch replacement for the hover-revealed row actions (plan decision 7).
@@ -191,19 +188,6 @@ export default function Transactions() {
         {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
         {canWrite && (
           <div className="flex items-center gap-2 max-sm:hidden">
-            {extractionEnabled && (
-              // Scanning is self-hosted and not always on: stay visible but
-              // disabled while offline so the button never fails on click.
-              <button
-                onClick={() => setReceiptOpen(true)}
-                disabled={!extractionReachable}
-                title={extractionReachable ? undefined : 'The receipt scanner is offline right now'}
-                className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface inline-flex items-center gap-1"
-              >
-                {extractionReachable ? <ScanLine size={13} /> : <CloudOff size={13} />}
-                {extractionReachable ? 'From receipt' : 'Scanning offline'}
-              </button>
-            )}
             <button onClick={openNew} className={primaryButtonClass}>
               <Plus size={13} className="inline mr-1" /> New transaction
             </button>
@@ -339,7 +323,6 @@ export default function Transactions() {
         ]}
       />
       <TransactionFormModal open={formOpen} onClose={() => setFormOpen(false)} transaction={editing} />
-      <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete transaction"
