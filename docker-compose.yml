@@ -92,8 +92,12 @@ services:
       - S3_BUCKET_MEDIA=denarly-media
       - S3_BUCKET_LOGS=denarly-logs
       - S3_EXTERNAL_URL=http://localhost:9000
-      # Receipt parser (R5). Unset PARSER_URL to disable extraction entirely.
-      - PARSER_URL=http://denarly_receipt_parser:8100
+      # Receipt parser (R5) — deployed on the home server next to the LLM and
+      # reached over the tailnet (see services/receipt-parser/README.md §
+      # Deployment). Leave PARSER_URL unset to disable extraction entirely; for
+      # an all-local run, start the parser on the host and use
+      # http://host.docker.internal:8100.
+      - PARSER_URL=${PARSER_URL:-}
       - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
     volumes:
       - ./backend:/app
@@ -102,6 +106,8 @@ services:
       - "8000:8000"
     networks:
       - denarly-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       denarly_db:
         condition: service_healthy
@@ -158,15 +164,31 @@ services:
       - REDIS_URL=redis://denarly_redis:6379
       - CELERY_BROKER_URL=redis://denarly_redis:6379/0
       - CELERY_RESULT_BACKEND=redis://denarly_redis:6379/1
+      # The extraction task reads attachments from S3 and calls the parser —
+      # same values as denarly_api, or it silently can't do either.
+      - USE_S3_STORAGE=true
+      - S3_ENDPOINT_URL=http://rustfs:9000
+      - S3_ACCESS_KEY=rustfsadmin
+      - S3_SECRET_KEY=rustfsadmin
+      - S3_BUCKET_STATIC=denarly-static
+      - S3_BUCKET_MEDIA=denarly-media
+      - S3_BUCKET_LOGS=denarly-logs
+      - S3_EXTERNAL_URL=http://localhost:9000
+      - PARSER_URL=${PARSER_URL:-}
+      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
     networks:
       - denarly-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       denarly_db:
         condition: service_healthy
       denarly_redis:
+        condition: service_healthy
+      denarly_storage:
         condition: service_healthy
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: ["celery", "-A", "config", "worker", "--loglevel=info"]
@@ -198,23 +220,9 @@ services:
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: ["celery", "-A", "config", "beat", "--loglevel=info"]
 
-  denarly_receipt_parser:
-    build:
-      context: ./services/receipt-parser
-      dockerfile: Dockerfile
-    container_name: denarly_receipt_parser
-    environment:
-      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
-      # Point at your vision model. Defaults to a host-run Ollama on the Docker host.
-      - PARSER_MODEL_BASE_URL=${PARSER_MODEL_BASE_URL:-http://host.docker.internal:11434/v1}
-      - PARSER_MODEL_NAME=${PARSER_MODEL_NAME:-qwen2.5-vl}
-      - PARSER_MODEL_API_KEY=${PARSER_MODEL_API_KEY:-not-needed}
-    ports:
-      - "8100:8100"
-    networks:
-      - denarly-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  # The receipt parser is NOT part of this stack: it deploys on the home server
+  # next to the LLM (services/receipt-parser/docker-compose.yml) and is reached
+  # via PARSER_URL over the tailnet. See services/receipt-parser/README.md.
 
 volumes:
   postgres_data_dev:
