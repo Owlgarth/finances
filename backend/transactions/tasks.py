@@ -8,6 +8,7 @@ from django.conf import settings
 from transactions.attachments import AttachmentService
 from transactions.models import TransactionAttachment
 from transactions.parser_client import ParserServiceError, ParserUnavailableError, parse_receipt
+from transactions.services import TransactionService
 
 logger = logging.getLogger(__name__)
 
@@ -61,3 +62,16 @@ def extract_attachment(self, attachment_id: int) -> None:
         return
 
     AttachmentService.mark_extraction_done(attachment, result)
+
+    created_items = TransactionService.auto_fill_from_extraction(attachment.transaction, result)
+    if created_items:
+        logger.info(
+            'Extraction auto-filled items for transaction %s from attachment %s.',
+            attachment.transaction_id,
+            attachment_id,
+        )
+    else:
+        logger.info(
+            'Extraction did not auto-fill items for transaction %s (already populated or nothing to fill).',
+            attachment.transaction_id,
+        )

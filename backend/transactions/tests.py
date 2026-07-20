@@ -19,7 +19,7 @@ from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
-from transactions.factories import TransactionFactory
+from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction, TransactionAttachment, TransactionItem
 from transactions.parser_client import ParserServiceError, ParserUnavailableError, parse_receipt
 from transactions.services import TransactionService
@@ -1029,3 +1029,132 @@ class TestExtractionTaskConfig(TestCase):
         self.assertEqual(extract_attachment.retry_backoff, settings.PARSER_EXTRACT_RETRY_BACKOFF)
         self.assertEqual(extract_attachment.retry_backoff_max, settings.PARSER_EXTRACT_RETRY_BACKOFF_MAX)
         self.assertTrue(extract_attachment.retry_jitter)
+
+
+class TestAutoFillFromExtraction(TransactionTestCase):
+    """auto_fill_from_extraction — server-side auto-fill from a parsed receipt.
+
+    Covers: items created when zero, description filled from merchant, no-clobber
+    guards, bad-decimal skipping, attachment-result regression, idempotency,
+    and a missing transaction (deleted between queue and run).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='Receipt')
+
+    def _result(self, **overrides):
+        """Return a fresh copy of CONTRACT_RESULT so tests can't mutate the shared constant."""
+        result = {**CONTRACT_RESULT}
+        if 'items' in overrides:
+            result['items'] = [dict(i) for i in overrides.pop('items')]
+        result.update(overrides)
+        return result
+
+    def test_creates_items_and_fills_description_when_blank(self):
+        self.trans.description = ''
+        self.trans.save(update_fields=['description'])
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertTrue(created)
+        self.assertEqual(
+            list(self.trans.items.values_list('name', flat=True)),
+            ['Bread', 'Butter'],
+        )
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.description, 'Lidl')
+
+    def test_fills_description_when_placeholder_receipt(self):
+        # setUp already sets description = 'Receipt'.
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertTrue(created)
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.description, 'Lidl')
+
+    def test_does_not_touch_items_when_already_populated(self):
+        TransactionItemFactory(transaction=self.trans, position=0, name='Existing row')
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertFalse(created)
+        names = list(self.trans.items.values_list('name', flat=True))
+        self.assertEqual(names, ['Existing row'])
+
+    def test_does_not_overwrite_intentional_description(self):
+        self.trans.description = 'Groceries'
+        self.trans.save(update_fields=['description'])
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        # Items are still auto-created (no existing rows); only description is preserved.
+        self.assertTrue(created)
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.description, 'Groceries')
+
+    def test_skips_rows_with_bad_decimals_keeps_good_ones(self):
+        result = self._result(
+            items=[
+                {'name': 'Bread', 'quantity': '1', 'unit_price': '4.49', 'line_total': '4.49'},
+                {'name': 'Bad', 'quantity': 'NaN', 'unit_price': 'oops', 'line_total': 'nope'},
+                {'name': 'Butter', 'quantity': '2', 'unit_price': '7.99', 'line_total': '15.98'},
+            ],
+        )
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, result)
+
+        self.assertTrue(created)
+        self.assertEqual(
+            list(self.trans.items.values_list('name', flat=True)),
+            ['Bread', 'Butter'],
+        )
+        # Positions are dense across the surviving rows (Bad is dropped, Butter is position 1).
+        self.assertEqual(
+            list(self.trans.items.values_list('position', flat=True)),
+            [0, 1],
+        )
+
+    def test_result_still_stored_on_attachment(self):
+        """Regression: auto-fill must not interfere with the existing
+        mark_extraction_done behavior that persists the result on the attachment."""
+        attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg',
+            filename='r.jpg',
+            content_type='image/jpeg',
+            size=10,
+            uploaded_by=self.user,
+        )
+        # Storage is disabled by default in tests; the task reads bytes via
+        # AttachmentService.read_bytes → StorageService.get_file. Mock both so
+        # the task runs end-to-end. Mirrors TestExtraction.setUp.
+        with (
+            mock.patch('transactions.attachments.StorageService') as storage,
+            mock.patch('transactions.tasks.parse_receipt', return_value=CONTRACT_RESULT),
+        ):
+            storage._is_enabled.return_value = True
+            storage.get_file.return_value = b'imagebytes'
+            extract_attachment(attachment.id)
+
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.extraction_status, 'done')
+        self.assertEqual(attachment.extraction_result['total'], '20.47')
+        # And the transaction was auto-filled as a side effect of the task.
+        self.trans.refresh_from_db()
+        self.assertEqual(self.trans.items.count(), 2)
+        self.assertEqual(self.trans.description, 'Lidl')
+
+    def test_idempotent_second_call_is_noop_on_items(self):
+        TransactionService.auto_fill_from_extraction(self.trans, self._result())
+        self.assertEqual(self.trans.items.count(), 2)
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertFalse(created)
+        self.assertEqual(self.trans.items.count(), 2)
+
+    def test_missing_transaction_does_not_raise(self):
+        self.trans.delete()
+        # A deleted transaction should not blow up the task — the method just returns False.
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+        self.assertFalse(created)
