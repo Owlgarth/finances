@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Plus, Check, Settings2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Merge, Plus, Check, Settings2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
@@ -11,7 +11,7 @@ import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
-import { inputClass, primaryButtonClass } from '../components/common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Per-budget currency-switcher order — a display preference, stored client-side
 // like the theme ('denarly_theme'), keyed per budget since currency sets differ.
@@ -97,10 +97,29 @@ export default function BudgetDetailPage() {
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [cellValue, setCellValue] = useState('')
 
-  // Row/card highlight — a purely visual "where was I looking" marker; click
-  // toggles it, nothing else reads it.
+  // Row/card highlight — click toggles it. Besides the visual "where was I
+  // looking" marker, the selected category is the target of the merge flow.
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const toggleSelected = (id: number) => setSelectedCategory((prev) => (prev === id ? null : id))
+
+  // Merge flow: fold another category (source) into the selected one (target).
+  const selectedCategoryObj = categories.find((c) => c.id === selectedCategory) ?? null
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeSourceId, setMergeSourceId] = useState<number | null>(null)
+  const mergeCategory = useMutation({
+    mutationFn: (sourceId: number) => budgetsApi.mergeCategory(budgetId, selectedCategory!, sourceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', budgetId] })
+      queryClient.invalidateQueries({ queryKey: ['workspace-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['planned'] })
+      toast.success('Categories merged')
+      setMergeOpen(false)
+      setMergeSourceId(null)
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to merge categories')),
+  })
 
   const selectedPeriod = allPeriods.find((p) => p.id === periodId) ?? null
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -464,6 +483,55 @@ export default function BudgetDetailPage() {
           <button type="submit" className={primaryButtonClass}><Plus size={13} /></button>
         </form>
       )}
+
+      {canWrite && selectedCategoryObj && categories.length > 1 && (
+        <button
+          type="button"
+          onClick={() => { setMergeSourceId(null); setMergeOpen(true) }}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text transition-colors touch-hit"
+        >
+          <Merge size={13} /> Merge another category into “{selectedCategoryObj.name}”…
+        </button>
+      )}
+
+      <Modal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        size="sm"
+        className="p-6"
+        title="Merge categories"
+      >
+        <p className="text-xs text-text-muted -mt-3 mb-4">
+          All transactions, planned transactions and planned amounts of the category you pick will
+          move to “{selectedCategoryObj?.name}”, and the picked category will be deleted. Planned
+          amounts for the same period are added together. This cannot be undone.
+        </p>
+        <div className="mb-4">
+          <label className={labelClass}>Category to merge in</label>
+          <Select
+            value={mergeSourceId}
+            onChange={setMergeSourceId}
+            options={categories
+              .filter((c) => c.id !== selectedCategory)
+              .map((c) => ({ value: c.id, label: c.name }))}
+            placeholder="Select category"
+            aria-label="Category to merge in"
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setMergeOpen(false)} className={secondaryButtonClass}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (mergeSourceId != null) mergeCategory.mutate(mergeSourceId) }}
+            disabled={mergeSourceId == null || mergeCategory.isPending}
+            className={primaryButtonClass}
+          >
+            {mergeCategory.isPending ? 'Merging…' : 'Merge'}
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         open={orderConfigOpen}
