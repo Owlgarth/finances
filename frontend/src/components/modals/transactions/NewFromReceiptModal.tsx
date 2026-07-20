@@ -60,6 +60,8 @@ export default function NewFromReceiptModal({ open, onClose }: Props) {
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
     },
+    // A 503 here means the self-hosted scanner is off, not a bad receipt — the
+    // backend's detail already says so, so surface it rather than a generic error.
     onError: (error) => toast.error(getApiErrorMessage(error, 'Could not read the receipt')),
   })
 

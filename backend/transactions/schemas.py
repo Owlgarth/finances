@@ -190,6 +190,12 @@ class ExtractionResultOut(BaseModel):
 
 
 class ExtractionConfigOut(BaseModel):
-    """Whether receipt extraction is configured. Drives UI affordance visibility."""
+    """Whether receipt extraction is configured, and whether it is answering now.
+
+    `enabled` drives affordance visibility; `reachable` drives whether they are
+    usable — the parser runs on an intermittently-available host, so configured
+    but offline is a normal state the UI relabels rather than hides.
+    """
 
     enabled: bool
+    reachable: bool

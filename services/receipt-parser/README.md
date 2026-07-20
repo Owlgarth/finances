@@ -139,8 +139,10 @@ error.** When it is off the backend degrades rather than failing:
   short-TTL cached), so the UI relabels the "From receipt" affordance as offline
   instead of letting an upload fail.
 - Queued attachment extractions stay retryable — the Celery task retries with
-  exponential backoff over roughly a day, so receipts uploaded while the home
-  server is down are picked up when it returns.
+  exponential backoff over ~12 hours (tunable via `PARSER_EXTRACT_*` on the
+  backend), so receipts uploaded while the home server is down are picked up
+  when it returns. A 4xx from `/parse` is *not* retried: that file would be
+  rejected identically every time.
 
 If `PARSER_URL` is unset entirely, the backend hides every extraction affordance —
 the service is fully optional.
