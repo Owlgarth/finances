@@ -32,7 +32,7 @@ async def parser_error_handler(_request: Request, exc: ParserError) -> JSONRespo
 @app.get('/health', response_model=HealthResult, responses={503: {'model': ErrorResult}})
 async def health() -> HealthResult:
     await llm.ping()
-    return HealthResult(status='ok', model=settings.model_name)
+    return HealthResult(status='ok', model=settings.active_model_name)
 
 
 @app.post('/parse', response_model=ParseResult, responses={400: {'model': ErrorResult}})

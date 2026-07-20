@@ -4,9 +4,16 @@ A small, **stateless** FastAPI service that turns a receipt image or PDF into
 structured JSON. It implements [`CONTRACT.md`](./CONTRACT.md) v1 and persists
 nothing — one request in, one JSON document out.
 
-It talks to any **OpenAI-compatible** vision chat-completions endpoint, selected
-entirely by environment variables. Point it at a local runtime (Ollama, vLLM) or
-a hosted provider without touching code.
+Model access is selected entirely by environment variables, with two backends:
+
+- **`openai`** (default) — any OpenAI-compatible vision chat-completions
+  endpoint: a local runtime (llama.cpp, Ollama, vLLM) or a hosted provider.
+- **`gemini`** — the Google Gemini API (native REST, no SDK), for when the
+  self-hosted box is down or a hosted fallback is preferred:
+  `PARSER_MODEL_PROVIDER=gemini` + `PARSER_GEMINI_API_KEY=<key>`.
+
+Both backends share the same prompt, transcript grounding, and contract-shaped
+structured output; switching is one env change.
 
 ## Pipeline
 
@@ -69,11 +76,16 @@ Copy `.env.example` to `.env` and edit. All variables are prefixed `PARSER_`:
 | variable | default | purpose |
 |----------|---------|---------|
 | `PARSER_API_TOKEN` | *(empty)* | Bearer token required from callers. Empty disables auth — local/testing only. |
-| `PARSER_MODEL_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible chat-completions endpoint. |
-| `PARSER_MODEL_NAME` | `qwen2.5-vl` | Model id at that endpoint. |
-| `PARSER_MODEL_API_KEY` | `not-needed` | Key for the endpoint (any value for local runtimes). |
-| `PARSER_MODEL_TIMEOUT_SECONDS` | `90` | Per-request model timeout. |
-| `PARSER_STRUCTURED_OUTPUT` | `json_schema` | `json_schema` constrains decoding to the contract shape; a 4xx rejection falls back to `json_object` for the rest of the process. |
+| `PARSER_MODEL_PROVIDER` | `openai` | Extraction backend: `openai` (any OpenAI-compatible endpoint) or `gemini` (Google Gemini API). |
+| `PARSER_MODEL_BASE_URL` | `http://localhost:11434/v1` | *(openai)* OpenAI-compatible chat-completions endpoint. |
+| `PARSER_MODEL_NAME` | `qwen2.5-vl` | *(openai)* Model id at that endpoint. |
+| `PARSER_MODEL_API_KEY` | `not-needed` | *(openai)* Key for the endpoint (any value for local runtimes). |
+| `PARSER_MODEL_TIMEOUT_SECONDS` | `90` | Per-request model timeout (both providers). |
+| `PARSER_STRUCTURED_OUTPUT` | `json_schema` | *(openai)* `json_schema` constrains decoding to the contract shape; a 4xx rejection falls back to `json_object` for the rest of the process. |
+| `PARSER_GEMINI_API_KEY` | *(empty)* | *(gemini)* Google AI Studio API key — required when the provider is `gemini`. |
+| `PARSER_GEMINI_MODEL` | `gemini-3.1-flash-lite` | *(gemini)* Gemini model id. |
+| `PARSER_GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` | *(gemini)* API base (override for testing/proxies). |
+| `PARSER_GEMINI_THINKING_LEVEL` | `low` | *(gemini)* Thinking level (`low`/`medium`/`high`); empty leaves the provider default. Receipts are simple — low keeps latency and cost down. |
 | `PARSER_MAX_FILE_MB` | `15` | Upload size cap. |
 | `PARSER_PDF_RENDER_SCALE` | `2.0` | PDF rasterization scale (~144 DPI at 2.0). |
 | `PARSER_PDF_MAX_PAGES` | `10` | Pages beyond this are dropped (adds `multi_page_merged`). |
