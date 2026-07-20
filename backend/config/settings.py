@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 from config.utils import get_int_env
@@ -40,6 +41,9 @@ cors_origins = _cors_env.split(',') if _cors_env else []
 CSRF_TRUSTED_ORIGINS = cors_origins.copy()
 CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_CREDENTIALS = True
+# Extend the library default with our custom request headers. The library
+# compares lowercased header names, so the entries here are lowercase.
+CORS_ALLOW_HEADERS = list(default_headers) + ['idempotency-key']
 
 # Application definition
 
