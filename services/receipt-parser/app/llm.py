@@ -105,7 +105,14 @@ async def _complete(content: list[dict], response_format: dict) -> str:
         )
         response.raise_for_status()
         data = response.json()
-    return data['choices'][0]['message']['content']
+    content = data['choices'][0]['message']['content']
+    if not content:
+        # Thinking models (e.g. Gemma 4 behind llama.cpp) put their reasoning in a
+        # separate reasoning_content field; if generation stops before the answer
+        # starts, the API returns HTTP 200 with empty content and finish_reason
+        # "length". That is a model failure, not an unreadable receipt.
+        raise ModelUnavailable('The extraction model returned an empty response.')
+    return content
 
 
 async def extract(images_b64: list[str], transcript: str | None = None) -> str:
