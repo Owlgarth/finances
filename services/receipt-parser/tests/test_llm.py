@@ -92,6 +92,23 @@ class TestTranscriptBlock:
         assert [block['type'] for block in content] == ['text', 'image_url']
 
 
+class TestEmptyContent:
+    """A thinking model that runs out of tokens returns 200 with empty content
+    (answer text goes to reasoning_content) — must map to ModelUnavailable."""
+
+    @pytest.mark.parametrize('content', ['', None])
+    async def test_empty_content_raises_model_unavailable(self, png_b64, content):
+        from app.errors import ModelUnavailable
+
+        def _empty_json(_self) -> dict:
+            return {'choices': [{'message': {'content': content, 'reasoning_content': 'thinking…'}}]}
+
+        requests, patcher = _fake_http()
+        with patcher, mock.patch.object(_FakeResponse, 'json', _empty_json), pytest.raises(ModelUnavailable):
+            await llm.extract([png_b64])
+        assert len(requests) == 1  # empty content is not a schema rejection — no json_object fallback
+
+
 class TestStructuredOutput:
     async def test_default_mode_sends_json_schema(self, png_b64):
         (payload,) = await _extract_capturing([png_b64], None)
