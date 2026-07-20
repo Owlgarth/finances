@@ -349,6 +349,30 @@ class TransactionService:
         return {'items': items}
 
     @staticmethod
+    def _build_items_from_schema(trans: Transaction, items_in: list) -> list[TransactionItem]:
+        """Convert TransactionItemIn schemas into unsaved TransactionItem instances.
+
+        Position is assigned in list order via enumerate, matching replace_items.
+        Unlike _build_items_from_parsed, no defensive parsing is needed —
+        Pydantic has already validated every field by the time we get here,
+        so input order maps 1:1 to stored positions and no rows are dropped.
+
+        Returns unsaved instances; the caller does bulk_create so the rows are
+        written inside its own @db_transaction.atomic block.
+        """
+        return [
+            TransactionItem(
+                transaction=trans,
+                position=position,
+                name=item.name,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                line_total=item.line_total,
+            )
+            for position, item in enumerate(items_in)
+        ]
+
+    @staticmethod
     @db_transaction.atomic
     def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
         """Create a transaction on an account, lazily materializing the derived period."""
@@ -372,6 +396,8 @@ class TransactionService:
             created_by=user,
             updated_by=user,
         )
+        if data.items:
+            TransactionItem.objects.bulk_create(TransactionService._build_items_from_schema(trans, data.items))
         TransactionService._touch_period(user, category, data.date)
         return trans
 

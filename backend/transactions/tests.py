@@ -85,6 +85,59 @@ class TestCreateTransaction(TransactionTestCase):
         self.assertStatus(400)
 
 
+class TestCreateTransactionWithItems(TransactionTestCase):
+    """Inline items on POST /transactions (Q1=A: optional, atomic, backward-compatible)."""
+
+    def test_create_with_items_persists_them_in_order(self):
+        items = [
+            {'name': 'Bread', 'quantity': '1', 'unit_price': '4.99', 'line_total': '4.99'},
+            {'name': 'Milk', 'quantity': '2', 'unit_price': '3.99', 'line_total': '7.98'},
+            {'name': 'Cheese', 'quantity': '1', 'unit_price': '11.00', 'line_total': '11.00'},
+        ]
+        data = self.post('/api/transactions', self._payload(items=items), **self.auth_headers())
+        self.assertStatus(201)
+        items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([i['name'] for i in items_data['items']], ['Bread', 'Milk', 'Cheese'])
+        self.assertEqual([i['position'] for i in items_data['items']], [0, 1, 2])
+        self.assertEqual(items_data['items_total'], '23.97')
+
+    def test_create_without_items_is_backward_compatible(self):
+        """Regression for planned_transactions/tasks.py: it constructs TransactionCreate without items=."""
+        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
+        self.assertEqual(items_data['items'], [])
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=data['id']).count(), 0)
+
+    def test_create_with_empty_items_list_is_noop(self):
+        data = self.post('/api/transactions', self._payload(items=[]), **self.auth_headers())
+        self.assertStatus(201)
+        items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
+        self.assertEqual(items_data['items'], [])
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=data['id']).count(), 0)
+
+    def test_create_items_exceeding_max_length_rejected(self):
+        too_many = [{'name': f'Item {i}', 'line_total': '1.00'} for i in range(201)]
+        self.post('/api/transactions', self._payload(items=too_many), **self.auth_headers())
+        self.assertStatus(422)  # Pydantic max_length=200
+
+    def test_create_with_items_does_not_change_amount_or_balance(self):
+        """Items are informational — the transaction's amount stays authoritative (invariant from
+        TestTransactionItems.test_items_do_not_change_amount_or_balance)."""
+        balance_before = AccountService.balance(self.account)
+        data = self.post(
+            '/api/transactions',
+            self._payload(amount='50.00', items=[{'name': 'X', 'line_total': '999.99'}]),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        trans = Transaction.objects.get(id=data['id'])
+        self.assertEqual(trans.amount, Decimal('50.00'))  # not 999.99
+        # opening_balance 100.00 − expense 50.00
+        self.assertEqual(AccountService.balance(self.account), balance_before - Decimal('50.00'))
+
+
 class TestAdjustments(TransactionTestCase):
     def test_negative_adjustment_ok(self):
         data = self.post(
