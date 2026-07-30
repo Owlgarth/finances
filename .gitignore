@@ -17,6 +17,7 @@ IMPLEMENTATION_PLAN.md
 # AI Tools
 .plans
 .opencode-data/
+.claude/
 
 # Python
 __pycache__/
