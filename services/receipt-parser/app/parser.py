@@ -106,6 +106,27 @@ def _apply_grounding(
             confidence.items = min(confidence.items, _UNGROUNDED_CAP)
 
 
+def _build_item(raw_item) -> Item | None:
+    """One contract Item from one untrusted model row, or None for junk rows."""
+    if not isinstance(raw_item, dict) or not raw_item.get('name'):
+        return None
+    return Item(
+        name=str(raw_item['name']).strip(),
+        quantity=_to_quantity_string(raw_item.get('quantity')),
+        unit_price=_to_decimal_string(raw_item.get('unit_price')),
+        line_total=_to_decimal_string(raw_item.get('line_total')),
+        confidence=_clamp_confidence(raw_item.get('confidence')),
+    )
+
+
+def _item_math_mismatch(item: Item) -> bool:
+    """Whether quantity × unit_price disagrees with the printed line_total by > 1 cent."""
+    if item.unit_price is None or item.line_total is None:
+        return False
+    expected = (Decimal(item.quantity) * Decimal(item.unit_price)).quantize(_CENTS, rounding=ROUND_HALF_UP)
+    return abs(expected - Decimal(item.line_total)) > _CENTS
+
+
 def _sum_line_totals(items: list[Item]) -> Decimal:
     total = Decimal('0')
     for item in items:
@@ -127,21 +148,12 @@ def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
 
     items: list[Item] = []
     for raw_item in data.get('items', []) or []:
-        if not isinstance(raw_item, dict) or not raw_item.get('name'):
+        item = _build_item(raw_item)
+        if item is None:
             continue
-        item = Item(
-            name=str(raw_item['name']).strip(),
-            quantity=_to_quantity_string(raw_item.get('quantity')),
-            unit_price=_to_decimal_string(raw_item.get('unit_price')),
-            line_total=_to_decimal_string(raw_item.get('line_total')),
-            confidence=_clamp_confidence(raw_item.get('confidence')),
-        )
         items.append(item)
-        # Derived per-row math check.
-        if item.unit_price is not None and item.line_total is not None:
-            expected = (Decimal(item.quantity) * Decimal(item.unit_price)).quantize(_CENTS, rounding=ROUND_HALF_UP)
-            if abs(expected - Decimal(item.line_total)) > _CENTS:
-                warnings.add('item_math_mismatch')
+        if _item_math_mismatch(item):
+            warnings.add('item_math_mismatch')
 
     total = _to_decimal_string(data.get('total'))
     currency = data.get('currency')

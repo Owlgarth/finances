@@ -1,3 +1,3 @@
-"""Stateless receipt parser service. See CONTRACT.md for the frozen v1 contract."""
+"""Stateless receipt parser service. See API.md for the frozen v1 contract."""
 
 SCHEMA_VERSION = '1'

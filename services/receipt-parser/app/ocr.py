@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from functools import cache
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image
@@ -29,36 +30,42 @@ def _engine():
     return RapidOCR()
 
 
+class _Word(NamedTuple):
+    x_left: float
+    y_center: float
+    height: float
+    text: str
+
+
 def _group_lines(results: list) -> str:
     """Rebuild text lines from (box, text, score) triples.
 
     Word boxes are grouped into lines by y-center proximity, each line sorted by
     x — preserving the "name …… price" row structure of receipts.
     """
-    words: list[tuple[float, float, float, str]] = []  # (x_left, y_center, height, text)
+    words: list[_Word] = []
     for box, text, _score in results:
         text = str(text).strip()
         if not text:
             continue
         xs = [point[0] for point in box]
         ys = [point[1] for point in box]
-        words.append((min(xs), (min(ys) + max(ys)) / 2, max(ys) - min(ys), text))
-    words.sort(key=lambda word: word[1])
+        words.append(_Word(min(xs), (min(ys) + max(ys)) / 2, max(ys) - min(ys), text))
+    words.sort(key=lambda word: word.y_center)
 
-    lines: list[list[tuple[float, float, float, str]]] = []
+    lines: list[list[_Word]] = []
     centers: list[float] = []
     for word in words:
-        x_left, y_center, height, _text = word
-        if lines and abs(y_center - centers[-1]) <= max(height, 1.0) * LINE_MERGE_FACTOR:
+        if lines and abs(word.y_center - centers[-1]) <= max(word.height, 1.0) * LINE_MERGE_FACTOR:
             lines[-1].append(word)
-            centers[-1] = sum(w[1] for w in lines[-1]) / len(lines[-1])
+            centers[-1] = sum(w.y_center for w in lines[-1]) / len(lines[-1])
         else:
             lines.append([word])
-            centers.append(y_center)
+            centers.append(word.y_center)
 
     for line in lines:
-        line.sort(key=lambda w: w[0])
-    return '\n'.join(' '.join(w[3] for w in line) for line in lines)
+        line.sort(key=lambda w: w.x_left)
+    return '\n'.join(' '.join(w.text for w in line) for line in lines)
 
 
 def transcribe(image: Image.Image) -> str | None:

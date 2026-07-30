@@ -1,7 +1,7 @@
 [project]
 name = "receipt-parser"
 version = "0.2.0"
-description = "Stateless receipt extraction service (implements CONTRACT.md v1)."
+description = "Stateless receipt extraction service (implements API.md v1)."
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",

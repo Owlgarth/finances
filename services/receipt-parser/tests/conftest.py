@@ -11,10 +11,10 @@ from app.config import settings
 
 @pytest.fixture(autouse=True)
 def _default_provider():
-    """A local .env (real deployment config, e.g. PARSER_MODEL_PROVIDER=gemini)
-    must not leak into the suite: tests assume the openai default and select
-    the gemini path explicitly where they mean to."""
-    with mock.patch.object(settings, 'model_provider', 'openai'):
+    """A local .env (real deployment config, e.g. PARSER_MODEL_PROVIDER=gemini
+    or PARSER_API_TOKEN=...) must not leak into the suite: tests assume the
+    openai default and no auth, and patch both explicitly where they mean to."""
+    with mock.patch.object(settings, 'model_provider', 'openai'), mock.patch.object(settings, 'api_token', ''):
         yield
 
 

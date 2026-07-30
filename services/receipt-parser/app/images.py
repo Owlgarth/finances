@@ -79,6 +79,20 @@ def _encode_png(image: Image.Image) -> str:
     return base64.b64encode(buffer.getvalue()).decode('ascii')
 
 
+def _pdf_transcript(pages: list[Image.Image], page_texts: list[str]) -> tuple[str | None, str | None, bool]:
+    """Transcript for a PDF as (transcript, source, ocr_unavailable).
+
+    A born-digital PDF's text layer wins; a scanned PDF (useless text layer)
+    falls back to OCR of the rendered pages; no OCR output means vision-only.
+    """
+    if sum(len(text.strip()) for text in page_texts) > PDF_TEXT_MIN_CHARS_PER_PAGE * len(pages):
+        return '\f'.join(page_texts), 'pdf_text', False
+    ocr_texts = [ocr.transcribe(page) or '' for page in pages]
+    if any(ocr_texts):
+        return '\f'.join(ocr_texts), 'ocr', False
+    return None, None, True
+
+
 def _render_pdf(data: bytes) -> DecodedInput:
     """Render up to pdf_max_pages PDF pages to PNGs."""
     try:
@@ -97,20 +111,7 @@ def _render_pdf(data: bytes) -> DecodedInput:
     if not pages:
         raise UnreadableInput('The PDF has no renderable pages.')
 
-    transcript = None
-    transcript_source = None
-    ocr_unavailable = False
-    if sum(len(text.strip()) for text in page_texts) > PDF_TEXT_MIN_CHARS_PER_PAGE * len(pages):
-        transcript = '\f'.join(page_texts)
-        transcript_source = 'pdf_text'
-    else:
-        # Scanned PDF — the text layer is useless; OCR the rendered pages.
-        ocr_texts = [ocr.transcribe(page) or '' for page in pages]
-        if any(ocr_texts):
-            transcript = '\f'.join(ocr_texts)
-            transcript_source = 'ocr'
-        else:
-            ocr_unavailable = True
+    transcript, transcript_source, ocr_unavailable = _pdf_transcript(pages, page_texts)
     return DecodedInput(
         images_b64=[_encode_png(page) for page in pages],
         transcript=transcript,

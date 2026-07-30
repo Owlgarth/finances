@@ -15,7 +15,7 @@ Content-Type: multipart/form-data
 
 | field | type | required | notes |
 |-------|------|----------|-------|
-| `file` | binary | yes | JPEG, PNG, HEIC, or PDF. Size cap enforced by the service (default 15 MB). |
+| `file` | binary | yes | JPEG, PNG, WebP, HEIC, or PDF. Size cap enforced by the service (default 15 MB). |
 
 ```
 GET /health
@@ -85,7 +85,7 @@ reach its configured model provider, `503` with the error shape otherwise.
 |------|---------|
 | `currency_inferred` | Currency not printed; inferred from symbol or locale. |
 | `total_missing` | No grand total found; `total` is `null`. |
-| `total_mismatch` | Σ`line_total` differs from `total` by more than 0.01. |
+| `total_mismatch` | `line_total` differs from `total` by more than 0.01. |
 | `item_math_mismatch` | Some row's `quantity × unit_price ≠ line_total`. |
 | `partially_readable` | Part of the receipt was unreadable; items may be missing. |
 | `multi_page_merged` | Input was a multi-page PDF; pages were merged into one result. |
@@ -125,7 +125,7 @@ the service never returns a bare `500` for foreseeable conditions:
 
 | HTTP | `error.code` | meaning |
 |------|--------------|---------|
-| 400 | `unsupported_media_type` | Not JPEG/PNG/HEIC/PDF. |
+| 400 | `unsupported_media_type` | Not JPEG/PNG/WebP/HEIC/PDF. |
 | 400 | `file_too_large` | Above the configured size cap. |
 | 401 | `unauthorized` | Missing/invalid bearer token. |
 | 422 | `unreadable_input` | Decodable file, but no receipt content extractable. |
