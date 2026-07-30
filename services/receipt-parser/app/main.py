@@ -1,4 +1,4 @@
-"""FastAPI app exposing POST /parse and GET /health per CONTRACT.md v1."""
+"""FastAPI app exposing POST /parse and GET /health per API.md v1."""
 
 from __future__ import annotations
 

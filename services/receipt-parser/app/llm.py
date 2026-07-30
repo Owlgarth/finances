@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 )
 
 
-# The contract shape (CONTRACT.md v1) as a JSON schema for constrained decoding.
+# The contract shape (API.md v1) as a JSON schema for constrained decoding.
 # Deliberately permissive — no top-level `required`, no additionalProperties:false —
 # so the {"error": "unreadable"} reply stays expressible and lax OpenAI-compatible
 # servers (vLLM, llama.cpp, Ollama) accept it. normalize() re-validates everything.
@@ -105,14 +105,43 @@ async def _complete(content: list[dict], response_format: dict) -> str:
         )
         response.raise_for_status()
         data = response.json()
-    content = data['choices'][0]['message']['content']
-    if not content:
+    text = data['choices'][0]['message']['content']
+    if not text:
         # Thinking models (e.g. Gemma 4 behind llama.cpp) put their reasoning in a
         # separate reasoning_content field; if generation stops before the answer
         # starts, the API returns HTTP 200 with empty content and finish_reason
         # "length". That is a model failure, not an unreadable receipt.
         raise ModelUnavailable('The extraction model returned an empty response.')
+    return text
+
+
+def _build_content(images_b64: list[str], transcript: str | None) -> list[dict]:
+    """User-message parts: instruction, then images, then the advisory transcript."""
+    content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
+    for image in images_b64:
+        content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
+    if transcript:
+        snippet = transcript[: settings.transcript_max_chars]
+        content.append({'type': 'text', 'text': TRANSCRIPT_PREAMBLE + snippet})
     return content
+
+
+async def _complete_with_fallback(content: list[dict]) -> str:
+    """Try json_schema constrained decoding; on a 4xx rejection, latch to json_object."""
+    global _schema_rejected
+    if settings.structured_output == 'json_schema' and not _schema_rejected:
+        try:
+            return await _complete(content, _json_schema_format())
+        except httpx.HTTPStatusError as exc:
+            if not (400 <= exc.response.status_code < 500):
+                raise
+            _schema_rejected = True
+            logger.warning(
+                'Model endpoint rejected json_schema response_format (HTTP %s); '
+                'falling back to json_object for the rest of this process.',
+                exc.response.status_code,
+            )
+    return await _complete(content, {'type': 'json_object'})
 
 
 async def extract(images_b64: list[str], transcript: str | None = None) -> str:
@@ -121,34 +150,15 @@ async def extract(images_b64: list[str], transcript: str | None = None) -> str:
     Dispatches on PARSER_MODEL_PROVIDER; the rest of this module is the
     OpenAI-compatible backend.
     """
-    global _schema_rejected
     if settings.model_provider == 'gemini':
         # Imported lazily: gemini.py imports this module for the shared prompt
         # and schema, so a top-level import here would be circular.
         from app import gemini
 
         return await gemini.extract(images_b64, transcript)
-    content: list[dict] = [{'type': 'text', 'text': 'Extract this receipt.'}]
-    for image in images_b64:
-        content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{image}'}})
-    if transcript:
-        snippet = transcript[: settings.transcript_max_chars]
-        content.append({'type': 'text', 'text': TRANSCRIPT_PREAMBLE + snippet})
 
     try:
-        if settings.structured_output == 'json_schema' and not _schema_rejected:
-            try:
-                return await _complete(content, _json_schema_format())
-            except httpx.HTTPStatusError as exc:
-                if not (400 <= exc.response.status_code < 500):
-                    raise
-                _schema_rejected = True
-                logger.warning(
-                    'Model endpoint rejected json_schema response_format (HTTP %s); '
-                    'falling back to json_object for the rest of this process.',
-                    exc.response.status_code,
-                )
-        return await _complete(content, {'type': 'json_object'})
+        return await _complete_with_fallback(_build_content(images_b64, transcript))
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
         raise ModelUnavailable('The extraction model is unavailable or returned an unexpected response.') from exc
 

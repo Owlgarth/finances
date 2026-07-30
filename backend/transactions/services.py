@@ -585,7 +585,7 @@ class TransactionService:
 
         Defensive against malformed rows: a row with no name or a non-parseable
         decimal is skipped, never raised on. Position is assigned in printed
-        order across the rows that survive. See services/receipt-parser/CONTRACT.md
+        order across the rows that survive. See services/receipt-parser/API.md
         for the input shape (decimal strings; unit_price/line_total may be null).
         """
         built: list[TransactionItem] = []
