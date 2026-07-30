@@ -26,6 +26,3 @@ export const secondaryButtonClass =
   'max-sm:min-h-[44px] ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
-
-// §11 Modal title.
-export const modalTitleClass = 'text-base font-semibold text-text mb-4'

@@ -15,9 +15,9 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg'
   /** Extra classes appended to the PANEL div (padding, overflow, max-height, flex layout). Never the scrim. */
   className?: string
-  /** Optional dialog title. When set, the title and close X render as one flex
-      header row (the X gets a reserved slot, so it can never overlap the title)
-      instead of the floating absolute-positioned X. */
+  /** Optional dialog title. When set, the title renders in a header row and the close X gets a
+      reserved slot (so it can never overlap the title): on desktop title + X share a flex row;
+      on mobile the title renders alone and the X stays in the BottomSheet sticky handle row. */
   title?: string
 }
 
@@ -39,37 +39,34 @@ export default function Modal({
   // Desktop-only wiring — BottomSheet runs its own useOverlay on mobile.
   const panelRef = useOverlay(open && !isMobile, onClose)
 
-  const closeButton = (
-    <button
-      type="button"
-      onClick={onClose}
-      aria-label="Close"
-      className="absolute right-4 top-4 -mr-1 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
-    >
-      <X size={14} strokeWidth={1.5} />
-    </button>
-  )
-
   const header = title ? (
-    <div className="flex items-start justify-between gap-3 mb-4">
-      <h2 className="text-base font-semibold text-text">{title}</h2>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="-mt-1 -mr-1 flex-shrink-0 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
-      >
-        <X size={14} strokeWidth={1.5} />
-      </button>
-    </div>
+    isMobile ? (
+      // Mobile: title only — the X lives in the BottomSheet sticky handle row
+      // (stays visible while the body scrolls), so it must not be duplicated here.
+      <h2 className="text-base font-semibold text-text mb-5">{title}</h2>
+    ) : (
+      // Desktop: title + X in one flex row. The X gets a reserved flex-shrink-0
+      // slot with gap-4, so it can never overlap the title (the original bug).
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <h2 className="text-base font-semibold text-text">{title}</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="-mt-1 -mr-1 flex-shrink-0 flex items-center justify-center p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors touch-hit"
+        >
+          <X size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+    )
   ) : null
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3). Without a
-  // title the X lives in the sheet's sticky handle row so it doesn't scroll
-  // away with the body; with one, the header row owns it instead.
+  // Mobile: same API, bottom-sheet presentation (plan decision 3). The X always
+  // lives in the sheet's sticky handle row so it doesn't scroll away with the
+  // body; the title (if any) renders as a plain <h2> below the handle.
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={onClose} className={className} showClose={!title} aria-label={title}>
+      <BottomSheet open={open} onClose={onClose} className={className} showClose aria-label={title}>
         {header}
         {children}
       </BottomSheet>
@@ -103,7 +100,7 @@ export default function Modal({
           className={`relative bg-surface border border-border rounded-sm w-full outline-none ${SIZE_CLASS[size]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {title ? header : closeButton}
+          {header}
           {children}
         </div>
       </div>
