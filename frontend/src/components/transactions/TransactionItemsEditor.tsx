@@ -5,8 +5,8 @@ import { transactionsApi } from '../../api/client'
 import type { Transaction, TransactionItemInput } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
 import { primaryButtonClass } from '../common/formStyles'
-import TransactionItemsTable from './TransactionItemsTable'
-import type { Row } from './TransactionItemsTable'
+import TransactionItemsList from './TransactionItemsList'
+import type { Row } from './TransactionItemsList'
 
 interface Props {
   transaction: Transaction
@@ -65,7 +65,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
 
   return (
     <div className="space-y-2">
-      <TransactionItemsTable
+      <TransactionItemsList
         rows={rows}
         onChange={setRows}
         amount={transaction.amount}

@@ -6,7 +6,7 @@ import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
-import TransactionItemsTable, { type Row } from '../../transactions/TransactionItemsTable'
+import TransactionItemsList, { type Row } from '../../transactions/TransactionItemsList'
 import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
@@ -332,7 +332,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
 
         {/* Editable line items — create mode only. Edit mode has its own items tab below. */}
         {!isEdit && (
-          <TransactionItemsTable
+          <TransactionItemsList
             rows={pendingRows}
             onChange={(rows) => setPendingItems(rowsToItems(rows))}
             amount={amount}
