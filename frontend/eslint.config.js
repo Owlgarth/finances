@@ -12,7 +12,7 @@ export default defineConfig([
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs['flat']['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -22,6 +22,11 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'react-refresh/only-export-components': 'off',
+      // eslint-plugin-react-hooks v7 added this React-Compiler-era rule. 18 pre-existing
+      // violations across the codebase are tracked in the backlog (Option A cleanup).
+      // Kept as 'warn' so the debt stays visible without failing lint; flip to 'off' for
+      // silent output, or remove this line once the cleanup task lands.
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 ])
