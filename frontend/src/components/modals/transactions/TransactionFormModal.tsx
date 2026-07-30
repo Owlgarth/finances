@@ -13,7 +13,7 @@ import type { ParsedReceipt, Transaction, TransactionItemInput, TransactionType 
 import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } from '../../../hooks/useDomain'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -217,8 +217,7 @@ export default function TransactionFormModal({ open, onClose, transaction }: Pro
   )
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto">
-      <h2 className={modalTitleClass}>{isEdit ? 'Edit transaction' : 'New transaction'}</h2>
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Edit transaction' : 'New transaction'} className="p-6 max-h-[90vh] overflow-y-auto">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Inline receipt scan — create mode only, hidden when extraction is disabled. */}
         {!isEdit && extractionEnabled && (

@@ -6,7 +6,7 @@ import Modal from '../common/Modal'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
-import { primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../common/formStyles'
+import { primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
   open: boolean
@@ -106,9 +106,7 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
     ) : null
 
   return (
-    <Modal open={open} onClose={onClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto">
-      <h2 className={modalTitleClass}>Review extracted receipt</h2>
-
+    <Modal open={open} onClose={onClose} size="lg" title="Review extracted receipt" className="p-6 max-h-[90vh] overflow-y-auto">
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div>
           <span className="text-text-muted">Merchant:</span> {parsed.merchant ?? '—'}

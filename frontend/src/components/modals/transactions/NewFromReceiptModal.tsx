@@ -10,7 +10,7 @@ import type { ParsedReceipt } from '../../../types'
 import { useAccounts, useBudgets } from '../../../hooks/useDomain'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { formatAmount } from '../../../utils/format'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -132,9 +132,7 @@ export default function NewFromReceiptModal({ open, onClose }: Props) {
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
 
   return (
-    <Modal open={open} onClose={close} className="p-6 max-h-[90vh] overflow-y-auto">
-      <h2 className={modalTitleClass}>New transaction from receipt</h2>
-
+    <Modal open={open} onClose={close} title="New transaction from receipt" className="p-6 max-h-[90vh] overflow-y-auto">
       {!parsed ? (
         <div className="space-y-4">
           <p className="text-sm text-text-muted">

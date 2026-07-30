@@ -7,7 +7,7 @@ import { accountsApi } from '../../api/client'
 import type { Account, AccountType } from '../../types'
 import { useEnabledCurrencies } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
-import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, modalTitleClass } from '../common/formStyles'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
   open: boolean
@@ -62,8 +62,7 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6">
-      <h2 className={modalTitleClass}>{isEdit ? 'Edit account' : 'New account'}</h2>
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Edit account' : 'New account'} className="p-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="acc-name" className={labelClass}>Name</label>
