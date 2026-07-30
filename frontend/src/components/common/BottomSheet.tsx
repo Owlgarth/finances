@@ -113,8 +113,30 @@ export default function BottomSheet({
           style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px)` } : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Drag-handle bar (+ optional close, pinned with it) */}
-          <div className="sticky top-0 z-10 bg-surface">
+          {/* Drag-handle bar (+ optional close, pinned with it).
+              Two things must hold for the close X on mobile (both gated on
+              `showClose`, so direct BottomSheet callers — Select, ActionSheet,
+              … — keep the tight 16px handle; e.g. Select's `top-4` content
+              offset assumes 16px, see Select.tsx):
+
+              1. `!absolute` (not `absolute`): the `.touch-hit` utility sets
+                 `position: relative` so its `::after` hit-area can anchor, and
+                 because it is emitted AFTER Tailwind's `.absolute` in the
+                 compiled CSS, a plain `absolute` is overridden to `relative` —
+                 which drops the X into normal flow at the LEFT edge and shifts
+                 it with relative `top`/`right`, colliding with the title. The
+                 leading `!` forces `position: absolute !important` so
+                 `right-3`/`top-1` anchor the X to the top-right of this sticky
+                 row as intended. `touch-hit` stays on the X for the enlarged
+                 tap target — its `::after` still anchors to the button.
+
+              2. `min-h-10` on the row: the X is out of flow, so the row's
+                 height comes only from the drag bar (~16px). `min-h-10` (40px)
+                 reserves enough space that the X (~22px at `top-1`) AND its
+                 `touch-hit` 8px expansion (~34px footprint) sit ENTIRELY
+                 within the row, leaving a clear gap to the `<h2>` title below —
+                 no accidental closure when tapping the title. */}
+          <div className={`sticky top-0 z-10 bg-surface ${showClose ? 'min-h-10' : ''}`}>
             <div className="flex justify-center pt-2 pb-1" aria-hidden="true">
               <div className="h-1 w-9 rounded-sm bg-surface-muted" />
             </div>
@@ -123,7 +145,7 @@ export default function BottomSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="absolute right-3 top-1 flex items-center justify-center p-1 text-text-muted hover:text-text active:bg-surface-hover transition-colors touch-hit"
+                className="!absolute right-3 top-1 flex items-center justify-center p-1 text-text-muted hover:text-text active:bg-surface-hover transition-colors touch-hit"
               >
                 <X size={14} strokeWidth={1.5} />
               </button>
