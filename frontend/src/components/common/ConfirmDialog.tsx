@@ -10,8 +10,7 @@ interface Props {
 
 export default function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: Props) {
   return (
-    <Modal open={isOpen} onClose={onCancel} size="sm" className="p-4">
-      <h2 className="text-base font-semibold text-text mb-2">{title}</h2>
+    <Modal open={isOpen} onClose={onCancel} size="sm" title={title} className="p-4">
       <p className="text-text-muted mb-6">{message}</p>
 
       <div className="flex justify-end space-x-3">
