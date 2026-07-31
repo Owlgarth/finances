@@ -111,6 +111,13 @@ class CategoryService:
         if source.budget_id != budget_id:
             raise CategoryNotFoundError()
 
+        # Serialize concurrent merges touching either category: lock both rows in a
+        # deterministic order (by id) to avoid deadlock, and re-verify both still
+        # exist — a concurrent merge may have deleted the source while we waited.
+        locked = Category.objects.select_for_update().filter(id__in=[target.id, source.id]).order_by('id')
+        if locked.count() != 2:
+            raise CategoryNotFoundError()
+
         Transaction.objects.filter(category=source).update(category=target)
         PlannedTransaction.objects.filter(category=source).update(category=target)
 
