@@ -7,30 +7,69 @@ description: Docker, nginx, and S3-compatible storage conventions for Denarly �
 
 ## DNS-Safe Service Names
 
-Docker Compose service names accessed via URLs must use DNS-safe characters (hyphens, not underscores). botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` crashes at runtime.
+Service names are the hostnames on the compose network, so keep them short and DNS-safe (hyphens, never underscores): `db`, `redis`, `storage`, `api`, `ui`, `worker`, `beat`, `parser`. botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` crashes at runtime.
 
-When the service name contains underscores, add a DNS-safe `networks` alias and use the alias in endpoint URLs:
+```
+POSTGRES_HOST=db
+REDIS_URL=redis://redis:6379
+S3_ENDPOINT_URL=http://storage:9000
+```
+
+## Configuration Lives in .env
+
+`docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`, `parser`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift.
+
+Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
+
+## Dev Script
+
+`./dev.sh` at the repo root is the only one — bash, not POSIX `sh` (`pipefail`, `read -rp`, `local`). Keep new commands in it rather than adding scripts, and keep its `usage()` heredoc in sync.
+
+- `up` — `db redis storage`; `up --full` adds `api ui worker beat parser`; `up <svc...>` passes through
+- `backend` / `frontend` — start the app; `logs`, `manage`, `migrate`, `seed`, `psql`, `test`, `lint`, `npm`
+- helpers: `load_env`, `use_local_hosts`, `require_service`, `on_host`, `in_service`
+
+It `source`s `.env`, so **values containing spaces must be quoted there** — compose parses that file itself and doesn't care, bash does.
+
+### DEV_TARGET: container or host
+
+`DEV_TARGET=docker` (the default, from `.env`) runs backend/frontend commands in the `api` and `node` containers, so no Python/uv/Node is needed on the machine — the case a PyCharm remote interpreter targets. `DEV_TARGET=host` runs them through `uv`/`npm` locally and is the only path that needs `use_local_hosts`.
+
+`in_service` execs into the service when it is up and uses `docker compose run --rm --entrypoint ''` otherwise (the image entrypoint would migrate and collectstatic). Both pass `--user "$(id -u):$(id -g)" -e HOME=/tmp`: **without the uid mapping every file the command writes into the bind mount — new migrations, `.pytest_cache`, `.ruff_cache` — lands root-owned in the checkout**, and without `HOME` uv/npm fail trying to write `/.cache`.
+
+Backend commands resolve through `/venv/bin/<tool>` (`UV_PROJECT_ENVIRONMENT`), not `uv run`, which would try to sync the environment it cannot write.
+
+The `node` service (profile `tools`) exists only for this: `node:22-slim` with `./frontend` bind-mounted. Debian-based like the builder stage, so the `node_modules` it writes stays usable if the host also runs npm — an alpine/musl image would install incompatible esbuild binaries.
+
+`use_local_hosts` exists because the same `.env` serves both worlds: inside compose a service is reached by name (`db`, `redis:6379`), from a host process only through the published port (`localhost:$DB_PORT`). Anything host-run must go through it, or it silently tries to resolve `db`.
+
+## Nothing Container-Owned Inside the Bind Mount
+
+The backend containers run as root against a bind-mounted, host-owned source tree, so any path a named volume mounts *inside* `/app` gets created on the host as a root-owned directory — which then blocks the host toolchain (`uv` can't write `backend/.venv`, `npm` can't write `frontend/node_modules`). Keep generated artefacts outside the mount:
+
+- `UV_PROJECT_ENVIRONMENT=/venv` in the backend image, volume mounted at `/venv`
+- Celery beat gets `--schedule=/tmp/celerybeat-schedule`
+- The `ui` service is the nginx production build (no bind mount, no `node_modules` volume); frontend hot reload comes from `start-dev-frontend.sh` on the host
+
+Compose otherwise builds **one image per service** from the same Dockerfile, so `docker compose build api` would leave `worker`/`beat` on the old image — which is how a stale worker once recreated a root-owned `/app/.venv`. `api`, `worker` and `beat` therefore share one tag via the anchor:
 
 ```yaml
-services:
-  denarly_storage:          # Container name (underscores are fine)
-    networks:
-      denarly-network:
-        aliases:
-          - rustfs          # DNS-safe alias used in endpoint URLs
+x-backend: &backend
+  build: ./backend
+  image: ${COMPOSE_PROJECT_NAME}-backend
 ```
 
-```
-S3_ENDPOINT_URL=http://rustfs:9000
-```
+Compose interpolates `COMPOSE_PROJECT_NAME` from the derived project name (the directory), so sibling checkouts keep separate images. Any new service built from `backend/` must use the anchor, never a bare `build:`.
+
+Tooling config must not rely on `.gitignore` for exclusions: `/app` in the container isn't a git checkout. Ruff uses `extend-exclude` so its built-in `.venv` exclusion survives.
 
 ## nginx Header Inheritance
 
 nginx does NOT inherit parent-context `add_header` directives into child blocks that define their own `add_header`. Security headers (CSP, HSTS, X-Frame-Options, etc.) must be repeated in each `location` block that has its own `add_header` — e.g., `location = /index.html` and the static-assets regex location. Critical for SPAs where `try_files` internally redirects to `/index.html`.
 
-## Docker Entrypoint Consistency
+## One Entrypoint, Overridden Commands
 
-`docker-compose.yml` inline `entrypoint` overrides the Dockerfile/shell script `CMD`/`ENTRYPOINT`. When modifying startup behavior, update **both** `docker-entrypoint.sh` **and** the inline entrypoint in `docker-compose.yml` — missing one causes different behavior depending on how the container is started.
+`api` keeps the image `ENTRYPOINT` (`docker-entrypoint.sh`: migrate → seed → bucket init → collectstatic) and only overrides `command` to add `--reload`. Never inline a copy of that script in `docker-compose.yml` — the copy silently drifts (it used to skip `seed_currencies`). Celery services override `entrypoint` with `celery-entrypoint.sh` precisely because they must *not* run migrations.
 
 ## S3-Compatible Storage: Two URLs
 

@@ -50,13 +50,35 @@ Denarly is a comprehensive financial management tool designed for individuals an
 # Clone and start
 git clone <repository-url>
 cd denarly
-docker-compose up -d
+cp example.env .env        # every setting, including the published ports, lives here
+./dev.sh up --full         # the whole stack in Docker
 ```
+
+For day-to-day work, run the services in Docker and the app on your machine —
+three terminals, hot reload on both sides:
+
+```bash
+./dev.sh up            # db, redis, storage
+./dev.sh backend       # migrate + seed, then uvicorn --reload and a Celery worker
+./dev.sh frontend      # Vite dev server
+```
+
+Services: `db`, `redis`, `storage`, plus `api`, `ui`, `worker` and `beat` for the
+full-Docker run, and the optional `parser` (`./dev.sh up parser`).
+
+**Docker or your machine?** By default `./dev.sh` runs the backend and frontend
+inside their containers, so Python, uv and Node only have to exist in the images —
+handy for a remote interpreter in PyCharm, or any machine without the right
+versions installed. Set `DEV_TARGET=host` in `.env` to use your own uv and npm
+instead (faster), or switch per command: `DEV_TARGET=host ./dev.sh test`.
 
 **Access:**
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:8000
 - API Docs: http://localhost:8000/api/docs
+- Storage console: http://localhost:9001
+
+Ports already taken on your machine? Change `*_PORT` in `.env` — nothing is hardcoded.
 
 **Demo credentials:** `demo@example.com` / `password123`
 
@@ -90,8 +112,9 @@ Denarly can read receipts to pre-fill line items and totals. This is powered by 
 separate, stateless service in [`services/receipt-parser/`](services/receipt-parser/)
 that talks to any OpenAI-compatible vision model (local via Ollama/vLLM, or hosted).
 
-- It is wired into `docker-compose.yml` as `denarly_receipt_parser` (port 8100) and
-  enabled for the backend via `PARSER_URL` / `PARSER_API_TOKEN`.
+- It is wired into `docker-compose.yml` as `parser` (port 8100), started with
+  `./dev.sh up parser` and enabled for the backend via `PARSER_URL` /
+  `PARSER_API_TOKEN`.
 - **It is entirely optional.** With `PARSER_URL` unset, the backend reports extraction
   as disabled and the UI hides every extraction affordance — no dead buttons.
 - Point it at your model with `PARSER_MODEL_BASE_URL` / `PARSER_MODEL_NAME`
@@ -153,6 +176,7 @@ denarly/
 ├── frontend/                   # React SPA
 ├── services/receipt-parser/    # Optional receipt extraction service (FastAPI)
 ├── docs/                       # Architecture and specifications
+├── dev.sh                      # The dev entry point: start, compose, manage.py, tests, lint
 └── docker-compose.yml
 ```
 
@@ -170,11 +194,28 @@ denarly/
 
 ## Development
 
-### With Docker
+### Everyday commands
+
+`./dev.sh` is the only script: `docker compose` for the services, `uv`/`npm` on
+the host for the app. Run it with no arguments for the full list.
 
 ```bash
-docker-compose up -d
+./dev.sh up parser       # start individual services
+./dev.sh logs storage    # follow logs
+./dev.sh migrate         # manage.py migrate
+./dev.sh seed            # currencies + legal documents
+./dev.sh manage <args>   # any other manage.py command
+./dev.sh test -k budgets # pytest
+./dev.sh lint            # ruff check --fix + ruff format + eslint
+./dev.sh psql            # psql on the dev database
+./dev.sh down            # stop (./dev.sh reset also drops the volumes)
 ```
+
+These run in the `api` and `node` containers by default (`DEV_TARGET`), as the
+user who invoked them, so anything they write — new migrations, caches — belongs
+to you and not to root. With `DEV_TARGET=host` they run through `uv` in
+`backend/` and `npm` in `frontend/`, and the script rewrites the service
+hostnames to the published ports for you.
 
 ### Without Docker
 
