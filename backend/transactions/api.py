@@ -184,11 +184,25 @@ def get_transaction(request: HttpRequest, transaction_id: int):
 
 @router.post('', response={201: TransactionOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_transaction(request: HttpRequest, data: TransactionCreate):
-    """Create a new transaction (requires write access)."""
+    """Create a new transaction (requires write access).
+
+    Optional `Idempotency-Key` request header: if present, a replay with the
+    same key (per user, within 24h) returns the original transaction instead
+    of creating a duplicate. See `TransactionService.create`.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    trans = TransactionService.create(user, workspace_id, data)
+
+    idempotency_key = request.headers.get('Idempotency-Key')
+    if idempotency_key is not None:
+        idempotency_key = idempotency_key.strip()
+        if len(idempotency_key) > 100:
+            return 400, {'detail': 'Idempotency-Key header must be at most 100 characters.'}
+        if idempotency_key == '':
+            idempotency_key = None
+
+    trans = TransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
     return 201, trans
 
 
@@ -280,8 +294,8 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
 
 @router.get('/extraction/config', response=ExtractionConfigOut, auth=WorkspaceJWTAuth())
 def extraction_config(request: HttpRequest):
-    """Report whether receipt extraction is configured (drives UI affordance visibility)."""
-    return ExtractionConfigOut(enabled=parser_client.is_enabled())
+    """Report whether receipt extraction is configured and currently answering."""
+    return ExtractionConfigOut(enabled=parser_client.is_enabled(), reachable=parser_client.is_reachable())
 
 
 @router.post('/extraction/parse', response={200: dict, 400: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())
@@ -299,6 +313,10 @@ def parse_receipt_preview(request: HttpRequest, file: UploadedFile = File(...)):
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     try:
         return parser_client.parse_receipt(file.read(), file.name or 'receipt', file.content_type or '')
+    except parser_client.ParserUnavailableError:
+        # Nothing is wrong with the upload — the scanning host is simply off.
+        # 503 (not 400) so the client shows "offline", not "bad receipt".
+        return 503, {'detail': 'Receipt scanning is temporarily offline. Please try again later.'}
     except parser_client.ParserServiceError as exc:
         return 400, {'detail': str(exc)}
 

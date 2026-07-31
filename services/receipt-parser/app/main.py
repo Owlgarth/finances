@@ -1,4 +1,4 @@
-"""FastAPI app exposing POST /parse and GET /health per CONTRACT.md v1."""
+"""FastAPI app exposing POST /parse and GET /health per API.md v1."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ async def parser_error_handler(_request: Request, exc: ParserError) -> JSONRespo
 @app.get('/health', response_model=HealthResult, responses={503: {'model': ErrorResult}})
 async def health() -> HealthResult:
     await llm.ping()
-    return HealthResult(status='ok', model=settings.model_name)
+    return HealthResult(status='ok', model=settings.active_model_name)
 
 
 @app.post('/parse', response_model=ParseResult, responses={400: {'model': ErrorResult}})
@@ -44,8 +44,8 @@ async def parse_receipt(file: UploadFile, _auth: None = Depends(require_token)) 
     if len(content) > limit:
         raise FileTooLarge(f'File exceeds the {settings.max_file_mb} MB limit.')
 
-    images, truncated = decode_to_images(content, file.content_type or '')
-    return await parser.parse(images, truncated)
+    decoded = decode_to_images(content, file.content_type or '')
+    return await parser.parse(decoded)
 
 
 @app.get('/')

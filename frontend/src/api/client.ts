@@ -8,7 +8,7 @@ import type {
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
-  TransactionAttachment, ExtractionResult, ParsedReceipt,
+  TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
 
 // ============= Ordering types (shared with page call sites) =============
@@ -221,6 +221,8 @@ export const budgetsApi = {
     api.put<Category>(`/budgets/${budgetId}/categories/${categoryId}`, data).then(res => res.data),
   setCategoryArchive: (budgetId: number, categoryId: number, isArchived: boolean): Promise<Category> =>
     api.patch<Category>(`/budgets/${budgetId}/categories/${categoryId}/archive`, { is_archived: isArchived }).then(res => res.data),
+  mergeCategory: (budgetId: number, categoryId: number, sourceCategoryId: number): Promise<Category> =>
+    api.post<Category>(`/budgets/${budgetId}/categories/${categoryId}/merge`, { source_category_id: sourceCategoryId }).then(res => res.data),
   deleteCategory: (budgetId: number, categoryId: number) =>
     api.delete(`/budgets/${budgetId}/categories/${categoryId}`),
 
@@ -242,6 +244,7 @@ export interface TransactionInput {
   category_id?: number | null;
   original_amount?: string | null;
   original_currency_code?: string | null;
+  items?: TransactionItemInput[];
 }
 
 export const transactionsApi = {
@@ -249,8 +252,10 @@ export const transactionsApi = {
     api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
   getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
-  create: (data: TransactionInput): Promise<Transaction> =>
-    api.post<Transaction>('/transactions', data).then(res => res.data),
+  create: (data: TransactionInput, opts?: { idempotencyKey?: string }): Promise<Transaction> =>
+    api.post<Transaction>('/transactions', data, {
+      ...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {}),
+    }).then(res => res.data),
   update: (id: number, data: TransactionInput): Promise<Transaction> =>
     api.put<Transaction>(`/transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/transactions/${id}`),
@@ -276,8 +281,8 @@ export const transactionsApi = {
   deleteAttachment: (transactionId: number, attachmentId: number): Promise<void> =>
     api.delete(`/transactions/${transactionId}/attachments/${attachmentId}`).then(() => undefined),
 
-  extractionConfig: (): Promise<{ enabled: boolean }> =>
-    api.get<{ enabled: boolean }>('/transactions/extraction/config').then(res => res.data),
+  extractionConfig: (): Promise<ExtractionConfig> =>
+    api.get<ExtractionConfig>('/transactions/extraction/config').then(res => res.data),
   parseReceipt: (file: File): Promise<ParsedReceipt> => {
     const form = new FormData();
     form.append('file', file);

@@ -1,4 +1,4 @@
-"""Pydantic models mirroring CONTRACT.md v1. Money values are decimal strings."""
+"""Pydantic models mirroring API.md v1. Money values are decimal strings."""
 
 from __future__ import annotations
 

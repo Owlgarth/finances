@@ -8,13 +8,26 @@ the contract holds regardless of model quality.
 from __future__ import annotations
 
 import json
+import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app import llm
 from app.errors import UnreadableInput
+from app.images import DecodedInput
 from app.schemas import Confidence, Item, ParseResult
 
 _CENTS = Decimal('0.01')
+
+# Money-shaped tokens in a machine transcript: `87.43`, `87,43`, `1,234.56`,
+# `1.234,56`, `1 234,56`, `1234.56` — always exactly two decimal digits.
+_MONEY_TOKEN_RE = re.compile(r'(?<![\d.,])(?:\d{1,3}(?:[ .,\u00a0]\d{3})+|\d+)[.,]\d{2}(?!\d)')
+
+# Grounding thresholds: a value found verbatim in the transcript is near-certain
+# (floor), one absent from it is suspect (cap + warning for the total).
+_GROUNDED_FLOOR = 0.9
+_UNGROUNDED_CAP = 0.5
+_ITEMS_FLOOR_RATIO = 0.8
+_ITEMS_CAP_RATIO = 0.5
 
 
 def _to_decimal_string(value) -> str | None:
@@ -57,6 +70,63 @@ def _extract_json(text: str) -> dict:
         raise UnreadableInput('The model returned malformed JSON.') from exc
 
 
+def _transcript_money_tokens(transcript: str) -> set[str]:
+    """Canonical 2-decimal strings for every money-shaped token in the transcript."""
+    tokens: set[str] = set()
+    for match in _MONEY_TOKEN_RE.finditer(transcript):
+        raw = match.group()
+        integer_digits = re.sub(r'\D', '', raw[:-3])
+        tokens.add(str(Decimal(f'{integer_digits}.{raw[-2:]}')))
+    return tokens
+
+
+def _apply_grounding(
+    transcript: str, total: str | None, items: list[Item], confidence: Confidence, warnings: set[str]
+) -> None:
+    """Cross-check model numbers against the transcript; adjust confidence deterministically.
+
+    The transcript is machine-extracted, so its digits are trustworthy: a total found
+    verbatim is near-certain, a total absent from it is suspect. Same idea for the
+    fraction of item line_totals found.
+    """
+    tokens = _transcript_money_tokens(transcript)
+    if total is not None:
+        if total in tokens:
+            confidence.total = max(confidence.total, _GROUNDED_FLOOR)
+        else:
+            warnings.add('total_not_in_source')
+            confidence.total = min(confidence.total, _UNGROUNDED_CAP)
+
+    line_totals = [item.line_total for item in items if item.line_total is not None]
+    if line_totals:
+        ratio = sum(1 for value in line_totals if value in tokens) / len(line_totals)
+        if ratio >= _ITEMS_FLOOR_RATIO:
+            confidence.items = max(confidence.items, _GROUNDED_FLOOR)
+        elif ratio < _ITEMS_CAP_RATIO:
+            confidence.items = min(confidence.items, _UNGROUNDED_CAP)
+
+
+def _build_item(raw_item) -> Item | None:
+    """One contract Item from one untrusted model row, or None for junk rows."""
+    if not isinstance(raw_item, dict) or not raw_item.get('name'):
+        return None
+    return Item(
+        name=str(raw_item['name']).strip(),
+        quantity=_to_quantity_string(raw_item.get('quantity')),
+        unit_price=_to_decimal_string(raw_item.get('unit_price')),
+        line_total=_to_decimal_string(raw_item.get('line_total')),
+        confidence=_clamp_confidence(raw_item.get('confidence')),
+    )
+
+
+def _item_math_mismatch(item: Item) -> bool:
+    """Whether quantity × unit_price disagrees with the printed line_total by > 1 cent."""
+    if item.unit_price is None or item.line_total is None:
+        return False
+    expected = (Decimal(item.quantity) * Decimal(item.unit_price)).quantize(_CENTS, rounding=ROUND_HALF_UP)
+    return abs(expected - Decimal(item.line_total)) > _CENTS
+
+
 def _sum_line_totals(items: list[Item]) -> Decimal:
     total = Decimal('0')
     for item in items:
@@ -67,7 +137,7 @@ def _sum_line_totals(items: list[Item]) -> Decimal:
     return total.quantize(_CENTS, rounding=ROUND_HALF_UP)
 
 
-def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
+def normalize(raw_text: str, decoded: DecodedInput) -> ParseResult:
     """Coerce raw model text into a contract-valid ParseResult with derived warnings."""
     data = _extract_json(raw_text)
 
@@ -78,21 +148,12 @@ def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
 
     items: list[Item] = []
     for raw_item in data.get('items', []) or []:
-        if not isinstance(raw_item, dict) or not raw_item.get('name'):
+        item = _build_item(raw_item)
+        if item is None:
             continue
-        item = Item(
-            name=str(raw_item['name']).strip(),
-            quantity=_to_quantity_string(raw_item.get('quantity')),
-            unit_price=_to_decimal_string(raw_item.get('unit_price')),
-            line_total=_to_decimal_string(raw_item.get('line_total')),
-            confidence=_clamp_confidence(raw_item.get('confidence')),
-        )
         items.append(item)
-        # Derived per-row math check.
-        if item.unit_price is not None and item.line_total is not None:
-            expected = (Decimal(item.quantity) * Decimal(item.unit_price)).quantize(_CENTS, rounding=ROUND_HALF_UP)
-            if abs(expected - Decimal(item.line_total)) > _CENTS:
-                warnings.add('item_math_mismatch')
+        if _item_math_mismatch(item):
+            warnings.add('item_math_mismatch')
 
     total = _to_decimal_string(data.get('total'))
     currency = data.get('currency')
@@ -113,8 +174,12 @@ def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
     elif items:
         if abs(_sum_line_totals(items) - Decimal(total)) > _CENTS:
             warnings.add('total_mismatch')
-    if multi_page_truncated:
+    if decoded.multi_page_truncated:
         warnings.add('multi_page_merged')
+    if decoded.ocr_unavailable:
+        warnings.add('ocr_unavailable')
+    if decoded.transcript:
+        _apply_grounding(decoded.transcript, total, items, confidence, warnings)
 
     return ParseResult(
         merchant=(str(data['merchant']).strip() if data.get('merchant') else None),
@@ -127,6 +192,6 @@ def normalize(raw_text: str, multi_page_truncated: bool) -> ParseResult:
     )
 
 
-async def parse(images_b64: list[str], multi_page_truncated: bool) -> ParseResult:
-    raw_text = await llm.extract(images_b64)
-    return normalize(raw_text, multi_page_truncated)
+async def parse(decoded: DecodedInput) -> ParseResult:
+    raw_text = await llm.extract(decoded.images_b64, decoded.transcript)
+    return normalize(raw_text, decoded)

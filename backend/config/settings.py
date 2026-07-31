@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 from config.utils import get_int_env
@@ -40,6 +41,9 @@ cors_origins = _cors_env.split(',') if _cors_env else []
 CSRF_TRUSTED_ORIGINS = cors_origins.copy()
 CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_CREDENTIALS = True
+# Extend the library default with our custom request headers. The library
+# compares lowercased header names, so the entries here are lowercase.
+CORS_ALLOW_HEADERS = list(default_headers) + ['idempotency-key']
 
 # Application definition
 
@@ -280,6 +284,20 @@ PARSER_URL = os.getenv('PARSER_URL', '').rstrip('/')
 PARSER_API_TOKEN = os.getenv('PARSER_API_TOKEN', '')
 PARSER_TIMEOUT_SECONDS = float(os.getenv('PARSER_TIMEOUT_SECONDS', '120'))
 EXTRACTION_ENABLED = bool(PARSER_URL)
+
+# The parser lives on a host that is only intermittently powered on, so
+# "configured but unreachable" is a normal state the UI must be able to show.
+# Reachability is probed live and cached briefly — the timeout is short because
+# an unreachable host must not stall the config request behind it.
+PARSER_HEALTH_TIMEOUT_SECONDS = float(os.getenv('PARSER_HEALTH_TIMEOUT_SECONDS', '3'))
+PARSER_HEALTH_CACHE_SECONDS = int(os.getenv('PARSER_HEALTH_CACHE_SECONDS', '30'))
+
+# Queued extractions must survive the parser being down for hours. Defaults give
+# roughly 12 hours of exponential backoff (60s doubling, capped at 2h) before an
+# attachment is finally marked failed.
+PARSER_EXTRACT_MAX_RETRIES = int(os.getenv('PARSER_EXTRACT_MAX_RETRIES', '12'))
+PARSER_EXTRACT_RETRY_BACKOFF = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF', '60'))
+PARSER_EXTRACT_RETRY_BACKOFF_MAX = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF_MAX', '7200'))
 
 # Email configuration
 # In development, emails are printed to the console.
