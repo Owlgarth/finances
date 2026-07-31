@@ -126,7 +126,19 @@ services:
   parser:
     profiles: ["parser"]
     build: ./services/receipt-parser
-    env_file: .env
+    # Explicit allowlist, not env_file: the parser handles untrusted uploads and
+    # talks to external model endpoints, so it must not inherit the stack's
+    # secrets (SECRET_KEY, DB/S3 credentials). Keep this list in sync with the
+    # PARSER_* block in example.env; unlisted vars never reach the container.
+    environment:
+      PARSER_API_TOKEN: ${PARSER_API_TOKEN}
+      PARSER_MODEL_PROVIDER: ${PARSER_MODEL_PROVIDER}
+      PARSER_MODEL_BASE_URL: ${PARSER_MODEL_BASE_URL}
+      PARSER_MODEL_NAME: ${PARSER_MODEL_NAME}
+      PARSER_MODEL_API_KEY: ${PARSER_MODEL_API_KEY}
+      PARSER_GEMINI_API_KEY: ${PARSER_GEMINI_API_KEY}
+      PARSER_GEMINI_MODEL: ${PARSER_GEMINI_MODEL}
+      PARSER_GEMINI_THINKING_LEVEL: ${PARSER_GEMINI_THINKING_LEVEL}
     ports:
       - "${PARSER_PORT}:8100"
     extra_hosts:
