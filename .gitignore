@@ -17,9 +17,16 @@ IMPLEMENTATION_PLAN.md
 # AI Tools
 .plans
 .opencode-data/
-.claude/
+# Everything under .claude/ is local except what's re-included below, one by one.
+# Note the `/*`: excluding the directory itself would stop git descending into
+# it, and the negations would never be reached.
+.claude/*
 !.claude/settings.json
-.agents/settings.local.json
+
+# Same for .agents/: only the shared skills and settings are tracked.
+.agents/*
+!.agents/skills/
+!.agents/settings.json
 
 # Python
 __pycache__/
