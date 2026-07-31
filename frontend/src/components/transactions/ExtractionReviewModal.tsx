@@ -50,6 +50,14 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
         line_total: r.line_total === '' ? null : r.line_total,
       }))
 
+  // The parsed merchant becomes the transaction description only when the user
+  // never gave one — blank, or the receipt-first flow's 'Receipt' placeholder.
+  // An intentional description is never overwritten.
+  const merchantFillsDescription = (): boolean => {
+    const current = transaction.description.trim()
+    return Boolean(parsed.merchant) && (current === '' || current === 'Receipt')
+  }
+
   const save = useMutation({
     mutationFn: async (mode: 'replace' | 'append') => {
       let items = toInputs()
@@ -63,10 +71,26 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
         }))
         items = [...current, ...items]
       }
-      return transactionsApi.replaceItems(transaction.id, items)
+      const saved = await transactionsApi.replaceItems(transaction.id, items)
+      if (merchantFillsDescription()) {
+        await transactionsApi.update(transaction.id, {
+          date: transaction.date,
+          description: parsed.merchant!,
+          type: transaction.type,
+          amount: transaction.amount,
+          account_id: transaction.account_id,
+          category_id: transaction.category_id,
+          original_amount: transaction.original_amount,
+          original_currency_code: transaction.original_currency_code,
+        })
+      }
+      return saved
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transaction-items', transaction.id] })
+      if (merchantFillsDescription()) {
+        queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      }
       toast.success('Items saved from receipt')
       onClose()
     },

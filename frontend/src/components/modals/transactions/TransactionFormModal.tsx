@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Trash2 } from 'lucide-react'
+import { Copy, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
+import TransactionItemsList, { type Row } from '../../transactions/TransactionItemsList'
 import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
-import type { Transaction, TransactionType } from '../../../types'
-import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
+import type { ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
+import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } from '../../../hooks/useDomain'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
@@ -36,6 +37,29 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
   { value: 'adjustment', label: 'Adjustment' },
 ]
 
+const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
+
+/** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
+const itemsToRows = (items: TransactionItemInput[]): Row[] =>
+  items.map((i) => ({
+    name: i.name,
+    quantity: i.quantity ?? '1',
+    unit_price: i.unit_price ?? '',
+    line_total: i.line_total ?? '',
+  }))
+
+/** Row[] (table editing shape) → TransactionItemInput[] (API payload shape).
+ * Drops rows with no name, defaults quantity to '1', converts '' → null. */
+const rowsToItems = (rows: Row[]): TransactionItemInput[] =>
+  rows
+    .filter((r) => r.name.trim())
+    .map((r) => ({
+      name: r.name.trim(),
+      quantity: r.quantity || '1',
+      unit_price: r.unit_price === '' ? null : r.unit_price,
+      line_total: r.line_total === '' ? null : r.line_total,
+    }))
+
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy }: Props) {
   const isEdit = !!transaction
   const queryClient = useQueryClient()
@@ -46,6 +70,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
   const { data: currencies = [] } = useEnabledCurrencies()
+  const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const defaultBudgetId =
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
@@ -61,9 +87,57 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [originalAmount, setOriginalAmount] = useState('')
   const [originalCurrencyCode, setOriginalCurrencyCode] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  // Rows are the editing source of truth in create mode (nameless rows, '' qty
+  // mid-edit, etc. survive). Normalization to the API payload shape happens
+  // once, at submit (rowsToItems below). Mirrors TransactionItemsEditor.
+  const [pendingRows, setPendingRows] = useState<Row[]>([])
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
+
+  const parse = useMutation({
+    mutationFn: (f: File) => transactionsApi.parseReceipt(f),
+    onSuccess: (result: ParsedReceipt, file: File) => {
+      setPendingFile(file)
+      // One-time conversion: parsed items carry extra fields (confidence, etc.)
+      // that must not leak into rows. After this, rows live as Row[] until submit.
+      setPendingRows(
+        itemsToRows(
+          result.items.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            line_total: i.line_total,
+          })),
+        ),
+      )
+      setAmount(result.total ?? '')
+      if (result.date) setDate(result.date)
+      // Merchant fills description only when the user hasn't typed one — matches
+      // ExtractionReviewModal's rule, simplified because this form's create-mode
+      // default is '' (not 'Receipt').
+      if (description === '' && result.merchant) setDescription(result.merchant)
+    },
+    // A 503 here means the self-hosted scanner is off — the backend's detail
+    // already says so, so surface it rather than a generic error.
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Could not read the receipt')),
+  })
+
+  const handleFile = (f: File | null) => {
+    if (!f) return
+    parse.mutate(f)
+    // Same-file reselect must re-fire onChange; the File object is already
+    // captured by parse.mutate, so clearing the input value is safe. Without
+    // this, re-selecting the same file fires no change event (silent no-op).
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   useEffect(() => {
     if (!open) return
+    // Clear any receipt-upload state from a previous session.
+    setPendingFile(null)
+    setPendingRows([])
+    parse.reset()
+    if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
     // Copy mode prefills like edit, except the date: always today (D4).
     const source = transaction ?? copyFrom
@@ -78,6 +152,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOriginalAmount(source.original_amount ?? '')
       setOriginalCurrencyCode(source.original_currency_code)
       setBudgetId(source.category_budget_id)
+      // Edit mode bypasses the idempotency-key dedup — only create-mode
+      // submissions carry a key (Q5=A: no items on update, same rationale).
+      // Copy mode IS a create, so it gets a fresh key like the else branch.
+      setIdempotencyKey(transaction ? null : crypto.randomUUID())
     } else {
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
@@ -89,6 +167,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(false)
       setOriginalAmount('')
       setOriginalCurrencyCode(null)
+      // Fresh key per open in create mode. Persists across mutation retries
+      // within this open session — that's what makes a double-click or a
+      // network-blip replay return the original 201 instead of a duplicate.
+      setIdempotencyKey(crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId])
@@ -102,7 +184,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   })
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const payload = {
         date,
         description: description.trim(),
@@ -113,13 +195,43 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         original_amount: otherCurrency ? originalAmount : null,
         original_currency_code: otherCurrency ? originalCurrencyCode : null,
       }
-      return isEdit ? transactionsApi.update(transaction.id, payload) : transactionsApi.create(payload)
+      if (isEdit) {
+        const trans = await transactionsApi.update(transaction.id, payload)
+        // Edit mode never uploads an attachment here — uniform return shape so
+        // onSuccess can destructure { uploadFailed } for both branches.
+        return { trans, uploadFailed: false }
+      }
+      // Inline the items on the create call (Task 1 backend) and send the
+      // idempotency key as a header (Task 2 backend). This is the atomic
+      // tx + items commit — once it returns, the data is durable.
+      const trans = await transactionsApi.create(
+        { ...payload, items: rowsToItems(pendingRows) },
+        { idempotencyKey: idempotencyKey ?? undefined },
+      )
+      // Attachment upload is best-effort: the tx and its items are already
+      // committed. A failure here (e.g. S3 blip) is no longer fatal — report
+      // it via the return value so onSuccess surfaces ONE message, not a
+      // mid-flight error toast followed by a success toast. The user can
+      // re-add the receipt in edit mode.
+      let uploadFailed = false
+      try {
+        if (pendingFile) await transactionsApi.uploadAttachment(trans.id, pendingFile)
+      } catch {
+        uploadFailed = true
+      }
+      return { trans, uploadFailed }
     },
-    onSuccess: () => {
+    onSuccess: ({ uploadFailed }) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success(isEdit ? 'Transaction updated' : 'Transaction added')
+      // The transaction IS durable either way — invalidations + close run in
+      // both cases. Only the message differs: a single error vs a single success.
+      if (uploadFailed) {
+        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+      } else {
+        toast.success(isEdit ? 'Transaction updated' : 'Transaction added')
+      }
       onClose()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save transaction')),
@@ -144,6 +256,41 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   return (
     <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? 'Edit transaction' : 'New transaction'}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Inline receipt scan — create mode only, hidden when extraction is disabled. */}
+        {!isEdit && extractionEnabled && (
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ACCEPT}
+              capture="environment"
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={parse.isPending || !extractionReachable}
+              title={extractionReachable ? undefined : 'The receipt scanner is offline right now'}
+              className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1`}
+            >
+              {parse.isPending ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" /> Reading…
+                </>
+              ) : extractionReachable ? (
+                <>
+                  <Upload size={13} /> Upload invoice/receipt
+                </>
+              ) : (
+                <>
+                  <CloudOff size={13} /> Scanning offline
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Type</label>
@@ -202,6 +349,16 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               </div>
             )}
           </div>
+        )}
+
+        {/* Editable line items — create mode only. Edit mode has its own items tab below. */}
+        {!isEdit && (
+          <TransactionItemsList
+            rows={pendingRows}
+            onChange={setPendingRows}
+            amount={amount}
+            currencyCode={account?.currency_code ?? null}
+          />
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-2">

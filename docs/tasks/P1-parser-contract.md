@@ -3,7 +3,7 @@
 Size **S** · Deps: none · Plan: `IMPLEMENTATION_PLAN.md` · Roadmap §6
 
 ## Objective
-Write `services/receipt-parser/CONTRACT.md` — the frozen, versioned JSON contract between the
+Write `services/receipt-parser/API.md` — the frozen, versioned JSON contract between the
 receipt parser service (P2) and Denarly (R5). Denarly codes against this document, not against
 the service implementation. The contract below is the design; the task is to write it out with
 full examples and field documentation.
@@ -67,7 +67,7 @@ Error body: `{ "schema_version": "1.0", "status": "error",
 `schema_version` uses semver-lite: additive optional fields bump the minor ("1.1");
 breaking changes bump major and the doc keeps both sections until Denarly migrates.
 
-## What to write in CONTRACT.md
+## What to write in API.md
 1. The request/response spec above, with every field documented (type, nullability, meaning).
 2. **Three complete worked examples**: (a) clean grocery receipt (several items, quantities incl.
    a weight, total matches); (b) partial extraction (blurry photo: total + 2 of ~10 items,
@@ -79,6 +79,6 @@ breaking changes bump major and the doc keeps both sections until Denarly migrat
    timeouts and call from a background worker (Denarly: Celery).
 
 ## Done criteria
-- [ ] `services/receipt-parser/CONTRACT.md` exists with the spec + 3 examples + client guidance.
+- [ ] `services/receipt-parser/API.md` exists with the spec + 3 examples + client guidance.
 - [ ] Every example is valid against the field rules (self-consistent decimal strings, enums).
 - [ ] No implementation details of the service leak into the contract (model names, prompts).

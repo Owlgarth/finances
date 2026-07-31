@@ -39,12 +39,27 @@ export function useMultiCurrency(): boolean {
   return (data?.length ?? 0) > 1
 }
 
-/** Whether receipt extraction is configured. When false, every extraction affordance hides. */
-export function useExtractionEnabled(): boolean {
+/**
+ * Receipt-extraction availability. `enabled` means a parser is configured (when
+ * false, every extraction affordance hides); `reachable` means it is answering
+ * right now — the parser is self-hosted on a machine that is not always on, so
+ * affordances stay visible but disabled while it is offline.
+ *
+ * Refetched on an interval so the UI recovers on its own when the host returns;
+ * the backend caches the underlying probe, so polling is cheap.
+ */
+export function useExtractionConfig(): { enabled: boolean; reachable: boolean } {
   const { data } = useQuery({
     queryKey: ['extraction-config'],
     queryFn: () => transactionsApi.extractionConfig(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchOnWindowFocus: true,
   })
-  return data?.enabled ?? false
+  return { enabled: data?.enabled ?? false, reachable: data?.reachable ?? false }
+}
+
+/** Whether receipt extraction is configured. When false, every extraction affordance hides. */
+export function useExtractionEnabled(): boolean {
+  return useExtractionConfig().enabled
 }

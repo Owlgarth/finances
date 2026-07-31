@@ -1,9 +1,11 @@
 """Tests for budget-scoped persistent categories (endpoints live under /budgets)."""
 
 from datetime import date
+from decimal import Decimal
 
 from django.test import TestCase
 
+from accounts.factories import AccountFactory
 from budgeting.factories import BudgetFactory
 from budgeting.models import CategoryBudget
 from budgeting.services import PeriodService
@@ -11,6 +13,8 @@ from categories.factories import CategoryFactory
 from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
+from planned_transactions.factories import PlannedTransactionFactory
+from transactions.factories import TransactionFactory
 
 
 class TestCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
@@ -103,6 +107,94 @@ class TestCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertTrue(Category.objects.filter(id=category.id).exists())
 
 
+class TestCategoryMergeAPI(AuthMixin, APIClientMixin, TestCase):
+    """Merging a source category into a target moves all references, then deletes the source."""
+
+    def setUp(self):
+        super().setUp()
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.target = CategoryFactory(budget=self.budget, name='Groceries')
+        self.source = CategoryFactory(budget=self.budget, name='Groceries and Food')
+
+    def _merge(self, target_id, source_id):
+        return self.post(
+            f'/api/budgets/{self.budget.id}/categories/{target_id}/merge',
+            {'source_category_id': source_id},
+            **self.auth_headers(),
+        )
+
+    def test_merge_moves_records_and_deletes_source(self):
+        account = AccountFactory(workspace=self.workspace)
+        moved_txn = TransactionFactory(account=account, workspace=self.workspace, category=self.source)
+        kept_txn = TransactionFactory(account=account, workspace=self.workspace, category=self.target)
+        moved_planned = PlannedTransactionFactory(account=account, workspace=self.workspace, category=self.source)
+
+        data = self._merge(self.target.id, self.source.id)
+        self.assertStatus(200)
+        self.assertEqual(data['id'], self.target.id)
+
+        moved_txn.refresh_from_db()
+        kept_txn.refresh_from_db()
+        moved_planned.refresh_from_db()
+        self.assertEqual(moved_txn.category_id, self.target.id)
+        self.assertEqual(kept_txn.category_id, self.target.id)
+        self.assertEqual(moved_planned.category_id, self.target.id)
+        self.assertFalse(Category.objects.filter(id=self.source.id).exists())
+
+    def test_merge_sums_planned_amounts_and_moves_unconflicted_ones(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        currency = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        june = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 6, 15))
+        july = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 7, 15))
+
+        # June: both categories plan PLN — amounts must be summed on the target.
+        # July: only the source plans — the row must move to the target as-is.
+        for period, category, amount in (
+            (june, self.target, '100.00'),
+            (june, self.source, '40.00'),
+            (july, self.source, '75.00'),
+        ):
+            CategoryBudget.objects.create(
+                period=period,
+                workspace_id=self.workspace.id,
+                category=category,
+                currency=currency,
+                amount=amount,
+                created_by=self.user,
+            )
+
+        self._merge(self.target.id, self.source.id)
+        self.assertStatus(200)
+
+        june_cb = CategoryBudget.objects.get(period=june, category=self.target, currency=currency)
+        july_cb = CategoryBudget.objects.get(period=july, category=self.target, currency=currency)
+        self.assertEqual(june_cb.amount, Decimal('140.00'))
+        self.assertEqual(july_cb.amount, Decimal('75.00'))
+        self.assertFalse(CategoryBudget.objects.filter(category_id=self.source.id).exists())
+
+    def test_merge_into_itself_returns_400(self):
+        self._merge(self.target.id, self.target.id)
+        self.assertStatus(400)
+        self.assertTrue(Category.objects.filter(id=self.target.id).exists())
+
+    def test_merge_source_from_other_budget_returns_404(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        foreign = CategoryFactory(budget=other_budget, name='Foreign')
+        self._merge(self.target.id, foreign.id)
+        self.assertStatus(404)
+        self.assertTrue(Category.objects.filter(id=foreign.id).exists())
+
+    def test_merge_source_from_other_workspace_returns_404(self):
+        foreign = CategoryFactory()
+        self._merge(self.target.id, foreign.id)
+        self.assertStatus(404)
+        self.assertTrue(Category.objects.filter(id=foreign.id).exists())
+
+    def test_merge_nonexistent_source_returns_404(self):
+        self._merge(self.target.id, 999999)
+        self.assertStatus(404)
+
+
 class TestWorkspaceCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
     """Workspace-wide category listing at /budgets/categories (cross-budget filters)."""
 
@@ -149,6 +241,16 @@ class TestCategoryRolePermissions(AuthMixin, APIClientMixin, TestCase):
 
     def test_viewer_cannot_create(self):
         self.post(f'/api/budgets/{self.budget.id}/categories', {'name': 'Food'}, **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_viewer_cannot_merge(self):
+        target = CategoryFactory(budget=self.budget, name='Groceries')
+        source = CategoryFactory(budget=self.budget, name='Food')
+        self.post(
+            f'/api/budgets/{self.budget.id}/categories/{target.id}/merge',
+            {'source_category_id': source.id},
+            **self.auth_headers(),
+        )
         self.assertStatus(403)
 
     def test_viewer_can_list(self):

@@ -11,3 +11,8 @@ class CategoryNotFoundError(NotFoundError):
 class CategoryDuplicateNameError(ValidationError):
     default_message = 'A category with this name already exists in this budget period.'
     default_code = 'duplicate_name'
+
+
+class CategoryMergeSelfError(ValidationError):
+    default_message = 'A category cannot be merged into itself.'
+    default_code = 'merge_self'
