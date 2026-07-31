@@ -88,20 +88,27 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [originalCurrencyCode, setOriginalCurrencyCode] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
-  const [pendingItems, setPendingItems] = useState<TransactionItemInput[]>([])
+  // Rows are the editing source of truth in create mode (nameless rows, '' qty
+  // mid-edit, etc. survive). Normalization to the API payload shape happens
+  // once, at submit (rowsToItems below). Mirrors TransactionItemsEditor.
+  const [pendingRows, setPendingRows] = useState<Row[]>([])
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
     onSuccess: (result: ParsedReceipt, file: File) => {
       setPendingFile(file)
-      setPendingItems(
-        result.items.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          unit_price: i.unit_price,
-          line_total: i.line_total,
-        })),
+      // One-time conversion: parsed items carry extra fields (confidence, etc.)
+      // that must not leak into rows. After this, rows live as Row[] until submit.
+      setPendingRows(
+        itemsToRows(
+          result.items.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            line_total: i.line_total,
+          })),
+        ),
       )
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
@@ -124,7 +131,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (!open) return
     // Clear any receipt-upload state from a previous session.
     setPendingFile(null)
-    setPendingItems([])
+    setPendingRows([])
     parse.reset()
     if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
@@ -165,7 +172,6 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId])
 
   const account = accounts.find((a) => a.id === accountId)
-  const pendingRows = useMemo(() => itemsToRows(pendingItems), [pendingItems])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -334,7 +340,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         {!isEdit && (
           <TransactionItemsList
             rows={pendingRows}
-            onChange={(rows) => setPendingItems(rowsToItems(rows))}
+            onChange={setPendingRows}
             amount={amount}
             currencyCode={account?.currency_code ?? null}
           />
