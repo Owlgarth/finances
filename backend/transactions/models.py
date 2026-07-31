@@ -162,3 +162,50 @@ class TransactionItem(models.Model):
 
     def __str__(self):
         return f'{self.name} x{self.quantity}'
+
+
+class TransactionIdempotencyKey(models.Model):
+    """Transient dedup record mapping (key, user, workspace) → transaction for POST /transactions.
+
+    Purpose: survive network-blip double-clicks. When the frontend sends an
+    `Idempotency-Key` header, the service looks up (key, user, workspace)
+    within a 24h window; on a hit it returns the stored transaction instead of
+    creating a second one. The record is NOT user data — it MUST NOT appear in
+    GDPR export or import. It CASCADE-deletes with the user and the workspace;
+    the transaction link is SET_NULL so a deleted transaction's record can still
+    serve replays of its own original response until the 24h TTL expires.
+
+    The unique constraint is (key, user_id, workspace_id): two distinct users
+    OR workspaces may use the same key without colliding. created_at is indexed
+    for TTL lookups.
+    """
+
+    key = models.CharField(max_length=100)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='transaction_idempotency_keys',
+    )
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='transaction_idempotency_keys',
+    )
+    transaction = models.ForeignKey(
+        'Transaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='idempotency_keys',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'transaction_idempotency_keys'
+        indexes = [models.Index(fields=['created_at'])]
+        constraints = [
+            models.UniqueConstraint(fields=['key', 'user', 'workspace'], name='unique_key_per_user_workspace'),
+        ]
+
+    def __str__(self):
+        return f'{self.key} → tx:{self.transaction_id}'
