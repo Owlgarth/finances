@@ -235,6 +235,86 @@ class TestIdempotencyKey(TransactionTestCase):
         keys = list(TransactionIdempotencyKey.objects.values_list('user_id', flat=True))
         self.assertEqual(sorted(keys), sorted([self.user.id, other.id]))
 
+    def test_same_key_different_workspace_is_independent(self):
+        """Unique constraint is (key, user, workspace) — no cross-workspace collision.
+
+        Same user, same key, two workspaces → two transactions, two dedup
+        records. AuthMixin mints a JWT scoped to self.workspace, so the second
+        workspace's create goes through TransactionService directly (mirroring
+        the race test) rather than the HTTP layer.
+        """
+        other_workspace = WorkspaceFactory(name='Other Workspace')
+        WorkspaceMemberFactory(workspace=other_workspace, user=self.user, role='member')
+        CurrencyCatalogService.enable(self.user, other_workspace.id, 'PLN')
+        other_account = AccountFactory(workspace=other_workspace, name='Other Main')
+
+        first = self.post(
+            '/api/transactions',
+            self._payload(),
+            **{**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'shared-key'},
+        )
+        self.assertStatus(201)
+
+        second = TransactionService.create(
+            self.user,
+            other_workspace.id,
+            TransactionCreate(**self._payload(account_id=other_account.id)),
+            idempotency_key='shared-key',
+        )
+
+        self.assertNotEqual(second.id, first['id'])
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 2)
+        # Same key + user, distinct workspaces — both rows live side by side.
+        ws_ids = list(
+            TransactionIdempotencyKey.objects.filter(key='shared-key', user=self.user).values_list(
+                'workspace_id', flat=True
+            )
+        )
+        self.assertEqual(sorted(ws_ids), sorted([self.workspace.id, other_workspace.id]))
+        # Each transaction landed in its own workspace.
+        first_tx = Transaction.objects.get(id=first['id'])
+        self.assertEqual(first_tx.workspace_id, self.workspace.id)
+        self.assertEqual(second.workspace_id, other_workspace.id)
+
+    def test_replay_does_not_leak_across_workspaces(self):
+        """A replay of key K under workspace B must NOT return workspace A's transaction.
+
+        Regression for the cross-workspace leak: before the lookup was
+        workspace-scoped, a replay under B returned the transaction created
+        under A (even after the user's membership in A was revoked). Now the
+        scoped lookup + per-workspace constraint keep the two isolated — the
+        replay creates a fresh transaction in B and A's transaction id is
+        never returned.
+        """
+        other_workspace = WorkspaceFactory(name='Other Workspace')
+        WorkspaceMemberFactory(workspace=other_workspace, user=self.user, role='member')
+        CurrencyCatalogService.enable(self.user, other_workspace.id, 'PLN')
+        other_account = AccountFactory(workspace=other_workspace, name='Other Main')
+
+        # Create with the key in workspace A (self.workspace).
+        first = self.post(
+            '/api/transactions',
+            self._payload(),
+            **{**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'leak-key'},
+        )
+        self.assertStatus(201)
+        first_id = first['id']
+
+        # Replay the SAME key against workspace B — must be a fresh create, not
+        # a return of A's transaction.
+        replay = TransactionService.create(
+            self.user,
+            other_workspace.id,
+            TransactionCreate(**self._payload(account_id=other_account.id)),
+            idempotency_key='leak-key',
+        )
+
+        self.assertNotEqual(replay.id, first_id)
+        self.assertEqual(replay.workspace_id, other_workspace.id)
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 2)
+
     def test_key_after_24h_treated_as_new(self):
         """After the 24h TTL, the same key creates a new transaction.
 
@@ -384,11 +464,11 @@ class TestIdempotencyKey(TransactionTestCase):
         real_lookup = TransactionService._lookup_idempotency_key
         call_count = [0]
 
-        def fake_lookup(user, key):
+        def fake_lookup(user, workspace_id, key):
             call_count[0] += 1
             if call_count[0] == 1:
                 return None
-            return real_lookup(user, key)
+            return real_lookup(user, workspace_id, key)
 
         with mock.patch.object(TransactionService, '_lookup_idempotency_key', side_effect=fake_lookup):
             result = TransactionService.create(

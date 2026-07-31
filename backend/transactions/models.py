@@ -165,18 +165,19 @@ class TransactionItem(models.Model):
 
 
 class TransactionIdempotencyKey(models.Model):
-    """Transient dedup record mapping (key, user) → transaction for POST /transactions.
+    """Transient dedup record mapping (key, user, workspace) → transaction for POST /transactions.
 
     Purpose: survive network-blip double-clicks. When the frontend sends an
-    `Idempotency-Key` header, the service looks up (key, user) within a 24h
-    window; on a hit it returns the stored transaction instead of creating a
-    second one. The record is NOT user data — it MUST NOT appear in GDPR export
-    or import. It CASCADE-deletes with the user and the workspace; the
-    transaction link is SET_NULL so a deleted transaction's record can still
+    `Idempotency-Key` header, the service looks up (key, user, workspace)
+    within a 24h window; on a hit it returns the stored transaction instead of
+    creating a second one. The record is NOT user data — it MUST NOT appear in
+    GDPR export or import. It CASCADE-deletes with the user and the workspace;
+    the transaction link is SET_NULL so a deleted transaction's record can still
     serve replays of its own original response until the 24h TTL expires.
 
-    The unique constraint is (key, user_id): two distinct users may use the
-    same key without colliding. created_at is indexed for TTL lookups.
+    The unique constraint is (key, user_id, workspace_id): two distinct users
+    OR workspaces may use the same key without colliding. created_at is indexed
+    for TTL lookups.
     """
 
     key = models.CharField(max_length=100)
@@ -203,7 +204,7 @@ class TransactionIdempotencyKey(models.Model):
         db_table = 'transaction_idempotency_keys'
         indexes = [models.Index(fields=['created_at'])]
         constraints = [
-            models.UniqueConstraint(fields=['key', 'user'], name='unique_key_per_user'),
+            models.UniqueConstraint(fields=['key', 'user', 'workspace'], name='unique_key_per_user_workspace'),
         ]
 
     def __str__(self):

@@ -376,16 +376,22 @@ class TransactionService:
         ]
 
     @staticmethod
-    def _lookup_idempotency_key(user, key: str) -> TransactionIdempotencyKey | None:
-        """Return the user's unexpired dedup record for `key`, or None.
+    def _lookup_idempotency_key(user, workspace_id: int, key: str) -> TransactionIdempotencyKey | None:
+        """Return the user's unexpired dedup record for `key` in this workspace, or None.
 
         "Unexpired" = created within the last 24h. A record whose `transaction`
         FK has been SET_NULL'd by a transaction delete is returned as-is — the
         caller decides what to do with it (currently: delete + create fresh).
+
+        Scoped to workspace so a replay under workspace B cannot return a
+        transaction created under workspace A (the user's membership in A may
+        have been revoked since).
         """
         cutoff = timezone.now() - timedelta(hours=24)
         return (
-            TransactionIdempotencyKey.objects.filter(key=key, user=user, created_at__gt=cutoff)
+            TransactionIdempotencyKey.objects.filter(
+                key=key, user=user, workspace_id=workspace_id, created_at__gt=cutoff
+            )
             .select_related('transaction')
             .first()
         )
@@ -434,14 +440,15 @@ class TransactionService:
     ) -> Transaction:
         """Create a transaction on an account, lazily materializing the derived period.
 
-        If `idempotency_key` is provided, dedup within a 24h window per user:
-        a replay with the same key returns the originally-created Transaction
-        instead of creating a second one (Stripe-style idempotency — same key,
-        same result, regardless of payload). The dedup record is a transient
-        key→transaction map, NOT user data; it never appears in export/import.
+        If `idempotency_key` is provided, dedup within a 24h window per user
+        per workspace: a replay with the same key returns the
+        originally-created Transaction instead of creating a second one
+        (Stripe-style idempotency — same key, same result, regardless of
+        payload). The dedup record is a transient key→transaction map, NOT
+        user data; it never appears in export/import.
         """
         if idempotency_key:
-            existing = TransactionService._lookup_idempotency_key(user, idempotency_key)
+            existing = TransactionService._lookup_idempotency_key(user, workspace_id, idempotency_key)
             if existing is not None:
                 if existing.transaction_id is None:
                     # Original transaction was deleted out from under the record.
@@ -450,16 +457,21 @@ class TransactionService:
                 else:
                     # Re-fetch fresh so ninja serializes the current row state
                     # (e.g. if some other field was edited in the meantime).
-                    return Transaction.objects.get(id=existing.transaction_id)
+                    return Transaction.objects.get(id=existing.transaction_id, workspace_id=workspace_id)
 
-            # Sweep expired records for this (key, user). The unique constraint
-            # is unconditional, so a record from >24h ago would otherwise block
-            # our fresh insert (and force us down the slower IntegrityError
-            # path). The lookup above already treats these as invisible; this
-            # just synchronises storage with the logical TTL. Concurrent races
-            # still fall through to the IntegrityError handler below.
+            # Sweep expired records for this (key, user, workspace). The unique
+            # constraint is unconditional, so a record from >24h ago would
+            # otherwise block our fresh insert (and force us down the slower
+            # IntegrityError path). The lookup above already treats these as
+            # invisible; this just synchronises storage with the logical TTL.
+            # Scoped to this workspace: an expired row in another workspace no
+            # longer blocks this insert (the constraint is per-workspace), so
+            # don't touch it. Concurrent races still fall through to the
+            # IntegrityError handler below.
             cutoff = timezone.now() - timedelta(hours=24)
-            TransactionIdempotencyKey.objects.filter(key=idempotency_key, user=user, created_at__lte=cutoff).delete()
+            TransactionIdempotencyKey.objects.filter(
+                key=idempotency_key, user=user, workspace_id=workspace_id, created_at__lte=cutoff
+            ).delete()
 
             # Wrap the create + key-insert in a SAVEPOINT so a lost race rolls
             # BOTH back cleanly. Catching IntegrityError inside the outer
@@ -482,9 +494,9 @@ class TransactionService:
                 # Lost the race. The savepoint rolled back BOTH the key row
                 # AND the transaction we just created (no orphan). Re-read the
                 # winner outside the savepoint and return their transaction.
-                winner = TransactionService._lookup_idempotency_key(user, idempotency_key)
+                winner = TransactionService._lookup_idempotency_key(user, workspace_id, idempotency_key)
                 if winner is not None and winner.transaction_id is not None:
-                    return Transaction.objects.get(id=winner.transaction_id)
+                    return Transaction.objects.get(id=winner.transaction_id, workspace_id=workspace_id)
                 raise  # unexpected: IntegrityError with no winner — let it propagate
 
         # No idempotency key — original code path. _do_create runs inside the
