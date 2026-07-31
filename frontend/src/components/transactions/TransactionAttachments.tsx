@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Upload, Trash2, FileText, X, Sparkles, Loader2, RotateCw } from 'lucide-react'
+import { Upload, Trash2, FileText, X, Sparkles, Loader2, RotateCw, CloudOff } from 'lucide-react'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionAttachment } from '../../types'
-import { useExtractionEnabled } from '../../hooks/useDomain'
+import { useExtractionConfig } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
 import ExtractionReviewModal from './ExtractionReviewModal'
 
@@ -20,7 +20,7 @@ function isImage(contentType: string): boolean {
 
 export default function TransactionAttachments({ transaction }: Props) {
   const queryClient = useQueryClient()
-  const extractionEnabled = useExtractionEnabled()
+  const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<TransactionAttachment | null>(null)
   const [pendingId, setPendingId] = useState<number | null>(null)
@@ -52,12 +52,15 @@ export default function TransactionAttachments({ transaction }: Props) {
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to start extraction')),
   })
 
-  // Poll the extraction state while a job is pending.
+  // Poll the extraction state while a job is pending. While the scanner is
+  // offline the job can sit queued for hours (the worker retries with backoff),
+  // so poll far more slowly rather than hammering the API every 2s.
   const { data: extraction } = useQuery({
     queryKey: ['extraction', transaction.id, pendingId],
     queryFn: () => transactionsApi.getExtraction(transaction.id, pendingId!),
     enabled: pendingId !== null,
-    refetchInterval: (query) => (query.state.data?.status === 'pending' ? 2000 : false),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'pending' ? (extractionReachable ? 2000 : 30000) : false,
   })
 
   useEffect(() => {
@@ -80,7 +83,13 @@ export default function TransactionAttachments({ transaction }: Props) {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const isExtracting = (a: TransactionAttachment) => pendingId === a.id || a.extraction_status === 'pending'
+  const isExtracting = (a: TransactionAttachment) =>
+    pendingId === a.id ||
+    a.extraction_status === 'pending' ||
+    // Cover the click → mutation.onSuccess gap so the user sees immediate
+    // feedback (and the button disappears, preventing double-clicks that
+    // queue redundant extraction jobs).
+    (startExtraction.isPending && startExtraction.variables === a.id)
 
   const reviewAttachment = review && attachments.find((a) => a.id === review.attachmentId)
 
@@ -116,12 +125,20 @@ export default function TransactionAttachments({ transaction }: Props) {
                 <div className="absolute bottom-1 left-1 right-1">
                   {isExtracting(a) ? (
                     <span className="flex items-center justify-center gap-1 bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-text-muted">
-                      <Loader2 size={11} className="animate-spin" /> Extracting…
+                      {extractionReachable ? (
+                        <><Loader2 size={11} className="animate-spin" /> Extracting…</>
+                      ) : (
+                        <><CloudOff size={11} /> Queued</>
+                      )}
                     </span>
                   ) : (
+                    // Unlike the synchronous "From receipt" flow, this queues work:
+                    // the worker retries until the scanner is back, so it stays
+                    // clickable while offline.
                     <button
                       type="button"
                       onClick={() => startExtraction.mutate(a.id)}
+                      title={extractionReachable ? undefined : 'The scanner is offline — this will run when it is back'}
                       className="flex items-center justify-center gap-1 w-full bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-primary hover:bg-surface opacity-0 group-hover:opacity-100 touch-reveal transition-opacity"
                     >
                       {a.extraction_status === 'failed' ? <RotateCw size={11} /> : <Sparkles size={11} />}

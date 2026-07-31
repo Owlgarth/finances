@@ -271,7 +271,7 @@ non-technical user from the UI.
 ### Track P — Receipt parser service (independent; anytime)
 
 **P1 — Contract (S)** · deps: —
-`services/receipt-parser/CONTRACT.md`: versioned JSON schema — items (name, quantity, unit price,
+`services/receipt-parser/API.md`: versioned JSON schema — items (name, quantity, unit price,
 line total), total, optional currency/date/merchant, per-field confidence + warnings, structured
 error shape. ≥ 3 worked examples (typical, partial, unreadable). *Done:* schema reviewed and
 frozen as v1.

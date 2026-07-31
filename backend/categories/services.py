@@ -2,10 +2,13 @@
 
 from django.db import transaction as db_transaction
 
+from budgeting.models import CategoryBudget
 from budgeting.services import BudgetService
-from categories.exceptions import CategoryDuplicateNameError, CategoryNotFoundError
+from categories.exceptions import CategoryDuplicateNameError, CategoryMergeSelfError, CategoryNotFoundError
 from categories.models import Category
-from categories.schemas import CategoryArchive, CategoryCreate, CategoryUpdate
+from categories.schemas import CategoryArchive, CategoryCreate, CategoryMerge, CategoryUpdate
+from planned_transactions.models import PlannedTransaction
+from transactions.models import Transaction
 
 
 class CategoryService:
@@ -89,6 +92,55 @@ class CategoryService:
         category.updated_by = user
         category.save()
         return category
+
+    @staticmethod
+    @db_transaction.atomic
+    def merge(user, workspace_id: int, budget_id: int, category_id: int, data: CategoryMerge) -> Category:
+        """Merge another category of the same budget into this one.
+
+        Transactions, planned transactions, and planned amounts move to the
+        target category; planned amounts for the same period and currency are
+        summed. The source category is deleted afterwards.
+        """
+        target = CategoryService.get(category_id, workspace_id)
+        if target.budget_id != budget_id:
+            raise CategoryNotFoundError()
+        if data.source_category_id == target.id:
+            raise CategoryMergeSelfError()
+        source = CategoryService.get(data.source_category_id, workspace_id)
+        if source.budget_id != budget_id:
+            raise CategoryNotFoundError()
+
+        # Serialize concurrent merges touching either category: lock both rows in a
+        # deterministic order (by id) to avoid deadlock, and re-verify both still
+        # exist — a concurrent merge may have deleted the source while we waited.
+        # Must materialize via list(): .count() compiles to an aggregate query,
+        # from which Django silently strips FOR UPDATE (Postgres forbids it),
+        # acquiring no locks at all.
+        locked = list(Category.objects.select_for_update().filter(id__in=[target.id, source.id]).order_by('id'))
+        if len(locked) != 2:
+            raise CategoryNotFoundError()
+
+        Transaction.objects.filter(category=source).update(category=target)
+        PlannedTransaction.objects.filter(category=source).update(category=target)
+
+        target_amounts = {(cb.period_id, cb.currency_id): cb for cb in CategoryBudget.objects.filter(category=target)}
+        for cb in CategoryBudget.objects.filter(category=source):
+            existing = target_amounts.get((cb.period_id, cb.currency_id))
+            if existing:
+                existing.amount += cb.amount
+                existing.updated_by = user
+                existing.save(update_fields=['amount', 'updated_by', 'updated_at'])
+                cb.delete()
+            else:
+                cb.category = target
+                cb.updated_by = user
+                cb.save(update_fields=['category', 'updated_by', 'updated_at'])
+
+        source.delete()
+        target.updated_by = user
+        target.save(update_fields=['updated_by', 'updated_at'])
+        return target
 
     @staticmethod
     @db_transaction.atomic
