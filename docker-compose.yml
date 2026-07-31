@@ -126,11 +126,7 @@ services:
   parser:
     profiles: ["parser"]
     build: ./services/receipt-parser
-    environment:
-      PARSER_API_TOKEN: ${PARSER_API_TOKEN}
-      PARSER_MODEL_BASE_URL: ${PARSER_MODEL_BASE_URL}
-      PARSER_MODEL_NAME: ${PARSER_MODEL_NAME}
-      PARSER_MODEL_API_KEY: ${PARSER_MODEL_API_KEY}
+    env_file: .env
     ports:
       - "${PARSER_PORT}:8100"
     extra_hosts:
