@@ -37,6 +37,12 @@ class CategoryArchive(BaseModel):
     is_archived: bool
 
 
+class CategoryMerge(BaseModel):
+    """Schema for merging another category into this one."""
+
+    source_category_id: int
+
+
 class CategoryOut(BaseModel):
     """Schema for category response."""
 

@@ -38,11 +38,18 @@ export default function NewFromReceiptModal({ open, onClose }: Props) {
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
 
   const reset = () => {
     setFile(null); setParsed(null); setCategoryId(null); setDescription(''); setAmount('')
     setDate(new Date().toISOString().slice(0, 10))
     if (fileRef.current) fileRef.current.value = ''
+    // Fresh key for the next open session. reset() fires on close (via
+    // close()), so the next time the user opens this modal the create
+    // mutation will send a new key — preserving dedup semantics within an
+    // open session while preventing stale keys from one session leaking
+    // into the next.
+    setIdempotencyKey(crypto.randomUUID())
   }
   const close = () => { reset(); onClose() }
 
@@ -60,37 +67,57 @@ export default function NewFromReceiptModal({ open, onClose }: Props) {
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
     },
+    // A 503 here means the self-hosted scanner is off, not a bad receipt — the
+    // backend's detail already says so, so surface it rather than a generic error.
     onError: (error) => toast.error(getApiErrorMessage(error, 'Could not read the receipt')),
   })
 
   const create = useMutation({
     mutationFn: async () => {
-      const trans = await transactionsApi.create({
-        date,
-        description: description.trim() || 'Receipt',
-        type: 'expense',
-        amount,
-        account_id: accountId,
-        category_id: categoryId,
-      })
-      if (file) await transactionsApi.uploadAttachment(trans.id, file)
-      if (parsed && parsed.items.length > 0) {
-        await transactionsApi.replaceItems(
-          trans.id,
-          parsed.items.map((i) => ({
-            name: i.name,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            line_total: i.line_total,
-          })),
-        )
+      // Inline the parsed items on the create call (Task 1 backend) and send
+      // the idempotency key as a header (Task 2 backend). Atomic tx + items
+      // commit in a single round-trip.
+      const trans = await transactionsApi.create(
+        {
+          date,
+          description: description.trim() || 'Receipt',
+          type: 'expense',
+          amount,
+          account_id: accountId,
+          category_id: categoryId,
+          items:
+            parsed && parsed.items.length > 0
+              ? parsed.items.map((i) => ({
+                  name: i.name,
+                  quantity: i.quantity,
+                  unit_price: i.unit_price,
+                  line_total: i.line_total,
+                }))
+              : undefined,
+        },
+        { idempotencyKey },
+      )
+      // Best-effort attachment upload — the tx and items are already durable.
+      // Report failure via the return value so onSuccess surfaces ONE message,
+      // not an error toast followed by a success toast.
+      let uploadFailed = false
+      try {
+        if (file) await transactionsApi.uploadAttachment(trans.id, file)
+      } catch {
+        uploadFailed = true
       }
-      return trans
+      return { trans, uploadFailed }
     },
-    onSuccess: () => {
+    onSuccess: ({ uploadFailed }) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success('Transaction created from receipt')
+      // The transaction IS durable either way — invalidations + close run in
+      // both cases. Only the message differs.
+      if (uploadFailed) {
+        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+      } else {
+        toast.success('Transaction created from receipt')
+      }
       close()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create transaction')),

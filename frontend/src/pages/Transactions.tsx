@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Plus, Pencil, Trash2, ScanLine } from 'lucide-react'
+import { Copy, Plus, Pencil, Trash2 } from 'lucide-react'
 import { transactionsApi } from '../api/client'
 import type { Transaction } from '../types'
-import { useAccounts, useBudgets, useMultiCurrency, useExtractionEnabled, useWorkspaceCategories } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
@@ -13,7 +13,6 @@ import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
-import NewFromReceiptModal from '../components/modals/transactions/NewFromReceiptModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import MultiSelect from '../components/common/MultiSelect'
@@ -61,7 +60,6 @@ export default function Transactions() {
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
-  const extractionEnabled = useExtractionEnabled()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
   const { data: categories = [] } = useWorkspaceCategories(false)
@@ -119,7 +117,6 @@ export default function Transactions() {
   const isTouch = useIsTouch()
 
   const [formOpen, setFormOpen] = useState(false)
-  const [receiptOpen, setReceiptOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [copySource, setCopySource] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
@@ -193,11 +190,6 @@ export default function Transactions() {
         {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
         {canWrite && (
           <div className="flex items-center gap-2 max-sm:hidden">
-            {extractionEnabled && (
-              <button onClick={() => setReceiptOpen(true)} className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1">
-                <ScanLine size={13} /> From receipt
-              </button>
-            )}
             <button onClick={openNew} className={primaryButtonClass}>
               <Plus size={13} className="inline mr-1" /> New transaction
             </button>
@@ -332,7 +324,6 @@ export default function Transactions() {
         onCopy={openCopy}
         onDelete={(t) => { setFormOpen(false); setDeleting(t) }}
       />
-      <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete transaction"
