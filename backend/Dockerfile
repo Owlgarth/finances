@@ -1,8 +1,11 @@
 FROM python:3.13-slim
 
+# UV_PROJECT_ENVIRONMENT lives outside /app: the source is bind-mounted in dev,
+# and a volume mounted inside it would create a root-owned .venv in the checkout.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    UV_SYSTEM_PYTHON=1
+    UV_SYSTEM_PYTHON=1 \
+    UV_PROJECT_ENVIRONMENT=/venv
 
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -33,7 +36,7 @@ RUN chmod +x /app/celery-entrypoint.sh
 
 # Create static/media dirs and set ownership
 RUN mkdir -p /app/staticfiles /app/mediafiles && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app /venv
 
 USER appuser
 

@@ -6,64 +6,46 @@ Thank you for your interest in contributing to Denarly! This document provides g
 
 ### Prerequisites
 
-- Python 3.13+
-- Node.js 22+
-- PostgreSQL 17+
-- Redis (for rate limiting cache)
-- [uv](https://github.com/astral-sh/uv) - Fast Python package manager
-
-### Option 1: Docker (Recommended)
+- Docker and Docker Compose — enough on their own for Option 1 and 2 below
+- For running the app outside the containers (`DEV_TARGET=host`): Python 3.13+,
+  Node.js 22+, and [uv](https://github.com/astral-sh/uv)
 
 ```bash
 # Clone the repository
 git clone https://github.com/erikmoroz/denarly.git
 cd denarly
 
-# Copy environment file
-cp backend/example.env .env
-
-# Start all services
-docker-compose up -d
+# Copy environment file (all settings, including the published ports)
+cp example.env .env
 ```
 
-Access:
-- Frontend: http://localhost:3000
+### Option 1: Services in Docker, app on your machine (recommended)
+
+One terminal each — both sides reload on save:
+
+```bash
+./dev.sh up            # db, redis, storage
+./dev.sh backend       # migrate + seed, then uvicorn --reload and a Celery worker
+./dev.sh frontend      # Vite dev server
+```
+
+`backend` and `frontend` — and `migrate`, `test`, `lint`, `npm` — run inside the
+`api` and `node` containers, so only Docker has to be installed. Set
+`DEV_TARGET=host` in `.env` to run them with your own uv and npm instead.
+
+### Option 2: Everything in Docker
+
+```bash
+./dev.sh up --full     # + api, ui, worker, beat
+```
+
+Access (ports come from `.env` — change them there if they clash):
+- Frontend: http://localhost:5173
 - Backend API: http://localhost:8000/api
 - API Docs: http://localhost:8000/api/docs
 
-### Option 2: Local Development
-
-**Backend:**
-
-```bash
-cd backend
-
-# Create virtual environment and install dependencies
-uv venv && source .venv/bin/activate
-uv sync
-
-# Configure environment
-cp example.env .env
-# Edit .env with your database credentials
-
-# Run migrations
-python manage.py migrate
-
-# Start development server (uvicorn with auto-reload)
-uvicorn config.asgi:application --reload
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
+`./dev.sh` covers the rest: `migrate`, `seed`, `manage <args>`, `test`, `lint`,
+`psql`, `logs`, `up`/`down`. Run it with no arguments for the list.
 
 ### Pre-commit Hooks
 
@@ -194,6 +176,7 @@ denarly/
 │   │   ├── hooks/
 │   │   └── pages/
 ├── docs/              # Documentation
+├── dev.sh             # The dev entry point: start, compose, manage.py, tests, lint
 └── docker-compose.yml
 ```
 

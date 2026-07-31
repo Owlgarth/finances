@@ -49,6 +49,34 @@ npm run lint                              # ESLint check
 
 Always run `npm run lint` after making changes.
 
+### Full Stack (Docker)
+
+Default workflow: services in Docker, backend and frontend on the host.
+
+```bash
+cp example.env .env    # every setting, including published ports
+./dev.sh up            # db, redis, storage (parser: ./dev.sh up parser)
+./dev.sh backend       # migrate + seed, then uvicorn --reload + Celery worker
+./dev.sh frontend      # Vite dev server
+./dev.sh up --full     # everything in Docker instead (adds api, ui, worker, beat)
+```
+
+`./dev.sh` is the single entry point and covers everything else too —
+`down`/`logs`/`ps`, plus `manage`, `migrate`, `seed`, `shell`, `psql`, `test`,
+`lint`, `npm`; run it with no arguments for the list.
+
+Backend and frontend commands run **inside the `api` and `node` containers** by
+default (`DEV_TARGET=docker` in `.env`), as the invoking user so nothing lands in
+the checkout owned by root. `DEV_TARGET=host` runs them through `uv` in
+`backend/` and `npm` in `frontend/` instead, with the service hostnames rewritten
+to the published ports; it can also be set per command
+(`DEV_TARGET=host ./dev.sh test`).
+
+## Working Rules
+
+- Never stage or commit personal data exports (`denarly_data_export_*.json`); stage explicit paths only — no `git add -A` / `git add .`.
+- Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`, `PARSER_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers — a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
+
 ## Data Model
 
 Money-holding accounts are the centre of gravity; balances and periods are computed/derived, not stored:
