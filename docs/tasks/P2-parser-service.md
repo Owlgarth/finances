@@ -1,7 +1,7 @@
 # P2 — Receipt parser FastAPI service
 
 Size **M** · Deps: P1 · Plan: `IMPLEMENTATION_PLAN.md` · Roadmap §6 · Contract:
-`services/receipt-parser/CONTRACT.md` (write P1 first; this task implements it exactly)
+`services/receipt-parser/API.md` (write P1 first; this task implements it exactly)
 
 ## Objective
 Standalone, stateless FastAPI service in this monorepo: receives a receipt file, calls any
@@ -9,7 +9,7 @@ OpenAI-compatible vision model, returns contract-v1 JSON. Runs via docker-compos
 opt-in profile (the core stack must not require it or a local LLM).
 
 ## Read first
-- `services/receipt-parser/CONTRACT.md` (P1 output — the source of truth)
+- `services/receipt-parser/API.md` (P1 output — the source of truth)
 - `.agents/skills/docker-infra/SKILL.md` (DNS-safe service names, compose conventions)
 - `docker-compose.yml`, `example.env` (root) — patterns for env wiring
 
@@ -20,7 +20,7 @@ services/receipt-parser/
 │   ├── __init__.py
 │   ├── main.py          # FastAPI app, routes, auth dependency, error handlers
 │   ├── config.py        # pydantic-settings Settings (env-driven)
-│   ├── schemas.py       # pydantic models mirroring CONTRACT.md exactly
+│   ├── schemas.py       # pydantic models mirroring API.md exactly
 │   ├── llm.py           # OpenAI-compatible client call + response parsing/repair
 │   ├── images.py        # decode/convert/downscale; HEIC via pillow-heif
 │   └── pdf.py           # PDF → page images via pypdfium2

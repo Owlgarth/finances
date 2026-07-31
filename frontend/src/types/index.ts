@@ -158,6 +158,17 @@ export interface ExtractionResult {
   result: ParsedReceipt | null;
 }
 
+/**
+ * `enabled` — a parser is configured at all; when false every extraction
+ * affordance is hidden. `reachable` — it is answering right now; the parser is
+ * self-hosted on a machine that is not always powered on, so configured but
+ * offline is a normal state where affordances are shown disabled, not hidden.
+ */
+export interface ExtractionConfig {
+  enabled: boolean;
+  reachable: boolean;
+}
+
 export interface Transfer {
   id: number;
   workspace_id: number;
