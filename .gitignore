@@ -18,6 +18,7 @@ IMPLEMENTATION_PLAN.md
 .plans
 .opencode-data/
 .claude/
+!.claude/settings.json
 .agents/settings.local.json
 
 # Python
