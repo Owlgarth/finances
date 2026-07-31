@@ -288,7 +288,9 @@ npm run preview  # Preview production build
 ### Docker
 
 ```bash
-docker-compose up denarly_ui
+# The `ui` service is the nginx production build (VITE_* baked in at build time).
+# For frontend work run the dev server on the host instead:
+./dev.sh frontend   # Vite + hot reload on UI_PORT, VITE_* from .env
 ```
 
 ## Environment Variables
