@@ -227,9 +227,15 @@ do not change to 404.
 
 ## Deployment
 
-`docker-compose.yml` runs: `denarly_db` (Postgres), `denarly_redis`, `denarly_storage`
-(S3-compatible), `denarly_api`, `denarly_celery_worker`, `denarly_celery_beat`,
-`denarly_ui`, and `denarly_receipt_parser` (optional; port 8100).
+`docker-compose.yml` runs: `db` (Postgres), `redis`, `storage` (S3-compatible),
+`api`, `ui`, `worker`, `beat`, plus `parser` (optional, `--profile parser`) and
+`node` (dev toolchain, `--profile tools`). Every value — credentials, service
+hostnames, published ports — comes from `.env` (see `example.env`).
+
+For local development `./dev.sh up` runs only the backing services and
+`./dev.sh backend` / `./dev.sh frontend` run the app — in their containers by
+default, or on the host with `DEV_TARGET=host`. `./dev.sh up --full` runs the
+whole stack in Docker, which is also how it deploys.
 
 The receipt parser is fully optional: with `PARSER_URL` unset, the backend reports
 extraction as disabled and the UI hides every extraction affordance.

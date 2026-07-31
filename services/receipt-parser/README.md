@@ -37,15 +37,15 @@ curl -s http://localhost:8100/parse \
 
 ## Run with Docker
 
-Built and wired into the repo's top-level `docker-compose.yml` as the
-`denarly_receipt_parser` service (published on `:8100`). Or standalone:
+Built and wired into the repo's top-level `docker-compose.yml` as the `parser`
+service, started with `./dev.sh up parser`. Or standalone:
 
 ```bash
 docker build -t denarly-receipt-parser .
 docker run --rm -p 8100:8100 --env-file .env denarly-receipt-parser
 ```
 
-The Denarly backend reaches it at `http://denarly_receipt_parser:8100` inside the
+The Denarly backend reaches it at `http://parser:8100` inside the
 compose network (see `PARSER_URL` in the backend env). If `PARSER_URL` is unset,
 the backend hides every extraction affordance — the service is entirely optional.
 

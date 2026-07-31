@@ -1,227 +1,143 @@
-# Local development stack.
-# - Host ports published so you can connect from your IDE / curl / a host-side Vite.
-# - DEBUG=true (no HTTPS redirect, verbose errors).
-# - Source bind-mounted with hot reload (uvicorn --reload, vite).
-# - Anonymous volumes preserve /app/.venv and /app/node_modules built into the images.
+# All configuration lives in .env (copy example.env). Start it with:
+#
+#   ./dev.sh up          # db, redis, storage, parser — backend and frontend
+#                        # then run on the host (./dev.sh backend | frontend)
+#   ./dev.sh up --full   # + api, ui, worker, beat
+#
+# The backend source is bind-mounted and `api` reloads on change. Container-owned
+# paths (the uv environment) stay outside that mount so the host toolchain keeps
+# working — see .agents/skills/docker-infra/SKILL.md.
+
+x-backend: &backend
+  build: ./backend
+  # One shared tag, so api/worker/beat can never run different builds of the same
+  # Dockerfile. Project-scoped, so a sibling checkout keeps its own image.
+  image: ${COMPOSE_PROJECT_NAME}-backend
+  user: root # the bind-mounted source is owned by the host user
+  env_file: .env
+  volumes:
+    - ./backend:/app
+    - backend-venv:/venv # UV_PROJECT_ENVIRONMENT, kept out of the bind mount
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    storage:
+      condition: service_healthy
 
 services:
-  denarly_db:
+  db:
     image: postgres:17-alpine
-    env_file:
-      - .env
-    volumes:
-      - postgres_data_dev:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
-    networks:
-      - denarly-network
+      - "${DB_PORT}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
-      timeout: 5s
       retries: 10
 
-  denarly_redis:
+  redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - denarly-network
-    volumes:
-      - redis_data_dev:/data
     command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
       retries: 10
 
-  denarly_storage_init:
+  # rustfs runs as uid 10001 and cannot chown a fresh named volume itself.
+  storage-init:
     image: busybox:1.37
-    container_name: denarly_storage_init
-    volumes:
-      - rustfs_data_dev:/data
     command: chown -R 10001:10001 /data
-    restart: "no"
-
-  denarly_storage:
-    image: rustfs/rustfs:latest
-    container_name: denarly_storage
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - RUSTFS_ACCESS_KEY=rustfsadmin
-      - RUSTFS_SECRET_KEY=rustfsadmin
-      - RUSTFS_SERVER_URL=http://localhost:9000
     volumes:
-      - rustfs_data_dev:/data
-    networks:
-      denarly-network:
-        aliases:
-          - rustfs
+      - storage-data:/data
+
+  storage:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_SERVER_URL: ${S3_EXTERNAL_URL}
+    ports:
+      - "${STORAGE_PORT}:9000"
+      - "${STORAGE_CONSOLE_PORT}:9001"
+    volumes:
+      - storage-data:/data
     depends_on:
-      denarly_storage_init:
+      storage-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
       interval: 5s
-      timeout: 3s
       retries: 10
 
-  denarly_api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: denarly_api
-    user: root
-    env_file:
-      - .env
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DEBUG=true
-      - ALLOWED_HOSTS=*
-      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
-      - REDIS_URL=redis://denarly_redis:6379
-      - USE_S3_STORAGE=true
-      - S3_ENDPOINT_URL=http://rustfs:9000
-      - S3_ACCESS_KEY=rustfsadmin
-      - S3_SECRET_KEY=rustfsadmin
-      - S3_BUCKET_STATIC=denarly-static
-      - S3_BUCKET_MEDIA=denarly-media
-      - S3_BUCKET_LOGS=denarly-logs
-      - S3_EXTERNAL_URL=http://localhost:9000
-      # Receipt parser (R5). Unset PARSER_URL to disable extraction entirely.
-      - PARSER_URL=http://denarly_receipt_parser:8100
-      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
-    volumes:
-      - ./backend:/app
-      - backend_venv:/app/.venv
+  # Image entrypoint migrates, seeds, creates buckets and collects static.
+  api:
+    <<: *backend
+    command:
+      ["uv", "run", "uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
-      - "8000:8000"
-    networks:
-      - denarly-network
-    depends_on:
-      denarly_db:
-        condition: service_healthy
-      denarly_redis:
-        condition: service_healthy
-      denarly_storage:
-        condition: service_healthy
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        set -e
-        echo "Running database migrations..."
-        uv run python manage.py migrate --noinput
-        echo "Seeding legal documents..."
-        uv run python manage.py seed_legal_documents
-        if [ "$$USE_S3_STORAGE" = "true" ]; then
-          echo "Initializing storage buckets..."
-          uv run python manage.py init_storage_buckets
-        fi
-        if [ "$$USE_S3_STORAGE" = "true" ]; then
-          echo "Collecting static files to S3..."
-          uv run python manage.py collectstatic --noinput
-        fi
-        echo "Starting dev server (autoreload)..."
-        exec uv run uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
+      - "${API_PORT}:8000"
 
-  denarly_ui:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
-        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
-    container_name: denarly_ui
-    ports:
-      - "5173:80"
-    networks:
-      - denarly-network
-    depends_on:
-      - denarly_api
-
-  denarly_celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: denarly_celery_worker
-    env_file:
-      - .env
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DEBUG=true
-      - REDIS_URL=redis://denarly_redis:6379
-      - CELERY_BROKER_URL=redis://denarly_redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://denarly_redis:6379/1
-    volumes:
-      - ./backend:/app
-      - backend_venv:/app/.venv
-    networks:
-      - denarly-network
-    depends_on:
-      denarly_db:
-        condition: service_healthy
-      denarly_redis:
-        condition: service_healthy
+  worker:
+    <<: *backend
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: ["celery", "-A", "config", "worker", "--loglevel=info"]
 
-  denarly_celery_beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: denarly_celery_beat
-    env_file:
-      - .env
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DEBUG=true
-      - REDIS_URL=redis://denarly_redis:6379
-      - CELERY_BROKER_URL=redis://denarly_redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://denarly_redis:6379/1
-    volumes:
-      - ./backend:/app
-      - backend_venv:/app/.venv
-    networks:
-      - denarly-network
-    depends_on:
-      denarly_db:
-        condition: service_healthy
-      denarly_redis:
-        condition: service_healthy
+  beat:
+    <<: *backend
     entrypoint: ["/app/celery-entrypoint.sh"]
-    command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+    # --schedule keeps beat's state file out of the bind-mounted source tree
+    command: ["celery", "-A", "config", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
 
-  denarly_receipt_parser:
+  # Production build served by nginx. For frontend work run ./dev.sh frontend
+  # on the host instead — Vite's hot reload beats rebuilding this image.
+  ui:
     build:
-      context: ./services/receipt-parser
-      dockerfile: Dockerfile
-    container_name: denarly_receipt_parser
-    environment:
-      - PARSER_API_TOKEN=${PARSER_API_TOKEN:-local-parser-token}
-      # Point at your vision model. Defaults to a host-run Ollama on the Docker host.
-      - PARSER_MODEL_BASE_URL=${PARSER_MODEL_BASE_URL:-http://host.docker.internal:11434/v1}
-      - PARSER_MODEL_NAME=${PARSER_MODEL_NAME:-qwen2.5-vl}
-      - PARSER_MODEL_API_KEY=${PARSER_MODEL_API_KEY:-not-needed}
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE}
     ports:
-      - "8100:8100"
-    networks:
-      - denarly-network
+      - "${UI_PORT}:80"
+
+  # The node toolchain for `./dev.sh frontend` and `./dev.sh npm`, so nothing has
+  # to be installed on the host. Debian-based like the builder stage, so the
+  # node_modules it writes also work if you run npm on a Linux host.
+  node:
+    profiles: ["tools"]
+    image: node:22-slim
+    working_dir: /app
+    env_file: .env
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "${UI_PORT}:5173"
+
+  parser:
+    profiles: ["parser"]
+    build: ./services/receipt-parser
+    environment:
+      PARSER_API_TOKEN: ${PARSER_API_TOKEN}
+      PARSER_MODEL_BASE_URL: ${PARSER_MODEL_BASE_URL}
+      PARSER_MODEL_NAME: ${PARSER_MODEL_NAME}
+      PARSER_MODEL_API_KEY: ${PARSER_MODEL_API_KEY}
+    ports:
+      - "${PARSER_PORT}:8100"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 volumes:
-  postgres_data_dev:
-  redis_data_dev:
-  rustfs_data_dev:
-  backend_venv:
-
-networks:
-  denarly-network:
-    driver: bridge
+  db-data:
+  redis-data:
+  storage-data:
+  backend-venv:
