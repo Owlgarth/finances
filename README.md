@@ -18,8 +18,7 @@ A modern, full-stack personal finance tracking application built on money-holdin
 
 This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Denarly as an open-source application.
 
-In the next development phase, I plan to conduct deeper code reviews and refactoring to ensure code quality, maintainability, and adherence to best practices.
-
+In the next development phase, I plan to conduct deeper 
 ---
 
 ## Overview
@@ -196,8 +195,9 @@ denarly/
 
 ### Everyday commands
 
-`./dev.sh` is the only script: `docker compose` for the services, `uv`/`npm` on
-the host for the app. Run it with no arguments for the full list.
+`./dev.sh` is the only script: `docker compose` for the services, and the app
+either in its container or on your machine. Run it with no arguments for the
+full list.
 
 ```bash
 ./dev.sh up parser       # start individual services
@@ -216,6 +216,28 @@ user who invoked them, so anything they write — new migrations, caches — bel
 to you and not to root. With `DEV_TARGET=host` they run through `uv` in
 `backend/` and `npm` in `frontend/`, and the script rewrites the service
 hostnames to the published ports for you.
+
+### The Python environment (`DEV_TARGET=host`)
+
+`uv run` creates `backend/.venv` and syncs it to `uv.lock` by itself, so
+`./dev.sh backend` works from a clean checkout. Doing it up front is still worth
+it — your editor gets an interpreter to point at, and the install isn't running
+while you wait for the server to come up:
+
+```bash
+cd backend
+uv venv     # creates backend/.venv
+uv sync     # installs the locked dependencies
+```
+
+There is nothing to activate. `uv` locates that environment by walking up for
+`pyproject.toml`, so it works from anywhere under `backend/`, and an environment
+you activated from another checkout is ignored (with a warning).
+
+Containers use `/venv` instead, via `UV_PROJECT_ENVIRONMENT` in
+`backend/Dockerfile` — which is why the container's packages never land in your
+checkout. Keep that variable out of `.env`: `./dev.sh` sources it, and host
+commands would then go looking for a `/venv` that doesn't exist on your machine.
 
 ### Without Docker
 
