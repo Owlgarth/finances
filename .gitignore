@@ -18,6 +18,7 @@ IMPLEMENTATION_PLAN.md
 .plans
 .opencode-data/
 .claude/
+.agents/settings.local.json
 
 # Python
 __pycache__/
