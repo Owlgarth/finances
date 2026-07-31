@@ -98,17 +98,26 @@ export default function NewFromReceiptModal({ open, onClose }: Props) {
         { idempotencyKey },
       )
       // Best-effort attachment upload — the tx and items are already durable.
+      // Report failure via the return value so onSuccess surfaces ONE message,
+      // not an error toast followed by a success toast.
+      let uploadFailed = false
       try {
         if (file) await transactionsApi.uploadAttachment(trans.id, file)
       } catch {
-        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+        uploadFailed = true
       }
-      return trans
+      return { trans, uploadFailed }
     },
-    onSuccess: () => {
+    onSuccess: ({ uploadFailed }) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success('Transaction created from receipt')
+      // The transaction IS durable either way — invalidations + close run in
+      // both cases. Only the message differs.
+      if (uploadFailed) {
+        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+      } else {
+        toast.success('Transaction created from receipt')
+      }
       close()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create transaction')),

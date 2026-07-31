@@ -125,6 +125,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const handleFile = (f: File | null) => {
     if (!f) return
     parse.mutate(f)
+    // Same-file reselect must re-fire onChange; the File object is already
+    // captured by parse.mutate, so clearing the input value is safe. Without
+    // this, re-selecting the same file fires no change event (silent no-op).
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   useEffect(() => {
@@ -192,7 +196,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         original_currency_code: otherCurrency ? originalCurrencyCode : null,
       }
       if (isEdit) {
-        return transactionsApi.update(transaction.id, payload)
+        const trans = await transactionsApi.update(transaction.id, payload)
+        // Edit mode never uploads an attachment here — uniform return shape so
+        // onSuccess can destructure { uploadFailed } for both branches.
+        return { trans, uploadFailed: false }
       }
       // Inline the items on the create call (Task 1 backend) and send the
       // idempotency key as a header (Task 2 backend). This is the atomic
@@ -202,21 +209,29 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         { idempotencyKey: idempotencyKey ?? undefined },
       )
       // Attachment upload is best-effort: the tx and its items are already
-      // committed. A failure here (e.g. S3 blip) is no longer fatal — surface
-      // a non-blocking toast and let onSuccess proceed. The user can re-add
-      // the receipt in edit mode.
+      // committed. A failure here (e.g. S3 blip) is no longer fatal — report
+      // it via the return value so onSuccess surfaces ONE message, not a
+      // mid-flight error toast followed by a success toast. The user can
+      // re-add the receipt in edit mode.
+      let uploadFailed = false
       try {
         if (pendingFile) await transactionsApi.uploadAttachment(trans.id, pendingFile)
       } catch {
-        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+        uploadFailed = true
       }
-      return trans
+      return { trans, uploadFailed }
     },
-    onSuccess: () => {
+    onSuccess: ({ uploadFailed }) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success(isEdit ? 'Transaction updated' : 'Transaction added')
+      // The transaction IS durable either way — invalidations + close run in
+      // both cases. Only the message differs: a single error vs a single success.
+      if (uploadFailed) {
+        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+      } else {
+        toast.success(isEdit ? 'Transaction updated' : 'Transaction added')
+      }
       onClose()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save transaction')),
