@@ -110,8 +110,12 @@ in_service() {
 }
 
 # python manage.py …, pytest …, ruff … — /venv is UV_PROJECT_ENVIRONMENT in the image.
+# On the host, `uv run` creates backend/.venv and syncs it to uv.lock by itself,
+# so there is nothing to set up first and nothing to activate.
 backend_run() {
     if on_host; then
+        command -v uv >/dev/null ||
+            die "Error: uv is not installed — see https://docs.astral.sh/uv/, or set DEV_TARGET=docker"
         use_local_hosts
         (cd backend && uv run "$@")
         return
@@ -121,6 +125,8 @@ backend_run() {
 
 frontend_run() {
     if on_host; then
+        command -v npm >/dev/null ||
+            die "Error: npm is not installed — install Node 22+, or set DEV_TARGET=docker"
         (cd frontend && "$@")
         return
     fi
@@ -199,7 +205,7 @@ start_backend() {
     # No periodic tasks are defined yet, so beat is not started; if that changes,
     # run it in the stack with: ./dev.sh up beat
     # No exec: the trap above has to survive to clean up the worker.
-    uv_backend uvicorn config.asgi:application --host 0.0.0.0 --port "$API_PORT" --reload
+    backend_run uvicorn config.asgi:application --host 0.0.0.0 --port "$API_PORT" --reload
 }
 
 # VITE_API_URL comes from .env, so it already points at the backend's port.
