@@ -114,8 +114,11 @@ class CategoryService:
         # Serialize concurrent merges touching either category: lock both rows in a
         # deterministic order (by id) to avoid deadlock, and re-verify both still
         # exist — a concurrent merge may have deleted the source while we waited.
-        locked = Category.objects.select_for_update().filter(id__in=[target.id, source.id]).order_by('id')
-        if locked.count() != 2:
+        # Must materialize via list(): .count() compiles to an aggregate query,
+        # from which Django silently strips FOR UPDATE (Postgres forbids it),
+        # acquiring no locks at all.
+        locked = list(Category.objects.select_for_update().filter(id__in=[target.id, source.id]).order_by('id'))
+        if len(locked) != 2:
             raise CategoryNotFoundError()
 
         Transaction.objects.filter(category=source).update(category=target)
