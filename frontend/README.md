@@ -28,7 +28,7 @@ frontend/
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
-│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, NewFromReceiptModal
+│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
 │   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
 │   │   ├── AuthContext.tsx          # Authentication + consent state
@@ -78,7 +78,7 @@ balance adjustment), `TransferModal` (last-used pair, cross-currency implied rat
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs), `TransactionItemsEditor`,
 `TransactionAttachments` (upload + extraction), `ExtractionReviewModal`,
-`PlannedFormModal`, `NewFromReceiptModal`.
+`PlannedFormModal`.
 
 ## Contexts
 
