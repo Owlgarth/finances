@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import {
   ArrowLeftRight,
   Calendar,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { transactionsApi } from '../../api/client'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -39,10 +41,9 @@ import Switch from '../common/Switch'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
-import NewFromReceiptModal from '../modals/transactions/NewFromReceiptModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import TransferModal from '../accounts/TransferModal'
-import type { Workspace } from '../../types'
+import type { ParsedReceipt, Workspace } from '../../types'
 
 // Overflow destinations live in the More sheet (plan decision 5).
 const MORE_DESTINATIONS = [
@@ -51,6 +52,9 @@ const MORE_DESTINATIONS = [
   { to: '/members', label: 'Members', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
+
+// Mirrors the accept list in TransactionFormModal's inline receipt upload.
+const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
 interface TabProps {
   to: string
@@ -111,8 +115,46 @@ export default function BottomNav() {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
-  const [receiptOpen, setReceiptOpen] = useState(false)
+  // Receipt-first flow: the parent owns the file picker + parse, then seeds the
+  // canonical TransactionFormModal via `prefillReceipt`. Set exactly once per
+  // flow (on parse success) and cleared to null in the modal's onClose wrapper,
+  // so the reference is stable while the modal is open — no mid-edit re-seed.
+  const [prefillReceipt, setPrefillReceipt] = useState<{ file: File; parsed: ParsedReceipt } | null>(null)
   const [plannedOpen, setPlannedOpen] = useState(false)
+
+  // Always-mounted hidden file input. Its .click() is called synchronously
+  // inside the "From receipt" ActionSheet onSelect (the user-gesture handler)
+  // — Chrome blocks file dialogs without user activation, so a useEffect-
+  // triggered click would be fragile. ActionSheet runs onSelect after onClose,
+  // still inside the gesture.
+  const receiptFileRef = useRef<HTMLInputElement>(null)
+  // react-hot-toast id for the loading→error swap (success dismisses silently).
+  const parseToastId = useRef<string | undefined>(undefined)
+
+  const parse = useMutation({
+    mutationFn: (f: File) => transactionsApi.parseReceipt(f),
+    onMutate: () => {
+      parseToastId.current = toast.loading('Reading receipt…')
+    },
+    onSuccess: (result: ParsedReceipt, file: File) => {
+      // No success toast — the form opening IS the signal.
+      toast.dismiss(parseToastId.current)
+      setPrefillReceipt({ file, parsed: result })
+      setTransactionOpen(true)
+    },
+    onError: (error) => {
+      // Replace the loading toast with the error (single toast, no duplicate).
+      toast.error(getApiErrorMessage(error, 'Could not read the receipt'), { id: parseToastId.current })
+    },
+  })
+
+  const handleReceiptFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) parse.mutate(f)
+    // Same-file reselect must re-fire onChange; the File is already captured by
+    // parse.mutate, so clearing the input value is safe (CODING_SUMMARIES T4-fix).
+    if (receiptFileRef.current) receiptFileRef.current.value = ''
+  }
 
   // Close the More sheet when navigation happens from inside it.
   useEffect(() => {
@@ -144,7 +186,7 @@ export default function BottomNav() {
     ...(extractionEnabled
       ? [
           extractionReachable
-            ? { label: 'From receipt', icon: ScanLine, onSelect: () => setReceiptOpen(true) }
+            ? { label: 'From receipt', icon: ScanLine, onSelect: () => receiptFileRef.current?.click() }
             : { label: 'Scanning offline', icon: CloudOff, onSelect: () => {}, disabled: true },
         ]
       : []),
@@ -346,10 +388,26 @@ export default function BottomNav() {
         onClose={() => setQuickAddOpen(false)}
         actions={quickAddActions}
       />
-      <TransactionFormModal open={transactionOpen} onClose={() => setTransactionOpen(false)} />
+      <TransactionFormModal
+        open={transactionOpen}
+        prefillReceipt={prefillReceipt}
+        onClose={() => {
+          setTransactionOpen(false)
+          setPrefillReceipt(null)
+        }}
+      />
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} />
-      <NewFromReceiptModal open={receiptOpen} onClose={() => setReceiptOpen(false)} />
       <PlannedFormModal open={plannedOpen} onClose={() => setPlannedOpen(false)} />
+
+      {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
+      <input
+        ref={receiptFileRef}
+        type="file"
+        accept={ACCEPT}
+        capture="environment"
+        onChange={handleReceiptFile}
+        className="hidden"
+      />
 
       {workspace && (
         <WorkspaceSettingsPanel
