@@ -29,6 +29,12 @@ interface Props {
   /** Edit mode only: renders a Copy button in the footer. Caller switches the
       modal into copy mode (transaction=null, copyFrom=t). */
   onCopy?: (transaction: Transaction) => void
+  /** Receipt-first create entry (BottomNav "From receipt"): seeds amount/date/
+      description + the editable items list + the pending attachment from an
+      *already-parsed* receipt. Set once by the parent on parse success and
+      cleared on close, so the reference is stable while open (no mid-edit
+      re-seed). Ignored unless create mode (no transaction/copyFrom). */
+  prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
 }
 
 const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
@@ -60,7 +66,7 @@ const rowsToItems = (rows: Row[]): TransactionItemInput[] =>
       line_total: r.line_total === '' ? null : r.line_total,
     }))
 
-export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy }: Props) {
+export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy, prefillReceipt = null }: Props) {
   const isEdit = !!transaction
   const queryClient = useQueryClient()
   // No autofocus on touch: focusing an input on open yanks the keyboard up
@@ -171,9 +177,35 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // within this open session — that's what makes a double-click or a
       // network-blip replay return the original 201 instead of a duplicate.
       setIdempotencyKey(crypto.randomUUID())
+
+      // Receipt-first entry (BottomNav "From receipt"): seed from an
+      // already-parsed receipt. Mirrors parse.onSuccess's seeding (above) but
+      // runs at open time. prefillReceipt is set once by the parent on parse
+      // success and cleared on close, so it cannot re-seed mid-edit. Merchant
+      // fills description unconditionally here because the line above just set
+      // it to '' (CODING_SUMMARIES T18 — create-mode default is ''). Do NOT
+      // touch the inline "Upload invoice/receipt" button below; it stays
+      // functional for an in-place re-scan after prefill.
+      if (prefillReceipt) {
+        const { file, parsed } = prefillReceipt
+        setPendingFile(file)
+        setPendingRows(
+          itemsToRows(
+            parsed.items.map((i) => ({
+              name: i.name,
+              quantity: i.quantity,
+              unit_price: i.unit_price,
+              line_total: i.line_total,
+            })),
+          ),
+        )
+        setAmount(parsed.total ?? '')
+        if (parsed.date) setDate(parsed.date)
+        setDescription(parsed.merchant ?? '')
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId])
+  }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId, prefillReceipt])
 
   const account = accounts.find((a) => a.id === accountId)
 
