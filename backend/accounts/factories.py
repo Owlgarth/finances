@@ -25,4 +25,5 @@ class AccountFactory(DjangoModelFactory):
     currency = factory.LazyFunction(_default_currency)
     opening_balance = 0
     is_archived = False
+    is_default_for_currency = False
     display_order = 0

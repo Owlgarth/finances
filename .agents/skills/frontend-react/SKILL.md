@@ -106,6 +106,8 @@ onExecute: (planned: PlannedTransaction) => void
 
 Standard form component shape: props interface, `isLoading` state, `handleSubmit` with `try/catch` showing `toast.error(...)` and `finally { setIsLoading(false) }`.
 
+**Inline checkbox labels — raw `inline-flex`, not `labelClass`:** An inline boolean toggle inside a form (e.g. "Set as default for {currency}", "Paid in another currency?") uses a raw `<label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">` wrapping its `<input type="checkbox">` — never the shared `labelClass` from `formStyles.ts`, which carries the block + margin styling meant for field labels *above* inputs. This is the established pattern wherever a checkbox sits inline with its label text.
+
 ## Variant Props on Shared Components
 
 When a shared component needs a new render variant that must NOT change existing call sites, add an opt-in boolean prop (default `false`) with an early-return render branch. Prefer this over a sibling component when the variant reuses most of the component's wiring (refs, formatters, context lookups) and differs only in presentation:
@@ -312,6 +314,32 @@ After operations that change server-side state (email change, profile update), f
 // Good: fetch full state from server
 const updatedUser = await authApi.getCurrentUser()
 updateUser(updatedUser)
+```
+
+## Reading State in Mutation Callbacks and Effects
+
+**TDZ-safe reads in `useMutation.onSuccess`:** A mutation callback defined before a derived `const` in source order cannot reference that const — JavaScript's temporal dead zone throws `ReferenceError` at call time, and **`tsc` does NOT catch this** (TDZ is a runtime semantic, not a type error; a clean build does not prove TDZ safety). When `onSuccess` needs state that is also captured by a later-declared const, read the source state directly:
+
+```tsx
+// `account` is declared AFTER `parse` in source order — referencing it here throws at runtime
+const parse = useMutation({
+  onSuccess: () => {
+    const current = accounts.find((a) => a.id === accountId)?.currency_code  // read source state, not `account`
+    if (current !== parsed.currency) { ... }
+  },
+})
+const account = accounts.find((a) => a.id === accountId)
+```
+
+**Stale-state-safe reads inside an effect that sets then branches:** When an effect calls `setState` and then needs to branch on the value being set, reading the state variable reflects the render that created the effect (the *previous* value), not the just-set value — React flushes state between effect runs, not mid-effect. Recompute the value locally instead of reading the state variable:
+
+```tsx
+useEffect(() => {
+  const intended = accounts.length === 1 ? accounts[0].id : null
+  setAccountId(intended)
+  // branch on `intended`, NOT on `accountId` — accountId is still the previous open's value here
+  if (intended !== parsedCurrency) { ... }
+}, [accounts, ...])
 ```
 
 ## API Client Pattern
