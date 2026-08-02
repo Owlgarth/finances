@@ -8,6 +8,7 @@ from django.test import TestCase
 from accounts.exceptions import AccountInUseError
 from accounts.factories import AccountFactory
 from accounts.models import Account
+from accounts.schemas import AccountUpdate
 from accounts.services import AccountService
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
@@ -124,6 +125,73 @@ class TestAccountsAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertEqual(data['currency_code'], 'PLN')
         self.assertEqual(data['balance'], '123.45')
 
+    def test_create_account_as_default(self):
+        payload = {'name': 'Main PLN', 'currency_code': 'PLN', 'is_default_for_currency': True}
+        data = self.post('/api/accounts', payload, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertTrue(data['is_default_for_currency'])
+
+    def test_setting_new_default_clears_prior(self):
+        first = AccountFactory(workspace=self.workspace, name='First')
+        second = AccountFactory(workspace=self.workspace, name='Second')
+
+        self.put(f'/api/accounts/{first.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+        self.put(f'/api/accounts/{second.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+
+        by_name = {a['name']: a for a in self.get('/api/accounts', **self.auth_headers())}
+        self.assertFalse(by_name['First']['is_default_for_currency'])
+        self.assertTrue(by_name['Second']['is_default_for_currency'])
+
+    def test_default_scoped_per_currency(self):
+        # A PLN default and a USD default coexist (the rule is per-currency).
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln_acct = AccountFactory(workspace=self.workspace, currency=pln, name='PLN Acct')
+        usd_acct = AccountFactory(workspace=self.workspace, currency=usd, name='USD Acct')
+
+        self.put(f'/api/accounts/{pln_acct.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+        self.put(f'/api/accounts/{usd_acct.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+
+        pln_acct.refresh_from_db()
+        usd_acct.refresh_from_db()
+        self.assertTrue(pln_acct.is_default_for_currency)
+        self.assertTrue(usd_acct.is_default_for_currency)
+
+    def test_archive_clears_default(self):
+        account = AccountFactory(workspace=self.workspace, name='Soon Archived')
+        self.put(f'/api/accounts/{account.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+
+        data = self.patch(f'/api/accounts/{account.id}/archive', {'is_archived': True}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertFalse(data['is_default_for_currency'])
+
+        # The slot is free: a fresh account can now become the default.
+        other = AccountFactory(workspace=self.workspace, name='Replacement')
+        self.put(f'/api/accounts/{other.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+        other.refresh_from_db()
+        self.assertTrue(other.is_default_for_currency)
+
+    def test_list_and_get_include_default_flag(self):
+        default_acct = AccountFactory(workspace=self.workspace, name='Default')
+        AccountFactory(workspace=self.workspace, name='Other')
+        self.put(f'/api/accounts/{default_acct.id}', {'is_default_for_currency': True}, **self.auth_headers())
+        self.assertStatus(200)
+
+        by_name = {a['name']: a for a in self.get('/api/accounts', **self.auth_headers())}
+        self.assertTrue(by_name['Default']['is_default_for_currency'])
+        self.assertFalse(by_name['Other']['is_default_for_currency'])
+
+        single = self.get(f'/api/accounts/{default_acct.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertTrue(single['is_default_for_currency'])
+
 
 class TestAccountRolePermissions(AuthMixin, APIClientMixin, TestCase):
     """Members and viewers cannot write accounts."""
@@ -192,6 +260,19 @@ class TestAccountService(TestCase):
         ):
             self.assertEqual(AccountService.balance(account), Decimal('120.00'))
 
+    def test_only_one_default_per_currency_enforced(self):
+        user = UserFactory()
+        first = AccountFactory(workspace=self.workspace, name='First')
+        second = AccountFactory(workspace=self.workspace, name='Second')
+
+        AccountService.update(user, self.workspace.id, first.id, AccountUpdate(is_default_for_currency=True))
+        AccountService.update(user, self.workspace.id, second.id, AccountUpdate(is_default_for_currency=True))
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertFalse(first.is_default_for_currency)
+        self.assertTrue(second.is_default_for_currency)
+
 
 class TestDefaultMainAccount(TestCase):
     """create_workspace provisions a Main account in the chosen currency."""
@@ -206,6 +287,7 @@ class TestDefaultMainAccount(TestCase):
         self.assertEqual(accounts[0].currency.code, 'EUR')
         self.assertIsNone(accounts[0].currency.workspace)
         self.assertFalse(accounts[0].is_archived)
+        self.assertTrue(accounts[0].is_default_for_currency)
 
 
 class TestCurrencyDisableBlockedByAccount(AuthMixin, APIClientMixin, TestCase):

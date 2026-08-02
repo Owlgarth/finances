@@ -209,11 +209,16 @@ class V3RoundTripTests(AuthMixin, TestCase):
         from accounts.services import AccountService
 
         checking, dollars = self._build_rich_workspace()
+        checking.is_default_for_currency = True
+        checking.save()
         checking_balance = AccountService.balance(checking)
         dollars_balance = AccountService.balance(dollars)
 
         export_data = UserService.export_all_data(self.user)
         self.assertEqual(export_data['export_version'], '3.0')
+        # The default-for-currency flag is serialized into the v3 export.
+        exported_checking = next(a for a in export_data['workspaces'][0]['accounts'] if a['name'] == 'Checking')
+        self.assertTrue(exported_checking['is_default_for_currency'])
 
         UserService.delete_account(self.user, self.user_password)
         self.assertFalse(User.objects.filter(email=self.user.email).exists())
@@ -260,6 +265,9 @@ class V3RoundTripTests(AuthMixin, TestCase):
         new_dollars = Account.objects.get(workspace=ws, name='Dollars')
         self.assertEqual(AccountService.balance(new_checking), checking_balance)
         self.assertEqual(AccountService.balance(new_dollars), dollars_balance)
+        # The default-for-currency flag survives the export→wipe→import round-trip.
+        self.assertTrue(new_checking.is_default_for_currency)
+        self.assertFalse(new_dollars.is_default_for_currency)
 
     def test_multiple_workspaces_round_trip(self):
         self._build_rich_workspace()

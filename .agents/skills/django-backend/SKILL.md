@@ -192,6 +192,20 @@ if existing:
     raise ExchangeShortcutDuplicateError()
 ```
 
+**Pre-clear-then-set for partial-unique-constraint partitions:** When a partial unique constraint enforces "at most one flagged row per partition" (see §Workspace-Scoped Models), the service pre-clears the partition *before* setting the new flag so well-behaved clients never hit the constraint — the DB constraint is the real guard, the pre-clear exists for clean UX, never as the only enforcement (no `try/except IntegrityError`):
+
+```python
+@staticmethod
+@db_transaction.atomic
+def create(user, workspace_id, data):
+    Account.objects.for_workspace(workspace_id).filter(
+        currency=data.currency, is_default_for_currency=True
+    ).update(is_default_for_currency=False)  # pre-clear the partition
+    return Account.objects.create(..., is_default_for_currency=data.is_default_for_currency)
+```
+
+On update, `.exclude(id=account.id)` so a row never clears its own flag.
+
 **Per-resource limit checks:** When a resource has a workspace-scoped maximum count, validate against a settings-backed env var before creation:
 
 ```python
@@ -288,6 +302,22 @@ with db_transaction.atomic():
 
 **`select_for_update()` + `select_related()` caveat:** Cannot combine with `select_related()` on nullable FKs — PostgreSQL raises "FOR UPDATE cannot be applied to the nullable side of an outer join". Remove `select_related` from locked queries involving nullable FKs.
 
+**Multi-row `select_for_update` — lock in id-order, re-check with `list()`:** When a mutation locks more than one row (e.g. merging two categories), acquire locks in ascending id order so concurrent transactions over the same pair can never deadlock — id-ascending is the house default lock order, and every transaction in the app acquires locks in the same order:
+
+```python
+locked = list(
+    Category.objects.select_for_update()
+    .filter(id__in=[target.id, source.id])
+    .order_by('id')
+)
+if len(locked) != 2:
+    raise CategoryNotFoundError()  # a concurrent tx deleted the source while we waited on the lock
+```
+
+The post-lock re-check uses `list(...)` + `len(locked) != N` — a concurrent transaction may have deleted a row while this one waited, and the count check surfaces that as a domain 404 rather than a 500. This is the multi-row analogue of the single-row `get()` + `DoesNotExist` form above.
+
+**Aggregates silently strip `FOR UPDATE`:** Postgres forbids `FOR UPDATE` with aggregate functions, so `.count()`, `.exists()`, and `.aggregate()` on a `select_for_update()` queryset silently emit a plain `SELECT` with no lock — no error, no warning, and the race the lock was meant to close stays open (single-threaded tests still pass). Only row-returning evaluation (e.g. `list(qs)`) actually acquires locks. Never use an aggregate terminal to verify or count a `select_for_update` queryset.
+
 ## Check Object State, Not Just Existence
 
 When a model has a boolean flag (`is_enabled`, `is_active`, `is_verified`, …), always check both existence AND the flag:
@@ -341,6 +371,23 @@ class Category(WorkspaceScopedModel):
 # Service usage - always set workspace_id on creation:
 Category.objects.create(budget_id=budget_id, workspace_id=workspace_id, name='Food', created_by=user)
 ```
+
+**Partial unique constraints for "at most one flagged row per partition":** When an invariant is "at most one row with `flag=True` per (scope, partition)" while many rows carry `flag=False`, enforce it at the DB level with a partial unique constraint, not service logic alone:
+
+```python
+from django.db.models import Q, UniqueConstraint
+
+class Meta:
+    constraints = [
+        UniqueConstraint(
+            condition=Q(is_default_for_currency=True),
+            fields=['workspace', 'currency'],
+            name='one_default_account_per_currency',
+        ),
+    ]
+```
+
+The `condition=Q(...)` form lets any number of `False` rows coexist while guaranteeing at most one `True` row per partition — immune to service-layer bugs and direct DB writes. The constraint `name` is part of the contract (service tests assert against it; renaming requires a migration). See §Pre-clear-then-set for the companion service pattern.
 
 **Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` defaults. Concrete models should set explicit `related_name` on all FKs.
 
@@ -415,6 +462,23 @@ class BudgetSummaryResponse(BaseModel):
 ```
 
 Populate in the API layer by iterating the queryset and grouping into dicts.
+
+## Distinguishing "Client Sent" from "Defaulted" on Partial Updates
+
+When a Pydantic update schema defaults a boolean to `False` (not `None`) so the `setattr` loop sees a plain `bool`, the service cannot tell "client omitted the field" from "client sent `False`" by reading the validated attribute — both are `False`. Branch on the `model_dump(exclude_unset=True)` dict instead:
+
+```python
+update_data = data.model_dump(exclude_unset=True)
+if update_data.get('is_default_for_currency') is True:
+    # client explicitly sent True — run the pre-clear (see §Service Layer)
+    Account.objects.for_workspace(workspace_id).filter(
+        currency=account.currency, is_default_for_currency=True
+    ).exclude(id=account.id).update(is_default_for_currency=False)
+for field, value in update_data.items():
+    setattr(account, field, value)
+```
+
+`exclude_unset=True` includes a key only if the client sent it, so `.get(...)` returns `None` when omitted and the actual value when sent. The `is True` identity check is what distinguishes an explicit `True` from both `None` (omitted) and `False` (explicitly cleared) — truthiness would mis-fire on a truthy non-bool.
 
 ## Safe Defaults for `getattr` Fallbacks
 
