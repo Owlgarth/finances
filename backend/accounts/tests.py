@@ -287,6 +287,7 @@ class TestDefaultMainAccount(TestCase):
         self.assertEqual(accounts[0].currency.code, 'EUR')
         self.assertIsNone(accounts[0].currency.workspace)
         self.assertFalse(accounts[0].is_archived)
+        self.assertTrue(accounts[0].is_default_for_currency)
 
 
 class TestCurrencyDisableBlockedByAccount(AuthMixin, APIClientMixin, TestCase):
