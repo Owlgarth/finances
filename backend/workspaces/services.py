@@ -53,6 +53,7 @@ class WorkspaceService:
             name='Main',
             type=AccountType.BANK,
             currency=catalog_currency,
+            is_default_for_currency=True,
             created_by=user,
             updated_by=user,
         )

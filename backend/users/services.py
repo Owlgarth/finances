@@ -653,6 +653,7 @@ class UserService:
                     'currency_code': a.currency.code,
                     'opening_balance': a.opening_balance,
                     'is_archived': a.is_archived,
+                    'is_default_for_currency': a.is_default_for_currency,
                     'display_order': a.display_order,
                 }
                 for a in Account.objects.for_workspace(ws.id).select_related('currency')
@@ -806,6 +807,7 @@ class UserService:
                     currency=currency,
                     opening_balance=acc_data.get('opening_balance', 0),
                     is_archived=acc_data.get('is_archived', False),
+                    is_default_for_currency=acc_data.get('is_default_for_currency', False),
                     display_order=acc_data.get('display_order', 0),
                     created_by=user,
                     updated_by=user,
