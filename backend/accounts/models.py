@@ -1,6 +1,7 @@
 """Account model — the money-holding entity of a workspace."""
 
 from django.db import models
+from django.db.models import Q, UniqueConstraint
 
 from common.models import WorkspaceScopedModel
 
@@ -23,12 +24,20 @@ class Account(WorkspaceScopedModel):
     currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='accounts')
     opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     is_archived = models.BooleanField(default=False)
+    is_default_for_currency = models.BooleanField(default=False)
     display_order = models.IntegerField(default=0)
 
     class Meta:
         db_table = 'accounts'
         unique_together = [['workspace', 'name']]
         ordering = ['display_order', 'name']
+        constraints = [
+            UniqueConstraint(
+                condition=Q(is_default_for_currency=True),
+                fields=['workspace', 'currency'],
+                name='one_default_account_per_currency',
+            ),
+        ]
 
     def __str__(self):
         return self.name
