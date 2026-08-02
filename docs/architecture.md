@@ -61,6 +61,7 @@ Workspace (top-level container)
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
 | **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. |
+| **Default account** | An account may be flagged the default for its currency — at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks / custom) and materialized on demand — not a table of pre-created rows. |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates. |
@@ -70,8 +71,8 @@ Workspace (top-level container)
 ### Multi-Workspace Support
 
 - **Creation**: `POST /api/workspaces/` creates a workspace, enables the chosen
-  currency, and seeds a "Main" account + a "General" budget. Registration can
-  optionally add sample data.
+  currency, and seeds a "Main" account (flagged as the default for its currency)
+  + a "General" budget. Registration can optionally add sample data.
 - **Switching**: `POST /api/workspaces/{id}/switch` changes the active workspace.
 - **Deletion**: `DELETE /api/workspaces/{id}` removes a workspace and all its data
   (owner only), in PROTECT-safe dependency order.

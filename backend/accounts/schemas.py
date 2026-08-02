@@ -15,6 +15,7 @@ class AccountCreate(BaseModel):
     currency_code: str = Field(..., pattern=r'^[A-Z]{3,8}$')
     opening_balance: Decimal = Field(default=Decimal('0'))
     display_order: int = 0
+    is_default_for_currency: bool = False
 
     @field_validator('name')
     @classmethod
@@ -32,6 +33,7 @@ class AccountUpdate(BaseModel):
     currency_code: str | None = Field(None, pattern=r'^[A-Z]{3,8}$')
     opening_balance: Decimal | None = None
     display_order: int | None = None
+    is_default_for_currency: bool = False
 
     @field_validator('name')
     @classmethod
@@ -60,6 +62,7 @@ class AccountOut(BaseModel):
     currency_code: str = Field(validation_alias=AliasChoices('currency_code', 'currency'))
     opening_balance: Decimal
     is_archived: bool
+    is_default_for_currency: bool
     display_order: int
     created_at: datetime
 

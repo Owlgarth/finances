@@ -33,17 +33,19 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
   const [type, setType] = useState<AccountType>(account?.type ?? 'bank')
   const [currencyCode, setCurrencyCode] = useState<string | null>(account?.currency_code ?? null)
   const [openingBalance, setOpeningBalance] = useState(account?.opening_balance ?? '0')
+  const [isDefault, setIsDefault] = useState(account?.is_default_for_currency ?? false)
 
   const mutation = useMutation({
     mutationFn: () => {
       if (isEdit) {
-        return accountsApi.update(account.id, { name: name.trim(), type, opening_balance: openingBalance })
+        return accountsApi.update(account.id, { name: name.trim(), type, opening_balance: openingBalance, is_default_for_currency: isDefault })
       }
       return accountsApi.create({
         name: name.trim(),
         type,
         currency_code: currencyCode!,
         opening_balance: openingBalance,
+        is_default_for_currency: isDefault,
       })
     },
     onSuccess: () => {
@@ -103,6 +105,17 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
             className={inputClass}
           />
         </div>
+
+        {(isEdit || !!currencyCode) && (
+          <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isDefault}
+              onChange={(e) => setIsDefault(e.target.checked)}
+            />
+            Set as default for {isEdit ? account!.currency_code : currencyCode}
+          </label>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>

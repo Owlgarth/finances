@@ -80,10 +80,18 @@ a per-workspace verification report.
 
 When adding new fields to the v3 export format:
 1. Update `export_all_data()` (the `_export_workspace_v3` helper) to include the field.
-2. Update `import_all_data()` to read it with a sensible default for older v3 files.
+2. Update `import_all_data()` to read it with a sensible default for older v3 files — always via `data.get('field', default)`, never `data['field']`, since older exports predate the key and would `KeyError`:
+
+   ```python
+   Account.objects.create(
+       ...,
+       is_default_for_currency=acc_data.get('is_default_for_currency', False),
+   )
+   ```
+
 3. Attachments travel as base64 in the export; items travel inline on each
    transaction. Keep both round-tripping when you touch the transaction export.
-4. Bump `export_version` only for breaking changes.
+4. Bump `export_version` only for **breaking** changes (renames, type changes, semantic shifts). An additive field with a safe default (e.g. a new boolean defaulting to `False`) does **not** bump the version — an older reader ignores the new key; a newer reader handles its absence.
 
 ## Legal Documents
 

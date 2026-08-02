@@ -27,6 +27,9 @@ workspace-scoped request carries `Authorization: Bearer <token>` and is validate
   an *adjustment* transaction for the delta between the current and target balance —
   the app never overwrites a balance directly. A record-free archived account can be
   deleted; one with records is PROTECT-blocked (surfaced as a clear error).
+- Each currency may have one **default account** (set with "Set as default for
+  {currency}" in the account form; archiving a current default clears its flag). At
+  most one per currency — flagging a new default clears the previous one.
 - Single-account, single-currency workspaces hide the account/currency chrome.
 
 ## Transfers
@@ -67,6 +70,11 @@ When a parser is configured (`PARSER_URL`):
 - **New from receipt** parses an upload *without persisting anything*, pre-fills a new
   transaction (total, date, merchant, items), and only creates the transaction +
   attachment + items on confirm. Cancel leaves no residue.
+- **Account auto-select**: whenever a receipt is parsed (inline upload or receipt-first
+  create), the account is auto-selected to match the parsed `currency` — preferring the
+  per-currency **default account**, else the first account in that currency by ordering.
+  An account whose currency already matches is left untouched (a deliberate pick is
+  respected). If no account matches the currency, the selection is unchanged.
 
 With no parser configured, every extraction affordance is hidden.
 

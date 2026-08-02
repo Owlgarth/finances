@@ -10,6 +10,7 @@ export interface Account {
   currency_code: string;
   opening_balance: string;
   is_archived: boolean;
+  is_default_for_currency: boolean;
   display_order: number;
   created_at: string;
 }

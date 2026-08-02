@@ -9,7 +9,7 @@ import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
 import TransactionItemsList, { type Row } from '../../transactions/TransactionItemsList'
 import TransactionAttachments from '../../transactions/TransactionAttachments'
 import { budgetsApi, transactionsApi } from '../../../api/client'
-import type { ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
+import type { Account, ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } from '../../../hooks/useDomain'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
@@ -65,6 +65,23 @@ const rowsToItems = (rows: Row[]): TransactionItemInput[] =>
       unit_price: r.unit_price === '' ? null : r.unit_price,
       line_total: r.line_total === '' ? null : r.line_total,
     }))
+
+/** Pick the account id whose currency matches `currencyCode`, preferring the
+ * per-currency default-flagged account and falling back to the first account
+ * by the backend's `display_order, name` ordering (the list endpoint already
+ * returns them in that order, so `matches[0]` is the first by ordering).
+ * Returns null when `currencyCode` is falsy/empty or no account matches.
+ * Pure — safe to call inline from a mutation callback or effect. */
+const pickAccountForCurrency = (
+  accounts: Account[],
+  currencyCode: string | null | undefined,
+): number | null => {
+  if (!currencyCode) return null
+  const code = currencyCode.toUpperCase()
+  const matches = accounts.filter((a) => a.currency_code.toUpperCase() === code)
+  if (matches.length === 0) return null
+  return matches.find((a) => a.is_default_for_currency)?.id ?? matches[0].id
+}
 
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy, prefillReceipt = null }: Props) {
   const isEdit = !!transaction
@@ -122,6 +139,22 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // ExtractionReviewModal's rule, simplified because this form's create-mode
       // default is '' (not 'Receipt').
       if (description === '' && result.merchant) setDescription(result.merchant)
+      // Auto-select the account whose currency matches the parsed receipt —
+      // prefer the per-currency default-flagged account, else the first by
+      // ordering. `useMutation` recreates this callback each render, so
+      // `accounts` and `accountId` are this render's current values. Do NOT
+      // override an account whose currency already matches (a deliberate user
+      // pick is respected). Read the current account's currency via
+      // `accounts.find(...)` rather than the L210 `account` const (declared
+      // after this mutation — referencing it here is a temporal-dead-zone
+      // ReferenceError; the explicit find is mandatory, not stylistic).
+      const pick = pickAccountForCurrency(accounts, result.currency)
+      if (
+        pick !== null &&
+        accounts.find((a) => a.id === accountId)?.currency_code?.toUpperCase() !== result.currency?.toUpperCase()
+      ) {
+        setAccountId(pick)
+      }
     },
     // A 503 here means the self-hosted scanner is off — the backend's detail
     // already says so, so surface it rather than a generic error.
@@ -202,6 +235,24 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         setAmount(parsed.total ?? '')
         if (parsed.date) setDate(parsed.date)
         setDescription(parsed.merchant ?? '')
+        // Auto-select the account whose currency matches the parsed receipt —
+        // mirrors parse.onSuccess. STALE-STATE NOTE: the `setAccountId(...)`
+        // at L170 above has NOT flushed yet within this same effect run (state
+        // reads inside an effect reflect the render that created the effect, not
+        // mid-effect setStates). So reading `accountId` here would be stale.
+        // Instead, recompute the L170 "intended current account id" locally and
+        // compare against that — this is the value accountId will hold once the
+        // effect's setStates flush. If a matching account exists and that
+        // intended account's currency doesn't already match the receipt's
+        // currency, override to the pick.
+        const currentAccountId = accounts.length === 1 ? accounts[0].id : null
+        const pick = pickAccountForCurrency(accounts, parsed.currency)
+        if (
+          pick !== null &&
+          accounts.find((a) => a.id === currentAccountId)?.currency_code?.toUpperCase() !== parsed.currency?.toUpperCase()
+        ) {
+          setAccountId(pick)
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

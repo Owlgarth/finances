@@ -82,6 +82,14 @@ class AccountService:
 
         currency = CurrencyCatalogService.get_enabled(workspace_id, data.currency_code)
 
+        # Enforce the one-default-per-(workspace, currency) rule at the service
+        # level so a well-behaved client never hits the partial unique
+        # constraint (one_default_account_per_currency). No id yet → clear all.
+        if data.is_default_for_currency:
+            Account.objects.for_workspace(workspace_id).filter(currency=currency, is_default_for_currency=True).update(
+                is_default_for_currency=False
+            )
+
         return Account.objects.create(
             workspace_id=workspace_id,
             name=data.name,
@@ -89,6 +97,7 @@ class AccountService:
             currency=currency,
             opening_balance=data.opening_balance,
             display_order=data.display_order,
+            is_default_for_currency=data.is_default_for_currency,
             created_by=user,
             updated_by=user,
         )
@@ -111,6 +120,17 @@ class AccountService:
 
         update_data = data.model_dump(exclude_unset=True)
         update_data.pop('currency_code', None)
+
+        # If the client explicitly set this account as the default for its
+        # currency, clear any *other* default in that currency first (currency is
+        # immutable, so account.currency is the right filter). Then the setattr
+        # loop below sets this account's flag to True and save() persists it.
+        # An explicit False just falls through to setattr (no clear needed).
+        if update_data.get('is_default_for_currency') is True:
+            Account.objects.for_workspace(workspace_id).filter(
+                currency=account.currency, is_default_for_currency=True
+            ).exclude(id=account_id).update(is_default_for_currency=False)
+
         for field, value in update_data.items():
             setattr(account, field, value)
 
@@ -124,6 +144,11 @@ class AccountService:
         """Archive or unarchive an account. Archived accounts keep all history."""
         account = AccountService.get(account_id, workspace_id)
         account.is_archived = data.is_archived
+        # An archived account must not remain the default for its currency —
+        # otherwise it would block a new active default under the partial unique
+        # constraint. Unarchiving never auto-promotes to default.
+        if data.is_archived and account.is_default_for_currency:
+            account.is_default_for_currency = False
         account.updated_by = user
         account.save()
         return account
