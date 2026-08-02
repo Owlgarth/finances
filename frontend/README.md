@@ -76,9 +76,10 @@ Seven in-app destinations (sidebar) plus auth/legal routes.
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
-`TransactionFormModal` (with Items/Receipts tabs), `TransactionItemsEditor`,
-`TransactionAttachments` (upload + extraction), `ExtractionReviewModal`,
-`PlannedFormModal`.
+`TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
+the account matching the parsed currency — preferring the per-currency default),
+`TransactionItemsEditor`, `TransactionAttachments` (upload + extraction),
+`ExtractionReviewModal`, `PlannedFormModal`.
 
 ## Contexts
 
@@ -223,6 +224,7 @@ interface Account {
   currency_code: string;
   opening_balance: string;   // balance is computed, not stored
   is_archived: boolean;
+  is_default_for_currency: boolean;  // one default per currency; drives receipt-currency auto-select
   display_order: number;
   created_at: string;
 }

@@ -132,8 +132,9 @@ The API uses role-based permissions for workspace operations:
 ## Starter & Demo Fixtures
 
 Every new workspace gets a **usable-but-empty** starter setup via
-`create_starter_fixtures()`: a "Main" account, a "General" budget with a few
-starter categories, and the current period.
+`create_starter_fixtures()`: a "Main" account (flagged as the default for its
+currency), a "General" budget with a few starter categories, and the current
+period.
 
 If the user opts in (the "Start with sample data" checkbox at registration),
 `create_demo_fixtures()` additionally seeds a second (Savings) account, sample
