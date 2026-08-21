@@ -4,7 +4,9 @@ import time
 from unittest.mock import patch
 
 import pyotp
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import override_settings
 
 from users.two_factor import TwoFactorService
@@ -108,8 +110,9 @@ class TestAuthRegister(AuthTestCase):
         self.assertGreaterEqual(PlannedTransaction.objects.for_workspace(ws_id).count(), 3)
         self.assertTrue(Transfer.objects.for_workspace(ws_id).exists())
 
-    def test_register_duplicate_email(self):
-        """Test registration with already registered email."""
+    @patch('core.services.time.sleep')
+    def test_register_duplicate_email(self, mock_sleep):
+        """Duplicate-email registration returns a generic error, notifies the owner, creates nothing."""
         self.post(
             '/api/auth/register',
             {
@@ -121,8 +124,9 @@ class TestAuthRegister(AuthTestCase):
             },
         )
         self.assertStatus(201)
+        workspace_count = Workspace.objects.count()
 
-        self.post(
+        data = self.post(
             '/api/auth/register',
             {
                 'email': 'duplicate@example.com',
@@ -133,7 +137,56 @@ class TestAuthRegister(AuthTestCase):
             },
         )
         self.assertStatus(400)
-        self.assertIn('already exists', self.response.json()['error'].lower())
+        error = data['error']
+        self.assertEqual(error, 'Unable to register with this email address.')
+        self.assertNotIn('already exists', error.lower())
+
+        # The existing address owner is notified (the 201 path's on_commit emails
+        # never fire under TestCase, so this is the only outbox entry).
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['duplicate@example.com'])
+
+        # Nothing was created for the rejected attempt.
+        self.assertEqual(Workspace.objects.count(), workspace_count)
+
+    @patch('core.services.time.sleep')
+    def test_register_existing_email_sends_notification_email(self, mock_sleep):
+        """Probing a registered email notifies the account owner, not the requester."""
+        self.create_user(email='taken@example.com', full_name='Taken User')
+
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'taken@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Not Yours',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
+            },
+        )
+        self.assertStatus(400)
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['taken@example.com'])
+        self.assertEqual(email.subject, 'Registration attempt with your email — Denarly')
+        self.assertIn('Taken User', email.body)
+
+    def test_register_rate_limited_per_email(self):
+        """Repeated register attempts against one email hit the account-keyed limit (429)."""
+        self.create_user(email='flooded@example.com')
+        payload = {
+            'email': 'flooded@example.com',
+            'password': 'securepassword123',
+            'workspace_name': 'Flood',
+            'accepted_terms_version': '2.0',
+            'accepted_privacy_version': '2.0',
+        }
+        for _ in range(settings.RATE_LIMIT_REGISTER_ACCOUNT):
+            self.post('/api/auth/register', payload)
+            self.assertStatus(400)
+        self.post('/api/auth/register', payload)
+        self.assertStatus(429)
 
     def test_register_missing_required_fields(self):
         """Test registration with missing required fields."""

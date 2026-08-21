@@ -35,8 +35,25 @@ router = Router(tags=['Auth'])
 User = get_user_model()
 
 
+def _extract_register_rate_key(request, data: RegisterIn = None, **kwargs):
+    """Per-account rate-limit key: the registration email (already normalized by ValidatedEmail).
+
+    Buckets attempts by target address so rotating source IPs does not reset the
+    counter — an enumerator probing the same address from fresh IPs stays capped.
+    The email is lowercased by the RegisterIn schema before it reaches the
+    extractor, so casing variants of the same address share one bucket.
+    """
+    return data.email
+
+
 @router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
 @rate_limit('register', limit=settings.RATE_LIMIT_REGISTER, period=settings.RATE_LIMIT_REGISTER_PERIOD)
+@rate_limit_account(
+    'register_account',
+    _extract_register_rate_key,
+    limit=settings.RATE_LIMIT_REGISTER_ACCOUNT,
+    period=settings.RATE_LIMIT_REGISTER_ACCOUNT_PERIOD,
+)
 def register(request, data: RegisterIn):
     """Register a new user with workspace and default data. See AuthService.register."""
     return AuthService.register(data, get_client_ip(request))

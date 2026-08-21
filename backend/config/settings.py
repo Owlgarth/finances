@@ -234,6 +234,11 @@ TRUSTED_PROXY_COUNT = int(os.getenv('TRUSTED_PROXY_COUNT', '0'))
 RATE_LIMIT_REGISTER = int(os.getenv('RATE_LIMIT_REGISTER', '5'))
 # Time window (seconds) for registration rate limiting
 RATE_LIMIT_REGISTER_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_PERIOD', '60'))
+# Max registration attempts per email account within the period window (anti-enumeration:
+# caps repeated probes of the same address even when the attacker rotates IPs)
+RATE_LIMIT_REGISTER_ACCOUNT = int(os.getenv('RATE_LIMIT_REGISTER_ACCOUNT', '5'))
+# Time window (seconds) for per-email registration rate limiting
+RATE_LIMIT_REGISTER_ACCOUNT_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_ACCOUNT_PERIOD', '3600'))
 # Max login attempts per IP within the period window
 RATE_LIMIT_LOGIN = int(os.getenv('RATE_LIMIT_LOGIN', '10'))
 # Time window (seconds) for login rate limiting
