@@ -228,6 +228,66 @@ class TestAuthLogin(AuthTestCase):
         )
         self.assertStatus(401)
 
+    def test_login_rate_limited_per_account_across_ips(self):
+        """11th login attempt for the same email is 429 even with a different IP per request.
+
+        Uses create_user (not register_and_login) so no earlier login request
+        pre-increments the per-account counter.
+        """
+        self.create_user('account_throttle@example.com', 'securepassword123')
+
+        for i in range(10):
+            self.post(
+                '/api/auth/login',
+                {'email': 'account_throttle@example.com', 'password': 'wrongpassword'},
+                REMOTE_ADDR=f'10.0.0.{i + 1}',
+            )
+            self.assertStatus(401)
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'account_throttle@example.com', 'password': 'wrongpassword'},
+            REMOTE_ADDR='10.0.0.11',
+        )
+        self.assertStatus(429)
+
+    def test_login_rate_limit_per_account_not_global(self):
+        """11 attempts spread over 10 different emails never hit the per-account cap.
+
+        Every request uses a distinct REMOTE_ADDR so the IP-keyed limit cannot
+        fire either — proving the account limit buckets per email, not globally.
+        """
+        emails = [f'no_interference_{i}@example.com' for i in range(10)]
+        for email in emails:
+            self.create_user(email, 'securepassword123')
+
+        for i in range(11):
+            # The 11th request reuses the first email — still only 2 attempts for it.
+            self.post(
+                '/api/auth/login',
+                {'email': emails[i % 10], 'password': 'wrongpassword'},
+                REMOTE_ADDR=f'192.168.0.{i + 1}',
+            )
+            self.assertStatus(401)
+
+    def test_login_nonexistent_user_same_body_as_wrong_password(self):
+        """The no-user path (dummy-hash timing normalization) returns the same 401 body as wrong-password."""
+        self.create_user('real_user@example.com', 'securepassword123')
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'real_user@example.com', 'password': 'wrongpassword'},
+        )
+        self.assertStatus(401)
+        wrong_password_body = self.response.json()
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'ghost_user@example.com', 'password': 'anypassword'},
+        )
+        self.assertStatus(401)
+        self.assertEqual(self.response.json(), wrong_password_body)
+
 
 class TestProtectedEndpoints(AuthTestCase):
     """Tests for protected endpoint access."""

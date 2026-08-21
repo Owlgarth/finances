@@ -1,7 +1,7 @@
 """Business logic for authentication flows (register, login, 2FA, refresh)."""
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, hashers
 from django.db import transaction as db_transaction
 
 from common.auth import (
@@ -19,6 +19,11 @@ from users.two_factor import TwoFactorService
 from workspaces.services import WorkspaceService
 
 User = get_user_model()
+
+# Pre-computed hash so the user-not-found path runs the same expensive password
+# check as the wrong-password path — removes the login timing oracle that
+# distinguished registered from unregistered emails.
+_DUMMY_PASSWORD_HASH = hashers.make_password('denarly-timing-normalization')
 
 
 class AuthService:
@@ -80,6 +85,9 @@ class AuthService:
         """
         user = User.objects.filter(email=data.email).first()
         if not user:
+            # Burn the same hash-check cost as the wrong-password path below so
+            # response timing cannot reveal whether the email is registered.
+            hashers.check_password(data.password, _DUMMY_PASSWORD_HASH)
             return 401, {'detail': 'Invalid email or password'}
         if not user.check_password(data.password):
             return 401, {'detail': 'Invalid email or password'}

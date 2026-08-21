@@ -10,7 +10,7 @@ from django.utils.http import urlsafe_base64_decode
 from ninja import Router
 
 from common.auth import JWTAuth, decode_temp_token
-from common.throttle import rate_limit, rate_limit_by_key
+from common.throttle import rate_limit, rate_limit_account, rate_limit_by_key
 from common.utils import get_client_ip
 from core.schemas import (
     DetailOut,
@@ -42,8 +42,24 @@ def register(request, data: RegisterIn):
     return AuthService.register(data, get_client_ip(request))
 
 
+def _extract_login_rate_key(request, data: LoginIn = None, **kwargs):
+    """Per-account rate-limit key: the login email (already normalized by ValidatedEmail).
+
+    Buckets attempts by target account so rotating source IPs does not reset the
+    counter. The email is lowercased by the LoginIn schema before it reaches the
+    extractor, so casing variants of the same address share one bucket.
+    """
+    return data.email
+
+
 @router.post('/login', response={200: LoginOut, 401: DetailOut, 429: DetailOut})
 @rate_limit('login', limit=settings.RATE_LIMIT_LOGIN, period=settings.RATE_LIMIT_LOGIN_PERIOD)
+@rate_limit_account(
+    'login_account',
+    _extract_login_rate_key,
+    limit=settings.RATE_LIMIT_LOGIN_ACCOUNT,
+    period=settings.RATE_LIMIT_LOGIN_ACCOUNT_PERIOD,
+)
 def login(request, data: LoginIn):
     """Login user and return a JWT pair, or a 2FA temp token. See AuthService.login."""
     return AuthService.login(data)

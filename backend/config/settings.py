@@ -238,6 +238,10 @@ RATE_LIMIT_REGISTER_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_PERIOD', '60'))
 RATE_LIMIT_LOGIN = int(os.getenv('RATE_LIMIT_LOGIN', '10'))
 # Time window (seconds) for login rate limiting
 RATE_LIMIT_LOGIN_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_PERIOD', '60'))
+# Max login attempts per account (email) within the period window, regardless of source IP
+RATE_LIMIT_LOGIN_ACCOUNT = int(os.getenv('RATE_LIMIT_LOGIN_ACCOUNT', '10'))
+# Time window (seconds) for per-account login rate limiting
+RATE_LIMIT_LOGIN_ACCOUNT_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_ACCOUNT_PERIOD', '60'))
 # Max 2FA verification attempts per IP+user within the period window
 RATE_LIMIT_VERIFY_2FA = int(os.getenv('RATE_LIMIT_VERIFY_2FA', '10'))
 # Time window (seconds) for 2FA verification rate limiting
