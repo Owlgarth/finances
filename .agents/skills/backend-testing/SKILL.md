@@ -71,6 +71,8 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
 workspace = Workspace.objects.filter(owner=self.user, name='Imported Workspace').first()
 ```
 
+**Authenticating as a different user:** `AuthMixin` only mints a JWT for `self.user`. Cross-user tests (same idempotency key under another user, viewer-role probes) mint one directly with `create_access_token(other_user)` from `common.auth` and send it as an explicit `Authorization: Bearer …` header instead of `self.auth_headers()`.
+
 ## Test Auth Without AuthMixin
 
 For tests that need an authenticated user without workspace setup:
@@ -128,6 +130,29 @@ payload = {
 expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 ```
 
+## Mocking Time in TTL Tests
+
+The codebase does not use `freezegun` or `time_machine`. For expiry/TTL behavior, patch Django's clock directly and keep the patch around the whole request or call — both the lookup and the write usually consult `now()`:
+
+```python
+with mock.patch('django.utils.timezone.now', return_value=future):
+    self.post('/api/transactions', payload, **self.auth_headers())
+```
+
+## Testing Race-Loss Branches Deterministically
+
+A true concurrent race can't be simulated inside `TestCase`. To exercise a unique-constraint `IntegrityError` handler (see the savepoint pattern in the `django-backend` skill): (1) pre-commit the winner's record directly — it lives in the test's outer transaction, so it survives the code's savepoint rollback; (2) mock the lookup to lose the race — capture the real function first, then force `None` on the first call (insert path) and delegate to the real lookup after the error:
+
+```python
+real = TransactionService._lookup_idempotency_key
+with mock.patch.object(
+    TransactionService, '_lookup_idempotency_key', side_effect=[None, real]
+):
+    ...
+```
+
+When a private helper's signature changes, grep its test doubles in the same task — `side_effect=fake` stubs must widen with the real method's parameters.
+
 ## Testing Celery Tasks
 
 Test settings use `CELERY_TASK_ALWAYS_EAGER=True`, so `.delay()` executes synchronously — no worker needed. Call tasks directly (`execute_planned_transaction(planned_id)`) instead of via `.delay()` for clearer error messages. After dispatching a task in a test, call `instance.refresh_from_db()` to pick up changes the synchronous task made.
@@ -155,6 +180,14 @@ class TestTaskConfig(TestCase):
         self.assertEqual(send_email_task.autoretry_for, (Exception,))
         self.assertTrue(send_email_task.retry_backoff)
 ```
+
+## Deleting a Workspace in Tests
+
+Direct `workspace.delete()` raises `ProtectedError` — accounts are PROTECT-referenced by transactions, transfers, and planned transactions. Do what production does (`UserService.delete_account`, `WorkspaceService.delete_workspace`): call `delete_workspace_financial_records(workspace_id)` first (deletion ordering is in the `data-deletion-gdpr` skill).
+
+## New Optional Schema Field: Five-Test Shape
+
+Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat — field omitted, (3) explicit empty collection, (4) `max_length` rejection — asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together.
 
 ## Email in Tests
 

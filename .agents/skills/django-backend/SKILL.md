@@ -318,6 +318,32 @@ The post-lock re-check uses `list(...)` + `len(locked) != N` — a concurrent tr
 
 **Aggregates silently strip `FOR UPDATE`:** Postgres forbids `FOR UPDATE` with aggregate functions, so `.count()`, `.exists()`, and `.aggregate()` on a `select_for_update()` queryset silently emit a plain `SELECT` with no lock — no error, no warning, and the race the lock was meant to close stays open (single-threaded tests still pass). Only row-returning evaluation (e.g. `list(qs)`) actually acquires locks. Never use an aggregate terminal to verify or count a `select_for_update` queryset.
 
+**Unique-constraint races: savepoint, then re-read outside it.** When a create path can race on a unique constraint (e.g. idempotency-key dedup), wrap the racing insert — and the parent-row writes that must not be orphaned — in a *nested* `with db_transaction.atomic():` (SAVEPOINT), catch `IntegrityError`, and re-read the winner **after** the savepoint block:
+
+```python
+@staticmethod
+@db_transaction.atomic
+def create_with_key(user, workspace_id, data, key):
+    existing = MyService._lookup(key, user, workspace_id)
+    if existing:
+        return existing.target
+    MyService._sweep_expired(key, user, workspace_id)  # expired rows still hold the constraint
+    try:
+        with db_transaction.atomic():  # SAVEPOINT
+            target = MyService._do_create(user, workspace_id, data)
+            KeyRecord.objects.create(key=key, user=user, workspace_id=workspace_id, target=target)
+            return target
+    except IntegrityError:
+        pass  # lost the race — savepoint rollback removed BOTH the key insert and the target
+    return MyService._lookup(key, user, workspace_id).target  # re-read OUTSIDE the savepoint
+```
+
+- A bare `try/except IntegrityError` around the outer atomic block is **wrong**: Django marks the outer `atomic()` broken on any `IntegrityError`, even when caught — the follow-up re-read raises `TransactionManagementError` at runtime (single-threaded tests won't show it). The savepoint isolates the rollback so the outer transaction stays usable.
+- TTL-style dedup records: expired rows still occupy the unique constraint and will raise on insert — sweep them (same filter set as the lookup) between lookup and insert. Never-reused keys are a periodic-cleanup concern, not a request-path one.
+- Helpers that only ever run inside an existing atomic block (the savepoint, or the outer method's) stay undecorated — a redundant `@db_transaction.atomic` would open a pointless nested savepoint on every call.
+
+**Dedup lookups and unique constraints stay in lockstep.** For any unique-constraint-backed dedup, the lookup's filter set and the constraint's column set must widen or narrow **together**. Workspace-scoping the lookup while the constraint stays narrower turns a legitimate cross-scope collision into an unhandled `IntegrityError` (500) on the savepoint race path above — the constraint must widen in the same commit so the race-path insert succeeds per-scope. Keep the sweep's filter set identical to the lookup's.
+
 ## Check Object State, Not Just Existence
 
 When a model has a boolean flag (`is_enabled`, `is_active`, `is_verified`, …), always check both existence AND the flag:
@@ -423,6 +449,8 @@ class TransactionOut(BaseModel):
     date: date
     amount: Decimal
 ```
+
+**Optional list fields (and same-module forward references):** A schema referencing a type defined later in the same module must use the string form — `items: list['TransactionItemIn']` — because Python evaluates bare annotations at class-definition time (`NameError` fires before Pydantic ever sees the model; ruff flags `F821`); Pydantic v2 resolves string annotations at module-load finalization. The default is `Field(default_factory=list, max_length=N)` — never a bare `[]` (mutable default) — with `max_length` matching the sibling endpoint that already caps the same collection. `default_factory=list` keeps every existing caller that omits the field working. In the service, bulk-create the children inside the parent's existing `@db_transaction.atomic` block, guarded by `if data.items:` — the children become atomic with the parent for free. Helpers consuming an already-validated schema skip per-row defensive parsing; reserve try/except parsing for untyped sources (parser dicts, external APIs).
 
 **Cross-field validation:** Use `@field_validator` with `mode='after'`:
 

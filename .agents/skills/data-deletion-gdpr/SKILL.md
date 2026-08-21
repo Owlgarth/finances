@@ -69,6 +69,8 @@ user.delete()
 - `UserService.delete_account()` — ensure the new model's rows are deleted (or cascade correctly) before parent objects are removed. `on_delete=PROTECT` fields must be deleted in dependency order; otherwise account deletion raises an `OperationalError`.
 - `UserService.export_all_data()` — include the new model's data in the JSON export (GDPR Art. 20). Export only non-sensitive fields (e.g., `is_enabled`, `created_at`, `last_used_at`). Never include secrets, encrypted values, or hashed tokens. Normalize nullable string fields with `or None` (e.g., `user.pending_email or None`) for cleaner JSON.
 
+**CASCADE is not a data-classification statement.** `on_delete=CASCADE` to user/workspace is a storage-cleanup concern — a model can cascade with its owner yet be deliberately excluded from `export_all_data()`/`import_all_data()` as a transient operational record (e.g. the idempotency-key dedup map). For such models, verify no export/import path picked them up: `grep -rn <Model> backend/users/ backend/common/services/` must return nothing.
+
 ## Import Version Compatibility
 
 The main `import_all_data` handles the current **v3.0** export only (same-system
