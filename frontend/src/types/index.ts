@@ -365,7 +365,6 @@ export interface AddMemberResponse {
   message: string;
   user_id: number;
   member_id: number;
-  is_new_user: boolean;
 }
 
 // ============= Pagination Types =============
