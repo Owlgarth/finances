@@ -4,6 +4,7 @@ from unittest import mock
 
 import pyotp
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.test import Client, TestCase
 
@@ -253,6 +254,13 @@ class TestAdminReset2FA(_Base):
         self.assertEqual(response.status_code, 200)
         self.assertIn('message', response.json())
 
+        # Exactly one notification goes to the TARGET user (not the admin)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['member@example.com'])
+        self.assertEqual(email.subject, 'Your two-factor authentication was reset — Denarly')
+        self.assertIn('Test WS', email.body)
+
     def test_owner_can_reset_member_2fa(self):
         client = Client()
         self._enable_2fa(self.member)
@@ -263,6 +271,8 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.auth_token}',
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['member@example.com'])
 
     def test_admin_cannot_reset_admin_2fa(self):
         client = Client()
@@ -275,6 +285,7 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
         )
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_cannot_reset_own_2fa(self):
         client = Client()
@@ -286,6 +297,7 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_cannot_reset_owner_2fa(self):
         client = Client()
@@ -297,6 +309,7 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_viewer_cannot_reset_2fa(self):
         client = Client()
@@ -310,6 +323,18 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {viewer_token}',
         )
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_reset_when_member_not_found(self):
+        client = Client()
+
+        response = client.post(
+            self._reset_url(999999),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_reset_when_2fa_not_enabled(self):
         client = Client()
@@ -320,6 +345,7 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
         )
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_reset_when_2fa_pending_setup(self):
         client = Client()
@@ -331,6 +357,7 @@ class TestAdminReset2FA(_Base):
             HTTP_AUTHORIZATION=f'Bearer {self.admin_token}',
         )
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 class TestTwoFAExport(_Base):

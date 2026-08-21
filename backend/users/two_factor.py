@@ -12,6 +12,7 @@ from django.db import transaction as db_transaction
 from django.utils import timezone
 
 from common.crypto import decrypt_secret, encrypt_secret
+from common.email import EmailService
 from common.exceptions import AuthenticationError, NotFoundError, ValidationError
 from users.exceptions import TwoFactorNotEnabledError, UserInvalidPasswordError
 from users.models import User, UserTwoFactor
@@ -21,7 +22,7 @@ from workspaces.exceptions import (
     WorkspaceMemberNotFoundError,
     WorkspaceOwnerPasswordResetError,
 )
-from workspaces.models import Role, WorkspaceMember
+from workspaces.models import Role, Workspace, WorkspaceMember
 
 
 def _generate_qr_code_svg(user: User, secret: str) -> str:
@@ -169,6 +170,15 @@ class TwoFactorService:
         return False
 
     @staticmethod
+    def _send_admin_reset_email(to, user_name, workspace_name, admin_name):
+        EmailService.send_email(
+            to=to,
+            subject='Your two-factor authentication was reset — Denarly',
+            template_name='email/twofa_admin_reset',
+            context={'user_name': user_name, 'workspace_name': workspace_name, 'admin_name': admin_name},
+        )
+
+    @staticmethod
     def admin_reset(admin: User, workspace_id: int, target_user_id: int, current_role: str) -> dict:
         target_member = WorkspaceMember.objects.filter(
             workspace_id=workspace_id,
@@ -187,9 +197,18 @@ class TwoFactorService:
         if current_role == Role.ADMIN and target_member.role == Role.ADMIN:
             raise WorkspaceMemberAdminInsufficientError('reset 2FA of')
 
+        target_user = User.objects.filter(id=target_user_id).first()
         twofa = UserTwoFactor.objects.filter(user_id=target_user_id).first()
         if not twofa or not twofa.is_enabled:
             raise TwoFactorNotEnabledError()
         twofa.delete()
+
+        workspace = Workspace.objects.filter(id=workspace_id).first()
+        TwoFactorService._send_admin_reset_email(
+            to=target_user.email,
+            user_name=target_user.full_name or target_user.email,
+            workspace_name=workspace.name if workspace else 'a workspace',
+            admin_name=admin.full_name or admin.email,
+        )
 
         return {'message': 'Two-factor authentication has been reset', 'user_id': target_user_id}
