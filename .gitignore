@@ -7,6 +7,7 @@ backend/.env
 *.env
 !example.env
 IMPLEMENTATION_PLAN.md
+opencode.json
 
 # OS
 .DS_Store
