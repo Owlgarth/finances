@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import override_settings
 
+from common.auth import create_temp_token
 from users.two_factor import TwoFactorService
 from workspaces.models import Workspace
 
@@ -600,6 +601,56 @@ class TestLoginWith2FA(AuthTestCase):
             {'temp_token': temp_token, 'code': '000000'},
         )
         self.assertStatus(429)
+
+    def test_verify_2fa_per_user_limit_independent_of_ip(self):
+        """The per-user 2FA bucket spans IPs: 10 attempts from 10 different
+        client IPs still block the 11th (IP rotation must not bypass it)."""
+        user, secret = self._register_with_2fa('ratelimituser@example.com')
+
+        for i in range(10):
+            temp_token = create_temp_token(user)  # fresh single-use token per attempt
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': temp_token, 'code': '000000'},
+                REMOTE_ADDR=f'10.0.0.{i}',
+            )
+            self.assertStatus(401)  # wrong code, but NOT blocked by any throttle
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': create_temp_token(user), 'code': '000000'},
+            REMOTE_ADDR='10.0.0.10',
+        )
+        self.assertStatus(429)
+
+    def test_verify_2fa_invalid_tokens_do_not_share_user_bucket(self):
+        """Invalid temp tokens get a random UUID key each, so they never
+        accumulate into a shared per-user bucket (12 > limit 10, still no 429)."""
+        for _ in range(12):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': 'not-a-real-token', 'code': '000000'},
+            )
+            self.assertStatus(401)
+
+    def test_verify_2fa_succeeds_at_exact_per_user_limit(self):
+        """9 wrong codes then the correct code on the 10th attempt still
+        succeeds — the lockout must not lock out a legitimate user at the cap."""
+        user, secret = self._register_with_2fa('ratelimitedge@example.com')
+
+        for _ in range(9):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': create_temp_token(user), 'code': '000000'},
+            )
+            self.assertStatus(401)
+
+        data = self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': create_temp_token(user), 'code': pyotp.TOTP(secret).now()},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
 
     def test_temp_token_cannot_access_protected_endpoints(self):
         self._register_with_2fa('temponly@example.com')

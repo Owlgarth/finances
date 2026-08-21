@@ -251,6 +251,10 @@ RATE_LIMIT_LOGIN_ACCOUNT_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_ACCOUNT_PERIOD
 RATE_LIMIT_VERIFY_2FA = int(os.getenv('RATE_LIMIT_VERIFY_2FA', '10'))
 # Time window (seconds) for 2FA verification rate limiting
 RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60'))
+# Max 2FA verification attempts per user within the period window, regardless of source IP
+RATE_LIMIT_VERIFY_2FA_USER = int(os.getenv('RATE_LIMIT_VERIFY_2FA_USER', '10'))
+# Time window (seconds) for per-user 2FA verification rate limiting
+RATE_LIMIT_VERIFY_2FA_USER_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_USER_PERIOD', '900'))
 # Max GDPR data export requests per IP within the period window
 RATE_LIMIT_DATA_EXPORT = int(os.getenv('RATE_LIMIT_DATA_EXPORT', '3'))
 # Time window (seconds) for data export rate limiting

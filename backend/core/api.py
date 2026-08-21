@@ -82,10 +82,10 @@ def login(request, data: LoginIn):
     return AuthService.login(data)
 
 
-def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
+def _extract_2fa_user_key(request, data: Verify2FAIn = None, **kwargs):
     """Extract a per-user rate-limit key from the temp token.
 
-    For valid tokens, returns the user_id so attempts are bucketed per (IP, user).
+    For valid tokens, returns the user_id so attempts are bucketed per user.
     For invalid tokens, returns a random UUID per request to avoid a shared bucket —
     a fixed key like 'invalid' would let an attacker exhaust it from a shared IP,
     blocking legitimate 2FA verification for other users on that IP.
@@ -97,9 +97,15 @@ def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
 @router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut, 429: DetailOut})
 @rate_limit_by_key(
     'verify_2fa',
-    _extract_2fa_rate_key,
+    _extract_2fa_user_key,
     limit=settings.RATE_LIMIT_VERIFY_2FA,
     period=settings.RATE_LIMIT_VERIFY_2FA_PERIOD,
+)
+@rate_limit_account(
+    'verify_2fa_user',
+    _extract_2fa_user_key,
+    limit=settings.RATE_LIMIT_VERIFY_2FA_USER,
+    period=settings.RATE_LIMIT_VERIFY_2FA_USER_PERIOD,
 )
 def verify_2fa(request, data: Verify2FAIn):
     """Verify a 2FA temp token + code and issue full tokens. See AuthService.complete_2fa."""
