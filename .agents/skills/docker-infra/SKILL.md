@@ -21,6 +21,28 @@ S3_ENDPOINT_URL=http://storage:9000
 
 Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
 
+## Env De-duplication: Map-Form `x-*` Anchors
+
+When several services share an identical `environment:` subset, hoist it into a root-level extension field in **map syntax** and merge it in — list-form `environment:` (`- KEY=VAL`) has no anchor/merge mechanism, so converting the merged blocks to map form is part of the change:
+
+```yaml
+x-backend-shared-env: &backend-shared-env
+  USE_S3_STORAGE: "true"
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+
+services:
+  api:
+    environment:
+      <<: *backend-shared-env
+      PARSER_URL: http://parser:8000
+```
+
+- Compose treats top-level `x-*` keys as opaque pass-through — the anchor block never becomes a container. Move explanatory comments onto the anchor so the *why* lives with the values.
+- Only merge where the shared vars genuinely match in kind — forcing an anchor onto a service that never had those vars injects them (and `environment:` wins over `env_file`, so it would also shadow `.env` values).
+- Map-form quoting: quote `true`/`false`/numbers to document intent, and `*`-valued keys MUST be quoted (`ALLOWED_HOSTS: '*'` — a bare `*` is the YAML alias indicator). Rule of thumb: quote any value that is a bool/null/number or starts with `*`/`&`/`!`/`|`/`>`/`{`/`[`.
+
+**Verification gate — `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk — the rendered `x-*` block itself — and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.)
+
 ## Dev Script
 
 `./dev.sh` at the repo root is the only one — bash, not POSIX `sh` (`pipefail`, `read -rp`, `local`). Keep new commands in it rather than adding scripts, and keep its `usage()` heredoc in sync.
