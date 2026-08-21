@@ -14,6 +14,7 @@ The frontend uses an "Architectural Ledger" design system via CSS custom propert
 - **Fonts:** `font-sans` — Geist (body/UI); `font-mono` — JetBrains Mono (code, numbers)
 - **Icons:** `lucide-react` only. No Material Symbols or other icon fonts.
 - **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables — avoid `box-shadow` utilities for elevation.
+- **Border widths:** Tailwind preflight resets `border-width: 0`, so a color utility alone (`border-primary`) renders **no** border. Always keep the bare `border` width utility and swap only the color half — `border border-primary` (open/selected) vs `border border-border` (default).
 
 ## Third-Party Component Theming
 
@@ -65,6 +66,13 @@ elements meet 44px (shared button classes and `SegmentedControl` carry `max-sm:m
 small icon buttons use the `.touch-hit` utility, but not on adjacent buttons whose expanded
 hit areas would overlap).
 
+`.touch-hit` sets `position: relative` in the same `@layer utilities` that Tailwind emits
+`.absolute`/`.fixed` into — equal specificity, later source order, so `.touch-hit` wins: an
+element carrying both classes silently computes `position: relative`. When an element needs
+true absolute positioning plus the enlarged hit area, use `!absolute` (the `BottomSheet`
+close X is the canonical example). Verify cascade fixes against the compiled CSS, not the
+source className.
+
 ## Modal Pattern
 
 Use `common/Modal.tsx` — it renders a centered panel on desktop and delegates to
@@ -72,11 +80,21 @@ Use `common/Modal.tsx` — it renders a centered panel on desktop and delegates 
 Escape, focus return, keyboard avoidance). Don't hand-roll fixed-overlay markup:
 
 ```tsx
-<Modal open={isOpen} onClose={onClose} size="md" className="p-6">
-  <h2 className={modalTitleClass}>Title</h2>
+<Modal open={isOpen} onClose={onClose} title="Edit transaction" size="md" className="p-6">
   {/* content */}
 </Modal>
 ```
+
+**Titles go through the `title` prop — never a hand-rolled `<h2>`.** The prop is `string`,
+not `ReactNode`: dynamic titles are template literals or string ternaries
+(`title={`Set balance — ${account.name}`}`), never JSX. The header reserves a `flex-shrink-0`
+slot for the close X so the X can never overlap the title; a standalone `<h2>` in the panel
+flow paired with a floating absolute X is the legacy overlap / accidental-closure bug — do
+not reintroduce it, and never absolutely position a close button over panel content. The
+header is viewport-aware inside `Modal`: desktop renders title + X in one flex row, mobile
+renders the title only with the X in the `BottomSheet` sticky handle row — callers just pass
+`title`. Modal title typography lives solely in `Modal`'s header render; don't add per-caller
+title styling or title-to-content spacing (the header owns the bottom margin).
 
 Non-modal sheets (pickers, action menus) use `BottomSheet` / `ActionSheet` directly
 (`design/components.md` §21).
@@ -103,6 +121,8 @@ onExecute: (id: number) => void
 // Good — child has all the data it needs
 onExecute: (planned: PlannedTransaction) => void
 ```
+
+- **Accordion/disclosure components:** the collapsed header is a real `<button>` carrying `aria-expanded` + `aria-controls`; the expanded region is its **sibling** with a matching `id` + `role="region" aria-label` — never nested inside the button (interactive content inside `<button>` is invalid HTML and steals focus/clicks).
 
 Standard form component shape: props interface, `isLoading` state, `handleSubmit` with `try/catch` showing `toast.error(...)` and `finally { setIsLoading(false) }`.
 
@@ -190,6 +210,8 @@ Before adding error toasts in a catch block, check whether the called function a
   setIsSubmitting(false);
 }
 ```
+
+When a catch block exists only to swallow the error (no inspection), use the optional catch binding `catch { ... }` rather than `catch (e)`/`catch (_e)` — no unused binding, satisfies `@typescript-eslint/no-unused-vars` without underscore noise.
 
 ## Token Storage
 
@@ -342,6 +364,10 @@ useEffect(() => {
 }, [accounts, ...])
 ```
 
+## State Changes in Event Handlers, Not Effects
+
+The project lints `react-hooks/set-state-in-effect`; the pre-existing warnings are codebase-wide backlog — never add a new one. For mount-time behavior (e.g. focusing a just-added row), set transient state inside the **event handler** that caused the mount, act via a plain HTML attribute (`autoFocus={condition}` — fires when the conditionally rendered content mounts), and self-clear in an `onFocus` handler — the self-clear keeps the behavior correct across unmount/remount of conditionally rendered content. Event handlers are not effects: the lint stays quiet. Don't reach for `useEffect` + `setState` or ref callbacks for this class of behavior.
+
 ## API Client Pattern
 
 ```typescript
@@ -365,6 +391,10 @@ export type TransactionOrdering =
   | '-category__name' | 'category__name'
   | '-account__name' | 'account__name' | '-account__currency__code' | 'account__currency__code';
 ```
+
+**Per-request headers via an optional `opts` bag:** `create(data, opts?: { idempotencyKey?: string })` injects the header with a conditional spread on the axios config — `...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {})` — so call sites without the option are untouched. Never push per-request headers onto `api.defaults.headers`; that leaks across requests.
+
+**Idempotency keys on create mutations:** `crypto.randomUUID()` per modal session — stable within one open, fresh across opens. A modal that resets in an open-effect generates the key in the create branch of that effect (`null` in the edit branch); a permanently-mounted modal reset via `close()` → `reset()` uses a lazy `useState(() => crypto.randomUUID())` initializer and regenerates inside `reset()`.
 
 ## Contexts
 
