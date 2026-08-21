@@ -216,6 +216,21 @@ class TestTransferListing(TransferTestCase):
         self.get(f'/api/transfers/{foreign.id}', **self.auth_headers())
         self.assertStatus(404)
 
+    def test_list_page_size_cap(self):
+        self.get('/api/transfers?page_size=1000', **self.auth_headers())
+        self.assertStatus(422)
+
+        self.get('/api/transfers?page_size=0', **self.auth_headers())
+        self.assertStatus(422)
+
+        self.get('/api/transfers?page_size=100', **self.auth_headers())
+        self.assertStatus(200)
+
+        # 200 is the largest supported page size (frontend PAGE_SIZE_OPTIONS /
+        # backend ALLOWED_PAGE_SIZES) — it must keep working under the cap.
+        self.get('/api/transfers?page_size=200', **self.auth_headers())
+        self.assertStatus(200)
+
 
 class TestTransferRolePermissions(TransferTestCase):
     user_role = 'viewer'
