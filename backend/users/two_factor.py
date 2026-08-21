@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import secrets
+import time
 
 import pyotp
 import qrcode
@@ -136,7 +137,7 @@ class TwoFactorService:
     @staticmethod
     @db_transaction.atomic
     def verify_code(user: User, code: str) -> bool:
-        """Verify a TOTP or recovery code. Uses select_for_update to prevent concurrent recovery code reuse."""
+        """Verify a TOTP or recovery code. Uses select_for_update to prevent concurrent recovery code reuse AND TOTP timestep replay."""
         try:
             twofa = UserTwoFactor.objects.select_for_update().get(user=user, is_enabled=True)
         except UserTwoFactor.DoesNotExist:
@@ -144,9 +145,22 @@ class TwoFactorService:
 
         secret = decrypt_secret(twofa.encrypted_secret)
         totp = pyotp.TOTP(secret)
-        if totp.verify(code, valid_window=1):
+
+        # Equivalent of totp.verify(code, valid_window=1) — match the code
+        # against the current timestep and its immediate neighbours — plus a
+        # replay guard: a timestep at or before the last consumed one is
+        # rejected, making each 30s code single-use.
+        matched_ts = None
+        now_ts = int(time.time())
+        for offset in (-1, 0, 1):
+            ts = now_ts + offset * 30
+            if totp.at(ts) == code:
+                matched_ts = ts // 30
+                break
+        if matched_ts is not None and (twofa.last_used_timestep is None or matched_ts > twofa.last_used_timestep):
+            twofa.last_used_timestep = matched_ts
             twofa.last_used_at = timezone.now()
-            twofa.save(update_fields=['last_used_at', 'updated_at'])
+            twofa.save(update_fields=['last_used_timestep', 'last_used_at', 'updated_at'])
             return True
 
         if _try_recovery_code(twofa, code):

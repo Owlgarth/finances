@@ -1,5 +1,7 @@
 """Tests for 2FA management endpoints."""
 
+from unittest import mock
+
 import pyotp
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -375,3 +377,49 @@ class TestVerify2FAEndpoint(_Base):
         )
         self.assertEqual(response.status_code, 404)
         self.assertIn('not enabled', response.json()['detail'].lower())
+
+
+class TestTOTPReplayGuard(_Base):
+    """TOTP codes are single-use per timestep — a replayed code is rejected."""
+
+    def test_reused_totp_code_rejected(self):
+        secret, _ = self._enable_2fa(self.user)
+        totp = pyotp.TOTP(secret)
+        now_ts = 1_700_000_000
+        code = totp.at(now_ts)
+
+        with mock.patch('users.two_factor.time.time', return_value=now_ts):
+            self.assertTrue(TwoFactorService.verify_code(self.user, code))
+            self.assertFalse(TwoFactorService.verify_code(self.user, code))
+
+        self.user.two_factor.refresh_from_db()
+        self.assertEqual(self.user.two_factor.last_used_timestep, now_ts // 30)
+        # A rejected replay must not burn recovery codes either
+        self.assertEqual(len(self.user.two_factor.backup_codes), 8)
+
+    def test_later_timestep_code_accepted_after_previous_used(self):
+        secret, _ = self._enable_2fa(self.user)
+        totp = pyotp.TOTP(secret)
+        now_ts = 1_700_000_000
+
+        with mock.patch('users.two_factor.time.time', return_value=now_ts):
+            self.assertTrue(TwoFactorService.verify_code(self.user, totp.at(now_ts)))
+        next_ts = now_ts + 30
+        with mock.patch('users.two_factor.time.time', return_value=next_ts):
+            self.assertTrue(TwoFactorService.verify_code(self.user, totp.at(next_ts)))
+
+        self.user.two_factor.refresh_from_db()
+        self.assertEqual(self.user.two_factor.last_used_timestep, next_ts // 30)
+
+    def test_previous_window_code_rejected_as_replay(self):
+        secret, _ = self._enable_2fa(self.user)
+        totp = pyotp.TOTP(secret)
+        now_ts = 1_700_000_000
+        old_code = totp.at(now_ts)
+
+        with mock.patch('users.two_factor.time.time', return_value=now_ts):
+            self.assertTrue(TwoFactorService.verify_code(self.user, old_code))
+        # Server moved into the next window: old_code still matches via the -1
+        # offset of the validity window, but its timestep is not newer.
+        with mock.patch('users.two_factor.time.time', return_value=now_ts + 30):
+            self.assertFalse(TwoFactorService.verify_code(self.user, old_code))

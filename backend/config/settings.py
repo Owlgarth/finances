@@ -221,6 +221,10 @@ WORKSPACE_MAX_MEMBERS = int(os.getenv('WORKSPACE_MAX_MEMBERS', '10'))
 TWO_FACTOR_RECOVERY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 TWO_FACTOR_RECOVERY_CODE_COUNT = 8
 TWO_FACTOR_RECOVERY_CODE_LENGTH = 8
+# Independent key for encrypting 2FA secrets (Fernet). Empty = derive from
+# SECRET_KEY (legacy behavior); set to a distinct random value to decouple
+# key rotation from SECRET_KEY.
+TWO_FACTOR_ENCRYPTION_KEY = os.getenv('TWO_FACTOR_ENCRYPTION_KEY', '')
 
 # Number of trusted reverse proxies in front of the API.
 # 0 (default) = X-Forwarded-For is ignored entirely and REMOTE_ADDR is used

@@ -152,6 +152,7 @@ class UserTwoFactor(models.Model):
     encrypted_secret = models.BinaryField()
     backup_codes = models.JSONField(default=list)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    last_used_timestep = models.BigIntegerField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
