@@ -764,6 +764,61 @@ class TestRefreshToken(AuthTestCase):
         self.post('/api/auth/refresh', {'refresh_token': refresh_token})
         self.assertStatus(401)
 
+    def test_refresh_token_invalidated_by_password_change(self):
+        refresh_token = self._register_and_get_refresh_token('stale_refresh@example.com')
+
+        access_token = self.post(
+            '/api/auth/login',
+            {'email': 'stale_refresh@example.com', 'password': 'securepassword123'},
+        )['access_token']
+
+        self.put(
+            '/api/users/me/password',
+            {'current_password': 'securepassword123', 'new_password': 'newsecurepassword456'},
+            **self.auth_headers(access_token),
+        )
+        self.assertStatus(200)
+
+        # Refresh token issued BEFORE the change must now be rejected
+        self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(401)
+
+        # A fresh login yields a refresh token that still works
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'stale_refresh@example.com', 'password': 'newsecurepassword456'},
+        )
+        self.assertStatus(200)
+        data = self.post('/api/auth/refresh', {'refresh_token': data['refresh_token']})
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
+    def test_refresh_token_issued_after_password_change_works(self):
+        self._register_and_get_refresh_token('fresh_refresh@example.com')
+
+        access_token = self.post(
+            '/api/auth/login',
+            {'email': 'fresh_refresh@example.com', 'password': 'securepassword123'},
+        )['access_token']
+        self.put(
+            '/api/users/me/password',
+            {'current_password': 'securepassword123', 'new_password': 'newsecurepassword456'},
+            **self.auth_headers(access_token),
+        )
+        self.assertStatus(200)
+
+        time.sleep(0.01)  # ensure iat is strictly after password_changed_at
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'fresh_refresh@example.com', 'password': 'newsecurepassword456'},
+        )
+        self.assertStatus(200)
+
+        data = self.post('/api/auth/refresh', {'refresh_token': data['refresh_token']})
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
     def test_new_access_token_is_valid(self):
         refresh_token = self._register_and_get_refresh_token('valid_refresh@example.com')
 

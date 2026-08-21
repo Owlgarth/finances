@@ -549,7 +549,7 @@ class WorkspaceMemberService:
 
         with db_transaction.atomic():
             target_user.set_password(new_password)
-            target_user.save(update_fields=['password'])
+            target_user.save(update_fields=['password', 'password_changed_at'])
 
         from users.services import UserService
 

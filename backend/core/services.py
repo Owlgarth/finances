@@ -163,7 +163,8 @@ class AuthService:
         """Exchange a valid refresh token for a rotated token pair.
 
         Returns:
-            (401, {'detail': ...}) for invalid/expired/consumed refresh token or missing user.
+            (401, {'detail': ...}) for invalid/expired/consumed refresh token, missing user,
+            or a token issued before the user's last password change.
             (200, {'access_token', 'refresh_token', 'token_type'}) on success (rotated refresh).
         """
         payload = consume_refresh_token(data.refresh_token)
@@ -173,6 +174,10 @@ class AuthService:
         user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
         if not user:
             return 401, {'detail': 'User not found'}
+
+        last_change = user.password_changed_at.timestamp() if user.password_changed_at else 0
+        if payload.get('iat', 0) < last_change:
+            return 401, {'detail': 'Invalid or expired refresh token'}
 
         return 200, {
             'access_token': create_access_token(user),
