@@ -222,6 +222,13 @@ TWO_FACTOR_RECOVERY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 TWO_FACTOR_RECOVERY_CODE_COUNT = 8
 TWO_FACTOR_RECOVERY_CODE_LENGTH = 8
 
+# Number of trusted reverse proxies in front of the API.
+# 0 (default) = X-Forwarded-For is ignored entirely and REMOTE_ADDR is used
+# (correct for the shipped direct-uvicorn exposure on API_PORT with no proxy).
+# Set to 1+ only when deployed behind exactly that many trustworthy proxies;
+# get_client_ip() then derives the client IP from the X-Forwarded-For chain.
+TRUSTED_PROXY_COUNT = int(os.getenv('TRUSTED_PROXY_COUNT', '0'))
+
 # Rate limiting
 # Max registration attempts per IP within the period window
 RATE_LIMIT_REGISTER = int(os.getenv('RATE_LIMIT_REGISTER', '5'))
