@@ -131,10 +131,14 @@ Actor: Owner or Admin
 Target: Any email address
 
 Process:
-1. Enter email, role, optional name, and password (for new users)
-2. If user exists: Add to workspace
-3. If user doesn't exist: Create with provided password
-4. Share credentials securely with new user
+1. Enter email, role, optional name, and optional password
+2. If user exists: Add to workspace (password ignored); they get an "added" email
+3. If user doesn't exist:
+   - With a password: create the user with it as their initial password
+     (shared with them out-of-band); they get an invitation email
+   - Without a password: create the user with an unusable password; they get
+     an invitation email with a set-password link (a standard reset-token
+     link, consumed at /reset-password) and cannot log in until they set one
 ```
 
 The API response is identical whether the user already existed or was just created —
