@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { transactionsApi } from '../../api/client'
-import type { Transaction, TransactionItemInput } from '../../types'
+import type { Transaction } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
+import { rowsToItems } from '../../utils/transactionItems'
 import { primaryButtonClass } from '../common/formStyles'
 import TransactionItemsList from './TransactionItemsList'
 import type { Row } from './TransactionItemsList'
@@ -25,6 +26,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
     if (data) {
       setRows(
         data.items.map((i) => ({
+          id: crypto.randomUUID(),
           name: i.name,
           quantity: i.quantity,
           unit_price: i.unit_price ?? '',
@@ -35,22 +37,13 @@ export default function TransactionItemsEditor({ transaction }: Props) {
   }, [data])
 
   const save = useMutation({
-    mutationFn: () => {
-      const payload: TransactionItemInput[] = rows
-        .filter((r) => r.name.trim())
-        .map((r) => ({
-          name: r.name.trim(),
-          quantity: r.quantity || '1',
-          unit_price: r.unit_price === '' ? null : r.unit_price,
-          line_total: r.line_total === '' ? null : r.line_total,
-        }))
-      return transactionsApi.replaceItems(transaction.id, payload)
-    },
+    mutationFn: () => transactionsApi.replaceItems(transaction.id, rowsToItems(rows)),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['transaction-items', transaction.id] })
       toast.success('Items saved')
       setRows(
         res.items.map((i) => ({
+          id: crypto.randomUUID(),
           name: i.name,
           quantity: i.quantity,
           unit_price: i.unit_price ?? '',

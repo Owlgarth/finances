@@ -5,7 +5,7 @@ import Modal from '../common/Modal'
 import { accountsApi, transactionsApi } from '../../api/client'
 import type { Account } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
-import { formatAmount } from '../../utils/format'
+import { formatAmount, subtractAmounts } from '../../utils/format'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
@@ -28,9 +28,13 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
     enabled: open,
   })
 
-  const current = balance ? parseFloat(balance.balance) : 0
-  const targetNum = parseFloat(target || '0')
-  const delta = target === '' ? null : targetNum - current
+  // Money rule (utils/format.ts): never run backend Decimals through float
+  // math — large balances get off-by-cent deltas recorded as real
+  // transactions. Exact string math via subtractAmounts. The regex gates
+  // e-notation ("1e5" is a valid number-input value that BigInt cannot
+  // parse) and is also the "did they type an amount" check.
+  const validTarget = /^-?(\d+(\.\d*)?|\.\d+)$/.test(target)
+  const delta = balance && validTarget ? subtractAmounts(target, balance.balance) : null
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -38,7 +42,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
         date: new Date().toISOString().slice(0, 10),
         description: 'Balance adjustment',
         type: 'adjustment',
-        amount: (delta as number).toFixed(2),
+        amount: delta!,
         account_id: account.id,
       }),
     onSuccess: () => {
@@ -53,8 +57,9 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (delta === null) return toast.error('Enter a target balance')
-    if (delta === 0) return toast.error('Balance is already this amount')
+    if (!balance) return toast.error('Current balance is still loading')
+    if (!validTarget) return toast.error('Enter a target balance')
+    if (delta === '0.00') return toast.error('Balance is already this amount')
     mutation.mutate()
   }
 
@@ -62,7 +67,10 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
     <Modal open={open} onClose={onClose} className="p-6" title={`Set balance — ${account.name}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-text-muted">
-          Current balance: <span className="font-mono text-text">{formatAmount(current)} {account.currency_code}</span>
+          Current balance:{' '}
+          <span className="font-mono text-text">
+            {balance ? `${formatAmount(balance.balance)} ${account.currency_code}` : 'Loading…'}
+          </span>
         </p>
         <div>
           <label htmlFor="target-balance" className={labelClass}>New balance</label>
@@ -76,17 +84,17 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
             autoFocus={!isTouch}
           />
         </div>
-        {delta !== null && delta !== 0 && (
+        {delta !== null && delta !== '0.00' && (
           <p className="text-sm text-text-muted">
             Adjustment: {' '}
-            <span className={`font-mono ${delta > 0 ? 'text-positive' : 'text-negative'}`}>
-              {delta > 0 ? '+' : ''}{formatAmount(delta)} {account.currency_code}
+            <span className={`font-mono ${delta.startsWith('-') ? 'text-negative' : 'text-positive'}`}>
+              {delta.startsWith('-') ? '' : '+'}{formatAmount(delta)} {account.currency_code}
             </span>
           </p>
         )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
-          <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
+          <button type="submit" disabled={mutation.isPending || !balance} className={primaryButtonClass}>
             {mutation.isPending ? 'Saving…' : 'Set balance'}
           </button>
         </div>

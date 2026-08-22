@@ -46,16 +46,21 @@ export default function BudgetDetailPage() {
   const [periodId, setPeriodId] = useState<number | null>(null)
 
   // Default to the current period (materialize it lazily on load).
-  const { data: currentPeriod } = useQuery({
+  const { data: currentPeriod, isSuccess: currentPeriodLoaded } = useQuery({
     queryKey: ['current-period', budgetId],
     queryFn: () => budgetsApi.currentPeriod(budgetId),
     enabled: budget?.cadence !== 'custom',
     retry: false,
   })
+  // The periods list is a plain GET, newest first — it beats the lazily
+  // materialized current-period fetch. Don't let periods[0] (the NEWEST
+  // period) win that race and open planners on a future period. Custom
+  // cadence has no derived current period, so there the list is all there is.
+  const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded
   useEffect(() => {
     if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
-    else if (periodId === null && periods.length > 0) setPeriodId(periods[0].id)
-  }, [currentPeriod, periods, periodId])
+    else if (periodId === null && currentPeriodKnown && periods.length > 0) setPeriodId(periods[0].id)
+  }, [currentPeriod, periods, periodId, currentPeriodKnown])
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['budget-summary', budgetId, periodId],
@@ -74,7 +79,9 @@ export default function BudgetDetailPage() {
     return Array.from(map.values()).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [periods, currentPeriod])
 
-  const primaryCurrency = currencies[0]?.code ?? 'PLN'
+  // Zero enabled currencies (shouldn't happen) — '—' can't pose as a real code;
+  // it's never rendered (single-currency layouts show no switcher).
+  const primaryCurrency = currencies[0]?.code ?? '—'
 
   const [newCategory, setNewCategory] = useState('')
   const addCategory = useMutation({
@@ -164,8 +171,15 @@ export default function BudgetDetailPage() {
 
   // Saved switcher order for this budget; empty = enabled-currency order.
   const [currencyOrder, setCurrencyOrder] = useState<string[]>(() => loadCurrencyOrder(budgetId))
+  // Budget→budget navigation (CommandPalette) re-renders this page with a new
+  // budgetId. Reset the other per-budget state too, or the summary query runs
+  // budgetSummary(B, A_period) → 404 → every row silently renders 0s. Kept in
+  // this same effect (not a new one) so the set-state-in-effect warning count
+  // stays put — the rule flags once per effect, not per call.
   useEffect(() => {
     setCurrencyOrder(loadCurrencyOrder(budgetId))
+    setPeriodId(null)
+    setSelectedCategory(null)
   }, [budgetId])
 
   // Currency column groups: every currency present in the summary (enabled-currency
@@ -341,7 +355,17 @@ export default function BudgetDetailPage() {
                 return (
                   <tr
                     key={category.id}
+                    tabIndex={0}
                     onClick={() => toggleSelected(category.id)}
+                    onKeyDown={(e) => {
+                      // Same guard as the mobile cards: only when the row itself
+                      // is focused — Enter/Space inside the planned editor and its
+                      // buttons must keep their native behavior.
+                      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault()
+                        toggleSelected(category.id)
+                      }
+                    }}
                     className={`cursor-pointer ${isSelected ? 'bg-surface-hover' : ''}`}
                   >
                     {/* Sticky cell needs its own solid bg, so it mirrors the row state;
@@ -361,8 +385,8 @@ export default function BudgetDetailPage() {
                             className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                             autoFocus
                           />
-                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} className="text-positive touch-hit"><Check size={14} /></button>
-                          <button onClick={() => setEditingCell(null)} className="text-text-muted touch-hit"><X size={14} /></button>
+                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label="Save planned amount" className="text-positive touch-hit"><Check size={14} /></button>
+                          <button onClick={() => setEditingCell(null)} aria-label="Cancel" className="text-text-muted touch-hit"><X size={14} /></button>
                         </span>
                       ) : canEditPlan ? (
                         /* Whole cell is the tap target, not just the digits. */

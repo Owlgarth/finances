@@ -5,6 +5,10 @@ import { formatAmount } from '../../utils/format'
 import { inputClass, labelClass } from '../common/formStyles'
 
 export interface Row {
+  /** Stable per-row identity — survives reorders. key={index} made focus and
+   * text selection jump mid-edit when `move` swapped values between two
+   * stationary DOM nodes. */
+  id: string
   name: string
   quantity: string
   unit_price: string
@@ -18,7 +22,7 @@ interface Props {
   currencyCode?: string | null
 }
 
-const emptyRow = (): Row => ({ name: '', quantity: '1', unit_price: '', line_total: '' })
+const emptyRow = (): Row => ({ id: crypto.randomUUID(), name: '', quantity: '1', unit_price: '', line_total: '' })
 
 /** Sum of line totals, falling back to quantity × unit price — mirrors the backend. */
 function computeTotal(rows: Row[]): number {
@@ -118,7 +122,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
         const nameId = `item-${index}-name`
 
         return (
-          <div key={index} className={cardShell(isOpen)}>
+          <div key={row.id} className={cardShell(isOpen)}>
             {/* Collapsed header — a real <button>, toggles on ALL breakpoints (not tappableProps). */}
             <button
               type="button"

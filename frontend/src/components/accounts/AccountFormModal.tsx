@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import Modal from '../common/Modal'
@@ -34,6 +34,19 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
   const [currencyCode, setCurrencyCode] = useState<string | null>(account?.currency_code ?? null)
   const [openingBalance, setOpeningBalance] = useState(account?.opening_balance ?? '0')
   const [isDefault, setIsDefault] = useState(account?.is_default_for_currency ?? false)
+
+  // Permanently mounted (AccountsPage renders us unconditionally, no `key`),
+  // so the useState initializers above ran once at page load — with `account`
+  // undefined. Re-seed from the prop on every open (TransferModal-style), or
+  // Edit opens a blank form that saves `opening_balance: '0'`.
+  useEffect(() => {
+    if (!open) return
+    setName(account?.name ?? '')
+    setType(account?.type ?? 'bank')
+    setCurrencyCode(account?.currency_code ?? null)
+    setOpeningBalance(account?.opening_balance ?? '0')
+    setIsDefault(account?.is_default_for_currency ?? false)
+  }, [open, account])
 
   const mutation = useMutation({
     mutationFn: () => {

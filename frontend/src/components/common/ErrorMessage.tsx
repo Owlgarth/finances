@@ -89,6 +89,7 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
           </p>
           {onRetry && (
             <button
+              type="button"
               onClick={onRetry}
               className={`mt-3 px-3 py-1.5 rounded-sm text-xs font-medium font-mono uppercase tracking-wider border border-border ${buttonColors[type]} transition-colors`}
             >

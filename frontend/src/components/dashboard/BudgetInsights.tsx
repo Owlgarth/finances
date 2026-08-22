@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { Table2, ChartColumn } from 'lucide-react'
@@ -110,7 +111,7 @@ function useTip() {
 }
 
 /** Horizontal paired bars: planned vs actual per category (top 6 + Other). */
-function CategoryBars({ items, currency }: { items: BudgetSummaryItem[]; currency: string }) {
+function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]; currency: string; loading: boolean }) {
   const { containerRef, tip, setTip, show } = useTip()
 
   const rows = useMemo(() => {
@@ -128,6 +129,15 @@ function CategoryBars({ items, currency }: { items: BudgetSummaryItem[]; currenc
     }
     return result
   }, [items, currency])
+
+  if (loading)
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-4 bg-surface-muted rounded-sm animate-pulse" />
+        ))}
+      </div>
+    )
 
   if (rows.length === 0) return <p className="text-sm text-text-muted py-6 text-center">No categories with data this period.</p>
 
@@ -173,7 +183,7 @@ function CategoryBars({ items, currency }: { items: BudgetSummaryItem[]; currenc
 }
 
 /** Grouped columns: planned vs actual per period, oldest first. */
-function PeriodColumns({ periods, currency, currentPeriodId }: { periods: BudgetHistoryPeriod[]; currency: string; currentPeriodId: number | null }) {
+function PeriodColumns({ periods, currency, currentPeriodId, loading }: { periods: BudgetHistoryPeriod[]; currency: string; currentPeriodId: number | null; loading: boolean }) {
   const { containerRef, tip, setTip, show } = useTip()
 
   const cols = periods.map((p) => ({
@@ -183,6 +193,8 @@ function PeriodColumns({ periods, currency, currentPeriodId }: { periods: Budget
     planned: parseFloat(p.totals[currency]?.planned ?? '0'),
     actual: parseFloat(p.totals[currency]?.actual ?? '0'),
   }))
+
+  if (loading) return <div className="h-44 bg-surface-muted rounded-sm animate-pulse" />
 
   if (cols.length === 0) return <p className="text-sm text-text-muted py-6 text-center">No periods yet.</p>
 
@@ -338,6 +350,14 @@ export default function BudgetInsights() {
     placeholderData: (prev) => prev,
   })
 
+  // First-load pendings — true from budget selection until the query chain
+  // (currentPeriod → history → summary) delivers data. A query waiting on
+  // prerequisites (`enabled: false`) also has no data yet, so gating on data
+  // presence covers those windows that `isLoading` misses; `placeholderData`
+  // keeps budget switches out of this (the opacity-60 dimming handles those).
+  const historyPending = !!budgetId && !history
+  const summaryPending = !!budgetId && !summary
+
   // Currencies present anywhere in the data; default = biggest plan in the current period.
   const currencies = useMemo(() => {
     const codes = new Set<string>()
@@ -370,11 +390,13 @@ export default function BudgetInsights() {
   const prevActual = prevPeriod && currency ? parseFloat(prevPeriod.totals[currency]?.actual ?? '0') : null
   const spentDelta = prevActual !== null ? actual - prevActual : null
 
-  const periodTableRows = periods.map((p) => [
-    p.name,
-    formatAmount(p.totals[currency ?? '']?.planned ?? '0'),
-    formatAmount(p.totals[currency ?? '']?.actual ?? '0'),
-  ])
+  const periodTableRows = currency
+    ? periods.map((p) => [
+        p.name,
+        formatAmount(p.totals[currency]?.planned ?? '0'),
+        formatAmount(p.totals[currency]?.actual ?? '0'),
+      ])
+    : []
   const categoryTableRows = (summary?.items ?? [])
     .filter((i) => i.currency_code === currency)
     .map((i) => [i.category_name, formatAmount(i.planned), formatAmount(i.actual), formatAmount(i.remaining)])
@@ -403,27 +425,43 @@ export default function BudgetInsights() {
             />
           </div>
         )}
+        {budget && (
+          <Link to={`/budgets/${budget.id}`} className="text-xs text-primary hover:text-primary-hover touch-hit">
+            View budget →
+          </Link>
+        )}
       </div>
 
       <div className={`space-y-4 transition-opacity ${isPlaceholderData ? 'opacity-60' : ''}`}>
         {/* KPI row — current period */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatTile label={`Planned · ${summary?.period.name ?? 'current period'}`} value={totals ? formatAmount(planned) : '—'} sub={currency ?? undefined} subTone="muted" />
-          <StatTile
-            label="Spent"
-            value={totals ? formatAmount(actual) : '—'}
-            sub={
-              spentDelta !== null && prevPeriod
-                ? `${spentDelta >= 0 ? '+' : '−'}${formatAmount(Math.abs(spentDelta))} vs ${prevPeriod.name}`
-                : (currency ?? undefined)
-            }
-            subTone={spentDelta === null ? 'muted' : spentDelta > 0 ? 'bad' : 'good'}
-          />
-          <StatTile label="Remaining" value={totals ? formatAmount(remaining) : '—'} sub={currency ?? undefined} subTone={remaining < 0 ? 'bad' : 'muted'} />
+          {summaryPending ? (
+            [0, 1, 2].map((i) => (
+              <div key={i} className="border border-border rounded-sm bg-surface p-4 space-y-2">
+                <div className="h-3 w-24 bg-surface-muted rounded-sm animate-pulse" />
+                <div className="h-6 w-28 bg-surface-muted rounded-sm animate-pulse" />
+              </div>
+            ))
+          ) : (
+            <>
+              <StatTile label={`Planned · ${summary?.period.name ?? 'current period'}`} value={totals ? formatAmount(planned) : '—'} sub={currency ?? undefined} subTone="muted" />
+              <StatTile
+                label="Spent"
+                value={totals ? formatAmount(actual) : '—'}
+                sub={
+                  spentDelta !== null && prevPeriod
+                    ? `${spentDelta >= 0 ? '+' : '−'}${formatAmount(Math.abs(spentDelta))} vs ${prevPeriod.name}`
+                    : (currency ?? undefined)
+                }
+                subTone={spentDelta === null ? 'muted' : spentDelta > 0 ? 'bad' : 'good'}
+              />
+              <StatTile label="Remaining" value={totals ? formatAmount(remaining) : '—'} sub={currency ?? undefined} subTone={remaining < 0 ? 'bad' : 'muted'} />
+            </>
+          )}
         </div>
 
         <div className="border border-border rounded-sm bg-surface p-4">
-          <SpendMeter planned={planned} actual={actual} />
+          {summaryPending ? <div className="h-8 bg-surface-muted rounded-sm animate-pulse" /> : <SpendMeter planned={planned} actual={actual} />}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -431,13 +469,13 @@ export default function BudgetInsights() {
             title="This period by category"
             table={<DataTable head={['Category', 'Planned', 'Spent', 'Remaining']} rows={categoryTableRows} />}
           >
-            <CategoryBars items={summary?.items ?? []} currency={currency ?? ''} />
+            <CategoryBars items={summary?.items ?? []} currency={currency ?? ''} loading={summaryPending} />
           </ChartCard>
           <ChartCard
             title="Planned vs spent by period"
             table={<DataTable head={['Period', 'Planned', 'Spent']} rows={periodTableRows} />}
           >
-            <PeriodColumns periods={periods} currency={currency ?? ''} currentPeriodId={currentPeriodId} />
+            <PeriodColumns periods={periods} currency={currency ?? ''} currentPeriodId={currentPeriodId} loading={historyPending} />
           </ChartCard>
         </div>
       </div>

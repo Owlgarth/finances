@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Trash2, TriangleAlert, X } from 'lucide-react'
-import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { useOverlay } from '../../hooks/useOverlay'
+import { Trash2, TriangleAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../utils/errors'
+import Modal from '../common/Modal'
 
 interface WorkspaceSettingsPanelProps {
   isOpen: boolean
@@ -26,10 +26,6 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
       setShowDeleteConfirm(false)
     }
   }, [isOpen])
-
-  // Stack-aware Escape + scroll lock + focus restore. Without the stack, this
-  // panel's own Escape listener would co-fire with a sheet opened above it.
-  const panelRef = useOverlay(isOpen && !!workspace, onClose)
 
   const isOwner = userRole === 'owner'
   const canEditName = userRole === 'owner' || userRole === 'admin'
@@ -65,31 +61,11 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
     }
   }
 
-  if (!isOpen || !workspace) return null
+  if (!workspace) return null
 
   return (
-    <div className="fixed inset-0 z-modal-backdrop overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="ws-settings-title">
-      <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-        <div className="fixed inset-0 bg-scrim backdrop-blur-sm transition-opacity" onClick={onClose} aria-hidden="true" />
-
-        <div
-          ref={panelRef}
-          tabIndex={-1}
-          className="relative transform overflow-hidden rounded-sm bg-surface border border-border text-left transition-all outline-none sm:my-8 sm:w-full sm:max-w-lg"
-        >
-          <div className="px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 id="ws-settings-title" className="text-base font-semibold text-text">Workspace Settings</h3>
-              <button
-                onClick={onClose}
-                aria-label="Close settings"
-                className="rounded-sm text-text-muted hover:text-text touch-hit"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-6">
+    <Modal open={isOpen} onClose={onClose} title="Workspace Settings" className="p-6">
+      <div className="space-y-6">
               <div>
                 <label htmlFor="workspace-name" className="block text-sm font-medium text-text mb-1">
                   Workspace Name
@@ -174,10 +150,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                   )}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }
