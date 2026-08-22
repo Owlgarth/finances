@@ -76,6 +76,12 @@ Each email has an HTML and plain text version in `backend/templates/email/`. HTM
 
 **Emails without a CTA button:** When no action can be taken (e.g., account deleted, password changed), do not include a CTA button — override `{% block cta_url %}` with a security note paragraph. See `password_changed.html` and `account_deleted.html`.
 
+**Query-string URLs in `.txt` templates need `{% autoescape off %}`:** Django autoescapes plain-text templates too — a `{{ url }}` containing `?uid=…&token=…` renders the `&` as `&amp;`, breaking the copy-pasted link (and any token-regex test). Wrap just the URL line, scoped, with a comment — see `workspace_invitation_set_password.txt`:
+
+```django
+{% autoescape off %}{{ reset_url }}{% endautoescape %}
+```
+
 ## Environment Variables
 
 ```
