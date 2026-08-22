@@ -10,7 +10,7 @@ from django.utils.http import urlsafe_base64_decode
 from ninja import Router
 
 from common.auth import JWTAuth, decode_temp_token
-from common.throttle import rate_limit, rate_limit_by_key
+from common.throttle import rate_limit, rate_limit_account, rate_limit_by_key
 from common.utils import get_client_ip
 from core.schemas import (
     DetailOut,
@@ -35,24 +35,57 @@ router = Router(tags=['Auth'])
 User = get_user_model()
 
 
+def _extract_register_rate_key(request, data: RegisterIn = None, **kwargs):
+    """Per-account rate-limit key: the registration email (already normalized by ValidatedEmail).
+
+    Buckets attempts by target address so rotating source IPs does not reset the
+    counter — an enumerator probing the same address from fresh IPs stays capped.
+    The email is lowercased by the RegisterIn schema before it reaches the
+    extractor, so casing variants of the same address share one bucket.
+    """
+    return data.email
+
+
 @router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
 @rate_limit('register', limit=settings.RATE_LIMIT_REGISTER, period=settings.RATE_LIMIT_REGISTER_PERIOD)
+@rate_limit_account(
+    'register_account',
+    _extract_register_rate_key,
+    limit=settings.RATE_LIMIT_REGISTER_ACCOUNT,
+    period=settings.RATE_LIMIT_REGISTER_ACCOUNT_PERIOD,
+)
 def register(request, data: RegisterIn):
     """Register a new user with workspace and default data. See AuthService.register."""
     return AuthService.register(data, get_client_ip(request))
 
 
+def _extract_login_rate_key(request, data: LoginIn = None, **kwargs):
+    """Per-account rate-limit key: the login email (already normalized by ValidatedEmail).
+
+    Buckets attempts by target account so rotating source IPs does not reset the
+    counter. The email is lowercased by the LoginIn schema before it reaches the
+    extractor, so casing variants of the same address share one bucket.
+    """
+    return data.email
+
+
 @router.post('/login', response={200: LoginOut, 401: DetailOut, 429: DetailOut})
 @rate_limit('login', limit=settings.RATE_LIMIT_LOGIN, period=settings.RATE_LIMIT_LOGIN_PERIOD)
+@rate_limit_account(
+    'login_account',
+    _extract_login_rate_key,
+    limit=settings.RATE_LIMIT_LOGIN_ACCOUNT,
+    period=settings.RATE_LIMIT_LOGIN_ACCOUNT_PERIOD,
+)
 def login(request, data: LoginIn):
     """Login user and return a JWT pair, or a 2FA temp token. See AuthService.login."""
     return AuthService.login(data)
 
 
-def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
+def _extract_2fa_user_key(request, data: Verify2FAIn = None, **kwargs):
     """Extract a per-user rate-limit key from the temp token.
 
-    For valid tokens, returns the user_id so attempts are bucketed per (IP, user).
+    For valid tokens, returns the user_id so attempts are bucketed per user.
     For invalid tokens, returns a random UUID per request to avoid a shared bucket —
     a fixed key like 'invalid' would let an attacker exhaust it from a shared IP,
     blocking legitimate 2FA verification for other users on that IP.
@@ -64,9 +97,15 @@ def _extract_2fa_rate_key(request, data: Verify2FAIn = None, **kwargs):
 @router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut, 429: DetailOut})
 @rate_limit_by_key(
     'verify_2fa',
-    _extract_2fa_rate_key,
+    _extract_2fa_user_key,
     limit=settings.RATE_LIMIT_VERIFY_2FA,
     period=settings.RATE_LIMIT_VERIFY_2FA_PERIOD,
+)
+@rate_limit_account(
+    'verify_2fa_user',
+    _extract_2fa_user_key,
+    limit=settings.RATE_LIMIT_VERIFY_2FA_USER,
+    period=settings.RATE_LIMIT_VERIFY_2FA_USER_PERIOD,
 )
 def verify_2fa(request, data: Verify2FAIn):
     """Verify a 2FA temp token + code and issue full tokens. See AuthService.complete_2fa."""

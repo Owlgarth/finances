@@ -4,9 +4,12 @@ import time
 from unittest.mock import patch
 
 import pyotp
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import override_settings
 
+from common.auth import create_temp_token
 from users.two_factor import TwoFactorService
 from workspaces.models import Workspace
 
@@ -108,8 +111,9 @@ class TestAuthRegister(AuthTestCase):
         self.assertGreaterEqual(PlannedTransaction.objects.for_workspace(ws_id).count(), 3)
         self.assertTrue(Transfer.objects.for_workspace(ws_id).exists())
 
-    def test_register_duplicate_email(self):
-        """Test registration with already registered email."""
+    @patch('core.services.time.sleep')
+    def test_register_duplicate_email(self, mock_sleep):
+        """Duplicate-email registration returns a generic error, notifies the owner, creates nothing."""
         self.post(
             '/api/auth/register',
             {
@@ -121,8 +125,9 @@ class TestAuthRegister(AuthTestCase):
             },
         )
         self.assertStatus(201)
+        workspace_count = Workspace.objects.count()
 
-        self.post(
+        data = self.post(
             '/api/auth/register',
             {
                 'email': 'duplicate@example.com',
@@ -133,7 +138,56 @@ class TestAuthRegister(AuthTestCase):
             },
         )
         self.assertStatus(400)
-        self.assertIn('already exists', self.response.json()['error'].lower())
+        error = data['error']
+        self.assertEqual(error, 'Unable to register with this email address.')
+        self.assertNotIn('already exists', error.lower())
+
+        # The existing address owner is notified (the 201 path's on_commit emails
+        # never fire under TestCase, so this is the only outbox entry).
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['duplicate@example.com'])
+
+        # Nothing was created for the rejected attempt.
+        self.assertEqual(Workspace.objects.count(), workspace_count)
+
+    @patch('core.services.time.sleep')
+    def test_register_existing_email_sends_notification_email(self, mock_sleep):
+        """Probing a registered email notifies the account owner, not the requester."""
+        self.create_user(email='taken@example.com', full_name='Taken User')
+
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'taken@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Not Yours',
+                'accepted_terms_version': '2.0',
+                'accepted_privacy_version': '2.0',
+            },
+        )
+        self.assertStatus(400)
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['taken@example.com'])
+        self.assertEqual(email.subject, 'Registration attempt with your email — Denarly')
+        self.assertIn('Taken User', email.body)
+
+    def test_register_rate_limited_per_email(self):
+        """Repeated register attempts against one email hit the account-keyed limit (429)."""
+        self.create_user(email='flooded@example.com')
+        payload = {
+            'email': 'flooded@example.com',
+            'password': 'securepassword123',
+            'workspace_name': 'Flood',
+            'accepted_terms_version': '2.0',
+            'accepted_privacy_version': '2.0',
+        }
+        for _ in range(settings.RATE_LIMIT_REGISTER_ACCOUNT):
+            self.post('/api/auth/register', payload)
+            self.assertStatus(400)
+        self.post('/api/auth/register', payload)
+        self.assertStatus(429)
 
     def test_register_missing_required_fields(self):
         """Test registration with missing required fields."""
@@ -227,6 +281,66 @@ class TestAuthLogin(AuthTestCase):
             },
         )
         self.assertStatus(401)
+
+    def test_login_rate_limited_per_account_across_ips(self):
+        """11th login attempt for the same email is 429 even with a different IP per request.
+
+        Uses create_user (not register_and_login) so no earlier login request
+        pre-increments the per-account counter.
+        """
+        self.create_user('account_throttle@example.com', 'securepassword123')
+
+        for i in range(10):
+            self.post(
+                '/api/auth/login',
+                {'email': 'account_throttle@example.com', 'password': 'wrongpassword'},
+                REMOTE_ADDR=f'10.0.0.{i + 1}',
+            )
+            self.assertStatus(401)
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'account_throttle@example.com', 'password': 'wrongpassword'},
+            REMOTE_ADDR='10.0.0.11',
+        )
+        self.assertStatus(429)
+
+    def test_login_rate_limit_per_account_not_global(self):
+        """11 attempts spread over 10 different emails never hit the per-account cap.
+
+        Every request uses a distinct REMOTE_ADDR so the IP-keyed limit cannot
+        fire either — proving the account limit buckets per email, not globally.
+        """
+        emails = [f'no_interference_{i}@example.com' for i in range(10)]
+        for email in emails:
+            self.create_user(email, 'securepassword123')
+
+        for i in range(11):
+            # The 11th request reuses the first email — still only 2 attempts for it.
+            self.post(
+                '/api/auth/login',
+                {'email': emails[i % 10], 'password': 'wrongpassword'},
+                REMOTE_ADDR=f'192.168.0.{i + 1}',
+            )
+            self.assertStatus(401)
+
+    def test_login_nonexistent_user_same_body_as_wrong_password(self):
+        """The no-user path (dummy-hash timing normalization) returns the same 401 body as wrong-password."""
+        self.create_user('real_user@example.com', 'securepassword123')
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'real_user@example.com', 'password': 'wrongpassword'},
+        )
+        self.assertStatus(401)
+        wrong_password_body = self.response.json()
+
+        self.post(
+            '/api/auth/login',
+            {'email': 'ghost_user@example.com', 'password': 'anypassword'},
+        )
+        self.assertStatus(401)
+        self.assertEqual(self.response.json(), wrong_password_body)
 
 
 class TestProtectedEndpoints(AuthTestCase):
@@ -488,6 +602,56 @@ class TestLoginWith2FA(AuthTestCase):
         )
         self.assertStatus(429)
 
+    def test_verify_2fa_per_user_limit_independent_of_ip(self):
+        """The per-user 2FA bucket spans IPs: 10 attempts from 10 different
+        client IPs still block the 11th (IP rotation must not bypass it)."""
+        user, secret = self._register_with_2fa('ratelimituser@example.com')
+
+        for i in range(10):
+            temp_token = create_temp_token(user)  # fresh single-use token per attempt
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': temp_token, 'code': '000000'},
+                REMOTE_ADDR=f'10.0.0.{i}',
+            )
+            self.assertStatus(401)  # wrong code, but NOT blocked by any throttle
+
+        self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': create_temp_token(user), 'code': '000000'},
+            REMOTE_ADDR='10.0.0.10',
+        )
+        self.assertStatus(429)
+
+    def test_verify_2fa_invalid_tokens_do_not_share_user_bucket(self):
+        """Invalid temp tokens get a random UUID key each, so they never
+        accumulate into a shared per-user bucket (12 > limit 10, still no 429)."""
+        for _ in range(12):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': 'not-a-real-token', 'code': '000000'},
+            )
+            self.assertStatus(401)
+
+    def test_verify_2fa_succeeds_at_exact_per_user_limit(self):
+        """9 wrong codes then the correct code on the 10th attempt still
+        succeeds — the lockout must not lock out a legitimate user at the cap."""
+        user, secret = self._register_with_2fa('ratelimitedge@example.com')
+
+        for _ in range(9):
+            self.post(
+                '/api/auth/verify-2fa',
+                {'temp_token': create_temp_token(user), 'code': '000000'},
+            )
+            self.assertStatus(401)
+
+        data = self.post(
+            '/api/auth/verify-2fa',
+            {'temp_token': create_temp_token(user), 'code': pyotp.TOTP(secret).now()},
+        )
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
     def test_temp_token_cannot_access_protected_endpoints(self):
         self._register_with_2fa('temponly@example.com')
 
@@ -650,6 +814,61 @@ class TestRefreshToken(AuthTestCase):
 
         self.post('/api/auth/refresh', {'refresh_token': refresh_token})
         self.assertStatus(401)
+
+    def test_refresh_token_invalidated_by_password_change(self):
+        refresh_token = self._register_and_get_refresh_token('stale_refresh@example.com')
+
+        access_token = self.post(
+            '/api/auth/login',
+            {'email': 'stale_refresh@example.com', 'password': 'securepassword123'},
+        )['access_token']
+
+        self.put(
+            '/api/users/me/password',
+            {'current_password': 'securepassword123', 'new_password': 'newsecurepassword456'},
+            **self.auth_headers(access_token),
+        )
+        self.assertStatus(200)
+
+        # Refresh token issued BEFORE the change must now be rejected
+        self.post('/api/auth/refresh', {'refresh_token': refresh_token})
+        self.assertStatus(401)
+
+        # A fresh login yields a refresh token that still works
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'stale_refresh@example.com', 'password': 'newsecurepassword456'},
+        )
+        self.assertStatus(200)
+        data = self.post('/api/auth/refresh', {'refresh_token': data['refresh_token']})
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
+
+    def test_refresh_token_issued_after_password_change_works(self):
+        self._register_and_get_refresh_token('fresh_refresh@example.com')
+
+        access_token = self.post(
+            '/api/auth/login',
+            {'email': 'fresh_refresh@example.com', 'password': 'securepassword123'},
+        )['access_token']
+        self.put(
+            '/api/users/me/password',
+            {'current_password': 'securepassword123', 'new_password': 'newsecurepassword456'},
+            **self.auth_headers(access_token),
+        )
+        self.assertStatus(200)
+
+        time.sleep(0.01)  # ensure iat is strictly after password_changed_at
+
+        data = self.post(
+            '/api/auth/login',
+            {'email': 'fresh_refresh@example.com', 'password': 'newsecurepassword456'},
+        )
+        self.assertStatus(200)
+
+        data = self.post('/api/auth/refresh', {'refresh_token': data['refresh_token']})
+        self.assertStatus(200)
+        self.assertIn('access_token', data)
 
     def test_new_access_token_is_valid(self):
         refresh_token = self._register_and_get_refresh_token('valid_refresh@example.com')

@@ -317,12 +317,12 @@ class WorkspaceMemberService:
                     existing_user.save(update_fields=['current_workspace'])
 
                 result = {
-                    'message': f'Existing user {data.email} added to workspace',
+                    'message': 'Member added to workspace',
                     'user_id': existing_user.id,
                     'member_id': new_member.id,
-                    'is_new_user': False,
                 }
                 recipient = existing_user
+                is_new_user = False
             else:
                 if not data.password:
                     raise WorkspaceMemberPasswordRequiredError()
@@ -342,15 +342,17 @@ class WorkspaceMemberService:
                 )
 
                 result = {
-                    'message': f'User {data.email} created and added to workspace',
+                    'message': 'Member added to workspace',
                     'user_id': new_user.id,
                     'member_id': new_member.id,
-                    'is_new_user': True,
                 }
                 recipient = new_user
+                is_new_user = True
 
         # Emails sent AFTER the transaction commits (Pattern B, AGENTS.md "Email Patterns").
-        if result['is_new_user']:
+        # The response must not reveal existing-vs-new (anti-enumeration); the two
+        # invitation emails still differentiate privately.
+        if is_new_user:
             WorkspaceMemberService._send_new_user_email(recipient, workspace, admin_name, data.role)
         else:
             WorkspaceMemberService._send_existing_user_email(recipient, workspace, admin_name, data.role)
@@ -547,7 +549,7 @@ class WorkspaceMemberService:
 
         with db_transaction.atomic():
             target_user.set_password(new_password)
-            target_user.save(update_fields=['password'])
+            target_user.save(update_fields=['password', 'password_changed_at'])
 
         from users.services import UserService
 
