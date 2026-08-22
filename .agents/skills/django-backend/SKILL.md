@@ -154,6 +154,23 @@ queryset = queryset.order_by(sort_order, '-id')  # '-id' tiebreaker → stable p
 
 Transactions use `-date, -id`; transfers and planned transactions use `-date, -id`. Either an id or created_at tiebreak is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
 
+### Pagination Param Caps (`page_size`)
+
+Numeric bounds on list-endpoint query params are part of the endpoint contract, declared on the `Query(...)` itself so Django Ninja rejects out-of-range values with an automatic 422 — services keep receiving already-validated ints:
+
+```python
+from core.schemas.pagination import ALLOWED_PAGE_SIZES
+
+MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)  # module level in each api.py
+
+page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
+```
+
+- Pair `le=` with `ge=1` — the contract rejects 0/negative sizes too, not just huge ones.
+- **Derive the cap from the source of truth** (`max(ALLOWED_PAGE_SIZES)`), never hardcode `le=100`. `paginate_queryset` silently coerces any size outside `ALLOWED_PAGE_SIZES` to its default; deriving `MAX_PAGE_SIZE` keeps the explicit 422 and the silent coercion in lockstep if the allowed set ever changes.
+- **The cap must not fall below the frontend's maximum.** `ALLOWED_PAGE_SIZES` (backend) and `PAGE_SIZE_OPTIONS` (frontend `utils/pageSize.ts`) duplicate the same list with no cross-reference; the frontend persists the user's choice in localStorage and sends it as `page_size` on every list request. A backend cap below the frontend max 422s real users' stored preference on their main pages — a functional regression dressed as a security fix. Lowering the cap or shrinking the allowed set requires a coordinated frontend change (drop the option from `PAGE_SIZE_OPTIONS` + migrate stored prefs) in the same PR.
+- Pin the contract with one boundary test per app: `page_size=1000` → 422, `page_size=0` → 422, and `page_size=<frontend max>` → 200 — the last assertion makes a future cap-lower fail loudly in tests instead of silently breaking the UI.
+
 ## Service Layer
 
 Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation, DB operations, and balance updates. Domain-specific exceptions live in `<app>/exceptions.py`.
@@ -523,6 +540,21 @@ email_verified = getattr(user, 'email_verified', False)
 ## Model Field Defaults Must Match Service Defaults
 
 When a service overrides a model field default (e.g., creates with `WeekdayChoices.MONDAY`), the model field `default` must match. Otherwise direct creation paths (Django admin, factories, management commands) produce inconsistent data. Only the field `default` changes — no data migration needed.
+
+## `update_fields` Must Include Fields Set by Model Overrides
+
+`save(update_fields=[...])` persists **only** the listed fields — any field a model-level override sets in memory is silently dropped, with no error and no failing test. When a model method mutates state beyond the field it is named for (e.g. `User.set_password` also stamps `password_changed_at`), every `save(update_fields=...)` call site on that model must list the extra fields:
+
+```python
+user.set_password(new_password)
+user.save(update_fields=['password', 'password_changed_at'])  # stamp comes from the override
+```
+
+When adding a field to such an override, grep `update_fields=` across the app in the same task — a missed list quietly drops the write (for the `password_changed_at` instance, a dropped stamp lets a stolen refresh token survive a password change; see the `auth-security` skill).
+
+## Read Settings at Call Time
+
+Read `django.conf.settings` values inside the function body, not at module import. Import-time reads freeze the value for the process lifetime and make `override_settings` useless in tests — call-time reads are why `override_settings(TRUSTED_PROXY_COUNT=...)` and `override_settings(TWO_FACTOR_ENCRYPTION_KEY=...)` work. The deliberate exception is decorator configuration (e.g. `rate_limit(...)` captures `settings.RATE_LIMIT_*` at decoration time); the test consequence — those limits are only testable at their defaults — is in the `backend-testing` skill.
 
 ## Error Handling
 
