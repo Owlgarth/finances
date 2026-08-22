@@ -352,8 +352,10 @@ export const plannedTransactionsApi = {
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
   getTotals: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
-  create: (data: PlannedInput): Promise<PlannedTransaction> =>
-    api.post<PlannedTransaction>('/planned-transactions', data).then(res => res.data),
+  create: (data: PlannedInput, opts?: { idempotencyKey?: string }): Promise<PlannedTransaction> =>
+    api.post<PlannedTransaction>('/planned-transactions', data, {
+      ...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {}),
+    }).then(res => res.data),
   update: (id: number, data: PlannedInput): Promise<PlannedTransaction> =>
     api.put<PlannedTransaction>(`/planned-transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),
