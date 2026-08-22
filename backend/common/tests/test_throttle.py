@@ -1,11 +1,11 @@
 """Tests for rate limiting and file validation utilities."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from ninja.errors import HttpError
 
-from common.throttle import rate_limit, validate_file_size
+from common.throttle import rate_limit, rate_limit_account, validate_file_size
 
 
 class TestRateLimit(SimpleTestCase):
@@ -115,8 +115,8 @@ class TestRateLimit(SimpleTestCase):
         mock_cache.add.assert_called_with('ratelimit:login:192.168.1.1', 1, 60)
 
     @patch('common.throttle.cache')
-    def test_handles_x_forwarded_for_header(self, mock_cache):
-        """Should use X-Forwarded-For header when present."""
+    def test_ignores_x_forwarded_for_by_default(self, mock_cache):
+        """X-Forwarded-For must be ignored when TRUSTED_PROXY_COUNT=0 (default)."""
         mock_cache.add.return_value = True
 
         @rate_limit('test', limit=10, period=60)
@@ -129,7 +129,87 @@ class TestRateLimit(SimpleTestCase):
 
         test_view(request)
 
-        mock_cache.add.assert_called_with('ratelimit:test:10.0.0.1', 1, 60)
+        mock_cache.add.assert_called_with('ratelimit:test:127.0.0.1', 1, 60)
+
+    @patch('common.throttle.cache')
+    @override_settings(TRUSTED_PROXY_COUNT=1)
+    def test_uses_x_forwarded_for_last_entry_behind_one_proxy(self, mock_cache):
+        """With one trusted proxy, the client is the last XFF entry (appended by the proxy)."""
+        mock_cache.add.return_value = True
+
+        @rate_limit('test', limit=10, period=60)
+        def test_view(request):
+            return 'success'
+
+        request = self.factory.get('/')
+        request.META['HTTP_X_FORWARDED_FOR'] = '10.0.0.1, 192.168.1.1'
+        request.META['REMOTE_ADDR'] = '127.0.0.1'
+
+        test_view(request)
+
+        mock_cache.add.assert_called_with('ratelimit:test:192.168.1.1', 1, 60)
+
+
+class TestRateLimitAccount(SimpleTestCase):
+    """Tests for the rate_limit_account decorator."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    @patch('common.throttle.cache')
+    def test_cache_key_excludes_ip(self, mock_cache):
+        """Cache key must contain prefix and key part only — no client IP."""
+        mock_cache.add.return_value = True
+
+        @rate_limit_account('login_account', lambda request: 'user@example.com', limit=5, period=60)
+        def test_view(request):
+            return 'success'
+
+        request = self.factory.get('/')
+        request.META['REMOTE_ADDR'] = '203.0.113.10'
+
+        test_view(request)
+
+        mock_cache.add.assert_called_once_with('ratelimit:login_account:user@example.com', 1, 60)
+
+    @patch('common.throttle.cache')
+    def test_limit_enforced_per_key_independent_of_ip(self, mock_cache):
+        """Rotating the client IP must not reset the counter for the same key."""
+        mock_cache.add.return_value = False
+        mock_cache.incr.return_value = 6  # over the limit of 5
+
+        @rate_limit_account('login_account', lambda request: 'user@example.com', limit=5, period=60)
+        def test_view(request):
+            return 'success'
+
+        for ip in ('203.0.113.10', '198.51.100.7', '192.0.2.99'):
+            request = self.factory.get('/')
+            request.META['REMOTE_ADDR'] = ip
+            with self.assertRaises(HttpError) as context:
+                test_view(request)
+            self.assertEqual(context.exception.status_code, 429)
+            self.assertIn('Too many requests', str(context.exception))
+
+    @patch('common.throttle.cache')
+    def test_different_keys_get_independent_counters(self, mock_cache):
+        """Separate key parts must not share a bucket."""
+        mock_cache.add.return_value = True
+
+        @rate_limit_account('login_account', lambda request: request.META.get('HTTP_X_ACCOUNT'), limit=5, period=60)
+        def test_view(request):
+            return 'success'
+
+        for account in ('a@example.com', 'b@example.com'):
+            request = self.factory.get('/')
+            request.META['HTTP_X_ACCOUNT'] = account
+            self.assertEqual(test_view(request), 'success')
+
+        mock_cache.add.assert_has_calls(
+            [
+                call('ratelimit:login_account:a@example.com', 1, 60),
+                call('ratelimit:login_account:b@example.com', 1, 60),
+            ]
+        )
 
 
 class TestValidateFileSize(SimpleTestCase):

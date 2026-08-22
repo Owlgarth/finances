@@ -1,0 +1,17 @@
+{% extends "email/base.html" %}
+
+{% block preheader %}
+<tr>
+  <td style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Someone tried to register with your email</td>
+</tr>
+{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Hi {{ user_name }},</p>
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">Someone just tried to create a Denarly account using this email address. Your existing account was not changed.</p>
+<p style="margin:0 0 16px;font-size:16px;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">If this was you, you can log in to Denarly — or reset your password if you've forgotten it. If it wasn't you, no action is needed.</p>
+{% endblock %}
+
+{% block cta_url %}
+<p style="margin:16px 0 0;font-size:14px;color:#6b7280;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">If you didn't attempt this registration, you can safely ignore this email.</p>
+{% endblock %}

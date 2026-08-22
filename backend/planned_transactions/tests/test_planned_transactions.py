@@ -597,3 +597,18 @@ class TestPlannedPagination(PlannedTransactionTestCase):
 
         data = self.get('/api/planned-transactions?page=2&page_size=25', **self.auth_headers())
         self.assertEqual(len(data['items']), 8)
+
+    def test_list_page_size_cap(self):
+        self.get('/api/planned-transactions?page_size=1000', **self.auth_headers())
+        self.assertStatus(422)
+
+        self.get('/api/planned-transactions?page_size=0', **self.auth_headers())
+        self.assertStatus(422)
+
+        self.get('/api/planned-transactions?page_size=100', **self.auth_headers())
+        self.assertStatus(200)
+
+        # 200 is the largest supported page size (frontend PAGE_SIZE_OPTIONS /
+        # backend ALLOWED_PAGE_SIZES) — it must keep working under the cap.
+        self.get('/api/planned-transactions?page_size=200', **self.auth_headers())
+        self.assertStatus(200)

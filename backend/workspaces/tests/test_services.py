@@ -296,7 +296,7 @@ class TestWorkspaceMemberService(TestCase):
 
         result = WorkspaceMemberService.add_member(admin, workspace.id, Data())
 
-        self.assertFalse(result['is_new_user'])
+        self.assertNotIn('is_new_user', result)
         self.assertEqual(result['user_id'], existing_user.id)
         self.assertTrue(WorkspaceMember.objects.filter(workspace=workspace, user=existing_user, role='member').exists())
 
@@ -314,7 +314,7 @@ class TestWorkspaceMemberService(TestCase):
 
         result = WorkspaceMemberService.add_member(admin, workspace.id, Data())
 
-        self.assertTrue(result['is_new_user'])
+        self.assertNotIn('is_new_user', result)
         new_member = WorkspaceMember.objects.get(id=result['member_id'])
         self.assertEqual(new_member.user.email, 'newuser@example.com')
         self.assertEqual(new_member.role, 'viewer')

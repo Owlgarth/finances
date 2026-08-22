@@ -61,6 +61,7 @@ class TestResetPassword(AuthTestCase):
     @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
     def test_reset_password_success(self, mock_on_commit):
         user = self.create_user(email='reset@example.com', password='oldpassword123')
+        before = user.password_changed_at
         payload = self._generate_reset_payload(user)
 
         data = self.post('/api/auth/reset-password', payload)
@@ -69,6 +70,9 @@ class TestResetPassword(AuthTestCase):
 
         user.refresh_from_db()
         self.assertTrue(user.check_password('newpassword123'))
+        self.assertGreater(user.password_changed_at, user.created_at)
+        # The reset itself must move the stamp (update_fields fix)
+        self.assertGreater(user.password_changed_at, before)
 
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('password was changed', mail.outbox[0].subject.lower())
@@ -143,6 +147,7 @@ class TestAdminResetPasswordNotification(AuthMixin, APIClientMixin, TestCase):
         )
         member.set_password('memberpass123')
         member.save()
+        before = member.password_changed_at
         WorkspaceMemberFactory(
             workspace=self.workspace,
             user=member,
@@ -156,6 +161,12 @@ class TestAdminResetPasswordNotification(AuthMixin, APIClientMixin, TestCase):
                 **self.auth_headers(),
             )
             self.assertStatus(200)
+
+        member.refresh_from_db()
+        self.assertTrue(member.check_password('adminreset123'))
+        self.assertGreater(member.password_changed_at, member.created_at)
+        # The admin reset itself must move the stamp (update_fields fix)
+        self.assertGreater(member.password_changed_at, before)
 
         password_changed_emails = [m for m in mail.outbox if 'password was changed' in m.subject.lower()]
         self.assertEqual(len(password_changed_emails), 1)

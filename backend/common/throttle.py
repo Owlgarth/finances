@@ -93,6 +93,45 @@ def rate_limit_by_key(key_prefix: str, key_extractor, limit: int = 10, period: i
     return decorator
 
 
+def rate_limit_account(key_prefix: str, key_extractor, limit: int = 10, period: int = 60):
+    """
+    Rate limiter keyed by an account identifier ONLY (no client IP).
+
+    Use when the protected resource is tied to an account (e.g. login attempts
+    for a specific email) and rotating IPs must not reset the counter.
+
+    Tradeoff: because the key excludes the client IP, a third party who knows a
+    victim's account identifier can intentionally exhaust the victim's
+    allowance (login lockout DoS). Accepted because the window is short
+    (seconds-to-minutes) and the alternative — IP-only keys — is bypassable via
+    X-Forwarded-For spoofing or IP rotation. Combine with an IP-keyed limit
+    where both dimensions matter.
+
+    Args:
+        key_prefix: Unique prefix for this rate limit (e.g., 'login_account')
+        key_extractor: Callable(request, *args, **kwargs) -> str
+        limit: Maximum number of requests allowed within the period
+        period: Time window in seconds
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(request, *args, **kwargs):
+            key_part = key_extractor(request, *args, **kwargs)
+
+            cache_key = f'ratelimit:{key_prefix}:{key_part}'
+            count = _atomic_increment(cache_key, period)
+
+            if count > limit:
+                raise HttpError(429, 'Too many requests. Please try again later.')
+
+            return func(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def validate_file_size(file, max_size_mb: int = 5):
     """
     Validate uploaded file size.

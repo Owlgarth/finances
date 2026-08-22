@@ -67,11 +67,11 @@ subject='Password changed — Denarly'
 
 ## Email Templates
 
-Each email has an HTML and plain text version in `backend/templates/email/`, extending `base.html` / `base.txt` (shared layout, inline CSS, max-width 600px). Existing templates: verify_email, welcome, reset_password, password_changed, email_change_verify, email_change_notify, workspace_invitation_new, workspace_invitation_existing, member_removed, member_left, workspace_deleted, role_changed, account_deleted (each as `.html` / `.txt`).
+Each email has an HTML and plain text version in `backend/templates/email/`. HTML versions extend `email/base.html` (shared layout, inline CSS, max-width 600px); plain text versions are **standalone** — every `.txt` template inlines its own header (`———` rule) and "You're receiving this…" footer, none extend `base.txt`. Existing templates: verify_email, welcome, reset_password, password_changed, email_change_verify, email_change_notify, workspace_invitation_new, workspace_invitation_existing, member_removed, member_left, workspace_deleted, role_changed, account_deleted (each as `.html` / `.txt`).
 
 **To add a new email template:**
 1. Create `email/my_email.html` extending `email/base.html` with `{% block content %}`, `{% block cta_url %}`, `{% block cta_text %}`
-2. Create `email/my_email.txt` extending `email/base.txt` with `{% block content %}`
+2. Create `email/my_email.txt` standalone — copy an existing `.txt` sibling verbatim as the skeleton (they inline the header/footer; only `.html` templates extend a base)
 3. Call `EmailService.send_email(template_name='email/my_email', ...)`
 
 **Emails without a CTA button:** When no action can be taken (e.g., account deleted, password changed), do not include a CTA button — override `{% block cta_url %}` with a security note paragraph. See `password_changed.html` and `account_deleted.html`.

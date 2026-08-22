@@ -12,7 +12,7 @@ from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
-from core.schemas.pagination import PaginatedOut
+from core.schemas.pagination import ALLOWED_PAGE_SIZES, PaginatedOut
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
     PlannedTransactionOut,
@@ -24,6 +24,10 @@ from workspaces.models import WRITE_ROLES
 router = Router(tags=['Planned Transactions'])
 
 ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account__name|account__currency__code))$'
+
+# Upper bound for page_size on list endpoints — derived from the pagination
+# module's allowed sizes so the API cap stays in lockstep with the service layer.
+MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)
 
 
 # =============================================================================
@@ -45,7 +49,7 @@ def list_planned(
     amount_lte: Decimal | None = Query(None),
     ordering: str | None = Query(None, pattern=ORDERING_PATTERN),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25),
+    page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 ):
     """List planned transactions for the current workspace with optional filters."""
     workspace_id = request.auth.current_workspace_id

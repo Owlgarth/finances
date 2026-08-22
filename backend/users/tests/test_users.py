@@ -1,5 +1,7 @@
 """Tests for user profile management."""
 
+from django.contrib.auth import get_user_model
+
 from core.tests.base import AuthTestCase
 
 
@@ -50,6 +52,7 @@ class TestPasswordChange(AuthTestCase):
     def test_change_password_success(self):
         """Test successful password change."""
         token = self.register_and_login('change_pass@example.com', 'oldpassword123', 'Password Test')
+        before = get_user_model().objects.get(email='change_pass@example.com').password_changed_at
 
         data = self.put(
             '/api/users/me/password',
@@ -61,6 +64,10 @@ class TestPasswordChange(AuthTestCase):
         )
         self.assertStatus(200)
         self.assertIn('successfully', data['message'].lower())
+
+        # password_changed_at must be re-persisted by the change (update_fields fix)
+        user = get_user_model().objects.get(email='change_pass@example.com')
+        self.assertGreater(user.password_changed_at, before)
 
         # Verify new password works
         self.post(
