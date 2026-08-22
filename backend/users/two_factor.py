@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import secrets
+import time
 
 import pyotp
 import qrcode
@@ -11,6 +12,7 @@ from django.db import transaction as db_transaction
 from django.utils import timezone
 
 from common.crypto import decrypt_secret, encrypt_secret
+from common.email import EmailService
 from common.exceptions import AuthenticationError, NotFoundError, ValidationError
 from users.exceptions import TwoFactorNotEnabledError, UserInvalidPasswordError
 from users.models import User, UserTwoFactor
@@ -20,7 +22,7 @@ from workspaces.exceptions import (
     WorkspaceMemberNotFoundError,
     WorkspaceOwnerPasswordResetError,
 )
-from workspaces.models import Role, WorkspaceMember
+from workspaces.models import Role, Workspace, WorkspaceMember
 
 
 def _generate_qr_code_svg(user: User, secret: str) -> str:
@@ -136,7 +138,7 @@ class TwoFactorService:
     @staticmethod
     @db_transaction.atomic
     def verify_code(user: User, code: str) -> bool:
-        """Verify a TOTP or recovery code. Uses select_for_update to prevent concurrent recovery code reuse."""
+        """Verify a TOTP or recovery code. Uses select_for_update to prevent concurrent recovery code reuse AND TOTP timestep replay."""
         try:
             twofa = UserTwoFactor.objects.select_for_update().get(user=user, is_enabled=True)
         except UserTwoFactor.DoesNotExist:
@@ -144,15 +146,37 @@ class TwoFactorService:
 
         secret = decrypt_secret(twofa.encrypted_secret)
         totp = pyotp.TOTP(secret)
-        if totp.verify(code, valid_window=1):
+
+        # Equivalent of totp.verify(code, valid_window=1) — match the code
+        # against the current timestep and its immediate neighbours — plus a
+        # replay guard: a timestep at or before the last consumed one is
+        # rejected, making each 30s code single-use.
+        matched_ts = None
+        now_ts = int(time.time())
+        for offset in (-1, 0, 1):
+            ts = now_ts + offset * 30
+            if totp.at(ts) == code:
+                matched_ts = ts // 30
+                break
+        if matched_ts is not None and (twofa.last_used_timestep is None or matched_ts > twofa.last_used_timestep):
+            twofa.last_used_timestep = matched_ts
             twofa.last_used_at = timezone.now()
-            twofa.save(update_fields=['last_used_at', 'updated_at'])
+            twofa.save(update_fields=['last_used_timestep', 'last_used_at', 'updated_at'])
             return True
 
         if _try_recovery_code(twofa, code):
             return True
 
         return False
+
+    @staticmethod
+    def _send_admin_reset_email(to, user_name, workspace_name, admin_name):
+        EmailService.send_email(
+            to=to,
+            subject='Your two-factor authentication was reset — Denarly',
+            template_name='email/twofa_admin_reset',
+            context={'user_name': user_name, 'workspace_name': workspace_name, 'admin_name': admin_name},
+        )
 
     @staticmethod
     def admin_reset(admin: User, workspace_id: int, target_user_id: int, current_role: str) -> dict:
@@ -173,9 +197,18 @@ class TwoFactorService:
         if current_role == Role.ADMIN and target_member.role == Role.ADMIN:
             raise WorkspaceMemberAdminInsufficientError('reset 2FA of')
 
+        target_user = User.objects.filter(id=target_user_id).first()
         twofa = UserTwoFactor.objects.filter(user_id=target_user_id).first()
         if not twofa or not twofa.is_enabled:
             raise TwoFactorNotEnabledError()
         twofa.delete()
+
+        workspace = Workspace.objects.filter(id=workspace_id).first()
+        TwoFactorService._send_admin_reset_email(
+            to=target_user.email,
+            user_name=target_user.full_name or target_user.email,
+            workspace_name=workspace.name if workspace else 'a workspace',
+            admin_name=admin.full_name or admin.email,
+        )
 
         return {'message': 'Two-factor authentication has been reset', 'user_id': target_user_id}

@@ -54,13 +54,9 @@ export default function WorkspaceMembersPage() {
 
   const addMutation = useMutation({
     mutationFn: (data: AddMemberRequest) => workspaceMembersApi.add(workspaceId!, data),
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
-      if (data.is_new_user) {
-        toast.success('New user created and added to workspace')
-      } else {
-        toast.success('Existing user added to workspace')
-      }
+      toast.success('Member added to workspace')
       setIsAddModalOpen(false)
     },
     onError: (error: any) => {
