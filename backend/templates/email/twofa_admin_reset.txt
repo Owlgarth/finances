@@ -1,0 +1,12 @@
+——————————————————————————————————
+Denarly
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Your two-factor authentication was reset by {{ admin_name }}, an administrator of the workspace "{{ workspace_name }}".
+
+If you didn't expect this, contact your workspace owner or change your password immediately.
+
+——————————————————————————————————
+You're receiving this because you have a Denarly account.

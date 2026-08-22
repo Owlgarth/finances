@@ -8,12 +8,16 @@ from ninja import Query, Router
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
 from core.schemas.common import DetailOut
-from core.schemas.pagination import PaginatedOut
+from core.schemas.pagination import ALLOWED_PAGE_SIZES, PaginatedOut
 from transfers.schemas import TransferCreate, TransferOut
 from transfers.services import TransferService
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Transfers'])
+
+# Upper bound for page_size on list endpoints — derived from the pagination
+# module's allowed sizes so the API cap stays in lockstep with the service layer.
+MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)
 
 
 @router.get('', response=PaginatedOut[TransferOut], auth=WorkspaceJWTAuth())
@@ -23,7 +27,7 @@ def list_transfers(
     date_to: date | None = Query(None),
     account_id: int | None = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25),
+    page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 ):
     """List transfers for the current workspace (account_id matches either side)."""
     workspace_id = request.auth.current_workspace_id

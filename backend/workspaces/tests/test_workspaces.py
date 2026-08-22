@@ -347,7 +347,8 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
 
         self.assertStatus(201)
-        self.assertTrue(data['is_new_user'])
+        self.assertNotIn('is_new_user', data)
+        self.assertEqual(data['message'], 'Member added to workspace')
         self.assertIn('user_id', data)
 
         # Verify membership was created
@@ -371,13 +372,39 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
 
         self.assertStatus(201)
-        self.assertFalse(data['is_new_user'])
+        self.assertNotIn('is_new_user', data)
+        self.assertEqual(data['message'], 'Member added to workspace')
+        self.assertIn('user_id', data)
 
         # Verify membership was created
         self.assertEqual(
             WorkspaceMember.objects.filter(workspace_id=self.workspace.id).count(),
             initial_member_count + 1,
         )
+
+    def test_add_member_response_identical_for_existing_and_new_user(self):
+        """The add_member response must not leak whether the email was already registered."""
+        UserFactory(email='parity_existing@example.com')
+
+        existing_data = self.post(
+            f'/api/workspaces/{self.workspace.id}/members/add',
+            {'email': 'parity_existing@example.com', 'role': 'viewer'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
+        new_data = self.post(
+            f'/api/workspaces/{self.workspace.id}/members/add',
+            {'email': 'parity_new@example.com', 'password': 'newpass123', 'role': 'viewer'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
+        self.assertNotIn('is_new_user', existing_data)
+        self.assertNotIn('is_new_user', new_data)
+        self.assertEqual(existing_data['message'], new_data['message'])
+        self.assertEqual(set(existing_data), {'message', 'user_id', 'member_id'})
+        self.assertEqual(set(new_data), {'message', 'user_id', 'member_id'})
 
     def test_add_already_member_fails(self):
         """Test that adding a user who is already a member fails."""
@@ -428,7 +455,8 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         payload = {'email': 'nopwd@example.com', 'role': 'viewer'}
         data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
         self.assertStatus(201)
-        self.assertFalse(data['is_new_user'])
+        self.assertNotIn('is_new_user', data)
+        self.assertEqual(data['message'], 'Member added to workspace')
 
     def test_add_existing_user_does_not_change_their_current_workspace(self):
         """Adding an existing user to a workspace does not change their current_workspace."""
