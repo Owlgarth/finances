@@ -53,3 +53,12 @@ export const secondaryButtonClass =
   `${controlHeightClass} ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
+
+// §3 Solid-negative confirm button — the destructive action INSIDE a confirm
+// dialog (ConfirmDialog). destructiveButtonClass above is the outline variant
+// for footer actions that chain into that dialog.
+export const solidNegativeButtonClass =
+  'bg-negative text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative/90 transition-colors ' +
+  `${controlHeightClass} ` +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed'
