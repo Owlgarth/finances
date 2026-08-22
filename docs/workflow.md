@@ -94,6 +94,10 @@ planned item done.
 Create/switch workspaces; the owner can rename or delete a workspace (deletion removes
 all financial records in PROTECT-safe order, including stored receipt files).
 Owners/admins add members and manage lower-role members' roles and passwords.
+When adding a brand-new member the password is optional: with one it becomes their
+initial password (shared out-of-band); without one the invitee receives an invitation
+email with a set-password link (the standard reset flow). The response is the same
+whether the invitee already had an account (anti-enumeration).
 
 ## Reports
 
