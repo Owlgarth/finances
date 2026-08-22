@@ -139,6 +139,17 @@ with mock.patch('django.utils.timezone.now', return_value=future):
     self.post('/api/transactions', payload, **self.auth_headers())
 ```
 
+Patch the clock the code under test actually reads, at the module where it reads it: code that calls `time.time()` directly (e.g. TOTP timestep math in `users/two_factor.py`) never sees a `django.utils.timezone.now` patch — `mock.patch('users.two_factor.time.time', return_value=...)` is the fix, stepping the return value to cross window boundaries.
+
+## Rate-Limit & Throttle Tests
+
+- Rate-limit decorators capture `settings.RATE_LIMIT_*` at import (decoration) time — `override_settings` cannot change them. Write these tests against the configured defaults instead of trying to override.
+- `APIClientMixin.setUp` clears the cache, so throttle counters are isolated per test.
+- To assert the account-keyed (IP-independent) limit in isolation, rotate `REMOTE_ADDR` per request — otherwise a "no 429" assertion is ambiguous between the IP-keyed and account-keyed decorators stacked on the same endpoint.
+- Test the boundary at the exact cap: N−1 failures followed by one success must succeed (`count > limit` blocks only above the limit — a lock must not fire AT the limit on a legitimate user).
+- Exact attempt counts require exact auth traffic: create users directly (`AuthTestCase.create_user` or factory + token), not via helpers that themselves log in — `register_and_login` pre-increments the login counter.
+- Unit-testing a throttle: `@patch('common.throttle.cache')` with `add`/`incr` return values, and assert the exact cache-key string — that is how "no IP component in the key" gets pinned.
+
 ## Testing Race-Loss Branches Deterministically
 
 A true concurrent race can't be simulated inside `TestCase`. To exercise a unique-constraint `IntegrityError` handler (see the savepoint pattern in the `django-backend` skill): (1) pre-commit the winner's record directly — it lives in the test's outer transaction, so it survives the code's savepoint rollback; (2) mock the lookup to lose the race — capture the real function first, then force `None` on the first call (insert path) and delegate to the real lookup after the error:
@@ -189,6 +200,14 @@ Direct `workspace.delete()` raises `ProtectedError` — accounts are PROTECT-ref
 
 Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat — field omitted, (3) explicit empty collection, (4) `max_length` rejection — asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together.
 
+## Behavior Changes Rewrite Their Tests
+
+When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior.
+
 ## Email in Tests
 
 `EMAIL_BACKEND` is set to `django.core.mail.backends.locmem.EmailBackend` via `config/test_settings.py`. Use `mail.outbox` to inspect sent emails.
+
+For flows that send email on success, give each failure-path test its own `assertEqual(len(mail.outbox), 0)` next to its status assertion — a future guard reorder that starts emailing before validation then fails that specific path's test, not a distant aggregate. Two counting details:
+- A delivered email proves both templates rendered — eager Celery's `send_email_task` renders `.txt` and `.html` before sending, so `len(mail.outbox) == 1` plus a body assertion covers "template exists, context vars present" without a render-to-string test.
+- `on_commit` emails never fire in `TestCase`, so on an early-return path the only outbox entry is the direct-send email — `len(mail.outbox) == 1` is exact without patching.

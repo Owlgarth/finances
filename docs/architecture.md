@@ -129,6 +129,16 @@ polls `GET .../extraction`.
    currencies; `WRITE_ROLES` (owner/admin/member) gate day-to-day records.
 4. **Resource ownership** — every query is workspace-scoped.
 
+On top of these layers, the public auth endpoints (register, login, verify-2fa) are
+rate-limited and return `429` when exceeded — per IP **and** per account (login email,
+registration email, 2FA user), so rotating source IPs cannot reset the counters. The
+client IP is taken from `X-Forwarded-For` only when `TRUSTED_PROXY_COUNT` names the
+exact number of trusted proxies in front of the API (default `0` → `REMOTE_ADDR`,
+which clients cannot spoof). Changing a password stamps `password_changed_at` and
+invalidates every refresh token issued before the change. 2FA secrets are
+Fernet-encrypted with a dedicated `TWO_FACTOR_ENCRYPTION_KEY` (empty → legacy
+`SECRET_KEY`-derived key), and TOTP codes are single-use (timestep replay guard).
+
 ## Frontend Architecture
 
 ### Directory Structure
@@ -215,6 +225,9 @@ do not change to 404.
 | `POSTGRES_*` | Database connection |
 | `REDIS_URL`, `CELERY_*` | Celery broker/result backend |
 | `SECRET_KEY`, `JWT_SECRET_KEY` | Django + token signing |
+| `TWO_FACTOR_ENCRYPTION_KEY` | 2FA secret encryption (Fernet; empty = derive from `SECRET_KEY`) |
+| `TRUSTED_PROXY_COUNT` | Trusted reverse proxies for client-IP parsing (0 = ignore `X-Forwarded-For`) |
+| `RATE_LIMIT_*` | Rate-limit thresholds/windows (per-IP and per-account) |
 | `USE_S3_STORAGE`, `S3_*` | Object storage for attachments |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
 | `DEMO_MODE` | Disable registration when true |
