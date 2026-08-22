@@ -32,6 +32,8 @@ All three use atomic cache operations (`cache.add()` + `cache.incr()`) via `_ato
 
 Key extractors for tokens must return a unique value (e.g., `str(uuid.uuid4())`) for invalid tokens, not a fixed string like `'invalid'` — a fixed string lets attackers on a shared IP exhaust the bucket and block legitimate users.
 
+Key extractors are named module-level functions defined **before** the endpoint that uses them — decorators resolve the name at decoration time. The house defensive signature is `(request, data: SchemaIn = None, **kwargs)` because endpoint kwargs are forwarded to the extractor.
+
 All rate limit `limit` and `period` values **must** be configured via Django settings backed by env vars, not hardcoded. Each setting needs an inline comment explaining its purpose:
 
 ```python
@@ -137,3 +139,9 @@ def forgot_password(request, data: ForgotPasswordIn):
 ```
 
 Import `random` and `time` at module level (stdlib imports, before Django/third-party).
+
+**Login dummy hash:** the no-user login path runs `hashers.check_password(data.password, _DUMMY_PASSWORD_HASH)` — a module-level hash computed once at import — before returning a 401 byte-identical to the wrong-password path. Without it, user-exists vs wrong-password response times are a user-enumeration oracle. Never assert wall-clock timings in tests; verify the two 401 bodies are byte-identical and leave timing to code review.
+
+## Admin-Initiated Account Actions Notify the Victim
+
+Admins can reset a member's password (`UserService.send_password_changed_email(..., changed_by_admin=True)`) and reset a member's 2FA (`TwoFactorService.admin_reset` → `email/twofa_admin_reset`). Together the two resets are full account takeover across every workspace the victim belongs to — the capability is kept only with a notification leg: both actions email the victim, paired in lockstep. Any new admin-initiated security mutation on a member's account (or edit to an existing one) must add the same victim-notification — differentiated notifications may go to the member, never to the acting admin only.
