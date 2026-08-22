@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models import IntegerChoices
+from django.utils import timezone
 
 
 class WeekdayChoices(IntegerChoices):
@@ -50,6 +51,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     pending_email = models.EmailField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    password_changed_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     objects = UserManager()
 
@@ -65,6 +67,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.pending_email:
             self.pending_email = self.pending_email.lower().strip()
         super().save(*args, **kwargs)
+
+    def set_password(self, raw_password):
+        """Hash the password and stamp password_changed_at.
+
+        Single choke point for password changes: create_user, change_password,
+        reset_password (self and admin) all funnel through here. Refresh tokens
+        issued before this stamp are rejected by AuthService.refresh.
+        """
+        super().set_password(raw_password)
+        self.password_changed_at = timezone.now()
 
     def __str__(self):
         return self.email
@@ -140,6 +152,7 @@ class UserTwoFactor(models.Model):
     encrypted_secret = models.BinaryField()
     backup_codes = models.JSONField(default=list)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    last_used_timestep = models.BigIntegerField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 

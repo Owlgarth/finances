@@ -1,0 +1,14 @@
+——————————————————————————————————
+Denarly
+——————————————————————————————————
+
+Hi {{ user_name }},
+
+Someone just tried to create a Denarly account using this email address. Your existing account was not changed.
+
+If this was you, you can log in to Denarly — or reset your password if you've forgotten it. If it wasn't you, no action is needed.
+
+If you didn't attempt this registration, you can safely ignore this email.
+
+——————————————————————————————————
+You're receiving this because you have a Denarly account.
