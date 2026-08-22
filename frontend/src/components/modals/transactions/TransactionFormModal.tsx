@@ -190,7 +190,11 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(!!source.original_currency_code)
       setOriginalAmount(source.original_amount ?? '')
       setOriginalCurrencyCode(source.original_currency_code)
-      setBudgetId(source.category_budget_id)
+      // Uncategorized source → fall back to the create-mode default budget so the
+      // Category select is immediately usable (it is disabled while budgetId is
+      // null, and the Budget select below only renders for multi-budget
+      // workspaces). Mirrors the create branch's setBudgetId(defaultBudgetId).
+      setBudgetId(source.category_budget_id ?? defaultBudgetId)
       // Edit mode bypasses the idempotency-key dedup — only create-mode
       // submissions carry a key (Q5=A: no items on update, same rationale).
       // Copy mode IS a create, so it gets a fresh key like the else branch.
