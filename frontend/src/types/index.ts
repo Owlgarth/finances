@@ -389,11 +389,9 @@ export interface TransactionTotalsResponse {
   by_category?: TransactionTotalItem[];
 }
 
-export interface PlannedTransactionTotalItem {
-  group: string;
-  currency: string;
-  total: string;
-}
+// Field-identical to TransactionTotalItem — planned-transaction totals return the
+// same shape; aliased so the two names cannot drift apart.
+export type PlannedTransactionTotalItem = TransactionTotalItem;
 
 export interface PlannedTransactionTotalsResponse {
   totals: PlannedTransactionTotalItem[];
