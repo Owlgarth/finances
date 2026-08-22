@@ -15,6 +15,7 @@ Each user in the system has the following attributes:
 | `current_workspace_id` | Currently active workspace |
 | `is_active` | Whether user can log in |
 | `created_at` | Account creation timestamp |
+| `password_changed_at` | Last password change; invalidates refresh tokens issued before it |
 
 ## Role Definitions
 
@@ -136,6 +137,9 @@ Process:
 4. Share credentials securely with new user
 ```
 
+The API response is identical whether the user already existed or was just created —
+it does not reveal which (anti-enumeration).
+
 ### Changing a Member's Role
 
 ```
@@ -206,6 +210,10 @@ Rules:
 4. JWT token returned
 ```
 
+A duplicate email returns a generic error that never reveals whether the address is
+registered; the owner of the existing account is emailed a "registration attempt"
+notice instead (anti-enumeration).
+
 ### Login
 
 ```
@@ -218,11 +226,17 @@ Rules:
 4. Token valid for 60 minutes (configurable)
 ```
 
+Login attempts are rate-limited per IP and per account (email) — exceeding either
+limit returns `429 Too Many Requests`. Unknown-email logins run the same password
+hash check as wrong-password ones, so response timing cannot reveal whether an
+email is registered.
+
 ### Password Requirements
 
 - Minimum 8 characters
 - Stored using bcrypt hashing
 - Never logged or returned in responses
+- Changing a password (self-service, reset, or admin reset) invalidates all refresh tokens issued before the change
 
 ## Multi-Workspace Scenarios
 
