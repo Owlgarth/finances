@@ -53,11 +53,6 @@ class WorkspaceOwnerRemoveError(ValidationError):
     default_code = 'workspace_owner_remove'
 
 
-class WorkspaceMemberPasswordRequiredError(ValidationError):
-    default_message = 'Password is required when adding a new user.'
-    default_code = 'workspace_member_password_required'
-
-
 class WorkspaceMemberCannotResetOwnPasswordError(ValidationError):
     default_message = 'Cannot reset your own password. Use the change password feature instead.'
     default_code = 'workspace_member_cannot_reset_own_password'

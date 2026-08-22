@@ -28,7 +28,21 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [name, setName] = useState('')
   const [cadence, setCadence] = useState<Cadence>('monthly')
   const [weeks, setWeeks] = useState('2')
-  const [anchor, setAnchor] = useState(new Date().toISOString().slice(0, 10))
+  const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10))
+
+  // This wrapper stays mounted while BudgetsPage is up (Modal only hides it), so
+  // form state would otherwise survive across opens — a create-after-create or a
+  // long-lived session would mix a blank name with a stale cadence/weeks/anchor.
+  // Modal funnels every dismissal path (Cancel, Close, scrim, Escape) through
+  // onClose, and success routes here too: full reset + a fresh anchor for the
+  // next open. Event handler, not an effect — keeps set-state-in-effect quiet.
+  const handleClose = () => {
+    setName('')
+    setCadence('monthly')
+    setWeeks('2')
+    setAnchor(new Date().toISOString().slice(0, 10))
+    onClose()
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -41,14 +55,13 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
       toast.success('Budget created')
-      setName('')
-      onClose()
+      handleClose()
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create budget')),
   })
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title="New budget">
+    <Modal open={open} onClose={handleClose} className="p-6" title="New budget">
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
           <label htmlFor="budget-name" className={labelClass}>Name</label>
@@ -71,7 +84,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         )}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
             {mutation.isPending ? 'Creating…' : 'Create'}
           </button>
@@ -205,6 +218,7 @@ export default function BudgetsPage() {
         message={`Delete "${deleting?.name}"? Its periods and categories will be deleted, and transactions in those categories will become uncategorized. This cannot be undone.`}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
+        isPending={deleteMutation.isPending}
       />
     </div>
   )

@@ -161,7 +161,9 @@ def add_member_to_workspace(request: HttpRequest, workspace_id: int, data: Works
 
     Behavior:
     - If user exists: Add them to workspace (password ignored)
-    - If user doesn't exist: Create user with provided password, add to workspace
+    - If user doesn't exist: Create user, add to workspace. With a password it
+      becomes their initial password; without one the new user gets a
+      set-password link by email.
     """
     user = request.auth
     WorkspaceMemberService.validate_access(workspace_id, user)

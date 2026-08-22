@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { CircleCheck, CircleX } from 'lucide-react'
-import { authApi } from '../api/client'
+import { authApi, getAuthToken } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type State = 'loading' | 'success' | 'error' | 'resend' | 'resend-success' | 'resend-error'
@@ -13,6 +13,14 @@ export default function VerifyEmailPage() {
   const [isResending, setIsResending] = useState(false)
   const { updateUser } = useAuth()
 
+  // Belt-and-suspenders: read updateUser through a ref so its identity never
+  // re-triggers the verify effect (AuthContext memoizes it too, but this page
+  // stays correct regardless).
+  const updateUserRef = useRef(updateUser)
+  useEffect(() => {
+    updateUserRef.current = updateUser
+  }, [updateUser])
+
   useEffect(() => {
     const verify = async () => {
       const token = searchParams.get('token')
@@ -23,11 +31,16 @@ export default function VerifyEmailPage() {
 
       try {
         await authApi.verifyEmail(token)
-        try {
-          const updatedUser = await authApi.getCurrentUser()
-          updateUser(updatedUser)
-        } catch {
-          // Non-critical: verification succeeded, context refresh failed
+        // Only refresh the user context when actually logged in — an
+        // anonymous visitor has no token and getCurrentUser() would 401 and
+        // redirect to /login via the interceptor, hiding the success screen.
+        if (getAuthToken()) {
+          try {
+            const updatedUser = await authApi.getCurrentUser()
+            updateUserRef.current(updatedUser)
+          } catch {
+            // Non-critical: verification succeeded, context refresh failed
+          }
         }
         setState('success')
       } catch {
@@ -36,7 +49,7 @@ export default function VerifyEmailPage() {
     }
 
     verify()
-  }, [searchParams, updateUser])
+  }, [searchParams])
 
   const handleResend = async (e: React.FormEvent) => {
     e.preventDefault()

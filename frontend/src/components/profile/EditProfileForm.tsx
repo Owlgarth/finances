@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import type { User } from '../../types'
 import { authApi } from '../../api/client'
+import { getApiErrorMessage } from '../../utils/errors'
 import EmailVerificationBadge from './EmailVerificationBadge'
 
 interface Props {
@@ -25,8 +26,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
     }
   }
 
-  const handleChangeEmail = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleChangeEmail = async () => {
     if (!newEmail || !password) return
 
     setIsChangingEmail(true)
@@ -37,11 +37,18 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
       setNewEmail('')
       setPassword('')
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } }
-      toast.error(err.response?.data?.detail || 'Failed to request email change')
+      toast.error(getApiErrorMessage(error, 'Failed to request email change'))
     } finally {
       setIsChangingEmail(false)
     }
+  }
+
+  // Enter inside the change-email inputs must submit the email change, not the
+  // outer profile form (implicit submission — "Confirm" is type="button").
+  const handleEmailKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' || isChangingEmail) return
+    e.preventDefault()
+    handleChangeEmail()
   }
 
   return (
@@ -88,6 +95,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
+              onKeyDown={handleEmailKeyDown}
               className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
               placeholder="New email address"
             />
@@ -95,6 +103,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleEmailKeyDown}
               className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
               placeholder="Current password"
             />

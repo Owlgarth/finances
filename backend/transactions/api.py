@@ -9,6 +9,7 @@ from ninja import File, Form, Query, Router
 from ninja.files import UploadedFile
 
 from common.auth import WorkspaceJWTAuth
+from common.idempotency import parse_idempotency_key
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
@@ -198,13 +199,9 @@ def create_transaction(request: HttpRequest, data: TransactionCreate):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
 
-    idempotency_key = request.headers.get('Idempotency-Key')
-    if idempotency_key is not None:
-        idempotency_key = idempotency_key.strip()
-        if len(idempotency_key) > 100:
-            return 400, {'detail': 'Idempotency-Key header must be at most 100 characters.'}
-        if idempotency_key == '':
-            idempotency_key = None
+    idempotency_key, error = parse_idempotency_key(request)
+    if error:
+        return 400, error
 
     trans = TransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
     return 201, trans
