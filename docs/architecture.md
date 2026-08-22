@@ -88,7 +88,8 @@ active workspace.
 backend/
 ├── config/                 # Django project config (settings, urls, celery)
 ├── common/                 # Shared: JWT auth, permissions, storage, test mixins
-│   └── services/base.py    # delete_workspace_financial_records (dependency-ordered)
+│   ├── services/base.py    # delete_workspace_financial_records (dependency-ordered)
+│   └── idempotency.py      # Idempotency-Key create dedup (transactions + planned)
 ├── users/                  # Custom user model (email auth), GDPR export/import, legacy import
 ├── workspaces/             # Multi-tenant workspaces, members, enabled currencies
 ├── currencies/             # Global ISO 4217 catalog + per-workspace enablement

@@ -22,7 +22,8 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 frontend/
 ├── src/
 │   ├── api/
-│   │   └── client.ts         # Axios instance + typed API modules
+│   │   ├── client.ts         # Axios instance + typed API modules
+│   │   └── queryClient.ts    # App-wide QueryClient (own module — no import cycles)
 │   ├── components/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
@@ -38,9 +39,12 @@ frontend/
 │   ├── hooks/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── usePermissions.ts        # Role-based permission checks
+│   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect panel state + keyboard nav
+│   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
-│   └── types/index.ts        # TypeScript interfaces
+│   ├── types/index.ts        # TypeScript interfaces
+│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -48,7 +52,7 @@ frontend/
 
 ## Pages and Routes
 
-Seven in-app destinations (sidebar) plus auth/legal routes.
+Seven in-app destinations (sidebar) plus auth/legal routes and a 404 catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
@@ -61,16 +65,19 @@ Seven in-app destinations (sidebar) plus auth/legal routes.
 | `/planned` | Planned | Planned transactions |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/settings` | ProfilePage | Profile, preferences, data export/import |
+| `*` | NotFoundPage | 404 catch-all for unknown paths |
 
 ## Components
 
 **Layout** (`components/layout/`): `MainLayout` (responsive wrapper), `Sidebar`
 (7 destinations + workspace selector + user menu), `UserMenu`, `WorkspaceSelector`.
 
-**Common** (`components/common/`): `Modal`, `Select` (custom dropdown), `ConfirmDialog`,
-`Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, and `formStyles.ts`
-(the input/label/button class constants — the redesign's form primitives). `DatePicker`
-(react-day-picker) lives at `components/`.
+**Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
+sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
+`Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, `ListFilterFields` (the
+shared Transactions/Planned filter panel), and `formStyles.ts` (the input/label/button
+class constants — the redesign's form primitives). `DatePicker` (react-day-picker) and
+`LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`.
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
@@ -317,6 +324,12 @@ const queryClient = new QueryClient({
   },
 });
 ```
+
+The client lives in `src/api/queryClient.ts` (its own module, so `main.tsx` and the
+contexts can both import it without a cycle). On workspace switch/create/delete the
+whole cache is removed except a keep-set of user-scoped keys (`user-preferences`,
+`2fa-status`, `extraction-config`) — mounted queries refetch immediately, so nothing
+from the previous workspace survives the switch.
 
 ### Query Keys
 
