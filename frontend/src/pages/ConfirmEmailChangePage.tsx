@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { CircleCheck, CircleX } from 'lucide-react'
-import { authApi } from '../api/client'
+import { authApi, getAuthToken } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type State = 'loading' | 'success' | 'error'
@@ -10,6 +10,14 @@ export default function ConfirmEmailChangePage() {
   const [searchParams] = useSearchParams()
   const [state, setState] = useState<State>('loading')
   const { updateUser } = useAuth()
+
+  // Belt-and-suspenders: read updateUser through a ref so its identity never
+  // re-triggers the confirm effect (AuthContext memoizes it too, but this
+  // page stays correct regardless).
+  const updateUserRef = useRef(updateUser)
+  useEffect(() => {
+    updateUserRef.current = updateUser
+  }, [updateUser])
 
   useEffect(() => {
     const confirm = async () => {
@@ -21,11 +29,16 @@ export default function ConfirmEmailChangePage() {
 
       try {
         await authApi.confirmEmailChange(token)
-        try {
-          const updatedUser = await authApi.getCurrentUser()
-          updateUser(updatedUser)
-        } catch {
-          // Non-critical: confirmation succeeded, but context refresh failed.
+        // Only refresh the user context when actually logged in — an
+        // anonymous visitor has no token and getCurrentUser() would 401 and
+        // redirect to /login via the interceptor, hiding the success screen.
+        if (getAuthToken()) {
+          try {
+            const updatedUser = await authApi.getCurrentUser()
+            updateUserRef.current(updatedUser)
+          } catch {
+            // Non-critical: confirmation succeeded, but context refresh failed.
+          }
         }
         setState('success')
       } catch {
@@ -34,7 +47,7 @@ export default function ConfirmEmailChangePage() {
     }
 
     confirm()
-  }, [searchParams, updateUser])
+  }, [searchParams])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface py-12 px-4 sm:px-6 lg:px-8">

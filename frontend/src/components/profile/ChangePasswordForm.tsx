@@ -1,17 +1,30 @@
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { authApi } from '../../api/client'
+import { getApiErrorMessage } from '../../utils/errors'
 
-interface Props {
-  onSubmit: (data: { currentPassword: string; newPassword: string }) => void
-  isLoading: boolean
-}
-
-export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
+export default function ChangePasswordForm() {
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   })
   const [error, setError] = useState('')
+
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      authApi.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      toast.success('Password changed successfully!')
+      setFormData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      })
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to change password'))
+  })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,20 +40,14 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
       return
     }
 
-    onSubmit({
+    changePasswordMutation.mutate({
       currentPassword: formData.currentPassword,
       newPassword: formData.newPassword
-    })
-
-    setFormData({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: ''
     })
   }
 
   return (
-    <form id="change-password-form" onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <label htmlFor="current_password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
           Current Password
@@ -98,10 +105,10 @@ export default function ChangePasswordForm({ onSubmit, isLoading }: Props) {
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={changePasswordMutation.isPending}
           className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Changing Password...' : 'Change Password'}
+          {changePasswordMutation.isPending ? 'Changing Password...' : 'Change Password'}
         </button>
       </div>
     </form>

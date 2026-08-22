@@ -9,6 +9,7 @@ from ninja import File, Form, Query, Router
 from ninja.files import UploadedFile
 
 from common.auth import WorkspaceJWTAuth
+from common.idempotency import parse_idempotency_key
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
@@ -72,12 +73,21 @@ def list_planned(
 
 @router.post('', response={201: PlannedTransactionOut, 400: dict, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
-    """Create a new planned transaction (requires write access)."""
+    """Create a new planned transaction (requires write access).
+
+    Optional `Idempotency-Key` request header: if present, a replay with the
+    same key (per user, within 24h) returns the original planned transaction
+    instead of creating a duplicate. See `PlannedTransactionService.create`.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
 
-    planned = PlannedTransactionService.create(user, workspace_id, data)
+    idempotency_key, error = parse_idempotency_key(request)
+    if error:
+        return 400, error
+
+    planned = PlannedTransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
     return 201, planned
 
 

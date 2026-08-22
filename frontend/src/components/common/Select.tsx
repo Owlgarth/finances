@@ -1,8 +1,16 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { AlertCircle, Check, ChevronDown } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { AlertCircle, ChevronDown } from 'lucide-react'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useListboxPanel } from '../../hooks/useListboxPanel'
 import BottomSheet from './BottomSheet'
-import { controlHeightClass } from './formStyles'
+import {
+  DropdownOptionRow,
+  EmptyOptions,
+  PanelSearchInput,
+  SheetOptionRow,
+  listboxPanelClass,
+  listboxTriggerBaseClass,
+} from './listboxParts'
 
 export interface SelectOption<T extends string | number> {
   value: T
@@ -34,18 +42,6 @@ export interface SelectProps<T extends string | number> {
   className?: string
 }
 
-/** Stringify an option for type-ahead matching (falls back to value for non-string labels). */
-function optionToString<T extends string | number>(opt: SelectOption<T>): string {
-  return typeof opt.label === 'string' ? opt.label : String(opt.value)
-}
-
-/** Case-insensitive substring match for the search box. */
-function matchesQuery<T extends string | number>(opt: SelectOption<T>, query: string): boolean {
-  return optionToString(opt).toLowerCase().includes(query.trim().toLowerCase())
-}
-
-const TYPE_AHEAD_RESET_MS = 500
-
 export default function Select<T extends string | number>({
   value,
   onChange,
@@ -60,66 +56,44 @@ export default function Select<T extends string | number>({
   className,
 }: SelectProps<T>) {
   // Adaptive variant (plan decision 4): shared trigger/state, panel presentation
-  // switches — anchored dropdown on desktop, bottom sheet on mobile. `open`,
-  // filtering and onChange live here, so a resize mid-open loses nothing.
+  // switches — anchored dropdown on desktop, bottom sheet on mobile. All panel
+  // state lives in useListboxPanel above the variant branches, so a resize
+  // mid-open loses nothing.
   const { isMobile } = useBreakpoint()
-
-  const [open, setOpen] = useState(false)
-  const [highlightedIndex, setHighlightedIndex] = useState(-1)
-  const [searchQuery, setSearchQuery] = useState('')
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const sheetListRef = useRef<HTMLDivElement>(null)
-  const typeAheadRef = useRef<{ buffer: string; t: number }>({ buffer: '', t: 0 })
-
-  const baseId = useId()
-  const optionId = (i: number) => `${baseId}-opt-${i}`
-
-  const filteredOptions =
-    searchable && searchQuery ? options.filter((opt) => matchesQuery(opt, searchQuery)) : options
 
   const selectedIndex = options.findIndex((opt) => opt.value === value)
   const selectedLabel =
     selectedIndex >= 0 ? options[selectedIndex].label : (placeholder ?? '\u00A0')
 
-  // Close on outside pointer-down while open.
-  useEffect(() => {
-    if (!open) return
-    function handlePointerDown(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [open])
+  // `selectIndex` below is a hoisted function declaration, so referencing it
+  // here is safe: it is only invoked from event handlers after render, by which
+  // time the hook returns its body closes over are initialized (no TDZ at call
+  // time).
+  const {
+    open,
+    setOpen,
+    highlightedIndex,
+    searchQuery,
+    filteredOptions,
+    wrapperRef,
+    triggerRef,
+    sheetListRef,
+    optionId,
+    openPanel,
+    closePanel,
+    handleTriggerKeyDown,
+    handleSearchKeyDown,
+    handleSearchChange,
+  } = useListboxPanel({
+    options,
+    searchable,
+    disabled,
+    isMobile,
+    initialHighlightIndex: selectedIndex >= 0 ? selectedIndex : 0,
+    onActivate: selectIndex,
+  })
 
-  // Reset transient panel state when the panel closes.
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery('')
-      setHighlightedIndex(-1)
-    }
-  }, [open])
-
-  // Sheet: bring the selected option into view on open (long lists — currencies, categories).
-  useEffect(() => {
-    if (!open || !isMobile) return
-    sheetListRef.current
-      ?.querySelector('[aria-selected="true"]')
-      ?.scrollIntoView({ block: 'center' })
-  }, [open, isMobile])
-
-  function openPanel() {
-    setOpen(true)
-    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0)
-  }
-
-  function closePanel(returnFocus: boolean) {
-    setOpen(false)
-    if (returnFocus) triggerRef.current?.focus()
-  }
-
+  // Pick the highlighted option and close.
   function selectIndex(i: number) {
     const opt = filteredOptions[i]
     if (!opt) return
@@ -127,106 +101,11 @@ export default function Select<T extends string | number>({
     closePanel(true)
   }
 
-  function handleTriggerKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
-    if (disabled) return
-
-    if (!open) {
-      // Let native Enter/Space activation open via onClick; intercept only arrows.
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        openPanel()
-      }
-      return
-    }
-
-    const count = filteredOptions.length
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setHighlightedIndex((prev) => (count === 0 ? -1 : prev < 0 ? 0 : (prev + 1) % count))
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setHighlightedIndex((prev) => (count === 0 ? -1 : prev <= 0 ? count - 1 : prev - 1))
-        break
-      case 'Home':
-        e.preventDefault()
-        setHighlightedIndex(count === 0 ? -1 : 0)
-        break
-      case 'End':
-        e.preventDefault()
-        setHighlightedIndex(count === 0 ? -1 : count - 1)
-        break
-      case 'Enter':
-      case ' ':
-        e.preventDefault()
-        if (highlightedIndex >= 0) selectIndex(highlightedIndex)
-        else closePanel(true)
-        break
-      case 'Escape':
-        e.preventDefault()
-        // Consume the key: without this, a surrounding Modal's document-level
-        // Escape listener (useOverlay) fires too and closes the whole dialog.
-        e.stopPropagation()
-        closePanel(true)
-        break
-      case 'Tab':
-        setOpen(false)
-        break
-      default:
-        // Printable char → type-ahead jump to first matching label.
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          e.preventDefault()
-          const now = Date.now()
-          const ta = typeAheadRef.current
-          const buffer = now - ta.t < TYPE_AHEAD_RESET_MS ? ta.buffer + e.key : e.key
-          typeAheadRef.current = { buffer, t: now }
-          const lower = buffer.toLowerCase()
-          const idx = filteredOptions.findIndex((opt) =>
-            optionToString(opt).toLowerCase().startsWith(lower),
-          )
-          if (idx >= 0) setHighlightedIndex(idx)
-        }
-        break
-    }
-  }
-
-  // The search inputs are focusable, so keys pressed there bypass the trigger
-  // handler. Escape must be consumed here too (same reason as the trigger:
-  // a surrounding Modal's document-level listener would close the dialog),
-  // and Enter must not trigger implicit submission of a surrounding <form> —
-  // it picks the highlighted/first match instead.
-  function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      e.stopPropagation()
-      closePanel(true)
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (filteredOptions.length === 0) return
-      // Desktop keeps highlightedIndex valid on each keystroke; the mobile
-      // sheet has no highlight, so fall back to the first match.
-      const i = highlightedIndex >= 0 && highlightedIndex < filteredOptions.length ? highlightedIndex : 0
-      selectIndex(i)
-    }
-  }
-
   const triggerClass =
-    'w-full flex items-center justify-between ' +
-    'bg-surface border border-border rounded-none px-2 py-1.5 ' +
-    `${controlHeightClass} ` +
-    'text-xs text-text text-left ' +
-    'hover:bg-surface-hover ' +
-    'focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
-    'transition-colors disabled:opacity-50 disabled:cursor-not-allowed ' +
+    listboxTriggerBaseClass +
     (mono ? 'font-mono ' : '') +
     (error ? 'bg-negative-bg border-negative ring-1 ring-negative ' : '') +
     (className ?? '')
-
-  const panelClass =
-    'absolute z-dropdown mt-1 w-full ' +
-    'bg-surface border border-border rounded-sm ' +
-    'max-h-[280px] overflow-y-auto'  // thin scrollbars applied globally (index.css)
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -262,47 +141,27 @@ export default function Select<T extends string | number>({
           aria-label={ariaLabel ?? placeholder ?? 'Select an option'}
         >
           {searchable && (
-            /* top-4 sits just below BottomSheet's 16px drag-handle row */
-            <div className="sticky top-4 z-10 bg-surface px-4 pb-2">
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Search…"
-                aria-label="Search options"
-                className="w-full bg-background border border-border rounded-none px-2 py-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
-              />
-            </div>
+            <PanelSearchInput
+              value={searchQuery}
+              onChange={(v) => handleSearchChange(v, false)}
+              onKeyDown={handleSearchKeyDown}
+              variant="sheet"
+            />
           )}
 
           <div ref={sheetListRef} role="listbox" className="pb-1">
             {filteredOptions.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-text-muted">No options</div>
+              <EmptyOptions variant="sheet" />
             ) : (
-              filteredOptions.map((opt, i) => {
-                const selected = opt.value === value
-                return (
-                  <button
-                    key={`${String(opt.value)}-${i}`}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    onClick={() => selectIndex(i)}
-                    className={
-                      'w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover ' +
-                      (selected ? 'font-medium bg-surface-muted ' : '') +
-                      (mono ? 'font-mono ' : '')
-                    }
-                  >
-                    {selected ? (
-                      <Check size={16} className="text-primary flex-shrink-0" />
-                    ) : (
-                      <span className="w-4 flex-shrink-0" />
-                    )}
-                    <span className="truncate">{opt.label}</span>
-                  </button>
-                )
-              })
+              filteredOptions.map((opt, i) => (
+                <SheetOptionRow
+                  key={`${String(opt.value)}-${i}`}
+                  label={opt.label}
+                  selected={opt.value === value}
+                  mono={mono}
+                  onClick={() => selectIndex(i)}
+                />
+              ))
             )}
           </div>
         </BottomSheet>
@@ -310,55 +169,29 @@ export default function Select<T extends string | number>({
 
       {/* Desktop panel: anchored dropdown with keyboard nav + type-ahead. */}
       {open && !isMobile && (
-        <div role="listbox" className={panelClass}>
+        <div role="listbox" className={listboxPanelClass}>
           {searchable && (
-            <div className="px-2 pb-1">
-              <input
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setHighlightedIndex(0)
-                }}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Search…"
-                className="w-full bg-background border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50"
-              />
-            </div>
+            <PanelSearchInput
+              value={searchQuery}
+              onChange={(v) => handleSearchChange(v, true)}
+              onKeyDown={handleSearchKeyDown}
+              variant="dropdown"
+            />
           )}
 
           {filteredOptions.length === 0 ? (
-            <div className="px-2 py-1.5 text-xs text-text-muted">No options</div>
+            <EmptyOptions variant="dropdown" />
           ) : (
-            filteredOptions.map((opt, i) => {
-              const selected = opt.value === value
-              const highlighted = i === highlightedIndex
-              return (
-                <button
-                  key={`${String(opt.value)}-${i}`}
-                  type="button"
-                  role="option"
-                  id={optionId(i)}
-                  aria-selected={selected}
-                  tabIndex={-1}
-                  onClick={() => selectIndex(i)}
-                  className={
-                    'w-full flex items-center gap-2 px-2 h-8 text-left text-xs transition-colors ' +
-                    (selected
-                      ? 'text-text font-medium bg-surface-muted '
-                      : highlighted
-                        ? 'text-text bg-surface-hover '
-                        : 'text-text hover:bg-surface-hover ')
-                  }
-                >
-                  {selected ? (
-                    <Check size={12} className="text-primary flex-shrink-0" />
-                  ) : (
-                    <span className="w-3 flex-shrink-0" />
-                  )}
-                  <span className="truncate">{opt.label}</span>
-                </button>
-              )
-            })
+            filteredOptions.map((opt, i) => (
+              <DropdownOptionRow
+                key={`${String(opt.value)}-${i}`}
+                id={optionId(i)}
+                label={opt.label}
+                selected={opt.value === value}
+                highlighted={i === highlightedIndex}
+                onClick={() => selectIndex(i)}
+              />
+            ))
           )}
         </div>
       )}

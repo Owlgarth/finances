@@ -58,7 +58,7 @@ export default function LegacyImportModal({ open, onClose }: Props) {
       }
       setSelections(preselected)
       setPhase('report')
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof SyntaxError) {
         toast.error('Invalid JSON file. Please select a valid export file.')
       } else {

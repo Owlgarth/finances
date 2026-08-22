@@ -32,11 +32,13 @@ export default function SortableTh({
 
   return (
     <th
+      aria-sort={isActive ? (isDescending ? 'descending' : 'ascending') : undefined}
       className={`px-6 py-2 ${thAlign} font-mono text-[9px] font-bold text-text-muted uppercase tracking-widest`}
     >
       <button
+        type="button"
         onClick={() => onSort(field)}
-        className={`${buttonAlign} items-center gap-1 hover:text-primary transition-colors cursor-pointer group uppercase`}
+        className={`${buttonAlign} items-center gap-1 hover:text-primary transition-colors cursor-pointer uppercase`}
       >
         {label}
         <ChevronDown

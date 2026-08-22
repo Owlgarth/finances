@@ -1,29 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { authApi, clearAuthToken } from '../../api/client';
-import type { AccountDeleteCheck } from '../../types';
+import { getApiErrorMessage } from '../../utils/errors';
 
 export default function DeleteAccountSection() {
   const navigate = useNavigate();
-  const [check, setCheck] = useState<AccountDeleteCheck | null>(null);
-  const [isLoadingCheck, setIsLoadingCheck] = useState(true);
+  const queryClient = useQueryClient();
+  const checkQuery = useQuery({
+    queryKey: ['account-delete-check'],
+    queryFn: authApi.checkDeletion,
+  });
   const [password, setPassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const loadCheck = async () => {
-      try {
-        const check = await authApi.checkDeletion();
-        setCheck(check);
-      } catch {
-        toast.error('Failed to load account deletion info');
-      } finally {
-        setIsLoadingCheck(false);
-      }
-    };
-    loadCheck();
-  }, []);
 
   const handleDelete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,21 +22,26 @@ export default function DeleteAccountSection() {
     setIsDeleting(true);
     try {
       await authApi.deleteAccount(password);
+      queryClient.clear();
       toast.success('Account deleted successfully.');
       clearAuthToken();
       navigate('/login');
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const message = err.response?.data?.detail || 'Failed to delete account';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Failed to delete account'));
     } finally {
       setIsDeleting(false);
     }
   };
 
-  if (isLoadingCheck) {
+  if (checkQuery.isLoading) {
     return <p className="text-sm text-text-muted">Loading...</p>;
   }
+
+  if (checkQuery.isError || !checkQuery.data) {
+    return <p className="text-sm text-text-muted">Failed to load account deletion info</p>;
+  }
+
+  const check = checkQuery.data;
 
   return (
     <div className="space-y-6">

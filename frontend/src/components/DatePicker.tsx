@@ -32,7 +32,6 @@ export default function DatePicker({
   const { isMobile } = useBreakpoint()
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const isoToJsWeekday = (isoDay: number): 0 | 1 | 2 | 3 | 4 | 5 | 6 => {
     return (isoDay === 7 ? 0 : isoDay) as 0 | 1 | 2 | 3 | 4 | 5 | 6
@@ -45,10 +44,6 @@ export default function DatePicker({
       onChange(format(date, 'yyyy-MM-dd'))
       setIsOpen(false)
     }
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value)
   }
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -82,15 +77,22 @@ export default function DatePicker({
   return (
     <div ref={containerRef} className="relative">
       <input
-        ref={inputRef}
         type="text"
         id={id}
         value={value}
-        onChange={handleInputChange}
         /* Mobile opens on click, not focus: the sheet's focus-return would
            re-fire onFocus and immediately reopen it. */
         onFocus={() => { if (!isMobile) setIsOpen(true) }}
         onClick={() => { if (isMobile) setIsOpen(true) }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape' || !isOpen || isMobile) return
+          e.preventDefault()
+          // Consume the key: without this, a surrounding Modal's document-level
+          // Escape listener (useOverlay) fires too and closes the whole dialog —
+          // same rationale as Select's trigger (Select.tsx:166-172).
+          e.stopPropagation()
+          setIsOpen(false)
+        }}
         className={`${inputClass} ${className}`}
         required={required}
         disabled={disabled}
@@ -99,7 +101,7 @@ export default function DatePicker({
       />
       {isOpen && !isMobile && (
         <div
-          className="absolute z-50 mt-2 bg-surface rounded-sm border border-border p-4"
+          className="absolute z-dropdown mt-2 bg-surface rounded-sm border border-border p-4"
         >
           <DayPicker
             mode="single"

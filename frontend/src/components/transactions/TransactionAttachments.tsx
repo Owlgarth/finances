@@ -55,18 +55,27 @@ export default function TransactionAttachments({ transaction }: Props) {
   // Poll the extraction state while a job is pending. While the scanner is
   // offline the job can sit queued for hours (the worker retries with backoff),
   // so poll far more slowly rather than hammering the API every 2s.
+  // A reload mid-extraction leaves the attachment server-side 'pending' with no
+  // local pendingId — nothing would poll and the badge (isExtracting) would be
+  // stuck forever. Derive the polled id so server-side pending resumes polling
+  // (derived, NOT adopted via effect-setState — keeps the set-state-in-effect
+  // lint clean). Local pendingId wins while set (covers the click → onSuccess
+  // gap).
+  const serverPendingId = attachments.find((a) => a.extraction_status === 'pending')?.id ?? null
+  const activePendingId = pendingId ?? serverPendingId
+
   const { data: extraction } = useQuery({
-    queryKey: ['extraction', transaction.id, pendingId],
-    queryFn: () => transactionsApi.getExtraction(transaction.id, pendingId!),
-    enabled: pendingId !== null,
+    queryKey: ['extraction', transaction.id, activePendingId],
+    queryFn: () => transactionsApi.getExtraction(transaction.id, activePendingId!),
+    enabled: activePendingId !== null,
     refetchInterval: (query) =>
       query.state.data?.status === 'pending' ? (extractionReachable ? 2000 : 30000) : false,
   })
 
   useEffect(() => {
-    if (!extraction || pendingId === null) return
+    if (!extraction || activePendingId === null) return
     if (extraction.status === 'done' && extraction.result) {
-      setReview({ attachmentId: pendingId, parsed: extraction.result })
+      setReview({ attachmentId: activePendingId, parsed: extraction.result })
       setPendingId(null)
       invalidate()
     } else if (extraction.status === 'failed') {
@@ -75,7 +84,7 @@ export default function TransactionAttachments({ transaction }: Props) {
       invalidate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extraction, pendingId])
+  }, [extraction, activePendingId])
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return
@@ -115,7 +124,7 @@ export default function TransactionAttachments({ transaction }: Props) {
               <button
                 type="button"
                 onClick={() => remove.mutate(a.id)}
-                className="absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
+                className="!absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
                 aria-label="Remove attachment"
               >
                 <Trash2 size={12} />
@@ -174,7 +183,7 @@ export default function TransactionAttachments({ transaction }: Props) {
 
       {preview && preview.download_url && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-scrim backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <button type="button" onClick={() => setPreview(null)} className="absolute top-4 right-4 text-white/80 hover:text-white" aria-label="Close preview">
+          <button type="button" onClick={() => setPreview(null)} className="absolute top-4 right-4 z-10 text-white/80 hover:text-white" aria-label="Close preview">
             <X size={24} />
           </button>
           <img src={preview.download_url} alt={preview.filename} className="max-w-full max-h-[90vh] object-contain rounded-sm" onClick={(e) => e.stopPropagation()} />
@@ -183,7 +192,6 @@ export default function TransactionAttachments({ transaction }: Props) {
 
       {reviewAttachment && review && (
         <ExtractionReviewModal
-          open
           onClose={() => setReview(null)}
           transaction={transaction}
           parsed={review.parsed}

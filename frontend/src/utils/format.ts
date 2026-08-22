@@ -43,3 +43,36 @@ export function formatAmount(value: string | number, currency?: string): string 
   const base = `${sign}${formattedInt}.${newDec}`
   return currency ? `${base} ${currency}` : base
 }
+
+/**
+ * Parse a money string into signed integer cents (BigInt), rounding half-up
+ * beyond 2 decimals — the same 3rd-digit rule formatAmount applies for
+ * display. String/BigInt only, no parseFloat: backend Decimals up to 17
+ * digits (see formatAmount's doc comment) keep exact cents.
+ */
+function toCents(value: string | number): bigint {
+  const total = String(value)
+  const isNegative = total.startsWith('-')
+  const abs = isNegative ? total.slice(1) : total
+  const [rawInt, decPart = ''] = abs.split('.')
+  const intPart = rawInt || '0'
+  // Same 3rd-digit round-up idiom as formatAmount.
+  const decPadded = decPart.padEnd(3, '0').slice(0, 3)
+  const roundUp = decPadded[2] >= '5'
+  const cents = BigInt(intPart + decPadded.slice(0, 2)) + (roundUp ? 1n : 0n)
+  return isNegative ? -cents : cents
+}
+
+/**
+ * Exact decimal subtraction of two money strings: a - b, as a 2-decimal
+ * string. e.g. subtractAmounts('10.00', '12.50') === '-2.50',
+ * subtractAmounts('10', '10') === '0.00'. For persisted deltas computed from
+ * backend Decimal strings — never parseFloat (money rule, see formatAmount).
+ * Inputs with more than 2 decimals round half-up via toCents.
+ */
+export function subtractAmounts(a: string, b: string): string {
+  const diff = toCents(a) - toCents(b)
+  const isNegative = diff < 0n
+  const abs = (isNegative ? -diff : diff).toString().padStart(3, '0')
+  return `${isNegative ? '-' : ''}${abs.slice(0, -2) || '0'}.${abs.slice(-2)}`
+}

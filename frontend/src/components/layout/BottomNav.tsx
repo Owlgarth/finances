@@ -10,7 +10,6 @@ import {
   Landmark,
   Loader2,
   LogOut,
-  Moon,
   MoreHorizontal,
   PieChart,
   Plus,
@@ -28,22 +27,24 @@ import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { transactionsApi } from '../../api/client'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTheme } from '../../contexts/ThemeContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
+import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
 import { openPageSearch } from '../common/CommandPalette'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
 import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
+import RoleBadge from '../common/RoleBadge'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
+import ThemeToggleRow from './ThemeToggleRow'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import TransferModal from '../accounts/TransferModal'
-import type { ParsedReceipt, Workspace } from '../../types'
+import type { ParsedReceipt } from '../../types'
 
 // Overflow destinations live in the More sheet (plan decision 5).
 const MORE_DESTINATIONS = [
@@ -100,8 +101,8 @@ const moreRowClass =
 export default function BottomNav() {
   const location = useLocation()
   const { user, logout } = useAuth()
-  const { isDark, toggleTheme } = useTheme()
-  const { workspace, workspaces, switchWorkspace } = useWorkspace()
+  const { workspace, workspaces } = useWorkspace()
+  const { switchingToId, switchTo } = useWorkspaceSwitch()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
 
@@ -109,7 +110,6 @@ export default function BottomNav() {
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
   const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
   const [creatingWorkspace, setCreatingWorkspace] = useState(false)
-  const [switchingToId, setSwitchingToId] = useState<number | null>(null)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
@@ -161,22 +161,6 @@ export default function BottomNav() {
     setMoreOpen(false)
     setCreatingWorkspace(false)
   }, [location.pathname])
-
-  const handleSwitch = async (ws: Workspace) => {
-    if (ws.id === workspace?.id) {
-      setMoreOpen(false)
-      return
-    }
-    setSwitchingToId(ws.id)
-    try {
-      await switchWorkspace(ws.id)
-      setMoreOpen(false)
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to switch workspace'))
-    } finally {
-      setSwitchingToId(null)
-    }
-  }
 
   const quickAddActions: ActionSheetAction[] = [
     { label: 'New transaction', icon: Receipt, onSelect: () => setTransactionOpen(true) },
@@ -296,7 +280,7 @@ export default function BottomNav() {
                 <button
                   key={ws.id}
                   type="button"
-                  onClick={() => handleSwitch(ws)}
+                  onClick={() => switchTo(ws, () => setMoreOpen(false))}
                   disabled={switchingToId !== null}
                   className={moreRowClass}
                 >
@@ -308,11 +292,7 @@ export default function BottomNav() {
                     <span className="w-4 flex-shrink-0" />
                   )}
                   <span className="truncate flex-1">{ws.name}</span>
-                  {ws.user_role && (
-                    <span className="text-xs px-1.5 py-0.5 rounded-sm bg-surface-muted text-text-muted">
-                      {ws.user_role}
-                    </span>
-                  )}
+                  <RoleBadge role={ws.user_role} />
                 </button>
               ))}
               <button type="button" onClick={() => setCreatingWorkspace(true)} className={moreRowClass}>
@@ -341,13 +321,7 @@ export default function BottomNav() {
                 <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
                 Reload
               </button>
-              <div className="flex items-center justify-between min-h-[44px] px-4">
-                <span className="flex items-center gap-3 text-sm text-text">
-                  <Moon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                  Dark mode
-                </span>
-                <Switch checked={isDark} onChange={() => toggleTheme()} aria-label="Dark mode" />
-              </div>
+              <ThemeToggleRow />
               <div className="flex items-center justify-between min-h-[44px] px-4">
                 <span className="flex items-center gap-3 text-sm text-text">
                   <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />

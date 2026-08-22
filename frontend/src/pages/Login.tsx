@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
@@ -54,8 +55,6 @@ export default function Login() {
     setIsSubmitting(false);
   };
 
-  const inputClassName = "w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors";
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
@@ -93,7 +92,7 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={inputClassName}
+                className={authInputClass}
                 placeholder="Email address"
               />
             </div>
@@ -110,7 +109,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={inputClassName}
+                className={authInputClass}
                 placeholder="Password"
               />
             </div>
@@ -155,9 +154,9 @@ export default function Login() {
                 autoComplete="one-time-code"
                 required
                 value={twoFACode}
-                onChange={(e) => setTwoFACode(e.target.value)}
-                className={inputClassName}
-                placeholder={useRecoveryCode ? 'XXXX-XXXX' : '000000'}
+              onChange={(e) => setTwoFACode(e.target.value)}
+              className={authInputClass}
+              placeholder={useRecoveryCode ? 'XXXX-XXXX' : '000000'}
                 maxLength={useRecoveryCode ? 9 : 6}
                 autoFocus
               />

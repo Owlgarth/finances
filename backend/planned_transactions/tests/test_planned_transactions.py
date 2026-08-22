@@ -1,23 +1,29 @@
 """Tests for account-based planned transactions (B7 semantics)."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 
 from accounts.factories import AccountFactory
 from budgeting.factories import BudgetFactory
 from categories.factories import CategoryFactory
+from common.auth import create_access_token
 from common.enums import TotalsLabel
+from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
-from planned_transactions.models import PlannedTransaction
+from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey
+from planned_transactions.schemas import PlannedTransactionCreate
 from planned_transactions.services import PlannedTransactionService
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
+from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import WorkspaceMember
 
 
@@ -612,3 +618,243 @@ class TestPlannedPagination(PlannedTransactionTestCase):
         # backend ALLOWED_PAGE_SIZES) — it must keep working under the cap.
         self.get('/api/planned-transactions?page_size=200', **self.auth_headers())
         self.assertStatus(200)
+
+
+class TestPlannedIdempotencyKey(PlannedTransactionTestCase):
+    """Idempotency-Key header on POST /planned-transactions — Stripe-style dedup.
+
+    Mirrors transactions.tests.TestIdempotencyKey (shared flow lives in
+    common.idempotency); these pin the planned-specific wiring: model, lookup
+    scoping, and the done-branch under a key.
+    """
+
+    def test_create_with_key_returns_same_planned_on_replay(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+
+        second = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(PlannedTransaction.objects.count(), 4)  # 3 from setUp + 1
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 1)
+
+    def test_create_with_key_different_payload_still_returns_original(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/planned-transactions', self._payload(amount='50.00'), **headers)
+        self.assertStatus(201)
+
+        second = self.post(
+            '/api/planned-transactions',
+            self._payload(name='Different name', amount='99.99'),
+            **headers,
+        )
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(second['amount'], '50.00')
+        self.assertEqual(second['name'], 'New Planned')
+        self.assertEqual(PlannedTransaction.objects.count(), 4)
+
+    def test_create_without_key_bypasses_dedup(self):
+        first = self.post('/api/planned-transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        second = self.post('/api/planned-transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(PlannedTransaction.objects.count(), 5)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 0)
+
+    def test_blank_key_bypasses_dedup(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': ''}
+        first = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        second = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+
+    def test_same_key_different_user_is_independent(self):
+        """Unique constraint is (key, user, workspace) — no cross-user collision."""
+        other = UserFactory(email='other@example.com', current_workspace=self.workspace)
+        WorkspaceMemberFactory(workspace=self.workspace, user=other, role='member')
+        other_headers = {'HTTP_AUTHORIZATION': f'Bearer {create_access_token(other)}'}
+
+        first = self.post(
+            '/api/planned-transactions',
+            self._payload(),
+            **{**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'shared-key'},
+        )
+        self.assertStatus(201)
+        second = self.post(
+            '/api/planned-transactions', self._payload(), **{**other_headers, 'HTTP_IDEMPOTENCY_KEY': 'shared-key'}
+        )
+        self.assertStatus(201)
+
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(PlannedTransaction.objects.count(), 5)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 2)
+        keys = list(PlannedTransactionIdempotencyKey.objects.values_list('user_id', flat=True))
+        self.assertEqual(sorted(keys), sorted([self.user.id, other.id]))
+
+    def test_same_key_different_workspace_is_independent(self):
+        """Scoped lookup + per-workspace constraint keep workspaces isolated."""
+        other_workspace = WorkspaceFactory(name='Other Workspace')
+        WorkspaceMemberFactory(workspace=other_workspace, user=self.user, role='member')
+        CurrencyCatalogService.enable(self.user, other_workspace.id, 'PLN')
+        other_account = AccountFactory(workspace=other_workspace, name='Other Main')
+
+        first = self.post(
+            '/api/planned-transactions',
+            self._payload(),
+            **{**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'shared-key'},
+        )
+        self.assertStatus(201)
+
+        second = PlannedTransactionService.create(
+            self.user,
+            other_workspace.id,
+            PlannedTransactionCreate(**self._payload(account_id=other_account.id)),
+            idempotency_key='shared-key',
+        )
+
+        self.assertNotEqual(second.id, first['id'])
+        self.assertEqual(second.workspace_id, other_workspace.id)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 2)
+
+    def test_key_after_24h_treated_as_new(self):
+        """Expired keys don't block — swept before insert; count stays 1."""
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+
+        original_now = timezone.now()
+        future = original_now + timedelta(hours=25)
+        with mock.patch('django.utils.timezone.now', return_value=future):
+            second = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(PlannedTransaction.objects.count(), 5)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 1)
+
+    def test_oversized_key_returns_400(self):
+        long_key = 'k' * 101
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': long_key}
+        data = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(400)
+        self.assertIn('100 characters', data['detail'])
+        self.assertEqual(PlannedTransaction.objects.count(), 3)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 0)
+
+    def test_viewer_cannot_use_idempotency_key(self):
+        """require_role runs before the header is read — viewer gets 403 first."""
+        viewer = UserFactory(email='viewer@example.com', current_workspace=self.workspace)
+        WorkspaceMemberFactory(workspace=self.workspace, user=viewer, role='viewer')
+        viewer_headers = {'HTTP_AUTHORIZATION': f'Bearer {create_access_token(viewer)}'}
+
+        self.post(
+            '/api/planned-transactions',
+            self._payload(),
+            **{**viewer_headers, 'HTTP_IDEMPOTENCY_KEY': 'k' * 101},
+        )
+        self.assertStatus(403)
+        self.assertEqual(PlannedTransaction.objects.count(), 3)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 0)
+
+    def test_planned_delete_sets_null_and_replay_creates_fresh(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        record = PlannedTransactionIdempotencyKey.objects.get()
+        planned_id = record.planned_transaction_id
+        self.assertIsNotNone(planned_id)
+
+        PlannedTransaction.objects.filter(id=planned_id).delete()
+
+        record.refresh_from_db()
+        self.assertIsNone(record.planned_transaction_id)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 1)
+
+        replay = self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertNotEqual(replay['id'], planned_id)
+
+    def test_create_with_key_status_done_replay_returns_original(self):
+        """Done-branch under a key: replay returns the original (and its executed
+        transaction) without re-dispatching or duplicating."""
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        first = self.post(
+            '/api/planned-transactions',
+            self._payload(name='Paid Bill', amount='200.00', status='done'),
+            **headers,
+        )
+        self.assertStatus(201)
+        self.assertEqual(first['status'], 'done')
+        self.assertIsNotNone(first['transaction_id'])
+        tx_count = Transaction.objects.count()
+
+        second = self.post(
+            '/api/planned-transactions',
+            self._payload(name='Paid Bill', amount='200.00', status='done'),
+            **headers,
+        )
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertIsNotNone(second['transaction_id'])
+        self.assertEqual(Transaction.objects.count(), tx_count)
+
+    def test_user_delete_cascades_to_idempotency_key(self):
+        from users.models import User
+
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.count(), 1)
+
+        user_id = self.user.id
+        User.objects.filter(id=user_id).delete()
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.filter(user_id=user_id).count(), 0)
+
+    def test_workspace_delete_cascades_to_idempotency_key(self):
+        from common.services.base import delete_workspace_financial_records
+        from workspaces.models import Workspace
+
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
+        self.post('/api/planned-transactions', self._payload(), **headers)
+        self.assertStatus(201)
+        ws_id = self.workspace.id
+
+        delete_workspace_financial_records(ws_id)
+        Workspace.objects.filter(id=ws_id).delete()
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.filter(workspace_id=ws_id).count(), 0)
+
+    def test_race_condition_two_concurrent_inserts_returns_one_planned(self):
+        """Force the IntegrityError branch: pre-commit a winner, mock the first
+        lookup to None, let the second run for real (mirrors the transactions
+        race test — see backend-testing skill §Testing Race-Loss Branches).
+        """
+        winner_planned = PlannedTransactionFactory(workspace=self.workspace, account=self.account)
+        PlannedTransactionIdempotencyKey.objects.create(
+            key='race-key',
+            user=self.user,
+            workspace_id=self.workspace.id,
+            planned_transaction=winner_planned,
+        )
+
+        real_lookup = PlannedTransactionService._lookup_idempotency_key
+        call_count = [0]
+
+        def fake_lookup(user, workspace_id, key):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return None
+            return real_lookup(user, workspace_id, key)
+
+        with mock.patch.object(PlannedTransactionService, '_lookup_idempotency_key', side_effect=fake_lookup):
+            result = PlannedTransactionService.create(
+                self.user,
+                self.workspace.id,
+                PlannedTransactionCreate(**self._payload()),
+                idempotency_key='race-key',
+            )
+
+        self.assertEqual(result.id, winner_planned.id)
+        self.assertEqual(PlannedTransactionIdempotencyKey.objects.filter(key='race-key', user=self.user).count(), 1)

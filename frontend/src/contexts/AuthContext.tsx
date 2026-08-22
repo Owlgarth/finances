@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authApi, setAuthToken, setRefreshToken, clearAuthToken, getAuthToken } from '../api/client';
-import { queryClient } from '../main';
-import type { User, LoginRequest, RegisterRequest } from '../types';
 import toast from 'react-hot-toast';
+import { authApi, setAuthToken, setRefreshToken, clearAuthToken, getAuthToken } from '../api/client';
+import { queryClient } from '../api/queryClient';
+import type { User, LoginRequest, RegisterRequest } from '../types';
+import { getApiErrorMessage } from '../utils/errors';
 
 interface AuthContextType {
   user: User | null;
@@ -26,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsReconsent, setNeedsReconsent] = useState(false);
   const navigate = useNavigate();
 
-  const checkConsentStatus = async (): Promise<boolean> => {
+  const checkConsentStatus = useCallback(async (): Promise<boolean> => {
     try {
       const status = await authApi.getConsentStatus();
       setNeedsReconsent(status.needs_reconsent);
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Non-critical — do not block the user if the check fails
       return false;
     }
-  };
+  }, [navigate]);
 
   // Load user on mount if token exists
   useEffect(() => {
@@ -62,9 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     loadUser();
-  }, []);
+  }, [checkConsentStatus]);
 
-  const login = async (credentials: LoginRequest) => {
+  const login = useCallback(async (credentials: LoginRequest) => {
     try {
       const response = await authApi.login(credentials);
 
@@ -87,14 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.error('Unexpected response from server. Please try again.');
       }
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const message = err.response?.data?.detail || 'Login failed';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Login failed'));
       throw error;
     }
-  };
+  }, [checkConsentStatus, navigate]);
 
-  const register = async (data: RegisterRequest) => {
+  const register = useCallback(async (data: RegisterRequest) => {
     try {
       const response = await authApi.register(data);
       if (response.access_token) {
@@ -115,14 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.success('Registration successful! Welcome!');
       navigate('/');
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const message = err.response?.data?.detail || 'Registration failed';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Registration failed'));
       throw error;
     }
-  };
+  }, [navigate]);
 
-  const verify2FA = async (tempToken: string, code: string) => {
+  const verify2FA = useCallback(async (tempToken: string, code: string) => {
     try {
       const response = await authApi.verify2FA(tempToken, code);
       if (response.access_token) {
@@ -140,43 +137,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.error('Unexpected response from server. Please try again.');
       }
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      const message = err.response?.data?.detail || 'Verification failed';
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, 'Verification failed'));
       throw error;
     }
-  };
+  }, [checkConsentStatus, navigate]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearAuthToken();
     setUser(null);
     queryClient.clear();
     toast.success('Logged out successfully');
     navigate('/login');
-  };
+  }, [navigate]);
 
-  const updateUser = (userData: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-    }
-  };
+  const updateUser = useCallback((userData: Partial<User>) => {
+    // Functional update: no `user` dependency → stable identity forever, so
+    // consumers' effects keyed on updateUser never replay. No-op when logged
+    // out, same as the previous `if (user)` guard.
+    setUser(prev => (prev ? { ...prev, ...userData } : prev));
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    needsReconsent,
+    login,
+    register,
+    logout,
+    updateUser,
+    checkConsentStatus,
+    verify2FA,
+  }), [user, isLoading, needsReconsent, login, register, logout, updateUser, checkConsentStatus, verify2FA]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        needsReconsent,
-        login,
-        register,
-        logout,
-        updateUser,
-        checkConsentStatus,
-        verify2FA,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

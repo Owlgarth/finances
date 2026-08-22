@@ -26,7 +26,7 @@ export default function Loading({ message, size = 'md', fullPage = false }: Prop
 
   if (fullPage) {
     return (
-      <div className="fixed inset-0 bg-surface/80 flex justify-center items-center z-50 backdrop-blur-[2px]">
+      <div className="fixed inset-0 bg-surface/80 flex justify-center items-center z-modal backdrop-blur-[2px]">
         {content}
       </div>
     )

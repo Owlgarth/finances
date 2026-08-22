@@ -53,3 +53,20 @@ export const secondaryButtonClass =
   `${controlHeightClass} ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
+
+// §3 Solid-negative confirm button — the destructive action INSIDE a confirm
+// dialog (ConfirmDialog). destructiveButtonClass above is the outline variant
+// for footer actions that chain into that dialog.
+export const solidNegativeButtonClass =
+  'bg-negative text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative/90 transition-colors ' +
+  `${controlHeightClass} ` +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed'
+
+// Auth pages (Login/Register) input style. These predate the §4 redesign and
+// keep their larger mono inputs (bg-background, text-sm, ring-2 focus) — they
+// are deliberately NOT inputClass above. Register appends
+// `placeholder:text-text-muted` on top of this base at its call site.
+export const authInputClass =
+  'w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text ' +
+  'focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors'

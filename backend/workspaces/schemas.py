@@ -56,8 +56,10 @@ class WorkspaceCreate(BaseModel):
 class WorkspaceMemberAdd(BaseModel):
     """Request to add a new member to workspace with direct account creation.
 
-    password is required when adding a user who does not yet exist in the system.
-    When adding an existing user, password is ignored.
+    password is optional. For a new user: when provided it becomes their
+    initial password (shared with them out-of-band); when omitted the new
+    user instead receives a set-password link by email. When adding an
+    existing user, password is ignored.
     """
 
     email: ValidatedEmail

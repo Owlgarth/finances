@@ -20,6 +20,7 @@ import TermsPage from './pages/TermsPage'
 import ReConsentPage from './pages/ReConsentPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import ConfirmEmailChangePage from './pages/ConfirmEmailChangePage'
+import NotFoundPage from './pages/NotFoundPage'
 
 function AppContent() {
   return (
@@ -33,6 +34,7 @@ function AppContent() {
         <Route path="/planned" element={<Planned />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
         <Route path="/settings" element={<ProfilePage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </MainLayout>
   )

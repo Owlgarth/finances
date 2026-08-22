@@ -53,6 +53,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   const [budgetId, setBudgetId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [plannedDate, setPlannedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -69,6 +70,10 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       // Mirrors the create branch's setBudgetId(defaultBudgetId).
       setBudgetId(source.category?.budget_id ?? defaultBudgetId)
       setPlannedDate(planned ? source.planned_date : new Date().toISOString().slice(0, 10))
+      // Edit bypasses the idempotency-key dedup — only create-mode submissions
+      // carry a key. Copy mode IS a create, so it gets a fresh key (mirrors
+      // TransactionFormModal).
+      setIdempotencyKey(planned ? null : crypto.randomUUID())
     } else {
       setName('')
       setAmount('')
@@ -76,6 +81,10 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setPlannedDate(new Date().toISOString().slice(0, 10))
+      // Fresh key per open in create mode. Persists across mutation retries
+      // within this open session — a double-click or network-blip replay
+      // returns the original 201 instead of a duplicate (Task 3 backend).
+      setIdempotencyKey(crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, planned, copyFrom, accounts.length, budgets.length, defaultBudgetId])
@@ -91,7 +100,9 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       const payload = { name: name.trim(), amount, account_id: accountId, category_id: categoryId, planned_date: plannedDate }
       // Echo the current status back on edit: the schema defaults a missing
       // status to 'pending', which the backend rejects as a revert for done rows.
-      return isEdit ? plannedTransactionsApi.update(planned.id, { ...payload, status: planned.status }) : plannedTransactionsApi.create(payload)
+      return isEdit
+        ? plannedTransactionsApi.update(planned.id, { ...payload, status: planned.status })
+        : plannedTransactionsApi.create(payload, { idempotencyKey: idempotencyKey ?? undefined })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
@@ -119,7 +130,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="planned-amount" className={labelClass}>Amount</label>
-            <input id="planned-amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
+            <input id="planned-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
           </div>
           <div>
             <label className={labelClass}>Date</label>

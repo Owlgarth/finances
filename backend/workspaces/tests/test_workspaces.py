@@ -2,6 +2,7 @@
 
 from datetime import date  # noqa: F401 (used by rewritten viewer tests)
 
+from django.core import mail
 from django.test import TestCase
 
 from accounts.factories import AccountFactory
@@ -12,6 +13,7 @@ from common.auth import create_access_token
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
+from users.models import User
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.models import Workspace, WorkspaceMember
 from workspaces.services import WorkspaceService
@@ -400,11 +402,21 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         )
         self.assertStatus(201)
 
+        new_no_password_data = self.post(
+            f'/api/workspaces/{self.workspace.id}/members/add',
+            {'email': 'parity_new_nopwd@example.com', 'role': 'viewer'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
         self.assertNotIn('is_new_user', existing_data)
         self.assertNotIn('is_new_user', new_data)
+        self.assertNotIn('is_new_user', new_no_password_data)
         self.assertEqual(existing_data['message'], new_data['message'])
+        self.assertEqual(new_data['message'], new_no_password_data['message'])
         self.assertEqual(set(existing_data), {'message', 'user_id', 'member_id'})
         self.assertEqual(set(new_data), {'message', 'user_id', 'member_id'})
+        self.assertEqual(set(new_no_password_data), {'message', 'user_id', 'member_id'})
 
     def test_add_already_member_fails(self):
         """Test that adding a user who is already a member fails."""
@@ -472,12 +484,29 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         existing.refresh_from_db()
         self.assertEqual(existing.current_workspace, original_ws)
 
-    def test_add_new_user_without_password_fails(self):
-        """New user cannot be created without a password."""
+    def test_add_new_user_without_password_succeeds_with_set_password_flow(self):
+        """New user without password: member created, unusable password, set-password email,
+        unified response shape."""
         payload = {'email': 'brand_new@example.com', 'role': 'member'}
         data = self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
-        self.assertStatus(400)
-        self.assertIn('Password', data['detail'])
+
+        self.assertStatus(201)
+        self.assertNotIn('is_new_user', data)
+        self.assertEqual(set(data), {'message', 'user_id', 'member_id'})
+        self.assertEqual(data['message'], 'Member added to workspace')
+
+        new_user = User.objects.get(email='brand_new@example.com')
+        self.assertFalse(new_user.has_usable_password())
+        self.assertTrue(WorkspaceMember.objects.filter(workspace_id=self.workspace.id, user_id=new_user.id).exists())
+
+        # Set-password email dispatched (eager Celery sends synchronously)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['brand_new@example.com'])
+        self.assertIn('/reset-password?uid=', mail.outbox[0].body)
+
+        # Login is impossible until the password is set via the link
+        self.post('/api/auth/login', {'email': 'brand_new@example.com', 'password': 'whatever123'})
+        self.assertStatus(401)
 
     def test_add_member_without_auth_fails(self):
         """Test that adding member without authentication fails."""
