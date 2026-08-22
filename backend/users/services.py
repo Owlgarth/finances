@@ -85,7 +85,7 @@ class UserService:
         """Reset user password (after token validation in the API layer)."""
         with db_transaction.atomic():
             user.set_password(new_password)
-            user.save(update_fields=['password'])
+            user.save(update_fields=['password', 'password_changed_at'])
         UserService.send_password_changed_email(user)
 
     @staticmethod
@@ -96,7 +96,7 @@ class UserService:
 
         with db_transaction.atomic():
             user.set_password(new_password)
-            user.save(update_fields=['password'])
+            user.save(update_fields=['password', 'password_changed_at'])
 
         UserService.send_password_changed_email(user)
 

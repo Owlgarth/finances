@@ -221,20 +221,44 @@ WORKSPACE_MAX_MEMBERS = int(os.getenv('WORKSPACE_MAX_MEMBERS', '10'))
 TWO_FACTOR_RECOVERY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 TWO_FACTOR_RECOVERY_CODE_COUNT = 8
 TWO_FACTOR_RECOVERY_CODE_LENGTH = 8
+# Independent key for encrypting 2FA secrets (Fernet). Empty = derive from
+# SECRET_KEY (legacy behavior); set to a distinct random value to decouple
+# key rotation from SECRET_KEY.
+TWO_FACTOR_ENCRYPTION_KEY = os.getenv('TWO_FACTOR_ENCRYPTION_KEY', '')
+
+# Number of trusted reverse proxies in front of the API.
+# 0 (default) = X-Forwarded-For is ignored entirely and REMOTE_ADDR is used
+# (correct for the shipped direct-uvicorn exposure on API_PORT with no proxy).
+# Set to 1+ only when deployed behind exactly that many trustworthy proxies;
+# get_client_ip() then derives the client IP from the X-Forwarded-For chain.
+TRUSTED_PROXY_COUNT = int(os.getenv('TRUSTED_PROXY_COUNT', '0'))
 
 # Rate limiting
 # Max registration attempts per IP within the period window
 RATE_LIMIT_REGISTER = int(os.getenv('RATE_LIMIT_REGISTER', '5'))
 # Time window (seconds) for registration rate limiting
 RATE_LIMIT_REGISTER_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_PERIOD', '60'))
+# Max registration attempts per email account within the period window (anti-enumeration:
+# caps repeated probes of the same address even when the attacker rotates IPs)
+RATE_LIMIT_REGISTER_ACCOUNT = int(os.getenv('RATE_LIMIT_REGISTER_ACCOUNT', '5'))
+# Time window (seconds) for per-email registration rate limiting
+RATE_LIMIT_REGISTER_ACCOUNT_PERIOD = int(os.getenv('RATE_LIMIT_REGISTER_ACCOUNT_PERIOD', '3600'))
 # Max login attempts per IP within the period window
 RATE_LIMIT_LOGIN = int(os.getenv('RATE_LIMIT_LOGIN', '10'))
 # Time window (seconds) for login rate limiting
 RATE_LIMIT_LOGIN_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_PERIOD', '60'))
+# Max login attempts per account (email) within the period window, regardless of source IP
+RATE_LIMIT_LOGIN_ACCOUNT = int(os.getenv('RATE_LIMIT_LOGIN_ACCOUNT', '10'))
+# Time window (seconds) for per-account login rate limiting
+RATE_LIMIT_LOGIN_ACCOUNT_PERIOD = int(os.getenv('RATE_LIMIT_LOGIN_ACCOUNT_PERIOD', '60'))
 # Max 2FA verification attempts per IP+user within the period window
 RATE_LIMIT_VERIFY_2FA = int(os.getenv('RATE_LIMIT_VERIFY_2FA', '10'))
 # Time window (seconds) for 2FA verification rate limiting
 RATE_LIMIT_VERIFY_2FA_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_PERIOD', '60'))
+# Max 2FA verification attempts per user within the period window, regardless of source IP
+RATE_LIMIT_VERIFY_2FA_USER = int(os.getenv('RATE_LIMIT_VERIFY_2FA_USER', '10'))
+# Time window (seconds) for per-user 2FA verification rate limiting
+RATE_LIMIT_VERIFY_2FA_USER_PERIOD = int(os.getenv('RATE_LIMIT_VERIFY_2FA_USER_PERIOD', '900'))
 # Max GDPR data export requests per IP within the period window
 RATE_LIMIT_DATA_EXPORT = int(os.getenv('RATE_LIMIT_DATA_EXPORT', '3'))
 # Time window (seconds) for data export rate limiting

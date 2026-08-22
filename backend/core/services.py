@@ -1,7 +1,10 @@
 """Business logic for authentication flows (register, login, 2FA, refresh)."""
 
+import random
+import time
+
 from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, hashers
 from django.db import transaction as db_transaction
 
 from common.auth import (
@@ -11,6 +14,7 @@ from common.auth import (
     create_refresh_token,
     create_temp_token,
 )
+from common.email import EmailService
 from core.schemas import LoginIn, LoginOut, RefreshTokenIn, RegisterIn, Verify2FAIn
 from users.exceptions import TwoFactorNotEnabledError
 from users.models import ConsentType, UserTwoFactor
@@ -19,6 +23,11 @@ from users.two_factor import TwoFactorService
 from workspaces.services import WorkspaceService
 
 User = get_user_model()
+
+# Pre-computed hash so the user-not-found path runs the same expensive password
+# check as the wrong-password path — removes the login timing oracle that
+# distinguished registered from unregistered emails.
+_DUMMY_PASSWORD_HASH = hashers.make_password('denarly-timing-normalization')
 
 
 class AuthService:
@@ -30,19 +39,42 @@ class AuthService:
     """
 
     @staticmethod
+    def _send_registration_attempt_email(existing_user) -> None:
+        """Notify the owner of an existing account that someone tried to register with their email.
+
+        Goes to the address OWNER, not the requester — sending it does not leak
+        registration status to the person who made the attempt.
+        """
+        EmailService.send_email(
+            to=existing_user.email,
+            subject='Registration attempt with your email — Denarly',
+            template_name='email/registration_attempt',
+            context={'user_name': existing_user.full_name or existing_user.email},
+        )
+
+    @staticmethod
     def register(data: RegisterIn, ip_address: str | None) -> tuple[int, dict]:
         """Register a new user with a workspace, consent records, and optional sample data.
 
         Returns:
             (403, {'detail': ...}) when DEMO_MODE is enabled.
-            (400, {'error': ...}) when the email is already registered.
+            (400, {'error': 'Unable to register with this email address.'}) when registration
+                cannot complete (e.g. the email is already registered — the message never reveals which).
             (201, {'access_token', 'refresh_token', 'token_type'}) on success.
         """
         if settings.DEMO_MODE:
             return 403, {'detail': 'Registration is disabled in demo mode'}
 
-        if User.objects.filter(email=data.email).exists():
-            return 400, {'error': 'User with this email already exists'}
+        existing_user = User.objects.filter(email=data.email).first()
+        if existing_user:
+            # Anti-enumeration: notify the address owner, normalize timing against
+            # the slow success path, and return a generic error that never reveals
+            # whether the address is registered. Residual risk: the 201-vs-400
+            # status difference remains a structural oracle; email-verification-
+            # gated signup is explicitly out of scope.
+            AuthService._send_registration_attempt_email(existing_user)
+            time.sleep(random.uniform(0.1, 0.3))  # Normalize response time to reduce timing side-channel
+            return 400, {'error': 'Unable to register with this email address.'}
 
         with db_transaction.atomic():
             user = User.objects.create_user(
@@ -80,6 +112,9 @@ class AuthService:
         """
         user = User.objects.filter(email=data.email).first()
         if not user:
+            # Burn the same hash-check cost as the wrong-password path below so
+            # response timing cannot reveal whether the email is registered.
+            hashers.check_password(data.password, _DUMMY_PASSWORD_HASH)
             return 401, {'detail': 'Invalid email or password'}
         if not user.check_password(data.password):
             return 401, {'detail': 'Invalid email or password'}
@@ -128,7 +163,8 @@ class AuthService:
         """Exchange a valid refresh token for a rotated token pair.
 
         Returns:
-            (401, {'detail': ...}) for invalid/expired/consumed refresh token or missing user.
+            (401, {'detail': ...}) for invalid/expired/consumed refresh token, missing user,
+            or a token issued before the user's last password change.
             (200, {'access_token', 'refresh_token', 'token_type'}) on success (rotated refresh).
         """
         payload = consume_refresh_token(data.refresh_token)
@@ -138,6 +174,10 @@ class AuthService:
         user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
         if not user:
             return 401, {'detail': 'User not found'}
+
+        last_change = user.password_changed_at.timestamp() if user.password_changed_at else 0
+        if payload.get('iat', 0) < last_change:
+            return 401, {'detail': 'Invalid or expired refresh token'}
 
         return 200, {
             'access_token': create_access_token(user),
