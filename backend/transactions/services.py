@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
-from django.db import IntegrityError
 from django.db import transaction as db_transaction
 from django.db.models import Count, F, Sum, Value
 from django.db.models.functions import Coalesce, Lower
@@ -17,6 +15,7 @@ from accounts.services import AccountService
 from budgeting.services import PeriodService
 from categories.models import Category
 from common.enums import TotalsLabel
+from common.idempotency import IDEMPOTENCY_TTL, create_with_idempotency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from currencies.models import Currency
 from transactions.exceptions import (
@@ -387,7 +386,7 @@ class TransactionService:
         transaction created under workspace A (the user's membership in A may
         have been revoked since).
         """
-        cutoff = timezone.now() - timedelta(hours=24)
+        cutoff = timezone.now() - IDEMPOTENCY_TTL
         return (
             TransactionIdempotencyKey.objects.filter(
                 key=key, user=user, workspace_id=workspace_id, created_at__gt=cutoff
@@ -447,61 +446,21 @@ class TransactionService:
         payload). The dedup record is a transient key→transaction map, NOT
         user data; it never appears in export/import.
         """
-        if idempotency_key:
-            existing = TransactionService._lookup_idempotency_key(user, workspace_id, idempotency_key)
-            if existing is not None:
-                if existing.transaction_id is None:
-                    # Original transaction was deleted out from under the record.
-                    # Discard the stale entry and fall through to a fresh create.
-                    existing.delete()
-                else:
-                    # Re-fetch fresh so ninja serializes the current row state
-                    # (e.g. if some other field was edited in the meantime).
-                    return Transaction.objects.get(id=existing.transaction_id, workspace_id=workspace_id)
-
-            # Sweep expired records for this (key, user, workspace). The unique
-            # constraint is unconditional, so a record from >24h ago would
-            # otherwise block our fresh insert (and force us down the slower
-            # IntegrityError path). The lookup above already treats these as
-            # invisible; this just synchronises storage with the logical TTL.
-            # Scoped to this workspace: an expired row in another workspace no
-            # longer blocks this insert (the constraint is per-workspace), so
-            # don't touch it. Concurrent races still fall through to the
-            # IntegrityError handler below.
-            cutoff = timezone.now() - timedelta(hours=24)
-            TransactionIdempotencyKey.objects.filter(
-                key=idempotency_key, user=user, workspace_id=workspace_id, created_at__lte=cutoff
-            ).delete()
-
-            # Wrap the create + key-insert in a SAVEPOINT so a lost race rolls
-            # BOTH back cleanly. Catching IntegrityError inside the outer
-            # @db_transaction.atomic WITHOUT a savepoint would leave the
-            # connection broken (Django's atomic marks the whole block for
-            # rollback on any IntegrityError, even if caught). The savepoint
-            # isolates the failure to just this nested block, leaving the
-            # outer transaction usable for the re-read below.
-            try:
-                with db_transaction.atomic():  # SAVEPOINT
-                    trans = TransactionService._do_create(user, workspace_id, data)
-                    TransactionIdempotencyKey.objects.create(
-                        key=idempotency_key,
-                        user=user,
-                        workspace_id=workspace_id,
-                        transaction=trans,
-                    )
-                return trans
-            except IntegrityError:
-                # Lost the race. The savepoint rolled back BOTH the key row
-                # AND the transaction we just created (no orphan). Re-read the
-                # winner outside the savepoint and return their transaction.
-                winner = TransactionService._lookup_idempotency_key(user, workspace_id, idempotency_key)
-                if winner is not None and winner.transaction_id is not None:
-                    return Transaction.objects.get(id=winner.transaction_id, workspace_id=workspace_id)
-                raise  # unexpected: IntegrityError with no winner — let it propagate
-
-        # No idempotency key — original code path. _do_create runs inside the
-        # @db_transaction.atomic on this method (no extra savepoint overhead).
-        return TransactionService._do_create(user, workspace_id, data)
+        if not idempotency_key:
+            # No idempotency key — original code path. _do_create runs inside the
+            # @db_transaction.atomic on this method (no extra savepoint overhead).
+            return TransactionService._do_create(user, workspace_id, data)
+        return create_with_idempotency(
+            user=user,
+            workspace_id=workspace_id,
+            data=data,
+            key=idempotency_key,
+            lookup=TransactionService._lookup_idempotency_key,
+            do_create=TransactionService._do_create,
+            record_model=TransactionIdempotencyKey,
+            target_model=Transaction,
+            target_field='transaction',
+        )
 
     @staticmethod
     @db_transaction.atomic

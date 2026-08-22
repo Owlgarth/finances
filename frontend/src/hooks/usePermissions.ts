@@ -41,16 +41,9 @@ export function usePermissions() {
       return false;
     };
 
-    // Check if current user can reset password for a member
-    const canResetPasswordFor = (member: WorkspaceMember): boolean => {
-      if (!user || member.user_id === user.id) return false;
-      if (member.role === 'owner') return false;
-      if (isOwner) return true;
-      if (isAdmin) {
-        return member.role === 'member' || member.role === 'viewer';
-      }
-      return false;
-    };
+    // Resetting a member's password follows the same permission rules as editing
+    // that member — one predicate, two intents, so the rules can never drift apart.
+    const canResetPasswordFor = canEditMember;
 
     return {
       // Role checks

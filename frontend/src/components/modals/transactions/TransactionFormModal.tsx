@@ -14,6 +14,7 @@ import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } fr
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
+import { rowsToItems } from '../../../utils/transactionItems'
 import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
@@ -48,23 +49,12 @@ const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 /** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
 const itemsToRows = (items: TransactionItemInput[]): Row[] =>
   items.map((i) => ({
+    id: crypto.randomUUID(),
     name: i.name,
     quantity: i.quantity ?? '1',
     unit_price: i.unit_price ?? '',
     line_total: i.line_total ?? '',
   }))
-
-/** Row[] (table editing shape) → TransactionItemInput[] (API payload shape).
- * Drops rows with no name, defaults quantity to '1', converts '' → null. */
-const rowsToItems = (rows: Row[]): TransactionItemInput[] =>
-  rows
-    .filter((r) => r.name.trim())
-    .map((r) => ({
-      name: r.name.trim(),
-      quantity: r.quantity || '1',
-      unit_price: r.unit_price === '' ? null : r.unit_price,
-      line_total: r.line_total === '' ? null : r.line_total,
-    }))
 
 /** Pick the account id whose currency matches `currencyCode`, preferring the
  * per-currency default-flagged account and falling back to the first account
@@ -113,7 +103,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   // Rows are the editing source of truth in create mode (nameless rows, '' qty
   // mid-edit, etc. survive). Normalization to the API payload shape happens
-  // once, at submit (rowsToItems below). Mirrors TransactionItemsEditor.
+  // once, at submit (rowsToItems, utils/transactionItems). Mirrors TransactionItemsEditor.
   const [pendingRows, setPendingRows] = useState<Row[]>([])
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
 
@@ -122,17 +112,11 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     onSuccess: (result: ParsedReceipt, file: File) => {
       setPendingFile(file)
       // One-time conversion: parsed items carry extra fields (confidence, etc.)
-      // that must not leak into rows. After this, rows live as Row[] until submit.
-      setPendingRows(
-        itemsToRows(
-          result.items.map((i) => ({
-            name: i.name,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            line_total: i.line_total,
-          })),
-        ),
-      )
+      // that must not leak into rows — itemsToRows picks exactly the four row
+      // fields, and ParsedReceiptItem is structurally assignable to
+      // TransactionItemInput, so no strip-map is needed. After this, rows live
+      // as Row[] until submit.
+      setPendingRows(itemsToRows(result.items))
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
       // Merchant fills description only when the user hasn't typed one — matches
@@ -226,16 +210,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       if (prefillReceipt) {
         const { file, parsed } = prefillReceipt
         setPendingFile(file)
-        setPendingRows(
-          itemsToRows(
-            parsed.items.map((i) => ({
-              name: i.name,
-              quantity: i.quantity,
-              unit_price: i.unit_price,
-              line_total: i.line_total,
-            })),
-          ),
-        )
+        setPendingRows(itemsToRows(parsed.items))
         setAmount(parsed.total ?? '')
         if (parsed.date) setDate(parsed.date)
         setDescription(parsed.merchant ?? '')

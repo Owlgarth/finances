@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { authApi } from '../../api/client'
 import type { TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse } from '../../types'
+import { getApiErrorMessage } from '../../utils/errors'
 import RecoveryCodesDisplay from './RecoveryCodesDisplay'
 
 type SectionState = 'idle' | 'setup' | 'showing_codes' | 'disabling' | 'regenerating'
@@ -26,10 +27,7 @@ export default function TwoFactorSection() {
       setSetupData(data)
       setState('setup')
     },
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { detail?: string } } }
-      toast.error(err.response?.data?.detail || 'Failed to start 2FA setup')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to start 2FA setup')),
   })
 
   const verifySetupMutation = useMutation({
@@ -41,10 +39,7 @@ export default function TwoFactorSection() {
       setSetupData(null)
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { detail?: string } } }
-      toast.error(err.response?.data?.detail || 'Invalid verification code')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Invalid verification code')),
   })
 
   const disableMutation = useMutation({
@@ -55,10 +50,7 @@ export default function TwoFactorSection() {
       setPassword('')
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { detail?: string } } }
-      toast.error(err.response?.data?.detail || 'Failed to disable 2FA')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to disable 2FA')),
   })
 
   const regenerateMutation = useMutation({
@@ -69,10 +61,7 @@ export default function TwoFactorSection() {
       setPassword('')
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { detail?: string } } }
-      toast.error(err.response?.data?.detail || 'Failed to regenerate recovery codes')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to regenerate recovery codes')),
   })
 
   const handleSetup = () => {
@@ -121,11 +110,7 @@ export default function TwoFactorSection() {
 
   if (state === 'showing_codes') {
     return (
-      <RecoveryCodesDisplay
-        codes={recoveryCodes}
-        showAcknowledge={true}
-        onAcknowledge={handleAcknowledge}
-      />
+      <RecoveryCodesDisplay codes={recoveryCodes} onAcknowledge={handleAcknowledge} />
     )
   }
 

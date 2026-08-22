@@ -12,6 +12,7 @@ export default function EmptyState({ message, action }: Props) {
       <p className="text-text-muted mb-6 font-sans">{message}</p>
       {action && (
         <button
+          type="button"
           onClick={action.onClick}
           className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
         >
