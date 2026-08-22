@@ -9,12 +9,13 @@ description: Frontend (React/TypeScript/Vite) conventions for Denarly — design
 
 The frontend uses an "Architectural Ledger" design system via CSS custom properties. All colors reference `var(--color-*)` variables — never hardcoded hex values in component code.
 
-- **Color tokens:** `primary`, `primary-hover`, `background`, `surface`, `surface-hover`, `surface-muted`, `border`, `border-focus`, `text`, `text-muted`, `positive`, `positive-bg`, `negative`, `negative-bg`, `warning`, `warning-bg`
+- **Color tokens:** `primary`, `primary-hover`, `background`, `surface`, `surface-hover`, `surface-muted`, `border`, `border-focus`, `text`, `text-muted`, `positive`, `positive-bg`, `negative`, `negative-bg`, `warning`, `warning-bg`, `scrim` (overlay backdrop — `bg-scrim` in `Modal`/`BottomSheet` overlays)
 - **Border radii:** `rounded-sm` (4px) — containers, buttons; `rounded-none` (0px) — inputs, table cells
 - **Fonts:** `font-sans` — Geist (body/UI); `font-mono` — JetBrains Mono (code, numbers)
 - **Icons:** `lucide-react` only. No Material Symbols or other icon fonts.
 - **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables — avoid `box-shadow` utilities for elevation.
 - **Border widths:** Tailwind preflight resets `border-width: 0`, so a color utility alone (`border-primary`) renders **no** border. Always keep the bare `border` width utility and swap only the color half — `border border-primary` (open/selected) vs `border border-border` (default).
+- **Stacking (z-index) tokens:** use the semantic scale from `tailwind.config.js` — `z-dropdown` (100) < `z-sticky` (200) < `z-sidebar`/`z-bottom-nav` (300) < `z-topbar` (400) < `z-modal-backdrop` (500) < `z-modal` (510) < `z-toast` (600) < `z-tooltip` (700) — never raw `z-10`/`z-50` utilities for overlays or persistent chrome. An overlay is two layers: backdrop at `z-modal-backdrop`, dismiss wrapper + panel at `z-modal` (`Modal.tsx`); plain `z-10` is only for local stacking *inside* a surface (a sticky drag handle, the lightbox close X above a tall sibling image, sticky table columns).
 
 ## Third-Party Component Theming
 
@@ -62,15 +63,20 @@ mid-interaction loses nothing. `Modal`, `Select`, and `DatePicker` already do th
 
 Mobile rules: text-entry controls are forced to 16px on mobile globally in `index.css` (iOS
 zoom prevention — don't undo per-input); amount inputs get `inputMode="decimal"`; interactive
-elements meet 44px (shared button classes and `SegmentedControl` carry `max-sm:min-h-[44px]`;
-small icon buttons use the `.touch-hit` utility, but not on adjacent buttons whose expanded
-hit areas would overlap).
+elements meet 44px on touch — shared button/control classes get the floor via
+`controlHeightClass` in `common/formStyles.ts` (`min-h-8 pointer-coarse:min-h-[44px]`, keyed
+on the custom `pointer-coarse` variant so tablets above `sm` keep full touch targets); only
+`SegmentedControl` uses `max-sm:min-h-[44px]` (viewport-keyed); small icon buttons use the
+`.touch-hit` utility, but not on adjacent buttons whose expanded hit areas would overlap).
 
 `.touch-hit` sets `position: relative` in the same `@layer utilities` that Tailwind emits
 `.absolute`/`.fixed` into — equal specificity, later source order, so `.touch-hit` wins: an
 element carrying both classes silently computes `position: relative`. When an element needs
-true absolute positioning plus the enlarged hit area, use `!absolute` (the `BottomSheet`
-close X is the canonical example). Verify cascade fixes against the compiled CSS, not the
+true absolute positioning plus the enlarged hit area, use `!absolute` — the attachment-tile
+delete button in `transactions/TransactionAttachments.tsx` (`!absolute top-1 right-1 …
+touch-hit`, the trash button on each receipt tile) is the canonical example; without the
+`!` it computes `position: relative`, drops into flow below the image, and the tile's
+`overflow-hidden` clips it out of sight. Verify cascade fixes against the compiled CSS, not the
 source className.
 
 ## Modal Pattern
@@ -87,14 +93,16 @@ Escape, focus return, keyboard avoidance). Don't hand-roll fixed-overlay markup:
 
 **Titles go through the `title` prop — never a hand-rolled `<h2>`.** The prop is `string`,
 not `ReactNode`: dynamic titles are template literals or string ternaries
-(`title={`Set balance — ${account.name}`}`), never JSX. The header reserves a `flex-shrink-0`
-slot for the close X so the X can never overlap the title; a standalone `<h2>` in the panel
-flow paired with a floating absolute X is the legacy overlap / accidental-closure bug — do
-not reintroduce it, and never absolutely position a close button over panel content. The
-header is viewport-aware inside `Modal`: desktop renders title + X in one flex row, mobile
-renders the title only with the X in the `BottomSheet` sticky handle row — callers just pass
-`title`. Modal title typography lives solely in `Modal`'s header render; don't add per-caller
-title styling or title-to-content spacing (the header owns the bottom margin).
+(`title={`Set balance — ${account.name}`}`), never JSX. `Modal` renders one header flex row —
+title left, labeled Close button (X icon + "Close" text) right — and the Close button carries
+`flex-shrink-0` so it can never overlap the title; a standalone `<h2>` in the panel flow
+paired with a floating absolute X is the legacy overlap / accidental-closure bug — do not
+reintroduce it, and never absolutely position a close button over panel content. The same
+header row renders on both viewports: desktop at the top of the centered panel, and on mobile
+inside the sheet body just below the drag handle (`BottomSheet` itself renders no close
+button — its handle bar is a visual affordance; closing is scrim tap or Escape) — callers just
+pass `title`. Modal title typography lives solely in `Modal`'s header render; don't add
+per-caller title styling or title-to-content spacing (the header owns the bottom margin).
 
 Non-modal sheets (pickers, action menus) use `BottomSheet` / `ActionSheet` directly
 (`design/components.md` §21).
@@ -103,8 +111,14 @@ When a component manages multiple modals, use separate boolean state for each. M
 
 ## File Structure
 
-- Components: `components/Category/CategoryRow.tsx`
-- Pages: `pages/CategoryPage.tsx`
+Components live in lowercase-plural feature directories (`components/accounts/`,
+`components/transactions/`, `components/modals/transactions/`, `components/common/`,
+`components/dashboard/`, `components/layout/`, `components/profile/`; a few cross-cutting
+components like `DatePicker.tsx` sit at `components/` top level) — never a PascalCase
+feature directory like `components/Budget/`:
+
+- Components: `components/accounts/AccountFormModal.tsx`
+- Pages: `pages/BudgetDetailPage.tsx`
 - Types: `types/index.ts`
 - API: `api/client.ts`
 - Contexts: `contexts/AuthContext.tsx`
@@ -123,6 +137,11 @@ onExecute: (planned: PlannedTransaction) => void
 ```
 
 - **Accordion/disclosure components:** the collapsed header is a real `<button>` carrying `aria-expanded` + `aria-controls`; the expanded region is its **sibling** with a matching `id` + `role="region" aria-label` — never nested inside the button (interactive content inside `<button>` is invalid HTML and steals focus/clicks).
+
+- **Every non-submit `<button>` carries `type="button"`.** Inside a `<form>` the browser
+  default is `type="submit"`, so a bare Cancel/icon/close button silently submits the form
+  on click. Only actual submit buttons omit the attribute. `common/ConfirmDialog.tsx`
+  and `Modal`'s Close button show the pattern.
 
 Standard form component shape: props interface, `isLoading` state, `handleSubmit` with `try/catch` showing `toast.error(...)` and `finally { setIsLoading(false) }`.
 
@@ -198,6 +217,21 @@ When a component holds important transient state (e.g., recovery codes that cann
 ```
 
 Only apply this where state loss is problematic — other tabs can continue using conditional rendering.
+
+## API Error Message Extraction
+
+Every API-error toast or handler extracts its message with
+`getApiErrorMessage(error, 'Fallback message')` from `utils/errors.ts` — it wraps
+`axios.isAxiosError` and reads `response.data.detail`, returning the fallback when either
+is missing:
+
+```typescript
+onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to upload'))
+```
+
+Never hand-roll `(error as { response?: { data?: { detail?: string } } })` casts or
+`error: any` at call sites — the helper is the single seam, and it keeps the error
+parameter typed as `unknown`.
 
 ## Avoid Duplicate Toasts
 
@@ -324,9 +358,10 @@ export default function MyWidget({ budgetId }: Props) {
 
 **Shared domain hooks:** Widgets read workspace data through the hooks in
 `hooks/useDomain.ts` (`useAccounts`, `useBudgets`, `useEnabledCurrencies`,
-`useMultiCurrency`, `useExtractionEnabled`) rather than threading props. Periods are
-per-budget, so period selection is local state on the Budget detail page — there is
-no global period context.
+`useMultiCurrency`, `useExtractionConfig` (returns `{ enabled, reachable }` — extraction UI
+keys polling cadence on `reachable`), `useExtractionEnabled`) rather than threading props.
+Periods are per-budget, so period selection is local state on the Budget detail page — there
+is no global period context.
 
 ## State Refresh After Mutations
 

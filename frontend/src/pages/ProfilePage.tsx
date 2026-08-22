@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { authApi } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { getApiErrorMessage } from '../utils/errors'
 import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
@@ -60,11 +61,11 @@ export default function ProfilePage() {
       const result = await authApi.importData(exportData)
       setImportResult(result)
       toast.success(`Imported ${result.imported_workspaces} workspace(s) successfully!`)
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof SyntaxError) {
         toast.error('Invalid JSON file. Please select a valid export file.')
       } else {
-        toast.error(error.response?.data?.detail || 'Failed to import data. Please try again.')
+        toast.error(getApiErrorMessage(error, 'Failed to import data. Please try again.'))
       }
     } finally {
       setIsImporting(false)
@@ -81,24 +82,7 @@ export default function ProfilePage() {
       updateUser(updatedUser)
       toast.success('Profile updated successfully!')
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Failed to update profile'
-      toast.error(message)
-    }
-  })
-
-  const changePasswordMutation = useMutation({
-    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
-      authApi.changePassword(currentPassword, newPassword),
-    onSuccess: () => {
-      toast.success('Password changed successfully!')
-      const form = document.getElementById('change-password-form') as HTMLFormElement
-      if (form) form.reset()
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Failed to change password'
-      toast.error(message)
-    }
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update profile'))
   })
 
   const updatePreferencesMutation = useMutation({
@@ -108,10 +92,7 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['user-preferences'] })
       toast.success('Preferences updated successfully!')
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Failed to update preferences'
-      toast.error(message)
-    }
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update preferences'))
   })
 
   if (!user) {
@@ -187,14 +168,7 @@ export default function ProfilePage() {
             />
           )}
 
-          {activeTab === 'password' && (
-            <ChangePasswordForm
-              onSubmit={({ currentPassword, newPassword }) =>
-                changePasswordMutation.mutate({ currentPassword, newPassword })
-              }
-              isLoading={changePasswordMutation.isPending}
-            />
-          )}
+          {activeTab === 'password' && <ChangePasswordForm />}
 
           <div className={activeTab === 'security' ? '' : 'hidden'}>
             <TwoFactorSection />

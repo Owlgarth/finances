@@ -1,29 +1,39 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api/client';
-import { useAuth } from '../contexts/AuthContext';
-import type { ConsentStatus } from '../types';
 import toast from 'react-hot-toast';
+import { CircleX } from 'lucide-react';
+import { authApi } from '../api/client';
+import type { ConsentStatus } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ReConsentPage() {
   const navigate = useNavigate();
   const { checkConsentStatus } = useAuth();
   const [status, setStatus] = useState<ConsentStatus | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Loads on mount and on every retry (the error card's Try again bumps
+  // retryTick from an event handler). The loader stays declared INSIDE the
+  // effect with its setters after the await: a hoisted useCallback loader
+  // called from here gets traced by set-state-in-effect and flagged, while
+  // this effect-local shape stays quiet. On retry the error card remains
+  // visible until the fetch resolves, then status + flag flip in one batch.
   useEffect(() => {
     const loadConsentStatus = async () => {
       try {
-        const status = await authApi.getConsentStatus();
-        setStatus(status);
+        const consentStatus = await authApi.getConsentStatus();
+        setStatus(consentStatus);
+        setLoadFailed(false);
       } catch {
-        toast.error('Failed to load consent status');
+        setLoadFailed(true);
       }
     };
     loadConsentStatus();
-  }, []);
+  }, [retryTick]);
 
   const needsTerms = status ? !status.terms_current : false;
   const needsPrivacy = status ? !status.privacy_current : false;
@@ -51,6 +61,29 @@ export default function ReConsentPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4">
+        <div className="max-w-md w-full bg-surface rounded-sm border border-border p-8 text-center">
+          <div className="flex justify-center">
+            <CircleX size={16} className="text-negative" />
+          </div>
+          <h1 className="mt-3 text-base font-semibold text-text">Something went wrong</h1>
+          <p className="mt-2 text-sm text-text-muted">
+            Could not load your consent status. Please try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => setRetryTick((t) => t + 1)}
+            className="mt-6 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!status) {
     return (
@@ -82,7 +115,7 @@ export default function ReConsentPage() {
                 <Link to="/terms" target="_blank" className="text-primary hover:text-primary-hover">
                   Terms of Service
                 </Link>{' '}
-                {status && `(v${status.terms_version_required})`}
+                {`(v${status.terms_version_required})`}
               </span>
             </label>
           )}
@@ -100,7 +133,7 @@ export default function ReConsentPage() {
                 <Link to="/privacy" target="_blank" className="text-primary hover:text-primary-hover">
                   Privacy Policy
                 </Link>{' '}
-                {status && `(v${status.privacy_version_required})`}
+                {`(v${status.privacy_version_required})`}
               </span>
             </label>
           )}

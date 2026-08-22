@@ -8,11 +8,13 @@ from decimal import Decimal
 from django.db import transaction as db_transaction
 from django.db.models import F, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 from accounts.models import Account
 from accounts.services import AccountService
 from categories.models import Category
 from common.enums import TotalsLabel
+from common.idempotency import IDEMPOTENCY_TTL, create_with_idempotency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from planned_transactions.exceptions import (
     PlannedTransactionAccountArchivedError,
@@ -23,7 +25,7 @@ from planned_transactions.exceptions import (
     PlannedTransactionImportError,
     PlannedTransactionNotFoundError,
 )
-from planned_transactions.models import PlannedTransaction
+from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey
 from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
@@ -86,6 +88,67 @@ class PlannedTransactionService:
         if amount_lte is not None:
             queryset = queryset.filter(amount__lte=amount_lte)
         return queryset
+
+    @staticmethod
+    def _lookup_idempotency_key(user, workspace_id: int, key: str) -> PlannedTransactionIdempotencyKey | None:
+        """Return the user's unexpired dedup record for `key` in this workspace, or None.
+
+        Mirror of TransactionService._lookup_idempotency_key — "unexpired" = created
+        within IDEMPOTENCY_TTL; a record whose planned FK was SET_NULL'd by a delete is
+        returned as-is (create_with_idempotency decides what to do with it). Scoped to
+        workspace so a replay under workspace B cannot return workspace A's planned row.
+        """
+        cutoff = timezone.now() - IDEMPOTENCY_TTL
+        return (
+            PlannedTransactionIdempotencyKey.objects.filter(
+                key=key, user=user, workspace_id=workspace_id, created_at__gt=cutoff
+            )
+            .select_related('planned_transaction')
+            .first()
+        )
+
+    @staticmethod
+    def _do_create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
+        """Build and persist the planned transaction — no idempotency logic.
+
+        Runs inside the caller's atomic block when a key is given
+        (create_with_idempotency's SAVEPOINT); standalone otherwise. Do NOT add a
+        method-level @db_transaction.atomic — the done-branch dispatches its Celery
+        task after its own inner commit, and wrapping the whole method would enqueue
+        the message before the outer commit.
+        """
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+
+        if data.status == 'done':
+            with db_transaction.atomic():
+                planned = PlannedTransaction.objects.create(
+                    workspace_id=workspace_id,
+                    account=account,
+                    name=data.name,
+                    amount=data.amount,
+                    category_id=data.category_id,
+                    planned_date=data.planned_date,
+                    status='done',
+                    payment_date=data.planned_date,
+                    created_by=user,
+                    updated_by=user,
+                )
+            execute_planned_transaction.delay(planned.id)
+            planned.refresh_from_db()
+            return planned
+
+        return PlannedTransaction.objects.create(
+            workspace_id=workspace_id,
+            account=account,
+            name=data.name,
+            amount=data.amount,
+            category_id=data.category_id,
+            planned_date=data.planned_date,
+            status=data.status,
+            created_by=user,
+            updated_by=user,
+        )
 
     @staticmethod
     def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
@@ -196,41 +259,34 @@ class PlannedTransactionService:
         ]
 
     @staticmethod
-    def create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
-        """Create a planned transaction on an account."""
-        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
-        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+    def create(
+        user,
+        workspace_id: int,
+        data: PlannedTransactionCreate,
+        idempotency_key: str | None = None,
+    ) -> PlannedTransaction:
+        """Create a planned transaction on an account.
 
-        if data.status == 'done':
-            with db_transaction.atomic():
-                planned = PlannedTransaction.objects.create(
-                    workspace_id=workspace_id,
-                    account=account,
-                    name=data.name,
-                    amount=data.amount,
-                    category_id=data.category_id,
-                    planned_date=data.planned_date,
-                    status='done',
-                    payment_date=data.planned_date,
-                    created_by=user,
-                    updated_by=user,
-                )
-            execute_planned_transaction.delay(planned.id)
-            planned.refresh_from_db()
-            return planned
-
-        planned = PlannedTransaction.objects.create(
+        If `idempotency_key` is provided, dedup within a 24h window per user per
+        workspace: a replay with the same key returns the originally-created
+        planned transaction instead of creating a second one (Stripe-style —
+        same key, same result, regardless of payload). Mirrors
+        TransactionService.create; the dedup flow itself is shared in
+        common.idempotency.create_with_idempotency.
+        """
+        if not idempotency_key:
+            return PlannedTransactionService._do_create(user, workspace_id, data)
+        return create_with_idempotency(
+            user=user,
             workspace_id=workspace_id,
-            account=account,
-            name=data.name,
-            amount=data.amount,
-            category_id=data.category_id,
-            planned_date=data.planned_date,
-            status=data.status,
-            created_by=user,
-            updated_by=user,
+            data=data,
+            key=idempotency_key,
+            lookup=PlannedTransactionService._lookup_idempotency_key,
+            do_create=PlannedTransactionService._do_create,
+            record_model=PlannedTransactionIdempotencyKey,
+            target_model=PlannedTransaction,
+            target_field='planned_transaction',
         )
-        return planned
 
     @staticmethod
     def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:

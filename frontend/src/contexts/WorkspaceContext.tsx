@@ -21,6 +21,12 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
+// Queries that are NOT workspace-scoped: the signed-in user and the parser
+// deployment do not change on a workspace switch, so their caches stay valid.
+// `user-preferences` must specifically NOT be removed — it is observed at the
+// app root and its fallback would flash the font (UserPreferencesContext).
+const userScopedQueryKeys = new Set(['user-preferences', '2fa-status', 'extraction-config']);
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -70,30 +76,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const currentMembership = members?.find(m => m.user_id === user?.id) || null;
   const userRole = currentMembership?.role || null;
 
-  const invalidateWorkspaceQueries = (deletedWorkspaceId?: number) => {
-    if (deletedWorkspaceId) {
-      queryClient.removeQueries({ queryKey: ['workspace-members', deletedWorkspaceId] });
-    } else {
-      queryClient.invalidateQueries({ queryKey: ['workspace-members'] });
-    }
-    queryClient.invalidateQueries({ queryKey: ['workspace-current'] });
-    queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    queryClient.invalidateQueries({ queryKey: ['budget-accounts'] });
-
-    const dataKeys = [
-      'budget-periods', 'categories', 'budgets',
-      'transactions', 'planned-transactions', 'currency-exchanges',
-      'period-balances', 'reports',
-    ];
-    for (const key of dataKeys) {
-      queryClient.invalidateQueries({ queryKey: [key] });
-    }
+  const clearWorkspaceScopedQueries = () => {
+    // Every data query is workspace-scoped but keyed without the workspace id
+    // (the API always serves the *current* workspace), so a switch/create/
+    // delete makes them all stale at once. Drop the whole workspace cache
+    // instead of invalidating a hardcoded key list — that list had already
+    // drifted (six dead keys, a dozen missing ones) and re-drifts whenever a
+    // query is added. Removal refetches mounted queries immediately and
+    // remounts the rest fresh. Forgetting a future *user-scoped* key in the
+    // keep-set only costs one extra refetch (safe direction); the old list
+    // drifted towards stale data (the bug this fixes).
+    queryClient.removeQueries({
+      predicate: (query) => !userScopedQueryKeys.has(query.queryKey[0] as string),
+    });
   };
 
   const switchMutation = useMutation({
     mutationFn: (workspaceId: number) => workspacesApi.switch(workspaceId),
     onSuccess: () => {
-      invalidateWorkspaceQueries();
+      clearWorkspaceScopedQueries();
       localStorage.removeItem('denarly_selected_account');
     },
   });
@@ -101,15 +102,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const createMutation = useMutation({
     mutationFn: (name: string) => workspacesApi.create({ name }),
     onSuccess: () => {
-      invalidateWorkspaceQueries();
+      clearWorkspaceScopedQueries();
       localStorage.removeItem('denarly_selected_account');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (workspaceId: number) => workspacesApi.delete(workspaceId),
-    onSuccess: (_data, workspaceId) => {
-      invalidateWorkspaceQueries(workspaceId);
+    onSuccess: () => {
+      clearWorkspaceScopedQueries();
       localStorage.removeItem('denarly_selected_account');
     },
   });
@@ -142,7 +143,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const refetch = () => {
     refetchWorkspace();
     refetchWorkspaces();
-    refetchMembers();
+    // refetch() bypasses `enabled` — calling it without a workspace would run
+    // the queryFn and dereference `workspace!.id` on null (TypeError).
+    if (workspace?.id) {
+      refetchMembers();
+    }
   };
 
   const filteredWorkspaceError = (() => {
