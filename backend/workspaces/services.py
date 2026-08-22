@@ -2,7 +2,10 @@
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction as db_transaction
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from accounts.models import Account, AccountType
 from budgeting.models import Budget, Cadence
@@ -18,7 +21,6 @@ from workspaces.exceptions import (
     WorkspaceMemberCannotResetOwnPasswordError,
     WorkspaceMemberLimitReachedError,
     WorkspaceMemberNotFoundError,
-    WorkspaceMemberPasswordRequiredError,
     WorkspaceNotFoundError,
     WorkspaceOwnerCannotLeaveError,
     WorkspaceOwnerPasswordResetError,
@@ -282,7 +284,9 @@ class WorkspaceMemberService:
 
         Behavior:
         - If user exists: Add them to workspace (password ignored)
-        - If user doesn't exist: Create user with provided password, add to workspace
+        - If user doesn't exist: Create user, add to workspace. With a password
+          it becomes their initial password; without one the new user gets a
+          set-password link by email.
 
         Raises domain exceptions on error.
         """
@@ -324,9 +328,11 @@ class WorkspaceMemberService:
                 recipient = existing_user
                 is_new_user = False
             else:
-                if not data.password:
-                    raise WorkspaceMemberPasswordRequiredError()
-
+                # password=None → UserManager.create_user calls set_password(None),
+                # which stores an unusable password hash ("!") through the User
+                # set_password override (so password_changed_at is stamped too).
+                # The user cannot log in until they set a password via the link
+                # in the set-password invitation email.
                 new_user = User.objects.create_user(
                     email=data.email,
                     password=data.password,
@@ -350,12 +356,14 @@ class WorkspaceMemberService:
                 is_new_user = True
 
         # Emails sent AFTER the transaction commits (Pattern B, AGENTS.md "Email Patterns").
-        # The response must not reveal existing-vs-new (anti-enumeration); the two
+        # The response must not reveal existing-vs-new (anti-enumeration); the three
         # invitation emails still differentiate privately.
-        if is_new_user:
+        if not is_new_user:
+            WorkspaceMemberService._send_existing_user_email(recipient, workspace, admin_name, data.role)
+        elif data.password:
             WorkspaceMemberService._send_new_user_email(recipient, workspace, admin_name, data.role)
         else:
-            WorkspaceMemberService._send_existing_user_email(recipient, workspace, admin_name, data.role)
+            WorkspaceMemberService._send_new_user_set_password_email(recipient, workspace, admin_name, data.role)
 
         return result
 
@@ -587,6 +595,28 @@ class WorkspaceMemberService:
                 'admin_name': admin_name,
                 'role': role,
                 'email': new_user.email,
+            },
+        )
+
+    @staticmethod
+    def _send_new_user_set_password_email(new_user, workspace, admin_name, role):
+        # Same token minting as UserService.send_reset_password_email; the link
+        # is consumed by POST /api/auth/reset-password (works for users with an
+        # unusable password — no has_usable_password gate on that endpoint).
+        uidb64 = urlsafe_base64_encode(force_bytes(new_user.pk))
+        token = default_token_generator.make_token(new_user)
+        reset_url = f'{settings.FRONTEND_URL}/reset-password?uid={uidb64}&token={token}'
+        EmailService.send_email(
+            to=new_user.email,
+            subject=f'You were invited to {workspace.name} — Denarly',
+            template_name='email/workspace_invitation_set_password',
+            context={
+                'user_name': new_user.full_name or new_user.email,
+                'workspace_name': workspace.name,
+                'admin_name': admin_name,
+                'role': role,
+                'email': new_user.email,
+                'reset_url': reset_url,
             },
         )
 

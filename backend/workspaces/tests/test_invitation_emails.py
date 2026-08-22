@@ -1,12 +1,17 @@
 """Tests for workspace invitation emails."""
 
+import re
 from unittest.mock import patch
 
+from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.db import transaction
 from django.test import TestCase
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from common.tests.factories import UserFactory
+from users.models import User
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.services import WorkspaceMemberService
 
@@ -98,3 +103,52 @@ class TestExistingUserInvitationEmail(TestCase):
         self.assertIn('added', email.subject.lower())
         self.assertIn('Existing Team', email.subject)
         self.assertIn('Existing Team', email.body)
+
+
+class TestNewUserSetPasswordEmail(TestCase):
+    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
+    def test_add_new_user_without_password_sends_set_password_email(self, mock_on_commit):
+        workspace = WorkspaceFactory(name='Set Password Team')
+        admin = UserFactory(full_name='Admin User')
+        WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
+
+        class Data:
+            email = 'setpwd@example.com'
+            role = 'member'
+            password = None
+            full_name = 'Set Pwd User'
+
+        WorkspaceMemberService.add_member(admin, workspace.id, Data())
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['setpwd@example.com'])
+        self.assertIn('invited', email.subject.lower())
+        self.assertIn('Set Password Team', email.subject)
+
+        # The link carries a valid, consumable reset token (same minting as
+        # UserService.send_reset_password_email; consumed by /api/auth/reset-password)
+        match = re.search(r'/reset-password\?uid=([^&\s]+)&token=([^\s]+)', email.body)
+        self.assertIsNotNone(match)
+        new_user = User.objects.get(email='setpwd@example.com')
+        self.assertEqual(urlsafe_base64_encode(force_bytes(new_user.pk)), match.group(1))
+        self.assertTrue(default_token_generator.check_token(new_user, match.group(2)))
+
+    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
+    def test_add_new_user_with_password_still_sends_plain_invitation(self, mock_on_commit):
+        """The with-password branch keeps the classic invitation (no reset link)."""
+        workspace = WorkspaceFactory(name='Classic Invite')
+        admin = UserFactory(full_name='Admin User')
+        WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
+
+        class Data:
+            email = 'classic@example.com'
+            role = 'member'
+            password = 'securepass123'
+            full_name = 'Classic User'
+
+        WorkspaceMemberService.add_member(admin, workspace.id, Data())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Classic Invite', mail.outbox[0].subject)
+        self.assertNotIn('/reset-password', mail.outbox[0].body)
