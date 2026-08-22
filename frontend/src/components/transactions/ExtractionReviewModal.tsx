@@ -6,10 +6,10 @@ import Modal from '../common/Modal'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
+import { rowsToItems } from '../../utils/transactionItems'
 import { primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
-  open: boolean
   onClose: () => void
   transaction: Transaction
   parsed: ParsedReceipt
@@ -27,8 +27,13 @@ interface Row {
   confidence: number
 }
 
-/** Review a parsed receipt, edit low-confidence rows, then replace or append line items. */
-export default function ExtractionReviewModal({ open, onClose, transaction, parsed }: Props) {
+/**
+ * Review a parsed receipt, edit low-confidence rows, then replace or append line
+ * items. Mount-per-use: rows seed from `parsed` in the useState initializer, so
+ * the caller must render this component ONLY while a review is open (unmount on
+ * close) — that remount is what re-seeds rows for the next extraction.
+ */
+export default function ExtractionReviewModal({ onClose, transaction, parsed }: Props) {
   const queryClient = useQueryClient()
   const [rows, setRows] = useState<Row[]>(
     parsed.items.map((i) => ({
@@ -40,16 +45,6 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
     })),
   )
 
-  const toInputs = (): TransactionItemInput[] =>
-    rows
-      .filter((r) => r.name.trim())
-      .map((r) => ({
-        name: r.name.trim(),
-        quantity: r.quantity || '1',
-        unit_price: r.unit_price === '' ? null : r.unit_price,
-        line_total: r.line_total === '' ? null : r.line_total,
-      }))
-
   // The parsed merchant becomes the transaction description only when the user
   // never gave one — blank, or the receipt-first flow's 'Receipt' placeholder.
   // An intentional description is never overwritten.
@@ -60,7 +55,7 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
 
   const save = useMutation({
     mutationFn: async (mode: 'replace' | 'append') => {
-      let items = toInputs()
+      let items = rowsToItems(rows)
       if (mode === 'append') {
         const existing = await transactionsApi.listItems(transaction.id)
         const current: TransactionItemInput[] = existing.items.map((i) => ({
@@ -73,16 +68,23 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
       }
       const saved = await transactionsApi.replaceItems(transaction.id, items)
       if (merchantFillsDescription()) {
-        await transactionsApi.update(transaction.id, {
-          date: transaction.date,
-          description: parsed.merchant!,
-          type: transaction.type,
-          amount: transaction.amount,
-          account_id: transaction.account_id,
-          category_id: transaction.category_id,
-          original_amount: transaction.original_amount,
-          original_currency_code: transaction.original_currency_code,
-        })
+        // Best-effort, strictly AFTER the durable items save: if this update
+        // failed the whole mutation, a retry would re-run the append branch and
+        // duplicate the rows just saved. The description just stays unset.
+        try {
+          await transactionsApi.update(transaction.id, {
+            date: transaction.date,
+            description: parsed.merchant!,
+            type: transaction.type,
+            amount: transaction.amount,
+            account_id: transaction.account_id,
+            category_id: transaction.category_id,
+            original_amount: transaction.original_amount,
+            original_currency_code: transaction.original_currency_code,
+          })
+        } catch {
+          // Swallowed deliberately — see comment above.
+        }
       }
       return saved
     },
@@ -106,7 +108,7 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
     ) : null
 
   return (
-    <Modal open={open} onClose={onClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title="Review extracted receipt">
+    <Modal open onClose={onClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title="Review extracted receipt">
 
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div>
@@ -151,9 +153,9 @@ export default function ExtractionReviewModal({ open, onClose, transaction, pars
             {rows.map((row, index) => (
               <tr key={index} className={row.confidence < LOW_CONFIDENCE ? 'bg-warning/5' : ''}>
                 <td className="px-2 py-1"><input value={row.name} onChange={(e) => updateRow(index, { name: e.target.value })} className={cellClass} /></td>
-                <td className="px-2 py-1"><input value={row.quantity} onChange={(e) => updateRow(index, { quantity: e.target.value })} className={cellClass} /></td>
-                <td className="px-2 py-1"><input value={row.unit_price} onChange={(e) => updateRow(index, { unit_price: e.target.value })} className={cellClass} /></td>
-                <td className="px-2 py-1"><input value={row.line_total} onChange={(e) => updateRow(index, { line_total: e.target.value })} className={cellClass} /></td>
+                <td className="px-2 py-1"><input value={row.quantity} inputMode="decimal" onChange={(e) => updateRow(index, { quantity: e.target.value })} className={cellClass} /></td>
+                <td className="px-2 py-1"><input value={row.unit_price} inputMode="decimal" onChange={(e) => updateRow(index, { unit_price: e.target.value })} className={cellClass} /></td>
+                <td className="px-2 py-1"><input value={row.line_total} inputMode="decimal" onChange={(e) => updateRow(index, { line_total: e.target.value })} className={cellClass} /></td>
               </tr>
             ))}
             {rows.length === 0 && (

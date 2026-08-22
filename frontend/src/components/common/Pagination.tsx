@@ -63,9 +63,10 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
 
       <div className="flex items-center gap-1">
         <button
+          type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Previous page"
         >
           <ChevronLeft size={14} />
@@ -79,7 +80,9 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
           ) : (
             <button
               key={p}
+              type="button"
               onClick={() => onPageChange(p)}
+              aria-current={p === page ? 'page' : undefined}
               className={`w-8 h-8 flex items-center justify-center rounded-sm text-sm font-mono font-medium transition-colors ${
                 p === page
                   ? 'bg-primary text-white'
@@ -92,9 +95,10 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         )}
 
         <button
+          type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= total_pages}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="Next page"
         >
           <ChevronRight size={14} />

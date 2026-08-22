@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Moon, RotateCw, User } from 'lucide-react'
-import Switch from '../common/Switch'
+import { LogOut, RotateCw, User } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTheme } from '../../contexts/ThemeContext'
+import ThemeToggleRow from './ThemeToggleRow'
 
 interface UserMenuProps {
   collapsed?: boolean
@@ -11,7 +10,6 @@ interface UserMenuProps {
 
 export default function UserMenu({ collapsed = false }: UserMenuProps) {
   const { user, logout } = useAuth()
-  const { isDark, toggleTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -47,13 +45,7 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
               <RotateCw size={14} />
               Reload
             </button>
-            <div className="flex items-center justify-between px-4 py-2 hover:bg-surface-hover transition-colors">
-              <span className="flex items-center gap-2 text-sm text-text">
-                <Moon size={14} className="flex-shrink-0" />
-                Dark mode
-              </span>
-              <Switch checked={isDark} onChange={() => toggleTheme()} aria-label="Dark mode" />
-            </div>
+            <ThemeToggleRow />
             <div className="border-b border-border my-1" />
             <div className="px-4 py-2 text-sm text-text-muted mb-1 truncate">
               {user?.email}

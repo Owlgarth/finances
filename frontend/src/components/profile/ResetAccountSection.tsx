@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { authApi } from '../../api/client';
+import { getApiErrorMessage } from '../../utils/errors';
 
 const CURRENCY_OPTIONS = ['PLN', 'EUR', 'USD', 'GBP', 'UAH', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD', 'JPY'];
 
@@ -34,8 +35,7 @@ export default function ResetAccountSection() {
       toast.success(`Account reset — "${result.workspace_name}" is ready.`);
       navigate('/');
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } } };
-      toast.error(err.response?.data?.detail || 'Failed to reset account');
+      toast.error(getApiErrorMessage(error, 'Failed to reset account'));
     } finally {
       setIsResetting(false);
       setPassword('');

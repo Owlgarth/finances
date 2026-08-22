@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Check, Plus, Settings, Landmark, ChevronDown, Loader2 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
 import { hasActiveOverlay } from '../../hooks/useOverlay'
-import { getApiErrorMessage } from '../../utils/errors'
+import RoleBadge from '../common/RoleBadge'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
-import type { Workspace } from '../../types'
 
 interface WorkspaceSelectorProps {
   onOpenSettings: () => void
@@ -14,10 +13,10 @@ interface WorkspaceSelectorProps {
 }
 
 export default function WorkspaceSelector({ onOpenSettings, collapsed = false }: WorkspaceSelectorProps) {
-  const { workspace, workspaces, switchWorkspace, isLoading } = useWorkspace()
+  const { workspace, workspaces, isLoading } = useWorkspace()
+  const { switchingToId, switchTo } = useWorkspaceSwitch()
   const [isOpen, setIsOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
-  const [switchingToId, setSwitchingToId] = useState<number | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -45,33 +44,6 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen])
 
-  const handleSwitch = async (ws: Workspace) => {
-    if (ws.id === workspace?.id) {
-      setIsOpen(false)
-      return
-    }
-    setSwitchingToId(ws.id)
-    try {
-      await switchWorkspace(ws.id)
-      setIsOpen(false)
-    } catch (error) {
-      console.error('Failed to switch workspace:', error)
-      toast.error(getApiErrorMessage(error, 'Failed to switch workspace'))
-    } finally {
-      setSwitchingToId(null)
-    }
-  }
-
-  const getRoleBadge = (ws: Workspace) => {
-    const role = ws.user_role
-    if (!role) return null
-    return (
-      <span className="text-xs px-1.5 py-0.5 rounded-sm bg-surface-muted text-text-muted">
-        {role}
-      </span>
-    )
-  }
-
   return (
     <div className="relative" ref={dropdownRef}>
       {collapsed ? (
@@ -90,7 +62,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
           disabled={isLoading}
           className="flex items-center gap-2 w-full px-3 py-2 rounded-sm border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
         >
-          <Landmark size={14} className={`flex-shrink-0 ${workspace ? 'text-text-muted' : 'text-text-muted'}`} />
+          <Landmark size={14} className="flex-shrink-0 text-text-muted" />
           <span className="text-sm font-medium text-text truncate flex-1 text-left">
             {workspace ? workspace.name : 'No workspace'}
           </span>
@@ -115,7 +87,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
               {workspaces.map((ws) => (
                 <button
                   key={ws.id}
-                  onClick={() => handleSwitch(ws)}
+                  onClick={() => switchTo(ws, () => setIsOpen(false))}
                   disabled={switchingToId !== null}
                   className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-surface-hover transition-colors ${
                     ws.id === workspace?.id ? 'bg-surface-hover' : ''
@@ -129,7 +101,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
                     <div className="h-4 w-4" />
                   )}
                   <span className="truncate flex-1 text-left text-text">{ws.name}</span>
-                  {getRoleBadge(ws)}
+                  <RoleBadge role={ws.user_role} />
                 </button>
               ))}
 

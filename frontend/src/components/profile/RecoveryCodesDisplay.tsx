@@ -4,10 +4,9 @@ import toast from 'react-hot-toast'
 interface Props {
   codes: string[]
   onAcknowledge?: () => void
-  showAcknowledge?: boolean
 }
 
-export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowledge }: Props) {
+export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
   const [copied, setCopied] = useState(false)
 
   const handleCopyAll = async () => {
@@ -84,7 +83,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge, showAcknowl
         </button>
       </div>
 
-      {showAcknowledge && onAcknowledge && (
+      {onAcknowledge && (
         <div className="pt-2">
           <button
             type="button"

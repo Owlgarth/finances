@@ -13,14 +13,19 @@ interface FiltersToggleProps {
   /** Number of active filters — shown as a badge so a collapsed panel never hides state. */
   count: number
   onToggle: () => void
+  /** id of the FilterPanel this toggle controls — accordion wiring (skill:
+      toggle carries aria-expanded + aria-controls; region is its sibling).
+      Optional so current call sites stay valid; pages wire it in Task 10. */
+  'aria-controls'?: string
 }
 
-export function FiltersToggle({ open, count, onToggle }: FiltersToggleProps) {
+export function FiltersToggle({ open, count, onToggle, 'aria-controls': ariaControls }: FiltersToggleProps) {
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
+      aria-controls={ariaControls}
       className={`bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 ${controlHeightClass} flex-shrink-0`}
     >
       <SlidersHorizontal size={13} />
@@ -38,11 +43,19 @@ interface FilterPanelProps {
   children: ReactNode
   /** "Clear filters" handler; the link renders only when a filter is active. */
   onClear?: (() => void) | null
+  /** id shared with FiltersToggle's aria-controls — identifies this region
+      to the toggle (accordion rule: id + role="region" + aria-label). */
+  id?: string
 }
 
-export function FilterPanel({ children, onClear }: FilterPanelProps) {
+export function FilterPanel({ children, onClear, id }: FilterPanelProps) {
   return (
-    <div className="border border-border rounded-sm bg-surface p-3 mb-4">
+    <div
+      id={id}
+      role="region"
+      aria-label="Filters"
+      className="border border-border rounded-sm bg-surface p-3 mb-4"
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{children}</div>
       {onClear && (
         <button

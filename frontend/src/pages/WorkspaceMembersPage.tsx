@@ -1,19 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { workspaceMembersApi, authApi } from '../api/client'
-import { useAuth } from '../contexts/AuthContext'
-import { useWorkspace } from '../contexts/WorkspaceContext'
-import { usePermissions } from '../hooks/usePermissions'
 import toast from 'react-hot-toast'
-import Skeleton from '../components/common/Skeleton'
-import EmptyState from '../components/common/EmptyState'
-import ActionSheet from '../components/common/ActionSheet'
-import ConfirmDialog from '../components/common/ConfirmDialog'
-import Modal from '../components/common/Modal'
-import Select from '../components/common/Select'
-import { useBreakpoint } from '../hooks/useBreakpoint'
-import { tappableProps } from '../utils/tappable'
-import type { WorkspaceMember, AddMemberRequest } from '../types'
 import {
   KeyRound,
   UserPlus,
@@ -24,6 +11,21 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
+import { workspaceMembersApi, authApi } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
+import { usePermissions } from '../hooks/usePermissions'
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import Skeleton from '../components/common/Skeleton'
+import EmptyState from '../components/common/EmptyState'
+import ActionSheet from '../components/common/ActionSheet'
+import ConfirmDialog from '../components/common/ConfirmDialog'
+import Modal from '../components/common/Modal'
+import Select from '../components/common/Select'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { getApiErrorMessage } from '../utils/errors'
+import { tappableProps } from '../utils/tappable'
+import type { WorkspaceMember, AddMemberRequest } from '../types'
 
 export default function WorkspaceMembersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -46,11 +48,7 @@ export default function WorkspaceMembersPage() {
     enabled: !!workspaceId,
   })
 
-  const { canManageMembers, canResetPasswordFor, isOwner } = usePermissions()
-
-  // Same per-member permission math as MemberRow, shared with the mobile card path.
-  const memberCanEdit = (m: WorkspaceMember) =>
-    canManageMembers && m.role !== 'owner' && m.user_id !== user?.id && (isOwner || m.role !== 'admin')
+  const { canManageMembers, canResetPasswordFor, canEditMember } = usePermissions()
 
   const addMutation = useMutation({
     mutationFn: (data: AddMemberRequest) => workspaceMembersApi.add(workspaceId!, data),
@@ -59,9 +57,7 @@ export default function WorkspaceMembersPage() {
       toast.success('Member added to workspace')
       setIsAddModalOpen(false)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to add member')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to add member')),
   })
 
   const updateRoleMutation = useMutation({
@@ -72,9 +68,7 @@ export default function WorkspaceMembersPage() {
       toast.success('Role updated')
       setEditingMember(null)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update role')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update role')),
   })
 
   const removeMutation = useMutation({
@@ -84,8 +78,9 @@ export default function WorkspaceMembersPage() {
       toast.success('Member removed')
       setRemovingMember(null)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to remove member')
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to remove member'))
+      setRemovingMember(null)
     },
   })
 
@@ -96,9 +91,7 @@ export default function WorkspaceMembersPage() {
       toast.success(`Password reset successfully for ${data.email}`)
       setResetPasswordMember(null)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to reset password')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to reset password')),
   })
 
   const changeMyPasswordMutation = useMutation({
@@ -108,9 +101,7 @@ export default function WorkspaceMembersPage() {
       toast.success('Your password has been changed successfully')
       setIsChangeMyPasswordModalOpen(false)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to change password')
-    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to change password')),
   })
 
   if (workspaceLoading || membersLoading) {
@@ -171,7 +162,7 @@ export default function WorkspaceMembersPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setIsChangeMyPasswordModalOpen(true)}
-            className="flex items-center gap-2 bg-surface border border-border text-text px-3 py-1.5 max-sm:min-h-[44px] rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+            className={`flex items-center gap-2 ${secondaryButtonClass}`}
             title="Change My Password"
           >
             <KeyRound size={14} />
@@ -180,7 +171,7 @@ export default function WorkspaceMembersPage() {
           {canManageMembers && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 bg-primary text-white px-3 py-1.5 max-sm:min-h-[44px] rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
+              className={`flex items-center gap-2 ${primaryButtonClass}`}
             >
               <UserPlus size={14} />
               <span className="hidden sm:inline">Add Member</span>
@@ -197,7 +188,7 @@ export default function WorkspaceMembersPage() {
         /* Mobile: card list, tap → action sheet — the 4-column table can't fit 375px. */
         <div className="bg-surface rounded-sm border border-border divide-y divide-border">
           {members?.map((member) => {
-            const tappable = memberCanEdit(member) || canResetPasswordFor(member)
+            const tappable = canEditMember(member) || canResetPasswordFor(member)
             return (
               <MemberCard
                 key={member.id}
@@ -236,9 +227,7 @@ export default function WorkspaceMembersPage() {
                   key={member.id}
                   member={member}
                   isCurrentUser={member.user_id === user?.id}
-                  canManage={canManageMembers && member.role !== 'owner' && member.user_id !== user?.id}
                   canResetPassword={canResetPasswordFor(member)}
-                  isOwner={isOwner}
                   onEditRole={() => setEditingMember(member)}
                   onRemove={() => setRemovingMember(member)}
                   onResetPassword={() => setResetPasswordMember(member)}
@@ -257,13 +246,13 @@ export default function WorkspaceMembersPage() {
         actions={
           actionMember
             ? [
-                ...(memberCanEdit(actionMember)
+                ...(canEditMember(actionMember)
                   ? [{ label: 'Edit role', icon: Pencil, onSelect: () => setEditingMember(actionMember) }]
                   : []),
                 ...(canResetPasswordFor(actionMember)
                   ? [{ label: 'Reset password', icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
                   : []),
-                ...(memberCanEdit(actionMember)
+                ...(canEditMember(actionMember)
                   ? [{ label: 'Remove from workspace', icon: Trash2, destructive: true, onSelect: () => setRemovingMember(actionMember) }]
                   : []),
               ]
@@ -295,6 +284,7 @@ export default function WorkspaceMembersPage() {
         isOpen={!!removingMember}
         title="Remove Member"
         message={removingMember ? `Are you sure you want to remove "${removingMember.email}" from this workspace? They will lose access to all workspace data.` : ''}
+        isPending={removeMutation.isPending}
         onConfirm={() => removingMember && removeMutation.mutate(removingMember.user_id)}
         onCancel={() => setRemovingMember(null)}
       />
@@ -375,7 +365,7 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
       }`}
     >
       <div className="flex-shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
-        <span className="text-text-muted font-medium">{member.email[0].toUpperCase()}</span>
+        <span className="text-text-muted font-medium">{member.email?.[0]?.toUpperCase() ?? '?'}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-text flex items-center gap-2">
@@ -411,16 +401,15 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
 interface MemberRowProps {
   member: WorkspaceMember
   isCurrentUser: boolean
-  canManage: boolean
   canResetPassword: boolean
-  isOwner: boolean
   onEditRole: () => void
   onRemove: () => void
   onResetPassword: () => void
 }
 
-function MemberRow({ member, isCurrentUser, canManage, canResetPassword, isOwner, onEditRole, onRemove, onResetPassword }: MemberRowProps) {
-  const canEditThisMember = canManage && (isOwner || member.role !== 'admin')
+function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemove, onResetPassword }: MemberRowProps) {
+  const { canManageMembers, canEditMember } = usePermissions()
+  const canEditThisMember = canEditMember(member)
   const showActions = canEditThisMember || canResetPassword
 
   return (
@@ -429,7 +418,7 @@ function MemberRow({ member, isCurrentUser, canManage, canResetPassword, isOwner
         <div className="flex items-center">
           <div className="flex-shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
             <span className="text-text-muted font-medium">
-              {member.email[0].toUpperCase()}
+              {member.email?.[0]?.toUpperCase() ?? '?'}
             </span>
           </div>
           <div className="ml-4">
@@ -458,7 +447,7 @@ function MemberRow({ member, isCurrentUser, canManage, canResetPassword, isOwner
           {member.is_active ? 'Active' : 'Inactive'}
         </span>
       </td>
-      {(canManage || showActions) && (
+      {canManageMembers && (
         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
           {showActions && (
             <div className="flex justify-end gap-2">
@@ -513,7 +502,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
     e.preventDefault()
     onSubmit({
       email,
-      password,
+      password: password || undefined,
       role,
       full_name: fullName || undefined,
     })
@@ -523,7 +512,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
     <Modal open={true} onClose={onClose} size="md" className="p-6" title="Add Member">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Email Address *
             </label>
             <input
@@ -531,44 +520,44 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="user@example.com"
             />
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-              Password *
+            <label className={labelClass}>
+              Password
             </label>
             <input
               type="password"
-              required
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
-              placeholder="Minimum 8 characters"
+              className={inputClass}
+              placeholder="Minimum 8 characters (optional)"
+              autoComplete="new-password"
             />
             <p className="text-xs text-text-muted mt-1">
-              User can change this password after first login
+              Only used if no account exists for this email yet.
             </p>
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Full Name
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="John Doe (optional)"
             />
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Role *
             </label>
             <Select
@@ -583,22 +572,18 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
             />
           </div>
 
-          <p className="text-xs text-text-muted">
-            If a user with this email already exists, they will be added to the workspace (password ignored).
-          </p>
-
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+              className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Adding...' : 'Add Member'}
@@ -631,7 +616,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Role
             </label>
             <Select
@@ -650,14 +635,14 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+              className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting || role === member.role}
             >
               {isSubmitting ? 'Updating...' : 'Update Role'}
@@ -705,7 +690,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               New Password *
             </label>
             <input
@@ -714,13 +699,14 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="Enter new password"
+              autoComplete="new-password"
             />
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Confirm Password *
             </label>
             <input
@@ -729,8 +715,9 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="Confirm new password"
+              autoComplete="new-password"
             />
           </div>
 
@@ -748,14 +735,14 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+              className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Resetting...' : 'Reset Password'}
@@ -813,7 +800,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Current Password *
             </label>
             <input
@@ -821,14 +808,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="Enter current password"
               autoComplete="current-password"
             />
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               New Password *
             </label>
             <input
@@ -837,7 +824,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="Enter new password"
               autoComplete="new-password"
             />
@@ -847,7 +834,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
           </div>
 
           <div>
-            <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            <label className={labelClass}>
               Confirm New Password *
             </label>
             <input
@@ -856,7 +843,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-surface border border-border rounded-none focus:outline-none focus:ring-2 focus:ring-border-focus font-mono text-sm text-text"
+              className={inputClass}
               placeholder="Confirm new password"
               autoComplete="new-password"
             />
@@ -876,14 +863,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
+              className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Changing...' : 'Change Password'}

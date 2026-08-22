@@ -20,13 +20,13 @@ from transactions.factories import TransactionFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
 from transfers.models import Transfer
+from users.models import User
 from workspaces.exceptions import (
     WorkspaceMemberAlreadyExistsError,
     WorkspaceMemberCannotChangeOwnRoleError,
     WorkspaceMemberCannotRemoveSelfError,
     WorkspaceMemberCannotResetOwnPasswordError,
     WorkspaceMemberLimitReachedError,
-    WorkspaceMemberPasswordRequiredError,
     WorkspaceNotFoundError,
     WorkspaceOwnerCannotLeaveError,
     WorkspaceOwnerPasswordResetError,
@@ -359,20 +359,29 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceMemberLimitReachedError):
             WorkspaceMemberService.add_member(admin, workspace.id, Data())
 
-    def test_add_member_password_required_for_new_user(self):
-        """Test that new user without password raises WorkspaceMemberPasswordRequiredError."""
+    def test_add_member_new_user_without_password(self):
+        """New user without password: created with unusable password (set via
+        create_user(None) through the set_password override) and unified result."""
         workspace = WorkspaceFactory()
         admin = UserFactory()
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
 
         class Data:
-            email = 'newuser@example.com'
+            email = 'nopassword@example.com'
             role = 'member'
             password = None
             full_name = None
 
-        with self.assertRaises(WorkspaceMemberPasswordRequiredError):
-            WorkspaceMemberService.add_member(admin, workspace.id, Data())
+        result = WorkspaceMemberService.add_member(admin, workspace.id, Data())
+
+        self.assertNotIn('is_new_user', result)
+        self.assertEqual(set(result), {'message', 'user_id', 'member_id'})
+        new_user = User.objects.get(email='nopassword@example.com')
+        self.assertFalse(new_user.has_usable_password())
+        self.assertFalse(new_user.check_password('anything123'))
+        # set_password(None) went through the override → stamp present (harmless,
+        # but pins the choke-point behavior)
+        self.assertIsNotNone(new_user.password_changed_at)
 
     def test_add_existing_user_with_no_workspace_sets_current(self):
         """Adding an existing user with current_workspace=None sets it to the new workspace."""

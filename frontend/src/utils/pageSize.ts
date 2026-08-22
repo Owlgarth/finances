@@ -1,6 +1,7 @@
 // Rows-per-page is a local (per-browser) preference, like utils/zoomLock —
 // one shared value for every paginated table.
 
+/** Rows-per-page choices sent as `page_size` on list requests. Synced with backend core/schemas/pagination.py ALLOWED_PAGE_SIZES. */
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200]
 
 const STORAGE_KEY = 'denarly_page_size'
