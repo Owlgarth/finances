@@ -1,6 +1,6 @@
 ---
 name: frontend-react
-description: Frontend (React/TypeScript/Vite) conventions for Denarly — design system tokens, modals, component patterns, TanStack Query widgets, API client, auth token storage/refresh, naming and import order. Use when writing or modifying any code in frontend/.
+description: Frontend (React/TypeScript/Vite) conventions for Denarly — design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams, API client, auth token storage/refresh, naming and import order. Use when writing or modifying any code in frontend/.
 ---
 
 # Frontend Conventions (TypeScript/React)
@@ -15,6 +15,7 @@ The frontend uses an "Architectural Ledger" design system via CSS custom propert
 - **Icons:** `lucide-react` only. No Material Symbols or other icon fonts.
 - **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables — avoid `box-shadow` utilities for elevation.
 - **Border widths:** Tailwind preflight resets `border-width: 0`, so a color utility alone (`border-primary`) renders **no** border. Always keep the bare `border` width utility and swap only the color half — `border border-primary` (open/selected) vs `border border-border` (default).
+- **Shared control classes:** button/control variants live in `common/formStyles.ts` and follow the four-part shape: base colors + padding + `controlHeightClass` + `focus-visible:outline-*` + `disabled:opacity-50 disabled:cursor-not-allowed`. Solid semantic fills have no `-hover` token — hover is an opacity step (`hover:bg-negative/90`), which inverts acceptably in both themes.
 - **Stacking (z-index) tokens:** use the semantic scale from `tailwind.config.js` — `z-dropdown` (100) < `z-sticky` (200) < `z-sidebar`/`z-bottom-nav` (300) < `z-topbar` (400) < `z-modal-backdrop` (500) < `z-modal` (510) < `z-toast` (600) < `z-tooltip` (700) — never raw `z-10`/`z-50` utilities for overlays or persistent chrome. An overlay is two layers: backdrop at `z-modal-backdrop`, dismiss wrapper + panel at `z-modal` (`Modal.tsx`); plain `z-10` is only for local stacking *inside* a surface (a sticky drag handle, the lightbox close X above a tall sibling image, sticky table columns).
 
 ## Third-Party Component Theming
@@ -109,6 +110,26 @@ Non-modal sheets (pickers, action menus) use `BottomSheet` / `ActionSheet` direc
 
 When a component manages multiple modals, use separate boolean state for each. Modals can chain by closing one and opening another (`onEdit={() => { setShowDetail(false); setShowEdit(true) }}`). `ActionSheet` actions close the sheet before running, so they chain safely.
 
+**Modal state lifecycle — two sanctioned shapes:**
+
+- **Permanently mounted (rendered unconditionally, no `key`):** re-seed **all** form state from props in an open-effect — `if (!open) return` first, deps `[open, entity]` (`AccountFormModal`, `TransferModal`):
+
+  ```tsx
+  useEffect(() => {
+    if (!open) return
+    setName(account?.name ?? '')
+    // …every field, every open
+  }, [open, account])
+  ```
+
+  `useState(account?.x)` initializers are dead weight here — they run exactly once, before the entity prop exists, so Edit opens blank and silently submits defaults, and the stale values leak into a later New session. When a full reset plus a fresh-per-open default is all you need, prefer ONE `handleClose` wrapper on `onClose` (`BudgetsPage`'s `CreateBudgetModal`): `Modal` funnels every dismissal path (Cancel/Close/scrim/Escape) through `onClose`, and an event handler stays lint-quiet where an open-effect spends `set-state-in-effect` budget (see §State Changes in Event Handlers).
+
+- **Mount-per-use:** a modal that seeds state from props in `useState` initializers drops the `open` prop entirely — the caller's conditional render (`{row && <Modal …/>}`) IS the open/close mechanism. Document the contract in the docblock (`ExtractionReviewModal`).
+
+**Escape inside a Modal:** a popup that lives inside a Modal (e.g. `DatePicker`'s desktop panel) consumes Escape at its focusable element — `preventDefault()` + `stopPropagation()` + close — gated on the popup being open, so a closed popup still lets Escape bubble to the surrounding Modal.
+
+**Migrating a hand-rolled fixed overlay to `Modal`:** pass `title` (string prop) + `className="p-6"`, and delete the manual `useOverlay` plus the hand-rolled header/`aria-labelledby`/close-X machinery — `Modal` wires stack-aware Escape/scroll-lock/focus on desktop and delegates to `BottomSheet` on mobile, preserving the behavior by construction.
+
 ## File Structure
 
 Components live in lowercase-plural feature directories (`components/accounts/`,
@@ -136,16 +157,44 @@ onExecute: (id: number) => void
 onExecute: (planned: PlannedTransaction) => void
 ```
 
-- **Accordion/disclosure components:** the collapsed header is a real `<button>` carrying `aria-expanded` + `aria-controls`; the expanded region is its **sibling** with a matching `id` + `role="region" aria-label` — never nested inside the button (interactive content inside `<button>` is invalid HTML and steals focus/clicks).
+- **Accordion/disclosure components:** the collapsed header is a real `<button>` carrying `aria-expanded` + `aria-controls`; the expanded region is its **sibling** with a matching `id` + `role="region" aria-label` — never nested inside the button (interactive content inside `<button>` is invalid HTML and steals focus/clicks). On list pages, wire the pair from ONE `useId()` value (`FiltersToggle aria-controls` ↔ `FilterPanel id` via `common/FilterBar.tsx`).
 
 - **Every non-submit `<button>` carries `type="button"`.** Inside a `<form>` the browser
   default is `type="submit"`, so a bare Cancel/icon/close button silently submits the form
   on click. Only actual submit buttons omit the attribute. `common/ConfirmDialog.tsx`
   and `Modal`'s Close button show the pattern.
 
+- **Consume hook predicates where they're needed** — call `usePermissions()` inside the row/component that needs the decision; never re-derive permission math locally or thread it down as boolean props (`canManage`, `isOwner`). Derived copies drift from the hook's truth; dead props are removed from the interface in the same commit.
+
+- **A form component that submits its own API call owns its mutation internally** — no `onSubmit`/`isLoading` props threading a parent's `useMutation` down, and never a parent reaching into the child's DOM (`getElementById` + `form.reset()`) — that coupling breaks silently when ids change and couples lifecycles across the boundary. Reset/clear fields in the mutation's `onSuccess`, never at fire-and-forget submit time (a server rejection would otherwise wipe the typed values and force a full retype).
+
+- **ConfirmDialog is wired with `isPending={mutation.isPending}`** (both buttons disable via the shared classes). Dialog close semantics: form modals stay open on error so input can be corrected; only remove/delete mutations close their dialog in BOTH `onSuccess` and `onError`.
+
+- **In a `mutationFn`, the durable call comes first; non-durable follow-ups** (post-save description update, post-create upload) go after it, wrapped in a swallowing `catch {}` with a reason comment — a mutation retry must never re-run already-durable side effects (the append branch would duplicate saved rows).
+
+- **Key-handling scope:** Enter-key interception for a nested non-form action goes on the individual inputs (`onKeyDown` + `preventDefault`), never on a wrapper div — wrapper-level hijacks Enter on focused buttons inside it. Keyboard activation on non-button elements (e.g. a selectable `<tr>`) uses `tabIndex={0}` + `onKeyDown` guarded by `e.target === e.currentTarget` so nested inputs/buttons keep their native Enter/Space.
+
+- **Optional form fields submit `x: value || undefined`** so axios omits the key entirely when blank (backends reject `""`, not absence). To make a text input "required only when non-empty", drop `required` but KEEP `minLength` — native constraint validation ignores `minLength` on an empty, non-required input; zero conditional props needed.
+
+- **Conditional ARIA attributes** (`aria-current`, `aria-sort`, `aria-controls`) use `… : undefined` for the inactive state — React then omits the attribute entirely, which is the correct ARIA shape. Prefixed ARIA props destructure as aliases: `'aria-controls': ariaControls`.
+
+- **`key={index}` on a reorderable list is a bug** — focus and selection jump when a `move` swaps values between stationary DOM nodes. Mint `crypto.randomUUID()` at every row-creation site (`emptyRow`, seeding maps) and render `key={row.id}`.
+
+- **Invisible characters in source must stay visible escape sequences** — write `'\u00A0'`, never a raw NBSP byte (0xC2 0xA0) or a plain space: file writes can silently mangle the byte, reintroducing the collapsing-trigger bug (`MultiSelect`'s empty-state label) while every grep for `u00A0` still passes. Verify with `grep -P '\xc2\xa0'` when touching nbsp literals.
+
 Standard form component shape: props interface, `isLoading` state, `handleSubmit` with `try/catch` showing `toast.error(...)` and `finally { setIsLoading(false) }`.
 
 **Inline checkbox labels — raw `inline-flex`, not `labelClass`:** An inline boolean toggle inside a form (e.g. "Set as default for {currency}", "Paid in another currency?") uses a raw `<label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">` wrapping its `<input type="checkbox">` — never the shared `labelClass` from `formStyles.ts`, which carries the block + margin styling meant for field labels *above* inputs. This is the established pattern wherever a checkbox sits inline with its label text.
+
+## Deduplication Seams
+
+Choose the extraction mechanism by WHAT the duplication is:
+
+- **More than half the duplicated surface is JSX → a shared self-contained component**, not a hook (hooks can't dedup JSX). It reads ambient state — filter values from `useSearchParams()`, reference data from the `useDomain` hooks — instead of taking props, so call sites collapse to one element. `common/ListFilterFields.tsx` (Transactions/Planned shared filter group) is the exemplar; page-specific fields stay in the page.
+- **Identical state machine with one behavioral delta → a hook with the delta injected as a callback.** `hooks/useListboxPanel.ts` + `common/listboxParts.tsx` (Select/MultiSelect): the keyboard/open/highlight machinery lives once; `onActivate` carries pick-and-closes vs toggles-and-stays. Extracted hooks keep host-surface state OUT — closing the host dropdown/sheet is the caller's `onDone` callback, run on success only, never on failure.
+- **Logic- or field-identical exports → alias, keep BOTH names** (`const canResetPasswordFor = canEditMember;`): an alias makes drift structurally impossible while every existing call site stays valid. Grep all consumers first to confirm nothing depends on the copies being distinct; deleting a name is a call-site migration, not a cleanup side effect.
+- When extracting, copy behavior-critical blocks **byte-equivalent** and verify mechanically (`diff` against git HEAD) — never "improve" during a move; a future fix should diff against exactly what shipped.
+- Shared row/shape normalization between sibling components lives in `utils/` behind a deliberately **structural param type** (`RowLike` in `utils/transactionItems.ts` — four string fields) so each component's local row type satisfies it without component-to-component type imports. URL-param readers (`intParam`/`intListParam`/`amountParam`/`createUpdateParams`) live in `utils/params.ts` — list pages import them instead of re-declaring. Object-literal API modules (`authApi`, `legalApi`) are `this`-less arrow functions — safe as bare `queryFn:` references and as stable module-level fetcher props for shared page components.
 
 ## Variant Props on Shared Components
 
@@ -276,6 +325,8 @@ The Axios response interceptor in `api/client.ts` uses a queue-based pattern:
 
 `authApi.refresh` sends `{ headers: { Authorization: '' } }` to avoid sending the expired access token on the refresh request itself.
 
+Credential endpoints (`login`, `register`, `verify2FA`, `refresh`) mark their requests `_skipAuthRefresh: true` — a wrong-credential 401 must reject immediately instead of entering the refresh path (a stale refresh token in storage would attempt a silent rotation and redirect to `/login`, swallowing the login form's own error toast). New credential-style endpoints (token exchange, magic-link consume) set the flag too.
+
 ## Token-Based Verification Pages
 
 ```tsx
@@ -306,6 +357,7 @@ export default function VerifyPage() {
 
 - Always handle the missing-token case (`if (!token)` → error state)
 - Public verification pages go outside `ProtectedRoute`; authenticated pages inside it
+- Public token pages must guard any authenticated follow-up call (e.g. `getCurrentUser()` refresh) with `if (getAuthToken())` — otherwise the 401 interceptor redirects anonymous visitors to `/login`, hiding the page's own success/error state
 - Success states offer a navigation link; error states offer retry/resend
 - Use a named `async` function inside `useEffect` with `try/catch/await` — no `.then()` chains
 - Never show the same success state in both `try` and `catch` — add a distinct error state with a recovery path
@@ -356,6 +408,8 @@ export default function MyWidget({ budgetId }: Props) {
 
 **Key conventions:** early-return `null` when `budgetId` is null (no skeleton); `enabled: !!budgetId` on `useQuery`; three rendering states (loading skeleton / empty message / data); always a `<Link>` to the detail page; skeletons use `bg-surface-muted rounded-sm animate-pulse`; container uses `border border-border rounded-sm bg-surface p-4`.
 
+**Enabled-chained queries gate loading on data presence, not `isLoading`.** When a query's `enabled` chains on another query's data (currentPeriod → history → summary), a disabled query reports `isLoading: false` — a bare `isLoading` gate flashes the empty-state message during the waiting window. Gate skeletons on `!!id && !data`, with a comment at the gate explaining the disabled window. Same class of race for defaults: when a fast list query and an authoritative query compete to supply a default value, gate the list fallback on the authoritative query's `isSuccess`. For switch-flash: paginated list queries get `placeholderData: keepPreviousData` (with placeholder data, `isLoading` is true only on first load, so the existing skeleton branch needs no change); non-paginated queries that should keep showing current data across id changes use `placeholderData: (prev) => prev`.
+
 **Shared domain hooks:** Widgets read workspace data through the hooks in
 `hooks/useDomain.ts` (`useAccounts`, `useBudgets`, `useEnabledCurrencies`,
 `useMultiCurrency`, `useExtractionConfig` (returns `{ enabled, reachable }` — extraction UI
@@ -372,6 +426,12 @@ After operations that change server-side state (email change, profile update), f
 const updatedUser = await authApi.getCurrentUser()
 updateUser(updatedUser)
 ```
+
+**Workspace cache invalidation is removal-by-predicate with a keep-set — never an invalidation list.** Workspace-scoped query keys don't encode the workspace id (the API serves the *current* workspace), so on workspace switch/create/delete `WorkspaceContext` runs `queryClient.removeQueries({ predicate })` keeping only the user/deployment-scoped keys in its `userScopedQueryKeys` set. Drift asymmetry is the reasoning: a drop-list that forgets a new query ships stale cross-workspace data (that IS the bug); a keep-set that forgets a new user-scoped key costs one harmless extra refetch (the safe direction). New workspace-scoped queries need zero action; new USER-scoped query keys must be added to `userScopedQueryKeys`.
+
+- Use `removeQueries` (query cache only), not `clear()`, inside `useMutation.onSuccess` — `clear()` also empties the mutation cache and can evict the in-flight mutation's own entry. `clear()` is reserved for auth identity changes (login/logout), where a full wipe is wanted.
+- `refetch()` from `useQuery` bypasses the query's `enabled` flag — guard manual refetches on the same condition `enabled` uses whenever the queryFn dereferences possibly-null data, or it throws on null.
+- react-query v5 has no query-level `onError` — query failure UX renders inline (`isError || !data` early-return), not via a toast. A manual `useEffect` + `useState` fetch should become a `useQuery` (caching, retries, dedup at zero extra code).
 
 ## Reading State in Mutation Callbacks and Effects
 
@@ -399,9 +459,17 @@ useEffect(() => {
 }, [accounts, ...])
 ```
 
+**Guards inside closures created before an early return are NOT dead.** After `if (!x) { return }`, JSX guards on the narrowed `const` are dead (TS narrows; delete them). But the same guards inside handlers/closures declared BEFORE the return are live — the closure's `x` keeps its declared nullable type because the closure is created where `x` was still nullable, and `tsc` fails if you remove them. Check closure creation order, not just runtime reachability, before deleting "redundant" guards.
+
 ## State Changes in Event Handlers, Not Effects
 
 The project lints `react-hooks/set-state-in-effect`; the pre-existing warnings are codebase-wide backlog — never add a new one. For mount-time behavior (e.g. focusing a just-added row), set transient state inside the **event handler** that caused the mount, act via a plain HTML attribute (`autoFocus={condition}` — fires when the conditionally rendered content mounts), and self-clear in an `onFocus` handler — the self-clear keeps the behavior correct across unmount/remount of conditionally rendered content. Event handlers are not effects: the lint stays quiet. Don't reach for `useEffect` + `setState` or ref callbacks for this class of behavior.
+
+When a `setState` in an effect is genuinely unavoidable, the rule reports **once per effect** (at the first violating call) — work within that granularity:
+
+- **Per-entity resets extend an already-flagged effect.** Resetting state on id change (stale period leaking across budget→budget navigation in an unkeyed route) goes INTO the existing `[entityId]` effect as more setters — zero new warnings. A new same-shaped effect would add one.
+- **Adopting server truth is derivation, not effect-setState.** `const activePendingId = pendingId ?? serverPendingId` — a derived const is lint-quiet where copying the server value into state would add a warning, and the derived value drives the poll that eventually clears it.
+- **Loaders stay effect-local.** A hoisted `useCallback` loader called from a mount `useEffect` is traced by the compiler lint across the `await` and produces a NEW warning even when every setter sits after the await — declare the named `async` loader inside the effect. Retry comes from an event-handler-bumped tick in the deps (`const [retryTick, setRetryTick] = useState(0)`; the Try-again button does `setRetryTick(t => t + 1)` — always lint-quiet).
 
 ## API Client Pattern
 
@@ -429,9 +497,26 @@ export type TransactionOrdering =
 
 **Per-request headers via an optional `opts` bag:** `create(data, opts?: { idempotencyKey?: string })` injects the header with a conditional spread on the axios config — `...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {})` — so call sites without the option are untouched. Never push per-request headers onto `api.defaults.headers`; that leaks across requests.
 
+**Internal per-request flags go through axios module augmentation, never `as any`:**
+
+```typescript
+// api/client.ts
+declare module 'axios' {
+  interface AxiosRequestConfig { _skipAuthRefresh?: boolean }
+}
+```
+
+Augmenting `AxiosRequestConfig` also types `error.config` (`InternalAxiosRequestConfig` extends it), so producer and consumer sites stay fully typed with zero casts.
+
 **Idempotency keys on create mutations:** `crypto.randomUUID()` per modal session — stable within one open, fresh across opens. A modal that resets in an open-effect generates the key in the create branch of that effect (`null` in the edit branch); a permanently-mounted modal reset via `close()` → `reset()` uses a lazy `useState(() => crypto.randomUUID())` initializer and regenerates inside `reset()`.
 
-**Backend-mirrored constants:** `PAGE_SIZE_OPTIONS` in `utils/pageSize.ts` duplicates the backend's `ALLOWED_PAGE_SIZES` — the user's choice is persisted to localStorage and sent as `page_size` on every list request, so the two lists must change together (the 422 trap is documented under Pagination Param Caps in the `django-backend` skill).
+**Backend-mirrored constants:** `PAGE_SIZE_OPTIONS` in `utils/pageSize.ts` duplicates the backend's `ALLOWED_PAGE_SIZES` — the user's choice is persisted to localStorage and sent as `page_size` on every list request, so the two lists must change together (the 422 trap is documented under Pagination Param Caps in the `django-backend` skill). Put an inline sync comment at the constant itself in the one-line `/** Synced with backend <file> <CONSTANT>. */` format (see `TotalsLabel`) — the coupling knowledge belongs where the next editor actually looks, not only in this skill.
+
+## Money Arithmetic (Exact Strings)
+
+Backend Decimal amounts cross the API as strings; any arithmetic whose result is **persisted or sent back** must be exact string/BigInt math via the helpers in `utils/format.ts` (`subtractAmounts` — BigInt cents, 3rd-digit round-half-up, never returns `'-0.00'`). Never `parseFloat` a backend Decimal that will be persisted: a 17-digit Decimal through `parseFloat` loses the last cent, and the wrong delta gets recorded as a real adjustment transaction. Floats are for validation/display only.
+
+Number-input values are arbitrary strings — `'1e5'`, `''`, `'.5'`, `'5.'` — so validate with a regex (`/^-?(\d+(\.\d*)?|\.\d+)$/`, which also rejects e-notation) before the BigInt math. BigInt itself accepts leading zeros; only the regex gate keeps scientific notation out.
 
 ## Contexts
 
@@ -440,6 +525,12 @@ const { user, isAuthenticated } = useAuth()
 const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace, userRole } = useWorkspace()
 // No global account/period context — use hooks/useDomain.ts and page-local period state.
 ```
+
+**Stable context values:** wrap every context function in `useCallback` and the value object in `useMemo`. When a callback reads mutable state, prefer a functional `setState` update (`setUser(prev => prev ? {...prev, ...patch} : prev)`, empty deps) over listing the state in deps — stable identity beats freshness for context functions. Every render of an unmemoized provider recreates its function values, so any consumer effect keyed on them replays — the verification-pages double-POST class of bug.
+
+**Latest-ref for context callbacks consumed in effects:** `const fnRef = useRef(fn)`; `useEffect(() => { fnRef.current = fn }, [fn])` — effect deps then stay `[realDeps]` while the effect always calls the current callback. Sync the ref inside an effect; render-time `ref.current = fn` writes are an ERROR under the `react-hooks/refs` rule — do not "simplify" back to them.
+
+**Singletons shared between `main.tsx` and contexts live in their own module** (`api/queryClient.ts`), never exported from `main.tsx` — importing app code from the entry file creates a circular import the moment that module imports anything from the app.
 
 ## Naming Conventions
 
