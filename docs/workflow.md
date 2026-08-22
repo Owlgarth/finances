@@ -10,13 +10,18 @@ workspace name, a **currency**, and consents to the current Terms/Privacy versio
 An optional "Start with sample data" checkbox seeds demo records. The system creates
 the user, a workspace (with that currency enabled), a default **Main** account, a
 **General** budget with starter categories and the current period, and the owner
-membership — then returns access + refresh JWTs.
+membership — then returns access + refresh JWTs. An already-registered email fails
+with a generic error that never reveals the account's existence; the existing address
+owner gets an email notice instead (anti-enumeration).
 
 **Login** (`POST /api/auth/login`): validates credentials; if 2FA is enabled, returns
 a temporary token that must be exchanged via `POST /api/auth/verify-2fa`. Access
-tokens are short-lived and refreshed through `POST /api/auth/refresh`. Every
-workspace-scoped request carries `Authorization: Bearer <token>` and is validated by
-`WorkspaceJWTAuth` (identity → membership → role → workspace-scoped query).
+tokens are short-lived and refreshed through `POST /api/auth/refresh`; refresh tokens
+issued before the user's last password change are rejected. Login and 2FA
+verification are rate-limited per IP and per account/user (`429` when exceeded), and
+each TOTP code is single-use. Every workspace-scoped request carries
+`Authorization: Bearer <token>` and is validated by `WorkspaceJWTAuth`
+(identity → membership → role → workspace-scoped query).
 
 ## Accounts & Balances
 

@@ -396,6 +396,8 @@ export type TransactionOrdering =
 
 **Idempotency keys on create mutations:** `crypto.randomUUID()` per modal session — stable within one open, fresh across opens. A modal that resets in an open-effect generates the key in the create branch of that effect (`null` in the edit branch); a permanently-mounted modal reset via `close()` → `reset()` uses a lazy `useState(() => crypto.randomUUID())` initializer and regenerates inside `reset()`.
 
+**Backend-mirrored constants:** `PAGE_SIZE_OPTIONS` in `utils/pageSize.ts` duplicates the backend's `ALLOWED_PAGE_SIZES` — the user's choice is persisted to localStorage and sent as `page_size` on every list request, so the two lists must change together (the 422 trap is documented under Pagination Param Caps in the `django-backend` skill).
+
 ## Contexts
 
 ```typescript
