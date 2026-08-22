@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { legalApi } from '../api/client';
 import toast from 'react-hot-toast';
+import { legalApi } from '../api/client';
+import { authInputClass } from '../components/common/formStyles';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Register() {
   const { register, isAuthenticated, isLoading } = useAuth();
@@ -66,14 +67,14 @@ export default function Register() {
         accepted_terms_version: termsVersion,
         accepted_privacy_version: privacyVersion,
       });
-    } catch (error) {
-      console.error(error)
+    } catch {
+      // Error already displayed by AuthContext
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const inputClassName = "w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors placeholder:text-text-muted";
+  const inputClassName = `${authInputClass} placeholder:text-text-muted`;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
