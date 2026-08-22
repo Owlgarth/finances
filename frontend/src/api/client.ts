@@ -11,6 +11,15 @@ import type {
   TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
 
+// Allows internal per-request flags to be set on the axios config object
+// without unsafe casts at the producer/consumer sites.
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Response interceptor must not attempt a token refresh for this request. */
+    _skipAuthRefresh?: boolean;
+  }
+}
+
 // ============= Ordering types (shared with page call sites) =============
 export type TransactionOrdering =
   | '-date' | 'date' | '-description' | 'description'
@@ -87,7 +96,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && originalRequest) {
       // Prevent deadlock: if the refresh request itself returns 401,
       // reject immediately so the outer catch handles cleanup.
-      if ((originalRequest as any)._skipAuthRefresh) {
+      if (originalRequest._skipAuthRefresh) {
         return Promise.reject(error);
       }
 
@@ -355,10 +364,10 @@ export const plannedTransactionsApi = {
 // ============= Auth API =============
 export const authApi = {
   register: (data: RegisterRequest): Promise<Token> =>
-    api.post<Token>('/auth/register', data, { headers: { Authorization: '' } }).then(res => res.data),
+    api.post<Token>('/auth/register', data, { headers: { Authorization: '' }, _skipAuthRefresh: true }).then(res => res.data),
 
   login: (data: LoginRequest): Promise<Token> =>
-    api.post<Token>('/auth/login', data, { headers: { Authorization: '' } }).then(res => res.data),
+    api.post<Token>('/auth/login', data, { headers: { Authorization: '' }, _skipAuthRefresh: true }).then(res => res.data),
 
   getCurrentUser: (): Promise<User> =>
     api.get<User>('/users/me').then(res => res.data),
@@ -407,10 +416,10 @@ export const authApi = {
     api.post('/users/me/consents', { consent_type: consentType, version }).then(res => res.data),
 
   verify2FA: (tempToken: string, code: string): Promise<Token> =>
-    api.post<Token>('/auth/verify-2fa', { temp_token: tempToken, code }, { headers: { Authorization: '' } }).then(res => res.data),
+    api.post<Token>('/auth/verify-2fa', { temp_token: tempToken, code }, { headers: { Authorization: '' }, _skipAuthRefresh: true }).then(res => res.data),
 
   refresh: (refreshToken: string): Promise<Token> =>
-    api.post<Token>('/auth/refresh', { refresh_token: refreshToken }, { headers: { Authorization: '' }, _skipAuthRefresh: true } as any).then(res => res.data),
+    api.post<Token>('/auth/refresh', { refresh_token: refreshToken }, { headers: { Authorization: '' }, _skipAuthRefresh: true }).then(res => res.data),
 
   get2FAStatus: (): Promise<TwoFAStatus> =>
     api.get<TwoFAStatus>('/users/me/2fa').then(res => res.data),
@@ -464,7 +473,7 @@ export const workspacesApi = {
     api.put<Workspace>(`/workspaces/${workspaceId}/default-budget`, { budget_id: budgetId }).then(res => res.data),
 
   create: (data: { name: string; currency_code?: string }): Promise<Workspace> =>
-    api.post<Workspace>('/workspaces/', data).then(res => res.data),
+    api.post<Workspace>('/workspaces', data).then(res => res.data),
 
   delete: (id: number): Promise<void> =>
     api.delete(`/workspaces/${id}`).then(() => undefined),

@@ -142,7 +142,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const refetch = () => {
     refetchWorkspace();
     refetchWorkspaces();
-    refetchMembers();
+    // refetch() bypasses `enabled` — calling it without a workspace would run
+    // the queryFn and dereference `workspace!.id` on null (TypeError).
+    if (workspace?.id) {
+      refetchMembers();
+    }
   };
 
   const filteredWorkspaceError = (() => {
