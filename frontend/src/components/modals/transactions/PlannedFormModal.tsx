@@ -63,7 +63,11 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setAmount(source.amount)
       setAccountId(source.account_id)
       setCategoryId(source.category_id)
-      setBudgetId(source.category?.budget_id ?? null)
+      // Uncategorized source → fall back to the create-mode default budget so the
+      // Category select is immediately usable (it is disabled while budgetId is
+      // null, and the Budget select only renders for multi-budget workspaces).
+      // Mirrors the create branch's setBudgetId(defaultBudgetId).
+      setBudgetId(source.category?.budget_id ?? defaultBudgetId)
       setPlannedDate(planned ? source.planned_date : new Date().toISOString().slice(0, 10))
     } else {
       setName('')
