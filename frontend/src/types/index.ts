@@ -356,7 +356,7 @@ export interface WorkspaceMember {
 
 export interface AddMemberRequest {
   email: string;
-  password: string;
+  password?: string;
   role: 'admin' | 'member' | 'viewer';
   full_name?: string;
 }
