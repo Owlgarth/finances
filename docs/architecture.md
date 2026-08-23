@@ -44,7 +44,7 @@ Workspace (top-level container)
 │
 ├── Account                  (cash / bank / other; holds money in one currency)
 │     ├── Transaction        (income / expense / adjustment; optional category)
-│     │     ├── TransactionItem        (ordered receipt line items — informational)
+│     │     ├── TransactionItem        (ordered receipt line items - informational)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
 │     └── PlannedTransaction (scheduled future transaction on an account)
@@ -61,8 +61,8 @@ Workspace (top-level container)
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
 | **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. |
-| **Default account** | An account may be flagged the default for its currency — at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
-| **Periods** | Derived from a budget's cadence (monthly / every-N-weeks / custom) and materialized on demand — not a table of pre-created rows. |
+| **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
+| **Periods** | Derived from a budget's cadence (monthly / every-N-weeks / custom) and materialized on demand - not a table of pre-created rows. |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. |
@@ -111,12 +111,12 @@ parsers that delegate to services. Apps with async work have a `tasks.py`.
 
 ### Async Task Flows
 
-**Planned transaction execution** — the service sets `status='done'` + `payment_date`,
+**Planned transaction execution** - the service sets `status='done'` + `payment_date`,
 then dispatches `execute_planned_transaction.delay(id)`. The worker re-fetches with
 `select_for_update()`, guards idempotency via `transaction_id`, and creates the
 `Transaction` on the planned account.
 
-**Receipt extraction** — `POST .../attachments/{id}/extract` marks the attachment
+**Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored
 file, calls the parser's `/parse`, and records `done` + the contract result or a
 retryable `failed` + error. It never raises, so manual work is never blocked. The UI
@@ -126,12 +126,12 @@ polls `GET .../extraction`.
 
 1. **JWT token** validates user identity.
 2. **Workspace membership** verifies access to the active workspace.
-3. **Role permission** — `ADMIN_ROLES` (owner/admin) gate accounts, budgets, and
+3. **Role permission** - `ADMIN_ROLES` (owner/admin) gate accounts, budgets, and
    currencies; `WRITE_ROLES` (owner/admin/member) gate day-to-day records.
-4. **Resource ownership** — every query is workspace-scoped.
+4. **Resource ownership** - every query is workspace-scoped.
 
 On top of these layers, the public auth endpoints (register, login, verify-2fa) are
-rate-limited and return `429` when exceeded — per IP **and** per account (login email,
+rate-limited and return `429` when exceeded - per IP **and** per account (login email,
 registration email, 2FA user), so rotating source IPs cannot reset the counters. The
 client IP is taken from `X-Forwarded-For` only when `TRUSTED_PROXY_COUNT` names the
 exact number of trusted proxies in front of the API (default `0` → `REMOTE_ADDR`,
@@ -168,7 +168,7 @@ frontend/src/
 ```
 
 Periods are per-budget now, so there is no global "selected account" or "selected
-period" context — the old `BudgetAccountContext` / `BudgetPeriodContext` were removed.
+period" context - the old `BudgetAccountContext` / `BudgetPeriodContext` were removed.
 Period selection lives inside the Budget detail page.
 
 ### Data Fetching
@@ -214,7 +214,7 @@ Each model declares a `WORKSPACE_FILTER` giving the ORM path to the workspace.
 #### List Endpoints Security Behavior
 
 List endpoints return empty arrays rather than 404 when a filter references a resource
-in another workspace, so IDs in other workspaces are not leaked. This is intentional —
+in another workspace, so IDs in other workspaces are not leaked. This is intentional -
 do not change to 404.
 
 ## Environment Configuration
@@ -244,11 +244,11 @@ do not change to 404.
 
 `docker-compose.yml` runs: `db` (Postgres), `redis`, `storage` (S3-compatible),
 `api`, `ui`, `worker`, `beat`, plus `parser` (optional, `--profile parser`) and
-`node` (dev toolchain, `--profile tools`). Every value — credentials, service
-hostnames, published ports — comes from `.env` (see `example.env`).
+`node` (dev toolchain, `--profile tools`). Every value - credentials, service
+hostnames, published ports - comes from `.env` (see `example.env`).
 
 For local development `./dev.sh up` runs only the backing services and
-`./dev.sh backend` / `./dev.sh frontend` run the app — in their containers by
+`./dev.sh backend` / `./dev.sh frontend` run the app - in their containers by
 default, or on the host with `DEV_TARGET=host`. `./dev.sh up --full` runs the
 whole stack in Docker, which is also how it deploys.
 

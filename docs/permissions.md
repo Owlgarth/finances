@@ -32,9 +32,9 @@ Layer 4: Resource Ownership Validation
 ## Complete Permissions Matrix
 
 Two role groups drive enforcement:
-- **`ADMIN_ROLES`** (owner, admin) — structural resources: accounts, budgets,
+- **`ADMIN_ROLES`** (owner, admin) - structural resources: accounts, budgets,
   periods, and enabled currencies.
-- **`WRITE_ROLES`** (owner, admin, member) — day-to-day records: transactions,
+- **`WRITE_ROLES`** (owner, admin, member) - day-to-day records: transactions,
   transfers, categories, planned transactions, category budget amounts, receipts.
 
 ### Account Management (`ADMIN_ROLES`)

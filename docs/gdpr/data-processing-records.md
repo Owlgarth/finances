@@ -8,7 +8,7 @@
 |-------|-------|
 | Data Controller | [Company Name], [Address] |
 | Contact | [your-email@example.com] |
-| DPO | [If appointed — name and contact; otherwise N/A] |
+| DPO | [If appointed - name and contact; otherwise N/A] |
 
 ---
 
@@ -20,7 +20,7 @@
 | Legal Basis | Consent (Art. 6(1)(a)) |
 | Categories of Data Subjects | Registered users |
 | Categories of Personal Data | Email address, full name (optional), hashed password, account status, timestamps |
-| Recipients | None — no third-party sharing |
+| Recipients | None - no third-party sharing |
 | Transfers to Third Countries | None (or specify hosting provider location) |
 | Retention Period | Until account deletion |
 | Technical Measures | JWT authentication, HTTPS/TLS, password hashing, rate limiting |
@@ -32,7 +32,7 @@
 | Field | Value |
 |-------|-------|
 | Purpose | Personal finance tracking and budgeting |
-| Legal Basis | Consent (Art. 6(1)(a)) — performance of service agreed to at registration |
+| Legal Basis | Consent (Art. 6(1)(a)) - performance of service agreed to at registration |
 | Categories of Data Subjects | Registered users |
 | Categories of Personal Data | Accounts, transactions (incl. line items), transfers, budgets, categories, planned transactions, receipt attachments (images/PDFs), workspace memberships |
 | Recipients | Workspace members. If the operator configures optional receipt extraction, uploaded receipt images are sent to the configured extraction service (self-hosted or a third-party model provider) solely to extract text. |
@@ -46,7 +46,7 @@
 
 | Field | Value |
 |-------|-------|
-| Purpose | GDPR compliance — recording and auditing user consent |
+| Purpose | GDPR compliance - recording and auditing user consent |
 | Legal Basis | Legal obligation (Art. 6(1)(c)) |
 | Categories of Data Subjects | Registered users |
 | Categories of Personal Data | Consent type, document version, grant/withdrawal timestamps, IP address at time of consent |
@@ -61,7 +61,7 @@
 
 | Field | Value |
 |-------|-------|
-| Purpose | Security — preventing abuse and brute-force attacks |
+| Purpose | Security - preventing abuse and brute-force attacks |
 | Legal Basis | Legitimate interest (Art. 6(1)(f)) |
 | Categories of Data Subjects | All visitors and users |
 | Categories of Personal Data | IP address |

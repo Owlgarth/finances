@@ -141,7 +141,7 @@ Process:
      link, consumed at /reset-password) and cannot log in until they set one
 ```
 
-The API response is identical whether the user already existed or was just created —
+The API response is identical whether the user already existed or was just created -
 it does not reveal which (anti-enumeration).
 
 ### Changing a Member's Role
@@ -230,7 +230,7 @@ notice instead (anti-enumeration).
 4. Token valid for 60 minutes (configurable)
 ```
 
-Login attempts are rate-limited per IP and per account (email) — exceeding either
+Login attempts are rate-limited per IP and per account (email) - exceeding either
 limit returns `429 Too Many Requests`. Unknown-email logins run the same password
 hash check as wrong-password ones, so response timing cannot reveal whether an
 email is registered.
