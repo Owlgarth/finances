@@ -44,7 +44,12 @@ export default function BudgetDetailPage() {
   const { data: currencies = [] } = useEnabledCurrencies()
 
   const { data: budget } = useQuery({ queryKey: ['budget', budgetId], queryFn: () => budgetsApi.get(budgetId) })
-  const { data: periods = [] } = useQuery({ queryKey: ['periods', budgetId], queryFn: () => budgetsApi.listPeriods(budgetId) })
+  const { data: periods = [] } = useQuery({
+    queryKey: ['periods', budgetId],
+    queryFn: () => budgetsApi.listPeriods(budgetId),
+    // Cross-tab convergence — same rationale as the useDomain list hooks.
+    refetchOnWindowFocus: 'always',
+  })
 
   const [periodId, setPeriodId] = useState<number | null>(null)
 
