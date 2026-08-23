@@ -23,7 +23,7 @@ frontend/
 ├── src/
 │   ├── api/
 │   │   ├── client.ts         # Axios instance + typed API modules
-│   │   └── queryClient.ts    # App-wide QueryClient (own module — no import cycles)
+│   │   └── queryClient.ts    # App-wide QueryClient (own module - no import cycles)
 │   ├── components/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
@@ -76,7 +76,7 @@ Seven in-app destinations (sidebar) plus auth/legal routes and a 404 catch-all.
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
 `Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, `ListFilterFields` (the
 shared Transactions/Planned filter panel), and `formStyles.ts` (the input/label/button
-class constants — the redesign's form primitives). `DatePicker` (react-day-picker) and
+class constants - the redesign's form primitives). `DatePicker` (react-day-picker) and
 `LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`.
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
@@ -84,7 +84,7 @@ balance adjustment), `TransferModal` (last-used pair, cross-currency implied rat
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
-the account matching the parsed currency — preferring the per-currency default),
+the account matching the parsed currency - preferring the per-currency default),
 `TransactionItemsEditor`, `TransactionAttachments` (upload + extraction),
 `ExtractionReviewModal`, `PlannedFormModal`.
 
@@ -328,7 +328,7 @@ const queryClient = new QueryClient({
 The client lives in `src/api/queryClient.ts` (its own module, so `main.tsx` and the
 contexts can both import it without a cycle). On workspace switch/create/delete the
 whole cache is removed except a keep-set of user-scoped keys (`user-preferences`,
-`2fa-status`, `extraction-config`) — mounted queries refetch immediately, so nothing
+`2fa-status`, `extraction-config`) - mounted queries refetch immediately, so nothing
 from the previous workspace survives the switch.
 
 ### Query Keys
@@ -364,7 +364,7 @@ const mutation = useMutation({
 
 The app uses an **Architectural Ledger** design system with CSS custom properties in `src/index.css` mapped to Tailwind utility classes in `tailwind.config.js`.
 
-Visual separation uses flat surfaces with borders (`border border-border`) — no gradients or box shadows.
+Visual separation uses flat surfaces with borders (`border border-border`) - no gradients or box shadows.
 
 ### Tailwind Theme
 
@@ -390,7 +390,7 @@ Visual separation uses flat surfaces with borders (`border border-border`) — n
 | Error / expense | `--color-negative` | `text-negative`, `bg-negative` |
 | Warnings | `--color-warning` | `text-warning`, `bg-warning` |
 
-> **Dark mode:** a `.dark` block in `src/index.css` overrides all 16 tokens above — see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
+> **Dark mode:** a `.dark` block in `src/index.css` overrides all 16 tokens above - see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
 
 ### Icons
 
