@@ -48,11 +48,19 @@ transfer. Transfers replace the old currency-exchange records.
 
 - A **Budget** has a cadence (monthly / every-N-weeks / custom). **Periods** are
   derived from the cadence and materialized on demand - the current period is created
-  the first time it's needed.
+  the first time it's needed. **Custom** budgets opt out of derivation: their periods
+  are explicit, non-overlapping date ranges the user creates and manages.
+- Creating a custom-cadence budget asks for the first period's start/end dates
+  (defaulting to today through today + 29 days) and prefills a period name from the
+  range ("04 Sep - 03 Oct 2026") that keeps re-deriving until edited; saving chains
+  the budget create with the first period create.
 - The **Budget detail** page shows a category table of **planned vs actual vs
   remaining** for the selected period, with a period switcher. Categories are created
   inline; planned amounts are edited inline (current period). Past periods render as
-  read-only snapshots.
+  read-only snapshots. Custom-cadence budgets get add/edit/delete period controls
+  beside the switcher (admin+; deleting a period removes its planned amounts but never
+  transactions), and a custom budget with no periods yet shows an "Add period" empty
+  state instead of the table.
 - Categories and planned amounts are member+; creating budgets/periods is admin+.
 
 ## Transactions
