@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowDown, ArrowLeft, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Settings2, Trash2, X } from 'lucide-react'
@@ -9,11 +9,13 @@ import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
+import { intParam } from '../utils/params'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Per-budget currency-switcher order — a display preference, stored client-side
@@ -39,12 +41,13 @@ function nextDayIso(isoDate: string): string {
 export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { canWrite, canManageAccounts } = usePermissions()
   const { data: currencies = [] } = useEnabledCurrencies()
 
   const { data: budget } = useQuery({ queryKey: ['budget', budgetId], queryFn: () => budgetsApi.get(budgetId) })
-  const { data: periods = [] } = useQuery({
+  const { data: periods = [], isSuccess: periodsLoaded } = useQuery({
     queryKey: ['periods', budgetId],
     queryFn: () => budgetsApi.listPeriods(budgetId),
     // Cross-tab convergence — same rationale as the useDomain list hooks.
@@ -53,11 +56,29 @@ export default function BudgetDetailPage() {
 
   const [periodId, setPeriodId] = useState<number | null>(null)
 
-  // Default to the current period (materialize it lazily on load).
+  // ?period= deep-link seed, as a latest-ref. The sync effect MUST stay
+  // declared BEFORE the [budgetId] reset effect below: React runs effects in
+  // declaration order, so on mount and on budget-to-budget navigation the
+  // ref already holds the NEW URL's value when the reset effect reads it
+  // (declared after, it would read the previous URL's value: deep links
+  // wiped on mount, the old budget's period id seeded on budget switches).
+  // The useRef initializer covers the very first read; render-time ref
+  // WRITES are illegal under react-hooks/refs - this effect-synced shape is
+  // the sanctioned one.
+  const periodParamRef = useRef<number | null>(intParam(searchParams, 'period'))
+  useEffect(() => {
+    periodParamRef.current = intParam(searchParams, 'period')
+  }, [searchParams])
+
+  // Default to the current period (materialize it lazily on load). The
+  // enabled gate must wait for the budget to LOAD, not just be non-custom:
+  // on the first render(s) budget is undefined, `undefined !== 'custom'` is
+  // true, and custom-cadence budgets fire a doomed GET periods/current ->
+  // 400 -> console error noise on every visit to an empty custom budget.
   const { data: currentPeriod, isSuccess: currentPeriodLoaded } = useQuery({
     queryKey: ['current-period', budgetId],
     queryFn: () => budgetsApi.currentPeriod(budgetId),
-    enabled: budget?.cadence !== 'custom',
+    enabled: budget != null && budget.cadence !== 'custom',
     retry: false,
   })
   // The periods list is a plain GET, newest first — it beats the lazily
@@ -65,16 +86,7 @@ export default function BudgetDetailPage() {
   // period) win that race and open planners on a future period. Custom
   // cadence has no derived current period, so there the list is all there is.
   const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded
-  useEffect(() => {
-    if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
-    else if (periodId === null && currentPeriodKnown && periods.length > 0) setPeriodId(periods[0].id)
-  }, [currentPeriod, periods, periodId, currentPeriodKnown])
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['budget-summary', budgetId, periodId],
-    queryFn: () => reportsApi.budgetSummary(budgetId, periodId!),
-    enabled: !!periodId,
-  })
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
     queryFn: () => budgetsApi.listCategories(budgetId),
@@ -86,6 +98,63 @@ export default function BudgetDetailPage() {
     if (currentPeriod) map.set(currentPeriod.id, currentPeriod)
     return Array.from(map.values()).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [periods, currentPeriod])
+
+  // Summary gate (declared after the allPeriods memo - TDZ): on budget-to-
+  // budget navigation the [budgetId] reset effect runs one commit later than
+  // this render, so periodId still holds the PREVIOUS budget's period for a
+  // single render. Without the gate that render fires budgetSummary(B,
+  // A_period) -> a transient red 404 in the network tab (the reset then
+  // clears the id and the UI recovers, but the stray request is noise).
+  // Gating on membership in allPeriods also keeps a garbage ?period= seed
+  // from hitting the server at all - the reconcile effect clears it locally.
+  // A derived const, not state: zero set-state-in-effect cost.
+  const summaryPeriodId = allPeriods.some((p) => p.id === periodId) ? periodId : undefined
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['budget-summary', budgetId, summaryPeriodId],
+    queryFn: () => reportsApi.budgetSummary(budgetId, summaryPeriodId!),
+    enabled: summaryPeriodId != null,
+  })
+
+  // Default the selection and reconcile URL seeds. Declared AFTER the
+  // allPeriods memo (referencing allPeriods from the old position, above its
+  // declaration, is a TDZ ReferenceError in the deps array) and BEFORE the
+  // [budgetId] reset effect (so the reset effect's setPeriodId lands last on
+  // mount - a seeded param beats this effect's auto-pick when react-query
+  // cache makes currentPeriod available in the first commit).
+  useEffect(() => {
+    if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
+    else if (periodId === null && currentPeriodKnown && periods.length > 0) setPeriodId(periods[0].id)
+    // Reconcile: a seeded ?period= that no authoritative list contains (typo,
+    // stale bookmark, another budget's id) clears so the auto-pick branches
+    // above take over. periodsLoaded + currentPeriodKnown gate the "the list
+    // is authoritative" premise: for non-custom budgets a VALID seed may
+    // equal the lazily-materialized current period that is not in the periods
+    // list yet - clearing before currentPeriodKnown would transiently wipe a
+    // valid seed while the two queries race. Never writes the URL
+    // (user-initiated writes only).
+    else if (periodId !== null && periodsLoaded && currentPeriodKnown && !allPeriods.some((p) => p.id === periodId)) setPeriodId(null)
+  }, [currentPeriod, periods, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
+
+  // URL write side - event handlers and mutation callbacks ONLY (picker
+  // onChange, goToPeriod, deletePeriod). Functional setSearchParams preserves
+  // any other params (same shape as createUpdateParams in utils/params.ts);
+  // replace keeps selections out of history. The auto-pick and reconcile
+  // branches above NEVER write.
+  const writePeriodParam = (id: number | null) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (id === null) next.delete('period')
+        else next.set('period', String(id))
+        return next
+      },
+      { replace: true },
+    )
+  }
+  const selectPeriod = (id: number) => {
+    setPeriodId(id)
+    writePeriodParam(id)
+  }
 
   // Zero enabled currencies (shouldn't happen) — '—' can't pose as a real code;
   // it's never rendered (single-currency layouts show no switcher).
@@ -156,8 +225,14 @@ export default function BudgetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
       queryClient.invalidateQueries({ queryKey: ['budget-history', budgetId] })
       toast.success('Period deleted')
-      // Category selection is period-independent — leave selectedCategory alone.
-      if (deletedId === periodId) setPeriodId(null)
+      // Category selection is period-independent - leave selectedCategory alone.
+      if (deletedId === periodId) {
+        // Param clear is safe here: mutation onSuccess is a callback, not an
+        // effect - no lint cost, and the awaited refetch above guarantees the
+        // auto-pick re-selects from the fresh list (not the just-deleted id).
+        setPeriodId(null)
+        writePeriodParam(null)
+      }
       setDeletingPeriod(null)
     },
     onError: (error) => {
@@ -189,6 +264,7 @@ export default function BudgetDetailPage() {
     const target = ascPeriods[selectedIdx + dir]
     if (target) {
       setPeriodId(target.id)
+      writePeriodParam(target.id)
       return
     }
     if (dir === 1 && canPlanAhead && selectedPeriod) {
@@ -197,6 +273,7 @@ export default function BudgetDetailPage() {
         const next = await budgetsApi.currentPeriod(budgetId, nextDayIso(selectedPeriod.end_date))
         await queryClient.invalidateQueries({ queryKey: ['periods', budgetId] })
         setPeriodId(next.id)
+        writePeriodParam(next.id)
       } catch (error) {
         toast.error(getApiErrorMessage(error, 'Failed to open the next period'))
       } finally {
@@ -216,7 +293,11 @@ export default function BudgetDetailPage() {
   // stays put — the rule flags once per effect, not per call.
   useEffect(() => {
     setCurrencyOrder(loadCurrencyOrder(budgetId))
-    setPeriodId(null)
+    // Seed from ?period= (deep link / reload) instead of resetting to null.
+    // The ref-sync effect declared above has already run for this commit, so
+    // the ref holds THIS URL's value (null when no param). Sanctioned
+    // extension of an already-flagged effect - no new warning.
+    setPeriodId(periodParamRef.current)
     setSelectedCategory(null)
   }, [budgetId])
 
@@ -333,13 +414,7 @@ export default function BudgetDetailPage() {
               <ChevronLeft size={14} />
             </button>
             <div className="w-56 max-sm:w-auto max-sm:flex-1">
-              <Select
-                value={periodId}
-                onChange={setPeriodId}
-                options={allPeriods.map((p) => ({ value: p.id, label: p.name }))}
-                placeholder="Select period"
-                aria-label="Period"
-              />
+              <PeriodPicker periods={allPeriods} value={periodId} onChange={selectPeriod} />
             </div>
             <button
               type="button"
