@@ -51,7 +51,7 @@ Workspace (top-level container)
 │
 └── Budget                   (a plan with a cadence)
       ├── Category           (persistent, budget-scoped)
-      └── Period             (derived from cadence; materialized lazily)
+      └── Period             (derived from cadence, or an explicit custom range)
             └── CategoryBudget (planned amount per category, per period)
 ```
 
@@ -62,7 +62,7 @@ Workspace (top-level container)
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
 | **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. |
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
-| **Periods** | Derived from a budget's cadence (monthly / every-N-weeks / custom) and materialized on demand - not a table of pre-created rows. |
+| **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. |
@@ -152,6 +152,7 @@ frontend/src/
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
 │   ├── transactions/       # Items editor, attachments, extraction review
+│   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit)
 │   └── modals/transactions/# Transaction / Planned / NewFromReceipt modals
 ├── contexts/
 │   ├── AuthContext.tsx         # Auth state + consent status
@@ -193,7 +194,7 @@ const { data } = useQuery({
 | `workspaces_workspace` / `_workspacemember` | Workspaces + membership/roles |
 | `currencies_currency` / `workspaces_workspacecurrency` | Global catalog + per-workspace enablement |
 | `accounts_account` | Money-holding accounts |
-| `budgeting_budget` / `_period` / `_categorybudget` | Budgets, derived periods, planned amounts |
+| `budgeting_budget` / `_period` / `_categorybudget` | Budgets, periods (cadence-derived or custom), planned amounts |
 | `categories_category` | Budget-scoped categories |
 | `transactions_transaction` | Income / expense / adjustment records |
 | `transaction_items` | Ordered receipt line items |
