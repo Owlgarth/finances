@@ -18,9 +18,9 @@ This directory contains documentation for Denarly's GDPR compliance implementati
 - **Model:** `UserConsent` in `backend/users/models.py`
 - **Service:** `UserService.record_consent`, `withdraw_consent`, `get_active_consents` in `backend/users/services.py`
 - **Endpoints:**
-  - `GET /api/users/me/consents` — list active consents
-  - `POST /api/users/me/consents` — grant consent
-  - `DELETE /api/users/me/consents/{type}` — withdraw consent
+  - `GET /api/users/me/consents` - list active consents
+  - `POST /api/users/me/consents` - grant consent
+  - `DELETE /api/users/me/consents/{type}` - withdraw consent
 - **Registration:** Consent is recorded during user registration (`backend/core/api.py`)
 - **Frontend:** Checkbox on `/register` page requiring acceptance before account creation
 
@@ -28,8 +28,8 @@ This directory contains documentation for Denarly's GDPR compliance implementati
 
 - **Service:** `UserService.delete_account` in `backend/users/services.py`
 - **Endpoints:**
-  - `GET /api/users/me/deletion-check` — pre-deletion impact summary
-  - `DELETE /api/users/me` — permanently delete account (requires password)
+  - `GET /api/users/me/deletion-check` - pre-deletion impact summary
+  - `DELETE /api/users/me` - permanently delete account (requires password)
 - **Frontend:** Delete Account section in Profile Settings → Account tab
 - **Cascade behavior:**
   - Solo-owned workspaces: fully deleted with all budget data
@@ -40,7 +40,7 @@ This directory contains documentation for Denarly's GDPR compliance implementati
 ### Right to Access & Portability (Articles 15, 20)
 
 - **Service:** `UserService.export_all_data` in `backend/users/services.py`
-- **Endpoint:** `GET /api/users/me/export` — downloads JSON file with all personal data
+- **Endpoint:** `GET /api/users/me/export` - downloads JSON file with all personal data
 - **Rate limit:** 3 exports per hour
 - **Frontend:** Export button in Profile Settings → Account tab
 - **Includes:** Profile, preferences, consents, all workspace/budget/transaction data
@@ -51,7 +51,7 @@ Users can restore data from a previously exported JSON file:
 
 - **Service:** `UserService.import_all_data` in `backend/users/services.py`
 - **Normalizer:** `UserService.normalize_export_v1_to_v2` converts v1.0 exports to v2.0 format
-- **Endpoint:** `POST /api/users/me/import` — imports all data from JSON export file
+- **Endpoint:** `POST /api/users/me/import` - imports all data from JSON export file
 - **Frontend:** Import Data button in Profile Settings → Account tab
 - **Version support:** Both v1.0 (legacy, auto-normalized) and v2.0 export formats
 - **Conflict handling:** Duplicate workspace names are renamed automatically (or skipped)
@@ -59,8 +59,8 @@ Users can restore data from a previously exported JSON file:
 
 ### Public-Facing Pages
 
-- `/privacy` — Privacy Policy
-- `/terms` — Terms of Service
+- `/privacy` - Privacy Policy
+- `/terms` - Terms of Service
 
 Legal documents are served from the database. Templates serve as a one-time seed.
 

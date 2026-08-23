@@ -10,7 +10,7 @@ workspace name, a **currency**, and consents to the current Terms/Privacy versio
 An optional "Start with sample data" checkbox seeds demo records. The system creates
 the user, a workspace (with that currency enabled), a default **Main** account, a
 **General** budget with starter categories and the current period, and the owner
-membership — then returns access + refresh JWTs. An already-registered email fails
+membership - then returns access + refresh JWTs. An already-registered email fails
 with a generic error that never reveals the account's existence; the existing address
 owner gets an email notice instead (anti-enumeration).
 
@@ -26,15 +26,15 @@ each TOTP code is single-use. Every workspace-scoped request carries
 ## Accounts & Balances
 
 - **Dashboard** shows each account's **computed** balance (opening balance +
-  transactions ± transfers) and recent activity. Nothing is stored — balances are
+  transactions ± transfers) and recent activity. Nothing is stored - balances are
   always derived.
 - **Accounts page** (admin+): create/edit/archive accounts. **"Set balance…"** records
-  an *adjustment* transaction for the delta between the current and target balance —
+  an *adjustment* transaction for the delta between the current and target balance -
   the app never overwrites a balance directly. A record-free archived account can be
   deleted; one with records is PROTECT-blocked (surfaced as a clear error).
 - Each currency may have one **default account** (set with "Set as default for
   {currency}" in the account form; archiving a current default clears its flag). At
-  most one per currency — flagging a new default clears the previous one.
+  most one per currency - flagging a new default clears the previous one.
 - Single-account, single-currency workspaces hide the account/currency chrome.
 
 ## Transfers
@@ -47,7 +47,7 @@ transfer. Transfers replace the old currency-exchange records.
 ## Budgets & Planning
 
 - A **Budget** has a cadence (monthly / every-N-weeks / custom). **Periods** are
-  derived from the cadence and materialized on demand — the current period is created
+  derived from the cadence and materialized on demand - the current period is created
   the first time it's needed.
 - The **Budget detail** page shows a category table of **planned vs actual vs
   remaining** for the selected period, with a period switcher. Categories are created
@@ -76,7 +76,7 @@ When a parser is configured (`PARSER_URL`):
   transaction (total, date, merchant, items), and only creates the transaction +
   attachment + items on confirm. Cancel leaves no residue.
 - **Account auto-select**: whenever a receipt is parsed (inline upload or receipt-first
-  create), the account is auto-selected to match the parsed `currency` — preferring the
+  create), the account is auto-selected to match the parsed `currency` - preferring the
   per-currency **default account**, else the first account in that currency by ordering.
   An account whose currency already matches is left untouched (a deliberate pick is
   respected). If no account matches the currency, the selection is unchanged.
@@ -113,5 +113,4 @@ whether the invitee already had an account (anti-enumeration).
 - **Import** (`POST /users/me/import`): restores a v3.0 export (same-system);
   `rename`/`skip` conflict strategies.
 - **Legacy import** (`POST /users/import-legacy`): converts a pre-redesign export to
-  the account-based model and returns a per-account balance verification report. See
-  the cutover guide in the root README.
+  the account-based model and returns a per-account balance verification report.

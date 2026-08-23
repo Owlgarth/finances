@@ -1,4 +1,4 @@
-# Denarly Mobile UX — Interaction Spec
+# Denarly Mobile UX - Interaction Spec
 
 The mobile web experience doubles as the interaction spec for any future mobile client
 (PWA wrapper, Capacitor, or native). A native implementation reimplements the *components*
@@ -10,14 +10,14 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 1. **Web and mobile may diverge in interaction, never in capability or data rules.** Every
    workflow reachable on desktop is reachable on mobile; only the presentation differs.
 2. **The bottom sheet is the universal container.** Dialogs, option pickers, action menus,
-   date picker, overflow navigation — one surface, one dismissal model (scrim tap / swipe
+   date picker, overflow navigation - one surface, one dismissal model (scrim tap / swipe
    down in native), one motion spec (in 120ms ease-out, out 80ms ease-in).
 3. **Nothing hides behind hover.** Touch rows open an action sheet on tap; destructive
    actions are styled destructive and confirm before executing.
 4. **44px touch minimum**, 16px minimum font in text inputs, numeric keypad
    (`inputMode="decimal"`) for amounts.
 5. **Density is kept.** 32px table rows and the 11–16px scale survive on mobile; wide tables
-   scroll horizontally with a sticky identity column — no table→card explosions except where
+   scroll horizontally with a sticky identity column - no table→card explosions except where
    a card list is the better native idiom (Members, Budget detail).
 
 ## Navigation
@@ -29,13 +29,13 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   (with role badges), workspace settings, dark mode, disable-zoom toggle (opt-in,
   per-device: kills double-tap/pinch zoom for a native feel), close. The bottom-most row
   (logout's old slot, directly above the just-tapped More button, which collected
-  accidental logouts) holds a Close button on its left side only — the rest of the row
+  accidental logouts) holds a Close button on its left side only - the rest of the row
   is deliberately inert so a stray tap there does nothing.
 - **The center FAB is the global create action**: New transaction · Transfer · From receipt
   (only when extraction is configured) · Planned. Available from every screen; screens hide
   their own creation buttons when the FAB covers them. Viewers (read-only role) get no FAB.
 - Each tab remembers its scroll position (native stack behavior).
-- **Global page search**: jump to any page or budget by name — ⌘K/Ctrl+K and a Search entry
+- **Global page search**: jump to any page or budget by name - ⌘K/Ctrl+K and a Search entry
   in the desktop sidebar; the Search row in the More sheet on mobile (sheet presentation).
 
 ## Per-screen patterns
@@ -45,7 +45,7 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 | Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search + Filters disclosure (multi-select account/type/budget/category, amount range, date range) with an active-count badge; filter state lives in the URL |
 | Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
 | Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time with a prev/next currency switcher above the cards (gear → reorder sheet, order saved per budget); desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker |
-| Planned | Rows; row tap → action sheet (Execute now — pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category, amount range, planned-date range), URL-synced |
+| Planned | Rows; row tap → action sheet (Execute now - pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category, amount range, planned-date range), URL-synced |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |
 
@@ -64,6 +64,6 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 
 - Sheet drag-to-dismiss gesture (handle is currently visual only on web).
 - Swipe actions on rows (action sheet is the v1 pattern).
-- Offline/service worker — the PWA shell is install-only.
+- Offline/service worker - the PWA shell is install-only.
 - Tab scroll restoration restores before data loads, so on a slow fetch the browser clamps
   to the skeleton height and deep positions in long lists are lost.
