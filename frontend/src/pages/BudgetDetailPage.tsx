@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowDown, ArrowLeft, ArrowUp, ChevronLeft, ChevronRight, Merge, Plus, Check, Settings2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Settings2, Trash2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
@@ -11,6 +11,9 @@ import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
+import ConfirmDialog from '../components/common/ConfirmDialog'
+import EmptyState from '../components/common/EmptyState'
+import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Per-budget currency-switcher order — a display preference, stored client-side
@@ -37,11 +40,16 @@ export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const queryClient = useQueryClient()
-  const { canWrite } = usePermissions()
+  const { canWrite, canManageAccounts } = usePermissions()
   const { data: currencies = [] } = useEnabledCurrencies()
 
   const { data: budget } = useQuery({ queryKey: ['budget', budgetId], queryFn: () => budgetsApi.get(budgetId) })
-  const { data: periods = [] } = useQuery({ queryKey: ['periods', budgetId], queryFn: () => budgetsApi.listPeriods(budgetId) })
+  const { data: periods = [] } = useQuery({
+    queryKey: ['periods', budgetId],
+    queryFn: () => budgetsApi.listPeriods(budgetId),
+    // Cross-tab convergence — same rationale as the useDomain list hooks.
+    refetchOnWindowFocus: 'always',
+  })
 
   const [periodId, setPeriodId] = useState<number | null>(null)
 
@@ -126,6 +134,36 @@ export default function BudgetDetailPage() {
       setMergeSourceId(null)
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to merge categories')),
+  })
+
+  // Custom-cadence period management. `nonce` forces a keyed remount of
+  // PeriodFormModal per open session so its lazy state initializers re-run —
+  // edit prefill and add-mode defaults with zero open-effects.
+  const [periodModal, setPeriodModal] = useState<{ mode: 'add' | 'edit'; period: Period | null; nonce: number } | null>(null)
+  const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null)
+  const openPeriodModal = (mode: 'add' | 'edit', period: Period | null = null) =>
+    setPeriodModal({ mode, period, nonce: Date.now() })
+
+  const deletePeriod = useMutation({
+    mutationFn: (id: number) => budgetsApi.deletePeriod(budgetId, id),
+    onSuccess: async (_result, deletedId) => {
+      // Await the periods refetch BEFORE clearing the selection: the null-picker
+      // effect (above) picks periods[0] from whatever list it sees — picking
+      // from a stale list could re-select the just-deleted id (ghost periodId →
+      // selectedPeriod null → dead page). After the await, the re-render reads
+      // the fresh cache.
+      await queryClient.invalidateQueries({ queryKey: ['periods', budgetId] })
+      queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
+      queryClient.invalidateQueries({ queryKey: ['budget-history', budgetId] })
+      toast.success('Period deleted')
+      // Category selection is period-independent — leave selectedCategory alone.
+      if (deletedId === periodId) setPeriodId(null)
+      setDeletingPeriod(null)
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to delete period'))
+      setDeletingPeriod(null)
+    },
   })
 
   const selectedPeriod = allPeriods.find((p) => p.id === periodId) ?? null
@@ -313,6 +351,47 @@ export default function BudgetDetailPage() {
             >
               <ChevronRight size={14} />
             </button>
+            {budget?.cadence === 'custom' && canManageAccounts && (
+              <>
+                {/* Divider between period navigation and period management
+                    (patterns.md §5 group divider, vertical form). Also keeps
+                    the chevrons' touch-hit areas clear of these buttons'. */}
+                <span className="w-px h-4 bg-border mx-1" aria-hidden="true" />
+                {/* Adjacent icon buttons (BudgetsPage pattern): real padded hit
+                    areas instead of .touch-hit (expanded areas would overlap —
+                    responsive.md); §3 restores the hover bg the card buttons
+                    omit, and rounded-none for icon-only. */}
+                <button
+                  type="button"
+                  onClick={() => openPeriodModal('add')}
+                  title="Add period"
+                  aria-label="Add period"
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                >
+                  <Plus size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectedPeriod && openPeriodModal('edit', selectedPeriod)}
+                  disabled={!selectedPeriod}
+                  title={selectedPeriod ? `Edit period ${selectedPeriod.name}` : 'Edit period'}
+                  aria-label={selectedPeriod ? `Edit period ${selectedPeriod.name}` : 'Edit period'}
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectedPeriod && setDeletingPeriod(selectedPeriod)}
+                  disabled={!selectedPeriod}
+                  title={selectedPeriod ? `Delete period ${selectedPeriod.name}` : 'Delete period'}
+                  aria-label={selectedPeriod ? `Delete period ${selectedPeriod.name}` : 'Delete period'}
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -324,7 +403,17 @@ export default function BudgetDetailPage() {
         <p className="text-xs text-text-muted mb-3">Planning ahead — actuals will appear once this period starts.</p>
       )}
 
-      {summaryLoading ? (
+      {budget?.cadence === 'custom' && periods.length === 0 ? (
+        /* Custom budget with no periods: nothing to summarize or plan — the
+           designed empty state (patterns.md §2 "Periods" row) replaces the
+           ledger. Non-admins see the message without the CTA. */
+        <EmptyState
+          icon={<CalendarRange size={48} strokeWidth={1.5} className="text-text-muted/30" />}
+          heading="No budget periods"
+          message="Create a period to start budgeting."
+          action={canManageAccounts ? { label: 'Add period', onClick: () => openPeriodModal('add') } : undefined}
+        />
+      ) : summaryLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : (
         <>
@@ -603,6 +692,25 @@ export default function BudgetDetailPage() {
           ))}
         </ul>
       </Modal>
+
+      {periodModal && (
+        <PeriodFormModal
+          key={`${periodModal.mode}-${periodModal.period?.id ?? 'new'}-${periodModal.nonce}`}
+          mode={periodModal.mode}
+          budgetId={budgetId}
+          period={periodModal.period}
+          onClose={() => setPeriodModal(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={!!deletingPeriod}
+        title="Delete period"
+        message={`Delete "${deletingPeriod?.name}"? Its planned amounts will be deleted. Transactions are not affected. This cannot be undone.`}
+        onConfirm={() => deletingPeriod && deletePeriod.mutate(deletingPeriod.id)}
+        onCancel={() => setDeletingPeriod(null)}
+        isPending={deletePeriod.isPending}
+      />
     </div>
   )
 }
