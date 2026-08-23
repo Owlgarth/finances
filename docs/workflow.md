@@ -55,14 +55,24 @@ transfer. Transfers replace the old currency-exchange records.
   range ("04 Sep - 03 Oct 2026") that keeps re-deriving until edited; saving chains
   the budget create with the first period create.
 - The **Budget detail** page shows a category table of **planned vs actual vs
-  remaining** for the selected period, with a period switcher (the selection is
-  carried in the `?period=` URL param, so reloads and shared links land on the
-  chosen period; an invalid id falls back to the default pick). Categories are created
-  inline; planned amounts are edited inline (current period). Past periods render as
-  read-only snapshots. Custom-cadence budgets get add/edit/delete period controls
-  beside the switcher (admin+; deleting a period removes its planned amounts but never
-  transactions), and a custom budget with no periods yet shows an "Add period" empty
-  state instead of the table.
+  remaining** for the selected period, with a period switcher capped at seven rows
+  centered on the viewed period plus a "View all periods" row that opens the
+  periods page (the selection is carried in the `?period=` URL param, so reloads
+  and shared links land on the chosen period; an invalid id falls back to the
+  default pick). Categories are created inline; planned amounts are edited inline
+  (current period). Past periods render as read-only snapshots. Custom-cadence
+  budgets get add/edit/delete period controls beside the switcher (admin+;
+  deleting a period removes its planned amounts but never transactions), and a
+  custom budget with no periods yet shows an "Add period" empty state instead of
+  the table.
+- The **budget periods page** (`/budgets/:id/periods`) lists every period of a
+  budget as year-sectioned cards, newest first - a CURRENT chip on the active
+  period, past periods muted. A card opens the budget detail page on that period
+  via the same `?period=` param. It is reachable from the switcher's "View all
+  periods" row and from the view-periods icon on a budget card (all roles);
+  add-period (the budget card icon and the page button) is custom-cadence and
+  admin-only, and the card edit/delete icons appear only on custom periods
+  (admin).
 - Categories and planned amounts are member+; creating budgets/periods is admin+.
 
 ## Transactions
