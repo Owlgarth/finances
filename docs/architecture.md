@@ -151,7 +151,7 @@ frontend/src/
 │   ├── layout/             # MainLayout, Sidebar (7 destinations), UserMenu
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
-│   ├── budgets/            # PeriodPicker (budget period listbox)
+│   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit)
 │   └── modals/transactions/# Transaction / Planned / NewFromReceipt modals
@@ -165,7 +165,8 @@ frontend/src/
 │   │                          #   useMultiCurrency, useExtractionEnabled
 │   └── usePermissions.ts       # canManageAccounts, canWrite, …
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
-│                           #   Transactions, Planned, Members, Settings
+│                           #   BudgetPeriods, Transactions, Planned,
+│                           #   Members, Settings
 └── types/index.ts          # TypeScript interfaces
 ```
 
