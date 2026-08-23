@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowDown, ArrowLeft, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Settings2, Trash2, X } from 'lucide-react'
@@ -42,6 +42,7 @@ export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canWrite, canManageAccounts } = usePermissions()
   const { data: currencies = [] } = useEnabledCurrencies()
@@ -414,7 +415,13 @@ export default function BudgetDetailPage() {
               <ChevronLeft size={14} />
             </button>
             <div className="w-56 max-sm:w-auto max-sm:flex-1">
-              <PeriodPicker periods={allPeriods} value={periodId} onChange={selectPeriod} />
+              <PeriodPicker
+                periods={allPeriods}
+                value={periodId}
+                onChange={selectPeriod}
+                limit={7}
+                onViewAll={() => navigate(`/budgets/${budgetId}/periods`)}
+              />
             </div>
             <button
               type="button"
