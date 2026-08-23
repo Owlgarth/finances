@@ -44,7 +44,7 @@ Under GDPR Articles 33 and 34, we must:
 
 If the breach is likely to result in a risk to individuals' rights and freedoms:
 
-**Notify:** [Supervisory Authority — e.g., UODO (Poland), ICO (UK), BfDI (Germany)]
+**Notify:** [Supervisory Authority - e.g., UODO (Poland), ICO (UK), BfDI (Germany)]
 
 **Required information (Art. 33(3)):**
 - Nature of the breach (categories and approximate number of individuals affected)
@@ -52,13 +52,13 @@ If the breach is likely to result in a risk to individuals' rights and freedoms:
 - Likely consequences of the breach
 - Measures taken or proposed to address the breach
 
-**Template notification subject:** `GDPR Data Breach Notification — Denarly — [Date]`
+**Template notification subject:** `GDPR Data Breach Notification - Denarly - [Date]`
 
 If notification cannot be made within 72 hours, provide notification as soon as possible with explanation of delay.
 
 ---
 
-## 4. User Notification (Art. 34 — High Risk Only)
+## 4. User Notification (Art. 34 - High Risk Only)
 
 Notify affected users **without undue delay** if the breach is likely to result in **high risk** to their rights and freedoms (e.g., financial data compromised, credentials exposed).
 

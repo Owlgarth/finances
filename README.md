@@ -18,7 +18,6 @@ A modern, full-stack personal finance tracking application built on money-holdin
 
 This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Denarly as an open-source application.
 
-In the next development phase, I plan to conduct deeper 
 ---
 
 ## Overview
@@ -45,45 +44,64 @@ Denarly is a comprehensive financial management tool designed for individuals an
 
 ### Installation
 
-```bash
-# Clone and start
-git clone <repository-url>
-cd denarly
-cp example.env .env        # every setting, including the published ports, lives here
-./dev.sh up --full         # the whole stack in Docker
-```
+1. **Clone and configure:**
 
-For day-to-day work, run the services in Docker and the app on your machine —
-three terminals, hot reload on both sides:
+   ```bash
+   git clone <repository-url>
+   cd denarly
+   cp example.env .env
+   ```
 
-```bash
-./dev.sh up            # db, redis, storage
-./dev.sh backend       # migrate + seed, then uvicorn --reload and a Celery worker
-./dev.sh frontend      # Vite dev server
-```
+   Every setting lives in `.env`: database credentials, secrets, and every
+   published port (`DB_PORT`, `API_PORT`, `UI_PORT`, ...). Nothing is
+   hardcoded - if a port is already taken on your machine, change it there and
+   everything follows.
 
-Services: `db`, `redis`, `storage`, plus `api`, `ui`, `worker` and `beat` for the
-full-Docker run, and the optional `parser` (`./dev.sh up parser`).
+2. **Start the stack.** Two ways to run it, both driven by the same `.env`:
 
-**Docker or your machine?** By default `./dev.sh` runs the backend and frontend
-inside their containers, so Python, uv and Node only have to exist in the images —
-handy for a remote interpreter in PyCharm, or any machine without the right
-versions installed. Set `DEV_TARGET=host` in `.env` to use your own uv and npm
-instead (faster), or switch per command: `DEV_TARGET=host ./dev.sh test`.
+   ```bash
+   ./dev.sh up --full    # one command: the whole stack in Docker, app included
+   ```
 
-**Access:**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/api/docs
-- Storage console: http://localhost:9001
+   ```bash
+   ./dev.sh up           # day to day: db, redis, storage in Docker
+   ./dev.sh backend      # migrate + seed, then uvicorn --reload and a Celery worker
+   ./dev.sh frontend     # Vite dev server (one terminal each, hot reload)
+   ```
 
-Ports already taken on your machine? Change `*_PORT` in `.env` — nothing is hardcoded.
+   `--full` is the shortest path to a running app. The three-terminal variant
+   is the day-to-day setup: services stay in Docker while the backend and
+   frontend run with hot reload. Services: `db`, `redis`, `storage` by
+   default; the full run adds `api`, `ui`, `worker` and `beat`; the optional
+   `parser` starts with `./dev.sh up parser`.
 
-**Demo credentials:** `demo@example.com` / `password123`
+   **Docker or your machine?** By default `./dev.sh` runs the backend and
+   frontend inside their containers, so Python, uv and Node only have to exist
+   in the images - handy for a remote interpreter in PyCharm, or any machine
+   without the right versions installed. Set `DEV_TARGET=host` in `.env` to use
+   your own uv and npm instead (faster), or switch per command:
+   `DEV_TARGET=host ./dev.sh test`.
+
+3. **Open the app** - the URLs use the `example.env` defaults and follow
+   `*_PORT` from `.env`:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/api/docs
+   - Storage console: http://localhost:9001
+
+4. **Log in** with the demo credentials: `demo@example.com` / `password123`
+
+From here, [Development](#development) covers everyday commands, tests, lint,
+and running without Docker.
 
 ### Demo Mode
 
-Disable registration for public demos by setting environment variables:
+Demo Mode is for running a publicly accessible demo instance: anyone can
+explore the app by logging in with the shared demo account, but nobody can
+create a new account of their own. Everything else - login and every feature -
+works normally.
+
+Enable it on both sides:
 
 ```bash
 # Backend
@@ -92,6 +110,16 @@ DEMO_MODE=true
 # Frontend
 VITE_DEMO_MODE=true
 ```
+
+Behavior:
+
+- **Backend** (`DEMO_MODE=true`): `POST /api/auth/register` returns
+  `403 "Registration is disabled in demo mode"`. Takes effect after a backend
+  restart.
+- **Frontend** (`VITE_DEMO_MODE=true`): `/register` redirects to `/login`, and
+  the login page hides its register link. `VITE_*` variables are baked in at
+  build time, so flipping this flag requires a frontend rebuild - or a
+  dev-server restart during development.
 
 ## Tech Stack
 
@@ -115,22 +143,21 @@ that talks to any OpenAI-compatible vision model (local via Ollama/vLLM, or host
   `./dev.sh up parser` and enabled for the backend via `PARSER_URL` /
   `PARSER_API_TOKEN`.
 - **It is entirely optional.** With `PARSER_URL` unset, the backend reports extraction
-  as disabled and the UI hides every extraction affordance — no dead buttons.
+  as disabled and the UI hides every extraction affordance - no dead buttons.
 - Point it at your model with `PARSER_MODEL_BASE_URL` / `PARSER_MODEL_NAME`
   (see `services/receipt-parser/.env.example`). `qwen2.5-vl` via Ollama is a good
   self-hosted default.
 
-See the [parser README](services/receipt-parser/README.md) and its
-[quality harness](services/receipt-parser/harness/README.md).
+See the [parser README](services/receipt-parser/README.md).
 
 ## GDPR Compliance
 
 Denarly includes built-in GDPR compliance features:
 
-- **Consent Management** — Track user consent for Terms of Service and Privacy Policy
-- **Right to Erasure** — Users can delete their account and all associated data
-- **Data Export** — Complete data portability in JSON format
-- **Legal Document Templates** — Customizable privacy policy and terms of service
+- **Consent Management** - Track user consent for Terms of Service and Privacy Policy
+- **Right to Erasure** - Users can delete their account and all associated data
+- **Data Export** - Complete data portability in JSON format
+- **Legal Document Templates** - Customizable privacy policy and terms of service
 
 **Self-Hosting Configuration:**
 
@@ -144,28 +171,6 @@ LEGAL_JURISDICTION="Your Jurisdiction"
 ```
 
 See [GDPR Documentation](docs/gdpr/README.md) for details.
-
-## Migrating from a pre-redesign version (cutover guide)
-
-The current model is account-based. If you have a JSON export from an older
-(period/exchange-based) version of Denarly, import it through the **legacy** path,
-which converts it to the new model and reports a per-account balance check:
-
-1. Register (or log in) and open **Settings → Account**.
-2. Under **"Import from an older Denarly version"**, choose your old export JSON.
-   The importer converts the old shape to the new one:
-   - per-workspace currencies → enabled catalog currencies;
-   - one `Main <CODE>` account is created per currency, seeded with a solved
-     opening balance so computed balances match the old closing balances;
-   - currency exchanges → transfers, with the two legacy sides deduplicated so
-     amounts are not double-counted;
-   - categories, budgets, transactions, and planned transactions are recreated.
-3. Review the **verification report**: each account shows its computed balance and,
-   where the old export recorded a closing balance, whether they match. Reconcile any
-   ⚠️ warnings with **Accounts → "Set balance…"** (which records an adjustment).
-
-The regular **"Import Data"** button is for current-format (v3) exports only
-(same-system restore); the legacy path is specifically for the older format.
 
 ## Project Structure
 
@@ -183,21 +188,54 @@ denarly/
 
 | Document | Description |
 |----------|-------------|
-| **[Backend README](backend/README.md)** | API endpoints, setup, testing, Django apps structure |
-| **[Frontend README](frontend/README.md)** | Components, contexts, hooks, API client |
-| [Architecture](docs/architecture.md) | System architecture and account-based data model |
-| [Receipt Parser](services/receipt-parser/README.md) | Optional extraction service + contract |
-| [Workflow](docs/workflow.md) | Application workflows and user flows |
-| [Permissions](docs/permissions.md) | Role-based permissions matrix |
-| [Users & Roles](docs/users-and-roles.md) | User hierarchy and role descriptions |
+| **[Backend README](backend/README.md)** | Reference for the Django API: a purpose table for every Django app, the shared `common/` module (JWT auth, email, storage), a complete endpoint reference covering every route with its method and purpose, the JWT auth and token lifecycle, the service-layer convention, testing instructions, and the environment variables. Answers "which API endpoints exist, and how do I call or test them?" |
+| **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars including the build-time `VITE_*` flags. Answers "where does a piece of the UI live, and how is it wired?" |
+| [Architecture](docs/architecture.md) | The system-level design: a component diagram, the account-based data model with its key-principles table (balances are computed and never stored, periods derive from a budget's cadence, transfers replace the old exchanges, the original-amount facet, adjustments), directory maps for both sides, the async Celery flows, the four auth layers with rate limiting, env configuration, and deployment topology. Answers "how is the system designed, and why?" |
+| [Receipt Parser](services/receipt-parser/README.md) | The optional stateless FastAPI service that turns receipt images and PDFs into structured JSON: its endpoints, upload/page/timeout limits, every `PARSER_*` variable, and the hybrid pipeline where a machine-read transcript fact-checks the vision model's numbers to ground the confidence scores, plus local and Docker run instructions and offline tests. Answers "how does receipt extraction work, and how do I point it at my own model?" |
+| [Workflow](docs/workflow.md) | The end-to-end user flows: registration with its anti-enumeration behavior, accounts and Set-balance adjustments, transfers, budget cadences and derived periods, transactions with line items, the receipt-extraction review flow, planned transactions, members and invites, reports, and export/import. Answers "what actually happens, step by step, when a user does X?" |
+| [Permissions](docs/permissions.md) | The authorization model: the four-layer security diagram, the role hierarchy, complete per-feature permission matrices (owner/admin/member/viewer × action) across accounts, currencies, budgets, categories, transactions, receipts, transfers, planned transactions, members, and settings, plus the backend enforcement code (`WorkspaceJWTAuth`, `require_role`, `for_workspace`), the frontend visibility hooks, and the error codes. Answers "who is allowed to do what, and where is it enforced?" |
+| [Users & Roles](docs/users-and-roles.md) | The user model and the people around it: user fields, per-role capability, restriction, and use-case write-ups for owner, admin, member, and viewer, the membership rules, member-management operations (adding, role changes, removal, password resets, leaving), the auth flow, and multi-workspace scenarios. Answers "what does each role mean in practice, and how are members managed?" |
 
 ## Development
 
 ### Everyday commands
 
-`./dev.sh` is the only script: `docker compose` for the services, and the app
-either in its container or on your machine. Run it with no arguments for the
-full list.
+`./dev.sh` is the single entry point for working on the repo: it wraps
+`docker compose` for the backing services and runs the backend and frontend
+tooling - server, worker, pytest, ruff, npm - either inside their containers
+or on your machine. It sources `.env` on every run, honors `DEV_TARGET`
+(`docker` or `host`) to decide where app commands run, and executes everything
+as the invoking user, so files written into the checkout (new migrations,
+caches) belong to you and not to root.
+
+Run `./dev.sh <command> [args]`, or `./dev.sh` with no arguments to print the
+full command list (excerpt):
+
+```text
+Usage: ./dev.sh <command> [args]
+
+Start (one terminal each)
+  up [svc...]           Services in Docker (default: db redis storage)
+  up --full             Everything in Docker, app included
+  backend               API + Celery worker, after migrate/seed
+  frontend              Vite dev server
+```
+
+After `./dev.sh up` brings the services up, it prints where they landed (the
+ports below are the `example.env` defaults; they come from `.env`):
+
+```text
+  Postgres  localhost:5432   Redis  localhost:6379
+  Storage   http://localhost:9000   console  http://localhost:9001
+  Receipt parser (optional): ./dev.sh up parser
+
+Next: ./dev.sh backend and ./dev.sh frontend (one terminal each).
+```
+
+Commands that need a backing service check for it first and fail fast with a
+one-line hint naming the command that starts it - with the database down,
+`./dev.sh test` stops immediately and points you at `./dev.sh up` instead of
+hanging on a connection timeout.
 
 ```bash
 ./dev.sh up parser       # start individual services
@@ -212,7 +250,7 @@ full list.
 ```
 
 These run in the `api` and `node` containers by default (`DEV_TARGET`), as the
-user who invoked them, so anything they write — new migrations, caches — belongs
+user who invoked them, so anything they write - new migrations, caches - belongs
 to you and not to root. With `DEV_TARGET=host` they run through `uv` in
 `backend/` and `npm` in `frontend/`, and the script rewrites the service
 hostnames to the published ports for you.
@@ -221,7 +259,7 @@ hostnames to the published ports for you.
 
 `uv run` creates `backend/.venv` and syncs it to `uv.lock` by itself, so
 `./dev.sh backend` works from a clean checkout. Doing it up front is still worth
-it — your editor gets an interpreter to point at, and the install isn't running
+it - your editor gets an interpreter to point at, and the install isn't running
 while you wait for the server to come up:
 
 ```bash
@@ -235,7 +273,7 @@ There is nothing to activate. `uv` locates that environment by walking up for
 you activated from another checkout is ignored (with a warning).
 
 Containers use `/venv` instead, via `UV_PROJECT_ENVIRONMENT` in
-`backend/Dockerfile` — which is why the container's packages never land in your
+`backend/Dockerfile` - which is why the container's packages never land in your
 checkout. Keep that variable out of `.env`: `./dev.sh` sources it, and host
 commands would then go looking for a `/venv` that doesn't exist on your machine.
 
