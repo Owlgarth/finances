@@ -1,3 +1,5 @@
+import { format, parseISO } from 'date-fns'
+
 /**
  * Format a monetary value with comma (,) thousands separators and 2 decimal places.
  *
@@ -75,4 +77,17 @@ export function subtractAmounts(a: string, b: string): string {
   const isNegative = diff < 0n
   const abs = (isNegative ? -diff : diff).toString().padStart(3, '0')
   return `${isNegative ? '-' : ''}${abs.slice(0, -2) || '0'}.${abs.slice(-2)}`
+}
+
+/**
+ * Name a custom budget period from its ISO date range (yyyy-MM-dd):
+ * "04 Sep – 03 Oct 2026" — zero-padded days, abbreviated months, en dash.
+ * Mirrors the backend's derived-period naming (budgeting/services.py,
+ * PeriodService.compute_range: f'{start:%d %b} – {end:%d %b %Y}') so
+ * hand-created custom periods read like derived weeks-cadence ones.
+ * parseISO reads date-only strings as local time — no UTC-midnight day
+ * shift in negative-offset zones (unlike new Date('yyyy-mm-dd')).
+ */
+export function formatPeriodName(startIso: string, endIso: string): string {
+  return `${format(parseISO(startIso), 'dd MMM')} – ${format(parseISO(endIso), 'dd MMM y')}`
 }
