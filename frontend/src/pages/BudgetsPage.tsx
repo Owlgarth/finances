@@ -11,6 +11,7 @@ import { useBudgets } from '../hooks/useDomain'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
+import { formatPeriodName } from '../utils/format'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 import Select from '../components/common/Select'
 import DatePicker from '../components/DatePicker'
@@ -21,6 +22,19 @@ const CADENCE_OPTIONS: { value: Cadence; label: string }[] = [
   { value: 'custom', label: 'Custom periods' },
 ]
 
+// Default custom-period window: today through today + 29 days (a 30-day
+// window), pre-named with formatPeriodName exactly as date changes re-name
+// it. Reused by the state initializers and handleClose so a reopened modal
+// always shows fresh defaults. UTC-based toISOString, matching the
+// anchor-date initializer's existing semantics.
+function initialCustomPeriod(): { start: string; end: string; name: string } {
+  const start = new Date().toISOString().slice(0, 10)
+  const end = new Date()
+  end.setDate(end.getDate() + 29)
+  const endIso = end.toISOString().slice(0, 10)
+  return { start, end: endIso, name: formatPeriodName(start, endIso) }
+}
+
 function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
@@ -29,6 +43,13 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [cadence, setCadence] = useState<Cadence>('monthly')
   const [weeks, setWeeks] = useState('2')
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10))
+  // Lazy initializers run once (this modal stays mounted while the page is
+  // up); handleClose regenerates everything on close.
+  const [customStart, setCustomStart] = useState(() => initialCustomPeriod().start)
+  const [customEnd, setCustomEnd] = useState(() => initialCustomPeriod().end)
+  const [customName, setCustomName] = useState(() => initialCustomPeriod().name)
+  // Once the user edits the period name, date changes stop re-deriving it.
+  const [nameTouched, setNameTouched] = useState(false)
 
   // This wrapper stays mounted while BudgetsPage is up (Modal only hides it), so
   // form state would otherwise survive across opens — a create-after-create or a
@@ -41,17 +62,41 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
     setCadence('monthly')
     setWeeks('2')
     setAnchor(new Date().toISOString().slice(0, 10))
+    const initial = initialCustomPeriod()
+    setCustomStart(initial.start)
+    setCustomEnd(initial.end)
+    setCustomName(initial.name)
+    setNameTouched(false)
     onClose()
   }
 
+  // Custom cadence: create the budget, then chain its first period — custom
+  // ranges are never derived server-side (PeriodService.compute_range raises
+  // NoPeriodForDateError for CUSTOM), so without this the new budget has no
+  // periods until one is added from the budget page.
   const mutation = useMutation({
-    mutationFn: () =>
-      budgetsApi.create({
+    mutationFn: async () => {
+      const budget = await budgetsApi.create({
         name: name.trim(),
         cadence,
         cadence_weeks: cadence === 'weeks' ? parseInt(weeks, 10) : null,
         cadence_anchor: cadence === 'weeks' ? anchor : null,
-      }),
+      })
+      if (cadence === 'custom') {
+        try {
+          await budgetsApi.createPeriod(budget.id, {
+            name: customName.trim(),
+            start_date: customStart,
+            end_date: customEnd,
+          })
+        } catch (error) {
+          // The budget exists; only the first period failed. Point the user
+          // at the recovery path but treat the overall create as successful.
+          toast.error(`${getApiErrorMessage(error, 'Failed to create the first period')} — you can add it from the budget page.`)
+        }
+      }
+      return budget
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
       toast.success('Budget created')
@@ -62,7 +107,16 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   return (
     <Modal open={open} onClose={handleClose} className="p-6" title="New budget">
-      <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        if (!name.trim()) return toast.error('Name required')
+        if (cadence === 'custom') {
+          if (!customName.trim()) return toast.error('Period name required')
+          // yyyy-MM-dd strings compare correctly lexicographically.
+          if (customEnd < customStart) return toast.error('End date must be on or after the start date')
+        }
+        mutation.mutate()
+      }} className="space-y-4">
         <div>
           <label htmlFor="budget-name" className={labelClass}>Name</label>
           <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
@@ -72,7 +126,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Select value={cadence} onChange={setCadence} options={CADENCE_OPTIONS} aria-label="Cadence" />
         </div>
         {cadence === 'weeks' && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="budget-weeks" className={labelClass}>Every N weeks</label>
               <input id="budget-weeks" type="number" inputMode="numeric" min="1" value={weeks} onChange={(e) => setWeeks(e.target.value)} className={inputClass} />
@@ -82,6 +136,45 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
               <DatePicker value={anchor} onChange={setAnchor} />
             </div>
           </div>
+        )}
+        {cadence === 'custom' && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="budget-period-start" className={labelClass}>Start date</label>
+                <DatePicker
+                  id="budget-period-start"
+                  placeholder="Start"
+                  value={customStart}
+                  onChange={(v) => {
+                    setCustomStart(v)
+                    if (!nameTouched) setCustomName(formatPeriodName(v, customEnd))
+                  }}
+                />
+              </div>
+              <div>
+                <label htmlFor="budget-period-end" className={labelClass}>End date</label>
+                <DatePicker
+                  id="budget-period-end"
+                  placeholder="End"
+                  value={customEnd}
+                  onChange={(v) => {
+                    setCustomEnd(v)
+                    if (!nameTouched) setCustomName(formatPeriodName(customStart, v))
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="budget-period-name" className={labelClass}>Period name</label>
+              <input
+                id="budget-period-name"
+                value={customName}
+                onChange={(e) => { setNameTouched(true); setCustomName(e.target.value) }}
+                className={inputClass}
+              />
+            </div>
+          </>
         )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
