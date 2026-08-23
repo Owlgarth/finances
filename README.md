@@ -143,7 +143,7 @@ that talks to any OpenAI-compatible vision model (local via Ollama/vLLM, or host
   `./dev.sh up parser` and enabled for the backend via `PARSER_URL` /
   `PARSER_API_TOKEN`.
 - **It is entirely optional.** With `PARSER_URL` unset, the backend reports extraction
-  as disabled and the UI hides every extraction affordance — no dead buttons.
+  as disabled and the UI hides every extraction affordance - no dead buttons.
 - Point it at your model with `PARSER_MODEL_BASE_URL` / `PARSER_MODEL_NAME`
   (see `services/receipt-parser/.env.example`). `qwen2.5-vl` via Ollama is a good
   self-hosted default.
@@ -154,10 +154,10 @@ See the [parser README](services/receipt-parser/README.md).
 
 Denarly includes built-in GDPR compliance features:
 
-- **Consent Management** — Track user consent for Terms of Service and Privacy Policy
-- **Right to Erasure** — Users can delete their account and all associated data
-- **Data Export** — Complete data portability in JSON format
-- **Legal Document Templates** — Customizable privacy policy and terms of service
+- **Consent Management** - Track user consent for Terms of Service and Privacy Policy
+- **Right to Erasure** - Users can delete their account and all associated data
+- **Data Export** - Complete data portability in JSON format
+- **Legal Document Templates** - Customizable privacy policy and terms of service
 
 **Self-Hosting Configuration:**
 
@@ -250,7 +250,7 @@ hanging on a connection timeout.
 ```
 
 These run in the `api` and `node` containers by default (`DEV_TARGET`), as the
-user who invoked them, so anything they write — new migrations, caches — belongs
+user who invoked them, so anything they write - new migrations, caches - belongs
 to you and not to root. With `DEV_TARGET=host` they run through `uv` in
 `backend/` and `npm` in `frontend/`, and the script rewrites the service
 hostnames to the published ports for you.
@@ -259,7 +259,7 @@ hostnames to the published ports for you.
 
 `uv run` creates `backend/.venv` and syncs it to `uv.lock` by itself, so
 `./dev.sh backend` works from a clean checkout. Doing it up front is still worth
-it — your editor gets an interpreter to point at, and the install isn't running
+it - your editor gets an interpreter to point at, and the install isn't running
 while you wait for the server to come up:
 
 ```bash
@@ -273,7 +273,7 @@ There is nothing to activate. `uv` locates that environment by walking up for
 you activated from another checkout is ignored (with a warning).
 
 Containers use `/venv` instead, via `UV_PROJECT_ENVIRONMENT` in
-`backend/Dockerfile` — which is why the container's packages never land in your
+`backend/Dockerfile` - which is why the container's packages never land in your
 checkout. Keep that variable out of `.env`: `./dev.sh` sources it, and host
 commands would then go looking for a `/venv` that doesn't exist on your machine.
 

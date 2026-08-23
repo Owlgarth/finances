@@ -1,4 +1,4 @@
-# Receipt Parser Contract — v1
+# Receipt Parser Contract - v1
 
 This document is the frozen v1 contract between the Denarly backend and the receipt
 parser service. The service is stateless: one request in, one JSON document out,
@@ -24,7 +24,7 @@ GET /health
 Returns `200 {"status": "ok", "model": "<configured model id>"}` when the service can
 reach its configured model provider, `503` with the error shape otherwise.
 
-## Success response — `200`
+## Success response - `200`
 
 ```json
 {
@@ -55,28 +55,28 @@ reach its configured model provider, `503` with the error shape otherwise.
 
 ### Field semantics
 
-- **`schema_version`** — always the string `"1"` for this contract.
-- **`merchant`** — string or `null`. Best-effort merchant name as printed.
-- **`date`** — ISO `YYYY-MM-DD` string or `null`. The purchase date, never the print
+- **`schema_version`** - always the string `"1"` for this contract.
+- **`merchant`** - string or `null`. Best-effort merchant name as printed.
+- **`date`** - ISO `YYYY-MM-DD` string or `null`. The purchase date, never the print
   date if both appear.
-- **`currency`** — ISO 4217 alphabetic code (uppercase) or `null`. Inferred from
+- **`currency`** - ISO 4217 alphabetic code (uppercase) or `null`. Inferred from
   symbols/locale when not printed; when inferred, a `currency_inferred` warning is
   added.
-- **`total`** — decimal **string** or `null`. The grand total actually paid (after
-  discounts, including tax). Never a float — all monetary values are decimal strings
+- **`total`** - decimal **string** or `null`. The grand total actually paid (after
+  discounts, including tax). Never a float - all monetary values are decimal strings
   to avoid binary-float drift.
-- **`items[]`** — possibly empty, in printed order:
-  - `name` — string, as printed (no translation).
-  - `quantity` — decimal string, `"1"` when not printed.
-  - `unit_price` — decimal string or `null`.
-  - `line_total` — decimal string or `null`. When both `quantity` and `unit_price`
+- **`items[]`** - possibly empty, in printed order:
+  - `name` - string, as printed (no translation).
+  - `quantity` - decimal string, `"1"` when not printed.
+  - `unit_price` - decimal string or `null`.
+  - `line_total` - decimal string or `null`. When both `quantity` and `unit_price`
     are present, `line_total` should equal their product; the parser reports what is
     printed and does not correct arithmetic (mismatches get an `item_math_mismatch`
     warning instead).
-  - `confidence` — float 0..1 for this row as a whole.
-- **`confidence`** — per-field floats 0..1. A field that is `null` has confidence
+  - `confidence` - float 0..1 for this row as a whole.
+- **`confidence`** - per-field floats 0..1. A field that is `null` has confidence
   `0.0`. Consumers should treat `< 0.7` as "flag for human review".
-- **`warnings[]`** — zero or more of the codes below. Unknown codes must be ignored
+- **`warnings[]`** - zero or more of the codes below. Unknown codes must be ignored
   by consumers (forward compatibility).
 
 ### Warning codes
@@ -97,7 +97,7 @@ reach its configured model provider, `503` with the error shape otherwise.
 
 When the service obtains a machine-extracted transcript of the receipt (the text
 layer of a born-digital PDF, or OCR of a photo), it deterministically cross-checks
-the model's numbers against it and adjusts confidence — the model's self-reported
+the model's numbers against it and adjusts confidence - the model's self-reported
 confidence is never trusted on its own:
 
 - `total` found verbatim among the transcript's money tokens ⇒ `confidence.total`
@@ -110,7 +110,7 @@ Without a transcript, confidence values pass through unchanged (clamped to 0..1)
 
 ## Error response
 
-Errors the caller can act on are returned with HTTP `4xx`/`503` and this body —
+Errors the caller can act on are returned with HTTP `4xx`/`503` and this body -
 the service never returns a bare `500` for foreseeable conditions:
 
 ```json
@@ -157,7 +157,7 @@ still accept.
 }
 ```
 
-### 2. Partial read — crumpled thermal paper, total readable
+### 2. Partial read - crumpled thermal paper, total readable
 
 ```json
 {
@@ -175,7 +175,7 @@ still accept.
 ```
 
 The caller should surface the low `items` confidence and the `total_mismatch`
-(6.40 ≠ 23.10 — rows are missing) on its review screen.
+(6.40 ≠ 23.10 - rows are missing) on its review screen.
 
 ### 3. Unreadable input
 

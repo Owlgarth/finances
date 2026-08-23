@@ -6,7 +6,7 @@ explains the three stages that produce it.
 
 ```
 file ──► 1. pre-process (app/images.py, app/ocr.py)
-          │    images:     base64 PNGs — PDF pages rasterized; extreme-aspect
+          │    images:     base64 PNGs - PDF pages rasterized; extreme-aspect
           │                photos split into overlapping vertical tiles
           │    transcript: PDF text layer (born-digital) or RapidOCR, or none
           ▼
@@ -20,7 +20,7 @@ file ──► 1. pre-process (app/images.py, app/ocr.py)
 ```
 
 Every stage degrades gracefully: OCR off or broken means vision-only extraction
-plus an `ocr_unavailable` warning — never a 5xx.
+plus an `ocr_unavailable` warning - never a 5xx.
 
 ## 1. Pre-processing
 
@@ -38,8 +38,8 @@ Then the upload is decoded into **model-ready images** plus an optional
 **machine-extracted transcript**:
 
 **Photos** (JPEG/PNG/WebP/HEIC) are decoded with Pillow (HEIC via pillow-heif)
-and re-encoded as PNG. Very long receipt photos — height over 2.5× width and
-over 2000 px — are split into overlapping vertical tiles (~15% overlap) so
+and re-encoded as PNG. Very long receipt photos - height over 2.5× width and
+over 2000 px - are split into overlapping vertical tiles (~15% overlap) so
 vision encoders don't downscale them into illegibility; the prompt tells the
 model not to duplicate items from the overlap. OCR always runs on the whole,
 untiled image (one pass, no seam duplicates).
@@ -53,9 +53,9 @@ untiled image (one pass, no seam duplicates).
 to the model and as the fact-checker in stage 3:
 
 - A born-digital PDF (more than ~80 extracted characters per page) supplies its
-  embedded text layer — exact digits, no OCR needed.
+  embedded text layer - exact digits, no OCR needed.
 - Photos and scanned PDFs are transcribed with RapidOCR (PaddleOCR models on
-  ONNX Runtime, CPU only, models baked into the Docker image — no runtime
+  ONNX Runtime, CPU only, models baked into the Docker image - no runtime
   egress). Detected words are regrouped into lines by y-center proximity and
   sorted by x, preserving the "name …… price" row structure.
 - If OCR is disabled (`PARSER_OCR_ENABLED=false`), fails, or detects nothing,
@@ -69,13 +69,13 @@ framed as "machine-extracted: digits reliable, layout imperfect") go to the
 configured model backend. Both backends share the same system prompt and return
 raw JSON text; nothing downstream differs.
 
-- **`openai`** (default) — any OpenAI-compatible vision `/chat/completions`
+- **`openai`** (default) - any OpenAI-compatible vision `/chat/completions`
   endpoint: local runtimes (llama.cpp, Ollama, vLLM) or hosted providers.
   Decoding is schema-constrained (`json_schema`); an endpoint that rejects it
   with a 4xx is remembered and gets plain `json_object` for the rest of the
   process. An HTTP 200 with empty content (a thinking model that ran out of
   tokens before answering) maps to `503 model_unavailable`, never a bare 500.
-- **`gemini`** — the Google Gemini REST API, no SDK. Uses plain JSON mode
+- **`gemini`** - the Google Gemini REST API, no SDK. Uses plain JSON mode
   *without* `responseSchema`, on measured evidence (gemini-3.1-flash-lite,
   2026-07): constrained decoding forced schema-ordered keys and scrambled
   fields into `warnings`, and fixing that with `propertyOrdering` triggered a
@@ -87,14 +87,14 @@ raw JSON text; nothing downstream differs.
 The model's JSON is treated as untrusted. `normalize()` in `app/parser.py`
 rebuilds the response field by field:
 
-- **Coercion** — every money value becomes a 2-decimal string (never a float);
+- **Coercion** - every money value becomes a 2-decimal string (never a float);
   malformed rows are skipped, never raised on; confidence values are clamped to
   0..1; missing quantity defaults to `"1"`.
-- **Derived warnings** — computed here, never trusted from the model:
+- **Derived warnings** - computed here, never trusted from the model:
   `item_math_mismatch` (a row where quantity × unit_price ≠ line_total),
   `total_mismatch` (Σ line totals ≠ total), `total_missing`,
   `multi_page_merged`, `ocr_unavailable`.
-- **Transcript grounding** — the deterministic fact-check, when a transcript
+- **Transcript grounding** - the deterministic fact-check, when a transcript
   exists. Every money-shaped token is harvested from the transcript
   (`4,49`, `1 234.56`, … → canonical `"4.49"`). Then:
   - the model's `total` found among those tokens ⇒ `confidence.total` floored
@@ -103,7 +103,7 @@ rebuilds the response field by field:
   - ≥ 80% of item `line_total`s found ⇒ `confidence.items` floored at 0.9;
     < 50% found ⇒ capped at 0.5.
 
-  The parser never "corrects" a number — it reports what the model read and
+  The parser never "corrects" a number - it reports what the model read and
   flags what the paper can't confirm. Without a transcript, confidence passes
   through unchanged (the model's own estimate).
 
@@ -117,7 +117,7 @@ Success is `200` with the contract shape:
   "merchant": "Lidl sp. z o.o.",          // string | null
   "date": "2026-06-14",                   // YYYY-MM-DD | null
   "currency": "PLN",                      // ISO 4217 | null
-  "total": "42.97",                       // decimal string | null — never a float
+  "total": "42.97",                       // decimal string | null - never a float
   "items": [
     {"name": "Chleb wiejski 500g", "quantity": "1",
      "unit_price": "4.49", "line_total": "4.49", "confidence": 0.98}
@@ -131,7 +131,7 @@ Success is `200` with the contract shape:
 Consumers should treat confidence `< 0.7` (and every warning) as "flag for
 human review", and must never parse money strings to float.
 
-Foreseeable failures return `4xx`/`503` with a structured error body — never a
+Foreseeable failures return `4xx`/`503` with a structured error body - never a
 bare 500:
 
 ```json

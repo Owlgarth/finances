@@ -1,7 +1,7 @@
-# Denarly Roadmap — Initiative Descriptions
+# Denarly Roadmap - Initiative Descriptions
 
 This document describes the planned initiatives for evolving Denarly from a personal tool into a
-usable open-source product. It is **not** an implementation plan — each section is a problem
+usable open-source product. It is **not** an implementation plan - each section is a problem
 statement and scope definition meant to be turned into a concrete implementation plan later.
 
 ## How the initiatives relate
@@ -32,7 +32,7 @@ defer the systematic consistency pass until after the redesign lands.
 
 ## 1. Feature & complexity audit ("de-overengineering" review)
 
-**Priority: high (do first — it's cheap and informs everything else)**
+**Priority: high (do first - it's cheap and informs everything else)**
 **Type: review / decision document, no code changes**
 
 ### Problem
@@ -51,18 +51,18 @@ input to the domain model redesign (initiative 3+4).
 
 ### Known candidates to examine
 
-- **Per-workspace `Currency` model** — users currently define their own currencies (name + symbol)
+- **Per-workspace `Currency` model** - users currently define their own currencies (name + symbol)
   per workspace instead of picking from an ISO 4217 list. Review whether a global currency table
   with per-workspace "enabled currencies" would be simpler, and whether a single-currency workspace
   can avoid seeing currency selection entirely.
-- **`ExchangeShortcut`** — an entire Django app for saved currency-pair shortcuts. Useful for a
+- **`ExchangeShortcut`** - an entire Django app for saved currency-pair shortcuts. Useful for a
   power user exchanging PLN↔USD weekly; likely noise for everyone else.
-- **`CurrencyExchange` records + `PeriodBalance.exchanges_in/exchanges_out`** — exchange tracking
+- **`CurrencyExchange` records + `PeriodBalance.exchanges_in/exchanges_out`** - exchange tracking
   is woven into the core balance math. Review whether it can be isolated so single-currency users
   never encounter it.
-- **`BudgetPeriod` manual creation, `weeks` field** — review whether periods can default to
+- **`BudgetPeriod` manual creation, `weeks` field** - review whether periods can default to
   auto-created monthly periods with manual/custom periods as the advanced option.
-- **Onboarding path** — what does a brand-new user have to understand and create before recording
+- **Onboarding path** - what does a brand-new user have to understand and create before recording
   their first transaction? Count the concepts (workspace, budget account, period, currency,
   category). Target: record a first expense within a minute of registering, understanding at most
   one or two concepts.
@@ -85,7 +85,7 @@ input to the domain model redesign (initiative 3+4).
 
 The UI looks acceptable at a glance but degrades on inspection: small elements are off (e.g. wrong
 borders around dropdowns), and there are many inconsistencies in how similar workflows behave in
-different places — the same kind of action is presented differently depending on the screen.
+different places - the same kind of action is presented differently depending on the screen.
 
 ### Goal
 
@@ -98,12 +98,12 @@ Two distinct workstreams:
 
 1. **Visual consistency (design-system level).** Audit all primitive components (dropdowns/selects,
    inputs, buttons, modals, date pickers, tables) against the design tokens in
-   `frontend/` — borders, focus rings, spacing, radii, hover/disabled states, dark-mode parity.
+   `frontend/` - borders, focus rings, spacing, radii, hover/disabled states, dark-mode parity.
    Fix the primitives once so every usage inherits the fix. Produce a component inventory listing
    each primitive, where it's used, and its defects.
-2. **Interaction consistency (workflow level).** Audit recurring workflows — create/edit/delete a
+2. **Interaction consistency (workflow level).** Audit recurring workflows - create/edit/delete a
    record, confirm destructive actions, form validation and error display, empty states, loading
-   states — and define one canonical pattern for each. Document the canonical patterns (in
+   states - and define one canonical pattern for each. Document the canonical patterns (in
    `docs/frontend.md` or the design system docs) so future features follow them.
 
 ### Constraints & notes
@@ -118,7 +118,7 @@ Two distinct workstreams:
 
 ## 3. Simplify the account → workspace → budget account → budget period hierarchy
 
-**Priority: super important — design jointly with initiative 4**
+**Priority: super important - design jointly with initiative 4**
 
 ### Problem
 
@@ -131,22 +131,22 @@ is cumbersome.
 
 Reduce the number of concepts a user must understand, rename what remains so each name is
 self-explanatory, and make navigation feel like Notion's workspace model: a workspace switcher at
-the top, and lightweight sections/pages inside — not a deep drill-down hierarchy.
+the top, and lightweight sections/pages inside - not a deep drill-down hierarchy.
 
 ### Direction (to be validated during design)
 
 - **Workspace stays** as the top-level container (it also carries membership/roles and is the
-  multi-tenancy boundary — that part works).
+  multi-tenancy boundary - that part works).
 - **Budget Account is the concept under most pressure.** With initiative 4 introducing real
   balance-holding accounts, "budget account" stops being where money lives and becomes a *budget*
-  — a plan/envelope over the shared money. Candidate rename: `Budget Account` → `Budget` (which
+  - a plan/envelope over the shared money. Candidate rename: `Budget Account` → `Budget` (which
   requires renaming the current `Budget` model, e.g. to `CategoryBudget` or `BudgetLine`).
 - **Budget Period should fade into the background.** Instead of a user-managed object, periods
   could be auto-created (monthly by default, configurable per budget), with custom periods as an
   advanced feature. The user thinks "February", not "create a period object first".
 - Consider whether the resulting mental model is simply:
   `Workspace → (Accounts hold money) + (Budgets plan money, sliced by period)`
-  — two sibling concepts instead of a four-deep chain.
+  - two sibling concepts instead of a four-deep chain.
 
 ### Open questions (answer during design, before planning)
 
@@ -154,8 +154,8 @@ the top, and lightweight sections/pages inside — not a deep drill-down hierarc
 - Do periods become implicit/auto-created? What happens to period-scoped categories and category
   budgets when a new period starts (copy forward? templates?)?
 - Migration story for existing data (including the demo dataset and the GDPR export/import
-  format — see `data-deletion-gdpr` constraints).
-- Final naming pass across UI, API, models, and docs — one name per concept everywhere.
+  format - see `data-deletion-gdpr` constraints).
+- Final naming pass across UI, API, models, and docs - one name per concept everywhere.
 
 ### Acceptance criteria
 
@@ -167,7 +167,7 @@ the top, and lightweight sections/pages inside — not a deep drill-down hierarc
 
 ## 4. Balance accounts (workspace-level money accounts)
 
-**Priority: super important — design jointly with initiative 3**
+**Priority: super important - design jointly with initiative 3**
 
 ### Problem
 
@@ -179,7 +179,7 @@ that.
 
 ### Goal
 
-Introduce workspace-level **balance accounts** (working name — alternatives: *accounts*, *money
+Introduce workspace-level **balance accounts** (working name - alternatives: *accounts*, *money
 accounts*, *wallets*; note YNAB calls these "accounts" and Firefly III "asset accounts") that
 represent real-world money holdings. Budget accounts (→ "budgets" after initiative 3) stop holding
 money themselves and instead **source their balances from the workspace's balance accounts**.
@@ -192,7 +192,7 @@ money themselves and instead **source their balances from the workspace's balanc
   addition to its budget/category (what it was for).
 - A budget's available funds are derived from balance accounts, not stored per-budget. Multiple
   budgets can draw on the same balance account.
-- Currency exchanges become transfers between balance accounts of different currencies — which may
+- Currency exchanges become transfers between balance accounts of different currencies - which may
   significantly simplify the current `CurrencyExchange` / `exchanges_in/out` machinery (audit
   finding from initiative 1 applies here).
 - Transfers between balance accounts (same currency) become a first-class operation, distinct from
@@ -233,7 +233,7 @@ individual items purchased ("what exactly did I buy for 180 PLN at the supermark
 ### Goal
 
 Attach a receipt (photo, image, or PDF) to a transaction, and store **line items** (product name,
-quantity/position, price) inside a transaction — entered manually or extracted automatically by
+quantity/position, price) inside a transaction - entered manually or extracted automatically by
 the receipt parsing service (initiative 6).
 
 ### User flows (all three must be supported)
@@ -242,32 +242,32 @@ the receipt parsing service (initiative 6).
    items by hand. Works with no LLM service configured.
 2. **Attach + extract**: transaction exists, receipt attached → user clicks "extract items" →
    photo is sent to the parsing service → returned items are saved as the transaction's line
-   items (user can review/edit before or after saving — decide during design).
+   items (user can review/edit before or after saving - decide during design).
 3. **Receipt-first creation**: user clicks "new transaction from receipt" → uploads photo →
    service extracts items and total → a transaction is created pre-filled (amount = receipt total,
    date if detected, line items populated); user picks category/account and confirms.
 
 ### Scope
 
-- New `TransactionItem` model (name, quantity, unit price / line total, order) — child of
+- New `TransactionItem` model (name, quantity, unit price / line total, order) - child of
   `Transaction`. Line items are informational detail; the transaction `amount` remains the source
   of truth for balances (decide: warn when items don't sum to the amount?).
 - Attachment storage: files stored in the existing S3-compatible storage (see `docker-infra`
-  conventions — dual URLs, bucket policy, private bucket + signed URLs since receipts are
+  conventions - dual URLs, bucket policy, private bucket + signed URLs since receipts are
   sensitive personal data).
 - Attachment model supports images and PDF; probably multiple attachments per transaction.
 - Frontend: attachment upload UI (file picker + camera on mobile), line-item editor, extraction
   review flow.
 - Integration point to the parsing service is a **configurable URL** (env var); when unset, the
   extract buttons are hidden and only manual flows exist. The parsing service must remain
-  optional — the open-source tool cannot require a local LLM.
+  optional - the open-source tool cannot require a local LLM.
 
 ### Constraints & notes
 
 - GDPR: attachments must be included in account data export and deleted with the account
   (see `data-deletion-gdpr`).
 - Extraction should run asynchronously (Celery task calling the service), with a visible
-  pending/failed state — local LLM inference can be slow.
+  pending/failed state - local LLM inference can be slow.
 - Extraction results are suggestions; the user must be able to correct them.
 
 ---
@@ -275,7 +275,7 @@ the receipt parsing service (initiative 6).
 ## 6. Receipt parsing service (standalone)
 
 **Priority: super important**
-**Independent — separate service/repo; can start immediately, in parallel with everything else**
+**Independent - separate service/repo; can start immediately, in parallel with everything else**
 
 ### Problem
 
@@ -286,8 +286,8 @@ be optional and swappable.
 ### Goal
 
 A small standalone HTTP service that accepts a receipt/invoice as photo, image, or PDF and returns
-structured JSON: the line items (name, quantity, unit price, line total), the final total, and —
-if detectable — currency, date, and merchant name.
+structured JSON: the line items (name, quantity, unit price, line total), the final total, and -
+if detectable - currency, date, and merchant name.
 
 ### Shape
 
@@ -298,16 +298,16 @@ if detectable — currency, date, and merchant name.
   key. Because the API is OpenAI-compatible, the same service works with a hosted provider if a
   user prefers that over local inference.
 - PDF handling: render PDF pages to images before sending to the vision model.
-- Response is a **stable, versioned JSON schema** — this schema is the contract Denarly
+- Response is a **stable, versioned JSON schema** - this schema is the contract Denarly
   (initiative 5) codes against; define it first. Include a confidence/warnings field so the client
   can flag uncertain extractions for review.
-- Stateless: no database, no stored files — receives bytes, returns JSON. Auth via a simple shared
+- Stateless: no database, no stored files - receives bytes, returns JSON. Auth via a simple shared
   API token. This keeps the privacy story trivial: receipts never persist outside Denarly.
 
 ### Open questions
 
 - Which local vision model to target/recommend first (affects prompt design and quality testing).
-- Sync vs async API: local inference may take tens of seconds — is a long-lived HTTP request
+- Sync vs async API: local inference may take tens of seconds - is a long-lived HTTP request
   acceptable (Denarly already calls it from a Celery task, so probably yes), or does the service
   need a job/poll API?
 - Same repo (monorepo `services/receipt-parser/`) vs separate repository.
