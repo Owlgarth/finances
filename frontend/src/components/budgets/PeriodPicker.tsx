@@ -346,9 +346,9 @@ export default function PeriodPicker({
   // Desktop scroll-into-view on open (spec §9, deviation 5): center the
   // initially highlighted row (= the selected period via
   // initialHighlightIndex, falling back to the first option when nothing is
-  // selected) INSTANTLY. Manual scrollTop math, NOT element.scrollIntoView -
-  // scrollIntoView scrolls every scrollable ancestor, dragging the page under
-  // the popover. Lint note: this effect only mutates DOM (scrollTop); it
+  // selected) INSTANTLY. Manual scrollTop math, NOT the DOM scroll-into-view
+  // API - that call scrolls every scrollable ancestor, dragging the page
+  // under the popover. Lint note: this effect only mutates DOM (scrollTop); it
   // contains no setState call, so react-hooks/set-state-in-effect stays
   // quiet and the 19-warning baseline is preserved.
   useEffect(() => {

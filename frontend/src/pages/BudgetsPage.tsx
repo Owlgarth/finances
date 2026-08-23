@@ -317,6 +317,7 @@ export default function BudgetsPage() {
                   )}
                   {canManageAccounts && (
                     <button
+                      type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
                       title="Rename"
@@ -327,6 +328,7 @@ export default function BudgetsPage() {
                   )}
                   {canManageAccounts && (
                     <button
+                      type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
                       title="Delete"
