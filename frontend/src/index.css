@@ -319,6 +319,16 @@ button {
 .animate-scrim-in  { animation: scrim-in 120ms ease-out; }
 .animate-scrim-out { animation: scrim-out 80ms ease-in forwards; }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Dropdown open (patterns.md §5) - anchored popover panels fade in 100ms;
+   close is instant (unmount). Collapsed by the GLOBAL prefers-reduced-motion
+   rule at the end of this file - no per-component opt-out needed. */
+.animate-fade-in { animation: fadeIn 100ms ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet-in,
   .animate-sheet-out,
