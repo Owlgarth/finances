@@ -28,6 +28,7 @@ frontend/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
+│   │   ├── budgets/          # PeriodPicker (budget period listbox: desktop popover / mobile bottom sheet)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
@@ -40,7 +41,7 @@ frontend/
 │   ├── hooks/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── usePermissions.ts        # Role-based permission checks
-│   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect panel state + keyboard nav
+│   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
@@ -61,7 +62,7 @@ Seven in-app destinations (sidebar) plus auth/legal routes and a 404 catch-all.
 | `/` | Dashboard | Account balances + recent activity |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers |
 | `/budgets` | BudgetsPage | Budget list |
-| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher; custom-cadence period management |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period); custom-cadence period management |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create |
 | `/planned` | Planned | Planned transactions |
 | `/members` | WorkspaceMembersPage | Member management |
@@ -83,8 +84,11 @@ class constants - the redesign's form primitives). `DatePicker` (react-day-picke
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
 
-**Budgets** (`components/modals/budgets/`): `PeriodFormModal` (add/edit a custom budget
-period; the name is derived from the date range until edited).
+**Budgets** (`components/budgets/` + `components/modals/budgets/`): `PeriodPicker`
+(the period listbox on Budget detail - desktop popover grouped by year with a
+CURRENT chip and muted past periods, mobile bottom sheet; a sibling consumer of
+the `useListboxPanel` machinery, not a Select fork), `PeriodFormModal` (add/edit a
+custom budget period; the name is derived from the date range until edited).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
@@ -132,7 +136,11 @@ interface WorkspaceContextType {
 > There is no global account or period context. Accounts and budgets are read
 > through the hooks in `hooks/useDomain.ts`; period selection is local state on the
 > Budget detail page (periods are per-budget). The old `BudgetAccountContext` /
-> `BudgetPeriodContext` were removed in the redesign.
+> `BudgetPeriodContext` were removed in the redesign. The selection is backed by
+> a `?period=` URL param: deep links and reloads seed the chosen period,
+> user-initiated selections are written back with `{ replace: true }` (selections
+> stay out of history), and a garbage or foreign period id falls back to the
+> default pick.
 
 ### ThemeContext
 
