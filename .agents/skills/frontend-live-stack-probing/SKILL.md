@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Denarly frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Denarly frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -41,6 +41,18 @@ same session - in PR #81 it paid for itself twice.
   derive from `API_PORT`/`UI_PORT` (rule detail in `docker-infra`). Missing one silently
   splits frontend/backend across checkouts - confirm the UI actually reaches YOUR api before
   debugging the product.
+
+## Budget the fallback before assembling
+
+- Gate the live-vs-static mode choice on a CHEAP availability check (`docker ps`, port probe)
+  written into the task spec BEFORE any assembly. PR #87's session spent ~25k tokens
+  investigating stack assembly (another checkout held the default ports) before the
+  >30k-before-first-probe guardrail forced a static fallback - the check itself costs ~0.
+- When assembly would burn the probe budget before the first probe, stop assembling: bank the
+  static verification (lint/grep/build gates, code-level checks), mark behavioral items
+  `[deferred - manual]`, and hand them to the PR visual gate - paste the task report's
+  visual-gate block into the PR body verbatim so every deferred item has an owner. A
+  half-assembled stack risks mid-pass context overflow and proves nothing.
 
 ## Probe by bug class
 
