@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 import AccountsPage from './pages/AccountsPage'
 import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
+import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
 import Planned from './pages/Planned'
 import ProfilePage from './pages/ProfilePage'
@@ -30,6 +31,7 @@ function AppContent() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
+        <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
