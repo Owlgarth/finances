@@ -29,6 +29,7 @@ frontend/
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
+│   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
 │   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
@@ -60,7 +61,7 @@ Seven in-app destinations (sidebar) plus auth/legal routes and a 404 catch-all.
 | `/` | Dashboard | Account balances + recent activity |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers |
 | `/budgets` | BudgetsPage | Budget list |
-| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher; custom-cadence period management |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create |
 | `/planned` | Planned | Planned transactions |
 | `/members` | WorkspaceMembersPage | Member management |
@@ -81,6 +82,9 @@ class constants - the redesign's form primitives). `DatePicker` (react-day-picke
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
+
+**Budgets** (`components/modals/budgets/`): `PeriodFormModal` (add/edit a custom budget
+period; the name is derived from the date range until edited).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
@@ -330,6 +334,12 @@ contexts can both import it without a cycle). On workspace switch/create/delete 
 whole cache is removed except a keep-set of user-scoped keys (`user-preferences`,
 `2fa-status`, `extraction-config`) - mounted queries refetch immediately, so nothing
 from the previous workspace survives the switch.
+
+The domain list hooks in `hooks/useDomain.ts` set `refetchOnWindowFocus: 'always'`:
+each browser tab keeps its own cache (a mutation in another tab can't invalidate this
+one) and the app-wide 5-minute `staleTime` would otherwise mark a list fresh and skip
+the default stale-only focus refetch - so these cheap list GETs converge whenever the
+user looks at the tab again.
 
 ### Query Keys
 
