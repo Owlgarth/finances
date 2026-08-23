@@ -151,6 +151,7 @@ frontend/src/
 │   ├── layout/             # MainLayout, Sidebar (7 destinations), UserMenu
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
+│   ├── budgets/            # PeriodPicker (budget period listbox)
 │   ├── transactions/       # Items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit)
 │   └── modals/transactions/# Transaction / Planned / NewFromReceipt modals

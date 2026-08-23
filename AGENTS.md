@@ -103,5 +103,6 @@ Detailed conventions are split into skills under `.agents/skills/`. Load the rel
 | `auth-security` | Auth, tokens, 2FA, rate limiting, anti-enumeration, security-sensitive endpoints |
 | `email-sending` | Sending emails, email templates, EmailService |
 | `frontend-react` | Any frontend code — design tokens, components, modals, API client, auth flows |
+| `frontend-live-stack-probing` | Interactive verification of frontend behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class |
 | `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
 | `docker-infra` | docker-compose, Dockerfiles, entrypoints, nginx, S3 storage |
