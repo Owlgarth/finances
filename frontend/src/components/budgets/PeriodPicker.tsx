@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { CalendarRange, Check, ChevronDown } from 'lucide-react'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import { formatPeriodRange } from '../../utils/format'
@@ -15,9 +15,26 @@ export interface PeriodPickerProps {
   value: number | null
   /** Fires with the chosen period id on row activation; the picker closes itself. */
   onChange: (id: number) => void
+  /** Max period rows shown: the list is windowed to `limit` rows centered on
+   *  the selected/viewed period (clamped at the list edges; a null selection
+   *  starts at the top). Undefined = no cap (full list). Optional variant
+   *  prop - existing call sites that omit it are unaffected. */
+  limit?: number
+  /** When provided, a "View all periods" pseudo-option is appended last in
+   *  BOTH panels; activating it fires this (instead of onChange) and closes
+   *  the picker. The row is always visible - not conditional on list length. */
+  onViewAll?: () => void
   /** Accessible name for the trigger (spec §2). Panels are labeled "Periods". */
   'aria-label'?: string
 }
+
+/** Value of the "View all periods" pseudo-option appended to the hook's
+ *  options. A NUMBER (not a string sentinel) keeps the hook's generic
+ *  ListboxOption<number> shape honest; period ids are positive DB primary
+ *  keys, so -1 can never collide with a real period. Module-private: callers
+ *  pass `onViewAll`, never the sentinel. */
+const VIEW_ALL_VALUE = -1
+const VIEW_ALL_LABEL = 'View all periods'
 
 /** Temporal classification of a period against today (spec §6). */
 type Temporal = 'past' | 'current' | 'future'
@@ -188,13 +205,19 @@ function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProp
  * + open/highlight/type-ahead machinery, picker-specific rich rows (name +
  * date range + CURRENT chip) grouped by year, temporal muting, composed
  * per-option aria-labels. Intentional deviations from listboxParts defaults
- * are the 8 items in spec §12. Not yet wired into any page (Task 3 does it);
+ * are the 8 items in spec §12. Hosted by BudgetDetailPage's period switcher;
  * selection semantics identical to Select (pick and close, no toggle-off).
+ * Optional variant props: `limit` caps the list to a window centered on the
+ * selected/viewed period, and `onViewAll` appends a "View all periods"
+ * pseudo-option (sticky footer in the desktop popover, last row in the
+ * mobile sheet) that fires it instead of onChange and closes.
  */
 export default function PeriodPicker({
   periods,
   value,
   onChange,
+  limit,
+  onViewAll,
   'aria-label': ariaLabel = 'Period',
 }: PeriodPickerProps) {
   // Adaptive pattern (patterns.md §13): all panel state lives in
@@ -204,12 +227,50 @@ export default function PeriodPicker({
 
   // Deviation 7: options are { value: id, label: name } so the hook's
   // type-ahead and filtering stay honest; rich rows look the full Period up
-  // from `periods` by flat index. Deviation 6: searchable: false - the search
-  // input is deferred; printable-letter type-ahead still works (labels carry
-  // the period names).
-  const options = periods.map((p) => ({ value: p.id, label: p.name }))
+  // by flat index. Deviation 6: searchable: false - the search input is
+  // deferred; printable-letter type-ahead still works (labels carry the
+  // period names, and the view-all pseudo-option's label matches it too).
   const selectedIndex = periods.findIndex((p) => p.id === value)
   const selectedPeriod = selectedIndex >= 0 ? periods[selectedIndex] : null
+
+  // Capped window (variant props): pure per-render derivation - NO state, NO
+  // effect, so react-hooks/set-state-in-effect stays quiet. When `limit` is
+  // provided and the list exceeds it, show `limit` rows centered on the
+  // selected/viewed period:
+  //   windowStart = clamp(selectedIndex - floor(limit / 2), 0, periods.length - limit)
+  // A null selection (or a list that fits) starts at the top / shows
+  // everything. Clamping only moves the window TOWARD an existing selection,
+  // so selectedIndex is guaranteed to fall INSIDE the window (proof: the
+  // unclamped center puts it at offset floor(limit/2); each clamp direction
+  // pins an edge that still contains it).
+  const effectiveLimit = limit != null && periods.length > limit ? limit : null
+  const windowStart =
+    effectiveLimit != null
+      ? Math.max(
+          0,
+          Math.min(
+            selectedIndex >= 0 ? selectedIndex - Math.floor(effectiveLimit / 2) : 0,
+            periods.length - effectiveLimit,
+          ),
+        )
+      : 0
+  const windowedPeriods =
+    effectiveLimit != null ? periods.slice(windowStart, windowStart + effectiveLimit) : periods
+
+  // The pseudo-option is appended LAST so arrows / Home / End / type-ahead
+  // treat it as an ordinary option: End lands on it, Enter on it navigates,
+  // typing "v" jumps to it (unless an earlier windowed period name also
+  // starts with "v" - type-ahead is first-match; uniform participation is
+  // accepted design). With searchable: false, filteredOptions === options.
+  const options = [
+    ...windowedPeriods.map((p) => ({ value: p.id, label: p.name })),
+    ...(onViewAll ? [{ value: VIEW_ALL_VALUE, label: VIEW_ALL_LABEL }] : []),
+  ]
+  // Flat index of the pseudo-option in the hook's option space; -1 = absent.
+  const viewAllIndex = onViewAll ? windowedPeriods.length : -1
+  // Window-relative index of the selection (identical to selectedIndex when
+  // uncapped - windowStart is 0). Always >= 0 when a selection exists.
+  const selectedWindowIndex = selectedIndex >= 0 ? selectedIndex - windowStart : -1
 
   // Desktop popover ref - the hook has no desktop panel ref; scroll-into-view
   // on open is done locally (deviation 5), NOT by extending the hook (which
@@ -237,17 +298,25 @@ export default function PeriodPicker({
     searchable: false,
     disabled: false,
     isMobile,
-    initialHighlightIndex: selectedIndex >= 0 ? selectedIndex : 0,
+    initialHighlightIndex: selectedWindowIndex >= 0 ? selectedWindowIndex : 0,
     onActivate: activateIndex,
   })
 
   // Pick the period and close - identical semantics to Select's selectIndex:
   // re-clicking the already-selected row just closes; no toggle-off.
-  // With searchable: false, filteredOptions === options === periods in order,
-  // so the index into filteredOptions doubles as a `periods` index.
+  // With searchable: false, filteredOptions === options: the first
+  // windowedPeriods.length entries are the windowed periods in order, and a
+  // final entry (when onViewAll is provided) is the view-all pseudo-option.
+  // So the index into filteredOptions doubles as a windowedPeriods index -
+  // or addresses the pseudo-option when it equals viewAllIndex.
   function activateIndex(i: number) {
     const opt = filteredOptions[i]
     if (!opt) return
+    if (opt.value === VIEW_ALL_VALUE) {
+      onViewAll?.()
+      closePanel(true)
+      return
+    }
     onChange(opt.value)
     closePanel(true)
   }
@@ -260,11 +329,13 @@ export default function PeriodPicker({
   // sorted allPeriods by start_date desc, so years are monotonically
   // non-increasing and equal years are adjacent; no resorting here). The
   // reduce's third argument IS each period's flat option index: with
-  // searchable: false the hook's filteredOptions === options === periods, so
-  // optionId(item.index) and aria-activedescendant stay aligned with the
-  // hook's index space while labels/dividers interleave options freely -
-  // keyboard skips them naturally because the hook only counts options.
-  const groups = periods.reduce<PeriodGroup[]>((acc, period, index) => {
+  // searchable: false the hook's filteredOptions === options (windowed
+  // periods first, optional pseudo-option last), so optionId(item.index)
+  // and aria-activedescendant stay aligned with the hook's index space
+  // while labels/dividers interleave options freely - keyboard skips them
+  // naturally because the hook only counts options. The pseudo-option is
+  // NOT in the groups; it renders separately after them at viewAllIndex.
+  const groups = windowedPeriods.reduce<PeriodGroup[]>((acc, period, index) => {
     const year = period.start_date.slice(0, 4)
     const last = acc[acc.length - 1]
     if (last && last.year === year) last.items.push({ period, index })
@@ -275,9 +346,9 @@ export default function PeriodPicker({
   // Desktop scroll-into-view on open (spec §9, deviation 5): center the
   // initially highlighted row (= the selected period via
   // initialHighlightIndex, falling back to the first option when nothing is
-  // selected) INSTANTLY. Manual scrollTop math, NOT element.scrollIntoView -
-  // scrollIntoView scrolls every scrollable ancestor, dragging the page under
-  // the popover. Lint note: this effect only mutates DOM (scrollTop); it
+  // selected) INSTANTLY. Manual scrollTop math, NOT the DOM scroll-into-view
+  // API - that call scrolls every scrollable ancestor, dragging the page
+  // under the popover. Lint note: this effect only mutates DOM (scrollTop); it
   // contains no setState call, so react-hooks/set-state-in-effect stays
   // quiet and the 19-warning baseline is preserved.
   useEffect(() => {
@@ -357,6 +428,22 @@ export default function PeriodPicker({
                 ))}
               </Fragment>
             ))}
+            {/* Same view-all pseudo-option in the sheet's listbox: plain
+                SheetOptionRow-parity row (44px floor, CalendarRange leading),
+                not a sticky footer - the sheet has no 280px cap. */}
+            {onViewAll && (
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                aria-label={VIEW_ALL_LABEL}
+                onClick={() => activateIndex(viewAllIndex)}
+                className="w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover"
+              >
+                <CalendarRange size={16} className="text-text-muted flex-shrink-0" />
+                <span className="truncate">{VIEW_ALL_LABEL}</span>
+              </button>
+            )}
           </div>
         </BottomSheet>
       )}
@@ -389,6 +476,33 @@ export default function PeriodPicker({
               ))}
             </Fragment>
           ))}
+          {/* View-all pseudo-option as a PINNED FOOTER: in-flow after 7 rows
+              it lands below the 280px scroll fold, so it sticks to the panel's
+              visible bottom instead - always visible without raising the
+              shared max-h (spec §9). role="option" + optionId(viewAllIndex)
+              keep it inside the hook's option space: ArrowDown/End/type-ahead
+              reach it, aria-activedescendant can point at it, Enter/click
+              activate it (activateIndex branch). aria-selected={false}: it is
+              a navigation action, never the selected period. */}
+          {onViewAll && (
+            <button
+              type="button"
+              role="option"
+              id={optionId(viewAllIndex)}
+              aria-selected={false}
+              aria-label={VIEW_ALL_LABEL}
+              tabIndex={-1}
+              onClick={() => activateIndex(viewAllIndex)}
+              className={
+                'sticky bottom-0 z-10 mt-1 border-t border-border transition-colors ' +
+                'w-full flex items-center gap-2.5 px-3 h-8 text-left text-[13px] text-text ' +
+                (highlightedIndex === viewAllIndex ? 'bg-surface-hover ' : 'bg-surface hover:bg-surface-hover ')
+              }
+            >
+              <CalendarRange size={14} className="text-text-muted flex-shrink-0" />
+              <span className="flex-1 min-w-0 truncate">{VIEW_ALL_LABEL}</span>
+            </button>
+          )}
         </div>
       )}
     </div>
