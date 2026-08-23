@@ -1,6 +1,6 @@
 import { useMediaQuery } from './useMediaQuery'
 
-// Canonical breakpoint tiers (IMPLEMENTATION_PLAN.md decision 1, spec docs/tasks/M1-*.md).
+// Canonical breakpoint tiers (IMPLEMENTATION_PLAN.md decision 1).
 // Boundaries snap to Tailwind's `sm` (640px) and `lg` (1024px) screens so this hook and
 // CSS prefixes (`max-sm:`, `lg:`) can never disagree at a boundary pixel.
 export const MOBILE_QUERY = '(max-width: 639.98px)'
