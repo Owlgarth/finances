@@ -28,7 +28,7 @@ frontend/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
-│   │   ├── budgets/          # PeriodPicker (budget period listbox: desktop popover / mobile bottom sheet)
+│   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
@@ -54,15 +54,17 @@ frontend/
 
 ## Pages and Routes
 
-Seven in-app destinations (sidebar) plus auth/legal routes and a 404 catch-all.
+Seven in-app destinations (sidebar) plus nested budget routes, auth/legal routes
+and a 404 catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
 | `/login`, `/register` | Login, Register | Auth; registration picks a currency + optional sample data |
 | `/` | Dashboard | Account balances + recent activity |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers |
-| `/budgets` | BudgetsPage | Budget list |
-| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period); custom-cadence period management |
+| `/budgets` | BudgetsPage | Budget list; card icons open a budget's periods / add a custom period |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row); custom-cadence period management |
+| `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create |
 | `/planned` | Planned | Planned transactions |
 | `/members` | WorkspaceMembersPage | Member management |
@@ -87,8 +89,14 @@ balance adjustment), `TransferModal` (last-used pair, cross-currency implied rat
 **Budgets** (`components/budgets/` + `components/modals/budgets/`): `PeriodPicker`
 (the period listbox on Budget detail - desktop popover grouped by year with a
 CURRENT chip and muted past periods, mobile bottom sheet; a sibling consumer of
-the `useListboxPanel` machinery, not a Select fork), `PeriodFormModal` (add/edit a
-custom budget period; the name is derived from the date range until edited).
+the `useListboxPanel` machinery, not a Select fork; optional `limit` caps the list
+to a window centered on the viewed period, and `onViewAll` appends a
+"View all periods" row - sticky popover footer on desktop, last row in the mobile
+sheet - that navigates to the periods page instead of selecting), `PeriodCard`
+(one period as a card on the periods page; the whole card is a link to
+`/budgets/:id?period=<id>`, with a CURRENT chip, muted past periods, and admin
+edit/delete icons on custom periods), `PeriodFormModal` (add/edit a custom budget
+period; the name is derived from the date range until edited).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
@@ -140,7 +148,9 @@ interface WorkspaceContextType {
 > a `?period=` URL param: deep links and reloads seed the chosen period,
 > user-initiated selections are written back with `{ replace: true }` (selections
 > stay out of history), and a garbage or foreign period id falls back to the
-> default pick.
+> default pick. The periods overview page (`/budgets/:id/periods`) holds no
+> selection either - its cards deep-link into the detail page via the same
+> `?period=` param.
 
 ### ThemeContext
 
