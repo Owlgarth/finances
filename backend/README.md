@@ -76,7 +76,7 @@ Endpoints should not contain database operations beyond workspace validation. Al
 
 Apps with service files: `accounts`, `budgeting`, `categories`, `transactions`, `transfers`, `planned_transactions`, `currencies`, `reports`, `workspaces`.
 
-Apps with Celery tasks: `planned_transactions` (see `tasks.py`). Services dispatch tasks via `task.delay()` directly — no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
+Apps with Celery tasks: `planned_transactions` (see `tasks.py`). Services dispatch tasks via `task.delay()` directly - no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
 
 ## JWT Authentication
 
@@ -138,7 +138,7 @@ period.
 
 If the user opts in (the "Start with sample data" checkbox at registration),
 `create_demo_fixtures()` additionally seeds a second (Savings) account, sample
-transactions across categories, a transfer, and a planned transaction — so the
+transactions across categories, a transfer, and a planned transaction - so the
 dashboard and reports have something to show.
 
 ## DEMO Mode
@@ -179,7 +179,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | DELETE | `/api/users/me/consents/{consent_type}` | Withdraw consent |
 | GET | `/api/users/me/deletion-check` | Pre-check account deletion impact |
 | DELETE | `/api/users/me` | Permanently delete account and all data |
-| GET | `/api/users/me/export` | Export all personal data as JSON — v3.0 (rate limited) |
+| GET | `/api/users/me/export` | Export all personal data as JSON - v3.0 (rate limited) |
 | POST | `/api/users/me/import` | Import data from a v3.0 export (same-system restore) |
 | POST | `/api/users/import-legacy` | Import + convert a legacy (pre-redesign) export |
 
@@ -243,7 +243,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | GET/PUT/DELETE | `/api/budgets/{id}` | Get / update / delete budget |
 | PATCH | `/api/budgets/{id}/archive` | Activate / deactivate budget |
 | GET/POST | `/api/budgets/{id}/periods` | List / create period |
-| GET | `/api/budgets/{id}/periods/current` | Current period (`date`) — materialized on demand |
+| GET | `/api/budgets/{id}/periods/current` | Current period (`date`) - materialized on demand |
 | PUT/DELETE | `/api/budgets/{id}/periods/{pid}` | Update / delete period |
 | GET/POST | `/api/budgets/{id}/categories` | List (`include_archived`) / create category |
 | PUT/PATCH/DELETE | `/api/budgets/{id}/categories/{cid}` | Update / archive / delete category |
@@ -318,11 +318,11 @@ attachments travel as base64 and are recreated when object storage is configured
 ### Legacy Import (pre-redesign data)
 
 `POST /api/users/import-legacy` accepts a JSON export from an older
-(period/exchange-based) version and converts it to the account-based model —
+(period/exchange-based) version and converts it to the account-based model -
 symbol→ISO currencies, one `Main <CODE>` account per currency (opening balance
 solved so computed balances match), exchanges→transfers with linked-transaction
 dedup, and a per-workspace **verification report** (computed vs expected balances,
-deduped transactions, warnings). See the cutover guide in the root README.
+deduped transactions, warnings).
 
 ## Testing
 
