@@ -55,7 +55,9 @@ transfer. Transfers replace the old currency-exchange records.
   range ("04 Sep - 03 Oct 2026") that keeps re-deriving until edited; saving chains
   the budget create with the first period create.
 - The **Budget detail** page shows a category table of **planned vs actual vs
-  remaining** for the selected period, with a period switcher. Categories are created
+  remaining** for the selected period, with a period switcher (the selection is
+  carried in the `?period=` URL param, so reloads and shared links land on the
+  chosen period; an invalid id falls back to the default pick). Categories are created
   inline; planned amounts are edited inline (current period). Past periods render as
   read-only snapshots. Custom-cadence budgets get add/edit/delete period controls
   beside the switcher (admin+; deleting a period removes its planned amounts but never
