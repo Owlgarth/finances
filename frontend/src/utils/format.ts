@@ -91,3 +91,41 @@ export function subtractAmounts(a: string, b: string): string {
 export function formatPeriodName(startIso: string, endIso: string): string {
   return `${format(parseISO(startIso), 'dd MMM')} – ${format(parseISO(endIso), 'dd MMM y')}`
 }
+
+/**
+ * Format a period's date range for the PeriodPicker rows (and any other short
+ * period-range display): "Apr 1 - Apr 30" within one year, "Dec 28 2025 -
+ * Jan 3 2026" across years.
+ *
+ * Worked examples (PERIOD_PICKER_SPEC.md §7.2 is the contract; the frontend
+ * has no test runner, so these docblock examples are the review reference -
+ * keep them in sync if the format ever changes):
+ *   formatPeriodRange('2026-04-01', '2026-04-30') === 'Apr 1 - Apr 30'
+ *   formatPeriodRange('2028-02-01', '2028-02-29') === 'Feb 1 - Feb 29'
+ *   formatPeriodRange('2026-01-05', '2026-01-11') === 'Jan 5 - Jan 11'
+ *   formatPeriodRange('2025-12-28', '2026-01-03') === 'Dec 28 2025 - Jan 3 2026'
+ *   formatPeriodRange('2026-11-15', '2027-02-28') === 'Nov 15 2026 - Feb 28 2027'
+ *   formatPeriodRange('2026-07-01', '2026-09-30', { withYears: true })
+ *     === 'Jul 1 2026 - Sep 30 2026'
+ *
+ * ADJACENCY WARNING - deliberately different from formatPeriodName above,
+ * which mirrors the backend's derived-period naming (zero-padded days, an
+ * en-dash separator, year only on the end, e.g. "04 Sep" en-dash "03 Oct
+ * 2026") and must stay byte-identical to it (hand-created periods persist it
+ * as their name). Do NOT unify the two formats. This one is a display-only
+ * context-selector range (spec §7): month-first, no leading zeros, year on
+ * BOTH endpoints or neither, regular hyphen " - " separator, no same-month
+ * compression.
+ *
+ * parseISO reads date-only strings as local time - no UTC-midnight day shift
+ * in negative-offset zones (see formatPeriodName's note).
+ */
+export function formatPeriodRange(
+  startIso: string,
+  endIso: string,
+  opts?: { withYears?: boolean },
+): string {
+  const withYears = opts?.withYears === true || startIso.slice(0, 4) !== endIso.slice(0, 4)
+  const pattern = withYears ? 'MMM d y' : 'MMM d'
+  return `${format(parseISO(startIso), pattern)} - ${format(parseISO(endIso), pattern)}`
+}
