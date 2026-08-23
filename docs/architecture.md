@@ -12,7 +12,7 @@ Full-stack web application with:
 - **Authentication**: JWT (JSON Web Tokens)
 - **Task Queue**: Celery with Redis broker (planned-transaction execution, receipt extraction)
 - **Object storage**: S3-compatible (private media bucket for receipt attachments)
-- **Receipt parser** (optional): a standalone stateless FastAPI service
+- **Receipt parser** (optional): an external, pluggable service implementing `docs/parser-contract.md`
 
 ```
 ┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
@@ -245,14 +245,15 @@ do not change to 404.
 ## Deployment
 
 `docker-compose.yml` runs: `db` (Postgres), `redis`, `storage` (S3-compatible),
-`api`, `ui`, `worker`, `beat`, plus `parser` (optional, `--profile parser`) and
-`node` (dev toolchain, `--profile tools`). Every value - credentials, service
-hostnames, published ports - comes from `.env` (see `example.env`).
+`api`, `ui`, `worker`, `beat`, plus `node` (dev toolchain, `--profile tools`).
+Every value - credentials, service hostnames, published ports - comes from
+`.env` (see `example.env`).
 
 For local development `./dev.sh up` runs only the backing services and
 `./dev.sh backend` / `./dev.sh frontend` run the app - in their containers by
 default, or on the host with `DEV_TARGET=host`. `./dev.sh up --full` runs the
 whole stack in Docker, which is also how it deploys.
 
-The receipt parser is fully optional: with `PARSER_URL` unset, the backend reports
-extraction as disabled and the UI hides every extraction affordance.
+The receipt parser is external and fully optional: any service implementing
+`docs/parser-contract.md` can serve it. With `PARSER_URL` unset, the backend
+reports extraction as disabled and the UI hides every extraction affordance.
