@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
+import { CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
 import { useBudgets } from '../hooks/useDomain'
@@ -227,12 +228,25 @@ function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose
 }
 
 export default function BudgetsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canManageAccounts } = usePermissions()
   const { data: budgets = [], isLoading } = useBudgets(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [renaming, setRenaming] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
+  // Add-period modal (mount-per-use, PeriodFormModal docblock): the
+  // per-session key forces a fresh remount so the modal's lazy useState
+  // initializers re-run - add-after-add on the same budget opens fresh
+  // defaults, not stale state. The nonce also covers a batched
+  // close-then-open in one tick (the null gap never renders), where the
+  // id alone would reuse the mounted instance.
+  const [periodModalBudget, setPeriodModalBudget] = useState<Budget | null>(null)
+  const [periodModalNonce, setPeriodModalNonce] = useState(0)
+  const openPeriodModal = (b: Budget) => {
+    setPeriodModalBudget(b)
+    setPeriodModalNonce((n) => n + 1)
+  }
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => budgetsApi.delete(id),
@@ -270,13 +284,40 @@ export default function BudgetsPage() {
               <div className="flex items-center gap-2">
                 <PieChart size={16} className="text-text-muted" />
                 <span className="text-sm font-medium text-text truncate">{b.name}</span>
-                {canManageAccounts && (
-                  /* Adjacent icon buttons: real padded hit areas instead of
-                     .touch-hit, whose expanded areas would overlap
-                     (responsive.md). On coarse pointers they grow to the 44px
-                     floor; -my keeps the card header height unchanged. */
-                  <span className="ml-auto flex items-center gap-1">
+                {/* Adjacent icon buttons: real padded hit areas instead of
+                    .touch-hit, whose expanded areas would overlap
+                    (responsive.md). On coarse pointers they grow to the 44px
+                    floor; -my keeps the card header height unchanged.
+                    View-periods is read-only (all roles); add-period gates
+                    on custom cadence + admin, the same predicate as
+                    BudgetDetailPage's period-management cluster. Buttons,
+                    not nested Links - a Link cannot nest inside the card's
+                    Link; preventDefault + stopPropagation keep the click
+                    from triggering the card's own navigation. */}
+                <span className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/budgets/${b.id}/periods`) }}
+                    className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
+                    title="View periods"
+                    aria-label={`View periods for ${b.name}`}
+                  >
+                    <CalendarRange size={13} />
+                  </button>
+                  {b.cadence === 'custom' && canManageAccounts && (
                     <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPeriodModal(b) }}
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
+                      title="Add period"
+                      aria-label={`Add period to ${b.name}`}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  )}
+                  {canManageAccounts && (
+                    <button
+                      type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
                       title="Rename"
@@ -284,7 +325,10 @@ export default function BudgetsPage() {
                     >
                       <Pencil size={13} />
                     </button>
+                  )}
+                  {canManageAccounts && (
                     <button
+                      type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
                       title="Delete"
@@ -292,8 +336,8 @@ export default function BudgetsPage() {
                     >
                       <Trash2 size={13} />
                     </button>
-                  </span>
-                )}
+                  )}
+                </span>
               </div>
               <div className="mt-2 text-[10px] font-mono uppercase tracking-wider text-text-muted">
                 {b.cadence === 'weeks' ? `Every ${b.cadence_weeks} weeks` : b.cadence}
@@ -305,6 +349,15 @@ export default function BudgetsPage() {
 
       <CreateBudgetModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <RenameBudgetModal budget={renaming} onClose={() => setRenaming(null)} />
+      {periodModalBudget && (
+        <PeriodFormModal
+          key={`add-${periodModalBudget.id}-${periodModalNonce}`}
+          mode="add"
+          budgetId={periodModalBudget.id}
+          period={null}
+          onClose={() => setPeriodModalBudget(null)}
+        />
+      )}
       <ConfirmDialog
         isOpen={!!deleting}
         title="Delete budget"
