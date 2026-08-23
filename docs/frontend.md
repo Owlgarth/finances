@@ -17,5 +17,6 @@ The detailed, authoritative frontend documentation lives next to the code:
 
 There is no global account or period context - data is read through
 `hooks/useDomain.ts`, and period selection is local to the Budget detail page
-(periods are per-budget). Receipt extraction UI is gated on `useExtractionEnabled()`
+(periods are per-budget; the selection is deep-linkable via the `?period=` URL
+param on `/budgets/:id`). Receipt extraction UI is gated on `useExtractionEnabled()`
 and hidden entirely when no parser is configured.
