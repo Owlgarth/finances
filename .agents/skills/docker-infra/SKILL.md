@@ -19,7 +19,7 @@ S3_ENDPOINT_URL=http://storage:9000
 
 `docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`, `parser`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift.
 
-Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
+Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. A port shift for a second checkout is a TRIPLE, not a one-variable edit: `VITE_API_URL`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` hardcode the API/UI origins and do NOT derive from `API_PORT`/`UI_PORT` - shifting only the port variables silently points the frontend at the other checkout's backend (or makes CORS reject it), which costs a debugging cycle before anyone suspects the env. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
 
 ## Env De-duplication: Map-Form `x-*` Anchors
 
