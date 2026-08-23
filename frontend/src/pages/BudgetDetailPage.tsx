@@ -15,6 +15,7 @@ import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Per-budget currency-switcher order — a display preference, stored client-side
@@ -69,11 +70,15 @@ export default function BudgetDetailPage() {
     periodParamRef.current = intParam(searchParams, 'period')
   }, [searchParams])
 
-  // Default to the current period (materialize it lazily on load).
+  // Default to the current period (materialize it lazily on load). The
+  // enabled gate must wait for the budget to LOAD, not just be non-custom:
+  // on the first render(s) budget is undefined, `undefined !== 'custom'` is
+  // true, and custom-cadence budgets fire a doomed GET periods/current ->
+  // 400 -> console error noise on every visit to an empty custom budget.
   const { data: currentPeriod, isSuccess: currentPeriodLoaded } = useQuery({
     queryKey: ['current-period', budgetId],
     queryFn: () => budgetsApi.currentPeriod(budgetId),
-    enabled: budget?.cadence !== 'custom',
+    enabled: budget != null && budget.cadence !== 'custom',
     retry: false,
   })
   // The periods list is a plain GET, newest first — it beats the lazily
@@ -82,11 +87,6 @@ export default function BudgetDetailPage() {
   // cadence has no derived current period, so there the list is all there is.
   const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['budget-summary', budgetId, periodId],
-    queryFn: () => reportsApi.budgetSummary(budgetId, periodId!),
-    enabled: !!periodId,
-  })
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
     queryFn: () => budgetsApi.listCategories(budgetId),
@@ -98,6 +98,22 @@ export default function BudgetDetailPage() {
     if (currentPeriod) map.set(currentPeriod.id, currentPeriod)
     return Array.from(map.values()).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [periods, currentPeriod])
+
+  // Summary gate (declared after the allPeriods memo - TDZ): on budget-to-
+  // budget navigation the [budgetId] reset effect runs one commit later than
+  // this render, so periodId still holds the PREVIOUS budget's period for a
+  // single render. Without the gate that render fires budgetSummary(B,
+  // A_period) -> a transient red 404 in the network tab (the reset then
+  // clears the id and the UI recovers, but the stray request is noise).
+  // Gating on membership in allPeriods also keeps a garbage ?period= seed
+  // from hitting the server at all - the reconcile effect clears it locally.
+  // A derived const, not state: zero set-state-in-effect cost.
+  const summaryPeriodId = allPeriods.some((p) => p.id === periodId) ? periodId : undefined
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['budget-summary', budgetId, summaryPeriodId],
+    queryFn: () => reportsApi.budgetSummary(budgetId, summaryPeriodId!),
+    enabled: summaryPeriodId != null,
+  })
 
   // Default the selection and reconcile URL seeds. Declared AFTER the
   // allPeriods memo (referencing allPeriods from the old position, above its
@@ -398,13 +414,7 @@ export default function BudgetDetailPage() {
               <ChevronLeft size={14} />
             </button>
             <div className="w-56 max-sm:w-auto max-sm:flex-1">
-              <Select
-                value={periodId}
-                onChange={selectPeriod}
-                options={allPeriods.map((p) => ({ value: p.id, label: p.name }))}
-                placeholder="Select period"
-                aria-label="Period"
-              />
+              <PeriodPicker periods={allPeriods} value={periodId} onChange={selectPeriod} />
             </div>
             <button
               type="button"
