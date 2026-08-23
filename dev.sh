@@ -79,9 +79,6 @@ use_local_hosts() {
     export CELERY_BROKER_URL="redis://localhost:$REDIS_PORT/0"
     export CELERY_RESULT_BACKEND="redis://localhost:$REDIS_PORT/1"
     export S3_ENDPOINT_URL="http://localhost:$STORAGE_PORT"
-    if [ -n "${PARSER_URL:-}" ]; then
-        export PARSER_URL="http://localhost:$PARSER_PORT"
-    fi
 }
 
 # Fail with a hint instead of a connection timeout.
@@ -146,7 +143,7 @@ start_services() {
     fi
 
     if [ "${1-}" = "--full" ]; then
-        docker compose --profile parser up -d --build
+        docker compose up -d --build
     else
         docker compose up -d --build "${INFRA_SERVICES[@]}"
     fi
@@ -156,7 +153,6 @@ start_services() {
 
   Postgres  localhost:$DB_PORT   Redis  localhost:$REDIS_PORT
   Storage   http://localhost:$STORAGE_PORT   console  http://localhost:$STORAGE_CONSOLE_PORT
-  Receipt parser (optional): ./dev.sh up parser
 
 Next: ./dev.sh backend and ./dev.sh frontend (one terminal each).
 EOF

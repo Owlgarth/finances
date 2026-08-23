@@ -1,28 +1,64 @@
 # Receipt Parser Contract - v1
 
-This document is the frozen v1 contract between the Denarly backend and the receipt
-parser service. The service is stateless: one request in, one JSON document out,
-nothing persisted. Any change that is not backward-compatible requires a new
-`schema_version` and a new section in this file.
+This document is the canonical, versioned specification of the receipt parser
+contract. A receipt parser is a stateless HTTP service: one file in (a photo or scan
+of a receipt), one JSON document out, nothing persisted between requests. It has two
+audiences: implementers building a compliant parser, and consumers calling one.
+Denarly - the project publishing this specification - is the reference consumer: its
+backend speaks this contract, and any service that implements it can act as a
+Denarly parser by pointing the backend's `PARSER_URL` setting at the service.
 
-## Endpoint
+This specification documents WHAT a compliant service does: endpoints,
+authentication, request and response shapes, field semantics, and warning and error
+codes. It never prescribes HOW a result is achieved - there are no requirements
+regarding models, providers, prompts, or internal pipelines.
+
+## Versioning
+
+This document is frozen at v1. Any change to the contract requires a new version of
+this document, and earlier versions remain as sections until consumers have
+migrated:
+
+- **Minor bump (v1.1)** for additive, backward-compatible changes: new optional
+  response fields, new warning codes. `schema_version` stays `"1"` across the v1
+  line, because consumers must ignore unknown keys and codes.
+- **Major bump (v2)** for breaking changes: removed or renamed fields, changed
+  types or semantics. `schema_version` becomes `"2"`, and the v1 section stays in
+  this document until all consumers have migrated.
+
+While v1 is in force, every response carries `"schema_version": "1"`.
+
+## Endpoints
+
+### POST /parse
 
 ```
 POST /parse
-Authorization: Bearer <PARSER_API_TOKEN>
+Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
+The request body is `multipart/form-data` with a single field:
+
 | field | type | required | notes |
 |-------|------|----------|-------|
-| `file` | binary | yes | JPEG, PNG, WebP, HEIC, or PDF. Size cap enforced by the service (default 15 MB). |
+| `file` | binary | yes | JPEG, PNG, WebP, HEIC, or PDF. A size cap is enforced by the service; a larger upload is rejected with `400 file_too_large`. |
 
-```
-GET /health
-```
+Authentication: every `/parse` request carries `Authorization: Bearer <token>`. The
+token is a static shared secret configured by the operator of the service; a missing
+or invalid token is rejected with `401 unauthorized`. Denarly sends its configured
+`PARSER_API_TOKEN` as this bearer token.
 
-Returns `200 {"status": "ok", "model": "<configured model id>"}` when the service can
-reach its configured model provider, `503` with the error shape otherwise.
+A parse call is not expected to be fast - it may take tens of seconds. Consumers
+should use generous timeouts and call the parser from a background worker rather
+than a user-facing request.
+
+### GET /health
+
+Returns `200 {"status": "ok", "model": "<configured model id>"}` when the service
+can serve `/parse` requests right now, and `503` with the error shape (below)
+otherwise. The `model` value is an opaque identifier configured by the operator; it
+carries no interoperability meaning.
 
 ## Success response - `200`
 
@@ -93,25 +129,31 @@ reach its configured model provider, `503` with the error shape otherwise.
 | `total_not_in_source` | `total` was not found among the money tokens of the machine-extracted transcript (PDF text layer or OCR); `confidence.total` is capped at 0.5. |
 | `ocr_unavailable` | OCR could not ground this input (disabled, failing, or no detections); the result is vision-only, without transcript grounding. |
 
-### Confidence grounding
+Unknown codes must be ignored by consumers (forward compatibility). Implementers may
+add new warning codes only with a minor version bump of this contract.
 
-When the service obtains a machine-extracted transcript of the receipt (the text
-layer of a born-digital PDF, or OCR of a photo), it deterministically cross-checks
-the model's numbers against it and adjusts confidence - the model's self-reported
-confidence is never trusted on its own:
+## Confidence grounding (informative)
 
-- `total` found verbatim among the transcript's money tokens ⇒ `confidence.total`
-  is **floored at 0.9**; not found ⇒ `total_not_in_source` warning and
-  `confidence.total` **capped at 0.5**.
-- The fraction of item `line_total`s found in the transcript floors (≥ 80% found)
-  or caps (< 50% found) `confidence.items` with the same 0.9/0.5 bounds.
+This section is informative: it records observable behavior, not requirements.
 
-Without a transcript, confidence values pass through unchanged (clamped to 0..1).
+How an implementation produces its confidence values is out of scope for this
+contract - the implementer may ground them however it chooses (transcript
+cross-checks, calibration, fixed values, or anything else). Two warning codes
+document the observable grounding behavior of the v1 reference parser:
+
+- `total_not_in_source` - the total was not found among the money tokens of a
+  machine-extracted transcript (PDF text layer or OCR); `confidence.total` is
+  capped at 0.5.
+- `ocr_unavailable` - no transcript grounding was possible for this input; the
+  result is vision-only.
+
+Implementers are free to emit or not emit these codes; consumers must handle both
+like any other warning.
 
 ## Error response
 
-Errors the caller can act on are returned with HTTP `4xx`/`503` and this body -
-the service never returns a bare `500` for foreseeable conditions:
+Errors the caller can act on are returned with HTTP `4xx`/`503` and this body - the
+service never returns a bare `500` for foreseeable conditions:
 
 ```json
 {
@@ -131,9 +173,9 @@ the service never returns a bare `500` for foreseeable conditions:
 | 422 | `unreadable_input` | Decodable file, but no receipt content extractable. |
 | 503 | `model_unavailable` | The configured model provider is unreachable/erroring. |
 
-`unreadable_input` is an error, not a success-with-empty-items: an empty `items` array
-on `200` means "a readable receipt with no line items detected", which callers may
-still accept.
+`unreadable_input` is an error, not a success-with-empty-items: an empty `items`
+array on `200` means "a readable receipt with no line items detected", which callers
+may still accept.
 
 ## Worked examples
 
@@ -174,7 +216,7 @@ still accept.
 }
 ```
 
-The caller should surface the low `items` confidence and the `total_mismatch`
+A consumer should surface the low `items` confidence and the `total_mismatch`
 (6.40 ≠ 23.10 - rows are missing) on its review screen.
 
 ### 3. Unreadable input
@@ -193,7 +235,9 @@ HTTP/1.1 422 Unprocessable Entity
 }
 ```
 
-## Consumer obligations (Denarly backend)
+## Consumer obligations
+
+Any consumer of a parser service - the Denarly backend is one - must:
 
 - Treat all monetary values as decimal strings; never parse to float.
 - Ignore unknown top-level keys and unknown warning codes.

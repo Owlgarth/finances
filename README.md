@@ -72,8 +72,7 @@ Denarly is a comprehensive financial management tool designed for individuals an
    `--full` is the shortest path to a running app. The three-terminal variant
    is the day-to-day setup: services stay in Docker while the backend and
    frontend run with hot reload. Services: `db`, `redis`, `storage` by
-   default; the full run adds `api`, `ui`, `worker` and `beat`; the optional
-   `parser` starts with `./dev.sh up parser`.
+   default; the full run adds `api`, `ui`, `worker` and `beat`.
 
    **Docker or your machine?** By default `./dev.sh` runs the backend and
    frontend inside their containers, so Python, uv and Node only have to exist
@@ -130,25 +129,26 @@ Behavior:
 | Database | PostgreSQL 17                                            |
 | Task Queue | Celery with Redis broker                               |
 | Storage | S3-compatible object storage (receipt attachments)     |
-| Receipt parser | FastAPI service (optional), any OpenAI-compatible vision model |
+| Receipt extraction | Optional and pluggable - any service implementing [docs/parser-contract.md](docs/parser-contract.md) |
 | Auth | JWT with bcrypt                                          |
 
 ## Receipt Extraction (optional)
 
-Denarly can read receipts to pre-fill line items and totals. This is powered by a
-separate, stateless service in [`services/receipt-parser/`](services/receipt-parser/)
-that talks to any OpenAI-compatible vision model (local via Ollama/vLLM, or hosted).
+Denarly can read receipts to pre-fill line items and totals. Extraction is
+pluggable: the backend speaks the public contract in
+[docs/parser-contract.md](docs/parser-contract.md), so any service that
+implements it works - write your own, or run the official parser (maintained
+separately from this repository).
 
-- It is wired into `docker-compose.yml` as `parser` (port 8100), started with
-  `./dev.sh up parser` and enabled for the backend via `PARSER_URL` /
-  `PARSER_API_TOKEN`.
-- **It is entirely optional.** With `PARSER_URL` unset, the backend reports extraction
-  as disabled and the UI hides every extraction affordance - no dead buttons.
-- Point it at your model with `PARSER_MODEL_BASE_URL` / `PARSER_MODEL_NAME`
-  (see `services/receipt-parser/.env.example`). `qwen2.5-vl` via Ollama is a good
-  self-hosted default.
+- Point the backend at your parser with `PARSER_URL` / `PARSER_API_TOKEN` in
+  `.env`; the client's timeout, health-check and retry knobs are documented
+  in `example.env`.
+- **It is entirely optional.** With `PARSER_URL` unset, the backend reports
+  extraction as disabled and the UI hides every extraction affordance - no
+  dead buttons.
 
-See the [parser README](services/receipt-parser/README.md).
+See [docs/parser-contract.md](docs/parser-contract.md) for endpoints, auth, the
+result schema, and error semantics.
 
 ## GDPR Compliance
 
@@ -178,7 +178,6 @@ See [GDPR Documentation](docs/gdpr/README.md) for details.
 denarly/
 ├── backend/                    # Django Ninja REST API
 ├── frontend/                   # React SPA
-├── services/receipt-parser/    # Optional receipt extraction service (FastAPI)
 ├── docs/                       # Architecture and specifications
 ├── dev.sh                      # The dev entry point: start, compose, manage.py, tests, lint
 └── docker-compose.yml
@@ -191,7 +190,7 @@ denarly/
 | **[Backend README](backend/README.md)** | Reference for the Django API: a purpose table for every Django app, the shared `common/` module (JWT auth, email, storage), a complete endpoint reference covering every route with its method and purpose, the JWT auth and token lifecycle, the service-layer convention, testing instructions, and the environment variables. Answers "which API endpoints exist, and how do I call or test them?" |
 | **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars including the build-time `VITE_*` flags. Answers "where does a piece of the UI live, and how is it wired?" |
 | [Architecture](docs/architecture.md) | The system-level design: a component diagram, the account-based data model with its key-principles table (balances are computed and never stored, periods derive from a budget's cadence or are custom-defined, transfers replace the old exchanges, the original-amount facet, adjustments), directory maps for both sides, the async Celery flows, the four auth layers with rate limiting, env configuration, and deployment topology. Answers "how is the system designed, and why?" |
-| [Receipt Parser](services/receipt-parser/README.md) | The optional stateless FastAPI service that turns receipt images and PDFs into structured JSON: its endpoints, upload/page/timeout limits, every `PARSER_*` variable, and the hybrid pipeline where a machine-read transcript fact-checks the vision model's numbers to ground the confidence scores, plus local and Docker run instructions and offline tests. Answers "how does receipt extraction work, and how do I point it at my own model?" |
+| [Parser Contract](docs/parser-contract.md) | The public HTTP contract a receipt-extraction service implements: auth, the `/health` and `/parse` endpoints, the versioned result JSON (line items, totals, currency, confidence), upload and page limits, and error semantics, plus the backend client's timeout and retry knobs. Answers "how do I implement or plug in my own receipt parser?" |
 | [Workflow](docs/workflow.md) | The end-to-end user flows: registration with its anti-enumeration behavior, accounts and Set-balance adjustments, transfers, budget cadences and periods (derived or custom), transactions with line items, the receipt-extraction review flow, planned transactions, members and invites, reports, and export/import. Answers "what actually happens, step by step, when a user does X?" |
 | [Permissions](docs/permissions.md) | The authorization model: the four-layer security diagram, the role hierarchy, complete per-feature permission matrices (owner/admin/member/viewer × action) across accounts, currencies, budgets, categories, transactions, receipts, transfers, planned transactions, members, and settings, plus the backend enforcement code (`WorkspaceJWTAuth`, `require_role`, `for_workspace`), the frontend visibility hooks, and the error codes. Answers "who is allowed to do what, and where is it enforced?" |
 | [Users & Roles](docs/users-and-roles.md) | The user model and the people around it: user fields, per-role capability, restriction, and use-case write-ups for owner, admin, member, and viewer, the membership rules, member-management operations (adding, role changes, removal, password resets, leaving), the auth flow, and multi-workspace scenarios. Answers "what does each role mean in practice, and how are members managed?" |
@@ -227,7 +226,6 @@ ports below are the `example.env` defaults; they come from `.env`):
 ```text
   Postgres  localhost:5432   Redis  localhost:6379
   Storage   http://localhost:9000   console  http://localhost:9001
-  Receipt parser (optional): ./dev.sh up parser
 
 Next: ./dev.sh backend and ./dev.sh frontend (one terminal each).
 ```
@@ -238,7 +236,6 @@ one-line hint naming the command that starts it - with the database down,
 hanging on a connection timeout.
 
 ```bash
-./dev.sh up parser       # start individual services
 ./dev.sh logs storage    # follow logs
 ./dev.sh migrate         # manage.py migrate
 ./dev.sh seed            # currencies + legal documents

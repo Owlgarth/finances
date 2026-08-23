@@ -72,7 +72,7 @@ Default workflow: services in Docker, backend and frontend on the host.
 
 ```bash
 cp example.env .env    # every setting, including published ports
-./dev.sh up            # db, redis, storage (parser: ./dev.sh up parser)
+./dev.sh up            # db, redis, storage
 ./dev.sh backend       # migrate + seed, then uvicorn --reload + Celery worker
 ./dev.sh frontend      # Vite dev server
 ./dev.sh up --full     # everything in Docker instead (adds api, ui, worker, beat)
@@ -117,4 +117,4 @@ Every endpoint must verify resources belong to the user's workspace. Four securi
 ## Working Rules
 
 - Never stage or commit personal data exports (`denarly_data_export_*.json`); stage explicit paths only — no `git add -A` / `git add .`.
-- Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`, `PARSER_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers — a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
+- Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers — a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
