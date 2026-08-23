@@ -1,4 +1,4 @@
-"""Thin client for the optional receipt parser service (see services/receipt-parser).
+"""Thin client for the optional receipt parser service (see docs/parser-contract.md).
 
 Everything here is gated on settings.EXTRACTION_ENABLED. The parser runs on a
 host that is only intermittently available, so failures are split in two:
