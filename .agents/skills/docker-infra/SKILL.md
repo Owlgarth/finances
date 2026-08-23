@@ -7,7 +7,7 @@ description: Docker, nginx, and S3-compatible storage conventions for Denarly �
 
 ## DNS-Safe Service Names
 
-Service names are the hostnames on the compose network, so keep them short and DNS-safe (hyphens, never underscores): `db`, `redis`, `storage`, `api`, `ui`, `worker`, `beat`, `parser`. botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` crashes at runtime.
+Service names are the hostnames on the compose network, so keep them short and DNS-safe (hyphens, never underscores): `db`, `redis`, `storage`, `api`, `ui`, `worker`, `beat`. botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` crashes at runtime.
 
 ```
 POSTGRES_HOST=db
@@ -17,7 +17,7 @@ S3_ENDPOINT_URL=http://storage:9000
 
 ## Configuration Lives in .env
 
-`docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`, `parser`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift.
+`docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift.
 
 Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. A port shift for a second checkout is a TRIPLE, not a one-variable edit: `VITE_API_URL`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` hardcode the API/UI origins and do NOT derive from `API_PORT`/`UI_PORT` - shifting only the port variables silently points the frontend at the other checkout's backend (or makes CORS reject it), which costs a debugging cycle before anyone suspects the env. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
 
@@ -34,7 +34,7 @@ services:
   api:
     environment:
       <<: *backend-shared-env
-      PARSER_URL: http://parser:8000
+      ALLOWED_HOSTS: '*'
 ```
 
 - Compose treats top-level `x-*` keys as opaque pass-through — the anchor block never becomes a container. Move explanatory comments onto the anchor so the *why* lives with the values.
@@ -47,7 +47,7 @@ services:
 
 `./dev.sh` at the repo root is the only one — bash, not POSIX `sh` (`pipefail`, `read -rp`, `local`). Keep new commands in it rather than adding scripts, and keep its `usage()` heredoc in sync.
 
-- `up` — `db redis storage`; `up --full` adds `api ui worker beat parser`; `up <svc...>` passes through
+- `up` — `db redis storage`; `up --full` adds `api ui worker beat`; `up <svc...>` passes through
 - `backend` / `frontend` — start the app; `logs`, `manage`, `migrate`, `seed`, `psql`, `test`, `lint`, `npm`
 - helpers: `load_env`, `use_local_hosts`, `require_service`, `on_host`, `in_service`
 
