@@ -1,10 +1,10 @@
 ——————————————————————————————————
-Denarly
+Owlgarth Finances
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
-Welcome to Denarly! We're excited to help you take control of your finances.
+Welcome to Owlgarth Finances! We're excited to help you take control of your finances.
 
 Here's what you can do:
 - Track your spending across multiple currencies
@@ -15,4 +15,4 @@ Get Started
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Denarly account.
+You're receiving this because you have an Owlgarth Finances account.

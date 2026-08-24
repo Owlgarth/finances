@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Denarly
+Owlgarth Finances
 ——————————————————————————————————
 
 {% block content %}{% endblock %}
@@ -8,4 +8,4 @@ Denarly
 {% block cta_url %}{{ cta_url }}{% endblock %}
 
 ——————————————————————————————————
-You're receiving this because you have a Denarly account.
+You're receiving this because you have an Owlgarth Finances account.

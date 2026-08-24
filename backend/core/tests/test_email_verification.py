@@ -119,8 +119,8 @@ class TestRegistrationEmails(AuthTestCase):
 
         self.assertEqual(len(mail.outbox), 2)
         subjects = [msg.subject for msg in mail.outbox]
-        self.assertIn('Verify your email — Denarly', subjects)
-        self.assertIn('Welcome to Denarly!', subjects)
+        self.assertIn('Verify your email — Owlgarth Finances', subjects)
+        self.assertIn('Welcome to Owlgarth Finances!', subjects)
 
         user = User.objects.get(email='newreg@example.com')
         self.assertFalse(user.email_verified)

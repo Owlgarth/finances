@@ -170,7 +170,7 @@ class TestAuthRegister(AuthTestCase):
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
         self.assertEqual(email.to, ['taken@example.com'])
-        self.assertEqual(email.subject, 'Registration attempt with your email — Denarly')
+        self.assertEqual(email.subject, 'Registration attempt with your email — Owlgarth Finances')
         self.assertIn('Taken User', email.body)
 
     def test_register_rate_limited_per_email(self):
