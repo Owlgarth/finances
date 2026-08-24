@@ -165,11 +165,11 @@ if USE_S3_STORAGE:
     S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY', '')
     S3_SECRET_KEY = os.getenv('S3_SECRET_KEY', '')
     # Bucket for Django collectstatic output
-    S3_BUCKET_STATIC = os.getenv('S3_BUCKET_STATIC', 'denarly-static')
+    S3_BUCKET_STATIC = os.getenv('S3_BUCKET_STATIC', 'finances-static')
     # Bucket for user-uploaded media files
-    S3_BUCKET_MEDIA = os.getenv('S3_BUCKET_MEDIA', 'denarly-media')
+    S3_BUCKET_MEDIA = os.getenv('S3_BUCKET_MEDIA', 'finances-media')
     # Bucket for application logs
-    S3_BUCKET_LOGS = os.getenv('S3_BUCKET_LOGS', 'denarly-logs')
+    S3_BUCKET_LOGS = os.getenv('S3_BUCKET_LOGS', 'finances-logs')
     # Include presigned query parameters in media URLs (private access)
     S3_QUERYSTRING_AUTH = True
     # Parse external URL for static file custom domain
@@ -338,7 +338,7 @@ if _email_host:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@denarly.com')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@finances.owlgarth.com')
 
 # Legal document operator settings (for privacy policy, terms of service)
 # Supports both individuals and companies as data controllers

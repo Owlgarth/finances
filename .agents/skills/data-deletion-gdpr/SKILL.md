@@ -1,6 +1,6 @@
 ---
 name: data-deletion-gdpr
-description: Model relationship map, deletion ordering (SET_NULL orphans, PROTECT chains), GDPR delete/export rules, import versioning, and legal document workflow for Denarly. Use when adding/removing Django models, changing FKs or on_delete behavior, touching UserService.delete_account/export_all_data/import_all_data, or editing privacy policy / terms of service.
+description: Model relationship map, deletion ordering (SET_NULL orphans, PROTECT chains), GDPR delete/export rules, import versioning, and legal document workflow for Owlgarth Finances. Use when adding/removing Django models, changing FKs or on_delete behavior, touching UserService.delete_account/export_all_data/import_all_data, or editing privacy policy / terms of service.
 ---
 
 # Data Deletion & GDPR Rules

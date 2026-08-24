@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Denarly — DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, or storage/S3 configuration.
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances — DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, or storage/S3 configuration.
 ---
 
 # Docker & Infrastructure

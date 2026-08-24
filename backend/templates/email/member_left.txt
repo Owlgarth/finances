@@ -1,5 +1,5 @@
 ——————————————————————————————————
-Denarly
+Owlgarth Finances
 ——————————————————————————————————
 
 Hi {{ user_name }},
@@ -8,8 +8,8 @@ Hi {{ user_name }},
 
 You may want to review your workspace members.
 
-Open Denarly
+Open Owlgarth Finances
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Denarly account.
+You're receiving this because you have an Owlgarth Finances account.

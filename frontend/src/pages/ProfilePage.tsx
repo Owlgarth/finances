@@ -36,7 +36,7 @@ export default function ProfilePage() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `denarly_data_export_${new Date().toISOString().slice(0, 10)}.json`
+      link.download = `owlgarth_finances_data_export_${new Date().toISOString().slice(0, 10)}.json`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -190,7 +190,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-text mb-2">Import Your Data</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Restore your data from a Denarly export (v3.0) JSON file.
+                  Restore your data from an Owlgarth Finances export (v3.0) JSON file.
                   If a workspace with the same name already exists, it will be renamed automatically.
                 </p>
                 <input

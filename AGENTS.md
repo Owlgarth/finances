@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Coding guidelines and commands for agentic coding agents working on the Denarly codebase.
+Coding guidelines and commands for agentic coding agents working on the Owlgarth Finances codebase.
 
 ## Project Overview
 
-Denarly is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It uses an account-based model: money-holding accounts (with computed balances), budgets that plan money over derived periods, transfers between accounts, and multi-currency support via a global ISO 4217 catalog. It also supports receipt attachments with optional automated line-item extraction, and collaborative team features. See `docs/architecture.md`.
+Owlgarth Finances is a personal finance tracking application built with Django 6, Django Ninja, React 19, and PostgreSQL. It uses an account-based model: money-holding accounts (with computed balances), budgets that plan money over derived periods, transfers between accounts, and multi-currency support via a global ISO 4217 catalog. It also supports receipt attachments with optional automated line-item extraction, and collaborative team features. See `docs/architecture.md`.
 
 ## Build/Lint/Test Commands
 
@@ -76,7 +76,7 @@ to the published ports; it can also be set per command
 
 ## Working Rules
 
-- Never stage or commit personal data exports (`denarly_data_export_*.json`); stage explicit paths only — no `git add -A` / `git add .`.
+- Never stage or commit personal data exports (`*_data_export_*.json`); stage explicit paths only — no `git add -A` / `git add .`.
 - Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers — a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
 
 ## Data Model

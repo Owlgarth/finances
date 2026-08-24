@@ -28,8 +28,8 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'full_name': 'New User',
                 'workspace_name': 'My Workspace',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -53,8 +53,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'workspace_test@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Test Workspace',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -91,8 +91,8 @@ class TestAuthRegister(AuthTestCase):
                 'full_name': 'Demo User',
                 'workspace_name': 'Demo Workspace',
                 'start_with_sample_data': True,
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -120,8 +120,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 1',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -133,8 +133,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'duplicate@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 2',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(400)
@@ -161,8 +161,8 @@ class TestAuthRegister(AuthTestCase):
                 'email': 'taken@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Not Yours',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(400)
@@ -170,7 +170,7 @@ class TestAuthRegister(AuthTestCase):
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
         self.assertEqual(email.to, ['taken@example.com'])
-        self.assertEqual(email.subject, 'Registration attempt with your email — Denarly')
+        self.assertEqual(email.subject, 'Registration attempt with your email — Owlgarth Finances')
         self.assertIn('Taken User', email.body)
 
     def test_register_rate_limited_per_email(self):
@@ -180,8 +180,8 @@ class TestAuthRegister(AuthTestCase):
             'email': 'flooded@example.com',
             'password': 'securepassword123',
             'workspace_name': 'Flood',
-            'accepted_terms_version': '2.0',
-            'accepted_privacy_version': '2.0',
+            'accepted_terms_version': '2.1',
+            'accepted_privacy_version': '2.1',
         }
         for _ in range(settings.RATE_LIMIT_REGISTER_ACCOUNT):
             self.post('/api/auth/register', payload)
@@ -392,8 +392,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'demouser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Demo Workspace',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(403)
@@ -408,8 +408,8 @@ class TestDemoMode(AuthTestCase):
                 'email': 'normaluser@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Normal Workspace',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -700,8 +700,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': email,
                 'password': password,
                 'workspace_name': 'Refresh WS',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)
@@ -778,8 +778,8 @@ class TestRefreshToken(AuthTestCase):
                 'email': 'register_refresh@example.com',
                 'password': 'securepassword123',
                 'workspace_name': 'Register WS',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
         )
         self.assertStatus(201)

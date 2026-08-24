@@ -258,7 +258,7 @@ class TestAdminReset2FA(_Base):
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
         self.assertEqual(email.to, ['member@example.com'])
-        self.assertEqual(email.subject, 'Your two-factor authentication was reset — Denarly')
+        self.assertEqual(email.subject, 'Your two-factor authentication was reset — Owlgarth Finances')
         self.assertIn('Test WS', email.body)
 
     def test_owner_can_reset_member_2fa(self):

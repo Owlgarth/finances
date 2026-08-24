@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve Denarly
+about: Report a bug to help us improve Owlgarth Finances
 title: '[BUG] '
 labels: bug
 assignees: ''
