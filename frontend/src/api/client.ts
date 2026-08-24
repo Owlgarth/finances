@@ -42,8 +42,8 @@ const api = axios.create({
 });
 
 // ============= Token Management =============
-const TOKEN_KEY = 'denarly_token';
-const REFRESH_TOKEN_KEY = 'denarly_refresh_token';
+const TOKEN_KEY = 'owlgarth_token';
+const REFRESH_TOKEN_KEY = 'owlgarth_refresh_token';
 
 export const setAuthToken = (token: string): void => {
   localStorage.setItem(TOKEN_KEY, token);

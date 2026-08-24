@@ -95,7 +95,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     mutationFn: (workspaceId: number) => workspacesApi.switch(workspaceId),
     onSuccess: () => {
       clearWorkspaceScopedQueries();
-      localStorage.removeItem('denarly_selected_account');
+      localStorage.removeItem('owlgarth_selected_account');
     },
   });
 
@@ -103,7 +103,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     mutationFn: (name: string) => workspacesApi.create({ name }),
     onSuccess: () => {
       clearWorkspaceScopedQueries();
-      localStorage.removeItem('denarly_selected_account');
+      localStorage.removeItem('owlgarth_selected_account');
     },
   });
 
@@ -111,7 +111,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     mutationFn: (workspaceId: number) => workspacesApi.delete(workspaceId),
     onSuccess: () => {
       clearWorkspaceScopedQueries();
-      localStorage.removeItem('denarly_selected_account');
+      localStorage.removeItem('owlgarth_selected_account');
     },
   });
 

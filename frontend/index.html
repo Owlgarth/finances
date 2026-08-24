@@ -20,9 +20,9 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <script>
       // Prevent flash of wrong theme — runs before React hydration.
-      // denarly_theme: 'light' | 'dark' | null (null = follow system preference)
+      // owlgarth_theme: 'light' | 'dark' | null (null = follow system preference)
       (function () {
-        var theme = localStorage.getItem('denarly_theme');
+        var theme = localStorage.getItem('owlgarth_theme');
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (theme === 'dark' || (theme === null && prefersDark)) {
           document.documentElement.classList.add('dark');

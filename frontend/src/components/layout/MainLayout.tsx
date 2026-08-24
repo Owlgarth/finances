@@ -8,7 +8,7 @@ import CommandPalette from '../common/CommandPalette'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
 
-const SIDEBAR_COLLAPSED_KEY = 'denarly-sidebar-collapsed'
+const SIDEBAR_COLLAPSED_KEY = 'owlgarth-sidebar-collapsed'
 
 interface MainLayoutProps {
   children: ReactNode
