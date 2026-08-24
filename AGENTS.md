@@ -49,6 +49,8 @@ npm run lint                              # ESLint check
 
 Always run `npm run lint` after making changes.
 
+There is no frontend test suite - verification is `npm run lint` + `npm run build`.
+
 ### Full Stack (Docker)
 
 Default workflow: services in Docker, backend and frontend on the host.
@@ -90,6 +92,16 @@ Workspace → { WorkspaceMember, WorkspaceCurrency,
 Currencies come from a global ISO 4217 catalog that each workspace enables a subset of. See `docs/architecture.md`.
 
 Every endpoint must verify resources belong to the user's workspace. Four security layers: JWT auth (`JWTAuth`/`WorkspaceJWTAuth`), workspace membership, role permissions (`require_role`), and workspace-scoped queries (`Model.objects.for_workspace(workspace_id)`).
+
+## Documentation Map
+
+- `docs/architecture.md`: system architecture and data model
+- `docs/frontend.md`: frontend structure
+- `docs/mobile-ux.md`: mobile interaction spec
+- `docs/permissions.md`, `docs/users-and-roles.md`: roles and access
+- `docs/workflow.md`: development workflow
+- `docs/parser-contract.md`: receipt parser HTTP contract (external service)
+- `design/`: design tokens, components, patterns, responsive rules
 
 ## Detailed Conventions (Skills)
 
