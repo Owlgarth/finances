@@ -19,10 +19,9 @@ cd denarly
 cp example.env .env
 ```
 
-> **History note:** this repository's git history was rewritten on 2026-08-23 to
-> remove a service that moved to its own repository. If your clone predates that
-> date, re-clone it - pulling the rewritten history into an old clone will
-> conflict.
+> **History note:** this repository's git history was rewritten on 2026-08-23.
+> If your clone predates that date, re-clone it - pulling the rewritten history
+> into an old clone will conflict.
 
 ### Option 1: Services in Docker, app on your machine (recommended)
 
