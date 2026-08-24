@@ -1,6 +1,6 @@
 # Frontend Application
 
-React 19 SPA (Vite, TypeScript, TanStack Query) for the account-based Denarly model.
+React 19 SPA (Vite, TypeScript, TanStack Query) for the account-based Owlgarth Finances model.
 
 The detailed, authoritative frontend documentation lives next to the code:
 

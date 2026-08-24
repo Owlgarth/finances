@@ -4,9 +4,9 @@ This document is the canonical, versioned specification of the receipt parser
 contract. A receipt parser is a stateless HTTP service: one file in (a photo or scan
 of a receipt), one JSON document out, nothing persisted between requests. It has two
 audiences: implementers building a compliant parser, and consumers calling one.
-Denarly - the project publishing this specification - is the reference consumer: its
+Owlgarth Finances - the project publishing this specification - is the reference consumer: its
 backend speaks this contract, and any service that implements it can act as a
-Denarly parser by pointing the backend's `PARSER_URL` setting at the service.
+Owlgarth Finances parser by pointing the backend's `PARSER_URL` setting at the service.
 
 This specification documents WHAT a compliant service does: endpoints,
 authentication, request and response shapes, field semantics, and warning and error
@@ -46,7 +46,7 @@ The request body is `multipart/form-data` with a single field:
 
 Authentication: every `/parse` request carries `Authorization: Bearer <token>`. The
 token is a static shared secret configured by the operator of the service; a missing
-or invalid token is rejected with `401 unauthorized`. Denarly sends its configured
+or invalid token is rejected with `401 unauthorized`. Owlgarth Finances sends its configured
 `PARSER_API_TOKEN` as this bearer token.
 
 A parse call is not expected to be fast - it may take tens of seconds. Consumers
@@ -237,7 +237,7 @@ HTTP/1.1 422 Unprocessable Entity
 
 ## Consumer obligations
 
-Any consumer of a parser service - the Denarly backend is one - must:
+Any consumer of a parser service - the Owlgarth Finances backend is one - must:
 
 - Treat all monetary values as decimal strings; never parse to float.
 - Ignore unknown top-level keys and unknown warning codes.

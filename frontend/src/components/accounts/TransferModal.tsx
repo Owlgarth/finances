@@ -11,7 +11,7 @@ import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
-const LAST_PAIR_KEY = 'denarly-last-transfer-pair'
+const LAST_PAIR_KEY = 'owlgarth-last-transfer-pair'
 
 interface Props {
   open: boolean
