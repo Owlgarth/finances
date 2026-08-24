@@ -1,6 +1,6 @@
 ---
 name: django-backend
-description: Backend (Python/Django/Django Ninja) code conventions for Denarly. Use when writing or modifying backend code — endpoints, services, models, schemas, exceptions, or queries in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, and concurrency patterns.
+description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code — endpoints, services, models, schemas, exceptions, or queries in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, and concurrency patterns.
 ---
 
 # Django Backend Conventions

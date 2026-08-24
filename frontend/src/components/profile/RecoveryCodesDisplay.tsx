@@ -22,7 +22,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
 
   const handleDownload = () => {
     const content = [
-      'Denarly Recovery Codes',
+      'Owlgarth Finances Recovery Codes',
       '=====================',
       '',
       'Store these codes in a safe place.',
@@ -37,7 +37,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'denarly_recovery_codes.txt'
+    link.download = 'owlgarth_finances_recovery_codes.txt'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

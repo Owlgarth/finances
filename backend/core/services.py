@@ -47,7 +47,7 @@ class AuthService:
         """
         EmailService.send_email(
             to=existing_user.email,
-            subject='Registration attempt with your email — Denarly',
+            subject='Registration attempt with your email — Owlgarth Finances',
             template_name='email/registration_attempt',
             context={'user_name': existing_user.full_name or existing_user.email},
         )

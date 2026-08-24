@@ -1,13 +1,13 @@
 ——————————————————————————————————
-Denarly
+Owlgarth Finances
 ——————————————————————————————————
 
 Hi {{ user_name }},
 
 Your role in {{ workspace_name }} was changed from {{ old_role }} to {{ new_role }} by {{ admin_name }}.
 
-Open Denarly
+Open Owlgarth Finances
 {{ frontend_url }}
 
 ——————————————————————————————————
-You're receiving this because you have a Denarly account.
+You're receiving this because you have an Owlgarth Finances account.

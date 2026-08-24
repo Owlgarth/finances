@@ -23,7 +23,7 @@ from users.api import router as users_router
 from workspaces.api import router as workspaces_router
 
 # Create main API instance (single entry point for routing)
-api = NinjaAPI(title='Denarly API', version='1.0.0')
+api = NinjaAPI(title='Owlgarth Finances API', version='1.0.0')
 
 
 @api.exception_handler(ServiceError)

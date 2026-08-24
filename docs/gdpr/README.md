@@ -1,6 +1,6 @@
 # GDPR Compliance Documentation
 
-This directory contains documentation for Denarly's GDPR compliance implementation.
+This directory contains documentation for Owlgarth Finances' GDPR compliance implementation.
 
 ## Documents
 

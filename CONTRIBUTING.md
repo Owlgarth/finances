@@ -1,6 +1,6 @@
-# Contributing to Denarly
+# Contributing to Owlgarth Finances
 
-Thank you for your interest in contributing to Denarly! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Owlgarth Finances! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
@@ -12,8 +12,8 @@ Thank you for your interest in contributing to Denarly! This document provides g
 
 ```bash
 # Clone the repository
-git clone https://github.com/erikmoroz/denarly.git
-cd denarly
+git clone https://github.com/Owlgarth/finances.git
+cd finances
 
 # Copy environment file (all settings, including the published ports)
 cp example.env .env
@@ -166,7 +166,7 @@ When requesting features, please include:
 ## Project Structure
 
 ```
-denarly/
+finances/
 ├── backend/           # Django API
 │   ├── config/        # Django settings
 │   ├── common/        # Shared utilities (auth, permissions)

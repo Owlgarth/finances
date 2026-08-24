@@ -1,4 +1,4 @@
-# Denarly Mobile UX - Interaction Spec
+# Owlgarth Finances Mobile UX - Interaction Spec
 
 The mobile web experience doubles as the interaction spec for any future mobile client
 (PWA wrapper, Capacitor, or native). A native implementation reimplements the *components*
@@ -58,7 +58,7 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   open sheet.
 - Escape/back dismisses only the topmost overlay; focus returns to the trigger.
 - Reduced-motion preference disables sheet/nav animation.
-- App identity: "Denarly", the D-mark icon (maskable variant for platform-shaped icons),
+- App identity: "Owlgarth Finances", the O-mark icon (maskable variant for platform-shaped icons),
   standalone display, status bar matching the page background in both themes.
 
 ## Deferred (known gaps, not regressions)

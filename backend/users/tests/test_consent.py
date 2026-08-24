@@ -17,8 +17,8 @@ class ConsentTests(AuthMixin, TestCase):
                 'email': 'newuser@test.com',
                 'password': 'testpass123',
                 'workspace_name': 'Test',
-                'accepted_terms_version': '2.0',
-                'accepted_privacy_version': '2.0',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
             },
             content_type='application/json',
         )
@@ -83,8 +83,8 @@ class ConsentTests(AuthMixin, TestCase):
 
     def test_consent_status_up_to_date(self):
         """GET /me/consent-status returns needs_reconsent=False when consents are current."""
-        UserConsent.objects.create(user=self.user, consent_type='terms_of_service', version='2.0')
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.0')
+        UserConsent.objects.create(user=self.user, consent_type='terms_of_service', version='2.1')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
@@ -96,7 +96,7 @@ class ConsentTests(AuthMixin, TestCase):
     def test_consent_status_outdated(self):
         """GET /me/consent-status returns needs_reconsent=True when consent version is old."""
         UserConsent.objects.create(user=self.user, consent_type='terms_of_service', version='0.9')
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.0')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
@@ -148,19 +148,19 @@ class ConsentTests(AuthMixin, TestCase):
             consent_type='terms_of_service',
             version='0.9',
         )
-        # Newer consent — v2.0 (the current version)
+        # Newer consent — v2.1 (the current version)
         newer = UserConsent.objects.create(
             user=self.user,
             consent_type='terms_of_service',
-            version='2.0',
+            version='2.1',
         )
         # Manually set granted_at so newer is definitely later
         UserConsent.objects.filter(id=newer.id).update(granted_at=now + timedelta(seconds=1))
 
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.0')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertTrue(data['terms_current'])  # should pick v2.0, not v0.9
+        self.assertTrue(data['terms_current'])  # should pick v2.1, not v0.9
         self.assertFalse(data['needs_reconsent'])

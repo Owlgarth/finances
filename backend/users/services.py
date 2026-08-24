@@ -119,7 +119,7 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Reset your password — Denarly',
+            subject='Reset your password — Owlgarth Finances',
             template_name='email/reset_password',
             context={'user_name': user_name, 'reset_url': reset_url},
         )
@@ -129,7 +129,7 @@ class UserService:
         user_name = user.full_name or user.email
         EmailService.send_email(
             to=user.email,
-            subject='Your password was changed — Denarly',
+            subject='Your password was changed — Owlgarth Finances',
             template_name='email/password_changed',
             context={'user_name': user_name, 'changed_by_admin': changed_by_admin},
         )
@@ -156,13 +156,13 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Verify your email — Denarly',
+            subject='Verify your email — Owlgarth Finances',
             template_name='email/verify_email',
             context={'user_name': user_name, 'verification_url': verification_url},
         )
         EmailService.send_email(
             to=user.email,
-            subject='Welcome to Denarly!',
+            subject='Welcome to Owlgarth Finances!',
             template_name='email/welcome',
             context={'user_name': user_name},
         )
@@ -179,7 +179,7 @@ class UserService:
 
         EmailService.send_email(
             to=user.email,
-            subject='Verify your email — Denarly',
+            subject='Verify your email — Owlgarth Finances',
             template_name='email/verify_email',
             context={
                 'user_name': user.full_name or user.email,
@@ -213,7 +213,7 @@ class UserService:
     def _send_email_change_verify_email(user, new_email, confirm_url):
         EmailService.send_email(
             to=new_email,
-            subject='Confirm your new email — Denarly',
+            subject='Confirm your new email — Owlgarth Finances',
             template_name='email/email_change_verify',
             context={
                 'user_name': user.full_name or user.email,
@@ -255,7 +255,7 @@ class UserService:
     def _send_email_change_notify_email(user, old_email, new_email):
         EmailService.send_email(
             to=old_email,
-            subject='Your email was changed — Denarly',
+            subject='Your email was changed — Owlgarth Finances',
             template_name='email/email_change_notify',
             context={
                 'user_name': user.full_name or new_email,
@@ -444,7 +444,7 @@ class UserService:
 
         EmailService.send_email(
             to=user_email,
-            subject='Your Denarly account has been deleted — Denarly',
+            subject='Your Owlgarth Finances account has been deleted — Owlgarth Finances',
             template_name='email/account_deleted',
             context={'user_name': user_name},
         )

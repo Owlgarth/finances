@@ -10,7 +10,7 @@ import BottomSheet from './BottomSheet'
 
 // Module-level opener so any trigger (Sidebar, More sheet) can summon the
 // palette without prop-drilling through the layout tree.
-const OPEN_EVENT = 'denarly:open-page-search'
+const OPEN_EVENT = 'owlgarth:open-page-search'
 export function openPageSearch() {
   window.dispatchEvent(new CustomEvent(OPEN_EVENT))
 }

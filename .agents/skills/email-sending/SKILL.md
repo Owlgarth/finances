@@ -1,6 +1,6 @@
 ---
 name: email-sending
-description: Email conventions for Denarly — EmailService usage, on_commit patterns, subject format, HTML/txt templates, adding new emails, email env vars. Use when sending emails from services, creating or editing email templates in backend/templates/email/, or wiring email notifications.
+description: Email conventions for Owlgarth Finances — EmailService usage, on_commit patterns, subject format, HTML/txt templates, adding new emails, email env vars. Use when sending emails from services, creating or editing email templates in backend/templates/email/, or wiring email notifications.
 ---
 
 # Email Patterns
@@ -28,7 +28,7 @@ class MyService:
     def _send_notification_email(user, workspace_id):
         EmailService.send_email(
             to=user.email,
-            subject='Something happened — Denarly',
+            subject='Something happened — Owlgarth Finances',
             template_name='email/template_name',
             context={'user_name': user.full_name or user.email},
         )
@@ -57,12 +57,12 @@ class MyService:
 
 ## Email Subject Format
 
-All subjects follow `{Description} — Denarly` with an em-dash (`—`) before the app name:
+All subjects follow `{Description} — Owlgarth Finances` with an em-dash (`—`) before the app name:
 
 ```python
-subject='Verify your email — Denarly'
-subject='Reset your password — Denarly'
-subject='Password changed — Denarly'
+subject='Verify your email — Owlgarth Finances'
+subject='Reset your password — Owlgarth Finances'
+subject='Password changed — Owlgarth Finances'
 ```
 
 ## Email Templates

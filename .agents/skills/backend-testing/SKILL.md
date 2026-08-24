@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Denarly (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions

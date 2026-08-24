@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
-const THEME_STORAGE_KEY = 'denarly_theme'
+const THEME_STORAGE_KEY = 'owlgarth_theme'
 
 interface ThemeContextType {
   isDark: boolean
@@ -49,7 +49,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   // Follow the OS color-scheme preference ONLY while the user has not made an
-  // explicit choice (no value stored under 'denarly_theme'). Once they toggle,
+  // explicit choice (no value stored under 'owlgarth_theme'). Once they toggle,
   // their stored choice wins and this listener becomes a no-op. We never write
   // to localStorage from here — that would pin a choice the user didn't make.
   useEffect(() => {

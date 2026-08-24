@@ -1,7 +1,7 @@
 # System Architecture
 
 This document describes the high-level architecture, data model, and system components
-of Denarly after the account-based domain redesign.
+of Owlgarth Finances after the account-based domain redesign.
 
 ## System Overview
 

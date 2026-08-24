@@ -1,6 +1,6 @@
 # Application Workflow
 
-The main user flows in Denarly's account-based model. For the data model and
+The main user flows in Owlgarth Finances' account-based model. For the data model and
 permissions see [architecture.md](architecture.md) and [permissions.md](permissions.md).
 
 ## Registration & Authentication

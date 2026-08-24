@@ -1,6 +1,6 @@
 ---
 name: frontend-react
-description: Frontend (React/TypeScript/Vite) conventions for Denarly — design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams, API client, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
+description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances — design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams, API client, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
 ---
 
 # Frontend Conventions (TypeScript/React)
@@ -311,7 +311,7 @@ When a catch block exists only to swallow the error (no inspection), use the opt
 
 ## Token Storage
 
-Access and refresh tokens are stored separately in `localStorage` (`denarly_token`, `denarly_refresh_token`). Helpers in `api/client.ts`: `setRefreshToken`, `getRefreshToken`, `clearAuthToken` (clears both tokens and the Authorization header).
+Access and refresh tokens are stored separately in `localStorage` (`owlgarth_token`, `owlgarth_refresh_token`). Helpers in `api/client.ts`: `setRefreshToken`, `getRefreshToken`, `clearAuthToken` (clears both tokens and the Authorization header).
 
 All auth flows receiving token pairs (`login`, `register`, `verify2FA`) must store both tokens:
 

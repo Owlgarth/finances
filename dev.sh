@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The dev entry point for Denarly: docker compose for the services, and the
+# The dev entry point for Owlgarth Finances: docker compose for the services, and the
 # backend/frontend commands either in their container or on the host.
 # Run ./dev.sh for the command list.
 #

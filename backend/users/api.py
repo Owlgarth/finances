@@ -187,7 +187,7 @@ def export_my_data(request):
         json.dumps(export_data, indent=2, cls=GDPREncoder, ensure_ascii=False),
         content_type='application/json; charset=utf-8',
     )
-    response['Content-Disposition'] = f'attachment; filename="denarly_data_export_{request.auth.id}.json"'
+    response['Content-Disposition'] = f'attachment; filename="owlgarth_finances_data_export_{request.auth.id}.json"'
     return response
 
 

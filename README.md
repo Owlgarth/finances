@@ -1,8 +1,8 @@
-# Denarly
+# Owlgarth Finances
 
 A modern, full-stack personal finance tracking application built on money-holding accounts with computed balances, budgets that plan money over cadence-derived or custom periods, transfers between accounts, multi-currency support, receipt attachments with optional automated line-item extraction, and collaborative team features.
 
-[![CI](https://github.com/erikmoroz/denarly/actions/workflows/ci.yml/badge.svg)](https://github.com/erikmoroz/denarly/actions/workflows/ci.yml)
+[![CI](https://github.com/Owlgarth/finances/actions/workflows/ci.yml/badge.svg)](https://github.com/Owlgarth/finances/actions/workflows/ci.yml)
 ![Tech Stack](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -16,13 +16,13 @@ A modern, full-stack personal finance tracking application built on money-holdin
 
 ### Developer's Note
 
-This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Denarly as an open-source application.
+This project started as a personal pet project to replace Excel spreadsheets for my personal budgeting needs. I wanted to test the capabilities of AI development tools while solving a real problem I had. The result exceeded my expectations, so I've decided to continue developing Owlgarth Finances as an open-source application.
 
 ---
 
 ## Overview
 
-Denarly is a comprehensive financial management tool designed for individuals and teams:
+Owlgarth Finances is a comprehensive financial management tool designed for individuals and teams:
 
 - **Accounts with computed balances** - Cash, bank, and other accounts; every balance is derived from opening balance + transactions ± transfers, never stored
 - **Budgets & periods** - Budgets plan money with a cadence (monthly / every-N-weeks / custom); periods materialize on demand, or are user-defined date ranges for the custom cadence; per-category planned-vs-actual
@@ -48,7 +48,7 @@ Denarly is a comprehensive financial management tool designed for individuals an
 
    ```bash
    git clone <repository-url>
-   cd denarly
+   cd finances
    cp example.env .env
    ```
 
@@ -134,7 +134,7 @@ Behavior:
 
 ## Receipt Extraction (optional)
 
-Denarly can read receipts to pre-fill line items and totals. Extraction is
+Owlgarth Finances can read receipts to pre-fill line items and totals. Extraction is
 pluggable: the backend speaks the public contract in
 [docs/parser-contract.md](docs/parser-contract.md), so any service that
 implements it works - write your own, or run the official parser (maintained
@@ -152,7 +152,7 @@ result schema, and error semantics.
 
 ## GDPR Compliance
 
-Denarly includes built-in GDPR compliance features:
+Owlgarth Finances includes built-in GDPR compliance features:
 
 - **Consent Management** - Track user consent for Terms of Service and Privacy Policy
 - **Right to Erasure** - Users can delete their account and all associated data
@@ -175,7 +175,7 @@ See [GDPR Documentation](docs/gdpr/README.md) for details.
 ## Project Structure
 
 ```
-denarly/
+finances/
 ├── backend/                    # Django Ninja REST API
 ├── frontend/                   # React SPA
 ├── docs/                       # Architecture and specifications

@@ -13,7 +13,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 rounded-sm bg-primary animate-pulse" />
-          <span className="font-sans font-semibold text-text text-base tracking-tight">Denarly</span>
+          <span className="font-sans font-semibold text-text text-base tracking-tight">Owlgarth Finances</span>
         </div>
       </div>
     );

@@ -1,15 +1,15 @@
 ---
-version: "2.0"
-effective_date: "2026-07-15"
+version: "2.1"
+effective_date: "2026-08-24"
 ---
 
 ## 1. Acceptance of Terms
 
-By registering for and using Denarly, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.
+By registering for and using Owlgarth Finances, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.
 
 ## 2. Service Description
 
-Denarly is a personal finance tracking application that provides:
+Owlgarth Finances is a personal finance tracking application that provides:
 
 - Multi-currency accounts with computed balances
 - Budgets with categories and recurring periods
@@ -30,7 +30,7 @@ Denarly is a personal finance tracking application that provides:
 
 ## 4. Acceptable Use
 
-You agree to use Denarly only for:
+You agree to use Owlgarth Finances only for:
 
 - Personal or business finance tracking
 - Legitimate budgeting and financial planning
@@ -44,7 +44,7 @@ You agree NOT to:
 
 ## 5. Data & Privacy
 
-Your use of Denarly is also governed by our [Privacy Policy](/privacy), which is incorporated into these Terms by reference. Please read it carefully.
+Your use of Owlgarth Finances is also governed by our [Privacy Policy](/privacy), which is incorporated into these Terms by reference. Please read it carefully.
 
 ## 6. Workspace Collaboration
 
@@ -62,13 +62,13 @@ Your use of Denarly is also governed by our [Privacy Policy](/privacy), which is
 
 ## 8. Intellectual Property
 
-- You own your financial data entered into Denarly
+- You own your financial data entered into Owlgarth Finances
 - You may export your data at any time
-- The Denarly software, design, and branding are owned by {{ operator_name }}
+- The Owlgarth Finances software, design, and branding are owned by {{ operator_name }}
 
 ## 9. Limitation of Liability
 
-Denarly is provided "as is" without warranty of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the service. Our total liability shall not exceed the amount you paid for the service in the past 12 months.
+Owlgarth Finances is provided "as is" without warranty of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the service. Our total liability shall not exceed the amount you paid for the service in the past 12 months.
 
 ## 10. Governing Law
 
