@@ -393,9 +393,9 @@ cp example.env .env
 
 Required variables:
 ```bash
-POSTGRES_DB=denarly_db
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+POSTGRES_DB=finances_db
+POSTGRES_USER=finances_user
+POSTGRES_PASSWORD=finances_pass
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 REDIS_URL=redis://localhost:6379
@@ -456,10 +456,10 @@ A Dockerfile is provided for containerized deployment. The image includes an ent
 
 ```bash
 # Build image
-docker build -t denarly-backend .
+docker build -t finances-backend .
 
 # Run the server (migrations and seeding happen automatically)
-docker run -p 8000:8000 --env-file .env denarly-backend
+docker run -p 8000:8000 --env-file .env finances-backend
 ```
 
 The entrypoint uses `exec "$@"` to hand off PID 1 to uvicorn, ensuring proper signal handling for graceful shutdowns.
@@ -467,7 +467,7 @@ The entrypoint uses `exec "$@"` to hand off PID 1 to uvicorn, ensuring proper si
 To run one-off commands without the entrypoint (e.g., a Django management command):
 
 ```bash
-docker run --rm --entrypoint "" --env-file .env denarly-backend python manage.py shell
+docker run --rm --entrypoint "" --env-file .env finances-backend python manage.py shell
 ```
 
 ## Admin Access

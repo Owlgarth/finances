@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Denarly
+about: Suggest an idea for Owlgarth Finances
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

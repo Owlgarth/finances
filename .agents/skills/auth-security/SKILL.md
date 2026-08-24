@@ -1,6 +1,6 @@
 ---
 name: auth-security
-description: Denarly's security model and auth patterns — JWT auth classes, role permissions, workspace scoping, rate limiting, temp/refresh token consumption, verification tokens, anti-enumeration. Use when working on authentication, authorization, tokens, 2FA, password reset, rate limits, or any security-sensitive endpoint.
+description: Owlgarth Finances' security model and auth patterns — JWT auth classes, role permissions, workspace scoping, rate limiting, temp/refresh token consumption, verification tokens, anti-enumeration. Use when working on authentication, authorization, tokens, 2FA, password reset, rate limits, or any security-sensitive endpoint.
 ---
 
 # Security Model & Auth Patterns
