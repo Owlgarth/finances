@@ -1,6 +1,6 @@
 {
-  "name": "Denarly",
-  "short_name": "Denarly",
+  "name": "Owlgarth Finances",
+  "short_name": "Owlgarth",
   "description": "Self-hostable personal finance tracker",
   "start_url": "/",
   "display": "standalone",

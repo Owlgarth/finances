@@ -48,7 +48,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         {/* Logo + collapse toggle */}
         <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
           {!collapsed && (
-            <span className="font-sans font-semibold text-primary text-base tracking-tight select-none">Denarly</span>
+            <span className="font-sans font-semibold text-primary text-base tracking-tight select-none whitespace-nowrap">Owlgarth Finances</span>
           )}
           <button
             onClick={onToggleCollapse}
