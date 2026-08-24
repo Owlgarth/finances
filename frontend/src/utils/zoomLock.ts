@@ -1,7 +1,7 @@
 // "Disable zoom" (More sheet): kills double-tap and pinch zoom for a closer-to-
 // native feel. A device preference, not an account one — stored client-side like
-// 'denarly_theme', never synced: you want it on the phone, not the desktop.
-const STORAGE_KEY = 'denarly_disable_zoom'
+// 'owlgarth_theme', never synced: you want it on the phone, not the desktop.
+const STORAGE_KEY = 'owlgarth_disable_zoom'
 
 // Must match the viewport meta in index.html.
 const BASE_VIEWPORT = 'width=device-width, initial-scale=1.0, viewport-fit=cover'

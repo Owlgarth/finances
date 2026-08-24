@@ -19,8 +19,8 @@ import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Per-budget currency-switcher order — a display preference, stored client-side
-// like the theme ('denarly_theme'), keyed per budget since currency sets differ.
-const currencyOrderKey = (budgetId: number) => `denarly_currency_order:${budgetId}`
+// like the theme ('owlgarth_theme'), keyed per budget since currency sets differ.
+const currencyOrderKey = (budgetId: number) => `owlgarth_currency_order:${budgetId}`
 
 function loadCurrencyOrder(budgetId: number): string[] {
   try {

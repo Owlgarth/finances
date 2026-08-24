@@ -1,13 +1,13 @@
 ---
-version: "2.0"
-effective_date: "2026-07-15"
+version: "2.1"
+effective_date: "2026-08-24"
 ---
 
 ## 1. Introduction
 
-Denarly ("we", "our", or "us"), operated by **{{ operator_name }}**{% if is_individual %} (an individual){% endif %}, provides a personal finance tracking application. This Privacy Policy explains how we collect, use, and protect your personal data when you use Denarly.
+Owlgarth Finances ("we", "our", or "us"), operated by **{{ operator_name }}**{% if is_individual %} (an individual){% endif %}, provides a personal finance tracking application. This Privacy Policy explains how we collect, use, and protect your personal data when you use Owlgarth Finances.
 
-By registering for Denarly, you agree to the collection and use of information in accordance with this policy.
+By registering for Owlgarth Finances, you agree to the collection and use of information in accordance with this policy.
 
 ## 2. Data We Collect
 
@@ -45,7 +45,7 @@ By registering for Denarly, you agree to the collection and use of information i
 
 ## 3. How We Use Your Data
 
-- Providing the Denarly service (personal finance tracking and budgeting)
+- Providing the Owlgarth Finances service (personal finance tracking and budgeting)
 - Authenticating your identity via JWT tokens
 - Rate limiting to prevent abuse and protect the service
 - Maintaining an audit trail of your consent (GDPR compliance)
@@ -112,4 +112,4 @@ Email: {{ contact_email }}
 
 ## 12. Changes to This Policy
 
-We may update this Privacy Policy when our practices change or when required by law. When we make significant changes, we will notify registered users via email or in-app notification. Continued use of Denarly after changes constitutes acceptance of the updated policy.
+We may update this Privacy Policy when our practices change or when required by law. When we make significant changes, we will notify registered users via email or in-app notification. Continued use of Owlgarth Finances after changes constitutes acceptance of the updated policy.

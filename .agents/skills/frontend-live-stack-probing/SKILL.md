@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Denarly frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -25,8 +25,8 @@ same session - in PR #81 it paid for itself twice.
 - Registration requires the CURRENT legal acceptance versions - fetch them from `/api/legal/*`
   and send them with the register call, or registration fails. (`DEMO_MODE=true` on the
   backend disables registration entirely with a 403.)
-- Fast path when a token already exists: seed `localStorage` directly (`denarly_token`,
-  `denarly_refresh_token` - see Token Storage in `frontend-react`) instead of driving the
+- Fast path when a token already exists: seed `localStorage` directly (`owlgarth_token`,
+  `owlgarth_refresh_token` - see Token Storage in `frontend-react`) instead of driving the
   login form.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the

@@ -26,7 +26,7 @@ from workspaces.models import Role, Workspace, WorkspaceMember
 
 
 def _generate_qr_code_svg(user: User, secret: str) -> str:
-    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name='Denarly')
+    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name='Owlgarth Finances')
     qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgImage)
     qr.add_data(totp_uri)
     qr.make(fit=True)
@@ -173,7 +173,7 @@ class TwoFactorService:
     def _send_admin_reset_email(to, user_name, workspace_name, admin_name):
         EmailService.send_email(
             to=to,
-            subject='Your two-factor authentication was reset — Denarly',
+            subject='Your two-factor authentication was reset — Owlgarth Finances',
             template_name='email/twofa_admin_reset',
             context={'user_name': user_name, 'workspace_name': workspace_name, 'admin_name': admin_name},
         )
