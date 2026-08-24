@@ -1,6 +1,6 @@
 ---
 name: celery-tasks
-description: Celery task conventions for Denarly — task structure, retry semantics, idempotency guards, service-to-task dispatch, circular import avoidance. Use when creating or modifying Celery tasks (<app>/tasks.py) or wiring background jobs into services.
+description: Celery task conventions for Owlgarth Finances — task structure, retry semantics, idempotency guards, service-to-task dispatch, circular import avoidance. Use when creating or modifying Celery tasks (<app>/tasks.py) or wiring background jobs into services.
 ---
 
 # Celery Task Conventions
