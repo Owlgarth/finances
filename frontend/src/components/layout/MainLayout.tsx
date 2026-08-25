@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
+import AttributionFooter from '../common/AttributionFooter'
 import CommandPalette from '../common/CommandPalette'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
@@ -92,6 +93,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             bottom padding clears the fixed bottom nav + raised FAB. */}
         <main className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
           {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
+          <AttributionFooter />
         </main>
         <BottomNav />
         <CommandPalette />
@@ -109,6 +111,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </div>
       <main className="flex-1 overflow-y-auto p-6">
         {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
+        <AttributionFooter />
       </main>
       <CommandPalette />
     </div>

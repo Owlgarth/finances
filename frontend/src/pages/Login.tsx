@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import AttributionFooter from '../components/common/AttributionFooter';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -56,7 +57,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
@@ -196,6 +197,7 @@ export default function Login() {
           </form>
         )}
       </div>
+      <AttributionFooter />
     </div>
   );
 }

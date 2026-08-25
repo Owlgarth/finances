@@ -2,6 +2,7 @@
   "name": "owlgarth-finances",
   "private": true,
   "version": "0.0.0",
+  "license": "LicenseRef-Owlgarth-Attribution",
   "type": "module",
   "scripts": {
     "dev": "vite",
