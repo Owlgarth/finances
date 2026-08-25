@@ -175,14 +175,13 @@ class TransactionItemsOut(BaseModel):
 
 
 class TransactionAttachmentOut(BaseModel):
-    """Attachment metadata with a short-lived presigned download URL + extraction state."""
+    """Attachment metadata + extraction state (downloads go through the API)."""
 
     id: int
     filename: str
     content_type: str
     size: int
     created_at: datetime
-    download_url: Optional[str]
     extraction_status: str
     extraction_error: str
 
