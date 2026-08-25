@@ -66,7 +66,7 @@ Workspace (top-level container)
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. |
-| **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; access is via short-lived signed URLs only. |
+| **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
 
 ### Multi-Workspace Support
 

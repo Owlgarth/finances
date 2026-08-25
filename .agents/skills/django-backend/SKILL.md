@@ -171,6 +171,31 @@ page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 - **The cap must not fall below the frontend's maximum.** `ALLOWED_PAGE_SIZES` (backend) and `PAGE_SIZE_OPTIONS` (frontend `utils/pageSize.ts`) duplicate the same list with no cross-reference; the frontend persists the user's choice in localStorage and sends it as `page_size` on every list request. A backend cap below the frontend max 422s real users' stored preference on their main pages — a functional regression dressed as a security fix. Lowering the cap or shrinking the allowed set requires a coordinated frontend change (drop the option from `PAGE_SIZE_OPTIONS` + migrate stored prefs) in the same PR.
 - Pin the contract with one boundary test per app: `page_size=1000` → 422, `page_size=0` → 422, and `page_size=<frontend max>` → 200 — the last assertion makes a future cap-lower fail loudly in tests instead of silently breaking the UI.
 
+### Byte-Streaming Download Endpoints
+
+Endpoints that stream stored bytes to the client return a plain
+`HttpResponse(content, content_type=...)` with no Ninja response schema -
+mirroring `export_transactions` / `users/me/export`. Error status codes are
+still declared in `response={404: DetailOut, 503: DetailOut}` and itemized in
+the docstring; only the 200 body (the file itself) escapes schematization.
+Exemplar: `download_transaction_attachment` in `transactions/api.py`.
+
+- Routing bytes through an authenticated endpoint instead of handing out
+  presigned URLs keeps every download behind the four security layers and the
+  client-facing URL surface constant - presigned URLs leak the storage host to
+  clients and expire opaquely. The Django admin is the sanctioned
+  presigned-URL consumer (`transactions/admin.py`).
+- User-controlled filenames never reach `Content-Disposition` raw: the RFC
+  6266/5987 formatting (ASCII-sanitized `filename="..."` fallback plus a
+  `filename*=UTF-8''...` param via `urllib.parse.quote(filename, safe='')`)
+  lives on the service (`AttachmentService.content_disposition`), not the
+  endpoint module - header-encoding policy is domain logic, and the endpoint
+  stays a thin wrapper.
+- A stored object that is gone while its metadata row survives raises a
+  `NotFoundError` subclass with its own `default_code` (`file_missing`) so the
+  client can tell "no such attachment" (`not_found`) from "row intact, bytes
+  unreachable".
+
 ## Service Layer
 
 Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation, DB operations, and balance updates. Domain-specific exceptions live in `<app>/exceptions.py`.
@@ -509,6 +534,8 @@ class BudgetSummaryResponse(BaseModel):
 ```
 
 Populate in the API layer by iterating the queryset and grouping into dicts.
+
+**Removing a response field requires a consumer census.** Before dropping a field from an `Out` schema, grep every consumer of that field - frontend types, components, and tests - and migrate them in the same branch (the `download_url` removal paired the backend drop with the frontend blob rework). A field the backend silently stops sending while the frontend still types it is an invisible `undefined` at runtime, not a compile error.
 
 ## Distinguishing "Client Sent" from "Defaulted" on Partial Updates
 
