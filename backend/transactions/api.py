@@ -254,10 +254,10 @@ def replace_transaction_items(request: HttpRequest, transaction_id: int, data: T
     auth=WorkspaceJWTAuth(),
 )
 def list_transaction_attachments(request: HttpRequest, transaction_id: int):
-    """List a transaction's attachments with short-lived download URLs."""
+    """List a transaction's attachments (metadata only; download via the download endpoint)."""
     workspace_id = request.auth.current_workspace_id
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
-    return AttachmentService.list_with_urls(trans)
+    return AttachmentService.list_metadata(trans)
 
 
 @router.post(
@@ -273,7 +273,7 @@ def upload_transaction_attachment(request: HttpRequest, transaction_id: int, fil
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     attachment = AttachmentService.upload(user, trans, file)
-    result = AttachmentService.list_with_urls(trans)
+    result = AttachmentService.list_metadata(trans)
     created = next(a for a in result if a['id'] == attachment.id)
     return 201, created
 
@@ -291,6 +291,27 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     AttachmentService.delete(trans, attachment_id)
     return 204, None
+
+
+@router.get(
+    '/{transaction_id}/attachments/{attachment_id}/download',
+    response={404: DetailOut, 503: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def download_transaction_attachment(request: HttpRequest, transaction_id: int, attachment_id: int):
+    """Download an attachment's stored file (read access - any member role).
+
+    Returns a plain HttpResponse (no Ninja response schema) with the stored
+    content type and Content-Disposition - mirrors export_transactions.
+    Status codes: 200 file bytes, 404 transaction/attachment not found or
+    stored file gone (code 'file_missing'), 503 storage not configured.
+    """
+    workspace_id = request.auth.current_workspace_id
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    attachment, content = AttachmentService.download(trans, attachment_id)
+    response = HttpResponse(content, content_type=attachment.content_type)
+    response['Content-Disposition'] = AttachmentService.content_disposition(attachment.filename)
+    return response
 
 
 @router.get('/extraction/config', response=ExtractionConfigOut, auth=WorkspaceJWTAuth())
