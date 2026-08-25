@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from urllib.parse import quote
 
 from django.conf import settings
 from django.db import transaction as db_transaction
 
 from common.storage import StorageService
 from transactions.exceptions import (
+    AttachmentFileMissingError,
     AttachmentNotFoundError,
     AttachmentStorageUnavailableError,
     AttachmentTypeError,
@@ -86,12 +88,8 @@ class AttachmentService:
         )
 
     @staticmethod
-    def list_with_urls(trans: Transaction) -> list[dict]:
-        """Attachment metadata plus a short-lived presigned download URL each.
-
-        With storage disabled the URLs come back None — metadata still lists.
-        """
-        bucket = AttachmentService._media_bucket()
+    def list_metadata(trans: Transaction) -> list[dict]:
+        """Attachment metadata for listing (no URLs - downloads go through the API)."""
         return [
             {
                 'id': a.id,
@@ -99,14 +97,37 @@ class AttachmentService:
                 'content_type': a.content_type,
                 'size': a.size,
                 'created_at': a.created_at,
-                'download_url': StorageService.get_presigned_url(
-                    bucket, a.file_key, expiry=DOWNLOAD_URL_EXPIRY_SECONDS
-                ),
                 'extraction_status': a.extraction_status,
                 'extraction_error': a.extraction_error,
             }
             for a in trans.attachments.all()
         ]
+
+    @staticmethod
+    def download(trans: Transaction, attachment_id: int) -> tuple[TransactionAttachment, bytes]:
+        """Fetch an attachment's metadata and stored bytes for API download.
+
+        Raises AttachmentStorageUnavailableError when storage is off and
+        AttachmentFileMissingError when the stored object is gone (the
+        metadata row stays - only the bytes are unreachable).
+        """
+        attachment = AttachmentService.get_attachment(trans, attachment_id)
+        if not StorageService._is_enabled():
+            raise AttachmentStorageUnavailableError()
+        content = StorageService.get_file(AttachmentService._media_bucket(), attachment.file_key)
+        if content is None:
+            raise AttachmentFileMissingError()
+        return attachment, content
+
+    @staticmethod
+    def content_disposition(filename: str) -> str:
+        """RFC 6266/5987 Content-Disposition value for a user-controlled filename.
+
+        ASCII-only fallback param plus a UTF-8 extended param - upload names are
+        arbitrary user input, so they must never reach the header raw.
+        """
+        fallback = ''.join(c if 32 <= ord(c) < 127 and c not in '"\\' else '_' for c in filename) or 'attachment'
+        return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
 
     @staticmethod
     @db_transaction.atomic
