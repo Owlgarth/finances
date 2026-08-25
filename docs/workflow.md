@@ -85,6 +85,9 @@ transfer. Transfers replace the old currency-exchange records.
 - **Line items** and **receipt attachments** are managed from the Items/Receipts tabs
   on an existing transaction. Items are informational (a mismatch hint appears when
   their sum differs from the amount); the transaction amount stays authoritative.
+- Attached receipts are served through the authenticated API, never direct storage
+  links: image receipts open in a lightbox with a download button; PDFs and HEICs
+  download on click.
 
 ## Receipts & Extraction (optional)
 
