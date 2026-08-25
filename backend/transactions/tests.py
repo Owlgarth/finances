@@ -1061,7 +1061,6 @@ class TestTransactionAttachments(TransactionTestCase):
         self.addCleanup(patcher.stop)
         self.storage._is_enabled.return_value = True
         self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
-        self.storage.get_presigned_url.return_value = 'http://signed.example/url'
         self.storage.delete_file.return_value = True
 
     def _attachments_url(self):
@@ -1081,11 +1080,12 @@ class TestTransactionAttachments(TransactionTestCase):
         data = response.json()
         self.assertEqual(data['filename'], 'receipt.jpg')
         self.assertEqual(data['content_type'], 'image/jpeg')
-        self.assertEqual(data['download_url'], 'http://signed.example/url')
+        self.assertNotIn('download_url', data)
 
         listed = self.get(self._attachments_url(), **self.auth_headers())
         self.assertStatus(200)
         self.assertEqual(len(listed), 1)
+        self.assertNotIn('download_url', listed[0])
         self.storage.save_file.assert_called_once()
         key = self.storage.save_file.call_args[0][1]
         self.assertTrue(key.startswith(f'attachments/{self.workspace.id}/{self.trans.id}/'))
@@ -1158,6 +1158,108 @@ class TestTransactionAttachments(TransactionTestCase):
         self.assertEqual(target.attachments.first().filename, 'shop.jpg')
 
 
+class TestAttachmentDownload(TransactionTestCase):
+    """Authenticated file download endpoint (bytes streamed via the API)."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='With receipt')
+        patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.get_file.return_value = b'storedbytes'
+        self.attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg', filename='r.jpg', content_type='image/jpeg', size=11, uploaded_by=self.user
+        )
+
+    def _download_url(self, attachment_id=None):
+        return f'/api/transactions/{self.trans.id}/attachments/{attachment_id or self.attachment.id}/download'
+
+    def test_download_streams_bytes_with_headers(self):
+        response = self.client.get(self._download_url(), **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'storedbytes')
+        self.assertEqual(response['Content-Type'], 'image/jpeg')
+        disposition = response['Content-Disposition']
+        self.assertIn('attachment', disposition)
+        self.assertIn('filename="r.jpg"', disposition)
+        self.assertIn("filename*=UTF-8''r.jpg", disposition)
+        self.storage.get_file.assert_called_once()
+
+    def test_unicode_filename_uses_ascii_fallback_and_rfc5987_param(self):
+        self.attachment.filename = 'paragón.jpg'
+        self.attachment.save()
+        response = self.client.get(self._download_url(), **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        disposition = response['Content-Disposition']
+        self.assertIn('filename="parag_n.jpg"', disposition)
+        self.assertIn("filename*=UTF-8''parag%C3%B3n.jpg", disposition)
+
+    def test_other_workspace_transaction_404(self):
+        other_trans = TransactionFactory()
+        url = f'/api/transactions/{other_trans.id}/attachments/{self.attachment.id}/download'
+        self.get(url, **self.auth_headers())
+        self.assertStatus(404)
+        self.storage.get_file.assert_not_called()
+
+    def test_nonexistent_attachment_404(self):
+        self.get(self._download_url(attachment_id=999999), **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_storage_disabled_503(self):
+        self.storage._is_enabled.return_value = False
+        self.get(self._download_url(), **self.auth_headers())
+        self.assertStatus(503)
+
+    def test_missing_file_404_with_code(self):
+        self.storage.get_file.return_value = None
+        data = self.get(self._download_url(), **self.auth_headers())
+        self.assertStatus(404)
+        self.assertEqual(data['code'], 'file_missing')
+
+    def test_viewer_can_download(self):
+        from workspaces.models import WorkspaceMember
+
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        response = self.client.get(self._download_url(), **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+
+
+class TestTransactionAttachmentAdmin(TransactionTestCase):
+    """Admin presigned download link - the live consumer of get_presigned_url."""
+
+    def setUp(self):
+        super().setUp()
+        self.trans = TransactionFactory(account=self.account, description='With receipt')
+        self.attachment = self.trans.attachments.create(
+            file_key='attachments/x.jpg', filename='r.jpg', content_type='image/jpeg', size=10, uploaded_by=self.user
+        )
+
+    def _model_admin(self):
+        from django.contrib import admin as django_admin
+
+        from transactions.admin import TransactionAttachmentAdmin
+
+        return TransactionAttachmentAdmin(TransactionAttachment, django_admin.site)
+
+    def test_link_is_presigned_url_with_short_expiry(self):
+        from transactions.attachments import DOWNLOAD_URL_EXPIRY_SECONDS
+
+        with mock.patch('transactions.admin.StorageService') as storage:
+            storage.get_presigned_url.return_value = 'http://signed.example/admin'
+            rendered = self._model_admin().presigned_download_link(self.attachment)
+        storage.get_presigned_url.assert_called_once()
+        self.assertEqual(storage.get_presigned_url.call_args.kwargs['expiry'], DOWNLOAD_URL_EXPIRY_SECONDS)
+        self.assertIn('http://signed.example/admin', rendered)
+
+    def test_link_reports_storage_disabled(self):
+        with mock.patch('transactions.admin.StorageService') as storage:
+            storage.get_presigned_url.return_value = None
+            rendered = self._model_admin().presigned_download_link(self.attachment)
+        self.assertEqual(rendered, 'storage disabled')
+
+
 CONTRACT_RESULT = {
     'schema_version': '1',
     'merchant': 'Lidl',
@@ -1184,7 +1286,6 @@ class TestExtraction(TransactionTestCase):
         self.addCleanup(storage_patcher.stop)
         self.storage._is_enabled.return_value = True
         self.storage.save_file.side_effect = lambda bucket, key, content, content_type: key
-        self.storage.get_presigned_url.return_value = 'http://signed/url'
         self.storage.get_file.return_value = b'imagebytes'
         # Pretend a parser is configured.
         enabled_patcher = mock.patch('transactions.parser_client.is_enabled', return_value=True)

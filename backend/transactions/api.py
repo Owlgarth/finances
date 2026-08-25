@@ -3,6 +3,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from urllib.parse import quote
 
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Form, Query, Router
@@ -39,6 +40,16 @@ ORDERING_PATTERN = r'^(-?(date|description|amount|type|category__name|account__n
 # Upper bound for page_size on list endpoints — derived from the pagination
 # module's allowed sizes so the API cap stays in lockstep with the service layer.
 MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)
+
+
+def _attachment_content_disposition(filename: str) -> str:
+    """RFC 6266/5987 Content-Disposition value for a user-controlled filename.
+
+    ASCII-only fallback param plus a UTF-8 extended param - upload names are
+    arbitrary user input, so they must never reach the header raw.
+    """
+    fallback = ''.join(c if 32 <= ord(c) < 127 and c not in '"\\' else '_' for c in filename) or 'attachment'
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
 
 
 @router.get('', response=PaginatedOut[TransactionOut], auth=WorkspaceJWTAuth())
@@ -254,10 +265,10 @@ def replace_transaction_items(request: HttpRequest, transaction_id: int, data: T
     auth=WorkspaceJWTAuth(),
 )
 def list_transaction_attachments(request: HttpRequest, transaction_id: int):
-    """List a transaction's attachments with short-lived download URLs."""
+    """List a transaction's attachments (metadata only; download via the download endpoint)."""
     workspace_id = request.auth.current_workspace_id
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
-    return AttachmentService.list_with_urls(trans)
+    return AttachmentService.list_metadata(trans)
 
 
 @router.post(
@@ -273,7 +284,7 @@ def upload_transaction_attachment(request: HttpRequest, transaction_id: int, fil
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     attachment = AttachmentService.upload(user, trans, file)
-    result = AttachmentService.list_with_urls(trans)
+    result = AttachmentService.list_metadata(trans)
     created = next(a for a in result if a['id'] == attachment.id)
     return 201, created
 
@@ -291,6 +302,27 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     AttachmentService.delete(trans, attachment_id)
     return 204, None
+
+
+@router.get(
+    '/{transaction_id}/attachments/{attachment_id}/download',
+    response={404: DetailOut, 503: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def download_transaction_attachment(request: HttpRequest, transaction_id: int, attachment_id: int):
+    """Download an attachment's stored file (read access - any member role).
+
+    Returns a plain HttpResponse (no Ninja response schema) with the stored
+    content type and Content-Disposition - mirrors export_transactions.
+    Status codes: 200 file bytes, 404 transaction/attachment not found or
+    stored file gone (code 'file_missing'), 503 storage not configured.
+    """
+    workspace_id = request.auth.current_workspace_id
+    trans = TransactionService.get_transaction(transaction_id, workspace_id)
+    attachment, content = AttachmentService.download(trans, attachment_id)
+    response = HttpResponse(content, content_type=attachment.content_type)
+    response['Content-Disposition'] = _attachment_content_disposition(attachment.filename)
+    return response
 
 
 @router.get('/extraction/config', response=ExtractionConfigOut, auth=WorkspaceJWTAuth())

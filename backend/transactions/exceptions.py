@@ -69,3 +69,8 @@ class AttachmentStorageUnavailableError(ServiceError):
     http_status = 503
     default_message = 'File storage is not configured'
     default_code = 'storage_unavailable'
+
+
+class AttachmentFileMissingError(NotFoundError):
+    default_message = 'The stored file is no longer available'
+    default_code = 'file_missing'
