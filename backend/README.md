@@ -261,7 +261,8 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
 | GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
 | GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items |
-| GET/POST/DELETE | `/api/transactions/{id}/attachments[/{aid}]` | - | List / upload / delete receipt attachments |
+| GET/POST/DELETE | `/api/transactions/{id}/attachments[/{aid}]` | - | List (metadata only) / upload / delete receipt attachments |
+| GET | `/api/transactions/{id}/attachments/{aid}/download` | - | Download an attachment's stored file (any member role - bytes streamed via the API; 404 `file_missing` if the stored object is gone, 503 if storage is off) |
 | GET | `/api/transactions/extraction/config` | - | Whether receipt extraction is configured |
 | POST | `/api/transactions/extraction/parse` | - | Parse a receipt without persisting (receipt-first create) |
 | POST | `/api/transactions/{id}/attachments/{aid}/extract` | - | Queue extraction for an attachment |

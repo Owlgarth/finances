@@ -65,6 +65,8 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
 
 `AuthMixin` creates a bare workspace (via `WorkspaceFactory`), a user, and a workspace membership — it does **not** enable currencies or create accounts/budgets (that keeps assertions clean). Enable a currency and create accounts/budgets explicitly in `setUp` when the test needs them (e.g. `CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')` then `AccountFactory(workspace=self.workspace)`). It also creates `auth_token` and provides `auth_headers()`. `self.user`, `self.workspace`, `self.auth_token` are available.
 
+**Byte-streaming endpoints:** `APIClientMixin`'s `self.get` parses JSON only - success-path assertions on file bytes and headers (`response.content`, `response['Content-Disposition']`) use `self.client.get` directly, while error paths keep `self.get` + `assertStatus`. Exemplar: `TestAttachmentDownload` in `transactions/tests.py`.
+
 **Workspace ambiguity:** When tests create additional workspaces for the same user (e.g., via `import_all_data`), filtering by `owner=self.user` alone may return the AuthMixin workspace instead of the new one. Filter by both `owner` and `name`:
 
 ```python

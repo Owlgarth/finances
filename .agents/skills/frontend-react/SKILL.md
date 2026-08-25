@@ -1,6 +1,6 @@
 ---
 name: frontend-react
-description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances — design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams, API client, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
+description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances - design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams and domain hooks modules, API client, blob downloads and object-URL ownership, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
 ---
 
 # Frontend Conventions (TypeScript/React)
@@ -14,6 +14,7 @@ The frontend uses an "Architectural Ledger" design system via CSS custom propert
 - **Fonts:** `font-sans` — Geist (body/UI); `font-mono` — JetBrains Mono (code, numbers)
 - **Icons:** `lucide-react` only. No Material Symbols or other icon fonts.
 - **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables — avoid `box-shadow` utilities for elevation.
+- **Full-bleed focus rings draw inside:** a positive `focus-visible:outline-offset-2` draws the outline OUTSIDE the element edge, so on a `w-full h-full` button inside an `overflow-hidden` wrapper (media tiles) it clips invisible on three of four sides - use `focus-visible:-outline-offset-2` (inset ring) there, and the standard positive offset on contained buttons. Exemplar: the attachment tiles in `transactions/TransactionAttachments.tsx`.
 - **Border widths:** Tailwind preflight resets `border-width: 0`, so a color utility alone (`border-primary`) renders **no** border. Always keep the bare `border` width utility and swap only the color half — `border border-primary` (open/selected) vs `border border-border` (default).
 - **Shared control classes:** button/control variants live in `common/formStyles.ts` and follow the four-part shape: base colors + padding + `controlHeightClass` + `focus-visible:outline-*` + `disabled:opacity-50 disabled:cursor-not-allowed`. Solid semantic fills have no `-hover` token — hover is an opacity step (`hover:bg-negative/90`), which inverts acceptably in both themes.
 - **Stacking (z-index) tokens:** use the semantic scale from `tailwind.config.js` — `z-dropdown` (100) < `z-sticky` (200) < `z-sidebar`/`z-bottom-nav` (300) < `z-topbar` (400) < `z-modal-backdrop` (500) < `z-modal` (510) < `z-toast` (600) < `z-tooltip` (700) — never raw `z-10`/`z-50` utilities for overlays or persistent chrome. An overlay is two layers: backdrop at `z-modal-backdrop`, dismiss wrapper + panel at `z-modal` (`Modal.tsx`); plain `z-10` is only for local stacking *inside* a surface (a sticky drag handle, the lightbox close X above a tall sibling image, sticky table columns).
@@ -131,6 +132,8 @@ When a component manages multiple modals, use separate boolean state for each. M
 
 **Migrating a hand-rolled fixed overlay to `Modal`:** pass `title` (string prop) + `className="p-6"`, and delete the manual `useOverlay` plus the hand-rolled header/`aria-labelledby`/close-X machinery — `Modal` wires stack-aware Escape/scroll-lock/focus on desktop and delegates to `BottomSheet` on mobile, preserving the behavior by construction.
 
+**Sanctioned exception - full-bleed media lightboxes.** A viewer whose content IS the viewport (the attachment image lightbox) does not fit `Modal`'s centered panel and title header, so hand-rolling it is allowed - but it still goes through `useOverlay(active, onClose)` for stack-aware Escape, refcounted scroll lock, and focus capture/restore, and its panel carries `ref` + `role="dialog"` + `aria-modal` + `tabIndex={-1}` exactly like `Modal`'s panel. An unregistered overlay lets Escape close the modal underneath it (the bug class `useOverlay` exists to prevent). Exemplar: the lightbox in `transactions/TransactionAttachments.tsx`.
+
 ## File Structure
 
 Components live in lowercase-plural feature directories (`components/accounts/`,
@@ -206,6 +209,7 @@ Choose the extraction mechanism by WHAT the duplication is:
 - **A non-selectable action row inside a listbox ("View all periods") is a pseudo-option in the hook's option space.** A bare `<button>` child of the listbox sits outside `aria-activedescendant`, and End/type-ahead/Enter skip it. Recipe (`PeriodPicker`'s view-all row): append `{ value: SENTINEL, label }` LAST to the hook's options with a numeric sentinel that cannot collide with real values (`-1`, impossible for a DB primary key, keeps `ListboxOption<number>` honest); branch in `activateIndex` on the sentinel (fire the navigation callback, `closePanel`, return) - activation is not selection, so no `onChange` path; render `role="option"` + `aria-selected={false}` (an action is never the selected value), with `id={optionId(index)}` + `tabIndex={-1}` on the desktop panel (the trigger owns focus) and no `id` in the mobile sheet (row parity). The scroll-to-selected `querySelector('[aria-selected="true"]')` still finds the real selection because the pseudo-option is always `aria-selected={false}`. Any windowing around the options (a `limit` cap) is pure per-render derivation clamped so the selection always lands inside the window - never state, which would need re-sync effects; an `effectiveLimit` alias (null when the list already fits) lets TypeScript narrow inside the branches.
 - **Logic- or field-identical exports → alias, keep BOTH names** (`const canResetPasswordFor = canEditMember;`): an alias makes drift structurally impossible while every existing call site stays valid. Grep all consumers first to confirm nothing depends on the copies being distinct; deleting a name is a call-site migration, not a cleanup side effect.
 - **Copy at two consumers, extract at the third.** When a task needs a sibling component's module-private helper (a 6-line chip, a 5-line predicate), copy it byte-equivalently into the new file with keep-in-sync comments on BOTH sides instead of extracting - a premature extraction churns a component outside the task's file set (exemplar: `PeriodCard`'s local `CurrentChip`/`temporalOf` copies from `PeriodPicker`). A third consumer is the extraction trigger: promote to a shared module then, moving every copy byte-equivalently.
+- **A resource's data logic (queries + mutations + cache-key builders) lives in a domain hooks module, not a component and not a class-based service.** When a resource will plausibly serve more than one consumer (attachments feed tiles, a lightbox, future pages), extract its full data logic at the FIRST consumer into `hooks/useAttachments.ts` - the `hooks/useDomain.ts` pattern (see Shared domain hooks) applied per resource: exported key-builder functions (`transactionAttachmentsKey`, `attachmentBlobKey`) so any hook or component can invalidate precisely, one hook per operation, each mutation owning its cache invalidation internally. Pure non-hook helpers (`isImage`, `triggerBrowserDownload`) go in `utils/attachments.ts` beside `utils/errors.ts` / `utils/format.ts`. This is the carve-out to "copy at two, extract at three" above - that rule is for presentation helpers; reusable data logic is extracted immediately because component-inline data logic cannot be reused without a rewrite. Service classes are the wrong seam in React: hooks compose with TanStack Query caching and component lifecycle, and the axios client in `api/client.ts` stays the only HTTP seam.
 - When extracting, copy behavior-critical blocks **byte-equivalent** and verify mechanically (`diff` against git HEAD) — never "improve" during a move; a future fix should diff against exactly what shipped.
 - Shared row/shape normalization between sibling components lives in `utils/` behind a deliberately **structural param type** (`RowLike` in `utils/transactionItems.ts` — four string fields) so each component's local row type satisfies it without component-to-component type imports. URL-param readers (`intParam`/`intListParam`/`amountParam`/`createUpdateParams`) live in `utils/params.ts` — list pages import them instead of re-declaring. Object-literal API modules (`authApi`, `legalApi`) are `this`-less arrow functions — safe as bare `queryFn:` references and as stable module-level fetcher props for shared page components.
 
@@ -294,6 +298,14 @@ onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to upload'))
 Never hand-roll `(error as { response?: { data?: { detail?: string } } })` casts or
 `error: any` at call sites — the helper is the single seam, and it keeps the error
 parameter typed as `unknown`.
+
+**Blob responses never have a parsed body.** On `responseType: 'blob'` requests the
+error response body arrives as a Blob (axios never parses it as JSON), so
+`getApiErrorMessage`'s `response.data.detail` read always finds nothing. Branch on
+the HTTP status first (`axios.isAxiosError(error)` + `error.response?.status`, e.g.
+404 -> "no longer available", 503 -> "storage unavailable"), then fall through to
+the generic helper. Exemplar: `attachmentDownloadErrorMessage` in
+`utils/attachments.ts`.
 
 ## Avoid Duplicate Toasts
 
@@ -541,6 +553,38 @@ Augmenting `AxiosRequestConfig` also types `error.config` (`InternalAxiosRequest
 
 **Backend-mirrored constants:** `PAGE_SIZE_OPTIONS` in `utils/pageSize.ts` duplicates the backend's `ALLOWED_PAGE_SIZES` — the user's choice is persisted to localStorage and sent as `page_size` on every list request, so the two lists must change together (the 422 trap is documented under Pagination Param Caps in the `django-backend` skill). Put an inline sync comment at the constant itself in the one-line `/** Synced with backend <file> <CONSTANT>. */` format (see `TotalsLabel`) — the coupling knowledge belongs where the next editor actually looks, not only in this skill. The same discipline applies to format strings: `formatPeriodName` (`utils/format.ts`) mirrors the backend's period-naming format (dd MMM + en dash) and is persisted as period names, while the adjacent display-only `formatPeriodRange` ("Apr 1 - Apr 30", regular hyphen) is deliberately different - harmonizing the look-alikes would corrupt the mirror, and the separator difference is invisible in review surfaces. The docblock adjacency warning between them is the guard; do not remove it.
 
+## Blob Downloads and Object-URL Ownership
+
+Files behind authenticated endpoints are fetched as blobs through the axios
+client (`responseType: 'blob'`, e.g. `transactionsApi.downloadAttachment`) -
+browsers cannot send the JWT header on navigations, so `<img src>`/`<a href>`
+pointing at the API never works; `URL.createObjectURL` bridges blob -> URL. The
+load-bearing contract is that exactly one site creates a URL per lifecycle, and
+`URL.revokeObjectURL` ownership is explicit at each call site (exemplar:
+`hooks/useAttachments.ts` + `utils/attachments.ts`):
+
+- **The query cache mints and pins display URLs.** The blob query's `queryFn`
+  returns `URL.createObjectURL(blob)` with BOTH `staleTime: Infinity` AND
+  `gcTime: Infinity` - the bytes are immutable, and the default 5-min gc drops
+  the cache entry, leaks its object URL, and mints a duplicate URL for the same
+  bytes on remount.
+- **A download-to-disk mutation creates and revokes its own short-lived URL**
+  around the programmatic anchor click (`useAttachmentDownload`).
+- **A reuse path NEVER revokes a cached URL.** The lightbox reuses the URL
+  passed in from the tile's cached data - revoking it after close would poison
+  the thumbnail that still references it. Shared download helpers stay
+  deliberately revoke-free (`triggerBrowserDownload`); never "simplify" the two
+  paths into one helper that always revokes.
+- **Per-item blob queries live in a child component** (`AttachmentMedia`) -
+  hooks cannot be called inside a list `.map()` callback; the parent's map keeps
+  the stateless chrome (border, delete button, extraction overlay).
+- **Delete mutations drop the deleted item's blob cache entry**
+  (`queryClient.removeQueries({ queryKey: attachmentBlobKey(...) })`); the
+  object URL itself is reclaimed at document unload, bounded by the
+  per-transaction attachment caps. A new blob consumer reuses the same client
+  call and key builders instead of minting a second query family for the same
+  bytes.
+
 ## Money Arithmetic (Exact Strings)
 
 Backend Decimal amounts cross the API as strings; any arithmetic whose result is **persisted or sent back** must be exact string/BigInt math via the helpers in `utils/format.ts` (`subtractAmounts` — BigInt cents, 3rd-digit round-half-up, never returns `'-0.00'`). Never `parseFloat` a backend Decimal that will be persisted: a 17-digit Decimal through `parseFloat` loses the last cent, and the wrong delta gets recorded as a real adjustment transaction. Floats are for validation/display only.
@@ -568,6 +612,7 @@ const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace
 - **Constants**: camelCase for objects, UPPER_SNAKE for primitives
 - **Types/Interfaces**: PascalCase (`User`, `Transaction`, `Props`)
 - **Event handlers**: `handle` prefix (`handleSubmit`, `handleClick`)
+- **Comments**: plain-language rationale only - never planning artifacts ("(R1)", "patterns.md SS3", task ids). Review-round and spec references are meaningless outside the session that wrote them; a comment must state the WHY so a reader with no access to the plan can act on it.
 
 ## Imports Order
 

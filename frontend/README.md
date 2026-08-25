@@ -40,13 +40,14 @@ frontend/
 │   │   └── ThemeContext.tsx         # Light/dark theme
 │   ├── hooks/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
+│   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems
+│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -101,8 +102,8 @@ period; the name is derived from the date range until edited).
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
 the account matching the parsed currency - preferring the per-currency default),
-`TransactionItemsEditor`, `TransactionAttachments` (upload + extraction),
-`ExtractionReviewModal`, `PlannedFormModal`.
+`TransactionItemsEditor`, `TransactionAttachments` (upload + view/download,
+extraction), `ExtractionReviewModal`, `PlannedFormModal`.
 
 ## Contexts
 
@@ -367,6 +368,8 @@ user looks at the tab again.
 ['budgets', includeInactive]
 ['budget-summary', budgetId, periodId]
 ['transactions', page, filters]
+['transaction-attachments', transactionId]
+['attachment-blob', transactionId, attachmentId]  // immutable files: staleTime/gcTime Infinity; the cache owns the object URL
 ['current-balances', includeArchived]
 ['workspace-members', workspaceId]
 ```
