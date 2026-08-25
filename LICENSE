@@ -1,21 +1,39 @@
-MIT License
+Owlgarth Finances
+Copyright 2026 Erik Moroz
 
-Copyright (c) 2025 Erik Moroz
+Licensed under the Apache License, Version 2.0 (reproduced below), with ONE
+additional condition. The permissions granted by that License are conditioned
+on compliance with it.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+--- ADDITIONAL CONDITION: ATTRIBUTION ---
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Attribution notice.
+   Any deployment of this software, or of a work derived from it, that is made
+   accessible to any person other than the operator - internal, commercial, or
+   public, free or paid - must display the following notice:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+       Powered by Owlgarth Finances - https://owlgarth.com
+
+2. Placement.
+   The notice must be legible and reachable from every main screen of the user
+   interface, for example in a footer or an "About" page. Where the interface
+   supports hyperlinks, the URL must be an active link.
+
+3. Removal.
+   The notice may not be removed, hidden, obscured, or reduced in prominence
+   relative to the surrounding interface.
+
+4. Names and marks.
+   No right is granted to use the names "Owlgarth" or "Owlgarth Finances", or
+   any Owlgarth logo, except to display the notice above unmodified. They may
+   not be used to name, brand, or promote a derivative work or service.
+
+5. Private use.
+   This condition does not apply to a deployment used solely by the operator.
+
+6. Waiver.
+   Erik Moroz may waive this condition in writing for any party.
+
+--- END OF ADDITIONAL CONDITION ---
+
+[PASTE THE FULL OFFICIAL TEXT HERE]
