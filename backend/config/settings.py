@@ -175,7 +175,17 @@ if USE_S3_STORAGE:
     # Parse external URL for static file custom domain
     from urllib.parse import urlparse as _urlparse
 
-    _external_netloc = _urlparse(S3_EXTERNAL_URL).netloc
+    _external_url = _urlparse(S3_EXTERNAL_URL)
+    if not _external_url.netloc:
+        # urlparse treats a scheme-less 'host.tld' as a path with no netloc;
+        # re-parse scheme-relative so custom_domain still gets the host.
+        _external_url = _urlparse(f'//{S3_EXTERNAL_URL}')
+    _external_netloc = _external_url.netloc
+    # Browser-facing static URLs must match the external URL's scheme, or HTTPS
+    # pages (Django admin) render plain-http asset URLs that browsers block as
+    # mixed content. Scheme-less URLs fall back to https: fail toward the
+    # browser-safe protocol (matches django-storages' own default).
+    _external_scheme = _external_url.scheme or 'https'
 
     STORAGES = {
         'default': {
@@ -196,7 +206,7 @@ if USE_S3_STORAGE:
                 'bucket_name': S3_BUCKET_STATIC,
                 # Generate browser-accessible URLs using external host (no presigned params)
                 'custom_domain': f'{_external_netloc}/{S3_BUCKET_STATIC}',
-                'url_protocol': 'http:',
+                'url_protocol': f'{_external_scheme}:',
             },
         },
     }
