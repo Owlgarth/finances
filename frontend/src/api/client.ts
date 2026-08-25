@@ -289,6 +289,8 @@ export const transactionsApi = {
   },
   deleteAttachment: (transactionId: number, attachmentId: number): Promise<void> =>
     api.delete(`/transactions/${transactionId}/attachments/${attachmentId}`).then(() => undefined),
+  downloadAttachment: (transactionId: number, attachmentId: number): Promise<Blob> =>
+    api.get(`/transactions/${transactionId}/attachments/${attachmentId}/download`, { responseType: 'blob' }).then(res => res.data),
 
   extractionConfig: (): Promise<ExtractionConfig> =>
     api.get<ExtractionConfig>('/transactions/extraction/config').then(res => res.data),
