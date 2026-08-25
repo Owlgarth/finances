@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
 import toast from 'react-hot-toast'
 import { Upload, Trash2, FileText, X, Sparkles, Loader2, RotateCw, CloudOff, Download } from 'lucide-react'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionAttachment } from '../../types'
+import {
+  transactionAttachmentsKey,
+  useAttachmentBlob,
+  useAttachmentDownload,
+  useDeleteAttachment,
+  useTransactionAttachments,
+  useUploadAttachment,
+} from '../../hooks/useAttachments'
 import { useExtractionConfig } from '../../hooks/useDomain'
 import { useOverlay } from '../../hooks/useOverlay'
 import { secondaryButtonClass } from '../common/formStyles'
+import { isImage, triggerBrowserDownload } from '../../utils/attachments'
 import { getApiErrorMessage } from '../../utils/errors'
 import ExtractionReviewModal from './ExtractionReviewModal'
 
@@ -16,40 +24,6 @@ interface Props {
 }
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
-
-function isImage(contentType: string): boolean {
-  return contentType.startsWith('image/') && contentType !== 'image/heic'
-}
-
-// Blob error response bodies are Blobs, never parsed JSON, so
-// getApiErrorMessage's `response.data.detail` read finds nothing. Branch on
-// the HTTP status instead, then fall through to the generic helper.
-function downloadErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    if (error.response?.status === 404) return 'This receipt is no longer available on the server.'
-    if (error.response?.status === 503) return 'File storage is temporarily unavailable.'
-  }
-  return getApiErrorMessage(error, 'Failed to download receipt')
-}
-
-// Programmatic <a download> click (ProfilePage.handleExportData precedent).
-// Deliberately does NOT revoke the URL: ownership stays with the caller.
-// The lightbox passes a URL owned by the query cache (must never be revoked
-// here - revoking would poison the thumbnail once the lightbox closes); the
-// non-image tile path creates and revokes its own short-lived URL around the
-// call. Do not "simplify" this into a helper that always revokes.
-function triggerBrowserDownload(url: string, filename: string) {
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-}
-
-// Blob object-URL cache key, shared by the tile query and the delete cleanup.
-const attachmentBlobKey = (transactionId: number, attachmentId: number) =>
-  ['attachment-blob', transactionId, attachmentId] as const
 
 // Media area of one tile. Owns the per-attachment blob query so hooks live in
 // a component, not in the parent's map callback. Fills the parent's
@@ -68,28 +42,13 @@ function AttachmentMedia({
   onDownload: (attachment: TransactionAttachment) => void
 }) {
   const image = isImage(attachment.content_type)
-  const blobQuery = useQuery({
-    queryKey: attachmentBlobKey(transactionId, attachment.id),
-    queryFn: async () => {
-      const blob = await transactionsApi.downloadAttachment(transactionId, attachment.id)
-      return URL.createObjectURL(blob)
-    },
-    // Files are immutable (storage keys are uuid-hex) so they are never
-    // stale. gcTime: Infinity is load-bearing: with the default 5-min gc a
-    // dropped cache entry leaks its object URL and a remount mints a second
-    // one for the same bytes.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    // Immutable files: automatic retries would only delay the retry-tile
-    // fallback. Retry is the explicit tile click.
-    retry: false,
-    enabled: image,
-  })
+  // Only image tiles prefetch the blob; non-image tiles download on click.
+  const blobQuery = useAttachmentBlob(transactionId, attachment.id, image)
 
   if (image) {
-    // Loading: in-grid tile-shaped skeleton (patterns.md SS3 - skeleton
-    // approximates the real content shape; the wrapper supplies the
-    // aspect-square tile, border and clipping).
+    // Loading: tile-shaped skeleton that approximates the real content
+    // shape; the wrapper supplies the aspect-square tile, border and
+    // clipping.
     if (blobQuery.isPending) {
       return <div className="w-full h-full bg-surface-muted animate-pulse" aria-hidden="true" />
     }
@@ -156,53 +115,22 @@ export default function TransactionAttachments({ transaction }: Props) {
   // The lightbox reuses the thumbnail's cached object URL (passed from the
   // tile click) instead of refetching - the blob query cache owns that URL.
   const [preview, setPreview] = useState<{ attachment: TransactionAttachment; url: string } | null>(null)
-  // Stack-aware Escape, scroll lock, focus capture/restore for the lightbox
-  // (R1). Without this, Escape inside TransactionFormModal closed the form
-  // modal underneath because the lightbox never joined the overlay stack.
+  // Stack-aware Escape, scroll lock, focus capture/restore for the lightbox.
+  // Without this, Escape inside TransactionFormModal closed the form modal
+  // underneath because the lightbox never joined the overlay stack.
   const lightboxRef = useOverlay(preview !== null, () => setPreview(null))
   const [pendingId, setPendingId] = useState<number | null>(null)
   const [review, setReview] = useState<{ attachmentId: number; parsed: ParsedReceipt } | null>(null)
 
-  const attachmentsKey = ['transaction-attachments', transaction.id]
-  const { data: attachments = [], isLoading } = useQuery({
-    queryKey: attachmentsKey,
-    queryFn: () => transactionsApi.listAttachments(transaction.id),
-  })
+  const { data: attachments = [], isLoading } = useTransactionAttachments(transaction.id)
+  // Extraction runs update the list (status badges on the tiles), so the
+  // extraction flow invalidates the list query itself; the attachment hooks
+  // invalidate it for their own mutations.
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: transactionAttachmentsKey(transaction.id) })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: attachmentsKey })
-
-  const upload = useMutation({
-    mutationFn: (file: File) => transactionsApi.uploadAttachment(transaction.id, file),
-    onSuccess: () => { invalidate(); toast.success('Attachment added') },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to upload')),
-  })
-
-  const remove = useMutation({
-    mutationFn: (attachmentId: number) => transactionsApi.deleteAttachment(transaction.id, attachmentId),
-    onSuccess: (_res, attachmentId) => {
-      invalidate()
-      // The attachment can never be shown again; drop its blob cache entry
-      // now. The object URL itself is reclaimed at document unload - bounded
-      // by the per-transaction attachment caps.
-      queryClient.removeQueries({ queryKey: attachmentBlobKey(transaction.id, attachmentId) })
-      toast.success('Attachment removed')
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to remove')),
-  })
-
-  // Click-to-download for non-image tiles (PDF/HEIC). Creates and revokes
-  // its OWN short-lived URL around the anchor click; the lightbox path
-  // reuses the query-cached URL and never revokes (R4).
-  const downloadFile = useMutation({
-    mutationFn: async (a: TransactionAttachment) => {
-      const blob = await transactionsApi.downloadAttachment(transaction.id, a.id)
-      const url = URL.createObjectURL(blob)
-      triggerBrowserDownload(url, a.filename)
-      URL.revokeObjectURL(url)
-    },
-    onSuccess: () => toast.success('Receipt downloaded'),
-    onError: (error) => toast.error(downloadErrorMessage(error)),
-  })
+  const upload = useUploadAttachment(transaction.id)
+  const remove = useDeleteAttachment(transaction.id)
+  const downloadFile = useAttachmentDownload(transaction.id)
 
   const startExtraction = useMutation({
     mutationFn: (attachmentId: number) => transactionsApi.extractAttachment(transaction.id, attachmentId),
