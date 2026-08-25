@@ -232,7 +232,7 @@ do not change to 404.
 | `TWO_FACTOR_ENCRYPTION_KEY` | 2FA secret encryption (Fernet; empty = derive from `SECRET_KEY`) |
 | `TRUSTED_PROXY_COUNT` | Trusted reverse proxies for client-IP parsing (0 = ignore `X-Forwarded-For`) |
 | `RATE_LIMIT_*` | Rate-limit thresholds/windows (per-IP and per-account) |
-| `USE_S3_STORAGE`, `S3_*` | Object storage for attachments |
+| `USE_S3_STORAGE`, `S3_*` | Object storage for attachments and static files; browser-facing URLs follow `S3_EXTERNAL_URL` |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
 | `DEMO_MODE` | Disable registration when true |
 
@@ -254,6 +254,16 @@ For local development `./dev.sh up` runs only the backing services and
 `./dev.sh backend` / `./dev.sh frontend` run the app - in their containers by
 default, or on the host with `DEV_TARGET=host`. `./dev.sh up --full` runs the
 whole stack in Docker, which is also how it deploys.
+
+With `USE_S3_STORAGE` enabled, the `api` entrypoint collects backend static
+files (the Django admin among them) into the static bucket, and browsers fetch
+them from storage rather than the API. Static URLs are generated at render
+time from `S3_EXTERNAL_URL` - host and scheme both (a scheme-less value falls
+back to `https`), so an `http://` external URL yields plain-http asset URLs
+that browsers block as mixed content on HTTPS pages. Changing `S3_EXTERNAL_URL`
+only needs a backend restart - `api`, `worker`, and `beat` share one image and
+read settings at startup - and no re-collectstatic: the stored objects are
+unchanged, only the rendered URLs differ.
 
 The receipt parser is external and fully optional: any service implementing
 `docs/parser-contract.md` can serve it. With `PARSER_URL` unset, the backend
