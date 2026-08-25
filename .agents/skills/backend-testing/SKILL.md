@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions
@@ -149,6 +149,43 @@ Patch the clock the code under test actually reads, at the module where it reads
 - Test the boundary at the exact cap: N−1 failures followed by one success must succeed (`count > limit` blocks only above the limit — a lock must not fire AT the limit on a legitimate user).
 - Exact attempt counts require exact auth traffic: create users directly (`AuthTestCase.create_user` or factory + token), not via helpers that themselves log in — `register_and_login` pre-increments the login counter.
 - Unit-testing a throttle: `@patch('common.throttle.cache')` with `add`/`incr` return values, and assert the exact cache-key string — that is how "no IP component in the key" gets pinned.
+
+## Testing Import-Time Settings Branches (Subprocess Probe)
+
+`config.settings` builds some settings at import time from env vars (e.g. STORAGES from `USE_S3_STORAGE` / `S3_*`), and pytest runs under `config.test_settings`, which forces `USE_S3_STORAGE=False` - those branches are unreachable in-process, and `override_settings` cannot help: the value is already built by the time a test imports Django. Exercise the real settings module in a subprocess with a controlled environment (reference implementation: `core/tests/test_settings_storage.py`):
+
+```python
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+_PROBE = (
+    'import django; django.setup(); '
+    'from django.contrib.staticfiles.storage import staticfiles_storage; '
+    "print(staticfiles_storage.url('admin/css/base.css'))"
+)
+
+def _static_url(env_overrides: dict) -> str:
+    env = {
+        'DJANGO_SETTINGS_MODULE': 'config.settings',
+        'SECRET_KEY': 'test-secret-key',
+        'JWT_SECRET_KEY': 'test-jwt-secret-key',
+        'S3_BUCKET_STATIC': 'finances-static',  # pin every var the output depends on
+        **env_overrides,
+    }
+    result = subprocess.run(
+        [sys.executable, '-c', _PROBE], capture_output=True, text=True,
+        timeout=60, cwd=BACKEND_DIR, env=env,
+    )
+    assert result.returncode == 0, f'probe failed:\n{result.stderr}'
+    return result.stdout.strip()
+
+class TestStaticStorageUrlScheme(SimpleTestCase):  # no DB - AuthMixin/factories don't apply
+    def test_http_dev_url(self):
+        url = _static_url({'USE_S3_STORAGE': 'true', 'S3_EXTERNAL_URL': 'http://localhost:9000'})
+        self.assertTrue(url.startswith('http://localhost:9000/finances-static/'))
+```
+
+- The subprocess env is a **whitelist, not a base layer**: pin EVERY env var the asserted output depends on, not just the var under test. `load_dotenv()` at settings import fills unset vars from the developer's root `.env` (a checkout-specific `S3_BUCKET_STATIC` shadowed the expected URL prefix mid-assertion); an unpinned var makes the test pass only where the local `.env` happens to match.
+- Keep the probe network-free: with `custom_domain` set, django-storages `url()` is pure string formatting, so asserting through `staticfiles_storage.url(...)` needs no storage containers in CI.
 
 ## Testing Race-Loss Branches Deterministically
 
