@@ -123,7 +123,6 @@ export interface TransactionAttachment {
   content_type: string;
   size: number;
   created_at: string;
-  download_url: string | null;
   extraction_status: ExtractionStatus;
   extraction_error: string;
 }
