@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from urllib.parse import quote
 
 from django.conf import settings
 from django.db import transaction as db_transaction
@@ -117,6 +118,16 @@ class AttachmentService:
         if content is None:
             raise AttachmentFileMissingError()
         return attachment, content
+
+    @staticmethod
+    def content_disposition(filename: str) -> str:
+        """RFC 6266/5987 Content-Disposition value for a user-controlled filename.
+
+        ASCII-only fallback param plus a UTF-8 extended param - upload names are
+        arbitrary user input, so they must never reach the header raw.
+        """
+        fallback = ''.join(c if 32 <= ord(c) < 127 and c not in '"\\' else '_' for c in filename) or 'attachment'
+        return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
 
     @staticmethod
     @db_transaction.atomic

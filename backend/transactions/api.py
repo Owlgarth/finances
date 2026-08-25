@@ -3,7 +3,6 @@
 import json
 from datetime import date
 from decimal import Decimal
-from urllib.parse import quote
 
 from django.http import HttpRequest, HttpResponse
 from ninja import File, Form, Query, Router
@@ -40,16 +39,6 @@ ORDERING_PATTERN = r'^(-?(date|description|amount|type|category__name|account__n
 # Upper bound for page_size on list endpoints — derived from the pagination
 # module's allowed sizes so the API cap stays in lockstep with the service layer.
 MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)
-
-
-def _attachment_content_disposition(filename: str) -> str:
-    """RFC 6266/5987 Content-Disposition value for a user-controlled filename.
-
-    ASCII-only fallback param plus a UTF-8 extended param - upload names are
-    arbitrary user input, so they must never reach the header raw.
-    """
-    fallback = ''.join(c if 32 <= ord(c) < 127 and c not in '"\\' else '_' for c in filename) or 'attachment'
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename, safe="")}'
 
 
 @router.get('', response=PaginatedOut[TransactionOut], auth=WorkspaceJWTAuth())
@@ -321,7 +310,7 @@ def download_transaction_attachment(request: HttpRequest, transaction_id: int, a
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     attachment, content = AttachmentService.download(trans, attachment_id)
     response = HttpResponse(content, content_type=attachment.content_type)
-    response['Content-Disposition'] = _attachment_content_disposition(attachment.filename)
+    response['Content-Disposition'] = AttachmentService.content_disposition(attachment.filename)
     return response
 
 
