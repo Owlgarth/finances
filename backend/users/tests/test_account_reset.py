@@ -68,6 +68,9 @@ class AccountResetTests(AuthMixin, TestCase):
         self.assertEqual(data['workspace_name'], 'My Workspace')
         new_account = Account.objects.filter(workspace_id=data['workspace_id']).first()
         self.assertEqual(new_account.currency.code, 'PLN')
+        # The recreated workspace gains the same silent default extras.
+        enabled = CurrencyCatalogService.list_enabled(data['workspace_id'])
+        self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
 
     def test_reset_wrong_password_returns_401(self):
         response = self._reset(password='wrongpassword')

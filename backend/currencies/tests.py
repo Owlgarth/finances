@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from accounts.models import Account
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.exceptions import (
@@ -407,7 +408,7 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
 
         user = User.objects.get(email='eur_user@example.com')
         enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
-        self.assertIn('EUR', [c.code for c in enabled])
+        self.assertEqual([c.code for c in enabled], ['EUR', 'USD'])
 
     def test_register_defaults_to_pln(self):
         self._register('pln_user@example.com')
@@ -415,21 +416,49 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
 
         user = User.objects.get(email='pln_user@example.com')
         enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
-        self.assertIn('PLN', [c.code for c in enabled])
+        self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
 
 
 class TestCreateWorkspaceEndpointCurrency(AuthMixin, APIClientMixin, TestCase):
-    """POST /api/workspaces accepts currency_code."""
+    """POST /api/workspaces accepts currency_code and optional currency_codes."""
 
     def test_create_workspace_with_currency_code(self):
         data = self.post('/api/workspaces', {'name': 'EUR Workspace', 'currency_code': 'EUR'}, **self.auth_headers())
         self.assertStatus(201)
 
         enabled = CurrencyCatalogService.list_enabled(data['id'])
-        self.assertEqual([c.code for c in enabled], ['EUR'])
+        self.assertEqual([c.code for c in enabled], ['EUR', 'USD'])
 
     def test_create_workspace_service_direct(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Direct', currency_code='EUR')
 
-        self.assertEqual([c.code for c in CurrencyCatalogService.list_enabled(workspace.id)], ['EUR'])
+        self.assertEqual([c.code for c in CurrencyCatalogService.list_enabled(workspace.id)], ['EUR', 'USD'])
+
+    def test_create_workspace_with_currency_codes_verbatim(self):
+        data = self.post(
+            '/api/workspaces', {'name': 'Dollar WS', 'currency_codes': ['USD', 'EUR']}, **self.auth_headers()
+        )
+        self.assertStatus(201)
+
+        enabled = CurrencyCatalogService.list_enabled(data['id'])
+        self.assertEqual([c.code for c in enabled], ['USD', 'EUR'])
+
+        account = Account.objects.filter(workspace_id=data['id'], name='Main').first()
+        self.assertIsNotNone(account)
+        self.assertEqual(account.currency.code, 'USD')
+
+    def test_create_workspace_currency_codes_unknown_returns_404(self):
+        self.post('/api/workspaces', {'name': 'Bad WS', 'currency_codes': ['USD', 'XXX']}, **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_create_workspace_currency_codes_empty_returns_422(self):
+        self.post('/api/workspaces', {'name': 'Empty WS', 'currency_codes': []}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_create_workspace_currency_codes_over_max_returns_422(self):
+        # 21 pattern-valid letter codes > max_length=20; the cap fires at
+        # schema validation before any catalog lookup.
+        codes = ['ZZ' + chr(ord('A') + idx) for idx in range(21)]
+        self.post('/api/workspaces', {'name': 'Big WS', 'currency_codes': codes}, **self.auth_headers())
+        self.assertStatus(422)

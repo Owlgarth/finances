@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.schemas.auth import ValidatedEmail
+from currencies.schemas import CurrencyCode
 
 
 class WorkspaceUpdate(BaseModel):
@@ -40,10 +41,17 @@ class WorkspaceDefaultBudgetIn(BaseModel):
 
 
 class WorkspaceCreate(BaseModel):
-    """Schema for creating a workspace."""
+    """Schema for creating a workspace.
+
+    ``currency_codes`` wins when present: exactly those codes are enabled
+    (first = primary/Main account currency), no silent extras. When absent
+    (or null), ``currency_code`` is the primary and the service silently
+    enables the DEFAULT_WORKSPACE_EXTRA_CURRENCIES alongside it.
+    """
 
     name: str = Field(..., max_length=100)
     currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] | None = Field(None, min_length=1, max_length=20)
 
     @field_validator('name')
     @classmethod
