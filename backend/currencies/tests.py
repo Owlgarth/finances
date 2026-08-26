@@ -350,7 +350,7 @@ class TestCreateWorkspaceEndpointCurrency(AuthMixin, APIClientMixin, TestCase):
     """POST /api/workspaces accepts currency_code."""
 
     def test_create_workspace_with_currency_code(self):
-        data = self.post('/api/workspaces/', {'name': 'EUR Workspace', 'currency_code': 'EUR'}, **self.auth_headers())
+        data = self.post('/api/workspaces', {'name': 'EUR Workspace', 'currency_code': 'EUR'}, **self.auth_headers())
         self.assertStatus(201)
 
         enabled = CurrencyCatalogService.list_enabled(data['id'])
