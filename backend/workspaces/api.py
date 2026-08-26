@@ -79,7 +79,7 @@ def list_workspaces(request: HttpRequest):
     return WorkspaceService.list_for_user(request.auth)
 
 
-@router.post('/', response={201: WorkspaceOut}, auth=JWTAuth())
+@router.post('', response={201: WorkspaceOut}, auth=JWTAuth())
 def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
     """Create a new workspace. User becomes owner and is auto-switched to it."""
     workspace = WorkspaceService.create_workspace(
