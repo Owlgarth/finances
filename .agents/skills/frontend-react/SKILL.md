@@ -1,6 +1,6 @@
 ---
 name: frontend-react
-description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances - design system tokens, modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams and domain hooks modules, API client, blob downloads and object-URL ownership, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
+description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances - design system tokens, theme reader atomicity (FOUC script, ThemeContext, theme-color metas), modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams and domain hooks modules, API client, blob downloads and object-URL ownership, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
 ---
 
 # Frontend Conventions (TypeScript/React)
@@ -42,6 +42,10 @@ Override the library's own CSS variables (e.g. `--rdp-*` in react-day-picker v9)
 ```
 
 For grid/table-based widgets (calendar grids, data tables), set `table-layout: fixed` + `width: 100%` on the grid so columns fill the container evenly.
+
+## Theme Signal Readers Move in One Commit
+
+The theme decision (`owlgarth_theme` in localStorage) is read in three places: `index.html`'s inline FOUC script (the earliest reader - it applies the `.dark` class before first paint), `ThemeContext` (seeds its state from the `<html>` class, owns the toggle and writes the key), and the `theme-color` metas (chrome UI color, synced on toggle). They are three views of one decision: any change to the storage key, the default, or the OS coupling must move ALL readers in the same commit. Leaving one behind diverges the views - a theme flash on reload when the script and the context disagree, or chrome color tracking the OS preference while the app stays light via a leftover media-gated meta. Hit by both the rebrand's storage-key rename and the light-default decoupling: census every reader of the theme signal before editing it.
 
 ## Responsive Breakpoints & Adaptive Components
 
