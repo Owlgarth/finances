@@ -8,8 +8,7 @@
 
     <!-- PWA shell (N1): installable, standalone launch, themed chrome -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FAFAFA" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -20,11 +19,10 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <script>
       // Prevent flash of wrong theme — runs before React hydration.
-      // owlgarth_theme: 'light' | 'dark' | null (null = follow system preference)
+      // owlgarth_theme: 'light' | 'dark' | null (null = default light; OS preference ignored)
       (function () {
         var theme = localStorage.getItem('owlgarth_theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (theme === 'dark' || (theme === null && prefersDark)) {
+        if (theme === 'dark') {
           document.documentElement.classList.add('dark');
         }
       })();
