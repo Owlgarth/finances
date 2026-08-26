@@ -487,7 +487,7 @@ export const workspacesApi = {
   setDefaultBudget: (workspaceId: number, budgetId: number | null): Promise<Workspace> =>
     api.put<Workspace>(`/workspaces/${workspaceId}/default-budget`, { budget_id: budgetId }).then(res => res.data),
 
-  create: (data: { name: string; currency_code?: string }): Promise<Workspace> =>
+  create: (data: { name: string; currency_code?: string; currency_codes?: string[] }): Promise<Workspace> =>
     api.post<Workspace>('/workspaces', data).then(res => res.data),
 
   delete: (id: number): Promise<void> =>
