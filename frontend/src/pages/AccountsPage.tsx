@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { Plus, ArrowLeftRight, Archive, Pencil, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
 import type { Account, AccountType, Transfer } from '../types'
+import { useWorkspace } from '../contexts/WorkspaceContext'
 import { useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
@@ -16,6 +17,7 @@ import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 
 const TYPE_ICON: Record<AccountType, typeof Wallet> = { cash: Coins, bank: Landmark, other: Wallet }
 
@@ -24,6 +26,7 @@ export default function AccountsPage() {
   const { canManageAccounts, canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const isTouch = useIsTouch()
+  const { workspace } = useWorkspace()
   const [showArchived, setShowArchived] = useState(false)
   // Touch replacement for the small inline card action links (plan decision 7).
   const [cardAction, setCardAction] = useState<Account | null>(null)
@@ -34,6 +37,10 @@ export default function AccountsPage() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [repeatTransfer, setRepeatTransfer] = useState<Transfer | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
+  // Workspace settings opened from the account form's currency dropdown
+  // footer - stacks ON TOP of the still-open form (useOverlay is
+  // stack-aware); never chain-closes it, so typed form state survives.
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', showArchived],
@@ -217,7 +224,22 @@ export default function AccountsPage() {
             : []),
         ]}
       />
-      <AccountFormModal open={formOpen} onClose={() => setFormOpen(false)} account={editing} />
+      <AccountFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        account={editing}
+        onManageCurrencies={() => setSettingsOpen(true)}
+      />
+      {/* Stacks above the still-open account form (useOverlay is
+          stack-aware; rendered after it in DOM order). Escape closes this
+          panel only - the form underneath keeps its typed state. The
+          doubled scrim (both modals render their own) is accepted. */}
+      {workspace && (
+        <WorkspaceSettingsPanel
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {setBalanceFor && (
         <SetBalanceModal open={!!setBalanceFor} onClose={() => setSetBalanceFor(null)} account={setBalanceFor} />
       )}

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
-import { AlertCircle, ChevronDown } from 'lucide-react'
+import { AlertCircle, ChevronDown, type LucideIcon } from 'lucide-react'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import BottomSheet from './BottomSheet'
 import {
   DropdownOptionRow,
   EmptyOptions,
+  ListboxFooterAction,
   PanelSearchInput,
   SheetOptionRow,
   listboxPanelClass,
@@ -40,6 +41,17 @@ export interface SelectProps<T extends string | number> {
   error?: string
   /** Width/layout pass-through (e.g. `w-24`). Do NOT use to override tokens. */
   className?: string
+  /** Optional non-option action rendered as the panel's LAST row in BOTH
+      variants (below the option list). Search filtering never hides it.
+      Keyboard: reachable via arrows/End like an option; Enter/Space fires
+      `onSelect` and commits NO value - the panel closes and focus returns
+      to the trigger. Absent (default) = the panel renders exactly as
+      before; all existing call sites are unaffected. */
+  footerAction?: {
+    icon?: LucideIcon
+    label: string
+    onSelect: () => void
+  }
 }
 
 export default function Select<T extends string | number>({
@@ -54,6 +66,7 @@ export default function Select<T extends string | number>({
   searchable = false,
   error,
   className,
+  footerAction,
 }: SelectProps<T>) {
   // Adaptive variant (plan decision 4): shared trigger/state, panel presentation
   // switches — anchored dropdown on desktop, bottom sheet on mobile. All panel
@@ -91,10 +104,18 @@ export default function Select<T extends string | number>({
     isMobile,
     initialHighlightIndex: selectedIndex >= 0 ? selectedIndex : 0,
     onActivate: selectIndex,
+    hasFooterAction: footerAction != null,
   })
 
-  // Pick the highlighted option and close.
+  // Pick the highlighted option and close. The footer action row occupies
+  // index === filteredOptions.length when present - activating it fires the
+  // action and closes without committing a value.
   function selectIndex(i: number) {
+    if (footerAction && i === filteredOptions.length) {
+      footerAction.onSelect()
+      closePanel(true)
+      return
+    }
     const opt = filteredOptions[i]
     if (!opt) return
     onChange(opt.value)
@@ -163,6 +184,14 @@ export default function Select<T extends string | number>({
                 />
               ))
             )}
+            {footerAction && (
+              <ListboxFooterAction
+                variant="sheet"
+                icon={footerAction.icon}
+                label={footerAction.label}
+                onClick={() => selectIndex(filteredOptions.length)}
+              />
+            )}
           </div>
         </BottomSheet>
       )}
@@ -192,6 +221,16 @@ export default function Select<T extends string | number>({
                 onClick={() => selectIndex(i)}
               />
             ))
+          )}
+          {footerAction && (
+            <ListboxFooterAction
+              variant="dropdown"
+              id={optionId(filteredOptions.length)}
+              icon={footerAction.icon}
+              label={footerAction.label}
+              highlighted={highlightedIndex === filteredOptions.length}
+              onClick={() => selectIndex(filteredOptions.length)}
+            />
           )}
         </div>
       )}

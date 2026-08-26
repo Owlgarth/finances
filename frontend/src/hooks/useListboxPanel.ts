@@ -22,6 +22,16 @@ export interface UseListboxPanelOptions<T extends string | number> {
    * owns the semantics: Select picks and closes; MultiSelect toggles and stays open.
    */
   onActivate: (index: number) => void
+  /**
+   * True when the caller renders one extra navigable row AFTER the option
+   * list (Select's footer action row). Keyboard navigation then sizes over
+   * `filteredOptions.length + 1` - the extra index addresses the footer
+   * row, Enter/Space there flows to `onActivate` like any option index
+   * (the caller branches on it and fires the action instead of picking),
+   * and type-ahead never lands on it because it only searches real
+   * options. Default absent = current behavior exactly.
+   */
+  hasFooterAction?: boolean
 }
 
 /** Stringify an option for type-ahead matching (falls back to value for non-string labels). */
@@ -50,6 +60,7 @@ export function useListboxPanel<T extends string | number>({
   isMobile,
   initialHighlightIndex,
   onActivate,
+  hasFooterAction,
 }: UseListboxPanelOptions<T>) {
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
@@ -115,7 +126,7 @@ export function useListboxPanel<T extends string | number>({
       return
     }
 
-    const count = filteredOptions.length
+    const count = filteredOptions.length + (hasFooterAction ? 1 : 0)
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
@@ -179,6 +190,13 @@ export function useListboxPanel<T extends string | number>({
       closePanel(true)
     } else if (e.key === 'Enter') {
       e.preventDefault()
+      // Footer action row: it sits at index === filteredOptions.length when
+      // present; the generic fallback below would remap that index to
+      // option 0 and select the wrong row.
+      if (hasFooterAction && highlightedIndex === filteredOptions.length) {
+        onActivate(highlightedIndex)
+        return
+      }
       if (filteredOptions.length === 0) return
       // Desktop keeps highlightedIndex valid on each keystroke; the mobile
       // sheet has no highlight, so fall back to the first match.

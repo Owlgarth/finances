@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, type LucideIcon } from 'lucide-react'
 import { controlHeightClass } from './formStyles'
 
 // Shared listbox trigger styling for Select and MultiSelect (§4 form controls),
@@ -146,5 +146,66 @@ export function EmptyOptions({ variant }: { variant: 'sheet' | 'dropdown' }) {
     >
       No options
     </div>
+  )
+}
+
+interface ListboxFooterActionProps {
+  /** 'sheet' = 44px row inside the mobile BottomSheet; 'dropdown' = compact desktop row. */
+  variant: 'sheet' | 'dropdown'
+  /** aria-activedescendant target id from the hook's `optionId(i)` - dropdown only. */
+  id?: string
+  /** Icon component rendered before the label (e.g. Settings2). */
+  icon?: LucideIcon
+  /** Keyboard highlight ring (dropdown only - the sheet has no highlight). */
+  highlighted?: boolean
+  label: string
+  onClick: () => void
+}
+
+/**
+ * Non-option action row rendered as the panel's LAST row, below the option
+ * list (the mobile-ux "View all periods" last-row pattern). Unlike a
+ * pseudo-option it is NOT part of the option array, so search filtering
+ * never hides it - exactly the dead-end case it exists for. `role="option"`
+ * keeps it inside the listbox keyboard/aria flow, but `aria-selected` is
+ * hard-false: activating it fires an action, never a selection, so the
+ * scroll-to-selected `[aria-selected="true"]` lookup cannot find it either.
+ */
+export function ListboxFooterAction({
+  variant,
+  id,
+  icon,
+  highlighted = false,
+  label,
+  onClick,
+}: ListboxFooterActionProps) {
+  const Icon = icon
+  return (
+    <>
+      <div className="h-px bg-border my-1 mx-2" aria-hidden="true" />
+      <button
+        type="button"
+        role="option"
+        aria-selected={false}
+        id={id}
+        tabIndex={variant === 'dropdown' ? -1 : undefined}
+        onClick={onClick}
+        className={
+          variant === 'sheet'
+            ? 'w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text-muted transition-colors active:bg-surface-hover '
+            : 'w-full flex items-center gap-2 px-2 ' +
+              `${controlHeightClass} ` +
+              'text-left text-xs text-text-muted transition-colors hover:bg-surface-hover ' +
+              (highlighted ? 'text-text bg-surface-hover ' : '')
+        }
+      >
+        {Icon ? (
+          <Icon size={variant === 'sheet' ? 16 : 12} className="flex-shrink-0" />
+        ) : (
+          <span className={variant === 'sheet' ? 'w-4 flex-shrink-0' : 'w-3 flex-shrink-0'} />
+        )}
+        <span className="truncate">{label}</span>
+      </button>
+    </>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Settings2 } from 'lucide-react'
 import Modal from '../common/Modal'
 import Select from '../common/Select'
 import { accountsApi } from '../../api/client'
@@ -14,6 +15,10 @@ interface Props {
   open: boolean
   onClose: () => void
   account?: Account | null
+  /** Fired when the currency dropdown's "Manage currencies..." footer action
+      is activated. Opens the workspace settings panel; this form stays open
+      underneath with its typed state intact. */
+  onManageCurrencies?: () => void
 }
 
 const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
@@ -22,7 +27,7 @@ const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
-export default function AccountFormModal({ open, onClose, account }: Props) {
+export default function AccountFormModal({ open, onClose, account, onManageCurrencies }: Props) {
   const isEdit = !!account
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
@@ -103,6 +108,11 @@ export default function AccountFormModal({ open, onClose, account }: Props) {
               aria-label="Account currency"
               mono
               searchable
+              footerAction={
+                onManageCurrencies
+                  ? { icon: Settings2, label: 'Manage currencies...', onSelect: onManageCurrencies }
+                  : undefined
+              }
             />
           </div>
         )}
