@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Trash2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
+import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { intParam } from '../utils/params'
 import Modal from '../components/common/Modal'
@@ -17,19 +18,6 @@ import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
-
-// Per-budget currency-switcher order — a display preference, stored client-side
-// like the theme ('owlgarth_theme'), keyed per budget since currency sets differ.
-const currencyOrderKey = (budgetId: number) => `owlgarth_currency_order:${budgetId}`
-
-function loadCurrencyOrder(budgetId: number): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(currencyOrderKey(budgetId)) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === 'string') : []
-  } catch {
-    return []
-  }
-}
 
 /** The day after an ISO date, as an ISO date (local, no TZ shifts). */
 function nextDayIso(isoDate: string): string {
@@ -157,8 +145,9 @@ export default function BudgetDetailPage() {
     writePeriodParam(id)
   }
 
-  // Zero enabled currencies (shouldn't happen) — '—' can't pose as a real code;
-  // it's never rendered (single-currency layouts show no switcher).
+  // Zero enabled currencies (shouldn't happen) - the fallback placeholder
+  // can't pose as a real code; the switcher band stays hidden while the
+  // enabled list is empty (showCurrencyBand), so it never renders.
   const primaryCurrency = currencies[0]?.code ?? '—'
 
   const [newCategory, setNewCategory] = useState('')
@@ -285,15 +274,12 @@ export default function BudgetDetailPage() {
 
   const items = useMemo(() => summary?.items ?? [], [summary])
 
-  // Saved switcher order for this budget; empty = enabled-currency order.
-  const [currencyOrder, setCurrencyOrder] = useState<string[]>(() => loadCurrencyOrder(budgetId))
   // Budget→budget navigation (CommandPalette) re-renders this page with a new
   // budgetId. Reset the other per-budget state too, or the summary query runs
   // budgetSummary(B, A_period) → 404 → every row silently renders 0s. Kept in
   // this same effect (not a new one) so the set-state-in-effect warning count
   // stays put — the rule flags once per effect, not per call.
   useEffect(() => {
-    setCurrencyOrder(loadCurrencyOrder(budgetId))
     // Seed from ?period= (deep link / reload) instead of resetting to null.
     // The ref-sync effect declared above has already run for this commit, so
     // the ref holds THIS URL's value (null when no param). Sanctioned
@@ -302,21 +288,23 @@ export default function BudgetDetailPage() {
     setSelectedCategory(null)
   }, [budgetId])
 
-  // Currency column groups: every currency present in the summary (enabled-currency
-  // order first), falling back to the primary currency for an empty period. The
-  // saved switcher order wins where set; unordered currencies keep their place
-  // after the ordered ones (stable sort). First in the result = default view.
-  const activeCurrencies = useMemo(() => {
-    const present = new Set(items.map((i) => i.currency_code))
-    const ordered = currencies.map((c) => c.code).filter((code) => present.has(code))
-    for (const code of present) {
-      if (!ordered.includes(code)) ordered.push(code)
-    }
-    const rank = new Map(currencyOrder.map((code, i) => [code, i]))
-    ordered.sort((a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER))
-    return ordered.length > 0 ? ordered : [primaryCurrency]
-  }, [items, currencies, primaryCurrency, currencyOrder])
+  // Currency column groups: the budget's configured currencies in stored
+  // order (first = default view), with data-only codes (money present in
+  // the summary but not configured) appended after in enabled-currency
+  // creation order (primary first) - stray money stays visible. Empty
+  // config + empty data falls back to the PRIMARY: the first entry of the
+  // creation-ordered enabled list - deterministic, never alphabetical.
+  const activeCurrencies = useMemo(
+    () => activeCurrencyCodes(budget?.currency_codes ?? [], items, currencies.map((c) => c.code), primaryCurrency),
+    [items, currencies, budget, primaryCurrency],
+  )
   const multiCurrency = activeCurrencies.length > 1
+  // The band renders for every budget view (a chip when only one currency
+  // is active) once the budget and the enabled-currency list are known;
+  // before that, the codes themselves are unknown - keep it hidden as
+  // before. currencies.length also keeps the fallback placeholder code at
+  // primaryCurrency from ever rendering in the chip.
+  const showCurrencyBand = budget != null && currencies.length > 0
 
   // Currency carousel: one currency's Planned/Actual/Remaining at a time.
   // Tracked by code, not index, so the view survives a period change; when the
@@ -325,58 +313,62 @@ export default function BudgetDetailPage() {
   const currencyIdx = viewCurrency ? Math.max(0, activeCurrencies.indexOf(viewCurrency)) : 0
   const activeCurrency = activeCurrencies[currencyIdx]
 
-  const goToCurrency = (dir: 1 | -1) => {
-    const len = activeCurrencies.length
-    setViewCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
+  // Same editor-close rule from both switch paths (chevrons and dropdown):
+  // never leave a planned-amount editor open across a currency change.
+  // Focus stays on the invoking control - no restoration logic.
+  const selectCurrency = (code: string) => {
+    setViewCurrency(code)
     setEditingCell(null)
   }
-
-  // Switcher-order config: each move persists the full current arrangement,
-  // so the saved order always covers every currency the user has seen.
-  const [orderConfigOpen, setOrderConfigOpen] = useState(false)
-  const moveCurrency = (idx: number, dir: 1 | -1) => {
-    const target = idx + dir
-    if (target < 0 || target >= activeCurrencies.length) return
-    const next = [...activeCurrencies]
-    ;[next[idx], next[target]] = [next[target], next[idx]]
-    setCurrencyOrder(next)
-    localStorage.setItem(currencyOrderKey(budgetId), JSON.stringify(next))
-    // With no explicit selection the first currency is shown, so a reorder can
-    // switch the visible currency — don't leave an editor open across that.
-    setEditingCell(null)
+  const goToCurrency = (dir: 1 | -1) => {
+    const len = activeCurrencies.length
+    selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
   }
 
   // Shared between the desktop table header and the mobile card list header.
-  const currencySwitcher = multiCurrency && (
+  // The element is embedded in both places (one copy is always display:none
+  // via max-sm:hidden / sm:hidden), so anything carried here exists twice in
+  // the DOM - safe for the live region: a display:none subtree is outside
+  // the accessibility tree, so only the visible copy announces.
+  const currencySwitcher = (
     <div className="flex items-center justify-center gap-1">
-      <button
-        type="button"
-        onClick={() => goToCurrency(-1)}
-        aria-label="Previous currency"
-        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <ChevronLeft size={12} />
-      </button>
-      <span aria-live="polite" className="min-w-[6ch] text-center text-text">
-        {activeCurrency}
-        <span className="ml-1.5 text-text-muted">{currencyIdx + 1}/{activeCurrencies.length}</span>
-      </span>
-      <button
-        type="button"
-        onClick={() => goToCurrency(1)}
-        aria-label="Next currency"
-        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <ChevronRight size={12} />
-      </button>
-      <button
-        type="button"
-        onClick={() => setOrderConfigOpen(true)}
-        aria-label="Configure currency order"
-        className="w-7 h-7 ml-1 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <Settings2 size={12} />
-      </button>
+      {/* The Select trigger is a button; button text changes are not reliably
+          announced (buttons must not be live regions), so this visually
+          hidden region carries the active code on every switch. */}
+      <span className="sr-only" aria-live="polite">{activeCurrency}</span>
+      {multiCurrency ? (
+        <>
+          <button
+            type="button"
+            onClick={() => goToCurrency(-1)}
+            aria-label="Previous currency"
+            className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+          >
+            <ChevronLeft size={12} />
+          </button>
+          <div className="w-24">
+            <Select
+              value={activeCurrency}
+              onChange={selectCurrency}
+              options={activeCurrencies.map((code) => ({ value: code, label: code }))}
+              mono
+              aria-label="View currency"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => goToCurrency(1)}
+            aria-label="Next currency"
+            className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
+          >
+            <ChevronRight size={12} />
+          </button>
+        </>
+      ) : (
+        <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text-muted select-none">
+          {activeCurrency}
+        </span>
+      )}
     </div>
   )
 
@@ -503,7 +495,7 @@ export default function BudgetDetailPage() {
         <div className="border border-border rounded-sm bg-surface overflow-x-auto max-sm:hidden">
           <table className="w-full text-sm">
             <thead>
-              {multiCurrency && (
+              {showCurrencyBand && (
                 <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                   <th className="sticky left-0 z-10 bg-surface" />
                   <th colSpan={3} className="px-4 py-1 font-medium">
@@ -584,7 +576,7 @@ export default function BudgetDetailPage() {
 
         {/* Mobile: card per category — full-width numbers so thousands stay legible. */}
         <div className="sm:hidden space-y-2">
-          {multiCurrency && (
+          {showCurrencyBand && (
             <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted py-0.5">
               {currencySwitcher}
             </div>
@@ -726,53 +718,6 @@ export default function BudgetDetailPage() {
             {mergeCategory.isPending ? 'Merging…' : 'Merge'}
           </button>
         </div>
-      </Modal>
-
-      <Modal
-        open={orderConfigOpen}
-        onClose={() => setOrderConfigOpen(false)}
-        size="sm"
-        className="p-6"
-        title="Currency order"
-      >
-        <p className="text-xs text-text-muted -mt-3 mb-4">
-          The switcher cycles through currencies in this order; the first one is shown by default.
-        </p>
-        <ul className="border border-border rounded-sm divide-y divide-border">
-          {activeCurrencies.map((code, idx) => (
-            <li key={code} className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-text">
-                <span className="font-mono">{code}</span>
-                <span className="ml-2 text-xs text-text-muted">
-                  {currencies.find((c) => c.code === code)?.name ?? ''}
-                </span>
-                {idx === 0 && (
-                  <span className="ml-2 text-[9px] font-mono uppercase tracking-widest text-text-muted">Default</span>
-                )}
-              </span>
-              <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => moveCurrency(idx, -1)}
-                  disabled={idx === 0}
-                  aria-label={`Move ${code} up`}
-                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
-                >
-                  <ArrowUp size={13} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveCurrency(idx, 1)}
-                  disabled={idx === activeCurrencies.length - 1}
-                  aria-label={`Move ${code} down`}
-                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
-                >
-                  <ArrowDown size={13} />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
       </Modal>
 
       {periodModal && (

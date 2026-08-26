@@ -33,8 +33,9 @@ interface CurrencySetFieldProps {
 // Next arrangement after moving the code at `idx` by `dir` (-1 up / +1 down).
 // Returns the SAME array reference when the move would leave the range (the
 // arrow buttons are disabled there anyway, so the setter is a cheap no-op).
-// Swap logic mirrors BudgetDetailPage's moveCurrency without its localStorage
-// persistence (the server-side order replaces it).
+// Swap logic mirrors the budget detail page's reorder idiom; the swap moves a
+// code one position within the ordered list (the server-side order replaces
+// the old localStorage persistence).
 function moveCode(codes: string[], idx: number, dir: 1 | -1): string[] {
   const target = idx + dir
   if (target < 0 || target >= codes.length) return codes
