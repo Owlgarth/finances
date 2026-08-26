@@ -165,7 +165,7 @@ interface ThemeContextType {
 }
 ```
 
-The choice is persisted to `localStorage` under `owlgarth_theme` (`'light'` | `'dark'` | `null`). `null` (no stored value) means follow the OS `prefers-color-scheme`; once the user toggles, the stored choice wins and the OS listener becomes a no-op. An inline script in `index.html` sets the `.dark` class on `<html>` before React hydration to prevent a flash of the wrong theme.
+The choice is persisted to `localStorage` under `owlgarth_theme` (`'light'` | `'dark'` | `null`). `null` (no stored value) means the light theme - the OS `prefers-color-scheme` is ignored; once the user toggles, the stored choice wins. An inline script in `index.html` sets the `.dark` class on `<html>` before React hydration to prevent a flash of the wrong theme.
 
 ## Hooks
 
