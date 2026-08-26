@@ -138,8 +138,14 @@ period.
 
 If the user opts in (the "Start with sample data" checkbox at registration),
 `create_demo_fixtures()` additionally seeds a second (Savings) account, sample
-transactions across categories, a transfer, and a planned transaction - so the
-dashboard and reports have something to show.
+transactions across two months (the previous month complete, the current
+month up to today), a recurring savings transfer, upcoming planned
+transactions, and a per-category budget estimate for every starter category
+in both periods - so the dashboard, budget view, and reports have something
+to show.
+
+All starter categories are expense-type: sample income transactions are
+uncategorized on purpose (income never gets estimates).
 
 ## DEMO Mode
 

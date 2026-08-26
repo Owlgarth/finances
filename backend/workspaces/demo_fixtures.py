@@ -1,17 +1,19 @@
 """Starter and sample data for new workspaces (account-based model).
 
 ``create_starter_fixtures`` runs for every new workspace: it leaves the
-workspace empty but usable — a General budget with starter categories and the
+workspace empty but usable - a General budget with starter categories and the
 current period materialized. ``create_demo_fixtures`` is opt-in and layers
-realistic sample records (extra account, transactions, transfer, planned) on
-top of the starter data.
+realistic sample records on top of the starter data: a second account, two
+months of transactions (previous month complete, current month up to today),
+a recurring savings transfer, upcoming planned transactions, and per-category
+budget estimates for both periods.
 """
 
 from datetime import date, timedelta
 from decimal import Decimal
 
 from accounts.models import Account, AccountType
-from budgeting.models import Budget, Cadence
+from budgeting.models import Budget, Cadence, CategoryBudget
 from budgeting.services import PeriodService
 from categories.models import Category
 from currencies.services import CurrencyCatalogService
@@ -21,13 +23,24 @@ from transfers.models import Transfer
 
 STARTER_CATEGORIES = [
     'Food & Groceries',
+    'Dining Out',
     'Transportation',
     'Entertainment',
     'Bills & Utilities',
     'Shopping',
     'Health & Fitness',
-    'Salary',
 ]
+
+# Demo estimate amount per starter category, seeded into both demo periods.
+CATEGORY_ESTIMATES = {
+    'Food & Groceries': Decimal('1200.00'),
+    'Dining Out': Decimal('400.00'),
+    'Transportation': Decimal('500.00'),
+    'Entertainment': Decimal('250.00'),
+    'Bills & Utilities': Decimal('1500.00'),
+    'Shopping': Decimal('600.00'),
+    'Health & Fitness': Decimal('300.00'),
+}
 
 
 def get_previous_month_date_range() -> tuple[date, date]:
@@ -66,6 +79,174 @@ def _get_or_create_general_budget(workspace_id, user_id) -> Budget:
     return budget
 
 
+def _clamp_to(day: int, month_start: date, today: date) -> date:
+    """Resolve 1-based ``day`` within the month of ``month_start``, never later than ``today``."""
+    return min(month_start + timedelta(days=day - 1), today)
+
+
+def _create_demo_transactions(
+    workspace_id,
+    user_id,
+    main_account: Account,
+    category_map: dict[str, Category],
+    prev_month_start: date,
+    current_month_start: date,
+    today: date,
+) -> None:
+    """Create the sample transactions for both seeded months.
+
+    The previous month is fully populated; current-month rows clamp to today
+    (same-day stacking early in the month is accepted). Income rows carry no
+    category. One-off purchases stay previous-month-only to imply the current
+    month is still in progress.
+    """
+    # (day of month, description, category name or None, amount, type)
+    previous_month_rows = [
+        (1, 'Monthly Salary', None, Decimal('5000.00'), 'income'),
+        (15, 'Freelance Project', None, Decimal('1500.00'), 'income'),
+        (5, 'Weekly Groceries', 'Food & Groceries', Decimal('350.00'), 'expense'),
+        (20, 'Grocery Store', 'Food & Groceries', Decimal('280.00'), 'expense'),
+        (16, 'Restaurant Dinner', 'Dining Out', Decimal('180.00'), 'expense'),
+        (8, 'Coffee Shop', 'Dining Out', Decimal('45.50'), 'expense'),
+        (3, 'Public Transport Card', 'Transportation', Decimal('120.00'), 'expense'),
+        (18, 'Gas Station', 'Transportation', Decimal('250.00'), 'expense'),
+        (10, 'Movie Tickets', 'Entertainment', Decimal('80.00'), 'expense'),
+        (20, 'Streaming Subscription', 'Entertainment', Decimal('49.90'), 'expense'),
+        (1, 'Electricity Bill', 'Bills & Utilities', Decimal('320.00'), 'expense'),
+        (2, 'Internet Bill', 'Bills & Utilities', Decimal('89.90'), 'expense'),
+        (7, 'Clothing Store', 'Shopping', Decimal('299.00'), 'expense'),
+        (19, 'Electronics', 'Shopping', Decimal('450.00'), 'expense'),
+        (12, 'Gym Membership', 'Health & Fitness', Decimal('150.00'), 'expense'),
+        (22, 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'expense'),
+    ]
+    current_month_rows = [
+        (1, 'Monthly Salary', None, Decimal('5000.00'), 'income'),
+        (15, 'Freelance Project', None, Decimal('1500.00'), 'income'),
+        (1, 'Electricity Bill', 'Bills & Utilities', Decimal('320.00'), 'expense'),
+        (2, 'Internet Bill', 'Bills & Utilities', Decimal('89.90'), 'expense'),
+        (5, 'Weekly Groceries', 'Food & Groceries', Decimal('350.00'), 'expense'),
+        (7, 'Clothing Store', 'Shopping', Decimal('299.00'), 'expense'),
+        (8, 'Coffee Shop', 'Dining Out', Decimal('45.50'), 'expense'),
+        (3, 'Public Transport Card', 'Transportation', Decimal('120.00'), 'expense'),
+        (12, 'Gym Membership', 'Health & Fitness', Decimal('150.00'), 'expense'),
+        (20, 'Streaming Subscription', 'Entertainment', Decimal('49.90'), 'expense'),
+    ]
+
+    rows = [
+        (prev_month_start + timedelta(days=day - 1), description, cat_name, amount, trans_type)
+        for day, description, cat_name, amount, trans_type in previous_month_rows
+    ]
+    rows += [
+        (_clamp_to(day, current_month_start, today), description, cat_name, amount, trans_type)
+        for day, description, cat_name, amount, trans_type in current_month_rows
+    ]
+
+    for trans_date, description, cat_name, amount, trans_type in rows:
+        Transaction.objects.create(
+            workspace_id=workspace_id,
+            account=main_account,
+            date=trans_date,
+            description=description,
+            category=category_map[cat_name] if cat_name else None,
+            amount=amount,
+            type=trans_type,
+            created_by_id=user_id,
+        )
+
+
+def _create_demo_transfers(
+    workspace_id,
+    user_id,
+    main_account: Account,
+    savings_account: Account,
+    prev_month_start: date,
+    current_month_start: date,
+    today: date,
+) -> None:
+    """Create the recurring savings transfer in both seeded months."""
+    for transfer_date in (
+        prev_month_start + timedelta(days=15),
+        _clamp_to(16, current_month_start, today),
+    ):
+        Transfer.objects.create(
+            workspace_id=workspace_id,
+            from_account=main_account,
+            to_account=savings_account,
+            from_amount=Decimal('500.00'),
+            to_amount=Decimal('500.00'),
+            date=transfer_date,
+            description='Monthly savings',
+            created_by_id=user_id,
+        )
+
+
+def _create_demo_planned(
+    workspace_id,
+    user_id,
+    main_account: Account,
+    category_map: dict[str, Category],
+    prev_month_start: date,
+    current_month_start: date,
+) -> None:
+    """Create one already-executed planned transaction and upcoming pending ones."""
+    if current_month_start.month == 12:
+        next_month_start = date(current_month_start.year + 1, 1, 1)
+    else:
+        next_month_start = date(current_month_start.year, current_month_start.month + 1, 1)
+    current_month_end = next_month_start - timedelta(days=1)
+
+    # (name, amount, category name, planned_date, payment_date, status)
+    planned_rows = [
+        # Already paid in the previous month.
+        (
+            'Phone Bill',
+            Decimal('79.90'),
+            'Bills & Utilities',
+            prev_month_start + timedelta(days=19),
+            prev_month_start + timedelta(days=19),
+            'done',
+        ),
+        # Upcoming.
+        ('Rent Payment', Decimal('2000.00'), 'Bills & Utilities', current_month_end, None, 'pending'),
+        ('Internet Bill', Decimal('89.90'), 'Bills & Utilities', next_month_start + timedelta(days=1), None, 'pending'),
+        ('Car Insurance', Decimal('450.00'), 'Transportation', next_month_start + timedelta(days=24), None, 'pending'),
+    ]
+
+    for name, amount, cat_name, planned_date, payment_date, status in planned_rows:
+        PlannedTransaction.objects.create(
+            workspace_id=workspace_id,
+            account=main_account,
+            name=name,
+            amount=amount,
+            category=category_map[cat_name],
+            planned_date=planned_date,
+            payment_date=payment_date,
+            status=status,
+            created_by_id=user_id,
+        )
+
+
+def _seed_category_budgets(
+    workspace_id,
+    user_id,
+    main_account: Account,
+    category_map: dict[str, Category],
+    periods,
+) -> None:
+    """Seed one estimate row per starter category for each given period."""
+    for period in periods:
+        for cat_name, amount in CATEGORY_ESTIMATES.items():
+            CategoryBudget.objects.create(
+                period=period,
+                workspace_id=workspace_id,
+                category=category_map[cat_name],
+                currency=main_account.currency,
+                amount=amount,
+                created_by_id=user_id,
+                updated_by_id=user_id,
+            )
+
+
 def create_starter_fixtures(workspace_id: int | str, user_id: int | str) -> None:
     """Make a fresh workspace immediately usable (no sample records).
 
@@ -89,11 +270,12 @@ def create_starter_fixtures(workspace_id: int | str, user_id: int | str) -> None
 
 
 def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
-    """
-    Create opt-in sample data for a new workspace (on top of starter fixtures).
+    """Create opt-in sample data for a new workspace (on top of starter fixtures).
 
-    Adds a savings account, sample transactions and a transfer for the previous
-    month, and sample planned transactions.
+    Adds a savings account, two months of sample transactions (previous month
+    complete, current month clamped to today), a recurring savings transfer,
+    one executed plus several upcoming planned transactions, and per-category
+    budget estimates for both periods.
     """
     create_starter_fixtures(workspace_id, user_id)
 
@@ -115,79 +297,24 @@ def create_demo_fixtures(workspace_id: int | str, user_id: int | str) -> None:
     # Starter fixtures already created these; reuse them.
     category_map = {cat.name: cat for cat in Category.objects.filter(budget=general_budget)}
 
-    start_date, _end_date = get_previous_month_date_range()
-    mid_month = start_date + timedelta(days=15)
-    early_month = start_date + timedelta(days=5)
+    today = date.today()
+    prev_month_start, _end_date = get_previous_month_date_range()
+    current_month_start = date(today.year, today.month, 1)
 
-    transactions_data = [
-        # Income
-        (start_date, 'Monthly Salary', 'Salary', Decimal('5000.00'), 'income'),
-        (mid_month, 'Freelance Project', 'Salary', Decimal('1500.00'), 'income'),
-        # Expenses
-        (early_month, 'Weekly Groceries', 'Food & Groceries', Decimal('350.00'), 'expense'),
-        (mid_month, 'Restaurant Dinner', 'Food & Groceries', Decimal('180.00'), 'expense'),
-        (start_date + timedelta(days=3), 'Public Transport Card', 'Transportation', Decimal('120.00'), 'expense'),
-        (mid_month + timedelta(days=2), 'Gas Station', 'Transportation', Decimal('250.00'), 'expense'),
-        (start_date + timedelta(days=10), 'Movie Tickets', 'Entertainment', Decimal('80.00'), 'expense'),
-        (mid_month + timedelta(days=5), 'Streaming Subscription', 'Entertainment', Decimal('49.90'), 'expense'),
-        (start_date + timedelta(days=1), 'Electricity Bill', 'Bills & Utilities', Decimal('320.00'), 'expense'),
-        (start_date + timedelta(days=2), 'Internet Bill', 'Bills & Utilities', Decimal('89.90'), 'expense'),
-        (start_date + timedelta(days=7), 'Clothing Store', 'Shopping', Decimal('299.00'), 'expense'),
-        (mid_month + timedelta(days=3), 'Electronics', 'Shopping', Decimal('450.00'), 'expense'),
-        (start_date + timedelta(days=12), 'Gym Membership', 'Health & Fitness', Decimal('150.00'), 'expense'),
-        (mid_month + timedelta(days=7), 'Pharmacy', 'Health & Fitness', Decimal('85.00'), 'expense'),
-    ]
+    # Starter fixtures already materialized the current period before any
+    # estimates existed, so its copy_forward had nothing to duplicate; the
+    # second call below just re-fetches it. Do not reorder: a period created
+    # after an earlier one gained estimates gets them copied forward, and the
+    # explicit seed below would then violate (period, category, currency)
+    # uniqueness.
+    previous_period = PeriodService.get_or_create_for_date(None, general_budget, prev_month_start)
+    current_period = PeriodService.get_or_create_for_date(None, general_budget, today)
 
-    for trans_date, description, cat_name, amount, trans_type in transactions_data:
-        Transaction.objects.create(
-            workspace_id=workspace_id,
-            account=main_account,
-            date=trans_date,
-            description=description,
-            category=category_map[cat_name],
-            amount=amount,
-            type=trans_type,
-            created_by_id=user_id,
-        )
-
-    # Materialize the previous-month period for the General budget so the
-    # budget view has something to show right away.
-    PeriodService.get_or_create_for_date(None, general_budget, start_date)
-
-    # A same-currency transfer into savings (replaces the old exchange demo)
-    Transfer.objects.create(
-        workspace_id=workspace_id,
-        from_account=main_account,
-        to_account=savings_account,
-        from_amount=Decimal('500.00'),
-        to_amount=Decimal('500.00'),
-        date=mid_month,
-        description='Monthly savings',
-        created_by_id=user_id,
+    _create_demo_transactions(
+        workspace_id, user_id, main_account, category_map, prev_month_start, current_month_start, today
     )
-
-    planned_data = [
-        ('Rent Payment', Decimal('2000.00'), 'Bills & Utilities', start_date + timedelta(days=25), None, 'pending'),
-        (
-            'Phone Bill',
-            Decimal('79.90'),
-            'Bills & Utilities',
-            start_date + timedelta(days=20),
-            start_date + timedelta(days=20),
-            'done',
-        ),
-        ('Car Insurance', Decimal('450.00'), 'Transportation', start_date + timedelta(days=28), None, 'pending'),
-    ]
-
-    for name, amount, cat_name, planned_date, payment_date, status in planned_data:
-        PlannedTransaction.objects.create(
-            workspace_id=workspace_id,
-            account=main_account,
-            name=name,
-            amount=amount,
-            category=category_map[cat_name],
-            planned_date=planned_date,
-            payment_date=payment_date,
-            status=status,
-            created_by_id=user_id,
-        )
+    _create_demo_transfers(
+        workspace_id, user_id, main_account, savings_account, prev_month_start, current_month_start, today
+    )
+    _create_demo_planned(workspace_id, user_id, main_account, category_map, prev_month_start, current_month_start)
+    _seed_category_budgets(workspace_id, user_id, main_account, category_map, (previous_period, current_period))
