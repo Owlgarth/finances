@@ -496,7 +496,7 @@ class UserService:
             owned_workspaces.delete()
 
             workspace = WorkspaceService.create_workspace(
-                user=user, name=workspace_name, currency_code=currency_code, create_demo=False
+                user=user, name=workspace_name, currency_codes=[currency_code], create_demo=False
             )
 
         return {

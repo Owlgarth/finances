@@ -279,7 +279,7 @@ class TestDefaultMainAccount(TestCase):
 
     def test_new_workspace_has_main_account(self):
         user = UserFactory()
-        workspace = WorkspaceService.create_workspace(user=user, name='WS', currency_code='EUR')
+        workspace = WorkspaceService.create_workspace(user=user, name='WS', currency_codes=['EUR'])
 
         accounts = list(Account.objects.for_workspace(workspace.id))
         self.assertEqual(len(accounts), 1)

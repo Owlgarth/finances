@@ -83,7 +83,7 @@ def list_workspaces(request: HttpRequest):
 def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
     """Create a new workspace. User becomes owner and is auto-switched to it."""
     workspace = WorkspaceService.create_workspace(
-        user=request.auth, name=data.name, currency_code=data.currency_code, create_demo=False
+        user=request.auth, name=data.name, currency_codes=data.currency_codes, create_demo=False
     )
     return 201, WorkspaceService._to_response(workspace, Role.OWNER)
 

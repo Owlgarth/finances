@@ -2,6 +2,11 @@
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+# Default currencies enabled for every new workspace, in enablement order.
+# The FIRST entry becomes the workspace's Main account currency. Must match
+# the frontend's pre-checked registration trio exactly.
+DEFAULT_WORKSPACE_CURRENCIES: tuple[str, ...] = ('PLN', 'EUR', 'USD')
+
 
 class CurrencyCatalogOut(BaseModel):
     """Schema for a catalog currency response."""

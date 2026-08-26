@@ -38,6 +38,11 @@ class CurrencyCatalogService:
         return Currency.objects.filter(Q(workspace__isnull=True) | Q(workspace_id=workspace_id)).order_by('code')
 
     @staticmethod
+    def list_global_catalog() -> QuerySet[Currency]:
+        """The global (workspace-independent) catalog, ordered by code."""
+        return Currency.objects.filter(workspace__isnull=True).order_by('code')
+
+    @staticmethod
     def list_enabled(workspace_id: int) -> list[Currency]:
         """List the currencies enabled for a workspace, ordered by code."""
         return [

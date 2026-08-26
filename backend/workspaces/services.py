@@ -11,6 +11,7 @@ from accounts.models import Account, AccountType
 from budgeting.models import Budget, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
+from currencies.schemas import DEFAULT_WORKSPACE_CURRENCIES
 from currencies.services import CurrencyCatalogService
 from workspaces.demo_fixtures import create_demo_fixtures, create_starter_fixtures
 from workspaces.exceptions import (
@@ -37,24 +38,31 @@ User = get_user_model()
 class WorkspaceService:
     @staticmethod
     @db_transaction.atomic
-    def create_workspace(user, name: str, currency_code: str = 'PLN', create_demo: bool = False) -> Workspace:
+    def create_workspace(
+        user, name: str, currency_codes: list[str] | None = None, create_demo: bool = False
+    ) -> Workspace:
         """
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
-        - One enabled catalog currency
-        - Default "Main" account (in the chosen currency)
+        - The requested catalog currencies, enabled in list order
+          (``currency_codes`` defaults to the trio PLN, EUR, USD)
+        - Default "Main" account - ORDER MATTERS: the FIRST code in
+          ``currency_codes`` becomes the Main account's currency
         - Default "General" budget + starter categories + current period
         - Opt-in sample data when ``create_demo`` is True
         - Sets user.current_workspace to the new workspace
         """
+        codes = list(currency_codes) if currency_codes is not None else list(DEFAULT_WORKSPACE_CURRENCIES)
         workspace = Workspace.objects.create(name=name, owner=user)
         WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
-        catalog_currency = CurrencyCatalogService.enable(user, workspace.id, currency_code)
+        main_currency = CurrencyCatalogService.enable(user, workspace.id, codes[0])
+        for code in codes[1:]:
+            CurrencyCatalogService.enable(user, workspace.id, code)
         Account.objects.create(
             workspace=workspace,
             name='Main',
             type=AccountType.BANK,
-            currency=catalog_currency,
+            currency=main_currency,
             is_default_for_currency=True,
             created_by=user,
             updated_by=user,

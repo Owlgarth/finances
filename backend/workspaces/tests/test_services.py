@@ -54,17 +54,17 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertIsNotNone(membership)
         self.assertEqual(membership.role, 'owner')
 
-    def test_creates_single_enabled_currency(self):
+    def test_default_enables_currency_trio(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
-        self.assertEqual([c.code for c in enabled], ['PLN'])
+        self.assertEqual([c.code for c in enabled], ['EUR', 'PLN', 'USD'])
 
     def test_creates_workspace_with_explicit_currency(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(
-            user=user, name='Euro Workspace', currency_code='EUR', create_demo=False
+            user=user, name='Euro Workspace', currency_codes=['EUR'], create_demo=False
         )
 
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
@@ -72,6 +72,18 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
 
         account = Account.objects.filter(workspace=workspace, name='Main').first()
         self.assertEqual(account.currency.code, 'EUR')
+
+    def test_currency_codes_order_defines_main_account(self):
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Dollar Workspace', currency_codes=['USD', 'PLN'], create_demo=False
+        )
+
+        enabled = [c.code for c in CurrencyCatalogService.list_enabled(workspace.id)]
+        self.assertEqual(enabled, ['PLN', 'USD'])
+
+        account = Account.objects.filter(workspace=workspace, name='Main').first()
+        self.assertEqual(account.currency.code, 'USD')
 
     def test_creates_main_account_and_general_budget(self):
         user = UserFactory()

@@ -4,7 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from core.schemas.auth import ValidatedEmail
+from core.schemas.auth import CurrencyCode, ValidatedEmail
+from currencies.schemas import DEFAULT_WORKSPACE_CURRENCIES
 
 
 class WorkspaceUpdate(BaseModel):
@@ -43,7 +44,12 @@ class WorkspaceCreate(BaseModel):
     """Schema for creating a workspace."""
 
     name: str = Field(..., max_length=100)
-    currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] = Field(
+        default_factory=lambda: list(DEFAULT_WORKSPACE_CURRENCIES),
+        min_length=1,
+        max_length=20,
+        description='Currencies to enable for the new workspace; the FIRST code becomes the Main account currency.',
+    )
 
     @field_validator('name')
     @classmethod

@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from accounts.models import Account
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.exceptions import (
@@ -315,8 +316,31 @@ class TestCurrencyRolePermissions(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(200)
 
 
-class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
-    """Registration propagates currency_code into workspace creation."""
+class TestPublicCurrencyCatalog(APIClientMixin, TestCase):
+    """GET /api/currencies/catalog is public and returns only global catalog rows."""
+
+    def test_catalog_returns_200_without_authentication(self):
+        data = self.get('/api/currencies/catalog')
+        self.assertStatus(200)
+
+        codes = [row['code'] for row in data]
+        self.assertIn('PLN', codes)
+        self.assertIn('USD', codes)
+        self.assertEqual(codes, sorted(codes))
+
+    def test_catalog_excludes_custom_workspace_currencies(self):
+        workspace = WorkspaceFactory()
+        CustomCurrencyFactory(workspace=workspace, code='GOLD')
+
+        data = self.get('/api/currencies/catalog')
+        self.assertStatus(200)
+
+        codes = [row['code'] for row in data]
+        self.assertNotIn('GOLD', codes)
+
+
+class TestRegistrationCurrencyCodes(APIClientMixin, TestCase):
+    """Registration propagates currency_codes into workspace creation."""
 
     def _register(self, email: str, **extra):
         payload = {
@@ -329,35 +353,75 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
         }
         return self.post('/api/auth/register', payload)
 
-    def test_register_with_currency_code(self):
-        self._register('eur_user@example.com', currency_code='EUR')
+    def test_register_enables_all_requested_currencies(self):
+        self._register('multi_user@example.com', currency_codes=['EUR', 'USD', 'GBP'])
         self.assertStatus(201)
 
-        user = User.objects.get(email='eur_user@example.com')
-        enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
-        self.assertIn('EUR', [c.code for c in enabled])
+        user = User.objects.get(email='multi_user@example.com')
+        enabled = [c.code for c in CurrencyCatalogService.list_enabled(user.current_workspace_id)]
+        self.assertEqual(enabled, ['EUR', 'GBP', 'USD'])
 
-    def test_register_defaults_to_pln(self):
-        self._register('pln_user@example.com')
+        # First code in the list is the Main account currency.
+        account = Account.objects.get(workspace_id=user.current_workspace_id, name='Main')
+        self.assertEqual(account.currency.code, 'EUR')
+
+    def test_register_defaults_to_trio(self):
+        self._register('trio_user@example.com')
         self.assertStatus(201)
 
-        user = User.objects.get(email='pln_user@example.com')
-        enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
-        self.assertIn('PLN', [c.code for c in enabled])
+        user = User.objects.get(email='trio_user@example.com')
+        enabled = [c.code for c in CurrencyCatalogService.list_enabled(user.current_workspace_id)]
+        self.assertEqual(enabled, ['EUR', 'PLN', 'USD'])
+
+        account = Account.objects.get(workspace_id=user.current_workspace_id, name='Main')
+        self.assertEqual(account.currency.code, 'PLN')
+
+    def test_register_empty_currency_codes_returns_422(self):
+        self._register('empty_user@example.com', currency_codes=[])
+        self.assertStatus(422)
+
+    def test_register_too_many_currency_codes_returns_422(self):
+        codes = [f'{c}{c}X' for c in 'ABCDEFGHIJKLMNOPQRSTU']  # 21 letter-only codes; cap is 20
+        self._register('many_user@example.com', currency_codes=codes)
+        self.assertStatus(422)
+
+    def test_register_unknown_currency_returns_404(self):
+        self._register('unknown_user@example.com', currency_codes=['EUR', 'XXX'])
+        self.assertStatus(404)
 
 
-class TestCreateWorkspaceEndpointCurrency(AuthMixin, APIClientMixin, TestCase):
-    """POST /api/workspaces accepts currency_code."""
+class TestCreateWorkspaceEndpointCurrencyCodes(AuthMixin, APIClientMixin, TestCase):
+    """POST /api/workspaces accepts currency_codes."""
 
-    def test_create_workspace_with_currency_code(self):
-        data = self.post('/api/workspaces', {'name': 'EUR Workspace', 'currency_code': 'EUR'}, **self.auth_headers())
+    def test_create_workspace_with_currency_codes(self):
+        data = self.post(
+            '/api/workspaces', {'name': 'Euro Workspace', 'currency_codes': ['EUR', 'USD']}, **self.auth_headers()
+        )
         self.assertStatus(201)
 
-        enabled = CurrencyCatalogService.list_enabled(data['id'])
-        self.assertEqual([c.code for c in enabled], ['EUR'])
+        enabled = [c.code for c in CurrencyCatalogService.list_enabled(data['id'])]
+        self.assertEqual(enabled, ['EUR', 'USD'])
+
+        account = Account.objects.get(workspace_id=data['id'], name='Main')
+        self.assertEqual(account.currency.code, 'EUR')
+
+    def test_create_workspace_defaults_to_trio(self):
+        data = self.post('/api/workspaces', {'name': 'Trio Workspace'}, **self.auth_headers())
+        self.assertStatus(201)
+
+        enabled = [c.code for c in CurrencyCatalogService.list_enabled(data['id'])]
+        self.assertEqual(enabled, ['EUR', 'PLN', 'USD'])
+
+    def test_create_workspace_empty_currency_codes_returns_422(self):
+        self.post('/api/workspaces', {'name': 'Bad Workspace', 'currency_codes': []}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_create_workspace_invalid_code_pattern_returns_422(self):
+        self.post('/api/workspaces', {'name': 'Bad Workspace', 'currency_codes': ['eur']}, **self.auth_headers())
+        self.assertStatus(422)
 
     def test_create_workspace_service_direct(self):
         user = UserFactory()
-        workspace = WorkspaceService.create_workspace(user=user, name='Direct', currency_code='EUR')
+        workspace = WorkspaceService.create_workspace(user=user, name='Direct', currency_codes=['EUR'])
 
         self.assertEqual([c.code for c in CurrencyCatalogService.list_enabled(workspace.id)], ['EUR'])
