@@ -9,7 +9,6 @@ import {
   Receipt,
   Search,
   Wallet,
-  Settings,
   Users,
 } from 'lucide-react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -25,7 +24,6 @@ const navItems = [
   { to: '/transactions', label: 'Transactions', icon: Receipt },
   { to: '/planned', label: 'Planned', icon: Calendar },
   { to: '/members', label: 'Members', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 interface SidebarProps {
