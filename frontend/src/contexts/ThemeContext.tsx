@@ -15,9 +15,9 @@ const THEME_COLOR = { light: '#FAFAFA', dark: '#0A0A0A' } as const
 
 function applyDark(isDark: boolean) {
   document.documentElement.classList.toggle('dark', isDark)
-  // Sync browser/PWA chrome with the *app* theme. The static metas in
-  // index.html are media-gated on the OS preference, which diverges from the
-  // app theme once the user toggles it; writing both metas makes either match.
+  // Sync browser/PWA chrome with the *app* theme. The static meta in
+  // index.html is light-only; writing it here makes browser/PWA chrome match
+  // the app theme once the user toggles.
   const color = isDark ? THEME_COLOR.dark : THEME_COLOR.light
   document
     .querySelectorAll('meta[name="theme-color"]')
@@ -33,7 +33,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   )
 
   // Re-apply on mount: the FOUC script only sets the <html> class, so a stored
-  // theme that differs from the OS preference needs its theme-color synced here.
+  // dark choice needs its theme-color synced here.
   useEffect(() => {
     applyDark(isDark)
   }, [isDark])
@@ -47,25 +47,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleTheme = () => {
     setDark(!isDark)
   }
-
-  // Follow the OS color-scheme preference ONLY while the user has not made an
-  // explicit choice (no value stored under 'owlgarth_theme'). Once they toggle,
-  // their stored choice wins and this listener becomes a no-op. We never write
-  // to localStorage from here — that would pin a choice the user didn't make.
-  useEffect(() => {
-    if (!window.matchMedia) return
-
-    const mql = window.matchMedia('(prefers-color-scheme: dark)')
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (localStorage.getItem(THEME_STORAGE_KEY) !== null) return
-      applyDark(e.matches)
-      setIsDark(e.matches)
-    }
-
-    mql.addEventListener('change', handleChange)
-    return () => mql.removeEventListener('change', handleChange)
-  }, [])
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme, setDark }}>
