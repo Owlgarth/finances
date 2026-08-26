@@ -15,13 +15,14 @@ import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_ICON: Record<AccountType, typeof Wallet> = { cash: Coins, bank: Landmark, other: Wallet }
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
-  const { canManageAccounts, canWrite } = usePermissions()
+  const { canManageAccounts, canWrite, canManageCurrencies } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const isTouch = useIsTouch()
   const [showArchived, setShowArchived] = useState(false)
@@ -34,6 +35,9 @@ export default function AccountsPage() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [repeatTransfer, setRepeatTransfer] = useState<Transfer | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
+  // Workspace settings opened from the account form's currency bridge; the
+  // panel instance renders LAST so it stacks above the still-open form.
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', showArchived],
@@ -217,7 +221,12 @@ export default function AccountsPage() {
             : []),
         ]}
       />
-      <AccountFormModal open={formOpen} onClose={() => setFormOpen(false)} account={editing} />
+      <AccountFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        account={editing}
+        onManageCurrencies={canManageCurrencies ? () => setSettingsOpen(true) : undefined}
+      />
       {setBalanceFor && (
         <SetBalanceModal open={!!setBalanceFor} onClose={() => setSetBalanceFor(null)} account={setBalanceFor} />
       )}
@@ -229,6 +238,7 @@ export default function AccountsPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      <WorkspaceSettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

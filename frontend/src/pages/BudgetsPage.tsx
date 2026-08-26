@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import CurrencySetField from '../components/currencies/CurrencySetField'
+import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
 import { useBudgets, useEnabledCurrencies } from '../hooks/useDomain'
@@ -46,7 +47,7 @@ function formatCardCurrencyCodes(codes: string[]): string {
   return codes.length > CARD_CURRENCY_CAP ? `${shown} +${codes.length - CARD_CURRENCY_CAP}` : shown
 }
 
-function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolean; onClose: () => void; onManageCurrencies?: () => void }) {
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -207,6 +208,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
         <CurrencySetField
           value={effectiveCurrencyCodes}
           onChange={(next) => { setCurrencyTouched(true); setCurrencyCodes(next) }}
+          onManageCurrencies={onManageCurrencies}
         />
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
@@ -223,7 +225,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
 // the useState initializers, so the caller renders this component ONLY while
 // the form is open (unmount on close). That remount re-seeds state per open
 // with zero open-effects.
-function EditBudgetModal({ budget, onClose }: { budget: Budget; onClose: () => void }) {
+function EditBudgetModal({ budget, onClose, onManageCurrencies }: { budget: Budget; onClose: () => void; onManageCurrencies?: () => void }) {
   const queryClient = useQueryClient()
   // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -252,7 +254,7 @@ function EditBudgetModal({ budget, onClose }: { budget: Budget; onClose: () => v
           <label htmlFor="budget-edit-name" className={labelClass}>Name</label>
           <input id="budget-edit-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
-        <CurrencySetField value={currencyCodes} onChange={setCurrencyCodes} />
+        <CurrencySetField value={currencyCodes} onChange={setCurrencyCodes} onManageCurrencies={onManageCurrencies} />
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
@@ -267,11 +269,15 @@ function EditBudgetModal({ budget, onClose }: { budget: Budget; onClose: () => v
 export default function BudgetsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { canManageAccounts } = usePermissions()
+  const { canManageAccounts, canManageCurrencies } = usePermissions()
   const { data: budgets = [], isLoading } = useBudgets(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
+  // Workspace settings opened from the currency field's manage bridge; the
+  // panel instance renders LAST so it stacks above the still-open form modal.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const openSettings = () => setSettingsOpen(true)
   // Add-period modal (mount-per-use, PeriodFormModal docblock): the
   // per-session key forces a fresh remount so the modal's lazy useState
   // initializers re-run - add-after-add on the same budget opens fresh
@@ -389,10 +395,20 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      <CreateBudgetModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateBudgetModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onManageCurrencies={canManageCurrencies ? openSettings : undefined}
+      />
       {/* Mount-per-use (EditBudgetModal docblock): the conditional render is
           the open state; closing unmounts and the next open re-seeds. */}
-      {editing && <EditBudgetModal budget={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <EditBudgetModal
+          budget={editing}
+          onClose={() => setEditing(null)}
+          onManageCurrencies={canManageCurrencies ? openSettings : undefined}
+        />
+      )}
       {periodModalBudget && (
         <PeriodFormModal
           key={`add-${periodModalBudget.id}-${periodModalNonce}`}
@@ -410,6 +426,7 @@ export default function BudgetsPage() {
         onCancel={() => setDeleting(null)}
         isPending={deleteMutation.isPending}
       />
+      <WorkspaceSettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }
