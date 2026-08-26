@@ -32,7 +32,6 @@ class EnableCurrencyIn(BaseModel):
     custom: bool = False
     name: str | None = Field(None, max_length=64)
     symbol: str | None = Field(None, max_length=8)
-    decimals: int = Field(2, ge=0, le=4)
 
     @field_validator('name', 'symbol')
     @classmethod

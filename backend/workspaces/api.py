@@ -47,9 +47,7 @@ def enable_currency(request: HttpRequest, data: EnableCurrencyIn):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, ADMIN_ROLES)
     if data.custom:
-        currency = CurrencyCatalogService.create_custom(
-            user, workspace_id, data.code, data.name, data.symbol, data.decimals
-        )
+        currency = CurrencyCatalogService.create_custom(user, workspace_id, data.code, data.name, data.symbol)
     else:
         currency = CurrencyCatalogService.enable(user, workspace_id, data.code)
     return 201, currency

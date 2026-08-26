@@ -99,14 +99,37 @@ class TestCurrencyCatalogService(TestCase):
         self.assertEqual(own, ['USD'])
         self.assertEqual(other, ['EUR'])
 
+    def test_list_enabled_orders_by_creation_order(self):
+        # Enabled in deliberately non-alphabetical order; the list must follow.
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['USD', 'PLN', 'EUR'])
+
+    def test_list_enabled_atomic_batch_keeps_insertion_order(self):
+        # Workspace creation enables several currencies inside ONE atomic
+        # block; Postgres now() is transaction-stable so the rows share one
+        # created_at - the id tiebreak must preserve insertion order.
+        from django.db import transaction as db_transaction
+
+        with db_transaction.atomic():
+            CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+            CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+            CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['PLN', 'EUR', 'USD'])
+
     def test_create_custom_creates_and_enables(self):
         currency = CurrencyCatalogService.create_custom(
-            self.user, self.workspace.id, code='GOLD', name='Gold grams', symbol='g', decimals=3
+            self.user, self.workspace.id, code='GOLD', name='Gold grams', symbol='g'
         )
 
         self.assertTrue(currency.is_custom)
         self.assertEqual(currency.workspace_id, self.workspace.id)
-        self.assertEqual(currency.decimals, 3)
+        self.assertEqual(currency.decimals, 2)
         self.assertTrue(WorkspaceCurrency.objects.filter(workspace=self.workspace, currency=currency).exists())
 
     def test_create_custom_collides_with_global_code(self):
@@ -154,21 +177,28 @@ class TestCurrencyCatalogService(TestCase):
         self.assertFalse(Currency.objects.filter(id=custom.id).exists())
 
     def test_disable_in_use_blocked(self):
-        """_reference_count is 0 until B2+; verify the guard path via a stub."""
+        """The breakdown guard via a stub (per-type dict shape)."""
         from unittest.mock import patch
 
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
 
-        with patch.object(CurrencyCatalogService, '_reference_count', return_value=3):
-            with self.assertRaises(CurrencyInUseError):
+        with patch.object(
+            CurrencyCatalogService,
+            '_reference_count',
+            return_value={'accounts': 2, 'category_budgets': 1, 'budget_currencies': 0},
+        ):
+            with self.assertRaises(CurrencyInUseError) as ctx:
                 CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+        self.assertIn('2 accounts', str(ctx.exception))
+        self.assertIn('1 planned amount', str(ctx.exception))
 
         # Still enabled after the failed disable
         codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
         self.assertIn('EUR', codes)
 
-    def test_disable_blocked_by_transaction_original_facet(self):
+    def test_disable_facet_referenced_currency_succeeds(self):
+        """The original facet resolves against the whole catalog - never requires enablement, so it must not block disable."""
         from decimal import Decimal
 
         from accounts.factories import AccountFactory
@@ -179,11 +209,15 @@ class TestCurrencyCatalogService(TestCase):
         account = AccountFactory(workspace=self.workspace)
         TransactionFactory(account=account, original_amount=Decimal('10.00'), original_currency=eur)
 
-        with self.assertRaises(CurrencyInUseError):
-            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+        CurrencyCatalogService.disable(self.workspace.id, 'EUR')
 
-    def test_disable_custom_facet_currency_blocked_not_500(self):
-        """A custom currency referenced only by an original facet must block, not ProtectedError."""
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['PLN'])
+        # Global catalog row untouched regardless of the facet reference.
+        self.assertTrue(Currency.objects.filter(workspace__isnull=True, code='EUR').exists())
+
+    def test_disable_custom_facet_currency_succeeds_and_keeps_row(self):
+        """A facet-referenced custom currency disables cleanly; the PROTECT FK pins the row (not orphaned), so no ProtectedError and no deletion."""
         from decimal import Decimal
 
         from accounts.factories import AccountFactory
@@ -196,9 +230,12 @@ class TestCurrencyCatalogService(TestCase):
         account = AccountFactory(workspace=self.workspace)
         TransactionFactory(account=account, original_amount=Decimal('1.00'), original_currency=custom)
 
-        with self.assertRaises(CurrencyInUseError):
-            CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
+        CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
+
+        self.assertFalse(WorkspaceCurrency.objects.filter(workspace=self.workspace, currency=custom).exists())
+        # The row stays (facet-referenced, PROTECT-pinned) and remains re-enablable.
         self.assertTrue(Currency.objects.filter(id=custom.id).exists())
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'GOLD')
 
     def test_disable_blocked_by_budget_currency(self):
         from budgeting.factories import BudgetCurrencyFactory, BudgetFactory
@@ -210,6 +247,18 @@ class TestCurrencyCatalogService(TestCase):
 
         with self.assertRaises(CurrencyInUseError):
             CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+
+    def test_disable_blocked_by_account_enumerates_blockers(self):
+        from accounts.factories import AccountFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        eur = Currency.objects.get(workspace__isnull=True, code='EUR')
+        AccountFactory(workspace=self.workspace, currency=eur)
+
+        with self.assertRaises(CurrencyInUseError) as ctx:
+            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+        self.assertIn('1 account', str(ctx.exception))
 
 
 class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
@@ -247,11 +296,21 @@ class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(404)
 
     def test_create_custom_currency(self):
-        payload = {'code': 'GOLD', 'custom': True, 'name': 'Gold grams', 'symbol': 'g', 'decimals': 3}
+        payload = {'code': 'GOLD', 'custom': True, 'name': 'Gold grams', 'symbol': 'g'}
         data = self.post('/api/workspaces/enabled-currencies', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertTrue(data['is_custom'])
-        self.assertEqual(data['decimals'], 3)
+        self.assertEqual(data['decimals'], 2)
+
+    def test_create_custom_currency_ignores_decimals_payload(self):
+        # The field no longer exists on the schema; a stale client sending it
+        # cannot influence storage - the row is created at 2 decimals.
+        payload = {'code': 'GOLD', 'custom': True, 'name': 'Gold grams', 'symbol': 'g', 'decimals': 3}
+        data = self.post('/api/workspaces/enabled-currencies', payload, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['decimals'], 2)
+        row = Currency.objects.get(workspace=self.workspace, code='GOLD')
+        self.assertEqual(row.decimals, 2)
 
     def test_create_custom_currency_missing_name_returns_422(self):
         self.post('/api/workspaces/enabled-currencies', {'code': 'GOLD', 'custom': True}, **self.auth_headers())
@@ -289,6 +348,18 @@ class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
         self.post('/api/workspaces/enabled-currencies', {'code': 'USD'}, **self.auth_headers())
         self.delete('/api/workspaces/enabled-currencies/USD', **self.auth_headers())
         self.assertStatus(400)
+
+    def test_disable_in_use_returns_400_with_enumerated_detail(self):
+        from accounts.factories import AccountFactory
+
+        self.post('/api/workspaces/enabled-currencies', {'code': 'PLN'}, **self.auth_headers())
+        self.post('/api/workspaces/enabled-currencies', {'code': 'EUR'}, **self.auth_headers())
+        eur = Currency.objects.get(workspace__isnull=True, code='EUR')
+        AccountFactory(workspace=self.workspace, currency=eur)
+
+        self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
+        self.assertStatus(400)
+        self.assertIn('1 account', self.response.json()['detail'])
 
     def test_disable_not_enabled_returns_404(self):
         self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
