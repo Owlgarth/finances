@@ -23,6 +23,7 @@ export function usePermissions() {
     // day-to-day records (transactions, transfers, categories, planned) are WRITE_ROLES.
     const canManageAccounts = canManageBudgetAccounts;
     const canWrite = canManageBudgetData;
+    const canManageCurrencies = canManageBudgetAccounts;
 
     // Utility function to check if user has any of the specified roles
     const hasRole = (roles: string[]): boolean => {
@@ -58,6 +59,7 @@ export function usePermissions() {
       canManageBudgetData,
       canManageMembers,
       canManageAccounts,
+      canManageCurrencies,
       canWrite,
 
       // Utility functions
