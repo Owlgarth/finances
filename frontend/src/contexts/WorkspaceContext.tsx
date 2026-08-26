@@ -14,7 +14,7 @@ interface WorkspaceContextValue {
   error: Error | null;
   refetch: () => void;
   switchWorkspace: (id: number) => Promise<void>;
-  createWorkspace: (name: string) => Promise<Workspace>;
+  createWorkspace: (name: string, currencyCodes?: string[]) => Promise<Workspace>;
   deleteWorkspace: (id: number) => Promise<void>;
   updateWorkspace: (data: { name: string }) => Promise<Workspace>;
 }
@@ -100,7 +100,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => workspacesApi.create({ name }),
+    mutationFn: ({ name, currencyCodes }: { name: string; currencyCodes?: string[] }) =>
+      workspacesApi.create({ name, currency_codes: currencyCodes }),
     onSuccess: () => {
       clearWorkspaceScopedQueries();
       localStorage.removeItem('owlgarth_selected_account');
@@ -127,8 +128,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await switchMutation.mutateAsync(id);
   };
 
-  const createWorkspace = async (name: string): Promise<Workspace> => {
-    const ws = await createMutation.mutateAsync(name);
+  const createWorkspace = async (name: string, currencyCodes?: string[]): Promise<Workspace> => {
+    const ws = await createMutation.mutateAsync({ name, currencyCodes });
     return ws;
   };
 

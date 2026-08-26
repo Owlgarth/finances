@@ -9,6 +9,7 @@ import {
   PanelSearchInput,
   SheetOptionRow,
   listboxPanelClass,
+  listboxTriggerAuthClass,
   listboxTriggerBaseClass,
 } from './listboxParts'
 
@@ -27,7 +28,17 @@ export interface MultiSelectProps<T extends string | number> {
   placeholder?: string
   'aria-label'?: string
   id?: string
+  /** Disable the trigger. */
   disabled?: boolean
+  /** Render the trigger value in JetBrains Mono (currency codes, IDs) - mirrors Select's mono. */
+  mono?: boolean
+  /**
+   * Trigger styling: 'filter' (default) is the §4 filter-bar style; 'auth'
+   * matches the larger pre-redesign auth-page inputs (authInputClass
+   * contexts, e.g. Register). Opt-in - existing call sites render
+   * byte-identically.
+   */
+  variant?: 'filter' | 'auth'
   /** Show an inline search input at the top of the panel (lists > 5 items). */
   searchable?: boolean
   className?: string
@@ -47,6 +58,8 @@ export default function MultiSelect<T extends string | number>({
   'aria-label': ariaLabel,
   id,
   disabled = false,
+  mono = false,
+  variant = 'filter',
   searchable = false,
   className,
 }: MultiSelectProps<T>) {
@@ -99,7 +112,11 @@ export default function MultiSelect<T extends string | number>({
     )
   }
 
-  const triggerClass = listboxTriggerBaseClass + (className ?? '')
+  // Same composition order as Select: variant base + mono + caller.
+  const triggerClass =
+    (variant === 'auth' ? listboxTriggerAuthClass : listboxTriggerBaseClass) +
+    (mono ? 'font-mono ' : '') +
+    (className ?? '')
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -158,6 +175,7 @@ export default function MultiSelect<T extends string | number>({
                   key={`${String(opt.value)}-${i}`}
                   label={opt.label}
                   selected={selected.has(opt.value)}
+                  mono={mono}
                   onClick={() => toggleIndex(i)}
                 />
               ))

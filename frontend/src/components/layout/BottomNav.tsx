@@ -109,7 +109,7 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
   const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
@@ -159,7 +159,6 @@ export default function BottomNav() {
   // Close the More sheet when navigation happens from inside it.
   useEffect(() => {
     setMoreOpen(false)
-    setCreatingWorkspace(false)
   }, [location.pathname])
 
   const quickAddActions: ActionSheetAction[] = [
@@ -217,24 +216,9 @@ export default function BottomNav() {
       {/* More sheet: overflow destinations + workspace + user controls */}
       <BottomSheet
         open={moreOpen}
-        onClose={() => {
-          setMoreOpen(false)
-          setCreatingWorkspace(false)
-        }}
+        onClose={() => setMoreOpen(false)}
         aria-label="More"
       >
-        {creatingWorkspace ? (
-          <div className="p-4">
-            <CreateWorkspaceForm
-              compact
-              onCancel={() => setCreatingWorkspace(false)}
-              onCreated={() => {
-                setCreatingWorkspace(false)
-                setMoreOpen(false)
-              }}
-            />
-          </div>
-        ) : (
           <div className="pb-2">
             <button
               type="button"
@@ -295,7 +279,14 @@ export default function BottomNav() {
                   <RoleBadge role={ws.user_role} />
                 </button>
               ))}
-              <button type="button" onClick={() => setCreatingWorkspace(true)} className={moreRowClass}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false)
+                  setCreateWorkspaceOpen(true)
+                }}
+                className={moreRowClass}
+              >
                 <Plus size={16} className="flex-shrink-0" />
                 Create workspace
               </button>
@@ -353,7 +344,6 @@ export default function BottomNav() {
               </div>
             </div>
           </div>
-        )}
       </BottomSheet>
 
       {/* FAB quick-add (plan decision 6) — owned here so it works on any route */}
@@ -372,6 +362,7 @@ export default function BottomNav() {
       />
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} />
       <PlannedFormModal open={plannedOpen} onClose={() => setPlannedOpen(false)} />
+      <CreateWorkspaceForm open={createWorkspaceOpen} onClose={() => setCreateWorkspaceOpen(false)} />
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
       <input

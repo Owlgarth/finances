@@ -4,7 +4,8 @@ import { controlHeightClass } from './formStyles'
 
 // Shared listbox trigger styling for Select and MultiSelect (§4 form controls),
 // in the spirit of formStyles.ts: the base is identical; Select appends its
-// mono/error variants and the caller's className, MultiSelect only the className.
+// mono/error variants and the caller's className, MultiSelect the mono/auth
+// variant and the caller's className.
 export const listboxTriggerBaseClass =
   'w-full flex items-center justify-between ' +
   'bg-surface border border-border rounded-none px-2 py-1.5 ' +
@@ -12,6 +13,18 @@ export const listboxTriggerBaseClass =
   'text-xs text-text text-left ' +
   'hover:bg-surface-hover ' +
   'focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
+  'transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
+
+// Auth-form trigger variant (MultiSelect variant="auth"): mirrors
+// formStyles.authInputClass - bg-background, px-3 py-2, text-sm, ring-2
+// focus, no hover swap - for Login/Register-style forms whose text inputs
+// predate the §4 redesign. The default stays listboxTriggerBaseClass.
+export const listboxTriggerAuthClass =
+  'w-full flex items-center justify-between ' +
+  'bg-background border border-border rounded-none px-3 py-2 ' +
+  `${controlHeightClass} ` +
+  'text-sm text-text text-left ' +
+  'focus:bg-surface focus:outline-none focus:ring-2 focus:ring-border-focus ' +
   'transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
 
 // Anchored desktop panel container (both components, verbatim).

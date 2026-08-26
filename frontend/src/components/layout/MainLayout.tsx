@@ -15,7 +15,7 @@ interface MainLayoutProps {
 }
 
 function NoWorkspaceMessage() {
-  const [showForm, setShowForm] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
 
   return (
     <div className="flex items-center justify-center h-full">
@@ -23,11 +23,8 @@ function NoWorkspaceMessage() {
         <h2 className="text-lg font-semibold text-text mb-2">No workspace selected</h2>
         <p className="text-text-muted mb-4">Create a workspace or ask to be added to one.</p>
 
-        {!showForm ? (
-          <CreateWorkspaceButton onClick={() => setShowForm(true)} />
-        ) : (
-          <CreateWorkspaceForm onCancel={() => setShowForm(false)} />
-        )}
+        <CreateWorkspaceButton onClick={() => setShowCreate(true)} />
+        <CreateWorkspaceForm open={showCreate} onClose={() => setShowCreate(false)} />
       </div>
     </div>
   )

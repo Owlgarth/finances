@@ -3,7 +3,9 @@ import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { legalApi } from '../api/client';
 import { authInputClass } from '../components/common/formStyles';
+import MultiSelect from '../components/common/MultiSelect';
 import { useAuth } from '../contexts/AuthContext';
+import { usePublicCurrencyCatalog, DEFAULT_CURRENCY_CODES } from '../hooks/usePublicCurrencyCatalog';
 
 export default function Register() {
   const { register, isAuthenticated, isLoading } = useAuth();
@@ -12,13 +14,16 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
-  const [currencyCode, setCurrencyCode] = useState('PLN');
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>([...DEFAULT_CURRENCY_CODES]);
   const [startWithSampleData, setStartWithSampleData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [termsVersion, setTermsVersion] = useState('');
   const [privacyVersion, setPrivacyVersion] = useState('');
+
+  const { options: currencyOptions, isLoading: currenciesLoading, isError: currenciesError } =
+    usePublicCurrencyCatalog();
 
   useEffect(() => {
     const loadLegalVersions = async () => {
@@ -54,6 +59,11 @@ export default function Register() {
       return;
     }
 
+    if (currencyCodes.length === 0) {
+      toast.error('Select at least one currency');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -62,7 +72,7 @@ export default function Register() {
         password,
         full_name: fullName || undefined,
         workspace_name: workspaceName,
-        currency_code: currencyCode,
+        currency_codes: currencyCodes,
         start_with_sample_data: startWithSampleData,
         accepted_terms_version: termsVersion,
         accepted_privacy_version: privacyVersion,
@@ -137,19 +147,44 @@ export default function Register() {
           </div>
 
           <div>
-            <label htmlFor="currency-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-              Currency
+            <label htmlFor="currency-codes" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+              Currencies *
             </label>
-            <select
-              id="currency-code"
-              value={currencyCode}
-              onChange={(e) => setCurrencyCode(e.target.value)}
-              className={inputClassName}
-            >
-              {['PLN', 'EUR', 'USD', 'GBP', 'UAH', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD', 'JPY'].map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            {currenciesLoading ? (
+              <div className="h-10 w-full bg-surface-muted animate-pulse" />
+            ) : (
+              <MultiSelect
+                id="currency-codes"
+                values={currencyCodes}
+                onChange={setCurrencyCodes}
+                options={currencyOptions}
+                placeholder="Select currencies"
+                searchable
+                mono
+                variant="auth"
+              />
+            )}
+            {currencyCodes.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {/* Selection-order chips; first = Main account currency.
+                    Keep in sync with CreateWorkspaceForm's copy (extract into a
+                    shared component at a third consumer). */}
+                {currencyCodes.map((code, i) => (
+                  <span
+                    key={code}
+                    className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none"
+                  >
+                    {code}
+                    {i === 0 && <span className="ml-1.5 text-text-muted">Main</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-[11px] text-text-muted leading-relaxed">
+              {currenciesError
+                ? "Couldn't load all currencies - your selection still works."
+                : 'The first currency becomes your Main account. You can enable more later.'}
+            </p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">

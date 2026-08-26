@@ -16,14 +16,13 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
   const { workspace, workspaces, isLoading } = useWorkspace()
   const { switchingToId, switchTo } = useWorkspaceSwitch()
   const [isOpen, setIsOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false)
-        setIsCreating(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -37,7 +36,6 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
       // owns the key then (topmost-only close).
       if (event.key === 'Escape' && !hasActiveOverlay()) {
         setIsOpen(false)
-        setIsCreating(false)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -76,58 +74,53 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
             collapsed ? 'left-0 w-64' : 'left-0 right-0'
           }`}
         >
-          {isCreating ? (
-            <CreateWorkspaceForm
-              compact
-              onCancel={() => setIsCreating(false)}
-              onCreated={() => setIsOpen(false)}
-            />
-          ) : (
-            <>
-              {workspaces.map((ws) => (
-                <button
-                  key={ws.id}
-                  onClick={() => switchTo(ws, () => setIsOpen(false))}
-                  disabled={switchingToId !== null}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-surface-hover transition-colors ${
-                    ws.id === workspace?.id ? 'bg-surface-hover' : ''
-                  }`}
-                >
-                  {ws.id === workspace?.id ? (
-                    <Check size={14} className="text-text flex-shrink-0" />
-                  ) : switchingToId === ws.id ? (
-                    <Loader2 size={14} className="animate-spin text-text flex-shrink-0" />
-                  ) : (
-                    <div className="h-4 w-4" />
-                  )}
-                  <span className="truncate flex-1 text-left text-text">{ws.name}</span>
-                  <RoleBadge role={ws.user_role} />
-                </button>
-              ))}
+          {workspaces.map((ws) => (
+            <button
+              key={ws.id}
+              onClick={() => switchTo(ws, () => setIsOpen(false))}
+              disabled={switchingToId !== null}
+              className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-surface-hover transition-colors ${
+                ws.id === workspace?.id ? 'bg-surface-hover' : ''
+              }`}
+            >
+              {ws.id === workspace?.id ? (
+                <Check size={14} className="text-text flex-shrink-0" />
+              ) : switchingToId === ws.id ? (
+                <Loader2 size={14} className="animate-spin text-text flex-shrink-0" />
+              ) : (
+                <div className="h-4 w-4" />
+              )}
+              <span className="truncate flex-1 text-left text-text">{ws.name}</span>
+              <RoleBadge role={ws.user_role} />
+            </button>
+          ))}
 
-              <div className="border-t border-border mt-1 pt-1">
-                <button
-                  onClick={() => setIsCreating(true)}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
-                >
-                  <Plus size={14} />
-                  Create workspace
-                </button>
-                <button
-                  onClick={() => {
-                    setIsOpen(false)
-                    onOpenSettings()
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
-                >
-                  <Settings size={14} />
-                  Workspace settings
-                </button>
-              </div>
-            </>
-          )}
+          <div className="border-t border-border mt-1 pt-1">
+            <button
+              onClick={() => {
+                setIsOpen(false)
+                setCreateOpen(true)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
+            >
+              <Plus size={14} />
+              Create workspace
+            </button>
+            <button
+              onClick={() => {
+                setIsOpen(false)
+                onOpenSettings()
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
+            >
+              <Settings size={14} />
+              Workspace settings
+            </button>
+          </div>
         </div>
       )}
+
+      <CreateWorkspaceForm open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   )
 }
