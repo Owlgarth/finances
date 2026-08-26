@@ -827,7 +827,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
 
 
 class TestCreateWorkspace(APIClientMixin, TestCase):
-    """Tests for POST /api/workspaces/."""
+    """Tests for POST /api/workspaces."""
 
     def setUp(self):
         """Set up test data."""
@@ -842,7 +842,7 @@ class TestCreateWorkspace(APIClientMixin, TestCase):
     def test_create_workspace_returns_201(self):
         """Test that creating workspace returns 201 with WorkspaceOut."""
         payload = {'name': 'New Workspace'}
-        data = self.post('/api/workspaces/', payload, **self.auth_headers())
+        data = self.post('/api/workspaces', payload, **self.auth_headers())
         self.assertStatus(201)
         self.assertEqual(data['name'], 'New Workspace')
         self.assertEqual(data['user_role'], 'owner')
@@ -851,7 +851,7 @@ class TestCreateWorkspace(APIClientMixin, TestCase):
     def test_create_workspace_sets_current_workspace(self):
         """Test that creating workspace sets user.current_workspace."""
         payload = {'name': 'New Workspace'}
-        self.post('/api/workspaces/', payload, **self.auth_headers())
+        self.post('/api/workspaces', payload, **self.auth_headers())
         self.assertStatus(201)
 
         self.user.refresh_from_db()
@@ -860,19 +860,19 @@ class TestCreateWorkspace(APIClientMixin, TestCase):
     def test_create_workspace_without_auth_fails(self):
         """Test that creating workspace without authentication fails."""
         payload = {'name': 'New Workspace'}
-        self.post('/api/workspaces/', payload)
+        self.post('/api/workspaces', payload)
         self.assertStatus(401)
 
     def test_create_workspace_with_blank_name_fails(self):
         """Test that creating a workspace with blank name returns 422."""
         payload = {'name': '   '}
-        self.post('/api/workspaces/', payload, **self.auth_headers())
+        self.post('/api/workspaces', payload, **self.auth_headers())
         self.assertStatus(422)
 
     def test_create_workspace_with_empty_name_fails(self):
         """Test that creating a workspace with empty name returns 422."""
         payload = {'name': ''}
-        self.post('/api/workspaces/', payload, **self.auth_headers())
+        self.post('/api/workspaces', payload, **self.auth_headers())
         self.assertStatus(422)
 
 

@@ -70,7 +70,7 @@ Workspace (top-level container)
 
 ### Multi-Workspace Support
 
-- **Creation**: `POST /api/workspaces/` creates a workspace, enables the chosen
+- **Creation**: `POST /api/workspaces` creates a workspace, enables the chosen
   currency, and seeds a "Main" account (flagged as the default for its currency)
   + a "General" budget. Registration can optionally add sample data.
 - **Switching**: `POST /api/workspaces/{id}/switch` changes the active workspace.
