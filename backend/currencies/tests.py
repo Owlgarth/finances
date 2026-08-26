@@ -200,12 +200,13 @@ class TestCurrencyCatalogService(TestCase):
             CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
         self.assertTrue(Currency.objects.filter(id=custom.id).exists())
 
-    def test_disable_blocked_by_budget_display_currency(self):
-        from budgeting.factories import BudgetFactory
+    def test_disable_blocked_by_budget_currency(self):
+        from budgeting.factories import BudgetCurrencyFactory, BudgetFactory
 
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
         eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
-        BudgetFactory(workspace=self.workspace, display_currency=eur)
+        budget = BudgetFactory(workspace=self.workspace)
+        BudgetCurrencyFactory(budget=budget, currency=eur)
 
         with self.assertRaises(CurrencyInUseError):
             CurrencyCatalogService.disable(self.workspace.id, 'EUR')

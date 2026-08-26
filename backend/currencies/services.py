@@ -19,16 +19,16 @@ class CurrencyCatalogService:
         """Count records in the workspace that reference this catalog currency.
 
         Covers every PROTECT FK to Currency: accounts, category budgets,
-        budget display currencies, and the transaction original-amount facet.
+        budget currency sets, and the transaction original-amount facet.
         """
         from accounts.models import Account
-        from budgeting.models import Budget, CategoryBudget
+        from budgeting.models import BudgetCurrency, CategoryBudget
         from transactions.models import Transaction
 
         return (
             Account.objects.filter(workspace_id=workspace_id, currency=currency).count()
             + CategoryBudget.objects.filter(workspace_id=workspace_id, currency=currency).count()
-            + Budget.objects.filter(workspace_id=workspace_id, display_currency=currency).count()
+            + BudgetCurrency.objects.filter(budget__workspace_id=workspace_id, currency=currency).count()
             + Transaction.objects.filter(workspace_id=workspace_id, original_currency=currency).count()
         )
 

@@ -5,12 +5,13 @@ from datetime import date
 from django.test import TestCase
 
 from budgeting.exceptions import NoPeriodForDateError, PeriodNotEditableError, PeriodOverlapError
-from budgeting.factories import BudgetFactory, PeriodFactory
-from budgeting.models import Budget, Cadence, Period
+from budgeting.factories import BudgetCurrencyFactory, BudgetFactory, PeriodFactory
+from budgeting.models import Budget, BudgetCurrency, Cadence, Period
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
+from currencies.services import CurrencyCatalogService
 from workspaces.factories import WorkspaceFactory
 from workspaces.services import WorkspaceService
 
@@ -97,6 +98,107 @@ class TestBudgetsAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(204)
         self.assertFalse(Budget.objects.filter(id=budget.id).exists())
         self.assertFalse(Period.objects.filter(budget_id=budget.id).exists())
+
+
+class TestBudgetCurrenciesAPI(AuthMixin, APIClientMixin, TestCase):
+    """Budget currency set: create/update contract, ordering, dedupe, validation."""
+
+    def setUp(self):
+        super().setUp()
+        self.pln = CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        self.usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+
+    def test_create_with_currency_codes_preserves_order(self):
+        data = self.post('/api/budgets', {'name': 'Multi', 'currency_codes': ['EUR', 'PLN']}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_codes'], ['EUR', 'PLN'])
+
+        budget = Budget.objects.get(workspace=self.workspace, name='Multi')
+        positions = list(
+            BudgetCurrency.objects.filter(budget=budget).order_by('position').values_list('currency__code', flat=True)
+        )
+        self.assertEqual(positions, ['EUR', 'PLN'])
+
+    def test_create_without_currency_codes_defaults_to_empty(self):
+        data = self.post('/api/budgets', {'name': 'Plain'}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_codes'], [])
+
+    def test_create_with_empty_list_allowed(self):
+        data = self.post('/api/budgets', {'name': 'Empty', 'currency_codes': []}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_codes'], [])
+
+    def test_create_dedupes_codes_keeping_first_occurrence(self):
+        data = self.post(
+            '/api/budgets', {'name': 'Dedup', 'currency_codes': ['PLN', 'EUR', 'PLN']}, **self.auth_headers()
+        )
+        self.assertStatus(201)
+        self.assertEqual(data['currency_codes'], ['PLN', 'EUR'])
+
+    def test_create_with_not_enabled_code_returns_404(self):
+        # GBP exists in the catalog but is not enabled for this workspace.
+        self.post('/api/budgets', {'name': 'Bad', 'currency_codes': ['GBP']}, **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_create_with_invalid_code_pattern_returns_422(self):
+        self.post('/api/budgets', {'name': 'Bad', 'currency_codes': ['usd']}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_create_with_more_than_10_currency_codes_returns_422(self):
+        # 11 pattern-valid codes: max_length fires at schema validation,
+        # before any enablement check - so the codes need not be enabled.
+        codes = ['USD', 'EUR', 'PLN', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK']
+        self.post('/api/budgets', {'name': 'Big', 'currency_codes': codes}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_update_replaces_currency_set(self):
+        budget = BudgetFactory(workspace=self.workspace)
+        BudgetCurrencyFactory(budget=budget, currency=self.pln, position=0)
+        BudgetCurrencyFactory(budget=budget, currency=self.eur, position=1)
+
+        data = self.put(f'/api/budgets/{budget.id}', {'currency_codes': ['USD', 'PLN']}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['currency_codes'], ['USD', 'PLN'])
+        codes = sorted(BudgetCurrency.objects.filter(budget=budget).values_list('currency__code', flat=True))
+        self.assertEqual(codes, ['PLN', 'USD'])
+
+    def test_update_without_currency_codes_leaves_set_untouched(self):
+        budget = BudgetFactory(workspace=self.workspace)
+        BudgetCurrencyFactory(budget=budget, currency=self.pln, position=0)
+
+        data = self.put(f'/api/budgets/{budget.id}', {'name': 'Renamed'}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['currency_codes'], ['PLN'])
+        self.assertEqual(BudgetCurrency.objects.filter(budget=budget).count(), 1)
+
+    def test_update_with_empty_list_clears_set(self):
+        budget = BudgetFactory(workspace=self.workspace)
+        BudgetCurrencyFactory(budget=budget, currency=self.pln, position=0)
+
+        data = self.put(f'/api/budgets/{budget.id}', {'currency_codes': []}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['currency_codes'], [])
+        self.assertEqual(BudgetCurrency.objects.filter(budget=budget).count(), 0)
+
+    def test_update_with_not_enabled_code_returns_404(self):
+        budget = BudgetFactory(workspace=self.workspace)
+        self.put(f'/api/budgets/{budget.id}', {'currency_codes': ['GBP']}, **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_get_and_list_return_codes_in_position_order(self):
+        budget = BudgetFactory(workspace=self.workspace)
+        BudgetCurrencyFactory(budget=budget, currency=self.eur, position=1)
+        BudgetCurrencyFactory(budget=budget, currency=self.pln, position=0)
+
+        data = self.get(f'/api/budgets/{budget.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['currency_codes'], ['PLN', 'EUR'])
+
+        listing = self.get('/api/budgets', **self.auth_headers())
+        entry = next(b for b in listing if b['id'] == budget.id)
+        self.assertEqual(entry['currency_codes'], ['PLN', 'EUR'])
 
 
 class TestBudgetRolePermissions(AuthMixin, APIClientMixin, TestCase):

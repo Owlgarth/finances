@@ -1,6 +1,11 @@
 """Pydantic schemas for the currencies API."""
 
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Shared validated ISO code type - budgeting and workspaces schemas import this.
+CurrencyCode = Annotated[str, Field(pattern=r'^[A-Z]{3,8}$')]
 
 
 class CurrencyCatalogOut(BaseModel):
