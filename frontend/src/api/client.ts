@@ -6,7 +6,7 @@ import type {
   TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse,
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
-  Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
+  Cadence, Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
   TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
@@ -196,14 +196,25 @@ export const accountsApi = {
 };
 
 // ============= Budgets & Periods API =============
+/** Writable budget fields (create/update payloads). */
+export interface BudgetInput {
+  name?: string;
+  cadence?: Cadence;
+  cadence_weeks?: number | null;
+  cadence_anchor?: string | null;
+  /** Ordered set of workspace-enabled ISO codes; index 0 = shown first in the
+      budget table. Empty array = automatic (data-driven) currency list. */
+  currency_codes?: string[];
+}
+
 export const budgetsApi = {
   list: (includeInactive = false): Promise<Budget[]> =>
     api.get<Budget[]>('/budgets', { params: { include_inactive: includeInactive } }).then(res => res.data),
   get: (id: number): Promise<Budget> =>
     api.get<Budget>(`/budgets/${id}`).then(res => res.data),
-  create: (data: Partial<Budget>): Promise<Budget> =>
+  create: (data: BudgetInput): Promise<Budget> =>
     api.post<Budget>('/budgets', data).then(res => res.data),
-  update: (id: number, data: Partial<Budget>): Promise<Budget> =>
+  update: (id: number, data: BudgetInput): Promise<Budget> =>
     api.put<Budget>(`/budgets/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/budgets/${id}`),
   setArchive: (id: number, isActive: boolean): Promise<Budget> =>
