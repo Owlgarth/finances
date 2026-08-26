@@ -55,8 +55,9 @@ frontend/
 
 ## Pages and Routes
 
-Seven in-app destinations (sidebar) plus nested budget routes, auth/legal routes
-and a 404 catch-all.
+Six in-app destinations (sidebar) plus the Settings page (user menu on desktop,
+More sheet on mobile), nested budget routes, auth/legal routes and a 404
+catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
@@ -75,7 +76,7 @@ and a 404 catch-all.
 ## Components
 
 **Layout** (`components/layout/`): `MainLayout` (responsive wrapper), `Sidebar`
-(7 destinations + workspace selector + user menu), `UserMenu`, `WorkspaceSelector`.
+(6 destinations + workspace selector + user menu), `UserMenu`, `WorkspaceSelector`.
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,

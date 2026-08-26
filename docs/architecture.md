@@ -148,7 +148,7 @@ Fernet-encrypted with a dedicated `TWO_FACTOR_ENCRYPTION_KEY` (empty → legacy
 frontend/src/
 ├── api/client.ts           # Axios instance + typed API modules
 ├── components/
-│   ├── layout/             # MainLayout, Sidebar (7 destinations), UserMenu
+│   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
