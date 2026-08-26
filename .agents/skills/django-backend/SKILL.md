@@ -120,6 +120,10 @@ def create_transaction(request: HttpRequest, data: TransactionCreate):
 
 For endpoints that don't require an active workspace (e.g., listing all workspaces), use `JWTAuth()`.
 
+### Route Paths Byte-Match the Client URL
+
+Collection POSTs register at `''`, and every route path must agree byte-for-byte with the URL the frontend client calls in `client.ts` - Django Ninja registers `''` and `'/'` as two distinct paths and never folds a trailing slash. Failure mode of a mismatch: a collection POST registered at `'/'` while the client calls the slash-less path resolves into the GET-only collection route and answers **405** - not a 404 and no redirect, because `APPEND_SLASH` only fires for URLs that fail to resolve entirely (this exact split broke workspace-create for every real user while all five sibling routers were correct). Keep one canonical collection URL per router - never add a backcompat `'/'` twin, since Django has no REMOVE_SLASH redirect and the duplicate would be permanent convention noise.
+
 ### Document All Possible Response Status Codes
 
 Every endpoint's `response` parameter must list **all** status codes the endpoint can return, including those from raised exceptions:

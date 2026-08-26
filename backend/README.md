@@ -195,7 +195,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/workspaces` | List user's workspaces |
-| POST | `/api/workspaces/` | Create new workspace |
+| POST | `/api/workspaces` | Create new workspace |
 | GET | `/api/workspaces/current` | Get current workspace |
 | PUT | `/api/workspaces/current` | Update current workspace name |
 | DELETE | `/api/workspaces/{id}` | Delete workspace (owner only) |

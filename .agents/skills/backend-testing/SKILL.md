@@ -243,6 +243,10 @@ Cover a newly added optional schema field with one test class: (1) positive case
 
 When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior.
 
+## URL-Pinning Tests Call the Exact Client URL
+
+Tests that exercise an endpoint must call the exact URL the real frontend client sends - never a variant the router also happens to accept. The workspace-create 405 survived a green suite because every test posted to `/api/workspaces/` while the frontend called the slash-less `/api/workspaces`; the tests blessed a URL no real client used (the route-registration side of this rule is in the `django-backend` skill). When a route's path changes or is questioned, grep the literal URL string across ALL test files and docstrings, not just the spec'd call sites - fixture-setup calls in other apps' tests (a currencies test creating a workspace) and test-class docstrings hold slashed URLs too.
+
 ## Email in Tests
 
 `EMAIL_BACKEND` is set to `django.core.mail.backends.locmem.EmailBackend` via `config/test_settings.py`. Use `mail.outbox` to inspect sent emails.
