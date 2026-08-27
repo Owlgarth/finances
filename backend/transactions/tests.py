@@ -820,6 +820,31 @@ class TestFiltersAndTotals(TransactionTestCase):
         # The account-less row groups by its stored own currency.
         self.assertEqual(as_map[('expense', 'EUR')], '25.00')
 
+    def test_totals_currency_filter_returns_only_matching_groups(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
+        totals = self.get('/api/transactions/totals?currency_code=EUR', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        # Whole-map equality: only the EUR group survives - the PLN and USD
+        # setUp groups are absent, exactly like the list endpoint's filter.
+        self.assertEqual(as_map, {('expense', 'EUR'): '25.00'})
+
+        # Multi-value repetition widens the filter but still excludes PLN.
+        totals = self.get('/api/transactions/totals?currency_code=EUR&currency_code=USD', **self.auth_headers())[
+            'totals'
+        ]
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {('expense', 'EUR'): '25.00', ('expense', 'USD'): '30.00'})
+
     def test_totals_category_branch_groups_account_less_by_own_currency(self):
         usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
         TransactionFactory(
@@ -875,6 +900,25 @@ class TestFiltersAndTotals(TransactionTestCase):
         by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
         self.assertEqual(by_type[('expense', 'EUR')], '25.00')
         self.assertEqual(by_type[('expense', 'PLN')], '40.00')
+
+    def test_totals_combined_currency_filter(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
+        data = self.get('/api/transactions/totals?group_by=type,category&currency_code=EUR', **self.auth_headers())
+        by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
+        by_category = {(t['group'], t['currency']): t['total'] for t in data['by_category']}
+        self.assertEqual(by_type, {('expense', 'EUR'): '25.00'})
+        # Both combined views honor the filter - no PLN/USD groups anywhere.
+        self.assertEqual(by_category, {('Uncategorized', 'EUR'): '25.00'})
 
     def test_workspace_scoping(self):
         foreign = TransactionFactory()
