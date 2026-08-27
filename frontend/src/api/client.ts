@@ -176,6 +176,10 @@ export const currenciesApi = {
     api.post<CatalogCurrency>('/workspaces/enabled-currencies', { ...data, custom: true }).then(res => res.data),
   disable: (code: string): Promise<void> =>
     api.delete(`/workspaces/enabled-currencies/${code}`).then(() => undefined),
+  /** Pure reorder: `codes` must be exactly the currently-enabled set (same
+      members, any order); returns the reordered list, first entry = primary. */
+  reorder: (codes: string[]): Promise<CatalogCurrency[]> =>
+    api.put<CatalogCurrency[]>('/workspaces/enabled-currencies', { currency_codes: codes }).then(res => res.data),
 };
 
 // ============= Accounts API =============
