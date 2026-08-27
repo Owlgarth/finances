@@ -60,6 +60,13 @@ same session - in PR #81 it paid for itself twice.
   plus a focus event (`bringToFront()`). NEVER `page.goto()` for staleness probes - a full
   load re-creates the query cache and masks both classes. (Rule detail under State Refresh
   After Mutations in `frontend-react`.)
+- Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
+  "cannot reproduce" means the trigger is environmental (a failed request), not absent.
+  Intercept and force-fail the dependency (request interception blocking the endpoint the
+  code under test consumes) before concluding already-fixed: an `isSuccess`-only gate fed by
+  a `retry: false` query only shows its failure mode under induced failure - the dead
+  period-picker on budget open passed every naive probe and surfaced only when
+  `GET /api/budgets/{id}/periods/current` was blocked.
 
 ## Trust the driver less than the product
 
@@ -67,5 +74,9 @@ same session - in PR #81 it paid for itself twice.
   expectation order, a hover auto-scroll invalidating a later centering check, asserting a
   chip the spec says is absent). A failing assertion is a hypothesis - re-derive the
   expectation from the spec before blaming the product.
+- `elementHandle.click()` on options inside a height-capped scrollable panel auto-scrolls
+  the container and can click THROUGH to whatever sits underneath the intended option -
+  coordinates and scroll state are the driver's, not the page's truth. Prefer a DOM
+  `el.click()` dispatch (no coordinate dependency) for listbox options inside scrollables.
 - Media features are emulator settings, not CSS edits: reduced motion goes through
   Playwright's `page.emulateMedia({ reducedMotion: 'reduce' })` / CDP media emulation.

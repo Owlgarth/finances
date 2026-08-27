@@ -176,15 +176,17 @@ require_role(request.auth, workspace_id, WRITE_ROLES)
 The frontend hides UI elements based on user role:
 
 ```typescript
-const { canManageAccounts, canWrite, canManageMembers } = usePermissions();
+const { canManageAccounts, canManageCurrencies, canWrite, canManageMembers } = usePermissions();
 
 // Button visibility
-{canManageAccounts && <Button>New account</Button>}   // ADMIN_ROLES (also budgets/currencies)
+{canManageAccounts && <Button>New account</Button>}   // ADMIN_ROLES (also budgets)
+{canManageCurrencies && <Button>Manage currencies</Button>}  // ADMIN_ROLES - gates the workspace-settings currencies section
 {canWrite && <Button>New transaction</Button>}         // WRITE_ROLES (records)
 {canManageMembers && <Button>Add member</Button>}
 
-// canManageAccounts / canWrite are the new-model aliases of
-// canManageBudgetAccounts / canManageBudgetData (both still exported).
+// canManageAccounts / canManageCurrencies / canWrite are the new-model aliases
+// of canManageBudgetAccounts / canManageBudgetData (both still exported);
+// canManageCurrencies is the same ADMIN_ROLES check as canManageAccounts.
 ```
 
 ## Error Responses
