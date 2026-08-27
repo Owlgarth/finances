@@ -6,11 +6,12 @@ permissions see [architecture.md](architecture.md) and [permissions.md](permissi
 ## Registration & Authentication
 
 **Registration** (`POST /api/auth/register`): the user provides email, password,
-workspace name, a **currency**, and consents to the current Terms/Privacy versions.
+workspace name, a **currency set** (ordered multi-select; the first becomes the
+workspace primary), and consents to the current Terms/Privacy versions.
 An optional "Start with sample data" checkbox seeds demo records. The system creates
-the user, a workspace (the chosen currency enabled as primary, plus EUR/USD
-silently), a default **Main** account, a **General** budget with starter categories
-and the current period, and the owner membership - then returns access + refresh JWTs.
+the user, a workspace (the chosen set enabled verbatim, first = primary and the
+Main account's currency), a default **Main** account, a **General** budget with starter
+categories and the current period, and the owner membership - then returns access + refresh JWTs.
 An already-registered email fails with a generic error that never reveals the
 account's existence; the existing address owner gets an email notice instead
 (anti-enumeration).
@@ -90,11 +91,14 @@ transfer. Transfers replace the old currency-exchange records.
 ## Transactions
 
 - Create/edit via a modal (member+): type (income/expense/adjustment), amount, date,
-  description, account (hidden at one account), optional budget→category, and an
-  optional "paid in another currency" facet.
+  description, an optional account ("No account" records money without one - cash
+  exchanged while traveling, a closed account's history; adjustments still require
+  an account), a currency that locks to the account's when one is set and is freely
+  chosen from the enabled set when not, optional budget→category, and an
+  optional "paid in another currency" facet (which must differ from the own currency).
 - The list supports account/type filters and pagination (plus a currency filter
-  matching the account's currency, hidden in single-currency workspaces); bulk
-  account reassignment is available.
+  matching each transaction's stored own currency, hidden in single-currency
+  workspaces); bulk account reassignment is available.
 - **Line items** and **receipt attachments** are managed from the Items/Receipts tabs
   on an existing transaction. Items are informational (a mismatch hint appears when
   their sum differs from the amount); the transaction amount stays authoritative.
@@ -121,27 +125,33 @@ With no parser configured, every extraction affordance is hidden.
 
 ## Planned Transactions
 
-Create scheduled transactions on an account (member+). **Execute** creates a real
-transaction on the planned account (via a Celery task, idempotent) and marks the
-planned item done. The list shares the Transactions search/filters pattern,
-including the account-currency filter (URL-synced).
+Create scheduled transactions, optionally on an account and always in their own
+currency (locked to the account's whenever one is set) (member+). **Execute** creates
+a real transaction carrying the plan's account and currency (via a Celery task,
+idempotent) and marks the planned item done. The list shares the Transactions
+search/filters pattern, including the own-currency filter (URL-synced).
 
 ## Currencies
 
 - **Enablement**: each workspace enables a subset of the global ISO 4217 catalog.
-  Workspace creation is silent-by-default - the primary currency is enabled plus
-  EUR/USD - while the in-app create-workspace modal sends an explicit
-  `currency_codes` list (max 20, first = primary and Main-account currency) that
-  is used verbatim.
-- **Enabled-list order**: the backend returns enabled currencies in creation
-  order (the primary first); account grids and other totals surfaces order by it.
+  Registration, account reset, and the in-app create-workspace modal all send an
+  explicit `currency_codes` list (max 20, first = primary and Main-account
+  currency) that is used verbatim; a service-level create without a list falls
+  back to the primary currency plus silent EUR/USD extras.
+- **Enabled-list order**: the backend returns enabled currencies in the
+  workspace's stored order (`WorkspaceCurrency.position`, the primary first);
+  new enablements append at the end, and account grids and other totals
+  surfaces order by it.
 - **Management** (admin+, Workspace Settings → Currencies): enable catalog
   currencies, create custom ones (always 2 decimals - storage and display are
-  2dp everywhere), and disable. A currency in use cannot be disabled: the guard
-  counts per-type references (accounts, planned amounts, budget currency sets)
-  and the error names them; the original-amount facet never blocks (a custom
-  row it references stays in the catalog, re-enablable). The budget modal and
-  the account form link here through "Manage currencies..." bridges.
+  2dp everywhere), reorder the enabled set (per-row arrows; position 0 becomes
+  the primary that leads every currency dropdown), and disable. A currency in
+  use cannot be disabled: the guard counts per-type references (accounts,
+  planned amounts, budget currency sets, planned transactions, transactions
+  storing it as their own currency) and the error names them; the
+  original-amount facet never blocks (a custom row it references stays in the
+  catalog, re-enablable). The budget modal and the account form link here
+  through "Manage currencies..." bridges.
 - **Budget currency sets**: budgets carry an ordered set (max 10) from the
   enabled subset; the first entry is the default view in the budget table and
   the dashboard insights, which share one derivation.

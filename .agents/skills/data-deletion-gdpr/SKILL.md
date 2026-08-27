@@ -13,14 +13,20 @@ description: Model relationship map, deletion ordering (SET_NULL orphans, PROTEC
 | Workspace | Account | `workspace` | CASCADE | `accounts` |
 | Workspace | Budget | `workspace` | CASCADE | `budgets` |
 | WorkspaceCurrency | Currency (catalog) | `currency` | PROTECT | — |
-| Account | Transaction | `account` | **PROTECT** | `transactions` |
+| Account | Transaction | `account` (nullable) | **PROTECT** | `transactions` |
 | Account | Transfer (from/to) | `from_account`/`to_account` | **PROTECT** | `transfers_out`/`_in` |
-| Account | PlannedTransaction | `account` | **PROTECT** | `planned_transactions` |
+| Account | PlannedTransaction | `account` (nullable) | **PROTECT** | `planned_transactions` |
+| Currency (own, stored) | Transaction | `currency` | **PROTECT** | `transactions` |
+| Currency (own, stored) | PlannedTransaction | `currency` | **PROTECT** | `planned_transactions` |
 | Budget | Category | `budget` | CASCADE | `categories` |
 | Budget | Period | `budget` | CASCADE | `periods` |
 | Period | CategoryBudget | `period` | CASCADE | `category_budgets` |
 | Transaction | TransactionItem | `transaction` | CASCADE | `items` |
 | Transaction | TransactionAttachment | `transaction` | CASCADE | `attachments` |
+
+Transactions and planned transactions may be account-less (nullable `account`) but always
+carry their own mandatory `currency` FK - account-less rows PROTECT nothing on the account
+side but still pin their currency row.
 
 ## PROTECT Chains Must Be Deleted in Dependency Order
 
@@ -38,6 +44,13 @@ transfers → transactions → planned_transactions → category_budgets
 
 Global catalog currencies are shared and never deleted; only workspace-custom
 `Currency` rows are removed, and only after everything referencing them is gone.
+
+**Deletion safety under new FK shapes is verified by ORDER, not by code** - transactions
+and planned transactions are deleted before accounts and before the custom-currency sweep,
+so neither the nullable-account PROTECT nor the transaction/planned-currency PROTECT can
+fire (account-less rows protect nothing on the account side but still pin their currency).
+Pin ordering invariants like these with a test even when the production code did not change
+in the task that noticed them - the pin is what makes the NEXT FK change provable.
 
 > **When adding a new model that PROTECT-references accounts or currencies**:
 > add it to `delete_workspace_financial_records` in the correct order, and to
@@ -94,6 +107,10 @@ When adding new fields to the v3 export format:
 3. Attachments travel as base64 in the export; items travel inline on each
    transaction. Keep both round-tripping when you touch the transaction export.
 4. Bump `export_version` only for **breaking** changes (renames, type changes, semantic shifts). An additive field with a safe default (e.g. a new boolean defaulting to `False`) does **not** bump the version — an older reader ignores the new key; a newer reader handles its absence.
+
+**A nullable FK reference in an import row is a two-branch contract, not one.** `account = account_map.get(name) if name else None` imports the row account-less when the name is missing OR explicitly null (`.get()` returns `None` either way - the two shapes behave identically), while a NON-null unresolvable name still skips the row with an error - the file references an account the export lacks, a different failure class from a deliberate account-less row.
+
+**Guard malformed-row inputs BEFORE calling resolvers that write.** `_resolve_import_currency(workspace, None)` would attempt `Currency.objects.create(code=None)` inside the import's atomic block - a 500 and a full rollback for one malformed row. The skip-with-error guard mirrors the adjacent unknown-account branch; only hand-edited files can reach it (well-formed exports always carry the code), but the guard keeps one bad row from destroying the whole import.
 
 ## Legal Documents
 
