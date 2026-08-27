@@ -2,13 +2,20 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Wallet, PieChart, Receipt } from 'lucide-react'
 import { reportsApi, transactionsApi } from '../api/client'
-import { useMultiCurrency } from '../hooks/useDomain'
+import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { formatAmount } from '../utils/format'
 import BudgetInsights from '../components/dashboard/BudgetInsights'
 
 function BalancesCard() {
   const multiCurrency = useMultiCurrency()
+  const { data: currencies = [] } = useEnabledCurrencies()
   const { data, isLoading } = useQuery({ queryKey: ['current-balances', false], queryFn: () => reportsApi.currentBalances(false) })
+  // Enabled-currency creation order (the workspace's primary first), stable
+  // within a currency (Array.prototype.sort is stable in modern JS engines).
+  const rank = new Map(currencies.map((c, i) => [c.code, i]))
+  const accounts = [...(data?.accounts ?? [])].sort(
+    (a, b) => (rank.get(a.currency_code) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.currency_code) ?? Number.MAX_SAFE_INTEGER),
+  )
 
   return (
     <div className="border border-border rounded-sm bg-surface p-4">
@@ -22,7 +29,7 @@ function BalancesCard() {
         <p className="text-sm text-text-muted">No accounts.</p>
       ) : (
         <div className="space-y-2">
-          {data!.accounts.map((a) => (
+          {accounts.map((a) => (
             <div key={a.account_id} className="flex items-center justify-between text-sm">
               <span className="text-text truncate mr-2">{a.account_name}</span>
               <span className="font-mono text-text whitespace-nowrap">{formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}</span>

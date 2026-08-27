@@ -47,9 +47,7 @@ def enable_currency(request: HttpRequest, data: EnableCurrencyIn):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, ADMIN_ROLES)
     if data.custom:
-        currency = CurrencyCatalogService.create_custom(
-            user, workspace_id, data.code, data.name, data.symbol, data.decimals
-        )
+        currency = CurrencyCatalogService.create_custom(user, workspace_id, data.code, data.name, data.symbol)
     else:
         currency = CurrencyCatalogService.enable(user, workspace_id, data.code)
     return 201, currency
@@ -79,11 +77,20 @@ def list_workspaces(request: HttpRequest):
     return WorkspaceService.list_for_user(request.auth)
 
 
-@router.post('', response={201: WorkspaceOut}, auth=JWTAuth())
+@router.post('', response={201: WorkspaceOut, 404: DetailOut}, auth=JWTAuth())
 def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
-    """Create a new workspace. User becomes owner and is auto-switched to it."""
+    """Create a new workspace. User becomes owner and is auto-switched to it.
+
+    ``currency_codes`` (optional, first = primary) is enabled verbatim when
+    sent; otherwise ``currency_code`` plus silent defaults. Unknown codes in
+    an explicit list return 404 (unknown_currency).
+    """
     workspace = WorkspaceService.create_workspace(
-        user=request.auth, name=data.name, currency_code=data.currency_code, create_demo=False
+        user=request.auth,
+        name=data.name,
+        currency_code=data.currency_code,
+        create_demo=False,
+        currency_codes=data.currency_codes,
     )
     return 201, WorkspaceService._to_response(workspace, Role.OWNER)
 

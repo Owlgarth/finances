@@ -23,11 +23,10 @@ function NoWorkspaceMessage() {
         <h2 className="text-lg font-semibold text-text mb-2">No workspace selected</h2>
         <p className="text-text-muted mb-4">Create a workspace or ask to be added to one.</p>
 
-        {!showForm ? (
-          <CreateWorkspaceButton onClick={() => setShowForm(true)} />
-        ) : (
-          <CreateWorkspaceForm onCancel={() => setShowForm(false)} />
-        )}
+        <CreateWorkspaceButton onClick={() => setShowForm(true)} />
+        {/* Mount-per-use: the conditional render is the open/close mechanism
+            (see the form's docblock), so each open starts from fresh state. */}
+        {showForm && <CreateWorkspaceForm onClose={() => setShowForm(false)} />}
       </div>
     </div>
   )

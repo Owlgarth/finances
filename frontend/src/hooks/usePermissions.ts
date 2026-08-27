@@ -22,6 +22,7 @@ export function usePermissions() {
     // New-model aliases: accounts/budgets/currencies are admin-gated (ADMIN_ROLES);
     // day-to-day records (transactions, transfers, categories, planned) are WRITE_ROLES.
     const canManageAccounts = canManageBudgetAccounts;
+    const canManageCurrencies = canManageBudgetAccounts;
     const canWrite = canManageBudgetData;
 
     // Utility function to check if user has any of the specified roles
@@ -58,6 +59,7 @@ export function usePermissions() {
       canManageBudgetData,
       canManageMembers,
       canManageAccounts,
+      canManageCurrencies,
       canWrite,
 
       // Utility functions

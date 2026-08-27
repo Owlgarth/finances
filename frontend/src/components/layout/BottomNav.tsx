@@ -109,7 +109,7 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
   const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
@@ -156,10 +156,11 @@ export default function BottomNav() {
     if (receiptFileRef.current) receiptFileRef.current.value = ''
   }
 
-  // Close the More sheet when navigation happens from inside it.
+  // Close the More sheet when navigation happens from inside it; the create
+  // modal follows suit so no form outlives the page it was opened on.
   useEffect(() => {
     setMoreOpen(false)
-    setCreatingWorkspace(false)
+    setCreateWorkspaceOpen(false)
   }, [location.pathname])
 
   const quickAddActions: ActionSheetAction[] = [
@@ -217,143 +218,136 @@ export default function BottomNav() {
       {/* More sheet: overflow destinations + workspace + user controls */}
       <BottomSheet
         open={moreOpen}
-        onClose={() => {
-          setMoreOpen(false)
-          setCreatingWorkspace(false)
-        }}
+        onClose={() => setMoreOpen(false)}
         aria-label="More"
       >
-        {creatingWorkspace ? (
-          <div className="p-4">
-            <CreateWorkspaceForm
-              compact
-              onCancel={() => setCreatingWorkspace(false)}
-              onCreated={() => {
-                setCreatingWorkspace(false)
-                setMoreOpen(false)
-              }}
-            />
-          </div>
-        ) : (
-          <div className="pb-2">
-            <button
-              type="button"
-              onClick={() => {
-                setMoreOpen(false)
-                openPageSearch()
-              }}
-              className={moreRowClass}
+        <div className="pb-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMoreOpen(false)
+              openPageSearch()
+            }}
+            className={moreRowClass}
+          >
+            <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
+            Search
+          </button>
+          {MORE_DESTINATIONS.map((d) => (
+            <NavLink
+              key={d.to}
+              to={d.to}
+              className={({ isActive }) =>
+                `${moreRowClass} ${isActive ? 'font-medium bg-surface-hover' : ''}`
+              }
             >
-              <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              Search
-            </button>
-            {MORE_DESTINATIONS.map((d) => (
-              <NavLink
-                key={d.to}
-                to={d.to}
-                className={({ isActive }) =>
-                  `${moreRowClass} ${isActive ? 'font-medium bg-surface-hover' : ''}`
-                }
+              <d.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              {d.label}
+            </NavLink>
+          ))}
+          {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
+              the bottom row sits right where the thumb tapped "More" and was
+              collecting accidental logouts. */}
+          <button
+            type="button"
+            onClick={() => {
+              setMoreOpen(false)
+              logout()
+            }}
+            className={moreRowClass}
+          >
+            <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
+            Logout
+          </button>
+
+          <div className="border-t border-border mt-2">
+            <SectionLabel>Workspace</SectionLabel>
+            {workspaces.map((ws) => (
+              <button
+                key={ws.id}
+                type="button"
+                onClick={() => switchTo(ws, () => setMoreOpen(false))}
+                disabled={switchingToId !== null}
+                className={moreRowClass}
               >
-                <d.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                {d.label}
-              </NavLink>
+                {ws.id === workspace?.id ? (
+                  <Check size={16} className="text-primary flex-shrink-0" />
+                ) : switchingToId === ws.id ? (
+                  <Loader2 size={16} className="animate-spin flex-shrink-0" />
+                ) : (
+                  <span className="w-4 flex-shrink-0" />
+                )}
+                <span className="truncate flex-1">{ws.name}</span>
+                <RoleBadge role={ws.user_role} />
+              </button>
             ))}
-            {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
-                the bottom row sits right where the thumb tapped "More" and was
-                collecting accidental logouts. */}
+            {/* Closes the sheet before opening the create modal, so the modal
+                is the only overlay layer (one Escape press, one dismissal). */}
             <button
               type="button"
               onClick={() => {
                 setMoreOpen(false)
-                logout()
+                setCreateWorkspaceOpen(true)
               }}
               className={moreRowClass}
             >
-              <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              Logout
+              <Plus size={16} className="flex-shrink-0" />
+              Create workspace
             </button>
-
-            <div className="border-t border-border mt-2">
-              <SectionLabel>Workspace</SectionLabel>
-              {workspaces.map((ws) => (
-                <button
-                  key={ws.id}
-                  type="button"
-                  onClick={() => switchTo(ws, () => setMoreOpen(false))}
-                  disabled={switchingToId !== null}
-                  className={moreRowClass}
-                >
-                  {ws.id === workspace?.id ? (
-                    <Check size={16} className="text-primary flex-shrink-0" />
-                  ) : switchingToId === ws.id ? (
-                    <Loader2 size={16} className="animate-spin flex-shrink-0" />
-                  ) : (
-                    <span className="w-4 flex-shrink-0" />
-                  )}
-                  <span className="truncate flex-1">{ws.name}</span>
-                  <RoleBadge role={ws.user_role} />
-                </button>
-              ))}
-              <button type="button" onClick={() => setCreatingWorkspace(true)} className={moreRowClass}>
-                <Plus size={16} className="flex-shrink-0" />
-                Create workspace
+            {workspace && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false)
+                  setWorkspaceSettingsOpen(true)
+                }}
+                className={moreRowClass}
+              >
+                <Landmark size={16} className="flex-shrink-0" />
+                Workspace settings
               </button>
-              {workspace && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreOpen(false)
-                    setWorkspaceSettingsOpen(true)
-                  }}
-                  className={moreRowClass}
-                >
-                  <Landmark size={16} className="flex-shrink-0" />
-                  Workspace settings
-                </button>
-              )}
+            )}
+          </div>
+
+          <div className="border-t border-border mt-2">
+            <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
+            {/* PWA has no browser chrome to refresh with. */}
+            <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
+              <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              Reload
+            </button>
+            <ThemeToggleRow />
+            <div className="flex items-center justify-between min-h-[44px] px-4">
+              <span className="flex items-center gap-3 text-sm text-text">
+                <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                Disable zoom
+              </span>
+              <Switch
+                checked={zoomLocked}
+                onChange={() => {
+                  const next = !zoomLocked
+                  setZoomLocked(next)
+                  setZoomDisabled(next)
+                }}
+                aria-label="Disable zoom"
+              />
             </div>
-
-            <div className="border-t border-border mt-2">
-              <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
-              {/* PWA has no browser chrome to refresh with. */}
-              <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
-                <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Reload
+            {/* Logout's old slot (the double-tap misclick zone): only the
+                left-side Close button is interactive - the rest of the row
+                deliberately does nothing, so a stray tap can't trigger
+                anything. Do NOT stretch the button to the full row. */}
+            <div className="flex items-center min-h-[44px] px-4">
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
+              >
+                <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                Close
               </button>
-              <ThemeToggleRow />
-              <div className="flex items-center justify-between min-h-[44px] px-4">
-                <span className="flex items-center gap-3 text-sm text-text">
-                  <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                  Disable zoom
-                </span>
-                <Switch
-                  checked={zoomLocked}
-                  onChange={() => {
-                    const next = !zoomLocked
-                    setZoomLocked(next)
-                    setZoomDisabled(next)
-                  }}
-                  aria-label="Disable zoom"
-                />
-              </div>
-              {/* Logout's old slot (the double-tap misclick zone): only the
-                  left-side Close button is interactive — the rest of the row
-                  deliberately does nothing, so a stray tap can't trigger
-                  anything. Do NOT stretch the button to the full row. */}
-              <div className="flex items-center min-h-[44px] px-4">
-                <button
-                  type="button"
-                  onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
-                >
-                  <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                  Close
-                </button>
-              </div>
             </div>
           </div>
-        )}
+        </div>
       </BottomSheet>
 
       {/* FAB quick-add (plan decision 6) — owned here so it works on any route */}
@@ -372,6 +366,11 @@ export default function BottomNav() {
       />
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} />
       <PlannedFormModal open={plannedOpen} onClose={() => setPlannedOpen(false)} />
+      {/* Create-workspace modal (mount-per-use): the More sheet's trigger row
+          closes the sheet first, so this is the only overlay layer while open. */}
+      {createWorkspaceOpen && (
+        <CreateWorkspaceForm onClose={() => setCreateWorkspaceOpen(false)} />
+      )}
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
       <input

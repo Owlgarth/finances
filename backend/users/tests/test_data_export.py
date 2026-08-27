@@ -5,7 +5,10 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from budgeting.factories import BudgetFactory
+from budgeting.models import BudgetCurrency
 from common.tests.mixins import AuthMixin
+from currencies.services import CurrencyCatalogService
 from users.models import UserConsent
 
 User = get_user_model()
@@ -91,6 +94,23 @@ class DataExportTests(AuthMixin, TestCase):
         data = json.loads(response.content)
 
         self.assertIsNone(data['preferences'])
+
+    def test_export_contains_budget_currency_codes(self):
+        """Budget currency sets export as ordered currency_codes lists."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        BudgetCurrency.objects.create(budget=budget, currency=pln, position=0)
+        BudgetCurrency.objects.create(budget=budget, currency=usd, position=1)
+
+        response = self.client.get('/api/users/me/export', **self.auth_headers())
+        data = json.loads(response.content)
+
+        exported_budget = next(b for b in data['workspaces'][0]['budgets'] if b['name'] == 'Household')
+        self.assertEqual(exported_budget['currency_codes'], ['PLN', 'USD'])
+        self.assertNotIn('display_currency_code', exported_budget)
 
     def test_export_rate_limited(self):
         """Export endpoint should be rate limited to 3 requests per hour."""

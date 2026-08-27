@@ -63,6 +63,7 @@ class PlannedTransactionService:
         end_date: date | None = None,
         category_id: list | None = None,
         budget_id: list | None = None,
+        currency_code: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -81,6 +82,8 @@ class PlannedTransactionService:
             queryset = queryset.filter(category_id__in=category_id)
         if budget_id:
             queryset = queryset.filter(category__budget_id__in=budget_id)
+        if currency_code:
+            queryset = queryset.filter(account__currency__code__in=currency_code)
         if search:
             queryset = queryset.filter(name__icontains=search)
         if amount_gte is not None:
@@ -172,6 +175,7 @@ class PlannedTransactionService:
         end_date: date | None = None,
         category_id: list | None = None,
         budget_id: list | None = None,
+        currency_code: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -187,6 +191,7 @@ class PlannedTransactionService:
             end_date,
             category_id=category_id,
             budget_id=budget_id,
+            currency_code=currency_code,
             search=search,
             amount_gte=amount_gte,
             amount_lte=amount_lte,

@@ -50,6 +50,7 @@ def list_transactions(
     category_id: list[int] | None = Query(None),
     budget_id: list[int] | None = Query(None),
     transaction_type: list[str] | None = Query(None),
+    currency_code: list[str] | None = Query(None),
     search: str | None = Query(None),
     amount_gte: Decimal | None = Query(None),
     amount_lte: Decimal | None = Query(None),
@@ -57,7 +58,11 @@ def list_transactions(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 ):
-    """List transactions for the current workspace with optional filters."""
+    """List transactions for the current workspace with optional filters.
+
+    currency_code filters by the ACCOUNT currency, never the original-amount
+    facet; unknown codes match nothing (filters are not resource lookups).
+    """
     workspace_id = request.auth.current_workspace_id
     return TransactionService.list(
         workspace_id=workspace_id,
@@ -67,6 +72,7 @@ def list_transactions(
         category_id=category_id,
         budget_id=budget_id,
         transaction_type=transaction_type,
+        currency_code=currency_code,
         search=search,
         amount_gte=amount_gte,
         amount_lte=amount_lte,

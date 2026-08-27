@@ -5,7 +5,7 @@ from datetime import date
 import factory
 from factory.django import DjangoModelFactory
 
-from budgeting.models import Budget, Cadence, Period
+from budgeting.models import Budget, BudgetCurrency, Cadence, Period
 
 
 def _current_month_start():
@@ -28,6 +28,16 @@ class BudgetFactory(DjangoModelFactory):
     is_active = True
     display_order = 0
     cadence = Cadence.MONTHLY
+
+
+class BudgetCurrencyFactory(DjangoModelFactory):
+    class Meta:
+        model = BudgetCurrency
+        django_get_or_create = ('budget', 'currency')
+
+    budget = factory.SubFactory(BudgetFactory)
+    currency = factory.SubFactory('currencies.factories.CatalogCurrencyFactory')
+    position = 0
 
 
 class PeriodFactory(DjangoModelFactory):

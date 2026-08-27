@@ -14,7 +14,7 @@ from django.test import TestCase
 from accounts.factories import AccountFactory
 from accounts.models import Account
 from budgeting.factories import BudgetFactory
-from budgeting.models import Budget, CategoryBudget, Period
+from budgeting.models import Budget, BudgetCurrency, CategoryBudget, Period
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
@@ -119,6 +119,59 @@ class V3ImportGatingTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_workspaces'], 1)
 
 
+class V3BudgetCurrencyImportTests(AuthMixin, TestCase):
+    """currency_codes import: ordered set, dedupe, empty."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _v3_with_budget(self, **budget_fields):
+        budget = {'name': 'Household'}
+        budget.update(budget_fields)
+        return {
+            'export_version': '3.0',
+            'workspaces': [
+                {
+                    'workspace_name': 'Imported Workspace',
+                    'enabled_currencies': [],
+                    'accounts': [],
+                    'budgets': [budget],
+                }
+            ],
+        }
+
+    def test_currency_codes_imported_with_positions(self):
+        export = self._v3_with_budget(currency_codes=['PLN', 'USD'])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_budgets'], 1)
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        self.assertEqual(list(budget.currencies.values_list('position', 'currency__code')), [(0, 'PLN'), (1, 'USD')])
+
+    def test_duplicate_codes_dedupe_preserving_first(self):
+        export = self._v3_with_budget(currency_codes=['USD', 'PLN', 'USD'])
+
+        UserService.import_all_data(self.user, self._make_import_input(export))
+
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        self.assertEqual(list(budget.currencies.values_list('position', 'currency__code')), [(0, 'USD'), (1, 'PLN')])
+
+    def test_no_currency_field_imports_empty_set(self):
+        export = self._v3_with_budget()
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_budgets'], 1)
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        self.assertEqual(budget.currencies.count(), 0)
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 
@@ -139,6 +192,8 @@ class V3RoundTripTests(AuthMixin, TestCase):
         dollars = AccountFactory(workspace=self.workspace, name='Dollars', currency=usd)
 
         budget = BudgetFactory(workspace=self.workspace, name='Household')
+        BudgetCurrency.objects.create(budget=budget, currency=pln, position=0)
+        BudgetCurrency.objects.create(budget=budget, currency=usd, position=1)
         groceries = CategoryFactory(budget=budget, workspace=self.workspace, name='Groceries')
         CategoryFactory(budget=budget, workspace=self.workspace, name='Retired', is_archived=True)
         period = PeriodService.get_or_create_for_date(self.user, budget, date(2026, 7, 15))
@@ -219,6 +274,9 @@ class V3RoundTripTests(AuthMixin, TestCase):
         # The default-for-currency flag is serialized into the v3 export.
         exported_checking = next(a for a in export_data['workspaces'][0]['accounts'] if a['name'] == 'Checking')
         self.assertTrue(exported_checking['is_default_for_currency'])
+        # The budget currency set is serialized in position order.
+        exported_budget = next(b for b in export_data['workspaces'][0]['budgets'] if b['name'] == 'Household')
+        self.assertEqual(exported_budget['currency_codes'], ['PLN', 'USD'])
 
         UserService.delete_account(self.user, self.user_password)
         self.assertFalse(User.objects.filter(email=self.user.email).exists())
@@ -246,6 +304,8 @@ class V3RoundTripTests(AuthMixin, TestCase):
         self.assertTrue(Category.objects.filter(budget=budget, name='Retired', is_archived=True).exists())
         self.assertEqual(Period.objects.filter(budget=budget).count(), 1)
         self.assertEqual(CategoryBudget.objects.filter(workspace=ws).count(), 1)
+        # Budget currency set restored in order with positions.
+        self.assertEqual(list(budget.currencies.values_list('position', 'currency__code')), [(0, 'PLN'), (1, 'USD')])
 
         # Transaction category + original facet restored
         converted = Transaction.objects.get(workspace=ws, description='Converted card payment')

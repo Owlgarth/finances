@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { Trash2, TriangleAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { usePermissions } from '../../hooks/usePermissions'
 import { getApiErrorMessage } from '../../utils/errors'
 import Modal from '../common/Modal'
+import CurrenciesSettingsSection from '../currencies/CurrenciesSettingsSection'
 
 interface WorkspaceSettingsPanelProps {
   isOpen: boolean
@@ -12,6 +14,7 @@ interface WorkspaceSettingsPanelProps {
 
 export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSettingsPanelProps) {
   const { workspace, deleteWorkspace, updateWorkspace, userRole } = useWorkspace()
+  const { canManageCurrencies } = usePermissions()
   const [newName, setNewName] = useState(workspace?.name || '')
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -64,7 +67,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   if (!workspace) return null
 
   return (
-    <Modal open={isOpen} onClose={onClose} title="Workspace Settings" className="p-6">
+    <Modal open={isOpen} onClose={onClose} title="Workspace Settings" className="p-6 max-h-[85vh] overflow-y-auto">
       <div className="space-y-6">
               <div>
                 <label htmlFor="workspace-name" className="block text-sm font-medium text-text mb-1">
@@ -103,6 +106,8 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                   </span>
                 </div>
               </div>
+
+              {canManageCurrencies && <CurrenciesSettingsSection />}
 
               {isOwner && (
                 <div className="border-t border-border pt-6">
