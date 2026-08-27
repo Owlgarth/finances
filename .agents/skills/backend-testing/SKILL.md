@@ -67,6 +67,8 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
 
 **Byte-streaming endpoints:** `APIClientMixin`'s `self.get` parses JSON only - success-path assertions on file bytes and headers (`response.content`, `response['Content-Disposition']`) use `self.client.get` directly, while error paths keep `self.get` + `assertStatus`. Exemplar: `TestAttachmentDownload` in `transactions/tests.py`.
 
+**`self.delete` returns `None`:** unlike `post`/`get`, the `delete` helper never parses the response body - asserting an error body after a DELETE reads `self.response.json()['detail']` (the helper sets `self.response`), not a return value.
+
 **Workspace ambiguity:** When tests create additional workspaces for the same user (e.g., via `import_all_data`), filtering by `owner=self.user` alone may return the AuthMixin workspace instead of the new one. Filter by both `owner` and `name`:
 
 ```python
@@ -237,7 +239,7 @@ Direct `workspace.delete()` raises `ProtectedError` — accounts are PROTECT-ref
 
 ## New Optional Schema Field: Five-Test Shape
 
-Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat — field omitted, (3) explicit empty collection, (4) `max_length` rejection — asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together.
+Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat — field omitted, (3) explicit empty collection, (4) `max_length` rejection — asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together. In the `max_length`-rejection test, every list item must satisfy the PER-ITEM constraint - items that fail their own pattern (digit-containing currency codes) still 422 but from the wrong constraint, so a cap regression to a huge value goes unnoticed. Generate per-item-valid items (`'ZZ' + chr(ord('A') + idx)`) so only the collection cap can fire.
 
 ## Behavior Changes Rewrite Their Tests
 

@@ -8,11 +8,12 @@ permissions see [architecture.md](architecture.md) and [permissions.md](permissi
 **Registration** (`POST /api/auth/register`): the user provides email, password,
 workspace name, a **currency**, and consents to the current Terms/Privacy versions.
 An optional "Start with sample data" checkbox seeds demo records. The system creates
-the user, a workspace (with that currency enabled), a default **Main** account, a
-**General** budget with starter categories and the current period, and the owner
-membership - then returns access + refresh JWTs. An already-registered email fails
-with a generic error that never reveals the account's existence; the existing address
-owner gets an email notice instead (anti-enumeration).
+the user, a workspace (the chosen currency enabled as primary, plus EUR/USD
+silently), a default **Main** account, a **General** budget with starter categories
+and the current period, and the owner membership - then returns access + refresh JWTs.
+An already-registered email fails with a generic error that never reveals the
+account's existence; the existing address owner gets an email notice instead
+(anti-enumeration).
 
 **Login** (`POST /api/auth/login`): validates credentials; if 2FA is enabled, returns
 a temporary token that must be exchanged via `POST /api/auth/verify-2fa`. Access
@@ -51,20 +52,31 @@ transfer. Transfers replace the old currency-exchange records.
   the first time it's needed. **Custom** budgets opt out of derivation: their periods
   are explicit, non-overlapping date ranges the user creates and manages.
 - Creating a custom-cadence budget asks for the first period's start/end dates
-  (defaulting to today through today + 29 days) and prefills a period name from the
-  range ("04 Sep - 03 Oct 2026") that keeps re-deriving until edited; saving chains
-  the budget create with the first period create.
+  (defaulting to today through today + 29 days) and prefills a period name from
+  the range ("04 Sep - 03 Oct 2026") that keeps re-deriving until edited; saving
+  chains the budget create with the first period create.
+- The budget create/edit modal also carries an **ordered currency set** (max 10,
+  from the workspace's enabled currencies; first = default view). An untouched
+  empty selection submits the workspace's primary; currencies the budget's data
+  carries but the set omits stay visible after the configured ones.
 - The **Budget detail** page shows a category table of **planned vs actual vs
   remaining** for the selected period, with a period switcher capped at seven rows
   centered on the viewed period plus a "View all periods" row that opens the
   periods page (the selection is carried in the `?period=` URL param, so reloads
   and shared links land on the chosen period; an invalid id falls back to the
-  default pick). Categories are created inline; planned amounts are edited inline
+  default pick). Opening a budget without the param lands on the current period -
+  or, when none can be derived (custom cadence, a failed fetch), the period
+  nearest today. Categories are created inline; planned amounts are edited inline
   (current period). Past periods render as read-only snapshots. Custom-cadence
   budgets get add/edit/delete period controls beside the switcher (admin+;
   deleting a period removes its planned amounts but never transactions), and a
   custom budget with no periods yet shows an "Add period" empty state instead of
   the table.
+- Multi-currency budgets show one currency at a time, selected through a
+  **per-currency totals strip** above the table (a chip per currency showing that
+  currency's own planned total and a spend meter - amounts are never summed
+  across currencies). The last-viewed currency is remembered per budget, and
+  arrow keys cycle the strip; single-currency budgets show a plain code chip.
 - The **budget periods page** (`/budgets/:id/periods`) lists every period of a
   budget as year-sectioned cards, newest first - a CURRENT chip on the active
   period, past periods muted. A card opens the budget detail page on that period
@@ -80,8 +92,9 @@ transfer. Transfers replace the old currency-exchange records.
 - Create/edit via a modal (member+): type (income/expense/adjustment), amount, date,
   description, account (hidden at one account), optional budget→category, and an
   optional "paid in another currency" facet.
-- The list supports account/type filters and pagination; bulk account reassignment is
-  available.
+- The list supports account/type filters and pagination (plus a currency filter
+  matching the account's currency, hidden in single-currency workspaces); bulk
+  account reassignment is available.
 - **Line items** and **receipt attachments** are managed from the Items/Receipts tabs
   on an existing transaction. Items are informational (a mismatch hint appears when
   their sum differs from the amount); the transaction amount stays authoritative.
@@ -110,7 +123,28 @@ With no parser configured, every extraction affordance is hidden.
 
 Create scheduled transactions on an account (member+). **Execute** creates a real
 transaction on the planned account (via a Celery task, idempotent) and marks the
-planned item done.
+planned item done. The list shares the Transactions search/filters pattern,
+including the account-currency filter (URL-synced).
+
+## Currencies
+
+- **Enablement**: each workspace enables a subset of the global ISO 4217 catalog.
+  Workspace creation is silent-by-default - the primary currency is enabled plus
+  EUR/USD - while the in-app create-workspace modal sends an explicit
+  `currency_codes` list (max 20, first = primary and Main-account currency) that
+  is used verbatim.
+- **Enabled-list order**: the backend returns enabled currencies in creation
+  order (the primary first); account grids and other totals surfaces order by it.
+- **Management** (admin+, Workspace Settings → Currencies): enable catalog
+  currencies, create custom ones (always 2 decimals - storage and display are
+  2dp everywhere), and disable. A currency in use cannot be disabled: the guard
+  counts per-type references (accounts, planned amounts, budget currency sets)
+  and the error names them; the original-amount facet never blocks (a custom
+  row it references stays in the catalog, re-enablable). The budget modal and
+  the account form link here through "Manage currencies..." bridges.
+- **Budget currency sets**: budgets carry an ordered set (max 10) from the
+  enabled subset; the first entry is the default view in the budget table and
+  the dashboard insights, which share one derivation.
 
 ## Workspaces & Members
 
