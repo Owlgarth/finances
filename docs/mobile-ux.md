@@ -26,7 +26,9 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   visible, active tab in the primary color, safe-area padded.
 - **More** opens a sheet: Search (global page search), Accounts, Planned, Members, Settings,
   logout, then workspace switching
-  (with role badges), workspace settings, dark mode, disable-zoom toggle (opt-in,
+  (with role badges), a create-workspace row (closes the sheet and opens the
+  create-workspace modal - a bottom sheet with the ordered currency multi-select - as the
+  only overlay layer), workspace settings, dark mode, disable-zoom toggle (opt-in,
   per-device: kills double-tap/pinch zoom for a native feel), close. The bottom-most row
   (logout's old slot, directly above the just-tapped More button, which collected
   accidental logouts) holds a Close button on its left side only - the rest of the row
@@ -42,11 +44,11 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 
 | Screen | Mobile pattern |
 |---|---|
-| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search + Filters disclosure (multi-select account/type/budget/category, amount range, date range) with an active-count badge; filter state lives in the URL |
+| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search + Filters disclosure (multi-select account/type/budget/category/currency - the account's currency, hidden in single-currency workspaces - amount range, date range) with an active-count badge; filter state lives in the URL |
 | Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
-| Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time with a prev/next currency switcher above the cards (gear → reorder sheet, order saved per budget); desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker (capped window centered on the viewed period; "View all periods" as the sheet's last row), plus admin-only add/edit/delete period icon buttons beside it on custom-cadence budgets (44px touch targets) |
+| Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time, selected through a per-currency totals strip above the cards (one chip per currency with that currency's own planned total + spend meter, horizontally scrollable; last-viewed currency remembered per budget); single-currency budgets show a plain code chip; desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker (capped window centered on the viewed period; "View all periods" as the sheet's last row), plus admin-only add/edit/delete period icon buttons beside it on custom-cadence budgets (44px touch targets) |
 | Budget periods | Year-sectioned period cards, newest first (CURRENT chip on the active period, past periods muted); card tap opens the budget detail on that period (`?period=`); admin-only edit/delete icons on custom periods and an Add period button on custom-cadence budgets (44px touch targets) |
-| Planned | Rows; row tap → action sheet (Execute now - pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category, amount range, planned-date range), URL-synced |
+| Planned | Rows; row tap → action sheet (Execute now - pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category/currency - the account's currency, hidden in single-currency workspaces - amount range, planned-date range), URL-synced |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |
 
