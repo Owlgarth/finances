@@ -560,7 +560,7 @@ class TestCurrencyRolePermissions(AuthMixin, APIClientMixin, TestCase):
 
 
 class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
-    """Registration propagates currency_code into workspace creation."""
+    """Registration propagates currency_codes into workspace creation."""
 
     def _register(self, email: str, **extra):
         payload = {
@@ -573,8 +573,8 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
         }
         return self.post('/api/auth/register', payload)
 
-    def test_register_with_currency_code(self):
-        self._register('eur_user@example.com', currency_code='EUR')
+    def test_register_with_currency_codes(self):
+        self._register('eur_user@example.com', currency_codes=['EUR', 'USD'])
         self.assertStatus(201)
 
         user = User.objects.get(email='eur_user@example.com')
