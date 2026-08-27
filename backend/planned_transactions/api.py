@@ -24,7 +24,7 @@ from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Planned Transactions'])
 
-ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account__name|account__currency__code))$'
+ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account__name|currency__code))$'
 
 # Upper bound for page_size on list endpoints — derived from the pagination
 # module's allowed sizes so the API cap stays in lockstep with the service layer.
@@ -55,8 +55,8 @@ def list_planned(
 ):
     """List planned transactions for the current workspace with optional filters.
 
-    currency_code filters by the ACCOUNT currency; unknown codes match
-    nothing (filters are not resource lookups).
+    currency_code filters by the planned transaction's own stored currency;
+    unknown codes match nothing (filters are not resource lookups).
     """
     workspace_id = request.auth.current_workspace_id
     return PlannedTransactionService.list(

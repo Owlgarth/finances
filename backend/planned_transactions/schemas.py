@@ -6,13 +6,20 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from currencies.schemas import CurrencyCode
+
 
 class PlannedTransactionCreate(BaseModel):
-    """Schema for creating or fully replacing a planned transaction."""
+    """Schema for creating or fully replacing a planned transaction.
+
+    currency_code is optional when account_id is set (auto-derived from the
+    account in the service) and required when the plan has no account.
+    """
 
     name: str = Field(..., max_length=200)
     amount: Decimal = Field(..., gt=0)
     account_id: Optional[int] = None
+    currency_code: Optional[CurrencyCode] = None
     category_id: Optional[int] = None
     planned_date: date
     status: str = Field(default='pending', pattern=r'^(pending|done|cancelled)$')
@@ -58,8 +65,8 @@ class PlannedTransactionOut(BaseModel):
 
     id: int
     workspace_id: int
-    account_id: int
-    account_name: str
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
     currency_code: str
     name: str
     amount: Decimal

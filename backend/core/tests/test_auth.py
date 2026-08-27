@@ -10,6 +10,7 @@ from django.core import mail
 from django.test import override_settings
 
 from common.auth import create_temp_token
+from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import Workspace
 
@@ -217,6 +218,116 @@ class TestAuthRegister(AuthTestCase):
             },
         )
         self.assertStatus(422)
+
+    def test_register_with_currency_codes_enables_them_in_order(self):
+        """An explicit currency_codes list is enabled verbatim, in the given order."""
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'multi_currency@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Multi Workspace',
+                'currency_codes': ['PLN', 'EUR', 'USD'],
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(201)
+
+        user = get_user_model().objects.get(email='multi_currency@example.com')
+        enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
+        # First entry is the primary by construction.
+        self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
+
+    def test_register_currency_codes_first_is_primary(self):
+        """The first code is the primary: the seeded Main account books in it."""
+        from accounts.models import Account
+
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'dollar_first@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Dollar First',
+                'currency_codes': ['USD', 'PLN'],
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(201)
+
+        user = get_user_model().objects.get(email='dollar_first@example.com')
+        enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
+        self.assertEqual([c.code for c in enabled], ['USD', 'PLN'])
+
+        main = Account.objects.filter(workspace_id=user.current_workspace_id, name='Main').first()
+        self.assertIsNotNone(main)
+        self.assertEqual(main.currency.code, 'USD')
+
+    def test_register_without_currency_codes_uses_defaults(self):
+        """Omitting currency_codes keeps the legacy default: PLN primary + silent extras."""
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'default_currency@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Default Workspace',
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(201)
+
+        user = get_user_model().objects.get(email='default_currency@example.com')
+        enabled = CurrencyCatalogService.list_enabled(user.current_workspace_id)
+        self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
+
+    def test_register_currency_codes_cap_returns_422(self):
+        """21 pattern-valid codes exceed max_length=20; 422 fires at schema validation."""
+        codes = ['ZZ' + chr(ord('A') + idx) for idx in range(21)]
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'too_many_codes@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Big Workspace',
+                'currency_codes': codes,
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(422)
+
+    def test_register_currency_codes_empty_returns_422(self):
+        """An empty currency_codes list is invalid input (min_length=1), not 'use defaults'."""
+        self.post(
+            '/api/auth/register',
+            {
+                'email': 'empty_codes@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Empty Workspace',
+                'currency_codes': [],
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(422)
+
+    def test_register_unknown_currency_code_rejected(self):
+        """An unknown code inside an explicit list fails with the catalog's 404 + code."""
+        data = self.post(
+            '/api/auth/register',
+            {
+                'email': 'unknown_code@example.com',
+                'password': 'securepassword123',
+                'workspace_name': 'Bad Workspace',
+                'currency_codes': ['PLN', 'XXX'],
+                'accepted_terms_version': '2.1',
+                'accepted_privacy_version': '2.1',
+            },
+        )
+        self.assertStatus(404)
+        self.assertEqual(data['code'], 'unknown_currency')
 
 
 class TestAuthLogin(AuthTestCase):

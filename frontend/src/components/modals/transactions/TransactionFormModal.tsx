@@ -46,6 +46,10 @@ const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
+/** Sentinel Select value for "no account" - the shared Select cannot hold a
+ * null-valued option, and 0 can never collide with a real account id. */
+const NO_ACCOUNT = 0
+
 /** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
 const itemsToRows = (items: TransactionItemInput[]): Row[] =>
   items.map((i) => ({
@@ -94,6 +98,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [type, setType] = useState<TransactionType>('expense')
   const [amount, setAmount] = useState('')
   const [accountId, setAccountId] = useState<number | null>(null)
+  const [currencyCode, setCurrencyCode] = useState<string | null>(null)
   const [budgetId, setBudgetId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [otherCurrency, setOtherCurrency] = useState(false)
@@ -119,6 +124,16 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setPendingRows(itemsToRows(result.items))
       setAmount(result.total ?? '')
       if (result.date) setDate(result.date)
+      // Currency FIRST: when the parsed code is an enabled currency it becomes
+      // the transaction's own currency even if no account matches it (the
+      // traveling-cash case - the receipt alone tells us the money's currency).
+      // The account pick below then locks the same code when a matching account
+      // exists; no match leaves this code selected and the currency editable.
+      // Canonical casing comes from the enabled list, not the raw parse.
+      const parsedEnabled = currencies.find(
+        (c) => c.code.toUpperCase() === result.currency?.toUpperCase(),
+      )
+      if (parsedEnabled) setCurrencyCode(parsedEnabled.code)
       // Merchant fills description only when the user hasn't typed one — matches
       // ExtractionReviewModal's rule, simplified because this form's create-mode
       // default is '' (not 'Receipt').
@@ -170,6 +185,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setType(source.type)
       setAmount(source.amount)
       setAccountId(source.account_id)
+      setCurrencyCode(source.currency_code)
       setCategoryId(source.category_id)
       setOtherCurrency(!!source.original_currency_code)
       setOriginalAmount(source.original_amount ?? '')
@@ -188,7 +204,11 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setDescription('')
       setType('expense')
       setAmount('')
+      // Single-account workspaces prefill the only account (a client-side
+      // convenience - the backend no longer defaults); its currency locks the
+      // form. Everything else starts account-less on the primary currency.
       setAccountId(accounts.length === 1 ? accounts[0].id : null)
+      setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencies[0]?.code ?? null))
       setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setOtherCurrency(false)
@@ -214,6 +234,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         setAmount(parsed.total ?? '')
         if (parsed.date) setDate(parsed.date)
         setDescription(parsed.merchant ?? '')
+        const parsedEnabled = currencies.find(
+          (c) => c.code.toUpperCase() === parsed.currency?.toUpperCase(),
+        )
+        if (parsedEnabled) setCurrencyCode(parsedEnabled.code)
         // Auto-select the account whose currency matches the parsed receipt —
         // mirrors parse.onSuccess. STALE-STATE NOTE: the `setAccountId(...)`
         // at L170 above has NOT flushed yet within this same effect run (state
@@ -224,6 +248,9 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         // effect's setStates flush. If a matching account exists and that
         // intended account's currency doesn't already match the receipt's
         // currency, override to the pick.
+        // Currency seeding above has the same stale-state shape: it derives
+        // from `parsed` and `currencies` directly instead of reading any
+        // just-set state, for the same reason as the account pick below.
         const currentAccountId = accounts.length === 1 ? accounts[0].id : null
         const pick = pickAccountForCurrency(accounts, parsed.currency)
         if (
@@ -235,9 +262,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, copyFrom, accounts.length, budgets.length, defaultBudgetId, prefillReceipt])
-
-  const account = accounts.find((a) => a.id === accountId)
+  }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId, prefillReceipt])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -253,6 +278,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         type,
         amount,
         account_id: accountId,
+        currency_code: currencyCode,
         category_id: type === 'adjustment' ? null : categoryId,
         original_amount: otherCurrency ? originalAmount : null,
         original_currency_code: otherCurrency ? originalCurrencyCode : null,
@@ -303,17 +329,39 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     e.preventDefault()
     if (!description.trim()) return toast.error('Description is required')
     if (!amount) return toast.error('Amount is required')
-    if (!accountId && accounts.length !== 1) return toast.error('Choose an account')
+    if (type === 'adjustment' && !accountId) return toast.error('Adjustments require an account')
+    if (!currencyCode) return toast.error('Choose a currency')
     mutation.mutate()
   }
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
   const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
+  // Adjustments must book to an account (an account-less adjustment moves no
+  // balance), so the sentinel disappears from the option list for them; a
+  // stale null accountId then simply shows the placeholder.
+  const accountSelectOptions =
+    type === 'adjustment'
+      ? accountOptions
+      : [{ value: NO_ACCOUNT, label: 'No account' }, ...accountOptions]
+  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
   const otherCurrencyOptions = useMemo(
-    () => currencies.filter((c) => c.code !== account?.currency_code).map((c) => ({ value: c.code, label: c.code })),
-    [currencies, account?.currency_code],
+    () => currencies.filter((c) => c.code !== currencyCode).map((c) => ({ value: c.code, label: c.code })),
+    [currencies, currencyCode],
   )
+
+  /** Picking a real account locks the currency to the account's (changing the
+      currency means changing the account). Re-selecting the sentinel clears the
+      account but KEEPS the currency - it just becomes editable again. */
+  const handleAccountChange = (value: number) => {
+    if (value === NO_ACCOUNT) {
+      setAccountId(null)
+      return
+    }
+    setAccountId(value)
+    const next = accounts.find((a) => a.id === value)
+    if (next) setCurrencyCode(next.currency_code)
+  }
 
   return (
     <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? 'Edit transaction' : 'New transaction'}>
@@ -360,7 +408,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           </div>
           <div>
             <label htmlFor="tx-amount" className={labelClass}>
-              {type === 'adjustment' ? 'Delta amount' : 'Amount'} {account ? `(${account.currency_code})` : ''}
+              {type === 'adjustment' ? 'Delta amount' : 'Amount'} {currencyCode ? `(${currencyCode})` : ''}
             </label>
             <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
           </div>
@@ -371,12 +419,32 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           <input id="tx-desc" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
         </div>
 
-        {accounts.length > 1 && (
+        {/* Always rendered: recording money without an account (cash exchanged
+            while traveling, a closed account's history) is a first-class path. */}
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Account</label>
-            <Select value={accountId} onChange={setAccountId} options={accountOptions} placeholder="Select account" aria-label="Account" />
+            <Select
+              value={accountId ?? NO_ACCOUNT}
+              onChange={handleAccountChange}
+              options={accountSelectOptions}
+              placeholder="Select account"
+              aria-label="Account"
+            />
           </div>
-        )}
+          <div>
+            <label className={labelClass}>Currency</label>
+            <Select
+              value={currencyCode}
+              onChange={setCurrencyCode}
+              options={currencyOptions}
+              placeholder="Currency"
+              aria-label="Currency"
+              disabled={accountId !== null}
+              mono
+            />
+          </div>
+        </div>
 
         {type !== 'adjustment' && (
           <div className="grid grid-cols-2 gap-3">
@@ -419,7 +487,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             rows={pendingRows}
             onChange={setPendingRows}
             amount={amount}
-            currencyCode={account?.currency_code ?? null}
+            currencyCode={currencyCode}
           />
         )}
 

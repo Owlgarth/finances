@@ -50,8 +50,8 @@ export default function Transactions() {
     .filter((v) => TYPE_OPTIONS.some((o) => o.value === v))
   const budgetFilter = intListParam(searchParams, 'budget')
   const categoryFilter = intListParam(searchParams, 'category')
-  // Filters by ACCOUNT currency - the account a transaction books into,
-  // never the informational original-amount facet.
+  // Filters by the transaction's stored own currency (account-less rows match
+  // their own), never the informational original-amount facet.
   const enabledCodes = new Set(currencies.map((c) => c.code))
   // URL param is a CSV of codes; unknown/stale entries drop (type-filter idiom).
   const currencyFilter = (searchParams.get('currency') ?? '')
@@ -212,7 +212,7 @@ export default function Transactions() {
                 {/* Single truncating string — a flex row here would wrap on long
                     category/account names and grow the row past spec height. */}
                 <div className="text-[10px] font-mono text-text-muted truncate">
-                  {[t.date, t.category_name, showAccountColumn ? t.account_name : null]
+                  {[t.date, t.category_name, showAccountColumn || !t.account_name ? t.account_name ?? 'No account' : null]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>

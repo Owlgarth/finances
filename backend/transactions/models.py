@@ -6,12 +6,18 @@ from common.models import WorkspaceScopedModel
 
 
 class Transaction(WorkspaceScopedModel):
-    """A dated money movement on an account.
+    """A dated money movement, optionally on an account.
 
-    The transaction's currency IS the account's currency — never stored
-    separately. Period membership is derived from category→budget + date,
-    never stored. The original amount/currency facet is informational only
-    (converted card payments) and excluded from every aggregate.
+    `currency` is the money's actual currency - the stored truth. Whenever an
+    account is set, the currency equals the account's currency (enforced on
+    create/update); account-less rows carry their own currency so history can
+    be recorded in a currency without dedicating an account to it (cash
+    exchanged while traveling; a closed account's past).
+
+    The original amount/currency facet records what was paid at the point of
+    sale (converted card payments): informational only, excluded from every
+    aggregate, and required to differ from the transaction's own currency.
+    Period membership is derived from category budget + date, never stored.
     """
 
     TYPE_CHOICES = [
@@ -40,7 +46,14 @@ class Transaction(WorkspaceScopedModel):
         related_name='updated_transactions',
     )
 
-    account = models.ForeignKey('accounts.Account', on_delete=models.PROTECT, related_name='transactions')
+    account = models.ForeignKey(
+        'accounts.Account',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='transactions',
+    )
+    currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='transactions')
     date = models.DateField()
     description = models.TextField()
     category = models.ForeignKey(
@@ -58,6 +71,7 @@ class Transaction(WorkspaceScopedModel):
         db_table = 'transactions'
         indexes = [
             models.Index(fields=['account', 'date']),
+            models.Index(fields=['currency', 'date']),
             models.Index(fields=['workspace', 'date']),
             models.Index(fields=['category', 'date']),
         ]
@@ -72,12 +86,12 @@ class Transaction(WorkspaceScopedModel):
         ]
 
     @property
-    def account_name(self) -> str:
-        return self.account.name
+    def account_name(self) -> str | None:
+        return self.account.name if self.account else None
 
     @property
     def currency_code(self) -> str:
-        return self.account.currency.code
+        return self.currency.code
 
     @property
     def category_name(self) -> str | None:
@@ -92,7 +106,7 @@ class Transaction(WorkspaceScopedModel):
         return self.original_currency.code if self.original_currency else None
 
     def __str__(self):
-        return f'{self.date} - {self.description} ({self.amount} {self.account.currency.code})'
+        return f'{self.date} - {self.description} ({self.amount} {self.currency.code})'
 
 
 class TransactionAttachment(models.Model):
