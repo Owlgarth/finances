@@ -207,7 +207,8 @@ Rules:
    - Password meets requirements (8+ chars)
 3. System creates:
    - User account
-   - Workspace with user as owner (chosen currency enabled)
+   - Workspace with user as owner (chosen currency enabled as primary,
+     plus EUR/USD silently)
    - Default "Main" account and "General" budget
    - Workspace membership (owner role)
    - Optional sample data if requested at registration

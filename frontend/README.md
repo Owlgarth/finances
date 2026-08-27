@@ -28,6 +28,7 @@ frontend/
 │   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
+│   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit)
@@ -47,7 +48,7 @@ frontend/
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers)
+│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -64,8 +65,8 @@ catch-all.
 | `/login`, `/register` | Login, Register | Auth; registration picks a currency + optional sample data |
 | `/` | Dashboard | Account balances + recent activity |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers |
-| `/budgets` | BudgetsPage | Budget list; card icons open a budget's periods / add a custom period |
-| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row); custom-cadence period management |
+| `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create |
 | `/planned` | Planned | Planned transactions |
@@ -75,8 +76,13 @@ catch-all.
 
 ## Components
 
-**Layout** (`components/layout/`): `MainLayout` (responsive wrapper), `Sidebar`
-(6 destinations + workspace selector + user menu), `UserMenu`, `WorkspaceSelector`.
+**Layout** (`components/layout/`): `MainLayout` (responsive wrapper),
+`Sidebar` (6 destinations + workspace selector + user menu), `UserMenu`,
+`WorkspaceSelector`, and `CreateWorkspaceForm` (mount-per-use create-workspace
+modal - name + ordered currency multi-select via `CurrencySetField` in compact
+mode - opened as a modal from all three call sites: the sidebar button, the
+workspace selector dropdown, and the mobile More sheet; also exports
+`CreateWorkspaceButton`).
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
@@ -87,6 +93,16 @@ class constants - the redesign's form primitives). `DatePicker` (react-day-picke
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
+
+**Currencies** (`components/currencies/`): `CurrencySetField` (ordered currency-set
+picker on top of `MultiSelect` - a visible ordered list with up/down arrows and a
+primary marker for index 0; a compact mode folds the list into helper copy for
+constrained call sites, and an optional "Manage currencies..." bridge jumps to the
+workspace-settings currencies section; used by the budget create/edit modals in
+full mode and the create-workspace form in compact mode with explicit catalog
+options), `CurrenciesSettingsSection` (workspace-settings section, admin-gated:
+enabled list with per-row disable, catalog enable picker, and an inline custom-
+currency form - custom currencies are always 2-decimal).
 
 **Budgets** (`components/budgets/` + `components/modals/budgets/`): `PeriodPicker`
 (the period listbox on Budget detail - desktop popover grouped by year with a
@@ -137,7 +153,7 @@ interface WorkspaceContextType {
   error: Error | null;
   refetch: () => void;
   switchWorkspace: (id: number) => Promise<void>;
-  createWorkspace: (name: string) => Promise<Workspace>;
+  createWorkspace: (name: string, currencyCodes?: string[]) => Promise<Workspace>;
   deleteWorkspace: (id: number) => Promise<void>;
   updateWorkspace: (data: { name: string }) => Promise<Workspace>;
 }
@@ -185,6 +201,9 @@ const {
   canManageMembers,         // owner, admin
   canEditMember,            // checks role hierarchy
   canResetPasswordFor,      // checks role hierarchy
+  canManageAccounts,        // owner, admin (alias of canManageBudgetAccounts)
+  canManageCurrencies,      // owner, admin (same check; gates the currencies settings section)
+  canWrite,                 // owner, admin, member (alias of canManageBudgetData)
 } = usePermissions();
 ```
 
@@ -268,7 +287,8 @@ interface Budget {
   cadence_weeks: number | null;
   cadence_anchor: string | null;
   is_active: boolean;
-  // …description/color/icon/display_currency_code
+  currency_codes: string[];  // ordered set; first = default view
+  // …description/color/icon/display_order
 }
 
 interface Transaction {

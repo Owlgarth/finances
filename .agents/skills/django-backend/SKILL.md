@@ -158,6 +158,10 @@ queryset = queryset.order_by(sort_order, '-id')  # '-id' tiebreaker → stable p
 
 Transactions use `-date, -id`; transfers and planned transactions use `-date, -id`. Either an id or created_at tiebreak is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
 
+**Creation order can itself be the payload.** Ordering a list by `created_at, id` makes "first" meaningful with zero schema fields: the `id` tiebreak is load-bearing because Postgres `now()` is transaction-stable, so rows created in one atomic block share a timestamp and only `id` (insertion order) puts the intended-first row first. `CurrencyCatalogService.list_enabled` is the exemplar - the first enabled currency IS the workspace primary, and consumers derive `currencies[0]` with no `is_primary` field. The order is read-only by construction: the moment users need to reorder, it must become an explicit `position` column (the `BudgetCurrency` through-model is the in-repo precedent), never a reinterpretation of timestamps.
+
+**List-filter values are not resource lookups: no pattern, no 422, no 404.** A `currency_code: list[str] | None = Query(None)` filter carries no `pattern=` - unknown or malformed values simply match nothing and return a 200 with an empty list, identical to filtering by an unknown `account_id`. The regex allowlist above is specifically for `ordering` values, because those reach `order_by()` and raise `FieldError` (500) on unknown fields; filter values only feed `__in` lookups. When a filter is ambiguous about WHICH field it targets, state the semantics in the endpoint docstring (the account-currency filter targets `account__currency__code__in`, never the informational `original_currency` facet).
+
 ### Pagination Param Caps (`page_size`)
 
 Numeric bounds on list-endpoint query params are part of the endpoint contract, declared on the `Query(...)` itself so Django Ninja rejects out-of-range values with an automatic 422 — services keep receiving already-validated ints:
@@ -259,6 +263,14 @@ count = ExchangeShortcut.objects.for_workspace(workspace_id).count()
 if count >= settings.EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE:
     raise ExchangeShortcutLimitError()
 ```
+
+**Ordered member sets are through-models with a `position` column, not FK flags on the parent** (`BudgetCurrency`, after the `WorkspaceCurrency` precedent: plain `Model` - scoped transitively via the parent FK, no audit fields - `Meta.ordering = ['position', 'id']`, unique together on parent+member). Writes validate ALL members first (every `get_enabled(...)` raise happens BEFORE any delete - a bad payload must not wipe the existing set inside the caller's atomic block), dedupe preserving first occurrence (`list(dict.fromkeys(codes))`), then delete + `bulk_create` with `position=enumerate_index`. Importers restore junction rows the same way, inside their existing atomic block - per-row creates matching the neighboring children, codes resolved through the same path the sibling entities use. The read side serializes through a model property (see §Pydantic Schemas).
+
+**New params on a service method with positional callers join the keyword group.** When existing call sites pass the first N arguments positionally (`PlannedTransactionService.list(workspace_id, status, account_id, start_date, end_date)`), inserting a new param at its semantically natural spot (right after `account_id`, where the filter chain would suggest) silently rebinds every caller's next positional argument - `start_date` becomes `currency_code` with no error. Place new params after the established positional run and pass them by keyword everywhere: filter-chain order is semantically irrelevant (an AND of all provided filters), signature placement is not. Before adding a param, check how the method's real callers invoke it.
+
+**Pop the prefetch cache after rewriting rows behind a prefetched relation.** When a read path prefetches a relation (`BudgetService.get()` prefetches `currencies`) and a write path on the same instance rewrites those rows via plain querysets (delete + recreate), the in-memory prefetch cache still serves the OLD set to anything reading the relation afterward - plain queryset writes never touch the instance cache. End the write helper with `getattr(obj, '_prefetched_objects_cache', {}).pop('<relation>', None)` (the `getattr` guard keeps the create path safe where no cache exists). `refresh_from_db()` would clear the cache too, but it also discards unsaved instance state, so it is unusable mid-update.
+
+**User-sent collections raise on invalid entries; machine-chosen defaults skip.** An unknown code in an explicit client list raises (`UnknownCurrencyError`, 404 - correct feedback for user choices), while an unknown entry in a module-level convenience default (`DEFAULT_WORKSPACE_EXTRA_CURRENCIES`) is silently skipped - raising on a machine-chosen default would take down registration and account reset on a partially seeded catalog. Single-source the raise path (a `strict` flag set at the codes-dedup branch) instead of duplicating the validation call between the two routes.
 
 ## No Nested Helper Functions
 
@@ -500,6 +512,10 @@ class TransactionOut(BaseModel):
 
 **Optional list fields (and same-module forward references):** A schema referencing a type defined later in the same module must use the string form — `items: list['TransactionItemIn']` — because Python evaluates bare annotations at class-definition time (`NameError` fires before Pydantic ever sees the model; ruff flags `F821`); Pydantic v2 resolves string annotations at module-load finalization. The default is `Field(default_factory=list, max_length=N)` — never a bare `[]` (mutable default) — with `max_length` matching the sibling endpoint that already caps the same collection. `default_factory=list` keeps every existing caller that omits the field working. In the service, bulk-create the children inside the parent's existing `@db_transaction.atomic` block, guarded by `if data.items:` — the children become atomic with the parent for free. Helpers consuming an already-validated schema skip per-row defensive parsing; reserve try/except parsing for untyped sources (parser dicts, external APIs).
 
+That default is for collections with a sane EMPTY default. When absence and emptiness must stay distinguishable - `[]` is invalid input (a 422 via `min_length=1`) while omission means "use your defaults" - the field is `Field(None, min_length=1, ...)` instead, and the service branches on truthiness (`if currency_codes:`), which additionally shields direct callers from an `IndexError` on an empty list.
+
+**M2M collections serialize through a model property.** `from_attributes` cannot coerce a Django `RelatedManager` to `list[str]` - define `@property currency_codes -> list[str]` on the model (`[bc.currency.code for bc in self.currencies.all()]`). It serializes cleanly, consumes the prefetch cache when present, falls back to `Meta.ordering` otherwise, and becomes the ONE derivation path: the API `Out` schema, the GDPR exporter (`prefetch_related('currencies__currency')` feeding the same cache), and any future reader all read the property instead of re-deriving the comprehension. Exemplar: `Budget.currency_codes`.
+
 **Cross-field validation:** Use `@field_validator` with `mode='after'`:
 
 ```python
@@ -610,6 +626,10 @@ class CurrencyNotFoundInWorkspaceError(ValidationError):
     def __init__(self, currency: str):
         super().__init__(f'Currency {currency} not found in workspace', code='currency_not_found')
 ```
+
+**Disable/delete guards enumerate their blockers per type.** A guard that counts blocking references returns a per-type breakdown dict (`{'accounts': n, 'category_budgets': n, ...}`), not a summed int, and the exception composes the human-readable sentence from a module-level label map (`REFERENCE_LABELS = {'accounts': 'account', ...}` in `currencies/exceptions.py`), pluralizing per count with a generic fallback for unknown kinds. The sentence rides the existing `{'detail': ...}` handler channel, so the frontend renders it verbatim with zero client-side enumeration logic. Dict iteration order drives sentence order - the label map and the breakdown dict are the only places to touch when a new PROTECT FK joins the guard. Exemplar: `CurrencyInUseError`.
+
+**An FK that does not gate an operation can still pin the row against its cleanup.** When un-blocking a guard (transaction original-currency facets stopped counting toward currency disable), check `on_delete` at every DELETION site, not just in the guard: `Transaction.original_currency` is `on_delete=PROTECT`, so the "orphaned" custom-row cleanup that now runs anyway would raise `ProtectedError` (500) on a facet-referenced row. The deletion site needs its own reference check - a facet-referenced row is not orphaned (it stays, re-enablable). Excluding a reference type from the guard NEVER means the row is safe to delete; it means the guard and the cleanup answer different questions.
 
 ## Case-Insensitive Grouping with Display Casing
 
