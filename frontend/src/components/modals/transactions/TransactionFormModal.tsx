@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
+import { Copy, Plus, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
@@ -91,6 +91,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
   const descListId = useId()
+  const noteId = useId()
 
   const defaultBudgetId =
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
@@ -118,6 +119,11 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
   const [highlighted, setHighlighted] = useState(-1)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  // Optional note, hidden behind an "Add note" disclosure so the form's
+  // common path stays compact. Opens pre-expanded when the source carries a
+  // note - existing data must never sit hidden behind the toggle.
+  const [note, setNote] = useState('')
+  const [noteOpen, setNoteOpen] = useState(false)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
@@ -192,6 +198,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (source) {
       setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
       setDescription(source.description)
+      setNote(source.note ?? '')
+      setNoteOpen(!!source.note)
       setType(source.type)
       setAmount(source.amount)
       setAccountId(source.account_id)
@@ -212,6 +220,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     } else {
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
+      setNote('')
+      setNoteOpen(false)
       setType('expense')
       setAmount('')
       // Single-account workspaces prefill the only account (a client-side
@@ -308,6 +318,9 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       const payload = {
         date,
         description: description.trim(),
+        // Always sent, even as null: update is full-replace - an absent key
+        // would silently clear a stored note.
+        note: note.trim() || null,
         type,
         amount,
         account_id: accountId,
@@ -549,6 +562,36 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             )}
           </div>
         </div>
+
+        {/* Note disclosure (accordion wiring: the collapsed toggle carries
+            aria-expanded + aria-controls; the field region is its sibling).
+            Collapsed by default so the form stays compact; the textarea
+            replaces the button once opened. */}
+        {noteOpen ? (
+          <div id={noteId} role="region" aria-label="Note">
+            <label htmlFor="tx-note" className={labelClass}>Note</label>
+            <textarea
+              id="tx-note"
+              rows={3}
+              /* Mirrors the backend note max_length: an over-long note is
+                 stopped at input, not rejected with a 422 on save. */
+              maxLength={2000}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setNoteOpen(true)}
+            aria-expanded={noteOpen}
+            aria-controls={noteId}
+            className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors max-sm:min-h-[44px]"
+          >
+            <Plus size={13} /> Add note
+          </button>
+        )}
 
         {/* Always rendered: recording money without an account (cash exchanged
             while traveling, a closed account's history) is a first-class path. */}

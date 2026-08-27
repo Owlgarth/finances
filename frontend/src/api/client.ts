@@ -262,6 +262,9 @@ export const budgetsApi = {
 export interface TransactionInput {
   date: string;
   description: string;
+  /** Always send the key (null clears) - update is full-replace, so an
+      absent key would silently clear a stored note. */
+  note?: string | null;
   type: TransactionType;
   amount: string;
   account_id?: number | null;
