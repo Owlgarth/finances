@@ -453,7 +453,11 @@ class UserService:
 
     @staticmethod
     def reset_account(
-        user: User, password: str, workspace_name: str, currency_code: str, confirm_shared: bool = False
+        user: User,
+        password: str,
+        workspace_name: str,
+        currency_codes: list[str] | None = None,
+        confirm_shared: bool = False,
     ) -> dict:
         """
         Wipe the user's data back to a fresh post-registration state.
@@ -496,7 +500,7 @@ class UserService:
             owned_workspaces.delete()
 
             workspace = WorkspaceService.create_workspace(
-                user=user, name=workspace_name, currency_code=currency_code, create_demo=False
+                user=user, name=workspace_name, currency_codes=currency_codes, create_demo=False
             )
 
         return {
