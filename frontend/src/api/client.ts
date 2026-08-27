@@ -413,7 +413,7 @@ export const authApi = {
   deleteAccount: (password: string): Promise<{ message: string; deleted_workspaces: string[] }> =>
     api.delete('/users/me', { data: { password } }).then(res => res.data),
 
-  resetAccount: (data: { password: string; workspace_name?: string; currency_code?: string; confirm_shared?: boolean }): Promise<{ message: string; deleted_workspaces: string[]; workspace_id: number; workspace_name: string }> =>
+  resetAccount: (data: { password: string; workspace_name?: string; currency_codes?: string[]; confirm_shared?: boolean }): Promise<{ message: string; deleted_workspaces: string[]; workspace_id: number; workspace_name: string }> =>
     api.post('/users/me/reset', data).then(res => res.data),
 
   exportData: (): Promise<Blob> =>

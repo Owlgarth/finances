@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { legalApi } from '../api/client';
+import CurrencySetField from '../components/currencies/CurrencySetField';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
+import { PRE_AUTH_CURRENCIES } from '../utils/currencies';
 
 export default function Register() {
   const { register, isAuthenticated, isLoading } = useAuth();
@@ -12,7 +14,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
-  const [currencyCode, setCurrencyCode] = useState('PLN');
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>(['PLN']);
   const [startWithSampleData, setStartWithSampleData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -54,6 +56,8 @@ export default function Register() {
       return;
     }
 
+    if (currencyCodes.length === 0) return toast.error('Select at least one currency');
+
     setIsSubmitting(true);
 
     try {
@@ -62,7 +66,7 @@ export default function Register() {
         password,
         full_name: fullName || undefined,
         workspace_name: workspaceName,
-        currency_code: currencyCode,
+        currency_codes: currencyCodes,
         start_with_sample_data: startWithSampleData,
         accepted_terms_version: termsVersion,
         accepted_privacy_version: privacyVersion,
@@ -136,21 +140,13 @@ export default function Register() {
             />
           </div>
 
-          <div>
-            <label htmlFor="currency-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-              Currency
-            </label>
-            <select
-              id="currency-code"
-              value={currencyCode}
-              onChange={(e) => setCurrencyCode(e.target.value)}
-              className={inputClassName}
-            >
-              {['PLN', 'EUR', 'USD', 'GBP', 'UAH', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD', 'JPY'].map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+          <CurrencySetField
+            value={currencyCodes}
+            onChange={setCurrencyCodes}
+            currencies={PRE_AUTH_CURRENCIES}
+            primaryLabel="Main account"
+            placeholder="Select currencies"
+          />
 
           <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
             <input
