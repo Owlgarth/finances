@@ -4,18 +4,30 @@ import type { AxiosError } from 'axios'
 import { Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CurrencySetField from '../currencies/CurrencySetField'
+import Modal from '../common/Modal'
 import { currenciesApi } from '../../api/client'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface CreateWorkspaceFormProps {
-  onCancel: () => void
-  onCreated?: () => void
-  compact?: boolean
+  onClose: () => void
 }
 
-export default function CreateWorkspaceForm({ onCancel, onCreated, compact = false }: CreateWorkspaceFormProps) {
+/**
+ * Create-workspace modal. Mount-per-use: the caller renders this component
+ * ONLY while the flow is open - that conditional render is the open/close
+ * mechanism, so the useState initializers re-run on every open and the
+ * ['PLN'] preselection resets without a manual clear pass. All dismissals
+ * (Close button, scrim, Escape) route through the Modal's overlay stack into
+ * `onClose`; on success the backend switches the user into the new workspace,
+ * so closing is the only cleanup the form owes.
+ */
+export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProps) {
   const { createWorkspace } = useWorkspace()
+  // No autofocus on touch - don't yank the keyboard up over a fresh sheet.
+  const isTouch = useIsTouch()
   const [name, setName] = useState('')
   // Ordered set of ISO codes sent as currency_codes; index 0 = the Main
   // account currency. Preselected with the light default (the backend's own
@@ -54,10 +66,7 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
     try {
       await createWorkspace(name.trim(), currencyCodes)
       toast.success('Workspace created')
-      setName('')
-      setCurrencyCodes(['PLN'])
-      onCreated?.()
-      onCancel()
+      onClose()
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to create workspace'))
     } finally {
@@ -65,106 +74,71 @@ export default function CreateWorkspaceForm({ onCancel, onCreated, compact = fal
     }
   }
 
+  // Enter submits from the name input. Escape is deliberately NOT handled
+  // here: the surrounding Modal's overlay stack owns it, and a form-level
+  // Escape branch would fight the stack's topmost-layer-only close.
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleCreate()
-    if (e.key === 'Escape') {
-      e.stopPropagation()
-      onCancel()
-    }
   }
 
-  if (compact) {
-    return (
-      <div className="p-2">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Workspace name"
-          maxLength={100}
-          className="w-full px-2 py-1.5 text-sm border border-border rounded-none focus:outline-none"
-          autoFocus
-          onKeyDown={handleKeyDown}
-        />
-        <div className="mt-2">
+  return (
+    // `open` hardcoded: mount-per-use, the caller's render IS the open state
+    // (see docblock). Default size 'md' - wide enough for the ordered
+    // currency list; the height cap keeps long catalogs scrollable.
+    <Modal open onClose={onClose} title="Create workspace" className="p-6 max-h-[85vh] overflow-y-auto">
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="create-workspace-name" className={labelClass}>Name</label>
+          <input
+            id="create-workspace-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Workspace name"
+            maxLength={100}
+            className={inputClass}
+            autoFocus={!isTouch}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <div>
           <CurrencySetField
             value={currencyCodes}
             onChange={setCurrencyCodes}
             primaryLabel="Main account"
             placeholder="Select currencies"
             currencies={catalogCurrencies}
-            compact
           />
+          <p className="mt-1 text-[11px] text-text-muted">
+            You can enable more currencies later in workspace settings.
+          </p>
         </div>
-        <p className="mt-1 text-[11px] text-text-muted">
-          You can enable more currencies later in workspace settings.
-        </p>
-        <div className="flex gap-2 mt-2">
+        <div className="flex justify-end gap-2 pt-2">
           <button
-            onClick={handleCreate}
-            disabled={!name.trim() || currencyCodes.length === 0 || isSubmitting}
-            className="flex-1 px-2 py-1 text-xs font-medium bg-primary text-white rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50"
-          >
-            {isSubmitting ? 'Creating...' : 'Create'}
-          </button>
-          <button
-            onClick={onCancel}
+            type="button"
+            onClick={onClose}
             disabled={isSubmitting}
-            className="px-2 py-1 text-xs font-medium border border-border rounded-sm hover:bg-surface-hover transition-colors"
+            className={secondaryButtonClass}
           >
             Cancel
           </button>
+          <button
+            onClick={handleCreate}
+            disabled={isSubmitting || !name.trim() || currencyCodes.length === 0}
+            className={primaryButtonClass}
+          >
+            {isSubmitting ? 'Creating...' : 'Create'}
+          </button>
         </div>
       </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Workspace name"
-        className="block w-64 rounded-none border border-border px-3 py-2 text-sm"
-        onKeyDown={handleKeyDown}
-        autoFocus
-      />
-      <div className="w-64">
-        <CurrencySetField
-          value={currencyCodes}
-          onChange={setCurrencyCodes}
-          primaryLabel="Main account"
-          placeholder="Select currencies"
-          currencies={catalogCurrencies}
-        />
-        <p className="mt-1 text-[11px] text-text-muted">
-          You can enable more currencies later in workspace settings.
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={handleCreate}
-          disabled={isSubmitting || !name.trim() || currencyCodes.length === 0}
-          className="px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50"
-        >
-          {isSubmitting ? 'Creating...' : 'Create'}
-        </button>
-        <button
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="px-3 py-1.5 bg-surface border border-border text-text text-xs font-medium rounded-sm hover:bg-surface-hover transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
 function CreateWorkspaceButton({ onClick }: { onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors"
     >
