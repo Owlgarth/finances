@@ -462,6 +462,7 @@ class TransactionService:
             currency=currency,
             date=data.date,
             description=data.description,
+            note=data.note,
             category=category,
             amount=data.amount,
             type=data.type,
@@ -534,6 +535,7 @@ class TransactionService:
         trans.currency = currency
         trans.date = data.date
         trans.description = data.description
+        trans.note = data.note
         trans.category = category
         trans.amount = data.amount
         trans.type = data.type
@@ -724,6 +726,7 @@ class TransactionService:
             {
                 'date': t.date.isoformat(),
                 'description': t.description,
+                'note': t.note,
                 'category_name': t.category_name,
                 'amount': str(t.amount),
                 'account_name': t.account_name,
@@ -771,6 +774,7 @@ class TransactionService:
                     currency=account.currency,
                     date=import_item.date,
                     description=import_item.description,
+                    note=import_item.note,
                     category_id=category_id,
                     amount=import_item.amount,
                     type=import_item.type,

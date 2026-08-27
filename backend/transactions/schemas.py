@@ -25,10 +25,14 @@ class TransactionCreate(BaseModel):
     bulk-creates them in the same atomic block as the transaction. Omitting
     it - as planned_transactions/tasks.py does - leaves the transaction with
     zero items, preserving the historical behavior.
+
+    note is optional free text (max 2000 chars). This is a full-replace
+    schema: an absent or null note stores None, clearing any previous note.
     """
 
     date: date
     description: str = Field(..., max_length=500)
+    note: Optional[str] = Field(None, max_length=2000)
     type: str = Field(..., pattern=r'^(income|expense|adjustment)$')
     amount: Decimal
     account_id: Optional[int] = None
@@ -57,6 +61,7 @@ class TransactionImport(BaseModel):
 
     date: date
     description: str = Field(..., max_length=500)
+    note: Optional[str] = Field(None, max_length=2000)
     category_name: Optional[str] = Field(None, max_length=100)
     amount: Decimal = Field(..., gt=0)
     type: str = Field(..., pattern=r'^(income|expense)$')
@@ -94,6 +99,7 @@ class TransactionOut(BaseModel):
     currency_code: str
     date: date
     description: str
+    note: Optional[str] = None
     category_id: Optional[int]
     category_name: Optional[str] = None
     category_budget_id: Optional[int] = None
