@@ -61,7 +61,7 @@ Workspace (top-level container)
 | Concept | Rule |
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
-| **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. |
+| **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
@@ -71,9 +71,12 @@ Workspace (top-level container)
 
 ### Multi-Workspace Support
 
-- **Creation**: `POST /api/workspaces` creates a workspace, enables the chosen
-  currency, and seeds a "Main" account (flagged as the default for its currency)
-  + a "General" budget. Registration can optionally add sample data.
+- **Creation**: `POST /api/workspaces` creates a workspace, enables the
+  currency set (the chosen currency silently plus EUR/USD by default, or
+  exactly an explicit `currency_codes` list, first = primary), and seeds a
+  "Main" account (flagged as the default for its currency) + a "General"
+  budget (currency set = the primary). Registration can optionally add
+  sample data.
 - **Switching**: `POST /api/workspaces/{id}/switch` changes the active workspace.
 - **Deletion**: `DELETE /api/workspaces/{id}` removes a workspace and all its data
   (owner only), in PROTECT-safe dependency order.
@@ -95,7 +98,7 @@ backend/
 ├── workspaces/             # Multi-tenant workspaces, members, enabled currencies
 ├── currencies/             # Global ISO 4217 catalog + per-workspace enablement
 ├── accounts/               # Money-holding accounts + computed balances
-├── budgeting/              # Budget, Period, CategoryBudget (+ services)
+├── budgeting/              # Budget, BudgetCurrency, Period, CategoryBudget (+ services)
 ├── categories/             # Budget-scoped categories
 ├── transactions/           # Transactions, items, attachments, extraction
 │   ├── tasks.py            # Celery task: extract_attachment
@@ -152,6 +155,7 @@ frontend/src/
 │   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
+│   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit)
