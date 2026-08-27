@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { Table2, ChartColumn } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../../api/client'
-import { useBudgets } from '../../hooks/useDomain'
+import { useBudgets, useEnabledCurrencies } from '../../hooks/useDomain'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { formatAmount } from '../../utils/format'
+import { activeCurrencyCodes } from '../../utils/currencies'
 import Select from '../common/Select'
 import type { BudgetHistoryPeriod, BudgetSummaryItem } from '../../types'
 
@@ -314,6 +315,7 @@ function ChartCard({ title, children, table }: { title: string; children: React.
 export default function BudgetInsights() {
   const { workspace } = useWorkspace()
   const { data: budgets = [] } = useBudgets(false)
+  const { data: currencies = [] } = useEnabledCurrencies()
 
   const [budgetId, setBudgetId] = useState<number | null>(null)
   useEffect(() => {
@@ -358,26 +360,63 @@ export default function BudgetInsights() {
   const historyPending = !!budgetId && !history
   const summaryPending = !!budgetId && !summary
 
-  // Currencies present anywhere in the data; default = biggest plan in the current period.
-  const currencies = useMemo(() => {
+  // Data presence for the shared derivation: every code the loaded data
+  // carries - summary rows and totals plus the six history periods the
+  // charts render (a code that only exists in history must stay
+  // switchable). Adapted to the util's {currency_code} row shape.
+  const dataCurrencies = useMemo(() => {
     const codes = new Set<string>()
     periods.forEach((p) => Object.keys(p.totals).forEach((c) => codes.add(c)))
+    ;(summary?.items ?? []).forEach((i) => codes.add(i.currency_code))
     Object.keys(summary?.totals ?? {}).forEach((c) => codes.add(c))
-    return Array.from(codes).sort()
+    return Array.from(codes).map((currency_code) => ({ currency_code }))
   }, [periods, summary])
 
-  const [currency, setCurrency] = useState<string | null>(null)
-  useEffect(() => {
-    if (currency && currencies.includes(currency)) return
-    if (currencies.length === 0) return
-    const current = periods[periods.length - 1]
-    const best = current
-      ? currencies.reduce((a, b) =>
-          parseFloat(current.totals[b]?.planned ?? '0') > parseFloat(current.totals[a]?.planned ?? '0') ? b : a,
-        )
-      : currencies[0]
-    setCurrency(best)
-  }, [currencies, currency, periods])
+  // Same currency derivation as the budget detail page: the budget's
+  // configured currencies in stored order (first = default view),
+  // data-only codes appended after in enabled order, and the PRIMARY as
+  // the fallback when config and data are both empty - the first entry
+  // of the creation-ordered enabled list (the backend orders it with the
+  // workspace's primary first), never the alphabetically-first code.
+  const activeCurrencies = useMemo(
+    () =>
+      activeCurrencyCodes(
+        budget?.currency_codes ?? [],
+        dataCurrencies,
+        currencies.map((c) => c.code),
+        currencies[0]?.code ?? '',
+      ),
+    [budget, dataCurrencies, currencies],
+  )
+
+  // Derived-until-touched currency selection: the view follows
+  // activeCurrencies[0] (the first configured currency) until the user
+  // picks a code; a touched code that leaves the list (budget currencies
+  // edited, budget switched) falls back to the first entry
+  // deterministically. Render-time derivation - no syncing effect.
+  const [selectedCurrency, setSelectedCurrency] = useState<string | null>(null)
+  const [currencyTouched, setCurrencyTouched] = useState(false)
+  const currency = currencyTouched && selectedCurrency !== null && activeCurrencies.includes(selectedCurrency) ? selectedCurrency : activeCurrencies[0]
+
+  // Picking a budget resets to its first configured currency (a surviving
+  // code from the previous budget's list must not stay selected); picking
+  // a currency marks the selection touched so re-derivations stop
+  // overwriting the user's choice.
+  const selectBudget = (id: number) => {
+    setBudgetId(id)
+    setSelectedCurrency(null)
+    setCurrencyTouched(false)
+  }
+  const selectCurrency = (code: string) => {
+    setSelectedCurrency(code)
+    setCurrencyTouched(true)
+  }
+
+  // Mirror of the budget page's band gate: the control renders once the
+  // budget and the enabled-currency list are known (chip when exactly one
+  // code is active, Select otherwise); while the enabled list is empty
+  // the codes are unknowable, so keep today's hide behavior.
+  const showCurrencyControl = budget != null && currencies.length > 0
 
   if (budgets.length === 0) return null
 
@@ -408,23 +447,28 @@ export default function BudgetInsights() {
         <div className="w-56">
           <Select
             value={budgetId}
-            onChange={setBudgetId}
+            onChange={selectBudget}
             options={budgets.map((b) => ({ value: b.id, label: b.name }))}
             placeholder="Select budget"
             aria-label="Budget"
           />
         </div>
-        {currencies.length > 1 && (
-          <div className="w-28">
-            <Select
-              value={currency}
-              onChange={setCurrency}
-              options={currencies.map((c) => ({ value: c, label: c }))}
-              aria-label="Currency"
-              mono
-            />
-          </div>
-        )}
+        {showCurrencyControl &&
+          (activeCurrencies.length > 1 ? (
+            <div className="w-28">
+              <Select
+                value={currency}
+                onChange={selectCurrency}
+                options={activeCurrencies.map((c) => ({ value: c, label: c }))}
+                aria-label="Currency"
+                mono
+              />
+            </div>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none">
+              {currency}
+            </span>
+          ))}
         {budget && (
           <Link to={`/budgets/${budget.id}`} className="text-xs text-primary hover:text-primary-hover touch-hit">
             View budget →

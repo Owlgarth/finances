@@ -899,7 +899,8 @@ class TestLegacyImportService(AuthMixin, TestCase):
         ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
         budget = Budget.objects.get(workspace=ws, name='Household')
         self.assertFalse(budget.is_active)
-        self.assertEqual(budget.display_currency.code, 'PLN')
+        # The legacy default_currency becomes a BudgetCurrency row at position 0.
+        self.assertEqual(list(budget.currencies.values_list('position', 'currency__code')), [(0, 'PLN')])
 
 
 class TestLegacyImportEndpoint(AuthMixin, TestCase):
