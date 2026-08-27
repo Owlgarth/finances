@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { Copy, Plus, Pencil, Trash2 } from 'lucide-react'
 import { transactionsApi } from '../api/client'
 import type { Transaction } from '../types'
-import { useAccounts, useMultiCurrency } from '../hooks/useDomain'
+import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
@@ -39,6 +39,7 @@ export default function Transactions() {
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
+  const { data: currencies = [] } = useEnabledCurrencies()
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -49,6 +50,13 @@ export default function Transactions() {
     .filter((v) => TYPE_OPTIONS.some((o) => o.value === v))
   const budgetFilter = intListParam(searchParams, 'budget')
   const categoryFilter = intListParam(searchParams, 'category')
+  // Filters by ACCOUNT currency - the account a transaction books into,
+  // never the informational original-amount facet.
+  const enabledCodes = new Set(currencies.map((c) => c.code))
+  // URL param is a CSV of codes; unknown/stale entries drop (type-filter idiom).
+  const currencyFilter = (searchParams.get('currency') ?? '')
+    .split(',')
+    .filter((c) => enabledCodes.has(c))
   const amountMin = searchParams.get('amount_min') ?? ''
   const amountMax = searchParams.get('amount_max') ?? ''
   const dateFrom = searchParams.get('from') ?? ''
@@ -65,6 +73,7 @@ export default function Transactions() {
     typeFilter.length > 0,
     budgetFilter.length > 0,
     categoryFilter.length > 0,
+    currencyFilter.length > 0,
     Boolean(amountMin || amountMax),
     Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
@@ -74,7 +83,7 @@ export default function Transactions() {
   const filterPanelId = useId()
 
   const clearFilters = () =>
-    updateParams({ account: null, type: null, budget: null, category: null, amount_min: null, amount_max: null, from: null, to: null })
+    updateParams({ account: null, type: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
 
   const isTouch = useIsTouch()
 
@@ -84,7 +93,7 @@ export default function Transactions() {
   const [deleting, setDeleting] = useState<Transaction | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, pageSize, search, accountFilter.join(','), typeFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['transactions', page, pageSize, search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       transactionsApi.getAll({
         page,
@@ -92,6 +101,7 @@ export default function Transactions() {
         search: search || undefined,
         account_id: accountFilter.length ? accountFilter : undefined,
         transaction_type: typeFilter.length ? typeFilter : undefined,
+        currency_code: currencyFilter.length ? currencyFilter : undefined,
         budget_id: budgetFilter.length ? budgetFilter : undefined,
         category_id: categoryFilter.length ? categoryFilter : undefined,
         amount_gte: amountParam(amountMin),
@@ -156,6 +166,17 @@ export default function Transactions() {
           {showAccountColumn && (
             <FilterField label="Account">
               <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
+            </FilterField>
+          )}
+          {multiCurrency && (
+            <FilterField label="Currency">
+              <MultiSelect
+                values={currencyFilter}
+                onChange={(v) => updateParams({ currency: v })}
+                options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
+                placeholder="All currencies"
+                aria-label="Filter by currency"
+              />
             </FilterField>
           )}
           <FilterField label="Type">

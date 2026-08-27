@@ -7,12 +7,13 @@ from django.test import TestCase
 from accounts.factories import AccountFactory
 from accounts.models import Account
 from budgeting.factories import BudgetFactory
-from budgeting.models import Budget, CategoryBudget
+from budgeting.models import Budget, BudgetCurrency, CategoryBudget
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
 from common.exceptions import ValidationError
 from common.tests.factories import UserFactory
+from currencies.exceptions import UnknownCurrencyError
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction
@@ -54,12 +55,12 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         self.assertIsNotNone(membership)
         self.assertEqual(membership.role, 'owner')
 
-    def test_creates_single_enabled_currency(self):
+    def test_creates_default_currency_trio(self):
         user = UserFactory()
         workspace = WorkspaceService.create_workspace(user=user, name='Test Workspace', create_demo=False)
 
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
-        self.assertEqual([c.code for c in enabled], ['PLN'])
+        self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
 
     def test_creates_workspace_with_explicit_currency(self):
         user = UserFactory()
@@ -68,10 +69,63 @@ class TestWorkspaceServiceCreateWorkspace(TestCase):
         )
 
         enabled = CurrencyCatalogService.list_enabled(workspace.id)
-        self.assertEqual([c.code for c in enabled], ['EUR'])
+        self.assertEqual([c.code for c in enabled], ['EUR', 'USD'])
 
         account = Account.objects.filter(workspace=workspace, name='Main').first()
         self.assertEqual(account.currency.code, 'EUR')
+
+    def test_explicit_currency_codes_used_verbatim(self):
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Dollar Workspace', currency_codes=['USD', 'EUR'], create_demo=False
+        )
+
+        enabled = CurrencyCatalogService.list_enabled(workspace.id)
+        self.assertEqual([c.code for c in enabled], ['USD', 'EUR'])
+
+        account = Account.objects.filter(workspace=workspace, name='Main').first()
+        self.assertEqual(account.currency.code, 'USD')
+
+        budget = Budget.objects.get(workspace=workspace, name='General')
+        seeded = list(BudgetCurrency.objects.filter(budget=budget))
+        self.assertEqual([(bc.position, bc.currency.code) for bc in seeded], [(0, 'USD')])
+
+    def test_explicit_currency_codes_dedupe_preserving_first(self):
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Dup Workspace', currency_codes=['USD', 'USD', 'EUR'], create_demo=False
+        )
+
+        enabled = CurrencyCatalogService.list_enabled(workspace.id)
+        self.assertEqual([c.code for c in enabled], ['USD', 'EUR'])
+
+    def test_primary_not_duplicated_in_default_extras(self):
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Euro Workspace', currency_code='EUR', create_demo=False
+        )
+
+        enabled = CurrencyCatalogService.list_enabled(workspace.id)
+        self.assertEqual([c.code for c in enabled], ['EUR', 'USD'])
+
+    def test_explicit_currency_codes_unknown_code_raises(self):
+        user = UserFactory()
+        with self.assertRaises(UnknownCurrencyError):
+            WorkspaceService.create_workspace(
+                user=user, name='Bad Workspace', currency_codes=['USD', 'XXX'], create_demo=False
+            )
+
+    def test_seeded_general_budget_gets_primary_budget_currency(self):
+        user = UserFactory()
+        workspace = WorkspaceService.create_workspace(
+            user=user, name='Euro Workspace', currency_code='EUR', create_demo=False
+        )
+
+        budget = Budget.objects.get(workspace=workspace, name='General')
+        seeded = list(BudgetCurrency.objects.filter(budget=budget))
+        self.assertEqual(len(seeded), 1)
+        self.assertEqual(seeded[0].currency.code, 'EUR')
+        self.assertEqual(seeded[0].position, 0)
 
     def test_creates_main_account_and_general_budget(self):
         user = UserFactory()

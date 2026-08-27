@@ -6,7 +6,7 @@ import type {
   TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse,
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
-  Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
+  Cadence, Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
   TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
@@ -196,14 +196,25 @@ export const accountsApi = {
 };
 
 // ============= Budgets & Periods API =============
+/** Writable budget fields (create/update payloads). */
+export interface BudgetInput {
+  name?: string;
+  cadence?: Cadence;
+  cadence_weeks?: number | null;
+  cadence_anchor?: string | null;
+  /** Ordered set of workspace-enabled ISO codes; index 0 = shown first in the
+      budget table. Empty array = automatic (data-driven) currency list. */
+  currency_codes?: string[];
+}
+
 export const budgetsApi = {
   list: (includeInactive = false): Promise<Budget[]> =>
     api.get<Budget[]>('/budgets', { params: { include_inactive: includeInactive } }).then(res => res.data),
   get: (id: number): Promise<Budget> =>
     api.get<Budget>(`/budgets/${id}`).then(res => res.data),
-  create: (data: Partial<Budget>): Promise<Budget> =>
+  create: (data: BudgetInput): Promise<Budget> =>
     api.post<Budget>('/budgets', data).then(res => res.data),
-  update: (id: number, data: Partial<Budget>): Promise<Budget> =>
+  update: (id: number, data: BudgetInput): Promise<Budget> =>
     api.put<Budget>(`/budgets/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/budgets/${id}`),
   setArchive: (id: number, isActive: boolean): Promise<Budget> =>
@@ -257,7 +268,7 @@ export interface TransactionInput {
 }
 
 export const transactionsApi = {
-  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
+  getAll: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; currency_code?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
     api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
   getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; search?: string; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
@@ -350,7 +361,7 @@ export interface PlannedInput {
 }
 
 export const plannedTransactionsApi = {
-  getAll: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
+  getAll: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
   getTotals: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
@@ -476,7 +487,7 @@ export const workspacesApi = {
   setDefaultBudget: (workspaceId: number, budgetId: number | null): Promise<Workspace> =>
     api.put<Workspace>(`/workspaces/${workspaceId}/default-budget`, { budget_id: budgetId }).then(res => res.data),
 
-  create: (data: { name: string; currency_code?: string }): Promise<Workspace> =>
+  create: (data: { name: string; currency_code?: string; currency_codes?: string[] }): Promise<Workspace> =>
     api.post<Workspace>('/workspaces', data).then(res => res.data),
 
   delete: (id: number): Promise<void> =>

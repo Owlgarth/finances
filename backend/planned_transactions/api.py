@@ -41,6 +41,7 @@ def list_planned(
     request: HttpRequest,
     status: str | None = Query(None),
     account_id: list[int] | None = Query(None),
+    currency_code: list[str] | None = Query(None),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
     category_id: list[int] | None = Query(None),
@@ -52,7 +53,11 @@ def list_planned(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 ):
-    """List planned transactions for the current workspace with optional filters."""
+    """List planned transactions for the current workspace with optional filters.
+
+    currency_code filters by the ACCOUNT currency; unknown codes match
+    nothing (filters are not resource lookups).
+    """
     workspace_id = request.auth.current_workspace_id
     return PlannedTransactionService.list(
         workspace_id,
@@ -62,6 +67,7 @@ def list_planned(
         end_date,
         category_id=category_id,
         budget_id=budget_id,
+        currency_code=currency_code,
         search=search,
         amount_gte=amount_gte,
         amount_lte=amount_lte,
