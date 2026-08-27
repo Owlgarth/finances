@@ -1,11 +1,12 @@
 """Business logic for the currencies app."""
 
 from django.db import transaction as db_transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Max, Q, QuerySet
 
 from currencies.exceptions import (
     CurrencyInUseError,
     CurrencyNotEnabledError,
+    CurrencyOrderMismatchError,
     DuplicateCurrencyError,
     LastCurrencyError,
     UnknownCurrencyError,
@@ -14,6 +15,14 @@ from currencies.models import Currency, WorkspaceCurrency
 
 
 class CurrencyCatalogService:
+    @staticmethod
+    def _next_position(workspace_id: int) -> int:
+        """Position for a new enablement: append at the end (0 for a fresh workspace)."""
+        current_max = WorkspaceCurrency.objects.filter(workspace_id=workspace_id).aggregate(Max('position'))[
+            'position__max'
+        ]
+        return 0 if current_max is None else current_max + 1
+
     @staticmethod
     def _reference_count(workspace_id: int, currency: Currency) -> dict[str, int]:
         """Count records in the workspace that reference this catalog currency, by type.
@@ -42,21 +51,21 @@ class CurrencyCatalogService:
 
     @staticmethod
     def list_enabled(workspace_id: int) -> list[Currency]:
-        """List the currencies enabled for a workspace, in creation order.
+        """List the currencies enabled for a workspace, in the workspace's order.
 
-        Ordered by WorkspaceCurrency.created_at, tiebroken by id: bulk
-        enablement (workspace creation runs in one atomic block, where
-        Postgres now() is transaction-stable) shares a timestamp, so id
-        preserves insertion order - the primary currency, enabled first,
-        sorts first. This order is the workspace's canonical currency order
-        (primary first); the frontend consumes it as the enabled-currencies
-        list and derives its primary fallback from the first entry.
+        Ordered by WorkspaceCurrency.position, id tiebreak (rows created
+        before the column existed all share the default 0 - id keeps their
+        insertion order). Position 0 is the workspace's primary currency:
+        create_workspace enables it first, users reorder via
+        set_enabled_order, and enable() appends at the end. The frontend
+        consumes this order for every currency dropdown and derives its
+        primary fallback from the first entry.
         """
         return [
             wc.currency
             for wc in WorkspaceCurrency.objects.filter(workspace_id=workspace_id)
             .select_related('currency')
-            .order_by('created_at', 'id')
+            .order_by('position', 'id')
         ]
 
     @staticmethod
@@ -74,12 +83,23 @@ class CurrencyCatalogService:
     @staticmethod
     @db_transaction.atomic
     def enable(user, workspace_id: int, code: str) -> Currency:
-        """Enable a catalog currency for a workspace (idempotent)."""
+        """Enable a catalog currency for a workspace (idempotent).
+
+        New enablements append at the end of the workspace's currency
+        order (position = max existing + 1; a fresh workspace starts at
+        0, so create_workspace's sequential enables yield 0, 1, 2...).
+        Enabling an already-enabled currency keeps its current position -
+        get_or_create never overwrites the stored one.
+        """
         global_row = Currency.objects.filter(workspace__isnull=True, code=code).first()
         currency = global_row or Currency.objects.filter(workspace_id=workspace_id, code=code).first()
         if not currency:
             raise UnknownCurrencyError(code)
-        WorkspaceCurrency.objects.get_or_create(workspace_id=workspace_id, currency=currency)
+        WorkspaceCurrency.objects.get_or_create(
+            workspace_id=workspace_id,
+            currency=currency,
+            defaults={'position': CurrencyCatalogService._next_position(workspace_id)},
+        )
         return currency
 
     @staticmethod
@@ -106,7 +126,14 @@ class CurrencyCatalogService:
             is_custom=True,
             workspace_id=workspace_id,
         )
-        WorkspaceCurrency.objects.create(workspace_id=workspace_id, currency=currency)
+        # Append at the end like any other new enablement - the model
+        # default (0) would jump a fresh custom currency ahead of the
+        # primary.
+        WorkspaceCurrency.objects.create(
+            workspace_id=workspace_id,
+            currency=currency,
+            position=CurrencyCatalogService._next_position(workspace_id),
+        )
         return currency
 
     @staticmethod
@@ -133,6 +160,11 @@ class CurrencyCatalogService:
         if any(references.values()):
             raise CurrencyInUseError(code, references)
 
+        # No renumbering after a disable: positions stay sparse. Ordering
+        # compares positions and never assumes contiguity, gaps cost
+        # nothing, and enable() appends at max+1 regardless of gaps -
+        # renumbering would add writes to every disable and race
+        # concurrent reorders for no observable benefit.
         enablement.delete()
         if currency.is_custom and not currency.enablements.exists():
             # Facet references do not BLOCK disable, but they pin the custom
@@ -144,3 +176,26 @@ class CurrencyCatalogService:
 
             if not Transaction.objects.filter(original_currency=currency).exists():
                 currency.delete()
+
+    @staticmethod
+    @db_transaction.atomic
+    def set_enabled_order(user, workspace_id: int, codes: list[str]) -> list[Currency]:
+        """Rewrite the workspace's enabled-currency order from an explicit list.
+
+        The payload must be exactly the currently-enabled set: same
+        members, no duplicates, any order. Validation raises before any
+        write, so a bad payload can never disturb the existing order.
+        Positions are rewritten 0..n-1 in one atomic block; after the
+        rewrite, position 0 is the workspace's primary currency in every
+        dropdown. No row locks: reorder is admin-rare and worst case
+        last-write-wins; a stale concurrent append can duplicate a
+        position, which the id tiebreak resolves deterministically.
+        """
+        rows = list(WorkspaceCurrency.objects.filter(workspace_id=workspace_id).select_related('currency'))
+        row_by_code = {wc.currency.code: wc for wc in rows}
+        if len(codes) != len(rows) or set(codes) != set(row_by_code):
+            raise CurrencyOrderMismatchError()
+        for position, code in enumerate(codes):
+            row_by_code[code].position = position
+        WorkspaceCurrency.objects.bulk_update(rows, ['position'])
+        return CurrencyCatalogService.list_enabled(workspace_id)

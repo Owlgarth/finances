@@ -47,3 +47,15 @@ class EnableCurrencyIn(BaseModel):
         if self.custom and (self.name is None or self.symbol is None):
             raise ValueError('name and symbol are required when creating a custom currency')
         return self
+
+
+class EnabledCurrenciesOrderIn(BaseModel):
+    """Schema for reordering the workspace's enabled currencies.
+
+    ``currency_codes`` must be a permutation of the currently-enabled set
+    (same members, any order). The cap mirrors WorkspaceCreate.currency_codes
+    (20); a workspace that enabled more cannot be reordered through this
+    endpoint - disable something first.
+    """
+
+    currency_codes: list[CurrencyCode] = Field(..., min_length=1, max_length=20)

@@ -51,16 +51,21 @@ class Currency(models.Model):
 
 
 class WorkspaceCurrency(models.Model):
-    """Enablement of a catalog currency for a workspace."""
+    """Enablement of a catalog currency for a workspace (position 0 = primary)."""
 
     workspace = models.ForeignKey('workspaces.Workspace', on_delete=models.CASCADE, related_name='enabled_currencies')
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, related_name='enablements')
     created_at = models.DateTimeField(auto_now_add=True)
+    # Explicit user-reorderable order, the BudgetCurrency precedent: new
+    # enablements append at max+1, reorders rewrite 0..n-1, disables leave
+    # gaps (harmless - ordering compares positions, never assumes contiguity).
+    position = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         db_table = 'workspace_currencies'
         verbose_name_plural = 'workspace currencies'
         unique_together = [['workspace', 'currency']]
+        ordering = ['position', 'id']
 
     def __str__(self):
         return f'{self.workspace_id}: {self.currency.code}'

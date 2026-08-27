@@ -10,6 +10,7 @@ from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.exceptions import (
     CurrencyInUseError,
     CurrencyNotEnabledError,
+    CurrencyOrderMismatchError,
     DuplicateCurrencyError,
     LastCurrencyError,
     UnknownCurrencyError,
@@ -111,8 +112,9 @@ class TestCurrencyCatalogService(TestCase):
 
     def test_list_enabled_atomic_batch_keeps_insertion_order(self):
         # Workspace creation enables several currencies inside ONE atomic
-        # block; Postgres now() is transaction-stable so the rows share one
-        # created_at - the id tiebreak must preserve insertion order.
+        # block; each enable() appends at max+1, so insertion order is
+        # preserved by construction (the id tiebreak covers rows that
+        # predate the position column and still share its default 0).
         from django.db import transaction as db_transaction
 
         with db_transaction.atomic():
@@ -262,6 +264,93 @@ class TestCurrencyCatalogService(TestCase):
         self.assertIn('1 account', str(ctx.exception))
 
 
+class TestCurrencyOrderService(TestCase):
+    """Tests for enablement ordering: append-at-end, reorder, mismatch rejection."""
+
+    def setUp(self):
+        self.user = UserFactory()
+        self.workspace = WorkspaceFactory()
+
+    def test_enable_appends_at_end(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['PLN', 'EUR', 'USD'])
+        usd = WorkspaceCurrency.objects.get(workspace=self.workspace, currency__code='USD')
+        self.assertEqual(usd.position, 2)
+
+    def test_create_custom_appends_at_end(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.create_custom(self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g')
+
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['PLN', 'GOLD'])
+
+    def test_idempotent_enable_keeps_position(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['USD', 'PLN', 'EUR'])
+
+        # Re-enabling a moved currency must not send it back to the end.
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['USD', 'PLN', 'EUR'])
+
+    def test_set_enabled_order_rewrites_positions(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+
+        result = CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['EUR', 'USD', 'PLN'])
+
+        self.assertEqual([c.code for c in result], ['EUR', 'USD', 'PLN'])
+        positions = {wc.currency.code: wc.position for wc in WorkspaceCurrency.objects.filter(workspace=self.workspace)}
+        self.assertEqual(positions, {'PLN': 2, 'EUR': 0, 'USD': 1})
+
+    def test_set_enabled_order_unknown_code_rejected(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+
+        with self.assertRaises(CurrencyOrderMismatchError):
+            CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['PLN', 'EUR', 'XXX'])
+
+        # Validate-all-first: the failed reorder left the order untouched.
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertEqual(codes, ['PLN', 'EUR'])
+
+    def test_set_enabled_order_missing_code_rejected(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+
+        with self.assertRaises(CurrencyOrderMismatchError):
+            CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['PLN'])
+
+    def test_set_enabled_order_extra_code_rejected(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+
+        with self.assertRaises(CurrencyOrderMismatchError):
+            CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['PLN', 'EUR'])
+
+    def test_set_enabled_order_duplicate_rejected(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+
+        with self.assertRaises(CurrencyOrderMismatchError):
+            CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, ['PLN', 'PLN', 'EUR'])
+
+    def test_set_enabled_order_empty_rejected(self):
+        # The schema 422s empty lists at the API; the service shields
+        # direct callers with the same set-mismatch error.
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+
+        with self.assertRaises(CurrencyOrderMismatchError):
+            CurrencyCatalogService.set_enabled_order(self.user, self.workspace.id, [])
+
+
 class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
     """Tests for GET /api/currencies and /api/workspaces/enabled-currencies as admin/owner."""
 
@@ -366,6 +455,49 @@ class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
         self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
         self.assertStatus(404)
 
+    def test_reorder_enabled_currencies(self):
+        self.post('/api/workspaces/enabled-currencies', {'code': 'PLN'}, **self.auth_headers())
+        self.post('/api/workspaces/enabled-currencies', {'code': 'EUR'}, **self.auth_headers())
+        self.post('/api/workspaces/enabled-currencies', {'code': 'USD'}, **self.auth_headers())
+
+        data = self.put(
+            '/api/workspaces/enabled-currencies',
+            {'currency_codes': ['USD', 'PLN', 'EUR']},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual([row['code'] for row in data], ['USD', 'PLN', 'EUR'])
+
+        # The stored order survives a fresh read.
+        refreshed = self.get('/api/workspaces/enabled-currencies', **self.auth_headers())
+        self.assertEqual([row['code'] for row in refreshed], ['USD', 'PLN', 'EUR'])
+
+    def test_reorder_mismatch_returns_400(self):
+        self.post('/api/workspaces/enabled-currencies', {'code': 'PLN'}, **self.auth_headers())
+        self.post('/api/workspaces/enabled-currencies', {'code': 'EUR'}, **self.auth_headers())
+
+        data = self.put(
+            '/api/workspaces/enabled-currencies',
+            {'currency_codes': ['PLN']},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertIn('enabled currencies', data['detail'])
+
+    def test_reorder_unknown_code_returns_400(self):
+        self.post('/api/workspaces/enabled-currencies', {'code': 'PLN'}, **self.auth_headers())
+
+        self.put('/api/workspaces/enabled-currencies', {'currency_codes': ['PLN', 'XXX']}, **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_reorder_empty_list_returns_422(self):
+        self.put('/api/workspaces/enabled-currencies', {'currency_codes': []}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_reorder_bad_pattern_returns_422(self):
+        self.put('/api/workspaces/enabled-currencies', {'currency_codes': ['pln']}, **self.auth_headers())
+        self.assertStatus(422)
+
 
 class TestCurrencyRolePermissions(AuthMixin, APIClientMixin, TestCase):
     """Members cannot manage enabled currencies."""
@@ -379,6 +511,11 @@ class TestCurrencyRolePermissions(AuthMixin, APIClientMixin, TestCase):
     def test_member_cannot_disable(self):
         WorkspaceCurrencyFactory(workspace=self.workspace)
         self.delete('/api/workspaces/enabled-currencies/USD', **self.auth_headers())
+        self.assertStatus(403)
+
+    def test_member_cannot_reorder(self):
+        WorkspaceCurrencyFactory(workspace=self.workspace)
+        self.put('/api/workspaces/enabled-currencies', {'currency_codes': ['USD']}, **self.auth_headers())
         self.assertStatus(403)
 
     def test_member_can_view(self):

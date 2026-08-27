@@ -29,6 +29,14 @@ class LastCurrencyError(ValidationError):
     default_code = 'last_currency'
 
 
+class CurrencyOrderMismatchError(ValidationError):
+    default_message = (
+        "The currency order must list exactly the workspace's enabled currencies "
+        '(same set, no duplicates, none missing, none extra)'
+    )
+    default_code = 'currency_order_mismatch'
+
+
 # Human labels for the per-type reference breakdown; iteration order of the
 # dict passed to CurrencyInUseError drives the sentence order.
 REFERENCE_LABELS = {
