@@ -8,14 +8,19 @@ class PlannedTransactionNotFoundError(NotFoundError):
     default_code = 'not_found'
 
 
-class PlannedTransactionAccountRequiredError(ValidationError):
-    default_message = 'Multiple accounts exist — specify account_id'
-    default_code = 'account_required'
-
-
 class PlannedTransactionAccountArchivedError(ValidationError):
     default_message = 'Account is archived and cannot receive new planned transactions'
     default_code = 'account_archived'
+
+
+class PlannedTransactionCurrencyMismatchError(ValidationError):
+    default_message = 'Currency does not match the account currency'
+    default_code = 'currency_mismatch'
+
+
+class PlannedTransactionCurrencyRequiredError(ValidationError):
+    default_message = 'Currency is required when no account is set'
+    default_code = 'currency_required'
 
 
 class PlannedTransactionCategoryNotFoundError(ValidationError):

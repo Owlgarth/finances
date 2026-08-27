@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { authApi } from '../../api/client';
+import CurrencySetField from '../currencies/CurrencySetField';
+import { PRE_AUTH_CURRENCIES } from '../../utils/currencies';
 import { getApiErrorMessage } from '../../utils/errors';
-
-const CURRENCY_OPTIONS = ['PLN', 'EUR', 'USD', 'GBP', 'UAH', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD', 'JPY'];
 
 const inputClassName =
   'w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all';
@@ -14,7 +14,7 @@ export default function ResetAccountSection() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [workspaceName, setWorkspaceName] = useState('My Workspace');
-  const [currencyCode, setCurrencyCode] = useState('PLN');
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>(['PLN']);
   const [password, setPassword] = useState('');
   const [confirmShared, setConfirmShared] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -22,13 +22,14 @@ export default function ResetAccountSection() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
+    if (currencyCodes.length === 0) return toast.error('Select at least one currency');
 
     setIsResetting(true);
     try {
       const result = await authApi.resetAccount({
         password,
         workspace_name: workspaceName.trim() || 'My Workspace',
-        currency_code: currencyCode,
+        currency_codes: currencyCodes,
         confirm_shared: confirmShared,
       });
       queryClient.clear();
@@ -55,35 +56,26 @@ export default function ResetAccountSection() {
       </div>
 
       <form onSubmit={handleReset} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="reset-workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-              New workspace name
-            </label>
-            <input
-              id="reset-workspace-name"
-              value={workspaceName}
-              onChange={(e) => setWorkspaceName(e.target.value)}
-              maxLength={100}
-              className={inputClassName}
-            />
-          </div>
-          <div>
-            <label htmlFor="reset-currency" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-              Currency
-            </label>
-            <select
-              id="reset-currency"
-              value={currencyCode}
-              onChange={(e) => setCurrencyCode(e.target.value)}
-              className={inputClassName}
-            >
-              {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label htmlFor="reset-workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
+            New workspace name
+          </label>
+          <input
+            id="reset-workspace-name"
+            value={workspaceName}
+            onChange={(e) => setWorkspaceName(e.target.value)}
+            maxLength={100}
+            className={inputClassName}
+          />
         </div>
+
+        <CurrencySetField
+          value={currencyCodes}
+          onChange={setCurrencyCodes}
+          currencies={PRE_AUTH_CURRENCIES}
+          primaryLabel="Main account"
+          placeholder="Select currencies"
+        />
 
         <label className="flex items-start gap-2 text-sm text-text-muted cursor-pointer">
           <input

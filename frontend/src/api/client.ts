@@ -25,13 +25,13 @@ export type TransactionOrdering =
   | '-date' | 'date' | '-description' | 'description'
   | '-amount' | 'amount' | '-type' | 'type'
   | '-category__name' | 'category__name' | '-account__name' | 'account__name'
-  | '-account__currency__code' | 'account__currency__code';
+  | '-currency__code' | 'currency__code';
 
 export type PlannedTransactionOrdering =
   | '-name' | 'name' | '-amount' | 'amount'
   | '-status' | 'status' | '-planned_date' | 'planned_date'
   | '-category__name' | 'category__name'
-  | '-account__name' | 'account__name' | '-account__currency__code' | 'account__currency__code';
+  | '-account__name' | 'account__name' | '-currency__code' | 'currency__code';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -176,6 +176,10 @@ export const currenciesApi = {
     api.post<CatalogCurrency>('/workspaces/enabled-currencies', { ...data, custom: true }).then(res => res.data),
   disable: (code: string): Promise<void> =>
     api.delete(`/workspaces/enabled-currencies/${code}`).then(() => undefined),
+  /** Pure reorder: `codes` must be exactly the currently-enabled set (same
+      members, any order); returns the reordered list, first entry = primary. */
+  reorder: (codes: string[]): Promise<CatalogCurrency[]> =>
+    api.put<CatalogCurrency[]>('/workspaces/enabled-currencies', { currency_codes: codes }).then(res => res.data),
 };
 
 // ============= Accounts API =============
@@ -261,6 +265,9 @@ export interface TransactionInput {
   type: TransactionType;
   amount: string;
   account_id?: number | null;
+  /** Own currency. Derived server-side from the account when omitted with an
+      account set; required (and enabled-only) when account-less. */
+  currency_code?: string | null;
   category_id?: number | null;
   original_amount?: string | null;
   original_currency_code?: string | null;
@@ -355,6 +362,7 @@ export interface PlannedInput {
   name: string;
   amount: string;
   account_id?: number | null;
+  currency_code?: string | null;
   category_id?: number | null;
   planned_date: string;
   status?: 'pending' | 'done' | 'cancelled';
@@ -405,7 +413,7 @@ export const authApi = {
   deleteAccount: (password: string): Promise<{ message: string; deleted_workspaces: string[] }> =>
     api.delete('/users/me', { data: { password } }).then(res => res.data),
 
-  resetAccount: (data: { password: string; workspace_name?: string; currency_code?: string; confirm_shared?: boolean }): Promise<{ message: string; deleted_workspaces: string[]; workspace_id: number; workspace_name: string }> =>
+  resetAccount: (data: { password: string; workspace_name?: string; currency_codes?: string[]; confirm_shared?: boolean }): Promise<{ message: string; deleted_workspaces: string[]; workspace_id: number; workspace_name: string }> =>
     api.post('/users/me/reset', data).then(res => res.data),
 
   exportData: (): Promise<Blob> =>

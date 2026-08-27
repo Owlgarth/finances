@@ -6,6 +6,8 @@ from django.core.validators import EmailValidator
 from django.core.validators import ValidationError as DjangoValidationError
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
+from currencies.schemas import CurrencyCode
+
 
 def _validate_email(v: str) -> str:
     v = v.lower().strip()
@@ -50,7 +52,7 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     workspace_name: str
-    currency_code: str = Field(default='PLN', pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] | None = Field(None, min_length=1, max_length=20)
     start_with_sample_data: bool = Field(default=False, description='Populate the workspace with example data')
     accepted_terms_version: str = Field(..., description='Version of Terms of Service accepted')
     accepted_privacy_version: str = Field(..., description='Version of Privacy Policy accepted')

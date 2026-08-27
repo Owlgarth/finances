@@ -64,8 +64,11 @@ export default function CurrencySetField({
 }: CurrencySetFieldProps) {
   // Ambient by default (dedup-seam rule: reference data from the useDomain
   // hooks, not props); the explicit prop overrides for pre-workspace call
-  // sites. The hook runs unconditionally, above every branch.
-  const { data: ambientCurrencies = [] } = useEnabledCurrencies()
+  // sites. The hook runs unconditionally, above every branch; its query is
+  // disabled when the prop feeds the options - prop-fed sites are
+  // pre-workspace or pre-auth and have no enabled-currencies set to read,
+  // so the ambient request would only be a wasted, rejected call.
+  const { data: ambientCurrencies = [] } = useEnabledCurrencies(currenciesProp === undefined)
   const currencies = currenciesProp ?? ambientCurrencies
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
 

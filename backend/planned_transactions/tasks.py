@@ -20,7 +20,7 @@ def execute_planned_transaction(self, planned_id: int) -> None:
     the task skips execution — this prevents duplicate Transactions if the task
     is retried after a partial failure.
     """
-    planned = PlannedTransaction.objects.select_related('account', 'category').filter(id=planned_id).first()
+    planned = PlannedTransaction.objects.select_related('account', 'category', 'currency').filter(id=planned_id).first()
     if not planned:
         logger.warning('PlannedTransaction %s not found, skipping.', planned_id)
         return
@@ -57,6 +57,7 @@ def execute_planned_transaction(self, planned_id: int) -> None:
                 date=payment_date,
                 description=planned.name,
                 account_id=planned.account_id,
+                currency_code=planned.currency.code,
                 category_id=planned.category_id,
                 amount=planned.amount,
                 type='expense',

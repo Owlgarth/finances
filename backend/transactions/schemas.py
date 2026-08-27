@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from currencies.schemas import CurrencyCode
+
 
 class TransactionCreate(BaseModel):
     """Schema for creating or fully replacing a transaction.
@@ -13,9 +15,15 @@ class TransactionCreate(BaseModel):
     amount is positive for income/expense and a signed non-zero delta for
     adjustments (validated in the service, where the type semantics live).
 
+    account_id is optional. With an account, currency_code is derived from
+    the account when omitted and must MATCH it when sent; without an account,
+    currency_code is required (and must be an enabled workspace currency).
+    Adjustments always require an account - service-validated like the other
+    type semantics.
+
     items is optional (defaults to empty list). When present, the service
     bulk-creates them in the same atomic block as the transaction. Omitting
-    it — as planned_transactions/tasks.py does — leaves the transaction with
+    it - as planned_transactions/tasks.py does - leaves the transaction with
     zero items, preserving the historical behavior.
     """
 
@@ -24,6 +32,7 @@ class TransactionCreate(BaseModel):
     type: str = Field(..., pattern=r'^(income|expense|adjustment)$')
     amount: Decimal
     account_id: Optional[int] = None
+    currency_code: Optional[CurrencyCode] = None
     category_id: Optional[int] = None
     original_amount: Optional[Decimal] = Field(None, gt=0)
     original_currency_code: Optional[str] = Field(None, pattern=r'^[A-Z]{3,8}$')
@@ -80,8 +89,8 @@ class TransactionOut(BaseModel):
 
     id: int
     workspace_id: int
-    account_id: int
-    account_name: str
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
     currency_code: str
     date: date
     description: str

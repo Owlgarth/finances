@@ -17,8 +17,9 @@ class ReportService:
         """Planned vs actual per category for a budget's period.
 
         Planned amounts come from CategoryBudget rows; actuals are the sums of
-        expense transactions per category (by account currency) within the
-        period's date range. Adjustments and income never count as actuals.
+        expense transactions per category by the transaction's own currency
+        within the period's date range (account-less transactions count).
+        Adjustments and income never count as actuals.
         """
         budget = BudgetService.get(budget_id, workspace_id)
         period = PeriodService._get_period(workspace_id, budget_id, period_id)
@@ -37,12 +38,12 @@ class ReportService:
                 date__gte=period.start_date,
                 date__lte=period.end_date,
             )
-            .values('category_id', 'category__name', 'account__currency__code')
+            .values('category_id', 'category__name', 'currency__code')
             .annotate(total=Sum('amount'))
         )
         actual_map: dict[tuple[int, str], Decimal] = {}
         for row in actual_rows:
-            actual_map[(row['category_id'], row['account__currency__code'])] = row['total']
+            actual_map[(row['category_id'], row['currency__code'])] = row['total']
             category_names.setdefault(row['category_id'], row['category__name'])
 
         cents = Decimal('0.01')
@@ -90,7 +91,8 @@ class ReportService:
 
         Returns up to `limit` existing periods, oldest first — never materializes
         new ones. Same actual semantics as the summary: expense transactions of
-        the budget's categories within each period's date range.
+        the budget's categories within each period's date range, grouped by the
+        transaction's own currency (account-less transactions count).
         """
         budget = BudgetService.get(budget_id, workspace_id)
         recent = list(budget.periods.order_by('-start_date')[:limit])
@@ -116,10 +118,10 @@ class ReportService:
                     date__gte=period.start_date,
                     date__lte=period.end_date,
                 )
-                .values('account__currency__code')
+                .values('currency__code')
                 .annotate(total=Sum('amount'))
             )
-            actual_map = {row['account__currency__code']: row['total'] for row in actual_rows}
+            actual_map = {row['currency__code']: row['total'] for row in actual_rows}
 
             totals = {}
             for code in sorted({c for (pid, c) in planned_map if pid == period.id} | set(actual_map)):

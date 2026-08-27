@@ -81,6 +81,9 @@ class WorkspaceService:
             codes = list(dict.fromkeys([currency_code, *DEFAULT_WORKSPACE_EXTRA_CURRENCIES]))
             strict = False
 
+        # Sequential enables append at max+1, so codes[0] (the primary)
+        # lands at position 0 - list_enabled's first entry, the default
+        # in every currency dropdown.
         primary_currency = CurrencyCatalogService.enable(user, workspace.id, codes[0])
         for code in codes[1:]:
             if strict:

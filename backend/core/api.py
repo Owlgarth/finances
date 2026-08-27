@@ -46,7 +46,7 @@ def _extract_register_rate_key(request, data: RegisterIn = None, **kwargs):
     return data.email
 
 
-@router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 429: DetailOut})
+@router.post('/register', response={201: Token, 400: ErrorOut, 403: DetailOut, 404: DetailOut, 429: DetailOut})
 @rate_limit('register', limit=settings.RATE_LIMIT_REGISTER, period=settings.RATE_LIMIT_REGISTER_PERIOD)
 @rate_limit_account(
     'register_account',
