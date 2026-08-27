@@ -21,9 +21,6 @@ class Budget(WorkspaceScopedModel):
     icon = models.CharField(max_length=50, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     display_order = models.IntegerField(default=0)
-    display_currency = models.ForeignKey(
-        'currencies.Currency', on_delete=models.PROTECT, null=True, blank=True, related_name='+'
-    )
     cadence = models.CharField(max_length=10, choices=Cadence.choices, default=Cadence.MONTHLY)
     # cadence_weeks/cadence_anchor are required iff cadence == WEEKS, null otherwise.
     cadence_weeks = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -36,6 +33,32 @@ class Budget(WorkspaceScopedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def currency_codes(self) -> list[str]:
+        """Codes of the budget's currency set, in stored position order."""
+        return [bc.currency.code for bc in self.currencies.all()]
+
+
+class BudgetCurrency(models.Model):
+    """One entry in a budget's ordered currency set (first = default view).
+
+    Plain Model, not WorkspaceScopedModel - matches the WorkspaceCurrency
+    precedent: scoped transitively via the budget FK, no audit fields.
+    """
+
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='currencies')
+    currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='budget_currencies')
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'budget_currencies'
+        verbose_name_plural = 'budget currencies'
+        unique_together = [['budget', 'currency']]
+        ordering = ['position', 'id']
+
+    def __str__(self):
+        return f'{self.budget.name}: {self.currency.code}'
 
 
 class Period(WorkspaceScopedModel):

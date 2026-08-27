@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { Plus, ArrowLeftRight, Archive, Pencil, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
 import type { Account, AccountType, Transfer } from '../types'
-import { useMultiCurrency } from '../hooks/useDomain'
+import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
@@ -15,14 +15,16 @@ import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_ICON: Record<AccountType, typeof Wallet> = { cash: Coins, bank: Landmark, other: Wallet }
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
-  const { canManageAccounts, canWrite } = usePermissions()
+  const { canManageAccounts, canWrite, canManageCurrencies } = usePermissions()
   const multiCurrency = useMultiCurrency()
+  const { data: currencies = [] } = useEnabledCurrencies()
   const isTouch = useIsTouch()
   const [showArchived, setShowArchived] = useState(false)
   // Touch replacement for the small inline card action links (plan decision 7).
@@ -34,6 +36,9 @@ export default function AccountsPage() {
   const [transferOpen, setTransferOpen] = useState(false)
   const [repeatTransfer, setRepeatTransfer] = useState<Transfer | null>(null)
   const [deleting, setDeleting] = useState<Account | null>(null)
+  // Workspace settings opened from the account form's currency bridge; the
+  // panel instance renders LAST so it stacks above the still-open form.
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', showArchived],
@@ -49,6 +54,13 @@ export default function AccountsPage() {
   })
 
   const balanceByAccount = new Map((balances?.accounts ?? []).map((r) => [r.account_id, r.balance]))
+  // Card grid in enabled-currency creation order (the workspace's primary
+  // first), stable within a currency (Array.prototype.sort is stable in
+  // modern JS engines).
+  const rank = new Map(currencies.map((c, i) => [c.code, i]))
+  const sortedAccounts = [...accounts].sort(
+    (a, b) => (rank.get(a.currency_code) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.currency_code) ?? Number.MAX_SAFE_INTEGER),
+  )
 
   const archiveMutation = useMutation({
     mutationFn: ({ id, archived }: { id: number; archived: boolean }) => accountsApi.setArchive(id, archived),
@@ -103,7 +115,7 @@ export default function AccountsPage() {
         <p className="text-sm text-text-muted">No accounts yet.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {accounts.map((account) => {
+          {sortedAccounts.map((account) => {
             const Icon = TYPE_ICON[account.type]
             const balance = balanceByAccount.get(account.id) ?? account.opening_balance
             return (
@@ -217,7 +229,12 @@ export default function AccountsPage() {
             : []),
         ]}
       />
-      <AccountFormModal open={formOpen} onClose={() => setFormOpen(false)} account={editing} />
+      <AccountFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        account={editing}
+        onManageCurrencies={canManageCurrencies ? () => setSettingsOpen(true) : undefined}
+      />
       {setBalanceFor && (
         <SetBalanceModal open={!!setBalanceFor} onClose={() => setSetBalanceFor(null)} account={setBalanceFor} />
       )}
@@ -229,6 +246,7 @@ export default function AccountsPage() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      <WorkspaceSettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

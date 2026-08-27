@@ -50,6 +50,7 @@ Workspace (top-level container)
 │     └── PlannedTransaction (scheduled future transaction on an account)
 │
 └── Budget                   (a plan with a cadence)
+      ├── BudgetCurrency     (the budget's ordered currency set; first = default view)
       ├── Category           (persistent, budget-scoped)
       └── Period             (derived from cadence, or an explicit custom range)
             └── CategoryBudget (planned amount per category, per period)
@@ -196,7 +197,7 @@ const { data } = useQuery({
 | `workspaces_workspace` / `_workspacemember` | Workspaces + membership/roles |
 | `currencies_currency` / `workspaces_workspacecurrency` | Global catalog + per-workspace enablement |
 | `accounts_account` | Money-holding accounts |
-| `budgeting_budget` / `_period` / `_categorybudget` | Budgets, periods (cadence-derived or custom), planned amounts |
+| `budgeting_budget` / `_period` / `_categorybudget` / `budget_currencies` | Budgets, periods (cadence-derived or custom), planned amounts, per-budget currency sets |
 | `categories_category` | Budget-scoped categories |
 | `transactions_transaction` | Income / expense / adjustment records |
 | `transaction_items` | Ordered receipt line items |

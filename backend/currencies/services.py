@@ -15,22 +15,25 @@ from currencies.models import Currency, WorkspaceCurrency
 
 class CurrencyCatalogService:
     @staticmethod
-    def _reference_count(workspace_id: int, currency: Currency) -> int:
-        """Count records in the workspace that reference this catalog currency.
+    def _reference_count(workspace_id: int, currency: Currency) -> dict[str, int]:
+        """Count records in the workspace that reference this catalog currency, by type.
 
-        Covers every PROTECT FK to Currency: accounts, category budgets,
-        budget display currencies, and the transaction original-amount facet.
+        Covers the PROTECT FKs whose references must block disable: accounts,
+        category budgets, and budget currency sets. The transaction
+        original-amount facet is deliberately NOT counted: it resolves against
+        the whole catalog and never requires enablement (see the facet guard
+        at the custom-row deletion site in disable()).
         """
         from accounts.models import Account
-        from budgeting.models import Budget, CategoryBudget
-        from transactions.models import Transaction
+        from budgeting.models import BudgetCurrency, CategoryBudget
 
-        return (
-            Account.objects.filter(workspace_id=workspace_id, currency=currency).count()
-            + CategoryBudget.objects.filter(workspace_id=workspace_id, currency=currency).count()
-            + Budget.objects.filter(workspace_id=workspace_id, display_currency=currency).count()
-            + Transaction.objects.filter(workspace_id=workspace_id, original_currency=currency).count()
-        )
+        return {
+            'accounts': Account.objects.filter(workspace_id=workspace_id, currency=currency).count(),
+            'category_budgets': CategoryBudget.objects.filter(workspace_id=workspace_id, currency=currency).count(),
+            'budget_currencies': BudgetCurrency.objects.filter(
+                budget__workspace_id=workspace_id, currency=currency
+            ).count(),
+        }
 
     @staticmethod
     def list_catalog(workspace_id: int) -> QuerySet[Currency]:
@@ -39,12 +42,21 @@ class CurrencyCatalogService:
 
     @staticmethod
     def list_enabled(workspace_id: int) -> list[Currency]:
-        """List the currencies enabled for a workspace, ordered by code."""
+        """List the currencies enabled for a workspace, in creation order.
+
+        Ordered by WorkspaceCurrency.created_at, tiebroken by id: bulk
+        enablement (workspace creation runs in one atomic block, where
+        Postgres now() is transaction-stable) shares a timestamp, so id
+        preserves insertion order - the primary currency, enabled first,
+        sorts first. This order is the workspace's canonical currency order
+        (primary first); the frontend consumes it as the enabled-currencies
+        list and derives its primary fallback from the first entry.
+        """
         return [
             wc.currency
             for wc in WorkspaceCurrency.objects.filter(workspace_id=workspace_id)
             .select_related('currency')
-            .order_by('currency__code')
+            .order_by('created_at', 'id')
         ]
 
     @staticmethod
@@ -72,8 +84,15 @@ class CurrencyCatalogService:
 
     @staticmethod
     @db_transaction.atomic
-    def create_custom(user, workspace_id: int, code: str, name: str, symbol: str, decimals: int = 2) -> Currency:
-        """Create a workspace-owned custom currency and enable it."""
+    def create_custom(user, workspace_id: int, code: str, name: str, symbol: str) -> Currency:
+        """Create a workspace-owned custom currency and enable it.
+
+        Storage and display are 2-decimal everywhere (every amount column is
+        DecimalField(decimal_places=2); design/data-formatting.md pins
+        "always exactly 2"), so custom currencies are created with
+        decimals=2 - there is no decimals parameter. The global catalog's
+        ISO decimals values (JPY=0 etc.) are seed data and stay untouched.
+        """
         if Currency.objects.filter(workspace__isnull=True, code=code).exists():
             raise DuplicateCurrencyError(code)
         if Currency.objects.filter(workspace_id=workspace_id, code=code).exists():
@@ -83,7 +102,7 @@ class CurrencyCatalogService:
             code=code,
             name=name,
             symbol=symbol,
-            decimals=decimals,
+            decimals=2,
             is_custom=True,
             workspace_id=workspace_id,
         )
@@ -111,9 +130,17 @@ class CurrencyCatalogService:
 
         currency = enablement.currency
         references = CurrencyCatalogService._reference_count(workspace_id, currency)
-        if references:
+        if any(references.values()):
             raise CurrencyInUseError(code, references)
 
         enablement.delete()
         if currency.is_custom and not currency.enablements.exists():
-            currency.delete()
+            # Facet references do not BLOCK disable, but they pin the custom
+            # row: Transaction.original_currency is PROTECT, so deleting a
+            # facet-referenced row would raise ProtectedError (a 500). A
+            # facet-referenced custom row is not orphaned - it stays in the
+            # workspace catalog, re-enablable from the settings picker.
+            from transactions.models import Transaction
+
+            if not Transaction.objects.filter(original_currency=currency).exists():
+                currency.delete()

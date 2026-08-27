@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -6,9 +6,11 @@ import { CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import CurrencySetField from '../components/currencies/CurrencySetField'
+import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
-import { useBudgets } from '../hooks/useDomain'
+import { useBudgets, useEnabledCurrencies } from '../hooks/useDomain'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiErrorMessage } from '../utils/errors'
@@ -36,7 +38,16 @@ function initialCustomPeriod(): { start: string; end: string; name: string } {
   return { start, end: endIso, name: formatPeriodName(start, endIso) }
 }
 
-function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+// Card currency row: codes joined with a " · " separator (e.g. "USD · EUR");
+// past the cap the rest collapse into a "+N" suffix so no code is ever
+// truncated mid-glyph (natural wrapping is allowed, truncate is not).
+const CARD_CURRENCY_CAP = 7
+function formatCardCurrencyCodes(codes: string[]): string {
+  const shown = codes.slice(0, CARD_CURRENCY_CAP).join(' · ')
+  return codes.length > CARD_CURRENCY_CAP ? `${shown} +${codes.length - CARD_CURRENCY_CAP}` : shown
+}
+
+function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolean; onClose: () => void; onManageCurrencies?: () => void }) {
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -51,6 +62,20 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [customName, setCustomName] = useState(() => initialCustomPeriod().name)
   // Once the user edits the period name, date changes stop re-deriving it.
   const [nameTouched, setNameTouched] = useState(false)
+  // Currencies the budget plans for, order-significant (index 0 = shown
+  // first). Single source of truth in this modal: the field appends new
+  // picks at the end and removes deselections; only its arrow list reorders.
+  const { data: currencies = [] } = useEnabledCurrencies()
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>([])
+  // Derived-until-touched (same shape as nameTouched above): until the user
+  // edits the set, an empty selection shows and submits [primary] - the
+  // FIRST entry of the enabled list, which the backend orders with the
+  // workspace's primary currency first. A PLN-primary workspace therefore
+  // preselects PLN even though EUR sorts first alphabetically. Users add
+  // more currencies deliberately (light default).
+  const [currencyTouched, setCurrencyTouched] = useState(false)
+  const effectiveCurrencyCodes =
+    currencyTouched || currencies.length === 0 ? currencyCodes : [currencies[0].code]
 
   // This wrapper stays mounted while BudgetsPage is up (Modal only hides it), so
   // form state would otherwise survive across opens — a create-after-create or a
@@ -68,6 +93,8 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
     setCustomEnd(initial.end)
     setCustomName(initial.name)
     setNameTouched(false)
+    setCurrencyCodes([])
+    setCurrencyTouched(false)
     onClose()
   }
 
@@ -82,6 +109,7 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
         cadence,
         cadence_weeks: cadence === 'weeks' ? parseInt(weeks, 10) : null,
         cadence_anchor: cadence === 'weeks' ? anchor : null,
+        currency_codes: effectiveCurrencyCodes,
       })
       if (cadence === 'custom') {
         try {
@@ -177,6 +205,11 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
             </div>
           </>
         )}
+        <CurrencySetField
+          value={effectiveCurrencyCodes}
+          onChange={(next) => { setCurrencyTouched(true); setCurrencyCodes(next) }}
+          onManageCurrencies={onManageCurrencies}
+        />
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
@@ -188,34 +221,40 @@ function CreateBudgetModal({ open, onClose }: { open: boolean; onClose: () => vo
   )
 }
 
-function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose: () => void }) {
+// Mount-per-use (PeriodFormModal's contract): fields seed from `budget` in
+// the useState initializers, so the caller renders this component ONLY while
+// the form is open (unmount on close). That remount re-seeds state per open
+// with zero open-effects.
+function EditBudgetModal({ budget, onClose, onManageCurrencies }: { budget: Budget; onClose: () => void; onManageCurrencies?: () => void }) {
   const queryClient = useQueryClient()
-  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
-  const [name, setName] = useState('')
-
-  useEffect(() => {
-    if (budget) setName(budget.name)
-  }, [budget])
+  const [name, setName] = useState(budget.name)
+  // Single order-significant source of truth (index 0 = shown first): the
+  // field appends new picks at the end and removes deselections; only its
+  // arrow list reorders.
+  const [currencyCodes, setCurrencyCodes] = useState<string[]>(budget.currency_codes)
 
   const mutation = useMutation({
-    mutationFn: () => budgetsApi.update(budget!.id, { name: name.trim() }),
+    mutationFn: () => budgetsApi.update(budget.id, { name: name.trim(), currency_codes: currencyCodes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
-      queryClient.invalidateQueries({ queryKey: ['budget', budget!.id] })
-      toast.success('Budget renamed')
+      // The detail page switcher reads ['budget', id].
+      queryClient.invalidateQueries({ queryKey: ['budget', budget.id] })
+      toast.success('Budget updated')
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to rename budget')),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update budget')),
   })
 
   return (
-    <Modal open={!!budget} onClose={onClose} className="p-6" title="Rename budget">
+    <Modal open onClose={onClose} className="p-6" title="Edit budget">
       <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
         <div>
-          <label htmlFor="budget-rename" className={labelClass}>Name</label>
-          <input id="budget-rename" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
+          <label htmlFor="budget-edit-name" className={labelClass}>Name</label>
+          <input id="budget-edit-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
+        <CurrencySetField value={currencyCodes} onChange={setCurrencyCodes} onManageCurrencies={onManageCurrencies} />
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
@@ -230,11 +269,15 @@ function RenameBudgetModal({ budget, onClose }: { budget: Budget | null; onClose
 export default function BudgetsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { canManageAccounts } = usePermissions()
+  const { canManageAccounts, canManageCurrencies } = usePermissions()
   const { data: budgets = [], isLoading } = useBudgets(false)
   const [createOpen, setCreateOpen] = useState(false)
-  const [renaming, setRenaming] = useState<Budget | null>(null)
+  const [editing, setEditing] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
+  // Workspace settings opened from the currency field's manage bridge; the
+  // panel instance renders LAST so it stacks above the still-open form modal.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const openSettings = () => setSettingsOpen(true)
   // Add-period modal (mount-per-use, PeriodFormModal docblock): the
   // per-session key forces a fresh remount so the modal's lazy useState
   // initializers re-run - add-after-add on the same budget opens fresh
@@ -285,9 +328,9 @@ export default function BudgetsPage() {
                 <PieChart size={16} className="text-text-muted" />
                 <span className="text-sm font-medium text-text truncate">{b.name}</span>
                 {/* Adjacent icon buttons: real padded hit areas instead of
-                    .touch-hit, whose expanded areas would overlap
-                    (responsive.md). On coarse pointers they grow to the 44px
-                    floor; -my keeps the card header height unchanged.
+                    the shared hit-area utility, whose expanded areas would
+                    overlap (responsive.md). On coarse pointers they grow to
+                    the 44px floor; -my keeps the card header height unchanged.
                     View-periods is read-only (all roles); add-period gates
                     on custom cadence + admin, the same predicate as
                     BudgetDetailPage's period-management cluster. Buttons,
@@ -318,10 +361,10 @@ export default function BudgetsPage() {
                   {canManageAccounts && (
                     <button
                       type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRenaming(b) }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
-                      title="Rename"
-                      aria-label={`Rename budget ${b.name}`}
+                      title="Edit"
+                      aria-label={`Edit budget ${b.name}`}
                     >
                       <Pencil size={13} />
                     </button>
@@ -342,13 +385,30 @@ export default function BudgetsPage() {
               <div className="mt-2 text-[10px] font-mono uppercase tracking-wider text-text-muted">
                 {b.cadence === 'weeks' ? `Every ${b.cadence_weeks} weeks` : b.cadence}
               </div>
+              {b.currency_codes.length > 0 && (
+                <div className="mt-1 text-[10px] font-mono uppercase tracking-wider text-text-muted">
+                  {formatCardCurrencyCodes(b.currency_codes)}
+                </div>
+              )}
             </Link>
           ))}
         </div>
       )}
 
-      <CreateBudgetModal open={createOpen} onClose={() => setCreateOpen(false)} />
-      <RenameBudgetModal budget={renaming} onClose={() => setRenaming(null)} />
+      <CreateBudgetModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onManageCurrencies={canManageCurrencies ? openSettings : undefined}
+      />
+      {/* Mount-per-use (EditBudgetModal docblock): the conditional render is
+          the open state; closing unmounts and the next open re-seeds. */}
+      {editing && (
+        <EditBudgetModal
+          budget={editing}
+          onClose={() => setEditing(null)}
+          onManageCurrencies={canManageCurrencies ? openSettings : undefined}
+        />
+      )}
       {periodModalBudget && (
         <PeriodFormModal
           key={`add-${periodModalBudget.id}-${periodModalNonce}`}
@@ -366,6 +426,7 @@ export default function BudgetsPage() {
         onCancel={() => setDeleting(null)}
         isPending={deleteMutation.isPending}
       />
+      <WorkspaceSettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

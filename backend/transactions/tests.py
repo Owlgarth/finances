@@ -21,6 +21,7 @@ from categories.factories import CategoryFactory
 from common.auth import create_access_token
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
+from currencies.models import Currency
 from currencies.services import CurrencyCatalogService
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import (
@@ -652,6 +653,55 @@ class TestFiltersAndTotals(TransactionTestCase):
             **self.auth_headers(),
         )
         self.assertEqual(data['total'], 4)
+
+    def test_filter_by_account_currency(self):
+        data = self.get('/api/transactions?currency_code=USD', **self.auth_headers())
+        self.assertEqual(data['total'], 1)
+        self.assertEqual(data['items'][0]['currency_code'], 'USD')
+
+    def test_filter_by_multiple_account_currencies(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        eur_account = AccountFactory(workspace=self.workspace, name='Euros', currency=eur)
+        TransactionFactory(
+            account=eur_account,
+            workspace=self.workspace,
+            date=date(2026, 7, 8),
+            description='Euro expense',
+            amount=Decimal('20.00'),
+            type='expense',
+        )
+
+        data = self.get('/api/transactions?currency_code=USD&currency_code=EUR', **self.auth_headers())
+        # The three PLN-account rows stay excluded.
+        self.assertEqual(data['total'], 2)
+        self.assertEqual({t['currency_code'] for t in data['items']}, {'USD', 'EUR'})
+
+    def test_currency_filter_never_matches_original_facet(self):
+        # A THB original facet on a PLN account: the filter is account-currency only.
+        thb = Currency.objects.get(workspace__isnull=True, code='THB')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 9),
+            description='Paid in baht, settled in PLN',
+            amount=Decimal('50.00'),
+            type='expense',
+            original_amount=Decimal('400.00'),
+            original_currency=thb,
+        )
+
+        data = self.get('/api/transactions?currency_code=THB', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['total'], 0)
+
+        # The same row matches its ACCOUNT currency (3 setUp rows + the facet row).
+        data = self.get('/api/transactions?currency_code=PLN', **self.auth_headers())
+        self.assertEqual(data['total'], 4)
+
+    def test_currency_filter_unknown_code_returns_empty(self):
+        data = self.get('/api/transactions?currency_code=XXX', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['total'], 0)
 
     def test_filter_by_budget(self):
         data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
