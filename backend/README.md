@@ -28,7 +28,7 @@ backend/
 | `workspaces` | Multi-tenant workspaces, role-based access (owner/admin/member/viewer), enabled currencies |
 | `currencies` | Global ISO 4217 currency catalog; workspaces enable a subset |
 | `accounts` | Money-holding accounts (cash/bank/other); balances computed from transactions ± transfers |
-| `budgeting` | `Budget` (plan + cadence), derived `Period`, `CategoryBudget` (planned amount per period) |
+| `budgeting` | `Budget` (plan + cadence), `BudgetCurrency` (ordered per-budget currency set), derived `Period`, `CategoryBudget` (planned amount per period) |
 | `categories` | Persistent, budget-scoped categories |
 | `transactions` | Income/expense/adjustment records; `TransactionItem` (receipt lines); `TransactionAttachment` (+ receipt extraction) |
 | `transfers` | Money moved between accounts, incl. cross-currency with implied rate |
@@ -134,7 +134,11 @@ The API uses role-based permissions for workspace operations:
 Every new workspace gets a **usable-but-empty** starter setup via
 `create_starter_fixtures()`: a "Main" account (flagged as the default for its
 currency), a "General" budget with a few starter categories, and the current
-period.
+period. Creation (`WorkspaceService.create_workspace` - registration, in-app
+create, account reset) first enables the currency set: the primary plus silent
+EUR/USD defaults, or exactly an explicit `currency_codes` list (first entry =
+primary / Main-account currency); the "General" budget's currency set starts
+as `[primary]`.
 
 If the user opts in (the "Start with sample data" checkbox at registration),
 `create_demo_fixtures()` additionally seeds a second (Savings) account, sample
@@ -201,7 +205,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/workspaces` | List user's workspaces |
-| POST | `/api/workspaces` | Create new workspace |
+| POST | `/api/workspaces` | Create new workspace (optional `currency_codes` list, max 20, first = primary - used verbatim; otherwise the primary `currency_code` plus silent EUR/USD defaults) |
 | GET | `/api/workspaces/current` | Get current workspace |
 | PUT | `/api/workspaces/current` | Update current workspace name |
 | DELETE | `/api/workspaces/{id}` | Delete workspace (owner only) |
@@ -212,9 +216,9 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/currencies` | List the global ISO 4217 catalog |
-| GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace |
-| POST | `/api/workspaces/enabled-currencies` | Enable a catalog currency, or create a custom one (`custom: true`) (admin+) |
-| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+) |
+| GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace (creation order - the primary first) |
+| POST | `/api/workspaces/enabled-currencies` | Enable a catalog currency, or create a custom one (`custom: true`; custom currencies are always 2-decimal - no `decimals` param) (admin+) |
+| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+; blocked while referenced by accounts, planned amounts, or budget currency sets - the error enumerates the counts; the transaction original-amount facet never blocks) |
 
 ### Workspace Members
 
@@ -245,8 +249,8 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET/POST | `/api/budgets` | List (`include_inactive`) / create budget |
-| GET/PUT/DELETE | `/api/budgets/{id}` | Get / update / delete budget |
+| GET/POST | `/api/budgets` | List (`include_inactive`) / create budget (payload carries an ordered `currency_codes` set, max 10, first = default view) |
+| GET/PUT/DELETE | `/api/budgets/{id}` | Get / update (incl. `currency_codes`) / delete budget |
 | PATCH | `/api/budgets/{id}/archive` | Activate / deactivate budget |
 | GET/POST | `/api/budgets/{id}/periods` | List / create period |
 | GET | `/api/budgets/{id}/periods/current` | Current period (`date`) - materialized on demand |
@@ -261,7 +265,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated) |
+| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the account's currency, never the original-amount facet) |
 | GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` |
 | POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete |
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
@@ -285,7 +289,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/planned-transactions` | `status`, `account_id`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated) |
+| GET | `/api/planned-transactions` | `status`, `account_id`, `currency_code[]`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated; `currency_code` filters by the account's currency) |
 | GET | `/api/planned-transactions/totals` | `status`, `account_id`, `group_by` | Totals grouped by `currency` or `category` |
 | POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Create / update / delete |
 | POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction on the planned account) |
@@ -314,8 +318,9 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 ### Full Data Export/Import (GDPR Portability)
 
 `GET /api/users/me/export` produces a **v3.0** JSON export of all the user's
-workspaces (accounts, budgets, periods, categories, category budgets, transactions
-with line items + attachments, transfers, planned transactions).
+workspaces (accounts, budgets with their ordered currency sets, periods,
+categories, category budgets, transactions with line items + attachments,
+transfers, planned transactions).
 
 `POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
 attachments travel as base64 and are recreated when object storage is configured.
