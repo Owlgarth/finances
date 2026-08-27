@@ -40,7 +40,8 @@ Money-holding **accounts** are the centre of gravity. Budgets *plan* money; acco
 Workspace (top-level container)
 │
 ├── WorkspaceMember          (user access + role)
-├── WorkspaceCurrency        (which catalog currencies are enabled here)
+├── WorkspaceCurrency        (which catalog currencies are enabled here; stored
+│                             position orders them - first = workspace primary)
 │
 ├── Account                  (cash / bank / other; holds money in one currency)
 │     ├── Transaction        (income / expense / adjustment; optional category; optionally on this
@@ -49,7 +50,9 @@ Workspace (top-level container)
 │     │     ├── TransactionItem        (ordered receipt line items - informational)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
-│     └── PlannedTransaction (scheduled future transaction on an account)
+│     └── PlannedTransaction (scheduled future transaction, optionally on this
+│                               account - stores its own currency, equal to the
+│                               account's whenever one is set)
 │
 └── Budget                   (a plan with a cadence)
       ├── BudgetCurrency     (the budget's ordered currency set; first = default view)
@@ -63,7 +66,7 @@ Workspace (top-level container)
 | Concept | Rule |
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
-| **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction stores its own currency - it equals the account's currency whenever an account is set, and account-less rows carry their own (cash exchanged while traveling; a closed account's history). A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
+| **Currency** | A global ISO 4217 catalog; each workspace enables a subset, ordered by a user-reorderable position (first = primary). A transaction stores its own currency - it equals the account's currency whenever an account is set, and account-less rows carry their own (cash exchanged while traveling; a closed account's history). A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
@@ -120,7 +123,7 @@ parsers that delegate to services. Apps with async work have a `tasks.py`.
 **Planned transaction execution** - the service sets `status='done'` + `payment_date`,
 then dispatches `execute_planned_transaction.delay(id)`. The worker re-fetches with
 `select_for_update()`, guards idempotency via `transaction_id`, and creates the
-`Transaction` on the planned account.
+`Transaction` with the plan's account (possibly none) and the plan's own currency.
 
 **Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored
