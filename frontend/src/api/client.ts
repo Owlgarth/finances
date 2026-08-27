@@ -25,7 +25,7 @@ export type TransactionOrdering =
   | '-date' | 'date' | '-description' | 'description'
   | '-amount' | 'amount' | '-type' | 'type'
   | '-category__name' | 'category__name' | '-account__name' | 'account__name'
-  | '-account__currency__code' | 'account__currency__code';
+  | '-currency__code' | 'currency__code';
 
 export type PlannedTransactionOrdering =
   | '-name' | 'name' | '-amount' | 'amount'
@@ -265,6 +265,9 @@ export interface TransactionInput {
   type: TransactionType;
   amount: string;
   account_id?: number | null;
+  /** Own currency. Derived server-side from the account when omitted with an
+      account set; required (and enabled-only) when account-less. */
+  currency_code?: string | null;
   category_id?: number | null;
   original_amount?: string | null;
   original_currency_code?: string | null;

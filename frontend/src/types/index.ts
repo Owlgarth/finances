@@ -78,8 +78,9 @@ export type TransactionType = 'income' | 'expense' | 'adjustment';
 export interface Transaction {
   id: number;
   workspace_id: number;
-  account_id: number;
-  account_name: string;
+  /** Null on account-less rows (own currency is the stored truth). */
+  account_id: number | null;
+  account_name: string | null;
   currency_code: string;
   date: string;
   description: string;
