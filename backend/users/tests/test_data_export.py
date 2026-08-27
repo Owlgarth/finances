@@ -1,6 +1,7 @@
 """Tests for GDPR data export (Right to Access & Portability)."""
 
 import json
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -9,6 +10,8 @@ from budgeting.factories import BudgetFactory
 from budgeting.models import BudgetCurrency
 from common.tests.mixins import AuthMixin
 from currencies.services import CurrencyCatalogService
+from planned_transactions.factories import PlannedTransactionFactory
+from transactions.factories import TransactionFactory
 from users.models import UserConsent
 
 User = get_user_model()
@@ -111,6 +114,37 @@ class DataExportTests(AuthMixin, TestCase):
         exported_budget = next(b for b in data['workspaces'][0]['budgets'] if b['name'] == 'Household')
         self.assertEqual(exported_budget['currency_codes'], ['PLN', 'USD'])
         self.assertNotIn('display_currency_code', exported_budget)
+
+    def test_export_contains_account_less_transaction_and_planned(self):
+        """Account-less rows export account_name None plus their own currency code."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        TransactionFactory(
+            account=None,
+            currency=pln,
+            workspace=self.workspace,
+            description='Tip jar',
+            amount=Decimal('20.00'),
+            type='expense',
+        )
+        PlannedTransactionFactory(
+            account=None,
+            currency=pln,
+            workspace=self.workspace,
+            name='Future tips',
+            amount=Decimal('10.00'),
+        )
+
+        response = self.client.get('/api/users/me/export', **self.auth_headers())
+        data = json.loads(response.content)
+
+        exported_tx = next(t for t in data['workspaces'][0]['transactions'] if t['description'] == 'Tip jar')
+        self.assertIsNone(exported_tx['account_name'])
+        self.assertEqual(exported_tx['currency_code'], 'PLN')
+
+        exported_pt = next(p for p in data['workspaces'][0]['planned_transactions'] if p['name'] == 'Future tips')
+        self.assertIsNone(exported_pt['account_name'])
+        self.assertEqual(exported_pt['currency_code'], 'PLN')
 
     def test_export_rate_limited(self):
         """Export endpoint should be rate limited to 3 requests per hour."""

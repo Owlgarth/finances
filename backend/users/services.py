@@ -683,7 +683,7 @@ class UserService:
                     'attachments': AttachmentService.export_for_transaction(t),
                 }
                 for t in Transaction.objects.for_workspace(ws.id)
-                .select_related('account__currency', 'category__budget', 'original_currency')
+                .select_related('account', 'currency', 'category__budget', 'original_currency')
                 .prefetch_related('items', 'attachments')
             ],
             'transfers': [
@@ -880,16 +880,27 @@ class UserService:
                         )
 
             for tx_data in ws_data.get('transactions', []):
-                account = account_map.get(tx_data.get('account_name'))
-                if not account:
+                account_name = tx_data.get('account_name')
+                # Null/missing account_name = account-less row carrying its own
+                # currency; a non-null name that resolves to nothing stays a
+                # skip+error (the row references an account the export lacks).
+                account = account_map.get(account_name) if account_name else None
+                if account_name and not account:
                     skipped['errors'].append(f'{original_name}: transaction references unknown account')
                     continue
+                currency_code = tx_data.get('currency_code')
+                if not account and not currency_code:
+                    skipped['errors'].append(f'{original_name}: account-less transaction missing currency_code')
+                    continue
+                currency = (
+                    account.currency if account else UserService._resolve_import_currency(workspace, currency_code)
+                )
                 category = category_map.get((tx_data.get('budget_name'), tx_data.get('category_name')))
                 original_code = tx_data.get('original_currency_code')
                 trans = Transaction.objects.create(
                     workspace=workspace,
                     account=account,
-                    currency=account.currency,
+                    currency=currency,
                     date=_date(tx_data.get('date')),
                     description=tx_data.get('description'),
                     amount=tx_data.get('amount'),
@@ -936,15 +947,23 @@ class UserService:
                 counts['imported_transfers'] += 1
 
             for pt_data in ws_data.get('planned_transactions', []):
-                account = account_map.get(pt_data.get('account_name'))
-                if not account:
+                account_name = pt_data.get('account_name')
+                account = account_map.get(account_name) if account_name else None
+                if account_name and not account:
                     skipped['errors'].append(f'{original_name}: planned transaction references unknown account')
                     continue
+                currency_code = pt_data.get('currency_code')
+                if not account and not currency_code:
+                    skipped['errors'].append(f'{original_name}: account-less planned transaction missing currency_code')
+                    continue
+                currency = (
+                    account.currency if account else UserService._resolve_import_currency(workspace, currency_code)
+                )
                 category = category_map.get((pt_data.get('budget_name'), pt_data.get('category_name')))
                 PlannedTransaction.objects.create(
                     workspace=workspace,
                     account=account,
-                    currency=account.currency,
+                    currency=currency,
                     name=pt_data.get('name'),
                     amount=pt_data.get('amount'),
                     category=category,

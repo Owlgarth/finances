@@ -19,8 +19,10 @@ from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
 from common.tests.mixins import AuthMixin
+from currencies.models import WorkspaceCurrency
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
+from planned_transactions.models import PlannedTransaction
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
@@ -172,6 +174,162 @@ class V3BudgetCurrencyImportTests(AuthMixin, TestCase):
         self.assertEqual(budget.currencies.count(), 0)
 
 
+class V3AccountLessImportTests(AuthMixin, TestCase):
+    """Null/missing account_name imports: account-less rows with their own currency."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _v3(self, **ws_extra):
+        ws = {'workspace_name': 'Imported Workspace', 'enabled_currencies': [], 'accounts': [], 'budgets': []}
+        ws.update(ws_extra)
+        return {'export_version': '3.0', 'workspaces': [ws]}
+
+    def test_account_less_transaction_and_planned_import(self):
+        export = self._v3(
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'Tip jar',
+                    'amount': '20.00',
+                    'type': 'expense',
+                    'account_name': None,
+                    'currency_code': 'PLN',
+                }
+            ],
+            planned_transactions=[
+                {
+                    'name': 'Future tips',
+                    'amount': '10.00',
+                    'planned_date': '2026-08-01',
+                    'status': 'pending',
+                    'account_name': None,
+                    'currency_code': 'PLN',
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['imported_planned_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        tx = Transaction.objects.get(workspace=ws, description='Tip jar')
+        self.assertIsNone(tx.account)
+        self.assertEqual(tx.currency.code, 'PLN')
+        planned = PlannedTransaction.objects.get(workspace=ws, name='Future tips')
+        self.assertIsNone(planned.account)
+        self.assertEqual(planned.currency.code, 'PLN')
+
+    def test_missing_account_name_key_imports_account_less(self):
+        """A row without the account_name key at all imports account-less too."""
+        export = self._v3(
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'No key row',
+                    'amount': '5.00',
+                    'type': 'expense',
+                    'currency_code': 'PLN',
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        tx = Transaction.objects.get(description='No key row')
+        self.assertIsNone(tx.account)
+        self.assertEqual(tx.currency.code, 'PLN')
+
+    def test_account_having_row_still_binds_account(self):
+        export = self._v3(
+            accounts=[{'name': 'Main', 'currency_code': 'PLN'}],
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'Salary',
+                    'amount': '100.00',
+                    'type': 'income',
+                    'account_name': 'Main',
+                    'currency_code': 'PLN',
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        tx = Transaction.objects.get(description='Salary')
+        self.assertEqual(tx.account.name, 'Main')
+        self.assertEqual(tx.currency.code, 'PLN')
+
+    def test_unknown_account_name_still_skips_with_error(self):
+        export = self._v3(
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'Ghost',
+                    'amount': '1.00',
+                    'type': 'expense',
+                    'account_name': 'Nope',
+                    'currency_code': 'PLN',
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown account', result['skipped']['errors'][0])
+
+    def test_account_less_unknown_currency_creates_custom(self):
+        export = self._v3(
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'Exotic tip',
+                    'amount': '7.00',
+                    'type': 'expense',
+                    'account_name': None,
+                    'currency_code': 'GOLD',
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        tx = Transaction.objects.get(description='Exotic tip')
+        self.assertEqual(tx.currency.code, 'GOLD')
+        self.assertTrue(tx.currency.is_custom)
+        self.assertTrue(WorkspaceCurrency.objects.filter(workspace=ws, currency=tx.currency).exists())
+
+    def test_account_less_row_without_currency_skips_with_error(self):
+        export = self._v3(
+            transactions=[
+                {
+                    'date': '2026-07-05',
+                    'description': 'No currency',
+                    'amount': '5.00',
+                    'type': 'expense',
+                    'account_name': None,
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_transactions'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('missing currency_code', result['skipped']['errors'][0])
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 
@@ -258,6 +416,24 @@ class V3RoundTripTests(AuthMixin, TestCase):
             planned_date=date(2026, 8, 1),
             status='pending',
         )
+        TransactionFactory(
+            account=None,
+            currency=pln,
+            workspace=self.workspace,
+            date=date(2026, 7, 8),
+            description='Street tips',
+            amount=Decimal('20.00'),
+            type='expense',
+        )
+        PlannedTransactionFactory(
+            account=None,
+            currency=pln,
+            workspace=self.workspace,
+            name='Cash gift',
+            amount=Decimal('50.00'),
+            planned_date=date(2026, 8, 15),
+            status='pending',
+        )
         return checking, dollars
 
     def test_full_round_trip_reproduces_hierarchy_and_balances(self):
@@ -292,9 +468,9 @@ class V3RoundTripTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_accounts'], 3)
         self.assertEqual(result['imported_budgets'], 1)
         self.assertEqual(result['imported_categories'], 2)
-        self.assertEqual(result['imported_transactions'], 2)
+        self.assertEqual(result['imported_transactions'], 3)
         self.assertEqual(result['imported_transfers'], 1)
-        self.assertEqual(result['imported_planned_transactions'], 1)
+        self.assertEqual(result['imported_planned_transactions'], 2)
 
         ws = Workspace.objects.get(owner=new_user)
 
@@ -313,6 +489,15 @@ class V3RoundTripTests(AuthMixin, TestCase):
         self.assertEqual(converted.original_currency.code, 'PLN')
         shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
         self.assertEqual(shop.category.name, 'Groceries')
+
+        # Account-less rows round-trip account-less with their own currency;
+        # balances are unaffected (account-less rows enter no balance).
+        tips = Transaction.objects.get(workspace=ws, description='Street tips')
+        self.assertIsNone(tips.account)
+        self.assertEqual(tips.currency.code, 'PLN')
+        gift = PlannedTransaction.objects.get(workspace=ws, name='Cash gift')
+        self.assertIsNone(gift.account)
+        self.assertEqual(gift.currency.code, 'PLN')
 
         # Line items restored in order
         items = list(shop.items.all())
@@ -386,3 +571,20 @@ class AccountDeletionOrphanTests(AuthMixin, TestCase):
         self.assertFalse(WorkspaceCurrency.objects.filter(workspace_id=ws_id).exists())
         # Global catalog rows survive
         self.assertTrue(Currency.objects.filter(workspace__isnull=True, code='PLN').exists())
+
+    def test_delete_account_with_account_less_rows_and_custom_currency(self):
+        """Account-less rows + the own-currency FK add no orphan class to deletion."""
+        CurrencyCatalogService.create_custom(self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g')
+        gold = CurrencyCatalogService.get_enabled(self.workspace.id, 'GOLD')
+        TransactionFactory(account=None, currency=gold, workspace=self.workspace, amount=Decimal('1'), type='expense')
+        PlannedTransactionFactory(account=None, currency=gold, workspace=self.workspace, amount=Decimal('2'))
+
+        ws_id = self.workspace.id
+        UserService.delete_account(self.user, self.user_password)
+
+        self.assertFalse(Workspace.objects.filter(id=ws_id).exists())
+        self.assertFalse(Transaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(PlannedTransaction.objects.filter(workspace_id=ws_id).exists())
+        from currencies.models import Currency
+
+        self.assertFalse(Currency.objects.filter(workspace_id=ws_id).exists())
