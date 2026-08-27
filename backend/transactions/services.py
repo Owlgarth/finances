@@ -157,7 +157,12 @@ class TransactionService:
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
     ):
-        """Build a filtered queryset for transactions."""
+        """Build a filtered queryset for transactions.
+
+        currency_code filters by the transaction's stored own currency;
+        account-less rows match their own currency, and the original-amount
+        facet never matches.
+        """
         queryset = Transaction.objects.for_workspace(workspace_id)
 
         if date_from:
@@ -173,7 +178,7 @@ class TransactionService:
         if transaction_type:
             queryset = queryset.filter(type__in=transaction_type)
         if currency_code:
-            queryset = queryset.filter(account__currency__code__in=currency_code)
+            queryset = queryset.filter(currency__code__in=currency_code)
         if search:
             queryset = queryset.filter(description__icontains=search)
         if amount_gte is not None:
@@ -187,7 +192,7 @@ class TransactionService:
     def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
         """Get a transaction and verify it belongs to the workspace."""
         trans = (
-            Transaction.objects.select_related('account__currency', 'category', 'currency', 'original_currency')
+            Transaction.objects.select_related('currency', 'account__currency', 'category', 'original_currency')
             .for_workspace(workspace_id)
             .filter(id=transaction_id)
             .first()
@@ -228,7 +233,7 @@ class TransactionService:
             amount_lte=amount_lte,
         )
 
-        queryset = queryset.select_related('account__currency', 'category', 'currency', 'original_currency')
+        queryset = queryset.select_related('currency', 'account__currency', 'category', 'original_currency')
 
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
@@ -276,7 +281,7 @@ class TransactionService:
         if group_by == 'category':
             rows = (
                 queryset.annotate(
-                    currency_code=F('account__currency__code'),
+                    currency_code=F('currency__code'),
                     grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
                 )
                 .values('grouped_category_name', 'currency_code')
@@ -289,7 +294,7 @@ class TransactionService:
 
         # Default: group by type
         rows = (
-            queryset.annotate(currency_code=F('account__currency__code'))
+            queryset.annotate(currency_code=F('currency__code'))
             .values('type', 'currency_code')
             .annotate(total=Sum('amount'))
             .order_by('type', 'currency_code')
@@ -327,7 +332,7 @@ class TransactionService:
         ).exclude(type='adjustment')
 
         rows = queryset.annotate(
-            currency_code=F('account__currency__code'),
+            currency_code=F('currency__code'),
             grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
         ).values_list('type', 'grouped_category_name', 'currency_code', 'amount')
 
@@ -368,7 +373,7 @@ class TransactionService:
         display_map = TransactionService._resolve_display_descriptions(queryset)
 
         rows = (
-            queryset.annotate(lower_desc=Lower('description'), currency_code=F('account__currency__code'))
+            queryset.annotate(lower_desc=Lower('description'), currency_code=F('currency__code'))
             .values('lower_desc', 'currency_code')
             .annotate(count=Count('id'), total=Sum('amount'))
             .order_by('-count')[:limit]
@@ -709,7 +714,7 @@ class TransactionService:
             date_from=date_from,
             date_to=date_to,
             transaction_type=[transaction_type] if transaction_type else None,
-        ).select_related('account__currency', 'category', 'currency', 'original_currency')
+        ).select_related('currency', 'account__currency', 'category', 'original_currency')
 
         return [
             {
