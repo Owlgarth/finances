@@ -145,6 +145,7 @@ def _create_demo_transactions(
         Transaction.objects.create(
             workspace_id=workspace_id,
             account=main_account,
+            currency=main_account.currency,
             date=trans_date,
             description=description,
             category=category_map[cat_name] if cat_name else None,
@@ -216,6 +217,7 @@ def _create_demo_planned(
         PlannedTransaction.objects.create(
             workspace_id=workspace_id,
             account=main_account,
+            currency=main_account.currency,
             name=name,
             amount=amount,
             category=category_map[cat_name],

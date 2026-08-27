@@ -163,6 +163,38 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         self.assertEqual(len(data['items']), 1)
         self.assertEqual(data['items'][0]['currency_code'], 'USD')
 
+    def test_list_includes_accountless_rows(self):
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=None,
+            currency=pln,
+            name='Cash tips',
+            amount=Decimal('20.00'),
+            planned_date=date(2025, 1, 25),
+        )
+
+        data = self.get('/api/planned-transactions?search=Cash', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertIsNone(data['items'][0]['account_id'])
+        self.assertIsNone(data['items'][0]['account_name'])
+        self.assertEqual(data['items'][0]['currency_code'], 'PLN')
+
+    def test_list_currency_filter_matches_accountless_rows(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=None,
+            currency=eur,
+            name='Euro cash',
+            amount=Decimal('10.00'),
+            planned_date=date(2025, 3, 5),
+        )
+
+        data = self.get('/api/planned-transactions?currency_code=EUR', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['currency_code'], 'EUR')
+
     def test_list_filtered_by_multiple_account_currencies(self):
         eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
         eur_account = AccountFactory(workspace=self.workspace, name='Euros', currency=eur)
@@ -209,6 +241,21 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         as_map = {t['currency']: t['total'] for t in data['totals']}
         self.assertEqual(as_map['PLN'], '1350.00')  # 1200 + 150
         self.assertEqual(as_map['USD'], '30.00')
+
+    def test_totals_include_accountless_rows(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=None,
+            currency=eur,
+            name='Euro cash',
+            amount=Decimal('10.00'),
+            planned_date=date(2025, 3, 5),
+        )
+
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        as_map = {t['currency']: t['total'] for t in data['totals']}
+        self.assertEqual(as_map['EUR'], '10.00')
 
     def test_totals_grouped_by_category(self):
         data = self.get('/api/planned-transactions/totals?group_by=category', **self.auth_headers())
@@ -262,21 +309,38 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['currency_code'], 'PLN')
         self.assertEqual(data['status'], 'pending')
 
-    def test_create_defaults_to_single_active_account(self):
-        self.usd_account.is_archived = True
-        self.usd_account.save()
+    def test_create_accountless_with_currency(self):
+        payload = self._payload()
+        payload.pop('account_id')
+        data = self.post('/api/planned-transactions', {**payload, 'currency_code': 'PLN'}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertIsNone(data['account_id'])
+        self.assertIsNone(data['account_name'])
+        self.assertEqual(data['currency_code'], 'PLN')
 
+    def test_create_accountless_without_currency_returns_400(self):
         payload = self._payload()
         payload.pop('account_id')
         data = self.post('/api/planned-transactions', payload, **self.auth_headers())
-        self.assertStatus(201)
-        self.assertEqual(data['account_id'], self.account.id)
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'currency_required')
 
-    def test_create_without_account_and_two_active_accounts_returns_400(self):
+    def test_create_accountless_currency_not_enabled_returns_404(self):
         payload = self._payload()
         payload.pop('account_id')
-        self.post('/api/planned-transactions', payload, **self.auth_headers())
+        data = self.post('/api/planned-transactions', {**payload, 'currency_code': 'GBP'}, **self.auth_headers())
+        self.assertStatus(404)
+        self.assertEqual(data['code'], 'currency_not_enabled')
+
+    def test_create_with_account_and_matching_currency(self):
+        data = self.post('/api/planned-transactions', self._payload(currency_code='PLN'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_create_with_mismatched_currency_returns_400(self):
+        data = self.post('/api/planned-transactions', self._payload(currency_code='USD'), **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(data['code'], 'currency_mismatch')
 
     def test_create_on_archived_account_returns_400(self):
         self.account.is_archived = True
@@ -338,6 +402,32 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(data['account_id'], self.usd_account.id)
         self.assertEqual(data['currency_code'], 'USD')
 
+    def test_update_clears_account_keeps_currency(self):
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(account_id=None, currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['account_id'])
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_update_accountless_without_currency_returns_400(self):
+        self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(account_id=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_update_to_account_with_mismatched_currency_returns_400(self):
+        self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(account_id=self.usd_account.id, currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
     def test_update_status_to_done_creates_transaction(self):
         initial_count = Transaction.objects.count()
 
@@ -397,6 +487,30 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(mirror.amount, Decimal('1250.00'))
         self.assertEqual(mirror.category_id, self.groceries.id)
         self.assertEqual(mirror.date, original_date)
+
+    def test_update_done_account_less_plan_mirrors_currency_and_account(self):
+        """Editing a done account-less plan updates the executed mirror's amount
+        and keeps it account-less in the plan's stored currency."""
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Cash tips', amount='40.00', account_id=None, currency_code='PLN', status='done'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        transaction_id = data['transaction_id']
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Cash tips', amount='45.00', account_id=None, currency_code='PLN', status='done'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+
+        self.planned1.refresh_from_db()
+        mirror = Transaction.objects.get(id=transaction_id)
+        self.assertEqual(mirror.amount, Decimal('45.00'))
+        self.assertIsNone(mirror.account_id)
+        self.assertEqual(mirror.currency_id, self.planned1.currency_id)
 
     def test_update_cancelled_planned_allowed(self):
         self.planned1.status = 'cancelled'
@@ -505,6 +619,11 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         created = Transaction.objects.get(id=self.planned3.transaction_id)
         # Lands on the planned row's own account, even with multiple accounts
         self.assertEqual(created.account_id, self.usd_account.id)
+        # The executed transaction's currency is the account's, which equals
+        # the plan's stored currency by the match rule. Threading the stored
+        # currency onto the transaction itself (and with it account-less
+        # execution) lands with the transaction currency change.
+        self.assertEqual(created.account.currency.code, 'USD')
 
     def test_task_idempotent_on_duplicate_call(self):
         self.planned1.status = 'done'

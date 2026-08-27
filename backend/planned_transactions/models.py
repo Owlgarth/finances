@@ -5,7 +5,13 @@ from common.models import WorkspaceScopedModel
 
 
 class PlannedTransaction(WorkspaceScopedModel):
-    """Planned transaction model for future transactions."""
+    """Planned transaction model for future transactions.
+
+    The planned amount books in the plan's own stored `currency`. When an
+    account is set, the currency always equals the account's currency
+    (enforced on create/update); an account-less plan carries any currency
+    enabled for the workspace.
+    """
 
     workspace = models.ForeignKey(
         'workspaces.Workspace',
@@ -33,9 +39,15 @@ class PlannedTransaction(WorkspaceScopedModel):
         ('cancelled', 'Cancelled'),
     ]
 
-    account = models.ForeignKey('accounts.Account', on_delete=models.PROTECT, related_name='planned_transactions')
+    account = models.ForeignKey(
+        'accounts.Account',
+        on_delete=models.PROTECT,
+        related_name='planned_transactions',
+        null=True,
+        blank=True,
+    )
+    currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='planned_transactions')
     name = models.CharField(max_length=200)
-    # The planned amount is in the account's currency, like transactions.
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     category = models.ForeignKey(
         'categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='planned_transactions'
@@ -55,12 +67,12 @@ class PlannedTransaction(WorkspaceScopedModel):
         db_table = 'planned_transactions'
 
     @property
-    def account_name(self) -> str:
-        return self.account.name
+    def account_name(self) -> str | None:
+        return self.account.name if self.account else None
 
     @property
     def currency_code(self) -> str:
-        return self.account.currency.code
+        return self.currency.code
 
     @property
     def category_name(self) -> str | None:

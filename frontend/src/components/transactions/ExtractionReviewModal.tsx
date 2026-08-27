@@ -78,6 +78,7 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
             type: transaction.type,
             amount: transaction.amount,
             account_id: transaction.account_id,
+            currency_code: transaction.currency_code,
             category_id: transaction.category_id,
             original_amount: transaction.original_amount,
             original_currency_code: transaction.original_currency_code,

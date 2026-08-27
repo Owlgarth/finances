@@ -53,6 +53,7 @@ class TransactionTestCase(AuthMixin, APIClientMixin, TestCase):
             'description': 'Test expense',
             'type': 'expense',
             'amount': '50.00',
+            'account_id': self.account.id,
         }
         payload.update(overrides)
         return payload
@@ -67,14 +68,18 @@ class TestCreateTransaction(TransactionTestCase):
         self.assertEqual(data['currency_code'], 'PLN')
         self.assertEqual(data['amount'], '50.00')
 
-    def test_create_defaults_to_single_active_account(self):
-        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+    def test_create_account_less_with_currency(self):
+        """The pocket-cash / traveling-cash path: no account, explicit currency."""
+        data = self.post(
+            '/api/transactions', self._payload(account_id=None, currency_code='PLN'), **self.auth_headers()
+        )
         self.assertStatus(201)
-        self.assertEqual(data['account_id'], self.account.id)
+        self.assertIsNone(data['account_id'])
+        self.assertIsNone(data['account_name'])
+        self.assertEqual(data['currency_code'], 'PLN')
 
-    def test_create_without_account_and_two_active_accounts_returns_400(self):
-        AccountFactory(workspace=self.workspace, name='Second')
-        self.post('/api/transactions', self._payload(), **self.auth_headers())
+    def test_create_account_less_without_currency_returns_400(self):
+        self.post('/api/transactions', self._payload(account_id=None), **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_on_archived_account_returns_400(self):
@@ -94,6 +99,44 @@ class TestCreateTransaction(TransactionTestCase):
     def test_create_with_negative_expense_returns_400(self):
         self.post('/api/transactions', self._payload(amount='-5.00'), **self.auth_headers())
         self.assertStatus(400)
+
+
+class TestTransactionOwnCurrency(TransactionTestCase):
+    """The own-currency contract: derive from account / match / require / enabled-domain."""
+
+    def test_currency_derived_from_account_when_omitted(self):
+        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_currency_matching_account_currency_ok(self):
+        data = self.post('/api/transactions', self._payload(currency_code='PLN'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_currency_mismatching_account_returns_400(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        self.post('/api/transactions', self._payload(currency_code='USD'), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_account_less_currency_not_enabled_returns_404(self):
+        # get_enabled maps to CurrencyNotEnabledError -> NotFoundError -> 404
+        self.post('/api/transactions', self._payload(account_id=None, currency_code='EUR'), **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_adjustment_without_account_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(type='adjustment', amount='-20.00', account_id=None, currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_adjustment_with_account_ok(self):
+        data = self.post('/api/transactions', self._payload(type='adjustment', amount='-20.00'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['account_id'], self.account.id)
+        self.assertEqual(data['currency_code'], 'PLN')
 
 
 class TestCreateTransactionWithItems(TransactionTestCase):
@@ -551,6 +594,24 @@ class TestOriginalFacet(TransactionTestCase):
         )
         self.assertStatus(400)
 
+    def test_facet_same_as_own_currency_account_less_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(account_id=None, currency_code='PLN', original_amount='12.99', original_currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_facet_differs_from_own_currency_account_less_ok(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(account_id=None, currency_code='PLN', original_amount='12.99', original_currency_code='USD'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+        self.assertEqual(data['original_currency_code'], 'USD')
+
 
 class TestDerivedPeriods(TransactionTestCase):
     def test_create_with_category_materializes_period(self):
@@ -654,12 +715,12 @@ class TestFiltersAndTotals(TransactionTestCase):
         )
         self.assertEqual(data['total'], 4)
 
-    def test_filter_by_account_currency(self):
+    def test_filter_by_own_currency(self):
         data = self.get('/api/transactions?currency_code=USD', **self.auth_headers())
         self.assertEqual(data['total'], 1)
         self.assertEqual(data['items'][0]['currency_code'], 'USD')
 
-    def test_filter_by_multiple_account_currencies(self):
+    def test_filter_by_multiple_currencies(self):
         eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
         eur_account = AccountFactory(workspace=self.workspace, name='Euros', currency=eur)
         TransactionFactory(
@@ -676,8 +737,26 @@ class TestFiltersAndTotals(TransactionTestCase):
         self.assertEqual(data['total'], 2)
         self.assertEqual({t['currency_code'] for t in data['items']}, {'USD', 'EUR'})
 
+    def test_currency_filter_matches_account_less_by_own_currency(self):
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        TransactionFactory(
+            account=None,
+            currency=usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash expense',
+            amount=Decimal('15.00'),
+            type='expense',
+        )
+
+        data = self.get('/api/transactions?currency_code=USD', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['total'], 2)
+        self.assertTrue(all(t['currency_code'] == 'USD' for t in data['items']))
+
     def test_currency_filter_never_matches_original_facet(self):
-        # A THB original facet on a PLN account: the filter is account-currency only.
+        # A THB original facet on a PLN-account transaction: the filter targets
+        # the stored own currency, never the facet.
         thb = Currency.objects.get(workspace__isnull=True, code='THB')
         TransactionFactory(
             account=self.account,
@@ -719,13 +798,45 @@ class TestFiltersAndTotals(TransactionTestCase):
         data = self.get('/api/transactions?transaction_type=income', **self.auth_headers())
         self.assertEqual(data['total'], 1)
 
-    def test_totals_grouped_per_account_currency(self):
+    def test_totals_grouped_per_own_currency(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
         totals = self.get('/api/transactions/totals?group_by=type', **self.auth_headers())['totals']
         as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        # Account-having rows keep grouping by their (stored) account currency.
         self.assertEqual(as_map[('expense', 'PLN')], '40.00')
         self.assertEqual(as_map[('expense', 'USD')], '30.00')
         self.assertEqual(as_map[('income', 'PLN')], '500.00')
         self.assertNotIn(('adjustment', 'PLN'), as_map)
+        # The account-less row groups by its stored own currency.
+        self.assertEqual(as_map[('expense', 'EUR')], '25.00')
+
+    def test_totals_category_branch_groups_account_less_by_own_currency(self):
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        TransactionFactory(
+            account=None,
+            currency=usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash groceries',
+            category=self.groceries,
+            amount=Decimal('12.00'),
+            type='expense',
+        )
+
+        totals = self.get('/api/transactions/totals?group_by=category', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map[('Groceries', 'PLN')], '40.00')
+        self.assertEqual(as_map[('Groceries', 'USD')], '12.00')
 
     def test_totals_filtered_by_multiple_accounts(self):
         totals = self.get(
@@ -748,6 +859,23 @@ class TestFiltersAndTotals(TransactionTestCase):
         by_type_groups = {t['group'] for t in data['by_type']}
         self.assertEqual(by_type_groups, {'income', 'expense'})
 
+    def test_totals_combined_includes_account_less(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
+        data = self.get('/api/transactions/totals?group_by=type,category', **self.auth_headers())
+        by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
+        self.assertEqual(by_type[('expense', 'EUR')], '25.00')
+        self.assertEqual(by_type[('expense', 'PLN')], '40.00')
+
     def test_workspace_scoping(self):
         foreign = TransactionFactory()
         data = self.get('/api/transactions', **self.auth_headers())
@@ -767,6 +895,14 @@ class TestFiltersAndTotals(TransactionTestCase):
         # backend ALLOWED_PAGE_SIZES) — it must keep working under the cap.
         self.get('/api/transactions?page_size=200', **self.auth_headers())
         self.assertStatus(200)
+
+    def test_ordering_by_own_currency_allowed(self):
+        self.get('/api/transactions?ordering=currency__code', **self.auth_headers())
+        self.assertStatus(200)
+
+    def test_ordering_by_account_currency_rejected(self):
+        self.get('/api/transactions?ordering=account__currency__code', **self.auth_headers())
+        self.assertStatus(422)
 
 
 class TestBulkSetAccount(TransactionTestCase):
@@ -806,6 +942,30 @@ class TestBulkSetAccount(TransactionTestCase):
         self.assertStatus(400)
         self.trans1.refresh_from_db()
         self.assertEqual(self.trans1.account_id, self.account.id)
+
+    def test_bulk_assigns_account_less_row_with_matching_currency(self):
+        """Pocket-cash path: an account-less PLN row can be assigned to a PLN account."""
+        pln = Currency.objects.get(workspace__isnull=True, code='PLN')
+        account_less = TransactionFactory(account=None, currency=pln, workspace=self.workspace)
+
+        payload = {'transaction_ids': [account_less.id], 'account_id': self.second.id}
+        data = self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['updated'], 1)
+        account_less.refresh_from_db()
+        self.assertEqual(account_less.account_id, self.second.id)
+
+    def test_bulk_account_less_row_with_other_currency_returns_400(self):
+        usd, _ = Currency.objects.get_or_create(
+            code='USD', workspace=None, defaults={'name': 'US Dollar', 'symbol': '$', 'decimals': 2}
+        )
+        account_less = TransactionFactory(account=None, currency=usd, workspace=self.workspace)
+
+        payload = {'transaction_ids': [account_less.id], 'account_id': self.second.id}
+        self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(400)
+        account_less.refresh_from_db()
+        self.assertIsNone(account_less.account_id)
 
 
 class TestAccountBalanceWithTransactions(TransactionTestCase):
@@ -865,15 +1025,24 @@ class TestUpdateDelete(TransactionTestCase):
         self.assertStatus(200)
         self.assertEqual(data['account_id'], second.id)
 
-    def test_update_keeps_account_when_not_sent(self):
-        AccountFactory(workspace=self.workspace, name='Second')  # two accounts now
+    def test_update_account_id_none_clears_the_account(self):
+        """account_id is authoritative on update: None clears it (currency_code becomes required)."""
         created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
 
         data = self.put(
-            f'/api/transactions/{created["id"]}', self._payload(description='Edited'), **self.auth_headers()
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=None, currency_code='PLN', description='Cleared'),
+            **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual(data['account_id'], self.account.id)
+        self.assertIsNone(data['account_id'])
+        self.assertIsNone(data['account_name'])
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_update_account_less_without_currency_returns_400(self):
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+        self.put(f'/api/transactions/{created["id"]}', self._payload(account_id=None), **self.auth_headers())
+        self.assertStatus(400)
 
     def test_update_with_null_category(self):
         """Explicit category_id=null must update fine (modal sends null when budget changes)."""
@@ -937,6 +1106,25 @@ class TestExportImport(TransactionTestCase):
         self.assertEqual(rows[0]['original_amount'], '12.99')
         self.assertEqual(rows[0]['original_currency_code'], 'USD')
 
+    def test_export_account_less_row_emits_null_account_name(self):
+        usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        TransactionFactory(
+            account=None,
+            currency=usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 6),
+            description='Cash tip',
+            amount=Decimal('5.00'),
+            type='expense',
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]['account_name'])
+        self.assertEqual(rows[0]['currency_code'], 'USD')
+
     def test_import_lands_rows_in_given_account(self):
         rows = [
             {'date': '2026-07-01', 'description': 'Imported A', 'amount': '10.00', 'type': 'expense'},
@@ -997,6 +1185,26 @@ class TestFrequentDescriptions(TransactionTestCase):
         self.assertEqual(data['items'][0]['description'], 'Biedronka')
         self.assertEqual(data['items'][0]['count'], 3)
         self.assertEqual(data['items'][0]['currency'], 'PLN')
+
+    def test_frequent_descriptions_groups_account_less_by_own_currency(self):
+        usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        for _ in range(2):
+            TransactionFactory(
+                account=None,
+                currency=usd,
+                workspace=self.workspace,
+                description='Biedronka',
+                amount=Decimal('10.00'),
+            )
+        TransactionFactory(
+            account=self.account, workspace=self.workspace, description='Biedronka', amount=Decimal('7.00')
+        )
+
+        data = self.get('/api/transactions/frequent-descriptions', **self.auth_headers())
+        self.assertStatus(200)
+        by_currency = {(i['description'], i['currency']): i['count'] for i in data['items']}
+        self.assertEqual(by_currency[('Biedronka', 'USD')], 2)
+        self.assertEqual(by_currency[('Biedronka', 'PLN')], 1)
 
 
 class TestDerivedPeriodServiceLevel(TestCase):

@@ -34,7 +34,7 @@ from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Transactions'])
 
-ORDERING_PATTERN = r'^(-?(date|description|amount|type|category__name|account__name|account__currency__code))$'
+ORDERING_PATTERN = r'^(-?(date|description|amount|type|category__name|account__name|currency__code))$'
 
 # Upper bound for page_size on list endpoints — derived from the pagination
 # module's allowed sizes so the API cap stays in lockstep with the service layer.
@@ -60,8 +60,9 @@ def list_transactions(
 ):
     """List transactions for the current workspace with optional filters.
 
-    currency_code filters by the ACCOUNT currency, never the original-amount
-    facet; unknown codes match nothing (filters are not resource lookups).
+    currency_code filters by the transaction's stored own currency, never
+    the original-amount facet; account-less transactions match their own
+    currency; unknown codes match nothing (filters are not resource lookups).
     """
     workspace_id = request.auth.current_workspace_id
     return TransactionService.list(
