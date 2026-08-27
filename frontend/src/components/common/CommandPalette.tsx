@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowLeftRight, Calendar, CornerDownLeft, Home, PieChart, Receipt, Search, Settings, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { plannedTransactionsApi, transactionsApi } from '../../api/client'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { useBudgets } from '../../hooks/useDomain'
+import { useAccounts, useBudgets } from '../../hooks/useDomain'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useDebouncedField } from '../../hooks/useDebouncedField'
 import { useOverlay } from '../../hooks/useOverlay'
 import BottomSheet from './BottomSheet'
 
@@ -49,25 +52,79 @@ function matches(entry: PageEntry, query: string): boolean {
   )
 }
 
+/** Minimum committed-query length before the server-backed sections kick in. */
+const MIN_ASYNC_QUERY = 2
+
+type PaletteGroup = 'Pages' | 'Budgets' | 'Accounts' | 'Transactions' | 'Planned'
+
+interface PaletteRow {
+  kind: 'row'
+  key: string
+  group: PaletteGroup
+  label: string
+  to: string
+  icon: LucideIcon
+  /** Small muted right-aligned hint (currency code, date). */
+  meta?: string
+  /** "See all results" section footer - link-styled instead of data-styled. */
+  isFooter?: boolean
+}
+
+interface PaletteSkeleton {
+  kind: 'skeleton'
+  key: string
+  group: PaletteGroup
+}
+
+type PaletteItem = PaletteRow | PaletteSkeleton
+
 /**
- * Global page search (⌘K / Ctrl+K): jump to any app page or budget detail
- * page by name. Desktop = top-centered dialog; mobile = bottom sheet.
+ * Global search (⌘K / Ctrl+K): jump to any app page or budget detail page by
+ * name, and once the query reaches two characters also surface matching
+ * accounts (client-side) and transactions/planned items (server search).
+ * Desktop = top-centered dialog; mobile = bottom sheet.
  */
 export default function CommandPalette() {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { workspace } = useWorkspace()
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
   const [highlighted, setHighlighted] = useState(0)
 
-  // Budgets appear as their own jump targets (/budgets/:id).
+  // Keystrokes update the draft instantly (static page matching runs on it,
+  // so it never waits on the network); server-backed sections key off the
+  // committed value so typing stays cheap.
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [query, setQuery] = useDebouncedField('', setDebouncedQuery, 300)
+
+  // Budgets appear as their own jump targets (/budgets/:id). Accounts back
+  // the client-side Accounts section - the shared list cache serves it, so
+  // filtering by name costs no request.
   const { data: budgets = [] } = useBudgets(false)
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(false)
+
+  const q = debouncedQuery.trim()
+  const asyncEnabled = q.length >= MIN_ASYNC_QUERY
+
+  // Palette-local keys, deliberately outside the ['transactions']/['planned']
+  // list families: every distinct keystroke creates a new cache entry, and
+  // family invalidation (any transaction mutation) would otherwise replay a
+  // request per query string ever typed here.
+  const txSearch = useQuery({
+    queryKey: ['palette-transactions', q],
+    queryFn: () => transactionsApi.getAll({ search: q, page_size: 5 }),
+    enabled: asyncEnabled,
+  })
+  const plannedSearch = useQuery({
+    queryKey: ['palette-planned', q],
+    queryFn: () => plannedTransactionsApi.getAll({ search: q, page_size: 5 }),
+    enabled: asyncEnabled,
+  })
 
   const panelRef = useOverlay(open && !isMobile, () => setOpen(false))
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Declared after useOverlay, so this runs after its panel-focus — the input wins.
+  // Declared after useOverlay, so this runs after its panel-focus - the input wins.
   useEffect(() => {
     if (open) inputRef.current?.focus()
   }, [open])
@@ -88,13 +145,17 @@ export default function CommandPalette() {
     }
   }, [])
 
-  // Fresh query each open; also drops stale highlight.
+  // Fresh query each open; also drops stale highlight. The committed value is
+  // cleared here too so a fast close/reopen (inside the debounce window)
+  // cannot flash the previous session's async sections. setQuery is the
+  // debounce hook's draft setter - stable like any useState setter.
   useEffect(() => {
     if (!open) {
       setQuery('')
+      setDebouncedQuery('')
       setHighlighted(0)
     }
-  }, [open])
+  }, [open, setQuery])
 
   const entries = useMemo<PageEntry[]>(
     () => [
@@ -109,11 +170,130 @@ export default function CommandPalette() {
     [budgets],
   )
 
-  const results = useMemo(() => entries.filter((e) => matches(e, query)), [entries, query])
+  const staticResults = useMemo(() => entries.filter((e) => matches(e, query)), [entries, query])
 
-  const go = (entry: PageEntry) => {
+  const accountMatches = useMemo(() => {
+    if (!asyncEnabled) return []
+    const needle = q.toLowerCase()
+    return accounts.filter((a) => a.name.toLowerCase().includes(needle)).slice(0, 5)
+  }, [accounts, asyncEnabled, q])
+
+  // One flat render model in visual order: interactive rows plus skeleton
+  // blocks. Keyboard traversal (below) walks the row subset only, so arrows
+  // land exclusively on entries the user can activate. Rows exist only once
+  // a section's data has settled; a loading section contributes a skeleton
+  // block instead, and a settled-empty one nothing at all (an empty block
+  // reads as "broken", not "no match"). A failed search request also lands
+  // there - data stays undefined, the section is simply omitted and the
+  // static results keep working.
+  const items = useMemo<PaletteItem[]>(() => {
+    const txRows = !txSearch.isLoading ? (txSearch.data?.items ?? []) : []
+    const plannedRows = !plannedSearch.isLoading ? (plannedSearch.data?.items ?? []) : []
+    // Data rows and footers navigate to the filtered list page, never an
+    // edit modal - a palette pick should land on something addressable.
+    const txResultsTo = `/transactions?search=${encodeURIComponent(q)}`
+    const plannedResultsTo = `/planned?search=${encodeURIComponent(q)}`
+    const items: PaletteItem[] = staticResults.map((e) => ({
+      kind: 'row',
+      key: `page-${e.to}`,
+      group: e.group,
+      label: e.label,
+      to: e.to,
+      icon: e.icon,
+    }))
+    if (asyncEnabled) {
+      if (accountsLoading) {
+        items.push({ kind: 'skeleton', key: 'skeleton-accounts', group: 'Accounts' })
+      } else if (accountMatches.length > 0) {
+        for (const a of accountMatches) {
+          items.push({
+            kind: 'row',
+            key: `account-${a.id}`,
+            group: 'Accounts',
+            label: a.name,
+            to: '/accounts',
+            icon: Wallet,
+            meta: a.currency_code,
+          })
+        }
+      }
+      if (txSearch.isLoading) {
+        items.push({ kind: 'skeleton', key: 'skeleton-transactions', group: 'Transactions' })
+      } else if (txRows.length > 0) {
+        for (const t of txRows) {
+          items.push({
+            kind: 'row',
+            key: `transaction-${t.id}`,
+            group: 'Transactions',
+            label: t.description,
+            to: txResultsTo,
+            icon: Receipt,
+            meta: t.date,
+          })
+        }
+        items.push({
+          kind: 'row',
+          key: 'transactions-all',
+          group: 'Transactions',
+          label: 'See all results',
+          to: txResultsTo,
+          icon: Search,
+          isFooter: true,
+        })
+      }
+      if (plannedSearch.isLoading) {
+        items.push({ kind: 'skeleton', key: 'skeleton-planned', group: 'Planned' })
+      } else if (plannedRows.length > 0) {
+        for (const p of plannedRows) {
+          items.push({
+            kind: 'row',
+            key: `planned-${p.id}`,
+            group: 'Planned',
+            label: p.name,
+            to: plannedResultsTo,
+            icon: Calendar,
+            meta: p.planned_date,
+          })
+        }
+        items.push({
+          kind: 'row',
+          key: 'planned-all',
+          group: 'Planned',
+          label: 'See all results',
+          to: plannedResultsTo,
+          icon: Search,
+          isFooter: true,
+        })
+      }
+    }
+    return items
+  }, [
+    staticResults,
+    asyncEnabled,
+    q,
+    accountsLoading,
+    accountMatches,
+    txSearch.isLoading,
+    txSearch.data,
+    plannedSearch.isLoading,
+    plannedSearch.data,
+  ])
+
+  const results = useMemo(
+    () => items.filter((item): item is PaletteRow => item.kind === 'row'),
+    [items],
+  )
+
+  // A section still fetching counts as "not empty yet" - the empty message
+  // waits until the static results AND every async section have settled empty.
+  const anySectionLoading =
+    asyncEnabled && (accountsLoading || txSearch.isLoading || plannedSearch.isLoading)
+
+  // Data rows and footers navigate to the filtered list page, never an edit
+  // modal - a palette pick should land on something addressable.
+  const go = (row: PaletteRow) => {
     setOpen(false)
-    navigate(entry.to)
+    navigate(row.to)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -125,8 +305,8 @@ export default function CommandPalette() {
       setHighlighted((h) => (results.length === 0 ? 0 : (h - 1 + results.length) % results.length))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      const entry = results[Math.min(highlighted, results.length - 1)]
-      if (entry) go(entry)
+      const row = results[Math.min(highlighted, results.length - 1)]
+      if (row) go(row)
     }
   }
 
@@ -144,49 +324,68 @@ export default function CommandPalette() {
           setHighlighted(0)
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Go to page…"
-        aria-label="Search pages"
+        placeholder="Search pages and data…"
+        aria-label="Search"
         className="w-full bg-transparent border-0 border-b border-border pl-8 pr-3 py-3 font-mono text-xs max-sm:text-base text-text placeholder:text-text-muted focus:outline-none"
       />
     </div>
   )
 
+  const groupHeader = (group: string) => (
+    <div className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
+      {group}
+    </div>
+  )
+
   const list = (rowClass: string) => {
-    let lastGroup: string | null = null
-    return results.length === 0 ? (
-      <div className="px-4 py-3 text-sm text-text-muted">No matching pages</div>
-    ) : (
-      results.map((entry, i) => {
-        const header = entry.group !== lastGroup ? entry.group : null
-        lastGroup = entry.group
+    if (results.length === 0 && !anySectionLoading) {
+      return <div className="px-4 py-3 text-sm text-text-muted">No matching pages</div>
+    }
+    let lastGroup: PaletteGroup | null = null
+    let rowIndex = 0
+    return items.map((item) => {
+      if (item.kind === 'skeleton') {
+        lastGroup = item.group
         return (
-          <div key={entry.to}>
-            {header && (
-              <div className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
-                {header}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => go(entry)}
-              onMouseEnter={() => setHighlighted(i)}
-              className={`${rowClass} ${i === highlighted ? 'bg-surface-hover' : ''}`}
-            >
-              <entry.icon size={14} strokeWidth={1.5} className="flex-shrink-0 text-text-muted" />
-              <span className="truncate flex-1 text-left">{entry.label}</span>
-              {i === highlighted && !isMobile && (
-                <CornerDownLeft size={12} className="flex-shrink-0 text-text-muted" />
-              )}
-            </button>
+          <div key={item.key}>
+            {groupHeader(item.group)}
+            {[0, 1, 2].map((s) => (
+              <div key={s} className="mx-3 my-2 h-3.5 rounded-sm bg-surface-muted animate-pulse" />
+            ))}
           </div>
         )
-      })
-    )
+      }
+      const i = rowIndex++
+      const header = item.group !== lastGroup ? item.group : null
+      lastGroup = item.group
+      return (
+        <div key={item.key}>
+          {header && groupHeader(header)}
+          <button
+            type="button"
+            onClick={() => go(item)}
+            onMouseEnter={() => setHighlighted(i)}
+            className={`${rowClass} ${i === highlighted ? 'bg-surface-hover' : ''}`}
+          >
+            <item.icon size={14} strokeWidth={1.5} className="flex-shrink-0 text-text-muted" />
+            <span className={`truncate flex-1 text-left ${item.isFooter ? 'text-primary' : ''}`}>
+              {item.label}
+            </span>
+            {item.meta && (
+              <span className="flex-shrink-0 text-[10px] font-mono text-text-muted">{item.meta}</span>
+            )}
+            {i === highlighted && !isMobile && (
+              <CornerDownLeft size={12} className="flex-shrink-0 text-text-muted" />
+            )}
+          </button>
+        </div>
+      )
+    })
   }
 
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={() => setOpen(false)} aria-label="Search pages">
+      <BottomSheet open={open} onClose={() => setOpen(false)} aria-label="Search">
         <div className="sticky top-4 z-10 bg-surface">{input}</div>
         <div className="pb-2 pt-1">
           {list('w-full min-h-[44px] px-3 flex items-center gap-3 text-sm text-text transition-colors active:bg-surface-hover')}
@@ -205,7 +404,7 @@ export default function CommandPalette() {
           ref={panelRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Search pages"
+          aria-label="Search"
           tabIndex={-1}
           className="bg-surface border border-border rounded-sm w-full max-w-md outline-none overflow-hidden"
           onClick={(e) => e.stopPropagation()}
