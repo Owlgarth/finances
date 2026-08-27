@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from django.db import IntegrityError
 from django.db import transaction as db_transaction
+from django.db.models import Prefetch
 
 from budgeting.exceptions import (
     BudgetCadenceConfigError,
@@ -17,7 +18,7 @@ from budgeting.exceptions import (
     PeriodNotFoundError,
     PeriodOverlapError,
 )
-from budgeting.models import Budget, Cadence, CategoryBudget, Period
+from budgeting.models import Budget, BudgetCurrency, Cadence, CategoryBudget, Period
 from budgeting.schemas import BudgetArchive, BudgetCreate, BudgetUpdate, PeriodCreate, PeriodUpdate
 from currencies.services import CurrencyCatalogService
 
@@ -35,9 +36,32 @@ class BudgetService:
         return None, None
 
     @staticmethod
+    def _set_currencies(workspace_id: int, budget: Budget, codes: list[str]) -> None:
+        """Replace the budget's currency set. Order significant - index becomes position.
+
+        Validates every code first (raises CurrencyNotEnabledError -> 404), dedupes
+        preserving first occurrence, then delete-and-recreates the rows.
+        """
+        unique_codes = list(dict.fromkeys(codes))
+        currencies = [CurrencyCatalogService.get_enabled(workspace_id, code) for code in unique_codes]
+        BudgetCurrency.objects.filter(budget=budget).delete()
+        BudgetCurrency.objects.bulk_create(
+            BudgetCurrency(budget=budget, currency=currency, position=index)
+            for index, currency in enumerate(currencies)
+        )
+        # Drop any prefetched currency rows from earlier reads - the currency_codes
+        # property (and response serialization) would otherwise serve the stale set.
+        getattr(budget, '_prefetched_objects_cache', {}).pop('currencies', None)
+
+    @staticmethod
     def list(workspace_id: int, include_inactive: bool = False) -> list[Budget]:
         """List budgets in a workspace, inactive ones only on request."""
-        queryset = Budget.objects.for_workspace(workspace_id).select_related('display_currency')
+        queryset = Budget.objects.for_workspace(workspace_id).prefetch_related(
+            Prefetch(
+                'currencies',
+                queryset=BudgetCurrency.objects.select_related('currency').order_by('position', 'id'),
+            )
+        )
         if not include_inactive:
             queryset = queryset.filter(is_active=True)
         return list(queryset)
@@ -46,7 +70,15 @@ class BudgetService:
     def get(budget_id: int, workspace_id: int) -> Budget:
         """Get a budget by ID within a workspace."""
         budget = (
-            Budget.objects.for_workspace(workspace_id).select_related('display_currency').filter(id=budget_id).first()
+            Budget.objects.for_workspace(workspace_id)
+            .prefetch_related(
+                Prefetch(
+                    'currencies',
+                    queryset=BudgetCurrency.objects.select_related('currency').order_by('position', 'id'),
+                )
+            )
+            .filter(id=budget_id)
+            .first()
         )
         if not budget:
             raise BudgetNotFoundError()
@@ -61,11 +93,7 @@ class BudgetService:
 
         weeks, anchor = BudgetService._validated_cadence_fields(data.cadence, data.cadence_weeks, data.cadence_anchor)
 
-        display_currency = None
-        if data.display_currency_code:
-            display_currency = CurrencyCatalogService.get_enabled(workspace_id, data.display_currency_code)
-
-        return Budget.objects.create(
+        budget = Budget.objects.create(
             workspace_id=workspace_id,
             name=data.name,
             description=data.description,
@@ -73,13 +101,14 @@ class BudgetService:
             icon=data.icon,
             is_active=data.is_active,
             display_order=data.display_order,
-            display_currency=display_currency,
             cadence=data.cadence,
             cadence_weeks=weeks,
             cadence_anchor=anchor,
             created_by=user,
             updated_by=user,
         )
+        BudgetService._set_currencies(workspace_id, budget, data.currency_codes)
+        return budget
 
     @staticmethod
     @db_transaction.atomic
@@ -96,11 +125,11 @@ class BudgetService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        if 'display_currency_code' in update_data:
-            code = update_data.pop('display_currency_code')
-            budget.display_currency = (
-                CurrencyCatalogService.get_enabled(workspace_id, code) if code is not None else None
-            )
+        # Popped before the setattr loop below - Budget.currency_codes is a
+        # read-only property and setattr would raise AttributeError.
+        if 'currency_codes' in update_data:
+            codes = update_data.pop('currency_codes')
+            BudgetService._set_currencies(workspace_id, budget, codes)
 
         cadence_touched = {'cadence', 'cadence_weeks', 'cadence_anchor'} & update_data.keys()
         if cadence_touched:

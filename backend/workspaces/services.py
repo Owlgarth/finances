@@ -8,9 +8,10 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from accounts.models import Account, AccountType
-from budgeting.models import Budget, Cadence
+from budgeting.models import Budget, BudgetCurrency, Cadence
 from common.email import EmailService
 from common.exceptions import ValidationError
+from currencies.exceptions import UnknownCurrencyError
 from currencies.services import CurrencyCatalogService
 from workspaces.demo_fixtures import create_demo_fixtures, create_starter_fixtures
 from workspaces.exceptions import (
@@ -33,38 +34,86 @@ from workspaces.schemas import WorkspaceMemberOut, WorkspaceOut
 
 User = get_user_model()
 
+# Silently enabled next to the primary currency on workspace creation
+# (registration, in-app create, account reset). Explicit `currency_codes`
+# lists bypass these defaults entirely.
+DEFAULT_WORKSPACE_EXTRA_CURRENCIES: tuple[str, ...] = ('EUR', 'USD')
+
 
 class WorkspaceService:
     @staticmethod
     @db_transaction.atomic
-    def create_workspace(user, name: str, currency_code: str = 'PLN', create_demo: bool = False) -> Workspace:
+    def create_workspace(
+        user,
+        name: str,
+        currency_code: str = 'PLN',
+        create_demo: bool = False,
+        currency_codes: list[str] | None = None,
+    ) -> Workspace:
         """
         Creates a workspace with full initial setup:
         - WorkspaceMember (owner role)
-        - One enabled catalog currency
-        - Default "Main" account (in the chosen currency)
-        - Default "General" budget + starter categories + current period
+        - Enabled catalog currencies: exactly ``currency_codes`` when given
+          (first = primary/Main account currency, no extras added), otherwise
+          ``currency_code`` plus DEFAULT_WORKSPACE_EXTRA_CURRENCIES (deduped)
+        - Default "Main" account (in the primary currency)
+        - Default "General" budget with a BudgetCurrency set of [primary]
+          + starter categories + current period
         - Opt-in sample data when ``create_demo`` is True
         - Sets user.current_workspace to the new workspace
+
+        An unknown code inside an explicit ``currency_codes`` list raises
+        UnknownCurrencyError (explicit choices are respected strictly). An
+        unknown DEFAULT extra is skipped silently: defaults are a convenience,
+        never a precondition for workspace creation.
         """
         workspace = Workspace.objects.create(name=name, owner=user)
         WorkspaceMember.objects.create(workspace=workspace, user=user, role=Role.OWNER)
-        catalog_currency = CurrencyCatalogService.enable(user, workspace.id, currency_code)
+
+        # Explicit list wins and is used verbatim (deduped, first = primary).
+        # The schema enforces min_length=1; the truthiness check also shields
+        # direct service callers from an empty list (falls back to the
+        # single-code path instead of IndexError).
+        if currency_codes:
+            codes = list(dict.fromkeys(currency_codes))
+            strict = True
+        else:
+            codes = list(dict.fromkeys([currency_code, *DEFAULT_WORKSPACE_EXTRA_CURRENCIES]))
+            strict = False
+
+        primary_currency = CurrencyCatalogService.enable(user, workspace.id, codes[0])
+        for code in codes[1:]:
+            if strict:
+                CurrencyCatalogService.enable(user, workspace.id, code)
+            else:
+                try:
+                    CurrencyCatalogService.enable(user, workspace.id, code)
+                except UnknownCurrencyError:
+                    # Best-effort silent extras (EUR/USD are seeded globals;
+                    # this branch is pure defense against a partial catalog)
+                    # must never block workspace creation.
+                    continue
+
         Account.objects.create(
             workspace=workspace,
             name='Main',
             type=AccountType.BANK,
-            currency=catalog_currency,
+            currency=primary_currency,
             is_default_for_currency=True,
             created_by=user,
             updated_by=user,
         )
-        Budget.objects.create(
+        budget = Budget.objects.create(
             workspace=workspace,
             name='General',
             cadence=Cadence.MONTHLY,
             created_by=user,
             updated_by=user,
+        )
+        BudgetCurrency.objects.create(
+            budget=budget,
+            currency=primary_currency,
+            position=0,
         )
 
         if create_demo:

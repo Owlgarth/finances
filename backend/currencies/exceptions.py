@@ -29,8 +29,23 @@ class LastCurrencyError(ValidationError):
     default_code = 'last_currency'
 
 
+# Human labels for the per-type reference breakdown; iteration order of the
+# dict passed to CurrencyInUseError drives the sentence order.
+REFERENCE_LABELS = {
+    'accounts': 'account',
+    'category_budgets': 'planned amount',
+    'budget_currencies': 'budget currency set',
+}
+
+
 class CurrencyInUseError(ValidationError):
     default_code = 'currency_in_use'
 
-    def __init__(self, code: str, references: int):
-        super().__init__(f'Currency {code} is referenced by {references} record(s) and cannot be disabled')
+    def __init__(self, code: str, breakdown: dict[str, int]):
+        parts = [
+            f'{count} {REFERENCE_LABELS.get(kind, kind)}{"s" if count != 1 else ""}'
+            for kind, count in breakdown.items()
+            if count
+        ]
+        summary = ', '.join(parts) if parts else 'other records'
+        super().__init__(f'Currency {code} is in use: {summary}. Remove those references before disabling it.')

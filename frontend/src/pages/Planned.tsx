@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { Ban, Copy, Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi } from '../api/client'
 import type { PlannedTransaction } from '../types'
-import { useAccounts, useMultiCurrency } from '../hooks/useDomain'
+import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
@@ -43,6 +43,7 @@ export default function Planned() {
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
+  const { data: currencies = [] } = useEnabledCurrencies()
 
   const isTouch = useIsTouch()
 
@@ -70,6 +71,13 @@ export default function Planned() {
   const accountFilter = intListParam(searchParams, 'account')
   const budgetFilter = intListParam(searchParams, 'budget')
   const categoryFilter = intListParam(searchParams, 'category')
+  // Filters by ACCOUNT currency - the account a plan books into, never the
+  // informational original-amount facet.
+  const enabledCodes = new Set(currencies.map((c) => c.code))
+  // URL param is a CSV of codes; unknown/stale entries drop (type-filter idiom).
+  const currencyFilter = (searchParams.get('currency') ?? '')
+    .split(',')
+    .filter((c) => enabledCodes.has(c))
   const amountMin = searchParams.get('amount_min') ?? ''
   const amountMax = searchParams.get('amount_max') ?? ''
   const dateFrom = searchParams.get('from') ?? ''
@@ -85,6 +93,7 @@ export default function Planned() {
     accountFilter.length > 0,
     budgetFilter.length > 0,
     categoryFilter.length > 0,
+    currencyFilter.length > 0,
     Boolean(amountMin || amountMax),
     Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
@@ -94,10 +103,10 @@ export default function Planned() {
   const filterPanelId = useId()
 
   const clearFilters = () =>
-    updateParams({ account: null, budget: null, category: null, amount_min: null, amount_max: null, from: null, to: null })
+    updateParams({ account: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['planned', statusFilter, page, pageSize, search, accountFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['planned', statusFilter, page, pageSize, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       plannedTransactionsApi.getAll({
         status: statusFilter === 'all' ? undefined : statusFilter,
@@ -105,6 +114,7 @@ export default function Planned() {
         page_size: pageSize,
         search: search || undefined,
         account_id: accountFilter.length ? accountFilter : undefined,
+        currency_code: currencyFilter.length ? currencyFilter : undefined,
         budget_id: budgetFilter.length ? budgetFilter : undefined,
         category_id: categoryFilter.length ? categoryFilter : undefined,
         amount_gte: amountParam(amountMin),
@@ -194,6 +204,17 @@ export default function Planned() {
           {accounts.length > 1 && (
             <FilterField label="Account">
               <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
+            </FilterField>
+          )}
+          {multiCurrency && (
+            <FilterField label="Currency">
+              <MultiSelect
+                values={currencyFilter}
+                onChange={(v) => updateParams({ currency: v })}
+                options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
+                placeholder="All currencies"
+                aria-label="Filter by currency"
+              />
             </FilterField>
           )}
           <ListFilterFields dateLabel="Planned date" />

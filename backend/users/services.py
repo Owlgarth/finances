@@ -592,7 +592,7 @@ class UserService:
         ws = membership.workspace
 
         budgets = []
-        for budget in Budget.objects.for_workspace(ws.id).select_related('display_currency'):
+        for budget in Budget.objects.for_workspace(ws.id).prefetch_related('currencies__currency'):
             categories = [
                 {'name': c.name, 'is_archived': c.is_archived} for c in Category.objects.filter(budget=budget)
             ]
@@ -622,7 +622,7 @@ class UserService:
                     'icon': budget.icon,
                     'is_active': budget.is_active,
                     'display_order': budget.display_order,
-                    'display_currency_code': budget.display_currency.code if budget.display_currency else None,
+                    'currency_codes': budget.currency_codes,
                     'cadence': budget.cadence,
                     'cadence_weeks': budget.cadence_weeks,
                     'cadence_anchor': budget.cadence_anchor.isoformat() if budget.cadence_anchor else None,
@@ -731,7 +731,7 @@ class UserService:
         dedicated legacy import endpoint.
         """
         from accounts.models import Account, AccountType
-        from budgeting.models import Budget, CategoryBudget, Period
+        from budgeting.models import Budget, BudgetCurrency, CategoryBudget, Period
         from categories.models import Category
         from planned_transactions.models import PlannedTransaction
         from transactions.models import Transaction
@@ -817,7 +817,6 @@ class UserService:
 
             category_map: dict[tuple[str, str], object] = {}
             for budget_data in ws_data.get('budgets', []):
-                display_code = budget_data.get('display_currency_code')
                 budget = Budget.objects.create(
                     workspace=workspace,
                     name=budget_data.get('name'),
@@ -826,15 +825,21 @@ class UserService:
                     icon=budget_data.get('icon'),
                     is_active=budget_data.get('is_active', True),
                     display_order=budget_data.get('display_order', 0),
-                    display_currency=(
-                        UserService._resolve_import_currency(workspace, display_code) if display_code else None
-                    ),
                     cadence=budget_data.get('cadence', 'monthly'),
                     cadence_weeks=budget_data.get('cadence_weeks'),
                     cadence_anchor=_date(budget_data.get('cadence_anchor')),
                     created_by=user,
                     updated_by=user,
                 )
+                # v3 field; absent key (payloads without it) imports an empty set.
+                codes = budget_data.get('currency_codes', [])
+                # Dedupe preserving first occurrence; list index becomes position.
+                for position, code in enumerate(list(dict.fromkeys(codes))):
+                    BudgetCurrency.objects.create(
+                        budget=budget,
+                        currency=UserService._resolve_import_currency(workspace, code),
+                        position=position,
+                    )
                 counts['imported_budgets'] += 1
 
                 for cat_data in budget_data.get('categories', []):

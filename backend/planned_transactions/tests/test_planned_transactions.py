@@ -158,6 +158,35 @@ class TestListPlannedTransactions(PlannedTransactionTestCase):
         )
         self.assertEqual(len(data['items']), 3)
 
+    def test_list_filtered_by_account_currency(self):
+        data = self.get('/api/planned-transactions?currency_code=USD', **self.auth_headers())
+        self.assertEqual(len(data['items']), 1)
+        self.assertEqual(data['items'][0]['currency_code'], 'USD')
+
+    def test_list_filtered_by_multiple_account_currencies(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        eur_account = AccountFactory(workspace=self.workspace, name='Euros', currency=eur)
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=eur_account,
+            name='Euro hosting',
+            amount=Decimal('10.00'),
+            planned_date=date(2025, 3, 5),
+            status='pending',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        data = self.get('/api/planned-transactions?currency_code=EUR&currency_code=USD', **self.auth_headers())
+        # The two PLN-account rows stay excluded.
+        self.assertEqual(len(data['items']), 2)
+        self.assertEqual({item['currency_code'] for item in data['items']}, {'EUR', 'USD'})
+
+    def test_list_currency_filter_unknown_code_returns_empty(self):
+        data = self.get('/api/planned-transactions?currency_code=XXX', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 0)
+
     def test_list_filtered_by_amount_range(self):
         data = self.get('/api/planned-transactions?amount_gte=100&amount_lte=200', **self.auth_headers())
         self.assertEqual(len(data['items']), 1)

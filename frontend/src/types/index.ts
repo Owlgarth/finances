@@ -41,7 +41,7 @@ export interface Budget {
   icon: string | null;
   is_active: boolean;
   display_order: number;
-  display_currency_code: string | null;
+  currency_codes: string[];
   cadence: Cadence;
   cadence_weeks: number | null;
   cadence_anchor: string | null;

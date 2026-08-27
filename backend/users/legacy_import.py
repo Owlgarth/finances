@@ -25,7 +25,7 @@ from django.db import transaction as db_transaction
 
 from accounts.models import Account, AccountType
 from accounts.services import AccountService
-from budgeting.models import Budget, Cadence, CategoryBudget, Period
+from budgeting.models import Budget, BudgetCurrency, Cadence, CategoryBudget, Period
 from categories.models import Category
 from common.exceptions import ValidationError
 from currencies.models import Currency, WorkspaceCurrency
@@ -355,8 +355,11 @@ class LegacyImportService:
                 created_budgets.append(budget)
                 # Resolved only on creation so the get path stays side-effect-free.
                 if default_symbol:
-                    budget.display_currency = resolve_currency(default_symbol)
-                    budget.save(update_fields=['display_currency'])
+                    BudgetCurrency.objects.create(
+                        budget=budget,
+                        currency=resolve_currency(default_symbol),
+                        position=0,
+                    )
 
             # (budget, ci-name) -> Category, merged across periods.
             category_map: dict[str, Category] = {}

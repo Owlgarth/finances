@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from currencies.schemas import CurrencyCode
+
 
 class BudgetCreate(BaseModel):
     """Schema for creating a budget."""
@@ -17,7 +19,7 @@ class BudgetCreate(BaseModel):
     icon: str | None = Field(None, max_length=50)
     is_active: bool = True
     display_order: int = 0
-    display_currency_code: str | None = Field(None, pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] = Field(default_factory=list, max_length=10)
     cadence: str = Field(default='monthly', pattern=r'^(monthly|weeks|custom)$')
     cadence_weeks: int | None = Field(None, ge=1, le=52)
     cadence_anchor: date | None = None
@@ -46,7 +48,7 @@ class BudgetUpdate(BaseModel):
     icon: str | None = Field(None, max_length=50)
     is_active: bool | None = None
     display_order: int | None = None
-    display_currency_code: str | None = Field(None, pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] | None = Field(None, max_length=10)
     cadence: str | None = Field(None, pattern=r'^(monthly|weeks|custom)$')
     cadence_weeks: int | None = Field(None, ge=1, le=52)
     cadence_anchor: date | None = None
@@ -85,23 +87,12 @@ class BudgetOut(BaseModel):
     icon: str | None
     is_active: bool
     display_order: int
-    # Reads the model's `display_currency` FK; the validator reduces it to its code.
-    display_currency_code: str | None = Field(
-        None, validation_alias=AliasChoices('display_currency_code', 'display_currency')
-    )
+    # Reads the model's `currency_codes` property (ordered list of codes).
+    currency_codes: list[str]
     cadence: str
     cadence_weeks: int | None
     cadence_anchor: date | None
     created_at: datetime
-
-    @field_validator('display_currency_code', mode='before')
-    @classmethod
-    def extract_currency_code(cls, value: Any) -> str | None:
-        if value is None:
-            return None
-        if hasattr(value, 'code'):
-            return value.code
-        return value
 
 
 class PeriodCreate(BaseModel):

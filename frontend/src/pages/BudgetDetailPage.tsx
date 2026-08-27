@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Trash2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
+import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { intParam } from '../utils/params'
 import Modal from '../components/common/Modal'
@@ -18,24 +19,34 @@ import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
-// Per-budget currency-switcher order — a display preference, stored client-side
-// like the theme ('owlgarth_theme'), keyed per budget since currency sets differ.
-const currencyOrderKey = (budgetId: number) => `owlgarth_currency_order:${budgetId}`
-
-function loadCurrencyOrder(budgetId: number): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(currencyOrderKey(budgetId)) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === 'string') : []
-  } catch {
-    return []
-  }
-}
-
 /** The day after an ISO date, as an ISO date (local, no TZ shifts). */
 function nextDayIso(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)
   const next = new Date(y, m - 1, d + 1)
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+}
+
+/** The period nearest today from a newest-first sorted list: the newest
+ * period that has already started, or - when every period starts in the
+ * future - the oldest one (the soonest to begin). Only an empty list returns
+ * undefined. "Nearest today" is what "current" means when the server cannot
+ * derive one: opening on the NEWEST period strands the user on a far-future
+ * plan while an in-flight (or already ended) period sits unselected. */
+function nearestPeriod(periods: Period[]): Period | undefined {
+  const today = new Date().toISOString().slice(0, 10)
+  return periods.find((p) => p.start_date <= today) ?? periods[periods.length - 1]
+}
+
+// Last-viewed currency per budget: applied on mount / budget switch, never
+// mid-session. Distinct key from any other stored preference.
+const currencyViewKey = (budgetId: number) => `owlgarth_currency_view:${budgetId}`
+function loadStoredCurrencyView(budgetId: number): string | null {
+  try {
+    const value = localStorage.getItem(currencyViewKey(budgetId))
+    return typeof value === 'string' && value ? value : null
+  } catch {
+    return null
+  }
 }
 
 export default function BudgetDetailPage() {
@@ -76,17 +87,21 @@ export default function BudgetDetailPage() {
   // on the first render(s) budget is undefined, `undefined !== 'custom'` is
   // true, and custom-cadence budgets fire a doomed GET periods/current ->
   // 400 -> console error noise on every visit to an empty custom budget.
-  const { data: currentPeriod, isSuccess: currentPeriodLoaded } = useQuery({
+  const { data: currentPeriod, isSuccess: currentPeriodLoaded, isError: currentPeriodError } = useQuery({
     queryKey: ['current-period', budgetId],
     queryFn: () => budgetsApi.currentPeriod(budgetId),
     enabled: budget != null && budget.cadence !== 'custom',
     retry: false,
   })
-  // The periods list is a plain GET, newest first — it beats the lazily
-  // materialized current-period fetch. Don't let periods[0] (the NEWEST
-  // period) win that race and open planners on a future period. Custom
-  // cadence has no derived current period, so there the list is all there is.
-  const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded
+  // The periods list is a plain GET, newest first - it beats the lazily
+  // materialized current-period fetch, so the materialized current period
+  // (not periods[0], the NEWEST) owns the default and planners don't open on
+  // a future period. Custom cadence has no derived current period, so there
+  // the list is all there is. A terminal ERROR also counts as "known":
+  // retry:false makes one failed request (backend restart mid-visit, network
+  // blip) final for this mount, so gating on success alone left the picker
+  // on its placeholder forever with a perfectly good periods list behind it.
+  const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded || currentPeriodError
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -124,7 +139,15 @@ export default function BudgetDetailPage() {
   // cache makes currentPeriod available in the first commit).
   useEffect(() => {
     if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
-    else if (periodId === null && currentPeriodKnown && periods.length > 0) setPeriodId(periods[0].id)
+    // No materialized current period (custom cadence, or the current-period
+    // query failed terminally): fall back to the period nearest today, so a
+    // period is ALWAYS selected whenever one exists - an idle picker reads
+    // as a dead page. Only a genuinely empty periods list leaves periodId
+    // null (the empty-state copy covers it).
+    else if (periodId === null && currentPeriodKnown) {
+      const nearest = nearestPeriod(allPeriods)
+      if (nearest) setPeriodId(nearest.id)
+    }
     // Reconcile: a seeded ?period= that no authoritative list contains (typo,
     // stale bookmark, another budget's id) clears so the auto-pick branches
     // above take over. periodsLoaded + currentPeriodKnown gate the "the list
@@ -134,7 +157,7 @@ export default function BudgetDetailPage() {
     // valid seed while the two queries race. Never writes the URL
     // (user-initiated writes only).
     else if (periodId !== null && periodsLoaded && currentPeriodKnown && !allPeriods.some((p) => p.id === periodId)) setPeriodId(null)
-  }, [currentPeriod, periods, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
+  }, [currentPeriod, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
 
   // URL write side - event handlers and mutation callbacks ONLY (picker
   // onChange, goToPeriod, deletePeriod). Functional setSearchParams preserves
@@ -157,8 +180,9 @@ export default function BudgetDetailPage() {
     writePeriodParam(id)
   }
 
-  // Zero enabled currencies (shouldn't happen) — '—' can't pose as a real code;
-  // it's never rendered (single-currency layouts show no switcher).
+  // Zero enabled currencies (shouldn't happen) - the fallback placeholder
+  // can't pose as a real code; the switcher band stays hidden while the
+  // enabled list is empty (showCurrencyBand), so it never renders.
   const primaryCurrency = currencies[0]?.code ?? '—'
 
   const [newCategory, setNewCategory] = useState('')
@@ -285,15 +309,33 @@ export default function BudgetDetailPage() {
 
   const items = useMemo(() => summary?.items ?? [], [summary])
 
-  // Saved switcher order for this budget; empty = enabled-currency order.
-  const [currencyOrder, setCurrencyOrder] = useState<string[]>(() => loadCurrencyOrder(budgetId))
+  // Currency carousel: one currency's Planned/Actual/Remaining at a time.
+  // Tracked by code, not index, so the view survives a period change; when the
+  // selected currency isn't present in the new period, fall back to the first.
+  // Sits above the [budgetId] reset effect because that effect seeds it - the
+  // compiler lint forbids an effect reaching a setter declared later.
+  const [viewCurrency, setViewCurrency] = useState<string | null>(null)
+
+  // Last-viewed-currency seed, as a latest-ref (same shape as periodParamRef
+  // above): the sync effect runs before the [budgetId] reset effect below,
+  // so the ref holds THIS budget's stored code when the reset reads it. The
+  // ref indirection also keeps the opaque localStorage read out of the reset
+  // effect - reading it there re-trips the set-state-in-effect lint.
+  const storedViewRef = useRef<string | null>(loadStoredCurrencyView(budgetId))
+  useEffect(() => {
+    storedViewRef.current = loadStoredCurrencyView(budgetId)
+  }, [budgetId])
+
   // Budget→budget navigation (CommandPalette) re-renders this page with a new
   // budgetId. Reset the other per-budget state too, or the summary query runs
   // budgetSummary(B, A_period) → 404 → every row silently renders 0s. Kept in
   // this same effect (not a new one) so the set-state-in-effect warning count
   // stays put — the rule flags once per effect, not per call.
   useEffect(() => {
-    setCurrencyOrder(loadCurrencyOrder(budgetId))
+    // Re-open the budget on its last-viewed currency. Stale codes resolve at
+    // render - the active-index derivation falls back to index 0 (first
+    // configured) when the code is absent.
+    setViewCurrency(storedViewRef.current)
     // Seed from ?period= (deep link / reload) instead of resetting to null.
     // The ref-sync effect declared above has already run for this commit, so
     // the ref holds THIS URL's value (null when no param). Sanctioned
@@ -302,81 +344,144 @@ export default function BudgetDetailPage() {
     setSelectedCategory(null)
   }, [budgetId])
 
-  // Currency column groups: every currency present in the summary (enabled-currency
-  // order first), falling back to the primary currency for an empty period. The
-  // saved switcher order wins where set; unordered currencies keep their place
-  // after the ordered ones (stable sort). First in the result = default view.
-  const activeCurrencies = useMemo(() => {
-    const present = new Set(items.map((i) => i.currency_code))
-    const ordered = currencies.map((c) => c.code).filter((code) => present.has(code))
-    for (const code of present) {
-      if (!ordered.includes(code)) ordered.push(code)
-    }
-    const rank = new Map(currencyOrder.map((code, i) => [code, i]))
-    ordered.sort((a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER))
-    return ordered.length > 0 ? ordered : [primaryCurrency]
-  }, [items, currencies, primaryCurrency, currencyOrder])
+  // Currency column groups: the budget's configured currencies in stored
+  // order (first = default view), with data-only codes (money present in
+  // the summary but not configured) appended after in enabled-currency
+  // creation order (primary first) - stray money stays visible. Empty
+  // config + empty data falls back to the PRIMARY: the first entry of the
+  // creation-ordered enabled list - deterministic, never alphabetical.
+  const activeCurrencies = useMemo(
+    () => activeCurrencyCodes(budget?.currency_codes ?? [], items, currencies.map((c) => c.code), primaryCurrency),
+    [items, currencies, budget, primaryCurrency],
+  )
   const multiCurrency = activeCurrencies.length > 1
+  // The header chip renders only when a single currency is active - with
+  // multiple currencies the per-currency strip above the table owns
+  // switching, so the header row is gone entirely. Still gated on the budget
+  // and the enabled-currency list being known; before that, the codes
+  // themselves are unknown. currencies.length also keeps the fallback
+  // placeholder code at primaryCurrency from ever rendering in the chip.
+  const showCurrencyBand = budget != null && currencies.length > 0
 
-  // Currency carousel: one currency's Planned/Actual/Remaining at a time.
-  // Tracked by code, not index, so the view survives a period change; when the
-  // selected currency isn't present in the new period, fall back to the first.
-  const [viewCurrency, setViewCurrency] = useState<string | null>(null)
   const currencyIdx = viewCurrency ? Math.max(0, activeCurrencies.indexOf(viewCurrency)) : 0
   const activeCurrency = activeCurrencies[currencyIdx]
 
+  // Same editor-close rule from both switch paths (strip chips and keyboard
+  // cycling): never leave a planned-amount editor open across a currency
+  // change. Focus stays on the invoking control - no restoration logic.
+  const selectCurrency = (code: string) => {
+    setViewCurrency(code)
+    // Remember the switch so the budget re-opens on this currency next visit.
+    localStorage.setItem(currencyViewKey(budgetId), code)
+    setEditingCell(null)
+  }
   const goToCurrency = (dir: 1 | -1) => {
     const len = activeCurrencies.length
-    setViewCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
-    setEditingCell(null)
+    selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
   }
 
-  // Switcher-order config: each move persists the full current arrangement,
-  // so the saved order always covers every currency the user has seen.
-  const [orderConfigOpen, setOrderConfigOpen] = useState(false)
-  const moveCurrency = (idx: number, dir: 1 | -1) => {
-    const target = idx + dir
-    if (target < 0 || target >= activeCurrencies.length) return
-    const next = [...activeCurrencies]
-    ;[next[idx], next[target]] = [next[target], next[idx]]
-    setCurrencyOrder(next)
-    localStorage.setItem(currencyOrderKey(budgetId), JSON.stringify(next))
-    // With no explicit selection the first currency is shown, so a reorder can
-    // switch the visible currency — don't leave an editor open across that.
-    setEditingCell(null)
+  // Focus targets of the strip chips, keyed by code (roving tabindex).
+  const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  // Keyboard guard: never hijack arrows inside editable controls - the
+  // planned-amount editor input must keep its native caret/number behavior.
+  const isEditableTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable="true"]')
+
+  // Strip arrows (roving): select AND move focus; Home/End jump to the ends.
+  // stopPropagation so the panel handler below does not double-step.
+  const onStripKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return
+    const len = activeCurrencies.length
+    const idx = activeCurrencies.indexOf(activeCurrency)
+    let next: string
+    if (e.key === 'Home') next = activeCurrencies[0]
+    else if (e.key === 'End') next = activeCurrencies[len - 1]
+    else next = activeCurrencies[(idx + (e.key === 'ArrowRight' ? 1 : -1) + len) % len]
+    e.preventDefault()
+    e.stopPropagation()
+    selectCurrency(next)
+    chipRefs.current[next]?.focus()
   }
 
-  // Shared between the desktop table header and the mobile card list header.
-  const currencySwitcher = multiCurrency && (
-    <div className="flex items-center justify-center gap-1">
-      <button
-        type="button"
-        onClick={() => goToCurrency(-1)}
-        aria-label="Previous currency"
-        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <ChevronLeft size={12} />
-      </button>
-      <span aria-live="polite" className="min-w-[6ch] text-center text-text">
-        {activeCurrency}
-        <span className="ml-1.5 text-text-muted">{currencyIdx + 1}/{activeCurrencies.length}</span>
-      </span>
-      <button
-        type="button"
-        onClick={() => goToCurrency(1)}
-        aria-label="Next currency"
-        className="w-7 h-7 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <ChevronRight size={12} />
-      </button>
-      <button
-        type="button"
-        onClick={() => setOrderConfigOpen(true)}
-        aria-label="Configure currency order"
-        className="w-7 h-7 ml-1 flex items-center justify-center rounded-sm hover:bg-surface-hover hover:text-text transition-colors touch-hit"
-      >
-        <Settings2 size={12} />
-      </button>
+  // Table-region arrows: cycle the view WITHOUT moving focus (focus stays on
+  // whatever control the user is on). Skips editable controls (guard above)
+  // and the strip, whose own handler stops propagation.
+  const onPanelKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    if (!multiCurrency || isEditableTarget(e.target)) return
+    e.preventDefault()
+    goToCurrency(e.key === 'ArrowRight' ? 1 : -1)
+  }
+
+  // Shared between the desktop table header and the mobile card list header
+  // (single-currency budgets only - the strip owns switching otherwise). The
+  // element is embedded in both places (one copy is always display:none via
+  // max-sm:hidden / sm:hidden), so it exists twice in the DOM.
+  const currencySwitcher = (
+    <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text-muted select-none">
+      {activeCurrency}
+    </span>
+  )
+
+  // Per-currency totals strip: one jump-chip per active currency, each
+  // showing its OWN currency's planned total in its own code - never summed
+  // or converted across currencies (a sum without conversion rates is
+  // meaningless). The meter under each number encodes spend ratio
+  // (actual/planned), not currency identity.
+  const totals = summary?.totals ?? {}
+  const severityFill = (pct: number) => (pct >= 95 ? 'bg-negative' : pct >= 75 ? 'bg-warning' : 'bg-primary')
+  const currencyStrip = multiCurrency && (
+    <div
+      role="tablist"
+      aria-label="Budget currency"
+      onKeyDown={onStripKeyDown}
+      className="flex flex-wrap gap-2 mb-3 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:scrollbar-none"
+    >
+      {/* The chips are buttons; button text changes are not reliably
+          announced (buttons must not be live regions), so this visually
+          hidden region carries the active code on every switch. */}
+      <span className="sr-only" aria-live="polite">{activeCurrency}</span>
+      {activeCurrencies.map((code) => {
+        const codeTotals = totals[code]
+        const planned = codeTotals ? parseFloat(codeTotals.planned) : 0
+        const actual = codeTotals ? parseFloat(codeTotals.actual) : 0
+        const isActive = code === activeCurrency
+        // Display-only ratio math (the meter fill); never persisted.
+        const spendPct = planned > 0 ? (actual / planned) * 100 : 0
+        const numberClass = `font-mono text-xs font-medium tabular-nums${isActive ? ' text-text' : ''}${summaryLoading ? ' animate-pulse' : ''}`
+        return (
+          <button
+            key={code}
+            ref={(el) => { chipRefs.current[code] = el }}
+            type="button"
+            role="tab"
+            id={`currency-tab-${code}`}
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            aria-controls="budget-currency-panel"
+            onClick={() => selectCurrency(code)}
+            className={`inline-flex flex-col items-stretch justify-center gap-1 px-2 py-1 border rounded-sm bg-surface select-none transition-colors cursor-pointer min-h-8 pointer-coarse:min-h-[44px] max-sm:shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
+              isActive ? 'border-primary ring-1 ring-primary' : 'border-border text-text-muted hover:bg-surface-hover hover:text-text'
+            }`}
+          >
+            <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+              <span className={numberClass}>
+                {formatAmount(codeTotals ? codeTotals.planned : '0')}
+              </span>
+              <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-text-muted">{code}</span>
+            </span>
+            {codeTotals && planned > 0 && (
+              <span aria-hidden="true" className="block w-full h-1 bg-surface-muted rounded-none overflow-hidden">
+                <span
+                  className={`block h-full rounded-none transition-all ${severityFill(spendPct)}`}
+                  style={{ width: `${Math.min(spendPct, 100)}%` }}
+                />
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 
@@ -498,12 +603,18 @@ export default function BudgetDetailPage() {
       ) : summaryLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : (
-        <>
+        <section
+          role="tabpanel"
+          id="budget-currency-panel"
+          aria-labelledby={activeCurrency ? `currency-tab-${activeCurrency}` : undefined}
+          onKeyDown={onPanelKeyDown}
+        >
+        {currencyStrip}
         {/* Desktop: ledger table. Hidden on mobile in favor of the card list below. */}
         <div className="border border-border rounded-sm bg-surface overflow-x-auto max-sm:hidden">
           <table className="w-full text-sm">
             <thead>
-              {multiCurrency && (
+              {showCurrencyBand && !multiCurrency && (
                 <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                   <th className="sticky left-0 z-10 bg-surface" />
                   <th colSpan={3} className="px-4 py-1 font-medium">
@@ -584,7 +695,7 @@ export default function BudgetDetailPage() {
 
         {/* Mobile: card per category — full-width numbers so thousands stay legible. */}
         <div className="sm:hidden space-y-2">
-          {multiCurrency && (
+          {showCurrencyBand && !multiCurrency && (
             <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted py-0.5">
               {currencySwitcher}
             </div>
@@ -666,7 +777,7 @@ export default function BudgetDetailPage() {
             </div>
           )}
         </div>
-        </>
+        </section>
       )}
 
       {canWrite && (
@@ -726,53 +837,6 @@ export default function BudgetDetailPage() {
             {mergeCategory.isPending ? 'Merging…' : 'Merge'}
           </button>
         </div>
-      </Modal>
-
-      <Modal
-        open={orderConfigOpen}
-        onClose={() => setOrderConfigOpen(false)}
-        size="sm"
-        className="p-6"
-        title="Currency order"
-      >
-        <p className="text-xs text-text-muted -mt-3 mb-4">
-          The switcher cycles through currencies in this order; the first one is shown by default.
-        </p>
-        <ul className="border border-border rounded-sm divide-y divide-border">
-          {activeCurrencies.map((code, idx) => (
-            <li key={code} className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-text">
-                <span className="font-mono">{code}</span>
-                <span className="ml-2 text-xs text-text-muted">
-                  {currencies.find((c) => c.code === code)?.name ?? ''}
-                </span>
-                {idx === 0 && (
-                  <span className="ml-2 text-[9px] font-mono uppercase tracking-widest text-text-muted">Default</span>
-                )}
-              </span>
-              <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => moveCurrency(idx, -1)}
-                  disabled={idx === 0}
-                  aria-label={`Move ${code} up`}
-                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
-                >
-                  <ArrowUp size={13} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveCurrency(idx, 1)}
-                  disabled={idx === activeCurrencies.length - 1}
-                  aria-label={`Move ${code} down`}
-                  className="w-7 h-7 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
-                >
-                  <ArrowDown size={13} />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
       </Modal>
 
       {periodModal && (

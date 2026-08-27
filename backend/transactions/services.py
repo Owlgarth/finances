@@ -122,6 +122,7 @@ class TransactionService:
         category_id: list | None = None,
         budget_id: list | None = None,
         transaction_type: list | None = None,
+        currency_code: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -141,6 +142,8 @@ class TransactionService:
             queryset = queryset.filter(category__budget_id__in=budget_id)
         if transaction_type:
             queryset = queryset.filter(type__in=transaction_type)
+        if currency_code:
+            queryset = queryset.filter(account__currency__code__in=currency_code)
         if search:
             queryset = queryset.filter(description__icontains=search)
         if amount_gte is not None:
@@ -172,6 +175,7 @@ class TransactionService:
         category_id: list | None = None,
         budget_id: list | None = None,
         transaction_type: list | None = None,
+        currency_code: list | None = None,
         search: str | None = None,
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
@@ -188,6 +192,7 @@ class TransactionService:
             category_id=category_id,
             budget_id=budget_id,
             transaction_type=transaction_type,
+            currency_code=currency_code,
             search=search,
             amount_gte=amount_gte,
             amount_lte=amount_lte,
