@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
@@ -16,6 +16,7 @@ import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
@@ -235,6 +236,9 @@ export default function BudgetDetailPage() {
   // edit prefill and add-mode defaults with zero open-effects.
   const [periodModal, setPeriodModal] = useState<{ mode: 'add' | 'edit'; period: Period | null; nonce: number } | null>(null)
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null)
+  // Category management (archive/merge/delete) lives in its own mount-per-use
+  // modal; this flag is its open/close.
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
   const openPeriodModal = (mode: 'add' | 'edit', period: Period | null = null) =>
     setPeriodModal({ mode, period, nonce: Date.now() })
 
@@ -581,6 +585,11 @@ export default function BudgetDetailPage() {
             )}
           </div>
         )}
+        {canWrite && (
+          <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
+            <Tags size={13} className="inline mr-1" /> Manage categories
+          </button>
+        )}
       </div>
 
       {isPast && (
@@ -847,6 +856,10 @@ export default function BudgetDetailPage() {
           period={periodModal.period}
           onClose={() => setPeriodModal(null)}
         />
+      )}
+
+      {manageCategoriesOpen && (
+        <ManageCategoriesModal budgetId={budgetId} onClose={() => setManageCategoriesOpen(false)} />
       )}
 
       <ConfirmDialog
