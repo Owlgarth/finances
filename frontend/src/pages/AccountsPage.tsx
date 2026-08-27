@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Plus, ArrowLeftRight, Archive, Pencil, Receipt, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
@@ -180,7 +180,10 @@ export default function AccountsPage() {
       {/* Recent transfers */}
       {(transfers?.items.length ?? 0) > 0 && (
         <div className="mt-8">
-          <h2 className="text-sm font-medium text-text mb-3">Recent transfers</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-text">Recent transfers</h2>
+            <Link to="/transfers" className="text-xs text-primary hover:text-primary-hover touch-hit">View all transfers</Link>
+          </div>
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {transfers!.items.map((t) => (
               <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">

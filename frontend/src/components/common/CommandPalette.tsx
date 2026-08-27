@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, CornerDownLeft, Home, PieChart, Receipt, Search, Settings, Users, Wallet } from 'lucide-react'
+import { ArrowLeftRight, Calendar, CornerDownLeft, Home, PieChart, Receipt, Search, Settings, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { useBudgets } from '../../hooks/useDomain'
@@ -35,6 +35,7 @@ const STATIC_PAGES: PageEntry[] = [
   { label: 'Budgets', to: '/budgets', icon: PieChart, group: 'Pages' },
   { label: 'Transactions', to: '/transactions', icon: Receipt, group: 'Pages', keywords: ['txns'] },
   { label: 'Planned', to: '/planned', icon: Calendar, group: 'Pages', keywords: ['scheduled', 'recurring'] },
+  { label: 'Transfers', to: '/transfers', icon: ArrowLeftRight, group: 'Pages', keywords: ['move money'] },
   { label: 'Members', to: '/members', icon: Users, group: 'Pages' },
   { label: 'Settings', to: '/settings', icon: Settings, group: 'Pages', keywords: ['profile', 'preferences'] },
 ]
