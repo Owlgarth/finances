@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Copy, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
@@ -15,7 +15,8 @@ import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { rowsToItems } from '../../../utils/transactionItems'
-import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
+import { listboxPanelClass } from '../../common/listboxParts'
+import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
   open: boolean
@@ -89,6 +90,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
+  const descListId = useId()
 
   const defaultBudgetId =
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
@@ -111,6 +113,11 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   // once, at submit (rowsToItems, utils/transactionItems). Mirrors TransactionItemsEditor.
   const [pendingRows, setPendingRows] = useState<Row[]>([])
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
+  // Description autocomplete: keyboard highlight index into `suggestions`
+  // (-1 = none) and the panel-open flag (follows focus/typing, closed on
+  // Escape/Tab/select/blur). Reset in the open-effect and on type change.
+  const [highlighted, setHighlighted] = useState(-1)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
@@ -177,6 +184,9 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     parse.reset()
     if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
+    // Suggestion panel starts closed for every fresh open.
+    setHighlighted(-1)
+    setSuggestionsOpen(false)
     // Copy mode prefills like edit, except the date: always today (D4).
     const source = transaction ?? copyFrom
     if (source) {
@@ -269,6 +279,29 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     queryFn: () => budgetsApi.listCategories(budgetId!),
     enabled: open && !!budgetId && type !== 'adjustment',
   })
+
+  // Frequent descriptions for the description autocomplete, cached per type.
+  // Keyed inside the ['transactions'] family so every transaction mutation's
+  // invalidation (including this form's own save) refetches it - a
+  // just-saved description shows up in the next open's suggestions.
+  const { data: freq } = useQuery({
+    queryKey: ['transactions', 'frequent-descriptions', type],
+    queryFn: () => transactionsApi.getFrequentDescriptions({ transaction_type: [type], limit: 6 }),
+    enabled: open && description.trim().length >= 2,
+    staleTime: 60_000,
+  })
+
+  // Substring matches of what is typed, excluding the exact match (typing a
+  // remembered description verbatim needs no suggestion). Never auto-applied:
+  // a suggestion lands in the field only on explicit Enter or click.
+  const suggestions = (freq?.items ?? [])
+    .filter((s) => {
+      const q = description.trim().toLowerCase()
+      return s.description.toLowerCase().includes(q) && s.description.toLowerCase() !== q
+    })
+    .slice(0, 6)
+  const showSuggestions =
+    open && suggestionsOpen && suggestions.length > 0 && description.trim().length >= 2
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -363,6 +396,44 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (next) setCurrencyCode(next.currency_code)
   }
 
+  /** Combobox keyboard semantics for the description field (mirrors
+   *  useListboxPanel): arrows move the highlight with wrap, Enter accepts the
+   *  highlighted suggestion (preventDefault - no form submit) or falls through
+   *  natively so the typed text submits as-is, Escape/Tab close the panel.
+   *  Escape is consumed (stopPropagation) so the surrounding Modal does not
+   *  also close - same rationale as the listbox panels. */
+  const handleDescriptionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) return
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlighted((prev) => (prev < 0 ? 0 : (prev + 1) % suggestions.length))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlighted((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1))
+        break
+      case 'Enter':
+        // Bounds check: a mid-flight refetch can shrink the list under a
+        // highlight set against the previous render's rows.
+        if (highlighted >= 0 && highlighted < suggestions.length) {
+          e.preventDefault()
+          setDescription(suggestions[highlighted].description)
+          setSuggestionsOpen(false)
+          setHighlighted(-1)
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        e.stopPropagation()
+        setSuggestionsOpen(false)
+        break
+      case 'Tab':
+        setSuggestionsOpen(false)
+        break
+    }
+  }
+
   return (
     <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? 'Edit transaction' : 'New transaction'}>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -404,7 +475,18 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Type</label>
-            <Select value={type} onChange={setType} options={TYPE_OPTIONS} aria-label="Transaction type" />
+            <Select
+              value={type}
+              onChange={(v) => {
+                setType(v)
+                // Suggestions are per-type: the panel stays closed until the
+                // new type's list arrives and the user interacts again.
+                setHighlighted(-1)
+                setSuggestionsOpen(false)
+              }}
+              options={TYPE_OPTIONS}
+              aria-label="Transaction type"
+            />
           </div>
           <div>
             <label htmlFor="tx-amount" className={labelClass}>
@@ -416,7 +498,56 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
 
         <div>
           <label htmlFor="tx-desc" className={labelClass}>Description</label>
-          <input id="tx-desc" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+          <div className="relative">
+            <input
+              id="tx-desc"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                // Re-filtering moves the rows; a stale highlight could point
+                // past the end of the shrunken list.
+                setHighlighted(-1)
+              }}
+              onFocus={() => setSuggestionsOpen(true)}
+              // Delayed close: clicking a suggestion row blurs the input
+              // first - closing synchronously would unmount the row before
+              // the click lands.
+              onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+              onKeyDown={handleDescriptionKeyDown}
+              className={inputClass}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={showSuggestions}
+              aria-controls={showSuggestions ? descListId : undefined}
+              aria-activedescendant={highlighted >= 0 ? `${descListId}-opt-${highlighted}` : undefined}
+            />
+            {showSuggestions && (
+              <div id={descListId} role="listbox" aria-label="Frequent descriptions" className={listboxPanelClass}>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={s.description}
+                    id={`${descListId}-opt-${i}`}
+                    type="button"
+                    role="option"
+                    aria-selected={i === highlighted}
+                    tabIndex={-1}
+                    onClick={() => {
+                      setDescription(s.description)
+                      setSuggestionsOpen(false)
+                      setHighlighted(-1)
+                    }}
+                    className={
+                      'w-full flex items-center px-2 text-left text-xs text-text transition-colors ' +
+                      `${controlHeightClass} ` +
+                      (i === highlighted ? 'bg-surface-hover ' : 'hover:bg-surface-hover ')
+                    }
+                  >
+                    <span className="truncate">{s.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Always rendered: recording money without an account (cash exchanged
