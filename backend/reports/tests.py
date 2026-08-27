@@ -89,6 +89,29 @@ class TestBudgetSummary(ReportsTestCase):
         self.assertEqual(data['totals']['PLN']['planned'], '1500.00')
         self.assertEqual(data['totals']['PLN']['actual'], '300.00')
 
+    def test_budget_summary_counts_account_less_actuals_by_own_currency(self):
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        TransactionFactory(
+            account=None,
+            currency=usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 8),
+            category=self.groceries,
+            amount=Decimal('80.00'),
+            type='expense',
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        by_key = {(i['category_name'], i['currency_code']): i for i in data['items']}
+        self.assertEqual(by_key[('Groceries', 'USD')]['actual'], '80.00')
+        self.assertEqual(by_key[('Groceries', 'USD')]['planned'], '0.00')
+        self.assertEqual(data['totals']['USD']['actual'], '80.00')
+        self.assertEqual(data['totals']['PLN']['planned'], '1500.00')
+
     def test_budget_summary_excludes_adjustments_and_income(self):
         TransactionFactory(
             account=self.checking,
@@ -174,6 +197,22 @@ class TestCurrentBalances(ReportsTestCase):
         self.get('/api/reports/current-balances')
         self.assertStatus(401)
 
+    def test_current_balances_ignore_account_less_transactions(self):
+        """Account-less rows contribute to no balance (reverse-FK exclusion is structural)."""
+        TransactionFactory(
+            account=None,
+            currency=self.pln,
+            workspace=self.workspace,
+            amount=Decimal('500.00'),
+            type='income',
+        )
+
+        data = self.get('/api/reports/current-balances', **self.auth_headers())
+        self.assertStatus(200)
+        # Checking stays at its 1000.00 opening balance; the 500.00 account-less
+        # income moves nothing. Totals come from accounts only.
+        self.assertEqual(data['totals'], {'PLN': '1000.00', 'USD': '0.00'})
+
 
 class TestBudgetHistory(ReportsTestCase):
     def setUp(self):
@@ -243,3 +282,21 @@ class TestBudgetHistory(ReportsTestCase):
     def test_history_unknown_budget_404(self):
         self.get('/api/reports/budget-history?budget_id=999999', **self.auth_headers())
         self.assertStatus(404)
+
+    def test_history_counts_account_less_actuals_by_own_currency(self):
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        TransactionFactory(
+            account=None,
+            currency=usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 9),
+            category=self.groceries,
+            amount=Decimal('40.00'),
+            type='expense',
+        )
+
+        data = self.get(f'/api/reports/budget-history?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertStatus(200)
+        july = data['periods'][-1]
+        self.assertEqual(july['totals']['USD'], {'planned': '0.00', 'actual': '40.00'})
+        self.assertEqual(july['totals']['PLN']['actual'], '300.00')

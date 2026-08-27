@@ -78,8 +78,9 @@ export type TransactionType = 'income' | 'expense' | 'adjustment';
 export interface Transaction {
   id: number;
   workspace_id: number;
-  account_id: number;
-  account_name: string;
+  /** Null on account-less rows (own currency is the stored truth). */
+  account_id: number | null;
+  account_name: string | null;
   currency_code: string;
   date: string;
   description: string;
@@ -189,8 +190,8 @@ export interface Transfer {
 export interface PlannedTransaction {
   id: number;
   workspace_id: number;
-  account_id: number;
-  account_name: string;
+  account_id: number | null;
+  account_name: string | null;
   currency_code: string;
   name: string;
   amount: string;
@@ -285,7 +286,7 @@ export interface RegisterRequest {
   password: string;
   full_name?: string;
   workspace_name: string;
-  currency_code?: string;
+  currency_codes: string[];
   start_with_sample_data?: boolean;
   accepted_terms_version: string;
   accepted_privacy_version: string;

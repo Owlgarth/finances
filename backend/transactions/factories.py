@@ -13,6 +13,9 @@ class TransactionFactory(DjangoModelFactory):
         model = Transaction
 
     account = factory.SubFactory('accounts.factories.AccountFactory')
+    # Own currency defaults to the account's; account-less rows pass
+    # account=None plus an explicit currency AND workspace.
+    currency = factory.LazyAttribute(lambda obj: obj.account.currency)
     workspace = factory.LazyAttribute(lambda obj: obj.account.workspace)
     date = factory.Faker('date_this_year')
     description = factory.Faker('sentence')

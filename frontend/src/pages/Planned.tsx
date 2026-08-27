@@ -149,6 +149,7 @@ export default function Planned() {
         name: p.name,
         amount: p.amount,
         account_id: p.account_id,
+        currency_code: p.currency_code,
         category_id: p.category_id,
         planned_date: p.planned_date,
         status: 'cancelled',
@@ -247,7 +248,7 @@ export default function Planned() {
                   <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{p.status}</span>
                 </div>
                 <div className="text-[10px] font-mono text-text-muted">
-                  {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name}
+                  {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? 'No account'}
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 pl-3">

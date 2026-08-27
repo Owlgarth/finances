@@ -43,7 +43,9 @@ Workspace (top-level container)
 ├── WorkspaceCurrency        (which catalog currencies are enabled here)
 │
 ├── Account                  (cash / bank / other; holds money in one currency)
-│     ├── Transaction        (income / expense / adjustment; optional category)
+│     ├── Transaction        (income / expense / adjustment; optional category; optionally on this
+│     │     │                  account - every transaction stores its own currency, so account-less
+│     │     │                  rows hang directly off the workspace)
 │     │     ├── TransactionItem        (ordered receipt line items - informational)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
@@ -61,11 +63,11 @@ Workspace (top-level container)
 | Concept | Rule |
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
-| **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction's currency *is* its account's currency. A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
+| **Currency** | A global ISO 4217 catalog; each workspace enables a subset. A transaction stores its own currency - it equals the account's currency whenever an account is set, and account-less rows carry their own (cash exchanged while traveling; a closed account's history). A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
-| **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates. |
+| **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates, and must differ from the transaction's own currency. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. |
 | **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
 

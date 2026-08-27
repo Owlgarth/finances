@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from currencies.schemas import CurrencyCode
+
 
 class AccountDeleteIn(BaseModel):
     """Input for account deletion — requires password confirmation."""
@@ -14,14 +16,14 @@ class AccountDeleteIn(BaseModel):
 class AccountResetIn(BaseModel):
     """Input for account reset — requires password confirmation.
 
-    workspace_name/currency_code shape the fresh workspace created after the wipe.
+    workspace_name/currency_codes shape the fresh workspace created after the wipe.
     confirm_shared must be true when any owned workspace has other members —
     the reset deletes those workspaces out from under them.
     """
 
     password: str
     workspace_name: str = Field('My Workspace', max_length=100)
-    currency_code: str = Field('PLN', pattern=r'^[A-Z]{3,8}$')
+    currency_codes: list[CurrencyCode] | None = Field(None, min_length=1, max_length=20)
     confirm_shared: bool = False
 
 
