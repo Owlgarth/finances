@@ -216,9 +216,10 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/currencies` | List the global ISO 4217 catalog |
-| GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace (creation order - the primary first) |
+| GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace (stored position order - the primary first) |
 | POST | `/api/workspaces/enabled-currencies` | Enable a catalog currency, or create a custom one (`custom: true`; custom currencies are always 2-decimal - no `decimals` param) (admin+) |
-| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+; blocked while referenced by accounts, planned amounts, or budget currency sets - the error enumerates the counts; the transaction original-amount facet never blocks) |
+| PUT | `/api/workspaces/enabled-currencies` | Reorder the enabled set (`currency_codes` = the full enabled set in its new order, any permutation; 400 `currency_order_mismatch` otherwise; first = primary) (admin+) |
+| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+; blocked while referenced by accounts, planned amounts, budget currency sets, planned transactions, or transactions storing it as their own currency - the error enumerates the counts; the transaction original-amount facet never blocks) |
 
 ### Workspace Members
 
@@ -265,9 +266,9 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the account's currency, never the original-amount facet) |
+| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the transaction's stored own currency - account-less rows match their own - never the original-amount facet) |
 | GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` |
-| POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete |
+| POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; adjustments always require an account) |
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
 | GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
 | GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items |
@@ -289,10 +290,10 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/planned-transactions` | `status`, `account_id`, `currency_code[]`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated; `currency_code` filters by the account's currency) |
+| GET | `/api/planned-transactions` | `status`, `account_id`, `currency_code[]`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated; `currency_code` filters by the planned transaction's own stored currency) |
 | GET | `/api/planned-transactions/totals` | `status`, `account_id`, `group_by` | Totals grouped by `currency` or `category` |
-| POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Create / update / delete |
-| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction on the planned account) |
+| POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less) |
+| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction carrying the plan's account and own currency) |
 
 ### Column Sorting (`ordering`)
 
@@ -303,8 +304,8 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 
 | Endpoint | Sortable fields | Default |
 |----------|-----------------|---------|
-| `GET /api/transactions` | `date`, `description`, `amount`, `type`, `category__name`, `account__name`, `account__currency__code` | `-date` |
-| `GET /api/planned-transactions` | `name`, `amount`, `status`, `planned_date`, `category__name`, `account__name`, `account__currency__code` | `planned_date` |
+| `GET /api/transactions` | `date`, `description`, `amount`, `type`, `category__name`, `account__name`, `currency__code` | `-date` |
+| `GET /api/planned-transactions` | `name`, `amount`, `status`, `planned_date`, `category__name`, `account__name`, `currency__code` | `planned_date` |
 
 ### Reports
 
