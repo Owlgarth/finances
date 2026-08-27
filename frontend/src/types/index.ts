@@ -189,8 +189,8 @@ export interface Transfer {
 export interface PlannedTransaction {
   id: number;
   workspace_id: number;
-  account_id: number;
-  account_name: string;
+  account_id: number | null;
+  account_name: string | null;
   currency_code: string;
   name: string;
   amount: string;

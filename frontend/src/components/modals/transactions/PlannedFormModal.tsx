@@ -7,11 +7,16 @@ import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import { budgetsApi, plannedTransactionsApi } from '../../../api/client'
 import type { PlannedTransaction } from '../../../types'
-import { useAccounts, useBudgets } from '../../../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/useDomain'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { destructiveButtonClass, inputClass, labelClass, positiveButtonClass, primaryButtonClass, secondaryButtonClass, warningButtonClass } from '../../common/formStyles'
+
+// Sentinel for the deliberate account-less state. Select's value contract is
+// string | number (it cannot hold null options), so the null account rides a
+// numeric sentinel instead; account ids are positive, so 0 never collides.
+const NO_ACCOUNT = 0
 
 interface Props {
   open: boolean
@@ -43,6 +48,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   const { workspace } = useWorkspace()
   const { data: accounts = [] } = useAccounts(false)
   const { data: budgets = [] } = useBudgets(false)
+  const { data: currencies = [] } = useEnabledCurrencies()
 
   const defaultBudgetId =
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
@@ -50,6 +56,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [accountId, setAccountId] = useState<number | null>(null)
+  const [currencyCode, setCurrencyCode] = useState<string | null>(null)
   const [budgetId, setBudgetId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [plannedDate, setPlannedDate] = useState(new Date().toISOString().slice(0, 10))
@@ -63,6 +70,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setName(source.name)
       setAmount(source.amount)
       setAccountId(source.account_id)
+      setCurrencyCode(source.currency_code)
       setCategoryId(source.category_id)
       // Uncategorized source → fall back to the create-mode default budget so the
       // Category select is immediately usable (it is disabled while budgetId is
@@ -78,6 +86,11 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setName('')
       setAmount('')
       setAccountId(accounts.length === 1 ? accounts[0].id : null)
+      // Single account: prefill it and its currency. Otherwise the plan
+      // starts account-less in the workspace's primary currency (the first
+      // enabled one). Until the currencies query lands that is null and the
+      // submit guard holds.
+      setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencies[0]?.code ?? null))
       setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setPlannedDate(new Date().toISOString().slice(0, 10))
@@ -87,7 +100,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setIdempotencyKey(crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planned, copyFrom, accounts.length, budgets.length, defaultBudgetId])
+  }, [open, planned, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -97,7 +110,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
 
   const mutation = useMutation({
     mutationFn: () => {
-      const payload = { name: name.trim(), amount, account_id: accountId, category_id: categoryId, planned_date: plannedDate }
+      const payload = { name: name.trim(), amount, account_id: accountId, currency_code: currencyCode, category_id: categoryId, planned_date: plannedDate }
       // Echo the current status back on edit: the schema defaults a missing
       // status to 'pending', which the backend rejects as a revert for done rows.
       return isEdit
@@ -116,8 +129,28 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
     e.preventDefault()
     if (!name.trim()) return toast.error('Name is required')
     if (!amount) return toast.error('Amount is required')
-    if (!accountId && accounts.length !== 1) return toast.error('Choose an account')
+    // Only reachable before the currencies query lands on an account-less
+    // create: a picked account sets the code, and edit/copy seeds it.
+    if (!currencyCode) return toast.error('Currency is required')
     mutation.mutate()
+  }
+
+  const accountOptions = [
+    { value: NO_ACCOUNT, label: 'No account' },
+    ...accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` })),
+  ]
+  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
+
+  // Picking an account locks the plan's currency to the account's (the
+  // backend rejects a mismatch); picking "No account" keeps the current
+  // currency - the typed amount is already in it.
+  const handleAccountChange = (value: number) => {
+    const id = value === NO_ACCOUNT ? null : value
+    setAccountId(id)
+    if (id !== null) {
+      const picked = accounts.find((a) => a.id === id)
+      if (picked) setCurrencyCode(picked.currency_code)
+    }
   }
 
   return (
@@ -137,12 +170,16 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
             <DatePicker value={plannedDate} onChange={setPlannedDate} />
           </div>
         </div>
-        {accounts.length > 1 && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Account</label>
-            <Select value={accountId} onChange={setAccountId} options={accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))} placeholder="Select account" aria-label="Account" />
+            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder="Select account" aria-label="Account" />
           </div>
-        )}
+          <div>
+            <label className={labelClass}>Currency</label>
+            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder="Select currency" aria-label="Currency" mono disabled={accountId !== null} />
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           {budgets.length > 1 && (
             <div>

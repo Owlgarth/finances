@@ -31,7 +31,7 @@ export type PlannedTransactionOrdering =
   | '-name' | 'name' | '-amount' | 'amount'
   | '-status' | 'status' | '-planned_date' | 'planned_date'
   | '-category__name' | 'category__name'
-  | '-account__name' | 'account__name' | '-account__currency__code' | 'account__currency__code';
+  | '-account__name' | 'account__name' | '-currency__code' | 'currency__code';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -359,6 +359,7 @@ export interface PlannedInput {
   name: string;
   amount: string;
   account_id?: number | null;
+  currency_code?: string | null;
   category_id?: number | null;
   planned_date: string;
   status?: 'pending' | 'done' | 'cancelled';
