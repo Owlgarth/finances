@@ -453,6 +453,7 @@ class LegacyImportService:
                     Transaction.objects.create(
                         workspace=workspace,
                         account=account,
+                        currency=account.currency,
                         date=_required_date(tx.get('date'), tx_ctx),
                         description=tx.get('description') or '',
                         amount=amount,
@@ -527,6 +528,7 @@ class LegacyImportService:
                             Transaction.objects.create(
                                 workspace=workspace,
                                 account=from_account,
+                                currency=from_account.currency,
                                 date=_required_date(ex.get('date'), ex_ctx),
                                 description=ex.get('description') or f'Currency exchange: {from_symbol} → {to_symbol}',
                                 amount=delta,

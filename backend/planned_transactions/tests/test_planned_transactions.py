@@ -488,6 +488,30 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(mirror.category_id, self.groceries.id)
         self.assertEqual(mirror.date, original_date)
 
+    def test_update_done_account_less_plan_mirrors_currency_and_account(self):
+        """Editing a done account-less plan updates the executed mirror's amount
+        and keeps it account-less in the plan's stored currency."""
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Cash tips', amount='40.00', account_id=None, currency_code='PLN', status='done'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        transaction_id = data['transaction_id']
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Cash tips', amount='45.00', account_id=None, currency_code='PLN', status='done'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+
+        self.planned1.refresh_from_db()
+        mirror = Transaction.objects.get(id=transaction_id)
+        self.assertEqual(mirror.amount, Decimal('45.00'))
+        self.assertIsNone(mirror.account_id)
+        self.assertEqual(mirror.currency_id, self.planned1.currency_id)
+
     def test_update_cancelled_planned_allowed(self):
         self.planned1.status = 'cancelled'
         self.planned1.save()

@@ -889,6 +889,7 @@ class UserService:
                 trans = Transaction.objects.create(
                     workspace=workspace,
                     account=account,
+                    currency=account.currency,
                     date=_date(tx_data.get('date')),
                     description=tx_data.get('description'),
                     amount=tx_data.get('amount'),

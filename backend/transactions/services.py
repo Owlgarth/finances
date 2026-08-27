@@ -18,14 +18,17 @@ from common.enums import TotalsLabel
 from common.idempotency import IDEMPOTENCY_TTL, create_with_idempotency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
 from currencies.models import Currency
+from currencies.services import CurrencyCatalogService
 from transactions.exceptions import (
-    AccountRequiredError,
     TransactionAccountArchivedError,
+    TransactionAdjustmentAccountError,
     TransactionAdjustmentCategoryError,
     TransactionAmountInvalidError,
     TransactionBulkAccountError,
     TransactionBulkCurrencyError,
     TransactionCategoryNotFoundError,
+    TransactionCurrencyMismatchError,
+    TransactionCurrencyRequiredError,
     TransactionImportError,
     TransactionNotFoundError,
     TransactionOriginalCurrencyError,
@@ -36,22 +39,40 @@ from transactions.schemas import TransactionCreate, TransactionImport
 
 class TransactionService:
     @staticmethod
-    def _resolve_account(workspace_id: int, account_id: int | None, allow_archived: bool = False) -> Account:
-        """Resolve the target account, defaulting when exactly one active account exists.
+    def _resolve_account(workspace_id: int, account_id: int | None, allow_archived: bool = False) -> Account | None:
+        """Resolve the target account; account_id None means an account-less transaction.
 
         allow_archived permits editing a transaction whose account was archived
-        after the fact — retargeting to an archived account is rejected by the
+        after the fact - retargeting to an archived account is rejected by the
         caller comparing account ids.
         """
-        if account_id is not None:
-            account = AccountService.get(account_id, workspace_id)
-        else:
-            account = AccountService.single_active_account(workspace_id)
-            if not account:
-                raise AccountRequiredError()
+        if account_id is None:
+            return None
+        account = AccountService.get(account_id, workspace_id)
         if account.is_archived and not allow_archived:
             raise TransactionAccountArchivedError()
         return account
+
+    @staticmethod
+    def _resolve_currency(workspace_id: int, account: Account | None, code: str | None) -> Currency:
+        """Resolve the transaction's own currency (the stored truth).
+
+        With an account: derived from the account when the payload omits the
+        code; an explicit code must MATCH the account's currency (a mismatch
+        would silently reinterpret the amount). Without an account: the code
+        is required and must resolve to an enabled workspace currency -
+        unlike the original facet, own-currency rows feed aggregates, so
+        un-enabled catalog codes are not allowed here.
+        """
+        if account is not None:
+            if code is None:
+                return account.currency
+            if code != account.currency.code:
+                raise TransactionCurrencyMismatchError()
+            return account.currency
+        if code is None:
+            raise TransactionCurrencyRequiredError()
+        return CurrencyCatalogService.get_enabled(workspace_id, code)
 
     @staticmethod
     def _validate_category(category_id: int | None, workspace_id: int) -> Category | None:
@@ -64,34 +85,43 @@ class TransactionService:
         return category
 
     @staticmethod
-    def _validate_type_amount(trans_type: str, amount: Decimal, category_id: int | None) -> None:
-        """Enforce type semantics: positive income/expense, signed non-zero uncategorized adjustment."""
+    def _validate_type_amount(
+        trans_type: str, amount: Decimal, category_id: int | None, account_id: int | None
+    ) -> None:
+        """Enforce type semantics: positive income/expense, signed non-zero uncategorized adjustment.
+
+        Adjustments require an account - an account-less adjustment affects
+        no balance, so it is meaningless. Income/expense may be account-less.
+        """
         if trans_type == 'adjustment':
             if amount == 0:
                 raise TransactionAmountInvalidError()
             if category_id is not None:
                 raise TransactionAdjustmentCategoryError()
+            if account_id is None:
+                raise TransactionAdjustmentAccountError()
         elif amount <= 0:
             raise TransactionAmountInvalidError()
 
     @staticmethod
-    def _resolve_original_currency(workspace_id: int, account: Account, code: str | None) -> Currency | None:
+    def _resolve_original_currency(workspace_id: int, currency: Currency, code: str | None) -> Currency | None:
         """Resolve the original-facet currency: catalog global or this workspace's custom rows.
 
-        Must differ from the account currency — the facet only records what was
-        paid in another currency; the settled amount drives all math.
+        Must differ from the transaction's OWN currency - the facet only
+        records what was paid in another currency at the point of sale; the
+        transaction's stored amount and currency drive all math.
         """
         if code is None:
             return None
-        currency = (
+        facet = (
             Currency.objects.filter(workspace__isnull=True, code=code).first()
             or Currency.objects.filter(workspace_id=workspace_id, code=code).first()
         )
-        if not currency:
+        if not facet:
             raise TransactionOriginalCurrencyError(f'Original currency {code} not found in the catalog')
-        if currency.code == account.currency.code:
-            raise TransactionOriginalCurrencyError('Original currency must differ from the account currency')
-        return currency
+        if facet.code == currency.code:
+            raise TransactionOriginalCurrencyError('Original currency must differ from the transaction currency')
+        return facet
 
     @staticmethod
     def _touch_period(user, category: Category | None, target_date) -> None:
@@ -157,7 +187,7 @@ class TransactionService:
     def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
         """Get a transaction and verify it belongs to the workspace."""
         trans = (
-            Transaction.objects.select_related('account__currency', 'category', 'original_currency')
+            Transaction.objects.select_related('account__currency', 'category', 'currency', 'original_currency')
             .for_workspace(workspace_id)
             .filter(id=transaction_id)
             .first()
@@ -198,7 +228,7 @@ class TransactionService:
             amount_lte=amount_lte,
         )
 
-        queryset = queryset.select_related('account__currency', 'category', 'original_currency')
+        queryset = queryset.select_related('account__currency', 'category', 'currency', 'original_currency')
 
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
@@ -410,15 +440,17 @@ class TransactionService:
         would open a redundant nested savepoint on every call.
         """
         account = TransactionService._resolve_account(workspace_id, data.account_id)
-        TransactionService._validate_type_amount(data.type, data.amount, data.category_id)
+        TransactionService._validate_type_amount(data.type, data.amount, data.category_id, data.account_id)
+        currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
         category = TransactionService._validate_category(data.category_id, workspace_id)
         original_currency = TransactionService._resolve_original_currency(
-            workspace_id, account, data.original_currency_code
+            workspace_id, currency, data.original_currency_code
         )
 
         trans = Transaction.objects.create(
             workspace_id=workspace_id,
             account=account,
+            currency=currency,
             date=data.date,
             description=data.description,
             category=category,
@@ -472,23 +504,25 @@ class TransactionService:
     def update(user, workspace_id: int, transaction_id: int, data: TransactionCreate) -> Transaction:
         """Fully replace a transaction; account/category/date changes re-derive the period.
 
-        Editing a transaction whose account was archived since is allowed, but
-        retargeting to an archived account is rejected.
+        data.account_id is authoritative: None clears the account (the payload
+        must then carry currency_code). Editing a transaction whose account
+        was archived since is allowed, but retargeting to a DIFFERENT archived
+        account is rejected; keeping the same archived account is fine.
         """
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
 
-        account = TransactionService._resolve_account(
-            workspace_id, data.account_id or trans.account_id, allow_archived=True
-        )
-        if account.id != trans.account_id and account.is_archived:
+        account = TransactionService._resolve_account(workspace_id, data.account_id, allow_archived=True)
+        if account is not None and account.id != trans.account_id and account.is_archived:
             raise TransactionAccountArchivedError()
-        TransactionService._validate_type_amount(data.type, data.amount, data.category_id)
+        TransactionService._validate_type_amount(data.type, data.amount, data.category_id, data.account_id)
+        currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
         category = TransactionService._validate_category(data.category_id, workspace_id)
         original_currency = TransactionService._resolve_original_currency(
-            workspace_id, account, data.original_currency_code
+            workspace_id, currency, data.original_currency_code
         )
 
         trans.account = account
+        trans.currency = currency
         trans.date = data.date
         trans.description = data.description
         trans.category = category
@@ -643,10 +677,12 @@ class TransactionService:
     def bulk_set_account(user, workspace_id: int, transaction_ids: list[int], account_id: int) -> int:
         """Move transactions to another account in one UPDATE (all-or-nothing).
 
-        The target must share the currency of every moved transaction — a
-        transaction's currency IS its account's currency, so a cross-currency
-        move would silently reinterpret amounts (and could equal an original
-        facet's currency, which must always differ).
+        The target must share the stored currency of every moved transaction -
+        a cross-currency move would silently reinterpret amounts (and could
+        equal an original facet's currency, which must always differ).
+        Account-less rows with a matching currency CAN be assigned here: this
+        is the pocket-cash-to-real-account path - their stored currency simply
+        starts matching the target account's.
         """
         account = AccountService.get(account_id, workspace_id)
         if account.is_archived:
@@ -655,7 +691,7 @@ class TransactionService:
         owned = Transaction.objects.for_workspace(workspace_id).filter(id__in=transaction_ids)
         if owned.count() != len(set(transaction_ids)):
             raise TransactionBulkAccountError()
-        if owned.exclude(account__currency=account.currency).exists():
+        if owned.exclude(currency=account.currency).exists():
             raise TransactionBulkCurrencyError()
 
         return owned.update(account=account, updated_by=user)
@@ -673,7 +709,7 @@ class TransactionService:
             date_from=date_from,
             date_to=date_to,
             transaction_type=[transaction_type] if transaction_type else None,
-        ).select_related('account__currency', 'category', 'original_currency')
+        ).select_related('account__currency', 'category', 'currency', 'original_currency')
 
         return [
             {
@@ -723,6 +759,7 @@ class TransactionService:
                 Transaction(
                     workspace_id=workspace_id,
                     account=account,
+                    currency=account.currency,
                     date=import_item.date,
                     description=import_item.description,
                     category_id=category_id,

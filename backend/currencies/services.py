@@ -28,14 +28,16 @@ class CurrencyCatalogService:
         """Count records in the workspace that reference this catalog currency, by type.
 
         Covers the PROTECT FKs whose references must block disable: accounts,
-        category budgets, budget currency sets, and planned transactions. The
-        transaction original-amount facet is deliberately NOT counted: it
-        resolves against the whole catalog and never requires enablement (see
-        the facet guard at the custom-row deletion site in disable()).
+        category budgets, budget currency sets, planned transactions, and
+        transactions (own stored currency). The transaction original-amount
+        facet is deliberately NOT counted: it resolves against the whole
+        catalog and never requires enablement (see the facet guard at the
+        custom-row deletion site in disable()).
         """
         from accounts.models import Account
         from budgeting.models import BudgetCurrency, CategoryBudget
         from planned_transactions.models import PlannedTransaction
+        from transactions.models import Transaction
 
         return {
             'accounts': Account.objects.filter(workspace_id=workspace_id, currency=currency).count(),
@@ -46,6 +48,7 @@ class CurrencyCatalogService:
             'planned_transactions': PlannedTransaction.objects.filter(
                 workspace_id=workspace_id, currency=currency
             ).count(),
+            'transactions': Transaction.objects.filter(workspace_id=workspace_id, currency=currency).count(),
         }
 
     @staticmethod

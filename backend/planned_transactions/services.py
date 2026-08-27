@@ -359,13 +359,10 @@ class PlannedTransactionService:
                     mirror.description = planned.name
                     mirror.amount = planned.amount
                     mirror.category_id = planned.category_id
-                    if planned.account_id:
-                        # While Transaction requires an account, the executed
-                        # mirror keeps the account it was created with when the
-                        # plan goes account-less; mirroring the account-less
-                        # state and the currency lands with the transaction
-                        # currency change.
-                        mirror.account_id = planned.account_id
+                    # The executed twin tracks the plan's account and stored
+                    # currency in lockstep, including the account-less state.
+                    mirror.account_id = planned.account_id
+                    mirror.currency = planned.currency
                     mirror.updated_by = user
                     mirror.save()
         return planned

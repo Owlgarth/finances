@@ -53,6 +53,7 @@ class TransactionTestCase(AuthMixin, APIClientMixin, TestCase):
             'description': 'Test expense',
             'type': 'expense',
             'amount': '50.00',
+            'account_id': self.account.id,
         }
         payload.update(overrides)
         return payload
@@ -67,14 +68,18 @@ class TestCreateTransaction(TransactionTestCase):
         self.assertEqual(data['currency_code'], 'PLN')
         self.assertEqual(data['amount'], '50.00')
 
-    def test_create_defaults_to_single_active_account(self):
-        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+    def test_create_account_less_with_currency(self):
+        """The pocket-cash / traveling-cash path: no account, explicit currency."""
+        data = self.post(
+            '/api/transactions', self._payload(account_id=None, currency_code='PLN'), **self.auth_headers()
+        )
         self.assertStatus(201)
-        self.assertEqual(data['account_id'], self.account.id)
+        self.assertIsNone(data['account_id'])
+        self.assertIsNone(data['account_name'])
+        self.assertEqual(data['currency_code'], 'PLN')
 
-    def test_create_without_account_and_two_active_accounts_returns_400(self):
-        AccountFactory(workspace=self.workspace, name='Second')
-        self.post('/api/transactions', self._payload(), **self.auth_headers())
+    def test_create_account_less_without_currency_returns_400(self):
+        self.post('/api/transactions', self._payload(account_id=None), **self.auth_headers())
         self.assertStatus(400)
 
     def test_create_on_archived_account_returns_400(self):
@@ -94,6 +99,44 @@ class TestCreateTransaction(TransactionTestCase):
     def test_create_with_negative_expense_returns_400(self):
         self.post('/api/transactions', self._payload(amount='-5.00'), **self.auth_headers())
         self.assertStatus(400)
+
+
+class TestTransactionOwnCurrency(TransactionTestCase):
+    """The own-currency contract: derive from account / match / require / enabled-domain."""
+
+    def test_currency_derived_from_account_when_omitted(self):
+        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_currency_matching_account_currency_ok(self):
+        data = self.post('/api/transactions', self._payload(currency_code='PLN'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_currency_mismatching_account_returns_400(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        self.post('/api/transactions', self._payload(currency_code='USD'), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_account_less_currency_not_enabled_returns_404(self):
+        # get_enabled maps to CurrencyNotEnabledError -> NotFoundError -> 404
+        self.post('/api/transactions', self._payload(account_id=None, currency_code='EUR'), **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_adjustment_without_account_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(type='adjustment', amount='-20.00', account_id=None, currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_adjustment_with_account_ok(self):
+        data = self.post('/api/transactions', self._payload(type='adjustment', amount='-20.00'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['account_id'], self.account.id)
+        self.assertEqual(data['currency_code'], 'PLN')
 
 
 class TestCreateTransactionWithItems(TransactionTestCase):
@@ -551,6 +594,24 @@ class TestOriginalFacet(TransactionTestCase):
         )
         self.assertStatus(400)
 
+    def test_facet_same_as_own_currency_account_less_returns_400(self):
+        self.post(
+            '/api/transactions',
+            self._payload(account_id=None, currency_code='PLN', original_amount='12.99', original_currency_code='PLN'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+
+    def test_facet_differs_from_own_currency_account_less_ok(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(account_id=None, currency_code='PLN', original_amount='12.99', original_currency_code='USD'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        self.assertEqual(data['currency_code'], 'PLN')
+        self.assertEqual(data['original_currency_code'], 'USD')
+
 
 class TestDerivedPeriods(TransactionTestCase):
     def test_create_with_category_materializes_period(self):
@@ -807,6 +868,30 @@ class TestBulkSetAccount(TransactionTestCase):
         self.trans1.refresh_from_db()
         self.assertEqual(self.trans1.account_id, self.account.id)
 
+    def test_bulk_assigns_account_less_row_with_matching_currency(self):
+        """Pocket-cash path: an account-less PLN row can be assigned to a PLN account."""
+        pln = Currency.objects.get(workspace__isnull=True, code='PLN')
+        account_less = TransactionFactory(account=None, currency=pln, workspace=self.workspace)
+
+        payload = {'transaction_ids': [account_less.id], 'account_id': self.second.id}
+        data = self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['updated'], 1)
+        account_less.refresh_from_db()
+        self.assertEqual(account_less.account_id, self.second.id)
+
+    def test_bulk_account_less_row_with_other_currency_returns_400(self):
+        usd, _ = Currency.objects.get_or_create(
+            code='USD', workspace=None, defaults={'name': 'US Dollar', 'symbol': '$', 'decimals': 2}
+        )
+        account_less = TransactionFactory(account=None, currency=usd, workspace=self.workspace)
+
+        payload = {'transaction_ids': [account_less.id], 'account_id': self.second.id}
+        self.post('/api/transactions/bulk-account', payload, **self.auth_headers())
+        self.assertStatus(400)
+        account_less.refresh_from_db()
+        self.assertIsNone(account_less.account_id)
+
 
 class TestAccountBalanceWithTransactions(TransactionTestCase):
     def test_balance_formula(self):
@@ -865,15 +950,24 @@ class TestUpdateDelete(TransactionTestCase):
         self.assertStatus(200)
         self.assertEqual(data['account_id'], second.id)
 
-    def test_update_keeps_account_when_not_sent(self):
-        AccountFactory(workspace=self.workspace, name='Second')  # two accounts now
+    def test_update_account_id_none_clears_the_account(self):
+        """account_id is authoritative on update: None clears it (currency_code becomes required)."""
         created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
 
         data = self.put(
-            f'/api/transactions/{created["id"]}', self._payload(description='Edited'), **self.auth_headers()
+            f'/api/transactions/{created["id"]}',
+            self._payload(account_id=None, currency_code='PLN', description='Cleared'),
+            **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual(data['account_id'], self.account.id)
+        self.assertIsNone(data['account_id'])
+        self.assertIsNone(data['account_name'])
+        self.assertEqual(data['currency_code'], 'PLN')
+
+    def test_update_account_less_without_currency_returns_400(self):
+        created = self.post('/api/transactions', self._payload(account_id=self.account.id), **self.auth_headers())
+        self.put(f'/api/transactions/{created["id"]}', self._payload(account_id=None), **self.auth_headers())
+        self.assertStatus(400)
 
     def test_update_with_null_category(self):
         """Explicit category_id=null must update fine (modal sends null when budget changes)."""
