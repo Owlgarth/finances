@@ -16,12 +16,15 @@ from categories.models import Category
 from common.enums import TotalsLabel
 from common.idempotency import IDEMPOTENCY_TTL, create_with_idempotency
 from core.schemas.pagination import DEFAULT_PAGE_SIZE, paginate_queryset
+from currencies.models import Currency
+from currencies.services import CurrencyCatalogService
 from planned_transactions.exceptions import (
     PlannedTransactionAccountArchivedError,
-    PlannedTransactionAccountRequiredError,
     PlannedTransactionAlreadyExecutedError,
     PlannedTransactionCannotRevertError,
     PlannedTransactionCategoryNotFoundError,
+    PlannedTransactionCurrencyMismatchError,
+    PlannedTransactionCurrencyRequiredError,
     PlannedTransactionImportError,
     PlannedTransactionNotFoundError,
 )
@@ -33,17 +36,38 @@ from transactions.models import Transaction
 
 class PlannedTransactionService:
     @staticmethod
-    def _resolve_account(workspace_id: int, account_id: int | None) -> Account:
-        """Resolve the target account, defaulting when exactly one active account exists."""
-        if account_id is not None:
-            account = AccountService.get(account_id, workspace_id)
-        else:
-            account = AccountService.single_active_account(workspace_id)
-            if not account:
-                raise PlannedTransactionAccountRequiredError()
+    def _resolve_account(workspace_id: int, account_id: int | None) -> Account | None:
+        """Resolve the explicitly-set account; None means an account-less plan.
+
+        There is no single-active-account default: an omitted account_id IS
+        the account-less request. An explicitly-set archived account still
+        raises.
+        """
+        if account_id is None:
+            return None
+        account = AccountService.get(account_id, workspace_id)
         if account.is_archived:
             raise PlannedTransactionAccountArchivedError()
         return account
+
+    @staticmethod
+    def _resolve_currency(workspace_id: int, account: Account | None, currency_code: str | None) -> Currency:
+        """Resolve the plan's own stored currency.
+
+        With an account set, the plan books in the account's currency: derived
+        from the account when currency_code is omitted, mismatch raises 400.
+        The plain code comparison is exact - an account's currency is always
+        enabled (accounts block currency disable), so no get_enabled lookup is
+        needed on this branch. Without an account, currency_code is required
+        and must be enabled for the workspace (404 otherwise).
+        """
+        if account is not None:
+            if currency_code is not None and currency_code != account.currency.code:
+                raise PlannedTransactionCurrencyMismatchError()
+            return account.currency
+        if currency_code is None:
+            raise PlannedTransactionCurrencyRequiredError()
+        return CurrencyCatalogService.get_enabled(workspace_id, currency_code)
 
     @staticmethod
     def _validate_category(category_id: int | None, workspace_id: int) -> None:
@@ -83,7 +107,7 @@ class PlannedTransactionService:
         if budget_id:
             queryset = queryset.filter(category__budget_id__in=budget_id)
         if currency_code:
-            queryset = queryset.filter(account__currency__code__in=currency_code)
+            queryset = queryset.filter(currency__code__in=currency_code)
         if search:
             queryset = queryset.filter(name__icontains=search)
         if amount_gte is not None:
@@ -121,6 +145,7 @@ class PlannedTransactionService:
         the message before the outer commit.
         """
         account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
         PlannedTransactionService._validate_category(data.category_id, workspace_id)
 
         if data.status == 'done':
@@ -128,6 +153,7 @@ class PlannedTransactionService:
                 planned = PlannedTransaction.objects.create(
                     workspace_id=workspace_id,
                     account=account,
+                    currency=currency,
                     name=data.name,
                     amount=data.amount,
                     category_id=data.category_id,
@@ -144,6 +170,7 @@ class PlannedTransactionService:
         return PlannedTransaction.objects.create(
             workspace_id=workspace_id,
             account=account,
+            currency=currency,
             name=data.name,
             amount=data.amount,
             category_id=data.category_id,
@@ -157,7 +184,7 @@ class PlannedTransactionService:
     def get_planned(planned_id: int, workspace_id: int) -> PlannedTransaction:
         """Get a planned transaction and verify it belongs to the workspace."""
         planned = (
-            PlannedTransaction.objects.select_related('account__currency', 'category')
+            PlannedTransaction.objects.select_related('account', 'category', 'currency')
             .for_workspace(workspace_id)
             .filter(id=planned_id)
             .first()
@@ -197,7 +224,7 @@ class PlannedTransactionService:
             amount_lte=amount_lte,
         )
         sort_order = ordering or 'planned_date'
-        queryset = queryset.select_related('account__currency', 'category').order_by(sort_order, '-id')
+        queryset = queryset.select_related('account', 'category', 'currency').order_by(sort_order, '-id')
 
         items, total, page, page_size, total_pages = paginate_queryset(queryset, page, page_size)
         return {
@@ -239,29 +266,25 @@ class PlannedTransactionService:
         if group_by == 'category':
             rows = (
                 queryset.annotate(
-                    account_currency_code=F('account__currency__code'),
+                    currency_code=F('currency__code'),
                     grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
                 )
-                .values('grouped_category_name', 'account_currency_code')
+                .values('grouped_category_name', 'currency_code')
                 .annotate(total=Sum('amount'))
-                .order_by('grouped_category_name', 'account_currency_code')
+                .order_by('grouped_category_name', 'currency_code')
             )
             return [
-                {'group': r['grouped_category_name'], 'currency': r['account_currency_code'], 'total': r['total']}
-                for r in rows
+                {'group': r['grouped_category_name'], 'currency': r['currency_code'], 'total': r['total']} for r in rows
             ]
 
         # Default: group by currency
         rows = (
-            queryset.annotate(account_currency_code=F('account__currency__code'))
-            .values('account_currency_code')
+            queryset.annotate(currency_code=F('currency__code'))
+            .values('currency_code')
             .annotate(total=Sum('amount'))
-            .order_by('account_currency_code')
+            .order_by('currency_code')
         )
-        return [
-            {'group': r['account_currency_code'], 'currency': r['account_currency_code'], 'total': r['total']}
-            for r in rows
-        ]
+        return [{'group': r['currency_code'], 'currency': r['currency_code'], 'total': r['total']} for r in rows]
 
     @staticmethod
     def create(
@@ -306,10 +329,12 @@ class PlannedTransactionService:
         if planned.status == 'done' and data.status != 'done':
             raise PlannedTransactionCannotRevertError()
 
-        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id or planned.account_id)
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
         PlannedTransactionService._validate_category(data.category_id, workspace_id)
 
         planned.account = account
+        planned.currency = currency
         planned.name = data.name
         planned.amount = data.amount
         planned.category_id = data.category_id
@@ -334,7 +359,10 @@ class PlannedTransactionService:
                     mirror.description = planned.name
                     mirror.amount = planned.amount
                     mirror.category_id = planned.category_id
+                    # The executed twin tracks the plan's account and stored
+                    # currency in lockstep, including the account-less state.
                     mirror.account_id = planned.account_id
+                    mirror.currency = planned.currency
                     mirror.updated_by = user
                     mirror.save()
         return planned
@@ -372,7 +400,7 @@ class PlannedTransactionService:
         """Return serialisable planned transaction data filtered by status and date range."""
         queryset = PlannedTransactionService._build_filtered_queryset(
             workspace_id, status=status, start_date=start_date, end_date=end_date
-        ).select_related('account__currency', 'category')
+        ).select_related('account', 'category', 'currency')
 
         return [
             {
@@ -418,6 +446,7 @@ class PlannedTransactionService:
                 PlannedTransaction(
                     workspace_id=workspace_id,
                     account=account,
+                    currency=account.currency,
                     name=import_item.name,
                     amount=import_item.amount,
                     planned_date=import_item.planned_date,

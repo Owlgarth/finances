@@ -13,11 +13,6 @@ class TransactionCategoryNotFoundError(ValidationError):
     default_code = 'category_not_found'
 
 
-class AccountRequiredError(ValidationError):
-    default_message = 'Multiple accounts exist — specify account_id'
-    default_code = 'account_required'
-
-
 class TransactionAccountArchivedError(ValidationError):
     default_message = 'Account is archived and cannot receive new transactions'
     default_code = 'account_archived'
@@ -33,10 +28,25 @@ class TransactionAdjustmentCategoryError(ValidationError):
     default_code = 'adjustment_category'
 
 
+class TransactionAdjustmentAccountError(ValidationError):
+    default_message = 'Adjustments require an account'
+    default_code = 'adjustment_account_required'
+
+
+class TransactionCurrencyRequiredError(ValidationError):
+    default_message = 'Transactions without an account require an explicit currency_code'
+    default_code = 'currency_required'
+
+
+class TransactionCurrencyMismatchError(ValidationError):
+    default_message = 'currency_code does not match the account currency'
+    default_code = 'currency_mismatch'
+
+
 class TransactionOriginalCurrencyError(ValidationError):
     default_code = 'original_currency_invalid'
 
-    def __init__(self, message: str = 'Original currency is unknown or equals the account currency'):
+    def __init__(self, message: str = 'Original currency is unknown or equals the transaction currency'):
         super().__init__(message)
 
 

@@ -86,7 +86,7 @@ class AuthService:
             WorkspaceService.create_workspace(
                 user=user,
                 name=data.workspace_name,
-                currency_code=data.currency_code,
+                currency_codes=data.currency_codes,
                 create_demo=data.start_with_sample_data,
             )
 

@@ -6,7 +6,7 @@ from ninja import Router
 from common.auth import JWTAuth, WorkspaceJWTAuth
 from common.permissions import require_role
 from core.schemas import DetailOut, MessageOut
-from currencies.schemas import CurrencyCatalogOut, EnableCurrencyIn
+from currencies.schemas import CurrencyCatalogOut, EnableCurrencyIn, EnabledCurrenciesOrderIn
 from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
@@ -64,6 +64,25 @@ def disable_currency(request: HttpRequest, code: str):
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     CurrencyCatalogService.disable(workspace_id, code)
     return 204, None
+
+
+@router.put(
+    '/enabled-currencies',
+    response={200: list[CurrencyCatalogOut], 400: DetailOut, 403: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def reorder_enabled_currencies(request: HttpRequest, data: EnabledCurrenciesOrderIn):
+    """Reorder the workspace's enabled currencies (owner or admin).
+
+    ``currency_codes`` must list exactly the currently-enabled codes in
+    their new order (same set, any order; anything else is a 400
+    currency_order_mismatch). Returns the reordered enabled list - its
+    first entry (position 0) becomes the workspace's primary currency.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, ADMIN_ROLES)
+    return CurrencyCatalogService.set_enabled_order(user, workspace_id, data.currency_codes)
 
 
 # =============================================================================

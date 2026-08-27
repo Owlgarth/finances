@@ -40,7 +40,7 @@ class AccountResetTests(AuthMixin, TestCase):
         self._seed_financial_data()
         old_workspace_id = self.workspace.id
 
-        response = self._reset(workspace_name='Fresh Start', currency_code='PLN')
+        response = self._reset(workspace_name='Fresh Start', currency_codes=['PLN'])
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -71,6 +71,19 @@ class AccountResetTests(AuthMixin, TestCase):
         # The recreated workspace gains the same silent default extras.
         enabled = CurrencyCatalogService.list_enabled(data['workspace_id'])
         self.assertEqual([c.code for c in enabled], ['PLN', 'EUR', 'USD'])
+
+    def test_reset_with_currency_codes(self):
+        """An explicit currency_codes list is used verbatim, first = primary."""
+        response = self._reset(currency_codes=['EUR', 'USD'])
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        enabled = CurrencyCatalogService.list_enabled(data['workspace_id'])
+        self.assertEqual([c.code for c in enabled], ['EUR', 'USD'])
+
+        main = Account.objects.filter(workspace_id=data['workspace_id'], name='Main').first()
+        self.assertIsNotNone(main)
+        self.assertEqual(main.currency.code, 'EUR')
 
     def test_reset_wrong_password_returns_401(self):
         response = self._reset(password='wrongpassword')

@@ -16,12 +16,15 @@ export function useAccounts(includeArchived = false) {
   })
 }
 
-/** Currencies enabled in the current workspace. */
-export function useEnabledCurrencies() {
+/** Currencies enabled in the current workspace. Pass enabled: false at call
+ * sites that feed CurrencySetField an explicit options prop - those sites
+ * have no workspace to query, so the ambient request would only be rejected. */
+export function useEnabledCurrencies(enabled = true) {
   return useQuery({
     queryKey: ['enabled-currencies'],
     queryFn: () => currenciesApi.enabled(),
     refetchOnWindowFocus: 'always',
+    enabled,
   })
 }
 
