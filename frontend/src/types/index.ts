@@ -285,7 +285,7 @@ export interface RegisterRequest {
   password: string;
   full_name?: string;
   workspace_name: string;
-  currency_code?: string;
+  currency_codes: string[];
   start_with_sample_data?: boolean;
   accepted_terms_version: string;
   accepted_privacy_version: string;
