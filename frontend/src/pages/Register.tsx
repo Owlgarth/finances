@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { legalApi } from '../api/client';
-import CurrencySetField from '../components/currencies/CurrencySetField';
 import { authInputClass } from '../components/common/formStyles';
+import CurrencySetField from '../components/currencies/CurrencySetField';
 import { useAuth } from '../contexts/AuthContext';
 import { PRE_AUTH_CURRENCIES } from '../utils/currencies';
 
