@@ -53,6 +53,7 @@ Two role groups drive enforcement:
 |--------|:-----:|:-----:|:------:|:------:|
 | View catalog + enabled currencies | ✓ | ✓ | ✓ | ✓ |
 | Enable / disable / create custom currency | ✓ | ✓ | ✗ | ✗ |
+| Reorder enabled currencies (first = primary) | ✓ | ✓ | ✗ | ✗ |
 
 ### Budget & Period Management (`ADMIN_ROLES`)
 

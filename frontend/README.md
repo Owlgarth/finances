@@ -48,7 +48,7 @@ frontend/
 │   │   └── useMediaQuery.ts         # Responsive breakpoint detection
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation)
+│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -62,7 +62,7 @@ catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
-| `/login`, `/register` | Login, Register | Auth; registration picks a currency + optional sample data |
+| `/login`, `/register` | Login, Register | Auth; registration picks a currency set (`CurrencySetField` on the pre-auth curated list; first = workspace primary) + optional sample data |
 | `/` | Dashboard | Account balances + recent activity |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers |
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period |
@@ -99,10 +99,14 @@ picker on top of `MultiSelect` - a visible ordered list with up/down arrows and 
 primary marker for index 0; a compact mode folds the list into helper copy for
 constrained call sites, and an optional "Manage currencies..." bridge jumps to the
 workspace-settings currencies section; used by the budget create/edit modals in
-full mode and the create-workspace form in compact mode with explicit catalog
-options), `CurrenciesSettingsSection` (workspace-settings section, admin-gated:
-enabled list with per-row disable, catalog enable picker, and an inline custom-
-currency form - custom currencies are always 2-decimal).
+full mode with ambient `useEnabledCurrencies()` options, and by the
+create-workspace form, register page, and account-reset section with explicit
+catalog options - the prop-fed mode also disables the ambient query, which those
+pre-workspace/pre-auth call sites have nothing to answer),
+`CurrenciesSettingsSection` (workspace-settings section, admin-gated: enabled
+list with per-row reorder arrows (first = primary) and disable, catalog enable
+picker, and an inline custom-currency form - custom currencies are always
+2-decimal).
 
 **Budgets** (`components/budgets/` + `components/modals/budgets/`): `PeriodPicker`
 (the period listbox on Budget detail - desktop popover grouped by year with a
@@ -117,10 +121,14 @@ edit/delete icons on custom periods), `PeriodFormModal` (add/edit a custom budge
 period; the name is derived from the date range until edited).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
-`TransactionFormModal` (with Items/Receipts tabs; receipt-first create auto-selects
-the account matching the parsed currency - preferring the per-currency default),
-`TransactionItemsEditor`, `TransactionAttachments` (upload + view/download,
-extraction), `ExtractionReviewModal`, `PlannedFormModal`.
+`TransactionFormModal` (with Items/Receipts tabs; optional account - "No account"
+is first-class, adjustments excepted - plus an own-currency select that locks to
+the account's when one is set; receipt-first create seeds the own currency from
+the parsed code when it is enabled and auto-selects the matching account -
+preferring the per-currency default), `TransactionItemsEditor`,
+`TransactionAttachments` (upload + view/download, extraction),
+`ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
+own-currency pairing; account-less plans default to the workspace primary).
 
 ## Contexts
 
@@ -224,7 +232,7 @@ const api = axios.create({
 | `authApi` | Login, register, current user, GDPR export/import + legacy import |
 | `workspacesApi` | Workspace management |
 | `workspaceMembersApi` | Member management |
-| `currenciesApi` | Catalog + enabled currencies (enable/disable/custom) |
+| `currenciesApi` | Catalog + enabled currencies (enable/disable/custom/reorder) |
 | `accountsApi` | Accounts, archive, computed balance |
 | `budgetsApi` | Budgets + nested periods, categories, category-budgets |
 | `transactionsApi` | Transactions (filters, totals, bulk-account), line items, attachments, extraction, receipt parse |
@@ -293,9 +301,9 @@ interface Budget {
 
 interface Transaction {
   id: number;
-  account_id: number;
-  account_name: string;
-  currency_code: string;     // == the account's currency
+  account_id: number | null;  // null on account-less rows
+  account_name: string | null;
+  currency_code: string;     // the stored own currency (== the account's when set)
   date: string;
   description: string;
   category_id: number | null;
