@@ -529,4 +529,7 @@ export const workspaceMembersApi = {
 
   resetPassword: (workspaceId: number, userId: number, newPassword: string): Promise<{ message: string; user_id: number; email: string }> =>
     api.put(`/workspaces/${workspaceId}/members/${userId}/reset-password`, { new_password: newPassword }).then(res => res.data),
+
+  reset2FA: (workspaceId: number, userId: number): Promise<{ message: string }> =>
+    api.post(`/workspaces/${workspaceId}/members/${userId}/reset-2fa`).then(res => res.data),
 };
