@@ -26,6 +26,17 @@ function nextDayIso(isoDate: string): string {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
 }
 
+/** The period nearest today from a newest-first sorted list: the newest
+ * period that has already started, or - when every period starts in the
+ * future - the oldest one (the soonest to begin). Only an empty list returns
+ * undefined. "Nearest today" is what "current" means when the server cannot
+ * derive one: opening on the NEWEST period strands the user on a far-future
+ * plan while an in-flight (or already ended) period sits unselected. */
+function nearestPeriod(periods: Period[]): Period | undefined {
+  const today = new Date().toISOString().slice(0, 10)
+  return periods.find((p) => p.start_date <= today) ?? periods[periods.length - 1]
+}
+
 // Last-viewed currency per budget: applied on mount / budget switch, never
 // mid-session. Distinct key from any other stored preference.
 const currencyViewKey = (budgetId: number) => `owlgarth_currency_view:${budgetId}`
@@ -76,17 +87,21 @@ export default function BudgetDetailPage() {
   // on the first render(s) budget is undefined, `undefined !== 'custom'` is
   // true, and custom-cadence budgets fire a doomed GET periods/current ->
   // 400 -> console error noise on every visit to an empty custom budget.
-  const { data: currentPeriod, isSuccess: currentPeriodLoaded } = useQuery({
+  const { data: currentPeriod, isSuccess: currentPeriodLoaded, isError: currentPeriodError } = useQuery({
     queryKey: ['current-period', budgetId],
     queryFn: () => budgetsApi.currentPeriod(budgetId),
     enabled: budget != null && budget.cadence !== 'custom',
     retry: false,
   })
-  // The periods list is a plain GET, newest first — it beats the lazily
-  // materialized current-period fetch. Don't let periods[0] (the NEWEST
-  // period) win that race and open planners on a future period. Custom
-  // cadence has no derived current period, so there the list is all there is.
-  const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded
+  // The periods list is a plain GET, newest first - it beats the lazily
+  // materialized current-period fetch, so the materialized current period
+  // (not periods[0], the NEWEST) owns the default and planners don't open on
+  // a future period. Custom cadence has no derived current period, so there
+  // the list is all there is. A terminal ERROR also counts as "known":
+  // retry:false makes one failed request (backend restart mid-visit, network
+  // blip) final for this mount, so gating on success alone left the picker
+  // on its placeholder forever with a perfectly good periods list behind it.
+  const currentPeriodKnown = budget?.cadence === 'custom' || currentPeriodLoaded || currentPeriodError
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -124,7 +139,15 @@ export default function BudgetDetailPage() {
   // cache makes currentPeriod available in the first commit).
   useEffect(() => {
     if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
-    else if (periodId === null && currentPeriodKnown && periods.length > 0) setPeriodId(periods[0].id)
+    // No materialized current period (custom cadence, or the current-period
+    // query failed terminally): fall back to the period nearest today, so a
+    // period is ALWAYS selected whenever one exists - an idle picker reads
+    // as a dead page. Only a genuinely empty periods list leaves periodId
+    // null (the empty-state copy covers it).
+    else if (periodId === null && currentPeriodKnown) {
+      const nearest = nearestPeriod(allPeriods)
+      if (nearest) setPeriodId(nearest.id)
+    }
     // Reconcile: a seeded ?period= that no authoritative list contains (typo,
     // stale bookmark, another budget's id) clears so the auto-pick branches
     // above take over. periodsLoaded + currentPeriodKnown gate the "the list
@@ -134,7 +157,7 @@ export default function BudgetDetailPage() {
     // valid seed while the two queries race. Never writes the URL
     // (user-initiated writes only).
     else if (periodId !== null && periodsLoaded && currentPeriodKnown && !allPeriods.some((p) => p.id === periodId)) setPeriodId(null)
-  }, [currentPeriod, periods, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
+  }, [currentPeriod, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
 
   // URL write side - event handlers and mutation callbacks ONLY (picker
   // onChange, goToPeriod, deletePeriod). Functional setSearchParams preserves
