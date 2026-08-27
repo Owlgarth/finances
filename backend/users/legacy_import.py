@@ -495,6 +495,7 @@ class LegacyImportService:
                     PlannedTransaction.objects.create(
                         workspace=workspace,
                         account=account,
+                        currency=account.currency,
                         name=_required_str(pt.get('name'), pt_ctx),
                         category=category,
                         amount=_dec(pt.get('amount'), parse_warnings, pt_ctx),

@@ -43,6 +43,7 @@ REFERENCE_LABELS = {
     'accounts': 'account',
     'category_budgets': 'planned amount',
     'budget_currencies': 'budget currency set',
+    'planned_transactions': 'planned transaction',
 }
 
 

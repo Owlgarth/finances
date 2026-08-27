@@ -714,7 +714,7 @@ class UserService:
                     'currency_code': pt.currency_code,
                 }
                 for pt in PlannedTransaction.objects.for_workspace(ws.id).select_related(
-                    'account__currency', 'category__budget'
+                    'account', 'category__budget', 'currency'
                 )
             ],
         }
@@ -943,6 +943,7 @@ class UserService:
                 PlannedTransaction.objects.create(
                     workspace=workspace,
                     account=account,
+                    currency=account.currency,
                     name=pt_data.get('name'),
                     amount=pt_data.get('amount'),
                     category=category,

@@ -189,7 +189,7 @@ class TestCurrencyCatalogService(TestCase):
         with patch.object(
             CurrencyCatalogService,
             '_reference_count',
-            return_value={'accounts': 2, 'category_budgets': 1, 'budget_currencies': 0},
+            return_value={'accounts': 2, 'category_budgets': 1, 'budget_currencies': 0, 'planned_transactions': 0},
         ):
             with self.assertRaises(CurrencyInUseError) as ctx:
                 CurrencyCatalogService.disable(self.workspace.id, 'EUR')
@@ -262,6 +262,20 @@ class TestCurrencyCatalogService(TestCase):
         with self.assertRaises(CurrencyInUseError) as ctx:
             CurrencyCatalogService.disable(self.workspace.id, 'EUR')
         self.assertIn('1 account', str(ctx.exception))
+
+    def test_disable_blocked_by_planned_transaction(self):
+        from accounts.factories import AccountFactory
+        from planned_transactions.factories import PlannedTransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        eur = Currency.objects.get(workspace__isnull=True, code='EUR')
+        account = AccountFactory(workspace=self.workspace, currency=eur)
+        PlannedTransactionFactory(workspace=self.workspace, account=account)
+
+        with self.assertRaises(CurrencyInUseError) as ctx:
+            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+        self.assertIn('1 planned transaction', str(ctx.exception))
 
 
 class TestCurrencyOrderService(TestCase):
