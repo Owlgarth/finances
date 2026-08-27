@@ -245,6 +245,10 @@ Cover a newly added optional schema field with one test class: (1) positive case
 
 When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior.
 
+**The rewrite census greps the FIELD NAME across ALL apps' test files**, not just the owning app's tests - a payload-field rename (`currency_code` → `currency_codes` on register/account-reset) also lives in `currencies/tests.py`'s registration test, and Pydantic's `extra='ignore'` silently drops the stale key from the payload (no 422), so the failure surfaces only as a downstream order assertion, far from the change that caused it. Behavior changes rewrite their tests WHEREVER the tests pin them.
+
+The same `extra='ignore'` tolerance makes clean-break sequencing forgiving across the stack: until the matching frontend task lands, the old key in the client's payload is silently dropped and defaults apply - no breakage window between the backend and frontend commits of a squash-merged PR.
+
 ## URL-Pinning Tests Call the Exact Client URL
 
 Tests that exercise an endpoint must call the exact URL the real frontend client sends - never a variant the router also happens to accept. The workspace-create 405 survived a green suite because every test posted to `/api/workspaces/` while the frontend called the slash-less `/api/workspaces`; the tests blessed a URL no real client used (the route-registration side of this rule is in the `django-backend` skill). When a route's path changes or is questioned, grep the literal URL string across ALL test files and docstrings, not just the spec'd call sites - fixture-setup calls in other apps' tests (a currencies test creating a workspace) and test-class docstrings hold slashed URLs too.
