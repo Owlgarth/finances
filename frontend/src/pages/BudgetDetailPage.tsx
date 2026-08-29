@@ -116,6 +116,19 @@ export default function BudgetDetailPage() {
     return Array.from(map.values()).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [periods, currentPeriod])
 
+  // Latest allPeriods, as a latest-ref (same shape as periodParamRef below):
+  // the [budgetId] reset effect's guarded period seed needs to know whether
+  // the id it is about to clear belongs to THIS budget, but naming allPeriods
+  // in that effect's deps would re-run the whole reset - including its
+  // viewCurrency seed - on every periods refetch. Ref reads are exempt from
+  // exhaustive-deps; this sync effect's body is only the ref write. Declared
+  // before the reset effect, so on every commit the ref is fresh when the
+  // reset reads it (effects run in declaration order).
+  const allPeriodsRef = useRef(allPeriods)
+  useEffect(() => {
+    allPeriodsRef.current = allPeriods
+  }, [allPeriods])
+
   // Summary gate (declared after the allPeriods memo - TDZ): on budget-to-
   // budget navigation the [budgetId] reset effect runs one commit later than
   // this render, so periodId still holds the PREVIOUS budget's period for a
@@ -344,7 +357,22 @@ export default function BudgetDetailPage() {
     // The ref-sync effect declared above has already run for this commit, so
     // the ref holds THIS URL's value (null when no param). Sanctioned
     // extension of an already-flagged effect - no new warning.
-    setPeriodId(periodParamRef.current)
+    //
+    // FUNCTIONAL and membership-guarded: with a warm react-query cache
+    // (navigate list -> budget -> back -> budget) currentPeriod is already
+    // available on the first commit, so the auto-pick effect above has queued
+    // this budget's current period in this same flush - a bare
+    // setPeriodId(null) (no URL param) would coalesce over it, and since
+    // periodId renders null both before and after, no dep ever changes: the
+    // auto-pick never re-runs and the picker strands on its placeholder. The
+    // guard keeps a same-flush pick that belongs to THIS budget, clears only
+    // ids from another budget (live budget-to-budget navigation), and still
+    // lets an explicit ?period= seed win outright.
+    setPeriodId((prev) => {
+      const seeded = periodParamRef.current
+      if (seeded != null) return seeded
+      return prev != null && allPeriodsRef.current.some((p) => p.id === prev) ? prev : null
+    })
     setSelectedCategory(null)
   }, [budgetId])
 
