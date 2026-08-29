@@ -20,11 +20,10 @@ interface Props {
 
 /**
  * Archive / merge / delete manager for a budget's categories (archive-first:
- * delete is offered only on already-archived rows). Mount-per-use (frontend-
- * react SKILL §Modal state lifecycle): the caller renders this component ONLY
- * while it is open - the conditional render IS the open/close mechanism, and
- * the remount resets every per-session state (merge target, pending
- * dialogs) with zero open-effects.
+ * delete is offered only on already-archived rows). Mount-per-use: the
+ * caller renders this component ONLY while it is open - the conditional
+ * render IS the open/close mechanism, and the remount resets every
+ * per-session state (merge target, pending dialogs) with zero open-effects.
  */
 export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
   const queryClient = useQueryClient()

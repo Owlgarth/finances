@@ -69,7 +69,7 @@ export default function TransfersPage() {
     queryFn: () => transfersApi.get(editingId!),
     enabled: editingId != null,
   })
-  // Touch replacement for the desktop hover actions (plan decision 7).
+  // Touch replacement for the desktop hover actions.
   const [rowAction, setRowAction] = useState<Transfer | null>(null)
   const [deleting, setDeleting] = useState<Transfer | null>(null)
 
@@ -101,7 +101,7 @@ export default function TransfersPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Transfers</h1>
         <div className="flex items-center gap-2">
-          {/* Hidden on mobile: the FAB quick-add has Transfer (plan decision 6). */}
+          {/* Hidden on mobile: the FAB quick-add has Transfer. */}
           {canWrite && (
             <button type="button" onClick={openCreate} className={`${primaryButtonClass} max-sm:hidden`}>
               <Plus size={13} className="inline mr-1" /> New transfer

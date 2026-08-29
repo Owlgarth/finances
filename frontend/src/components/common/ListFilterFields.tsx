@@ -4,7 +4,7 @@ import { createUpdateParams, intListParam } from '../../utils/params'
 import AmountInput from './AmountInput'
 import { FilterField } from './FilterBar'
 import MultiSelect from './MultiSelect'
-import { inputClass } from './formStyles'
+import { controlHeightClass, inputClass } from './formStyles'
 
 /** Local calendar date as YYYY-MM-DD. Never toISOString() - it renders the
     UTC day, which can sit a day off either end of a local-date range. */
@@ -145,7 +145,7 @@ export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
                 type="button"
                 aria-pressed={active}
                 onClick={() => updateParams({ from, to })}
-                className={`text-xs border rounded-sm px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
+                className={`text-xs border rounded-sm px-2 py-1 ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
                   active ? 'border-border-focus bg-surface-hover text-text' : 'border-border text-text-muted'
                 }`}
               >
