@@ -204,7 +204,7 @@ All buttons are flat — no gradients. Depth and hierarchy come from background 
 | Hover | `bg-primary-hover` (`#262626`) | `text-white` |
 | Active | `bg-primary-hover` | `text-white` |
 | Disabled | `bg-primary` at 50% opacity | `text-white` at 50% opacity |
-| Loading | Same as default + `cursor-wait`; text changes to "-ing..." form |
+| Loading | Same as default + `disabled:cursor-not-allowed`; text changes to "-ing..." form |
 | Focus | `outline: 2px solid border-focus; outline-offset: 2px` |
 
 ### Secondary Button
@@ -1468,6 +1468,7 @@ For inline loading indicators where a progress bar or skeleton isn't appropriate
 ```
 
 Uses Lucide `Loader2` with `animate-spin` only for inline micro-loaders — not for full-page or section loading states.
+Progress checklists (staged setup panels): a completed step renders a Lucide `Check` in `text-positive`; the active step renders `Loader2` with `animate-spin` - inline progress only, never a page-level loader.
 
 ---
 
