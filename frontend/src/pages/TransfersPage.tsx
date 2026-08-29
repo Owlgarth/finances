@@ -197,7 +197,7 @@ export default function TransfersPage() {
         </div>
       )}
 
-      {data && data.total_pages > 1 && (
+      {data && data.total > 0 && (
         <div className="mt-4">
           <Pagination
             page={data.page}

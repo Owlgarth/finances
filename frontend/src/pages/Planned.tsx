@@ -400,7 +400,7 @@ export default function Planned() {
               </div>
             </div>
           ))}
-          {data && data.total_pages > 1 && (
+          {data && data.total > 0 && (
             <Pagination
               page={data.page}
               total_pages={data.total_pages}
