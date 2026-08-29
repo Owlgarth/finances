@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
@@ -16,6 +16,7 @@ import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
@@ -114,6 +115,19 @@ export default function BudgetDetailPage() {
     if (currentPeriod) map.set(currentPeriod.id, currentPeriod)
     return Array.from(map.values()).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [periods, currentPeriod])
+
+  // Latest allPeriods, as a latest-ref (same shape as periodParamRef below):
+  // the [budgetId] reset effect's guarded period seed needs to know whether
+  // the id it is about to clear belongs to THIS budget, but naming allPeriods
+  // in that effect's deps would re-run the whole reset - including its
+  // viewCurrency seed - on every periods refetch. Ref reads are exempt from
+  // exhaustive-deps; this sync effect's body is only the ref write. Declared
+  // before the reset effect, so on every commit the ref is fresh when the
+  // reset reads it (effects run in declaration order).
+  const allPeriodsRef = useRef(allPeriods)
+  useEffect(() => {
+    allPeriodsRef.current = allPeriods
+  }, [allPeriods])
 
   // Summary gate (declared after the allPeriods memo - TDZ): on budget-to-
   // budget navigation the [budgetId] reset effect runs one commit later than
@@ -235,6 +249,9 @@ export default function BudgetDetailPage() {
   // edit prefill and add-mode defaults with zero open-effects.
   const [periodModal, setPeriodModal] = useState<{ mode: 'add' | 'edit'; period: Period | null; nonce: number } | null>(null)
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null)
+  // Category management (archive/merge/delete) lives in its own mount-per-use
+  // modal; this flag is its open/close.
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
   const openPeriodModal = (mode: 'add' | 'edit', period: Period | null = null) =>
     setPeriodModal({ mode, period, nonce: Date.now() })
 
@@ -340,7 +357,22 @@ export default function BudgetDetailPage() {
     // The ref-sync effect declared above has already run for this commit, so
     // the ref holds THIS URL's value (null when no param). Sanctioned
     // extension of an already-flagged effect - no new warning.
-    setPeriodId(periodParamRef.current)
+    //
+    // FUNCTIONAL and membership-guarded: with a warm react-query cache
+    // (navigate list -> budget -> back -> budget) currentPeriod is already
+    // available on the first commit, so the auto-pick effect above has queued
+    // this budget's current period in this same flush - a bare
+    // setPeriodId(null) (no URL param) would coalesce over it, and since
+    // periodId renders null both before and after, no dep ever changes: the
+    // auto-pick never re-runs and the picker strands on its placeholder. The
+    // guard keeps a same-flush pick that belongs to THIS budget, clears only
+    // ids from another budget (live budget-to-budget navigation), and still
+    // lets an explicit ?period= seed win outright.
+    setPeriodId((prev) => {
+      const seeded = periodParamRef.current
+      if (seeded != null) return seeded
+      return prev != null && allPeriodsRef.current.some((p) => p.id === prev) ? prev : null
+    })
     setSelectedCategory(null)
   }, [budgetId])
 
@@ -580,6 +612,11 @@ export default function BudgetDetailPage() {
               </>
             )}
           </div>
+        )}
+        {canWrite && (
+          <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
+            <Tags size={13} className="inline mr-1" /> Manage categories
+          </button>
         )}
       </div>
 
@@ -847,6 +884,10 @@ export default function BudgetDetailPage() {
           period={periodModal.period}
           onClose={() => setPeriodModal(null)}
         />
+      )}
+
+      {manageCategoriesOpen && (
+        <ManageCategoriesModal budgetId={budgetId} onClose={() => setManageCategoriesOpen(false)} />
       )}
 
       <ConfirmDialog

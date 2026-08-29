@@ -667,6 +667,7 @@ class UserService:
                 {
                     'date': t.date.isoformat(),
                     'description': t.description,
+                    'note': t.note,
                     'amount': t.amount,
                     'type': t.type,
                     'budget_name': t.category.budget.name if t.category else None,
@@ -907,6 +908,8 @@ class UserService:
                     currency=currency,
                     date=_date(tx_data.get('date')),
                     description=tx_data.get('description'),
+                    # v3 field; absent key (older v3 exports) imports None.
+                    note=tx_data.get('note'),
                     amount=tx_data.get('amount'),
                     type=tx_data.get('type'),
                     category=category,
