@@ -2,6 +2,7 @@
 name = "api"
 version = "0.1.0"
 description = "Add your description here"
+license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
     "boto3>=1.43.6",
