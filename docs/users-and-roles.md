@@ -28,6 +28,7 @@ The highest permission level within a workspace.
 - Manage all accounts, budgets, currencies, and records
 - Add, edit, and remove any member
 - Reset password for any member
+- Reset 2FA for any member (they must set it up again at next login)
 - Cannot be removed from workspace
 - Only one owner per workspace
 
@@ -43,6 +44,7 @@ High-level access for workspace management.
 - Add new members to workspace
 - Manage members with lower roles (member, viewer)
 - Reset passwords for members and viewers
+- Reset 2FA for members and viewers
 
 **Restrictions:**
 - Cannot manage other admins
@@ -181,6 +183,21 @@ Rules:
 - Admin can only reset for member/viewer
 - Cannot reset own password via this feature
 - User must be notified of new password
+```
+
+### 2FA Reset
+
+```
+Actor: Owner or Admin
+Target: Member with lower permissions (must have 2FA enabled)
+
+Rules:
+- Same hierarchy as password reset: owner resets for
+  admin/member/viewer, admin only for member/viewer
+- Cannot reset own 2FA via this feature
+- Cannot reset the owner's 2FA
+- The member is emailed a notice and must set up 2FA
+  again at next login
 ```
 
 ### Leaving a Workspace

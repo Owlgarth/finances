@@ -31,7 +31,7 @@ frontend/
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
-│   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit)
+│   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
 │   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
@@ -57,19 +57,21 @@ frontend/
 ## Pages and Routes
 
 Six in-app destinations (sidebar) plus the Settings page (user menu on desktop,
-More sheet on mobile), nested budget routes, auth/legal routes and a 404
-catch-all.
+More sheet on mobile), a Transfers page with no nav slot of its own (reached
+from Accounts and the command palette), nested budget routes, auth/legal routes
+and a 404 catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
 | `/login`, `/register` | Login, Register | Auth; registration picks a currency set (`CurrencySetField` on the pre-auth curated list; first = workspace primary) + optional sample data |
-| `/` | Dashboard | Account balances + recent activity |
-| `/accounts` | AccountsPage | Accounts, set-balance, transfers |
-| `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period |
-| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management |
+| `/` | Dashboard | Account balances + recent activity; balance rows link to the account's filtered transactions |
+| `/accounts` | AccountsPage | Accounts, set-balance, transfers; per-account "View transactions" drill-down and a "View all transfers" link to `/transfers` |
+| `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
+| `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target) |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
-| `/transactions` | Transactions | Transaction list, filters, receipt-first create |
-| `/planned` | Planned | Planned transactions |
+| `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download |
+| `/planned` | Planned | Planned transactions; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view") |
+| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/settings` | ProfilePage | Profile, preferences, data export/import |
 | `*` | NotFoundPage | 404 catch-all for unknown paths |
@@ -87,12 +89,16 @@ workspace selector dropdown, and the mobile More sheet; also exports
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
 `Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, `ListFilterFields` (the
-shared Transactions/Planned filter panel), and `formStyles.ts` (the input/label/button
+shared Transactions/Planned filter panel, with date-preset chips: This month /
+Last month / Last 30 days / This year), `ListTotalsStrip` (presentational totals
+strip for the list pages - the owning page runs the query and passes the results),
+and `formStyles.ts` (the input/label/button
 class constants - the redesign's form primitives). `DatePicker` (react-day-picker) and
 `LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`.
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
-balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate).
+balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate;
+doubles as the edit modal - `editFrom` prefills every field and saves via update).
 
 **Currencies** (`components/currencies/`): `CurrencySetField` (ordered currency-set
 picker on top of `MultiSelect` - a visible ordered list with up/down arrows and a
@@ -118,14 +124,20 @@ sheet - that navigates to the periods page instead of selecting), `PeriodCard`
 (one period as a card on the periods page; the whole card is a link to
 `/budgets/:id?period=<id>`, with a CURRENT chip, muted past periods, and admin
 edit/delete icons on custom periods), `PeriodFormModal` (add/edit a custom budget
-period; the name is derived from the date range until edited).
+period; the name is derived from the date range until edited), `ManageCategoriesModal`
+(archive/merge/delete manager for a budget's categories - archive-first: delete is
+offered only on already-archived rows and states the live transaction count, merge
+picks the target that keeps the history; mount-per-use, lists archived-inclusive).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; optional account - "No account"
 is first-class, adjustments excepted - plus an own-currency select that locks to
 the account's when one is set; receipt-first create seeds the own currency from
 the parsed code when it is enabled and auto-selects the matching account -
-preferring the per-currency default), `TransactionItemsEditor`,
+preferring the per-currency default; description autocomplete over frequent
+descriptions of the picked type, applied only on explicit Enter/click; an
+optional free-text note behind an "Add note" disclosure that opens pre-expanded
+when the edited transaction carries one), `TransactionItemsEditor`,
 `TransactionAttachments` (upload + view/download, extraction),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
 own-currency pairing; account-less plans default to the workspace primary).
@@ -235,9 +247,9 @@ const api = axios.create({
 | `currenciesApi` | Catalog + enabled currencies (enable/disable/custom/reorder) |
 | `accountsApi` | Accounts, archive, computed balance |
 | `budgetsApi` | Budgets + nested periods, categories, category-budgets |
-| `transactionsApi` | Transactions (filters, totals, bulk-account), line items, attachments, extraction, receipt parse |
+| `transactionsApi` | Transactions (filters, totals, bulk-account, filtered JSON export, frequent descriptions), line items, attachments, extraction, receipt parse |
 | `transfersApi` | Transfers between accounts |
-| `plannedTransactionsApi` | Planned with execute, totals by `currency`/`category` |
+| `plannedTransactionsApi` | Planned with execute, totals by `currency`/`category`, filtered JSON export |
 | `reportsApi` | Budget summary (planned vs actual), current balances |
 
 ### Token Management
@@ -306,6 +318,7 @@ interface Transaction {
   currency_code: string;     // the stored own currency (== the account's when set)
   date: string;
   description: string;
+  note: string | null;      // free-text remarks, informational like description; never read by aggregates
   category_id: number | null;
   amount: string;
   type: 'income' | 'expense' | 'adjustment';
