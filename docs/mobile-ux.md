@@ -37,19 +37,23 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   (only when extraction is configured) · Planned. Available from every screen; screens hide
   their own creation buttons when the FAB covers them. Viewers (read-only role) get no FAB.
 - Each tab remembers its scroll position (native stack behavior).
-- **Global page search**: jump to any page or budget by name - ⌘K/Ctrl+K and a Search entry
+- **Global search**: jump to any page or budget by name, and once the query reaches
+  two characters also surface matching data - accounts (filtered client-side from the
+  shared list cache) and transactions/planned items (server search, top 5 each) -
+  ⌘K/Ctrl+K and a Search entry
   in the desktop sidebar; the Search row in the More sheet on mobile (sheet presentation).
 
 ## Per-screen patterns
 
 | Screen | Mobile pattern |
 |---|---|
-| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search + Filters disclosure (multi-select account/type/budget/category/currency - the transaction's stored own currency, hidden in single-currency workspaces - amount range, date range) with an active-count badge; filter state lives in the URL |
-| Accounts | Full-width balance cards; card tap → action sheet (Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines |
-| Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time, selected through a per-currency totals strip above the cards (one chip per currency with that currency's own planned total + spend meter, horizontally scrollable; last-viewed currency remembered per budget); single-currency budgets show a plain code chip; desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker (capped window centered on the viewed period; "View all periods" as the sheet's last row), plus admin-only add/edit/delete period icon buttons beside it on custom-cadence budgets (44px touch targets) |
+| Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search (remembered across visits) + Filters disclosure (multi-select account/type/budget/category/currency - the transaction's stored own currency, hidden in single-currency workspaces - amount range, date range) with an active-count badge and date-preset chips (This month / Last month / Last 30 days / This year); sort select + per-type totals strip (adjustments excluded); Export view button (JSON; honors only the date range and a single type); filter state lives in the URL |
+| Accounts | Full-width balance cards; card tap → action sheet (View transactions, Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines, headed by a "View all transfers" link to `/transfers` |
+| Transfers | Rows (from → to / date / amount, cross-currency amounts on two lines); row tap → action sheet (Edit, Repeat, Delete); account (either side) + date-range filters, URL-synced; creation via the FAB's Transfer action on mobile (no sidebar or More-sheet slot - the page is reached from Accounts or global search) |
+| Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time, selected through a per-currency totals strip above the cards (one chip per currency with that currency's own planned total + spend meter, horizontally scrollable; last-viewed currency remembered per budget); single-currency budgets show a plain code chip; desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker (capped window centered on the viewed period; "View all periods" as the sheet's last row), plus admin-only add/edit/delete period icon buttons beside it on custom-cadence budgets (44px touch targets); "Manage categories" (write roles) opens the archive-first manager - delete only on already-archived rows (confirm states the live transaction count), merge into a target; its rows tap → action sheet on touch |
 | Budget periods | Year-sectioned period cards, newest first (CURRENT chip on the active period, past periods muted); card tap opens the budget detail on that period (`?period=`); admin-only edit/delete icons on custom periods and an Add period button on custom-cadence budgets (44px touch targets) |
-| Planned | Rows; row tap → action sheet (Execute now - pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category/currency - the planned transaction's stored own currency, hidden in single-currency workspaces - amount range, planned-date range), URL-synced |
-| Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Remove) |
+| Planned | Rows; row tap → action sheet (Execute now - pending rows only, Edit, Delete); status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category/currency - the planned transaction's stored own currency, hidden in single-currency workspaces - amount range, planned-date range), URL-synced; sort select + per-currency totals strip; Export view button (JSON; honors only the status and date filters) |
+| Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Reset 2FA - same role gate as reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |
 
 ## Platform mechanics (what a native client must reproduce)
