@@ -197,6 +197,8 @@ onExecute: (planned: PlannedTransaction) => void
 
 - **Conditional ARIA attributes** (`aria-current`, `aria-sort`, `aria-controls`) use `… : undefined` for the inactive state — React then omits the attribute entirely, which is the correct ARIA shape. Prefixed ARIA props destructure as aliases: `'aria-controls': ariaControls`.
 
+- **A takeover panel announces ONCE, statically - mutating step lists stay OUTSIDE live regions.** A panel that takes over a card mid-submit renders exactly one `sr-only` `role="status"` summary when it appears (`grep -c 'sr-only' == 1`); putting the step list inside a live region would announce every stage flip - chatty, and lagging the visuals. The panel itself takes focus via `tabIndex={-1}` + `outline-none`, the same panel shape `Modal` uses. Exemplar: `Register`'s setup checklist.
+
 - **A switching control announces through a sibling live region, never by being one.** Button text changes are not reliably announced and buttons must not BE live regions, so a control whose value switches (a currency switcher) renders a visually hidden `<span className="sr-only" aria-live="polite">` beside it carrying the active value on every change. The live region MOVES with the control when it relocates - render it once beside the new home, never in both places (`grep -c 'sr-only' == 1` pins it). A `display:none` copy of the control (`max-sm:hidden`/`sm:hidden` dual embed, one copy always hidden) is outside the accessibility tree, so only the visible copy announces - the dual embed is safe for the live region. Exemplar: `BudgetDetailPage`'s currency strip.
 
 - **`key={index}` on a reorderable list is a bug** — focus and selection jump when a `move` swaps values between stationary DOM nodes. Mint `crypto.randomUUID()` at every row-creation site (`emptyRow`, seeding maps) and render `key={row.id}`.
@@ -204,6 +206,8 @@ onExecute: (planned: PlannedTransaction) => void
 - **Invisible characters in source must stay visible escape sequences** — write `'\u00A0'`, never a raw NBSP byte (0xC2 0xA0) or a plain space: file writes can silently mangle the byte, reintroducing the collapsing-trigger bug (`MultiSelect`'s empty-state label) while every grep for `u00A0` still passes. Verify with `grep -P '\xc2\xa0'` when touching nbsp literals.
 
 Standard form component shape: props interface, `isLoading` state, `handleSubmit` with `try/catch` showing `toast.error(...)` and `finally { setIsLoading(false) }`.
+
+- **Submit-button micro-loader:** `Loader2 size={13} animate-spin` rendered BEFORE the "-ing" label ("Signing in"), with `items-center gap-1.5` added to the button's existing `flex justify-center`; keep `disabled:cursor-not-allowed`, never `cursor-wait` - every shipped Loader2 button agrees (blessed in `design/components.md` §3). Exemplar: `Login`'s "Sign in" / "Verify" buttons.
 
 **Inline checkbox labels — raw `inline-flex`, not `labelClass`:** An inline boolean toggle inside a form (e.g. "Set as default for {currency}", "Paid in another currency?") uses a raw `<label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">` wrapping its `<input type="checkbox">` — never the shared `labelClass` from `formStyles.ts`, which carries the block + margin styling meant for field labels *above* inputs. This is the established pattern wherever a checkbox sits inline with its label text.
 
@@ -273,6 +277,8 @@ const mutation = useMutation({
   },
 })
 ```
+
+**A long in-flight submit swaps the whole card body for a staged progress panel** - branch on `isSubmitting` (Register's "Setting up your workspace" checklist), never offer only a disabled button: a 2-5s synchronous request with no visible progress reads as a frozen UI. The swap never unmounts the component, so all form state stays alive and a failed submit restores the typed values for free, and the derived stage list is frozen mid-flight because the input that could change it (the sample-data checkbox feeding its conditional) is unmounted by the swap. Stages are pure client-side timers identical on every error path - backend state never leaks through stage count or timing - and the advance is capped (`Math.min(s + 1, setupStages.length - 1)`) so the terminal step stays "active" forever: it must never flip to complete while the request is still hanging. Exemplar: `pages/Register.tsx`.
 
 ## Auth Response Error Guard
 
@@ -526,6 +532,8 @@ When a `setState` in an effect is genuinely unavoidable, the rule reports **once
 - **Per-entity resets extend an already-flagged effect.** Resetting state on id change (stale period leaking across budget→budget navigation in an unkeyed route) goes INTO the existing `[entityId]` effect as more setters — zero new warnings. A new same-shaped effect would add one.
 - **Adopting server truth is derivation, not effect-setState.** `const activePendingId = pendingId ?? serverPendingId` — a derived const is lint-quiet where copying the server value into state would add a warning, and the derived value drives the poll that eventually clears it.
 - **Loaders stay effect-local.** A hoisted `useCallback` loader called from a mount `useEffect` is traced by the compiler lint across the `await` and produces a NEW warning even when every setter sits after the await — declare the named `async` loader inside the effect. Retry comes from an event-handler-bumped tick in the deps (`const [retryTick, setRetryTick] = useState(0)`; the Try-again button does `setRetryTick(t => t + 1)` — always lint-quiet).
+- **Timed or staged progress setState lives ONLY inside the timer callback.** `useEffect(() => { const timer = setInterval(() => setStage((s) => Math.min(s + 1, last)), 1200); return () => clearInterval(timer) }, [isSubmitting, setupStages.length])` adds zero `set-state-in-effect` warnings - the rule flags synchronous setter calls in the effect body, and the timer callback runs on a later tick; a synchronous `setStage` seed in the same body would be flagged. Deps stay in the list-LENGTH member-expression form (see Modal Pattern's open-effect deps rule). Exemplar: `Register`'s setup-progress effect.
+- **Event-to-effect signaling uses a one-shot ref flag, never state.** When an event handler must trigger behavior in an effect that runs after the re-commit (focus restore after a failed submit), the handler's `catch` sets `failedSubmitRef.current = true` and an `[isSubmitting]`-deps effect consumes it: `if (!isSubmitting && failedSubmitRef.current) { failedSubmitRef.current = false; submitButtonRef.current?.focus() }`. Ref reads/writes in effects are invisible to `react-hooks/set-state-in-effect`, where a boolean useState flag would add a warning and a pointless re-render. Exemplar: `Register`'s `failedSubmitRef`.
 
 ## URL Search-Param State Sync
 
