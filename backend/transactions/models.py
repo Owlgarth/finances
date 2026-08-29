@@ -18,6 +18,10 @@ class Transaction(WorkspaceScopedModel):
     sale (converted card payments): informational only, excluded from every
     aggregate, and required to differ from the transaction's own currency.
     Period membership is derived from category budget + date, never stored.
+
+    `note` is free-text user remarks - informational like `description`.
+    Aggregates never read it (by disinterest, not by exclusion: nothing to
+    do), and it is optional with no other invariant.
     """
 
     TYPE_CHOICES = [
@@ -56,6 +60,8 @@ class Transaction(WorkspaceScopedModel):
     currency = models.ForeignKey('currencies.Currency', on_delete=models.PROTECT, related_name='transactions')
     date = models.DateField()
     description = models.TextField()
+    # Free-text note, informational like description; aggregates never read it.
+    note = models.TextField(null=True, blank=True)
     category = models.ForeignKey(
         'categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions'
     )

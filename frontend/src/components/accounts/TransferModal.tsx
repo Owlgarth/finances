@@ -18,13 +18,15 @@ interface Props {
   onClose: () => void
   /** Prefill from a "Repeat" action on a history row (amounts/date cleared). */
   repeatFrom?: Transfer | null
+  /** Edit an existing transfer: every field prefilled, saved via update. */
+  editFrom?: Transfer | null
 }
 
 function accountById(accounts: Account[], id: number | null): Account | undefined {
   return accounts.find((a) => a.id === id)
 }
 
-export default function TransferModal({ open, onClose, repeatFrom }: Props) {
+export default function TransferModal({ open, onClose, repeatFrom, editFrom }: Props) {
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -37,9 +39,18 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
 
-  // Prefill: repeat > last-used pair > auto-fill when exactly two accounts.
+  // Prefill: edit > repeat > last-used pair > auto-fill when exactly two accounts.
   useEffect(() => {
     if (!open) return
+    if (editFrom) {
+      setFromId(editFrom.from_account_id)
+      setToId(editFrom.to_account_id)
+      setFromAmount(editFrom.from_amount)
+      setToAmount(editFrom.to_amount)
+      setDate(editFrom.date)
+      setDescription(editFrom.description)
+      return
+    }
     if (repeatFrom) {
       setFromId(repeatFrom.from_account_id)
       setToId(repeatFrom.to_account_id)
@@ -68,7 +79,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
     setDescription('')
     setDate(new Date().toISOString().slice(0, 10))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, repeatFrom, accounts.length])
+  }, [open, editFrom, repeatFrom, accounts.length])
 
   const fromAccount = accountById(accounts, fromId)
   const toAccount = accountById(accounts, toId)
@@ -80,24 +91,29 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
       : null
 
   const mutation = useMutation({
-    mutationFn: () =>
-      transfersApi.create({
+    mutationFn: () => {
+      const payload = {
         from_account_id: fromId!,
         to_account_id: toId!,
         from_amount: fromAmount,
         to_amount: crossCurrency ? toAmount : null,
         date,
         description: description.trim(),
-      }),
+      }
+      return editFrom ? transfersApi.update(editFrom.id, payload) : transfersApi.create(payload)
+    },
     onSuccess: () => {
-      localStorage.setItem(LAST_PAIR_KEY, `${fromId},${toId}`)
+      // Only a newly recorded pair is "the last transfer made" - editing an
+      // old one must not capture its pair as the next default.
+      if (!editFrom) localStorage.setItem(LAST_PAIR_KEY, `${fromId},${toId}`)
       queryClient.invalidateQueries({ queryKey: ['transfers'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success('Transfer recorded')
+      toast.success(editFrom ? 'Transfer updated' : 'Transfer recorded')
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to record transfer')),
+    onError: (error) =>
+      toast.error(getApiErrorMessage(error, editFrom ? 'Failed to update transfer' : 'Failed to record transfer')),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -112,7 +128,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
   const options = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title="Transfer">
+    <Modal open={open} onClose={onClose} className="p-6" title={editFrom ? 'Edit transfer' : 'Transfer'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -174,7 +190,7 @@ export default function TransferModal({ open, onClose, repeatFrom }: Props) {
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : 'Transfer'}
+            {mutation.isPending ? 'Saving…' : editFrom ? 'Save' : 'Transfer'}
           </button>
         </div>
       </form>
