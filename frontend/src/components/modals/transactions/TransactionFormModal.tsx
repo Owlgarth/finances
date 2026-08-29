@@ -535,7 +535,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               aria-activedescendant={highlighted >= 0 ? `${descListId}-opt-${highlighted}` : undefined}
             />
             {showSuggestions && (
-              <div id={descListId} role="listbox" aria-label="Frequent descriptions" className={listboxPanelClass}>
+              // max-w-full caps the fit-widest panel at the description
+              // field's width - frequent descriptions can be arbitrarily
+              // long (max-width clamps width regardless of class order).
+              <div id={descListId} role="listbox" aria-label="Frequent descriptions" className={listboxPanelClass + ' max-w-full'}>
                 {suggestions.map((s, i) => (
                   <button
                     key={s.description}

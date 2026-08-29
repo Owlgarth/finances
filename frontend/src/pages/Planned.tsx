@@ -315,7 +315,7 @@ export default function Planned() {
           options={SORT_OPTIONS}
           placeholder="Soonest"
           aria-label="Sort"
-          className="w-36 flex-shrink-0"
+          className="w-48 flex-shrink-0"
         />
       </div>
 
