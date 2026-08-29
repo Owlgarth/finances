@@ -820,6 +820,31 @@ class TestFiltersAndTotals(TransactionTestCase):
         # The account-less row groups by its stored own currency.
         self.assertEqual(as_map[('expense', 'EUR')], '25.00')
 
+    def test_totals_currency_filter_returns_only_matching_groups(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
+        totals = self.get('/api/transactions/totals?currency_code=EUR', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        # Whole-map equality: only the EUR group survives - the PLN and USD
+        # setUp groups are absent, exactly like the list endpoint's filter.
+        self.assertEqual(as_map, {('expense', 'EUR'): '25.00'})
+
+        # Multi-value repetition widens the filter but still excludes PLN.
+        totals = self.get('/api/transactions/totals?currency_code=EUR&currency_code=USD', **self.auth_headers())[
+            'totals'
+        ]
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {('expense', 'EUR'): '25.00', ('expense', 'USD'): '30.00'})
+
     def test_totals_category_branch_groups_account_less_by_own_currency(self):
         usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
         TransactionFactory(
@@ -875,6 +900,25 @@ class TestFiltersAndTotals(TransactionTestCase):
         by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
         self.assertEqual(by_type[('expense', 'EUR')], '25.00')
         self.assertEqual(by_type[('expense', 'PLN')], '40.00')
+
+    def test_totals_combined_currency_filter(self):
+        eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        TransactionFactory(
+            account=None,
+            currency=eur,
+            workspace=self.workspace,
+            date=date(2026, 7, 14),
+            description='Cash tip',
+            amount=Decimal('25.00'),
+            type='expense',
+        )
+
+        data = self.get('/api/transactions/totals?group_by=type,category&currency_code=EUR', **self.auth_headers())
+        by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
+        by_category = {(t['group'], t['currency']): t['total'] for t in data['by_category']}
+        self.assertEqual(by_type, {('expense', 'EUR'): '25.00'})
+        # Both combined views honor the filter - no PLN/USD groups anywhere.
+        self.assertEqual(by_category, {('Uncategorized', 'EUR'): '25.00'})
 
     def test_workspace_scoping(self):
         foreign = TransactionFactory()
@@ -1083,6 +1127,66 @@ class TestUpdateDelete(TransactionTestCase):
         self.assertStatus(403)
 
 
+class TestTransactionNote(TransactionTestCase):
+    """Optional free-text note on POST/PUT /transactions (item G backend half)."""
+
+    def test_create_with_note_round_trips(self):
+        data = self.post('/api/transactions', self._payload(note='Split with Ania'), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['note'], 'Split with Ania')
+
+        detail = self.get(f'/api/transactions/{data["id"]}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(detail['note'], 'Split with Ania')
+        self.assertEqual(Transaction.objects.get(id=data['id']).note, 'Split with Ania')
+
+    def test_create_without_note_is_none(self):
+        data = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertIsNone(data['note'])
+        self.assertIsNone(Transaction.objects.get(id=data['id']).note)
+
+    def test_update_replaces_and_clears_note(self):
+        """Full-replace semantics: an absent note key on PUT stores None."""
+        created = self.post('/api/transactions', self._payload(note='First note'), **self.auth_headers())
+        self.assertStatus(201)
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(note='Second note'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['note'], 'Second note')
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(),  # no note key -> cleared
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['note'])
+        self.assertIsNone(Transaction.objects.get(id=created['id']).note)
+
+    def test_note_over_max_length_rejected(self):
+        self.post('/api/transactions', self._payload(note='x' * 2001), **self.auth_headers())
+        self.assertStatus(422)  # Pydantic max_length=2000
+
+    def test_note_does_not_change_amount_or_balance(self):
+        """The note is informational - the amount stays authoritative."""
+        balance_before = AccountService.balance(self.account)
+        data = self.post(
+            '/api/transactions',
+            self._payload(amount='50.00', note='x' * 2000),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        trans = Transaction.objects.get(id=data['id'])
+        self.assertEqual(trans.amount, Decimal('50.00'))
+        # opening_balance 100.00 − expense 50.00
+        self.assertEqual(AccountService.balance(self.account), balance_before - Decimal('50.00'))
+
+
 class TestExportImport(TransactionTestCase):
     def test_export_includes_account_currency_original(self):
         usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
@@ -1124,6 +1228,60 @@ class TestExportImport(TransactionTestCase):
         self.assertEqual(len(rows), 1)
         self.assertIsNone(rows[0]['account_name'])
         self.assertEqual(rows[0]['currency_code'], 'USD')
+
+    def test_export_includes_note(self):
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 7),
+            description='Noted expense',
+            note='Reimbursable',
+            amount=Decimal('15.00'),
+            type='expense',
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['note'], 'Reimbursable')
+
+    def test_export_note_less_row_emits_null(self):
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 7),
+            description='Plain expense',
+            amount=Decimal('15.00'),
+            type='expense',
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]['note'])
+
+    def test_import_applies_note(self):
+        rows = [
+            {
+                'date': '2026-07-01',
+                'description': 'With note',
+                'amount': '10.00',
+                'type': 'expense',
+                'note': 'Paid by card',
+            },
+            {'date': '2026-07-02', 'description': 'Without note', 'amount': '20.00', 'type': 'expense'},
+        ]
+        response = self.client.post(
+            '/api/transactions/import',
+            {'account_id': self.account.id, 'file': self._json_file(rows)},
+            **self.auth_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+
+        self.assertEqual(Transaction.objects.get(description='With note').note, 'Paid by card')
+        self.assertIsNone(Transaction.objects.get(description='Without note').note)
 
     def test_import_lands_rows_in_given_account(self):
         rows = [

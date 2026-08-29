@@ -84,6 +84,8 @@ export interface Transaction {
   currency_code: string;
   date: string;
   description: string;
+  /** Free-form informational note, never read by aggregates (like description). */
+  note: string | null;
   category_id: number | null;
   category_name: string | null;
   category_budget_id: number | null;

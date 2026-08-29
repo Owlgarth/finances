@@ -330,6 +330,65 @@ class V3AccountLessImportTests(AuthMixin, TestCase):
         self.assertIn('missing currency_code', result['skipped']['errors'][0])
 
 
+class V3TransactionNoteImportTests(AuthMixin, TestCase):
+    """The optional transaction note: export→import round-trip plus legacy note-less v3 files.
+
+    No export_version bump: an additive optional field with a safe default -
+    older readers ignore the key, newer readers handle its absence (.get → None).
+    """
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _noted_workspace(self):
+        account = AccountFactory(workspace=self.workspace)
+        TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Noted expense',
+            note='Reimbursable',
+            amount=Decimal('15.00'),
+            type='expense',
+        )
+
+    def _imported_workspace(self):
+        """The one workspace the import created besides AuthMixin's."""
+        return Workspace.objects.filter(owner=self.user).exclude(id=self.workspace.id).get()
+
+    def test_note_survives_export_import_round_trip(self):
+        self._noted_workspace()
+
+        export_data = UserService.export_all_data(self.user)
+        exported_tx = next(
+            t for t in export_data['workspaces'][0]['transactions'] if t['description'] == 'Noted expense'
+        )
+        self.assertEqual(exported_tx['note'], 'Reimbursable')
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        tx = Transaction.objects.get(workspace=self._imported_workspace(), description='Noted expense')
+        self.assertEqual(tx.note, 'Reimbursable')
+
+    def test_legacy_note_less_export_imports_none(self):
+        """A v3 export from before the note field existed still imports; note lands None."""
+        self._noted_workspace()
+
+        export_data = UserService.export_all_data(self.user)
+        for tx in export_data['workspaces'][0]['transactions']:
+            tx.pop('note', None)
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        tx = Transaction.objects.get(workspace=self._imported_workspace(), description='Noted expense')
+        self.assertIsNone(tx.note)
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 

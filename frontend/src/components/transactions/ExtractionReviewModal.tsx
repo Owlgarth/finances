@@ -75,6 +75,9 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
           await transactionsApi.update(transaction.id, {
             date: transaction.date,
             description: parsed.merchant!,
+            // Echoed unchanged: update is full-replace - an absent
+            // key would silently clear a stored note.
+            note: transaction.note,
             type: transaction.type,
             amount: transaction.amount,
             account_id: transaction.account_id,

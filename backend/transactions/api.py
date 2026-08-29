@@ -92,12 +92,18 @@ def get_transaction_totals(
     category_id: list[int] | None = Query(None),
     budget_id: list[int] | None = Query(None),
     transaction_type: list[str] | None = Query(None),
+    currency_code: list[str] | None = Query(None),
     search: str | None = Query(None),
     amount_gte: Decimal | None = Query(None),
     amount_lte: Decimal | None = Query(None),
     group_by: str = Query('type', pattern=r'^(type|category|type,category)$'),
 ):
-    """Get aggregated transaction totals grouped by type or category (adjustments excluded)."""
+    """Get aggregated transaction totals grouped by type or category (adjustments excluded).
+
+    currency_code filters by the transaction's stored own currency, never
+    the original-amount facet; account-less transactions match their own
+    currency; unknown codes match nothing (filters are not resource lookups).
+    """
     workspace_id = request.auth.current_workspace_id
     common_kwargs = dict(
         workspace_id=workspace_id,
@@ -107,6 +113,7 @@ def get_transaction_totals(
         category_id=category_id,
         budget_id=budget_id,
         transaction_type=transaction_type,
+        currency_code=currency_code,
         search=search,
         amount_gte=amount_gte,
         amount_lte=amount_lte,

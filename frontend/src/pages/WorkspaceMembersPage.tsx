@@ -6,6 +6,7 @@ import {
   UserPlus,
   Star,
   Shield,
+  ShieldOff,
   User,
   Eye,
   Pencil,
@@ -32,6 +33,7 @@ export default function WorkspaceMembersPage() {
   const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(null)
   const [removingMember, setRemovingMember] = useState<WorkspaceMember | null>(null)
   const [resetPasswordMember, setResetPasswordMember] = useState<WorkspaceMember | null>(null)
+  const [resetting2FA, setResetting2FA] = useState<WorkspaceMember | null>(null)
   const [isChangeMyPasswordModalOpen, setIsChangeMyPasswordModalOpen] = useState(false)
   // Mobile card list: tap → action sheet (plan decision 7).
   const [actionMember, setActionMember] = useState<WorkspaceMember | null>(null)
@@ -92,6 +94,19 @@ export default function WorkspaceMembersPage() {
       setResetPasswordMember(null)
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to reset password')),
+  })
+
+  const reset2FAMutation = useMutation({
+    mutationFn: (userId: number) => workspaceMembersApi.reset2FA(workspaceId!, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
+      toast.success('Two-factor authentication reset')
+      setResetting2FA(null)
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Failed to reset 2FA'))
+      setResetting2FA(null)
+    },
   })
 
   const changeMyPasswordMutation = useMutation({
@@ -228,9 +243,11 @@ export default function WorkspaceMembersPage() {
                   member={member}
                   isCurrentUser={member.user_id === user?.id}
                   canResetPassword={canResetPasswordFor(member)}
+                  canReset2FA={canResetPasswordFor(member)}
                   onEditRole={() => setEditingMember(member)}
                   onRemove={() => setRemovingMember(member)}
                   onResetPassword={() => setResetPasswordMember(member)}
+                  onReset2FA={() => setResetting2FA(member)}
                 />
               ))}
             </tbody>
@@ -251,6 +268,9 @@ export default function WorkspaceMembersPage() {
                   : []),
                 ...(canResetPasswordFor(actionMember)
                   ? [{ label: 'Reset password', icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
+                  : []),
+                ...(canResetPasswordFor(actionMember)
+                  ? [{ label: 'Reset 2FA', icon: ShieldOff, onSelect: () => setResetting2FA(actionMember) }]
                   : []),
                 ...(canEditMember(actionMember)
                   ? [{ label: 'Remove from workspace', icon: Trash2, destructive: true, onSelect: () => setRemovingMember(actionMember) }]
@@ -301,6 +321,17 @@ export default function WorkspaceMembersPage() {
           isSubmitting={resetPasswordMutation.isPending}
         />
       )}
+
+      {/* Reset 2FA Confirmation */}
+      <ConfirmDialog
+        isOpen={!!resetting2FA}
+        title="Reset 2FA"
+        message={resetting2FA ? `Reset two-factor authentication for ${resetting2FA.full_name || resetting2FA.email}? They will need to set up 2FA again on their next login.` : ''}
+        confirmLabel="Reset 2FA"
+        isPending={reset2FAMutation.isPending}
+        onConfirm={() => resetting2FA && reset2FAMutation.mutate(resetting2FA.user_id)}
+        onCancel={() => setResetting2FA(null)}
+      />
 
       {/* Change My Password Modal */}
       {isChangeMyPasswordModalOpen && (
@@ -402,15 +433,17 @@ interface MemberRowProps {
   member: WorkspaceMember
   isCurrentUser: boolean
   canResetPassword: boolean
+  canReset2FA: boolean
   onEditRole: () => void
   onRemove: () => void
   onResetPassword: () => void
+  onReset2FA: () => void
 }
 
-function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemove, onResetPassword }: MemberRowProps) {
+function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEditRole, onRemove, onResetPassword, onReset2FA }: MemberRowProps) {
   const { canManageMembers, canEditMember } = usePermissions()
   const canEditThisMember = canEditMember(member)
-  const showActions = canEditThisMember || canResetPassword
+  const showActions = canEditThisMember || canResetPassword || canReset2FA
 
   return (
     <tr className={isCurrentUser ? 'bg-surface-hover/50' : ''}>
@@ -467,6 +500,16 @@ function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemo
                   title="Reset Password"
                 >
                   <KeyRound size={14} />
+                </button>
+              )}
+              {canReset2FA && (
+                <button
+                  type="button"
+                  onClick={onReset2FA}
+                  className="p-1.5 text-text-muted hover:text-text transition-colors"
+                  title="Reset 2FA"
+                >
+                  <ShieldOff size={14} />
                 </button>
               )}
               {canEditThisMember && (

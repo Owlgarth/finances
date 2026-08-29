@@ -61,49 +61,54 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
         </span>
       </div>
 
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          aria-label="Previous page"
-        >
-          <ChevronLeft size={14} />
-        </button>
+      {/* Nav half hidden on a single page - arrows and a lone "1" chip are
+          noise. The rows-per-page row always renders so the size picker stays
+          reachable even when the stored page size already covers every row. */}
+      {total_pages > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={14} />
+          </button>
 
-        {getPageNumbers(page, total_pages).map((p, idx) =>
-          p === 'ellipsis' ? (
-            <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-text-muted text-sm">
-              &hellip;
-            </span>
-          ) : (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onPageChange(p)}
-              aria-current={p === page ? 'page' : undefined}
-              className={`w-8 h-8 flex items-center justify-center rounded-sm text-sm font-mono font-medium transition-colors ${
-                p === page
-                  ? 'bg-primary text-white'
-                  : 'text-text-muted hover:bg-surface-hover'
-              }`}
-            >
-              {p}
-            </button>
-          )
-        )}
+          {getPageNumbers(page, total_pages).map((p, idx) =>
+            p === 'ellipsis' ? (
+              <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-text-muted text-sm">
+                &hellip;
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPageChange(p)}
+                aria-current={p === page ? 'page' : undefined}
+                className={`w-8 h-8 flex items-center justify-center rounded-sm text-sm font-mono font-medium transition-colors ${
+                  p === page
+                    ? 'bg-primary text-white'
+                    : 'text-text-muted hover:bg-surface-hover'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          )}
 
-        <button
-          type="button"
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= total_pages}
-          className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          aria-label="Next page"
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= total_pages}
+            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            aria-label="Next page"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

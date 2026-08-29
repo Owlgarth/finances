@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Plus, ArrowLeftRight, Archive, Pencil, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
+import { Plus, ArrowLeftRight, Archive, Pencil, Receipt, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
 import type { Account, AccountType, Transfer } from '../types'
 import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -22,6 +23,7 @@ const TYPE_ICON: Record<AccountType, typeof Wallet> = { cash: Coins, bank: Landm
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { canManageAccounts, canWrite, canManageCurrencies } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: currencies = [] } = useEnabledCurrencies()
@@ -146,6 +148,7 @@ export default function AccountsPage() {
                 {/* Inline links are pointer-fine only — card tap opens the sheet on touch. */}
                 {canManageAccounts && !isTouch && (
                   <div className="mt-3 flex items-center gap-3 text-xs">
+                    <button type="button" onClick={() => navigate(`/transactions?account=${account.id}`)} className="text-primary hover:text-primary-hover">View transactions</button>
                     <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">Set balance…</button>
                     <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> Edit</button>
                     <button
@@ -177,7 +180,10 @@ export default function AccountsPage() {
       {/* Recent transfers */}
       {(transfers?.items.length ?? 0) > 0 && (
         <div className="mt-8">
-          <h2 className="text-sm font-medium text-text mb-3">Recent transfers</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-text">Recent transfers</h2>
+            <Link to="/transfers" className="text-xs text-primary hover:text-primary-hover touch-hit">View all transfers</Link>
+          </div>
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {transfers!.items.map((t) => (
               <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
@@ -216,6 +222,7 @@ export default function AccountsPage() {
         onClose={() => setCardAction(null)}
         title={cardAction?.name}
         actions={[
+          { label: 'View transactions', icon: Receipt, onSelect: () => cardAction && navigate(`/transactions?account=${cardAction.id}`) },
           { label: 'Set balance…', icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
           { label: 'Edit', icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
           {
