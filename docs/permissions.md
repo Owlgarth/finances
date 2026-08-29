@@ -114,11 +114,16 @@ Two role groups drive enforcement:
 | Change member role | ✓ | ✓* | ✗ | ✗ |
 | Remove member | ✓ | ✓* | ✗ | ✗ |
 | Reset member password | ✓ | ✓* | ✗ | ✗ |
+| Reset member 2FA | ✓ | ✓* | ✗ | ✗ |
 
 **\* Admin Restrictions:**
 - Cannot manage other admins
 - Cannot manage the owner
 - Can only manage members and viewers
+
+> Reset member 2FA follows the same gate as reset password and additionally
+> requires the target to have 2FA enabled (`400` otherwise). The member gets an
+> email notice and must set up 2FA again at next login.
 
 ### Workspace Settings
 
