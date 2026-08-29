@@ -163,7 +163,7 @@ frontend/src/
 │   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Items editor, attachments, extraction review
-│   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit)
+│   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   └── modals/transactions/# Transaction / Planned / NewFromReceipt modals
 ├── contexts/
 │   ├── AuthContext.tsx         # Auth state + consent status
@@ -176,7 +176,9 @@ frontend/src/
 │   └── usePermissions.ts       # canManageAccounts, canWrite, …
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
-│                           #   Members, Settings
+│                           #   Transfers (no sidebar slot - reached from
+│                           #   Accounts and the command palette), Members,
+│                           #   Settings
 └── types/index.ts          # TypeScript interfaces
 ```
 

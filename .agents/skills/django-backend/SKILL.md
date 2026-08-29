@@ -162,6 +162,10 @@ Transactions use `-date, -id`; transfers and planned transactions use `-date, -i
 
 **List-filter values are not resource lookups: no pattern, no 422, no 404.** A `currency_code: list[str] | None = Query(None)` filter carries no `pattern=` - unknown or malformed values simply match nothing and return a 200 with an empty list, identical to filtering by an unknown `account_id`. The regex allowlist above is specifically for `ordering` values, because those reach `order_by()` and raise `FieldError` (500) on unknown fields; filter values only feed `__in` lookups. When a filter is ambiguous about WHICH field it targets, state the semantics in the endpoint docstring (the account-currency filter targets `account__currency__code__in`, never the informational `original_currency` facet).
 
+**Aggregation siblings stay in filter parity with their list endpoint.** When a totals endpoint shares the list's `_build_filtered_queryset` helper, adding a filter to the list endpoint is pure param threading: the aggregation endpoint gains the same bare `Query(None)` param at the same position, and its service methods pass it into the shared helper - a totals strip that disagrees with the filtered list (group totals ignoring the active filter) is exactly the bug this prevents.
+
+**After touching a `Query(..., pattern=...)` line, the gate is a route-importing pytest run, not ruff.** A corrupted regex in the raw string (a stray parenthesis) passes `ruff check` AND `ruff format`, and explodes only at Django Ninja route registration (Pydantic compiles the pattern at import), taking down every test that imports the router - a full traceback wall on the first run. Ruff alone is never sufficient verification for a `pattern=` edit.
+
 ### Pagination Param Caps (`page_size`)
 
 Numeric bounds on list-endpoint query params are part of the endpoint contract, declared on the `Query(...)` itself so Django Ninja rejects out-of-range values with an automatic 422 — services keep receiving already-validated ints:
@@ -592,6 +596,8 @@ for field, value in update_data.items():
 ```
 
 `exclude_unset=True` includes a key only if the client sent it, so `.get(...)` returns `None` when omitted and the actual value when sent. The `is True` identity check is what distinguishes an explicit `True` from both `None` (omitted) and `False` (explicitly cleared) — truthiness would mis-fire on a truthy non-bool.
+
+**The full-replace dual: direct assignment makes the schema default the stored value.** An update service that assigns fields directly (`trans.note = data.note`, no `exclude_unset` loop) has full-replace semantics - an absent key stores the schema default, i.e. it CLEARS the field. That is free, correct absent-key behavior: pin it with the create schema's docstring and a replace-and-clear test instead of reaching for `exclude_unset`; the dict dance above exists only for partial-update schemas where omission must NOT overwrite.
 
 ## Safe Defaults for `getattr` Fallbacks
 
