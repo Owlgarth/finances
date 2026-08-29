@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -118,9 +119,16 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Signing in...' : 'Sign in'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign in'
+                )}
               </button>
             </div>
 
@@ -166,9 +174,16 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isSubmitting || !twoFACode}
-                className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Verifying...' : 'Verify'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify'
+                )}
               </button>
             </div>
 
