@@ -12,6 +12,9 @@ An optional "Start with sample data" checkbox seeds demo records. The system cre
 the user, a workspace (the chosen set enabled verbatim, first = primary and the
 Main account's currency), a default **Main** account, a **General** budget with starter
 categories and the current period, and the owner membership - then returns access + refresh JWTs.
+The create is synchronous and takes a few seconds; while it runs, the Register form is
+replaced by a client-timed "Setting up your workspace" checklist panel (stages identical
+on every path, including errors, so their count and timing never leak backend state).
 An already-registered email fails with a generic error that never reveals the
 account's existence; the existing address owner gets an email notice instead
 (anti-enumeration).
