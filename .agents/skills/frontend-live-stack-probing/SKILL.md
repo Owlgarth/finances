@@ -57,9 +57,20 @@ same session - in PR #81 it paid for itself twice.
 ## Probe by bug class
 
 - Same-tab invalidation: SPA-link navigation, no reload. Cross-tab staleness: two real tabs
-  plus a focus event (`bringToFront()`). NEVER `page.goto()` for staleness probes - a full
-  load re-creates the query cache and masks both classes. (Rule detail under State Refresh
-  After Mutations in `frontend-react`.)
+  plus a focus event (`bringToFront()`). NEVER `page.goto()` between probe steps - a full
+  load re-creates the JS heap and cold-resets the query cache, masking staleness probes AND
+  every warm-path (remount) bug: a defect that needs a warm query cache (list -> detail ->
+  back -> detail) reproduces only through chained in-page SPA navigations (`anchor.click()`,
+  `history.pushState` + `popstate`, app events like `owlgarth:open-page-search`). Treat the
+  reported viewport or classification as a hypothesis - "mobile-only" was a workflow artifact
+  (bottom-nav flows warm-re-enter while desktop sessions cold-load). (Rule detail under State
+  Refresh After Mutations in `frontend-react`.)
+- Cascade and sizing claims are settled against the COMPILED stylesheet, never the source
+  className string. A static headless-Chrome harness (`--headless=new --dump-dom`, page
+  script writes measured element rects into the DOM) linked against `dist/assets/index-*.css`
+  with the real class strings needs no dev stack and settles the claim in minutes - canonical
+  instance: Tailwind v4's alphabetical utility emission made a shared base `w-full` silently
+  void caller width classes (trap detail under Responsive Breakpoints in `frontend-react`).
 - Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
   "cannot reproduce" means the trigger is environmental (a failed request), not absent.
   Intercept and force-fail the dependency (request interception blocking the endpoint the

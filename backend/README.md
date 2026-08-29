@@ -231,6 +231,7 @@ All endpoints (except auth endpoints) require `Authorization: Bearer <token>` he
 | DELETE | `/api/workspaces/{workspaceId}/members/{userId}` | Remove member |
 | POST | `/api/workspaces/{workspaceId}/members/leave` | Leave workspace |
 | PUT | `/api/workspaces/{workspaceId}/members/{userId}/reset-password` | Reset member password |
+| POST | `/api/workspaces/{workspaceId}/members/{userId}/reset-2fa` | Reset member 2FA (same hierarchy as reset-password; `400` when the member has no 2FA enabled) |
 
 ### Accounts (admin+ to mutate)
 
@@ -268,7 +269,8 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 |--------|----------|--------------|-------------|
 | GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the transaction's stored own currency - account-less rows match their own - never the original-amount facet) |
 | GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` |
-| POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; adjustments always require an account) |
+| GET | `/api/transactions/export/` | `date_from`, `date_to`, `transaction_type` | JSON file export (honors only these filters - a single type at most) |
+| POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; adjustments always require an account; optional `note` - free text, full-replace: an absent or null note clears) |
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
 | GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
 | GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items |
@@ -292,6 +294,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 |--------|----------|--------------|-------------|
 | GET | `/api/planned-transactions` | `status`, `account_id`, `currency_code[]`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated; `currency_code` filters by the planned transaction's own stored currency) |
 | GET | `/api/planned-transactions/totals` | `status`, `account_id`, `group_by` | Totals grouped by `currency` or `category` |
+| GET | `/api/planned-transactions/export/` | `status`, `start_date`, `end_date` | JSON file export (honors only these filters) |
 | POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less) |
 | POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction carrying the plan's account and own currency) |
 
