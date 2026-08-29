@@ -4,7 +4,65 @@ import { createUpdateParams, intListParam } from '../../utils/params'
 import AmountInput from './AmountInput'
 import { FilterField } from './FilterBar'
 import MultiSelect from './MultiSelect'
-import { inputClass } from './formStyles'
+import { controlHeightClass, inputClass } from './formStyles'
+
+/** Local calendar date as YYYY-MM-DD. Never toISOString() - it renders the
+    UTC day, which can sit a day off either end of a local-date range. */
+function toIsoDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+/** First-to-last day of a month; out-of-range months roll over (Date math). */
+function monthRange(year: number, month: number): { from: string; to: string } {
+  return {
+    from: toIsoDate(new Date(year, month, 1)),
+    to: toIsoDate(new Date(year, month + 1, 0)),
+  }
+}
+
+interface DatePreset {
+  label: string
+  /** "Today" is computed at click/render time so a session crossing midnight
+      never serves a stale range. */
+  range: () => { from: string; to: string }
+}
+
+// Ranges span the WHOLE period (month/year ends included): future dates inside
+// the period matter for the Planned list, and post-dated transactions are not
+// silently excluded either.
+const DATE_PRESETS: DatePreset[] = [
+  {
+    label: 'This month',
+    range: () => {
+      const now = new Date()
+      return monthRange(now.getFullYear(), now.getMonth())
+    },
+  },
+  {
+    label: 'Last month',
+    range: () => {
+      const now = new Date()
+      return monthRange(now.getFullYear(), now.getMonth() - 1)
+    },
+  },
+  {
+    label: 'Last 30 days',
+    range: () => {
+      const start = new Date()
+      start.setDate(start.getDate() - 29)
+      return { from: toIsoDate(start), to: toIsoDate(new Date()) }
+    },
+  },
+  {
+    label: 'This year',
+    range: () => {
+      const year = new Date().getFullYear()
+      return { from: `${year}-01-01`, to: `${year}-12-31` }
+    },
+  },
+]
 
 /**
  * The budget/category/amount/date filter-field group shared by the
@@ -75,6 +133,27 @@ export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
         </div>
       </FilterField>
       <FilterField label={dateLabel} className="col-span-2">
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {DATE_PRESETS.map((preset) => {
+            const { from, to } = preset.range()
+            // Active only on an EXACT match: any manually edited bound leaves
+            // every chip off by construction.
+            const active = dateFrom === from && dateTo === to
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => updateParams({ from, to })}
+                className={`text-xs border rounded-sm px-2 py-1 ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
+                  active ? 'border-border-focus bg-surface-hover text-text' : 'border-border text-text-muted'
+                }`}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
         <div className="flex items-center gap-1.5">
           <input type="date" value={dateFrom} onChange={(e) => updateParams({ from: e.target.value || null })} aria-label="From date" className={`${inputClass} max-sm:min-h-[44px]`} />
           <span className="text-text-muted text-xs">–</span>

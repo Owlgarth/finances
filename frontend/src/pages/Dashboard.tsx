@@ -30,10 +30,14 @@ function BalancesCard() {
       ) : (
         <div className="space-y-2">
           {accounts.map((a) => (
-            <div key={a.account_id} className="flex items-center justify-between text-sm">
+            <Link
+              key={a.account_id}
+              to={`/transactions?account=${a.account_id}`}
+              className="flex items-center justify-between text-sm rounded-sm hover:bg-surface-hover transition-colors px-1.5 -mx-1.5"
+            >
               <span className="text-text truncate mr-2">{a.account_name}</span>
               <span className="font-mono text-text whitespace-nowrap">{formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}</span>
-            </div>
+            </Link>
           ))}
         </div>
       )}

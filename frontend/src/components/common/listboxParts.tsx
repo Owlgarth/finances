@@ -14,9 +14,13 @@ export const listboxTriggerBaseClass =
   'focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
   'transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
 
-// Anchored desktop panel container (both components, verbatim).
+// Anchored desktop panel container. w-max fits the panel to the widest
+// option row (rows are w-full buttons with nowrap spans, so the widest
+// natural label drives the max-content width) so no label truncates;
+// min-w-full floors the panel at the trigger width, so a dropdown can
+// only grow past its trigger, never render narrower than it.
 export const listboxPanelClass =
-  'absolute z-dropdown mt-1 w-full ' +
+  'absolute z-dropdown mt-1 w-max min-w-full ' +
   'bg-surface border border-border rounded-sm ' +
   'max-h-[280px] overflow-y-auto' // thin scrollbars applied globally (index.css)
 

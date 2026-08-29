@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
+import { Archive, CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
@@ -270,7 +270,8 @@ export default function BudgetsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canManageAccounts, canManageCurrencies } = usePermissions()
-  const { data: budgets = [], isLoading } = useBudgets(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const { data: budgets = [], isLoading } = useBudgets(showArchived)
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
@@ -305,6 +306,18 @@ export default function BudgetsPage() {
     },
   })
 
+  // setArchive's second argument is isActive, so unarchive passes true. The
+  // ['budgets'] prefix invalidation refreshes both the active and the
+  // show-archived list (the key is ['budgets', showArchived]).
+  const unarchiveMutation = useMutation({
+    mutationFn: (id: number) => budgetsApi.setArchive(id, true),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      toast.success('Budget unarchived')
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to unarchive budget')),
+  })
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -326,7 +339,13 @@ export default function BudgetsPage() {
             <Link key={b.id} to={`/budgets/${b.id}`} className="border border-border rounded-sm bg-surface p-4 hover:bg-surface-hover active:bg-surface-hover transition-colors">
               <div className="flex items-center gap-2">
                 <PieChart size={16} className="text-text-muted" />
-                <span className="text-sm font-medium text-text truncate">{b.name}</span>
+                {/* Archived budgets stay full cards and stay navigable - the
+                    detail page works for them; only the presentation is
+                    muted (badge chip identical to AccountsPage's). */}
+                <span className={`text-sm font-medium truncate ${b.is_active ? 'text-text' : 'text-text-muted'}`}>{b.name}</span>
+                {!b.is_active && (
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">Archived</span>
+                )}
                 {/* Adjacent icon buttons: real padded hit areas instead of
                     the shared hit-area utility, whose expanded areas would
                     overlap (responsive.md). On coarse pointers they grow to
@@ -369,6 +388,19 @@ export default function BudgetsPage() {
                       <Pencil size={13} />
                     </button>
                   )}
+                  {/* Archived cards get the restore action; active cards
+                      deliberately offer no archive button here. */}
+                  {!b.is_active && canManageAccounts && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); unarchiveMutation.mutate(b.id) }}
+                      className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
+                      title="Unarchive"
+                      aria-label={`Unarchive budget ${b.name}`}
+                    >
+                      <Archive size={13} />
+                    </button>
+                  )}
                   {canManageAccounts && (
                     <button
                       type="button"
@@ -394,6 +426,13 @@ export default function BudgetsPage() {
           ))}
         </div>
       )}
+
+      <div className="mt-4">
+        <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer max-sm:min-h-[44px]">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Show archived budgets
+        </label>
+      </div>
 
       <CreateBudgetModal
         open={createOpen}

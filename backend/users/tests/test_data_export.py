@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from accounts.factories import AccountFactory
 from budgeting.factories import BudgetFactory
 from budgeting.models import BudgetCurrency
 from common.tests.mixins import AuthMixin
@@ -145,6 +146,33 @@ class DataExportTests(AuthMixin, TestCase):
         exported_pt = next(p for p in data['workspaces'][0]['planned_transactions'] if p['name'] == 'Future tips')
         self.assertIsNone(exported_pt['account_name'])
         self.assertEqual(exported_pt['currency_code'], 'PLN')
+
+    def test_export_contains_transaction_note(self):
+        """The optional transaction note serializes into the v3 export."""
+        account = AccountFactory(workspace=self.workspace)
+        TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Noted expense',
+            note='Reimbursable',
+            amount=Decimal('15.00'),
+            type='expense',
+        )
+        TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Plain expense',
+            amount=Decimal('10.00'),
+            type='expense',
+        )
+
+        response = self.client.get('/api/users/me/export', **self.auth_headers())
+        data = json.loads(response.content)
+
+        exported_tx = next(t for t in data['workspaces'][0]['transactions'] if t['description'] == 'Noted expense')
+        self.assertEqual(exported_tx['note'], 'Reimbursable')
+        plain_tx = next(t for t in data['workspaces'][0]['transactions'] if t['description'] == 'Plain expense')
+        self.assertIsNone(plain_tx['note'])
 
     def test_export_rate_limited(self):
         """Export endpoint should be rate limited to 3 requests per hour."""

@@ -2,12 +2,13 @@ import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Plus, Pencil, Trash2 } from 'lucide-react'
-import { transactionsApi } from '../api/client'
+import { Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
+import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
+import { triggerBrowserDownload } from '../utils/attachments'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam } from '../utils/params'
@@ -18,9 +19,11 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import MultiSelect from '../components/common/MultiSelect'
 import SearchInput from '../components/common/SearchInput'
+import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
+import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
-import { primaryButtonClass } from '../components/common/formStyles'
+import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_STYLE: Record<string, string> = {
   income: 'text-positive',
@@ -34,6 +37,33 @@ const TYPE_OPTIONS = [
   { value: 'adjustment', label: 'Adjustment' },
 ]
 
+// Curated sort options; the backend's ORDERING_PATTERN allows more, but the
+// Select only offers what reads well in a divider-row list.
+const SORT_OPTIONS: { value: TransactionOrdering; label: string }[] = [
+  { value: '-date', label: 'Newest' },
+  { value: 'date', label: 'Oldest' },
+  { value: '-amount', label: 'Amount high to low' },
+  { value: 'amount', label: 'Amount low to high' },
+  { value: 'description', label: 'Description A-Z' },
+]
+
+// The backend's default when no ?ordering= is sent: picking it clears the
+// param so the URL stays clean for the common case.
+const DEFAULT_SORT: TransactionOrdering = '-date'
+
+// Last committed search term, remembered across visits. The URL ?search= param
+// always wins over the stored value.
+const SEARCH_STORAGE_KEY = 'owlgarth_tx_search'
+
+function readStoredSearch(): string {
+  try {
+    return localStorage.getItem(SEARCH_STORAGE_KEY) ?? ''
+  } catch {
+    // Storage unavailable (private mode): remembering is best-effort.
+    return ''
+  }
+}
+
 export default function Transactions() {
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
@@ -43,7 +73,14 @@ export default function Transactions() {
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
-  const search = searchParams.get('search') ?? ''
+  // Remembered search: when the URL carries no ?search= param (fresh visit),
+  // the last committed term fills the box. Seeded once at mount (the lazy
+  // useState initializer reads storage exactly once); after that the URL
+  // param is the single source of truth.
+  const [restoredSearch, setRestoredSearch] = useState(() =>
+    searchParams.get('search') === null ? readStoredSearch() : '',
+  )
+  const search = searchParams.get('search') ?? restoredSearch
   const accountFilter = intListParam(searchParams, 'account')
   const typeFilter = (searchParams.get('type') ?? '')
     .split(',')
@@ -62,10 +99,49 @@ export default function Transactions() {
   const dateFrom = searchParams.get('from') ?? ''
   const dateTo = searchParams.get('to') ?? ''
   const page = intParam(searchParams, 'page') ?? 1
+  // Garbage ?ordering= values read as unset (status-filter idiom): the Select
+  // shows the default placeholder and the request sends nothing.
+  const rawOrdering = searchParams.get('ordering')
+  const ordering = SORT_OPTIONS.some((o) => o.value === rawOrdering) ? (rawOrdering as TransactionOrdering) : null
 
   const [pageSize, setPageSize] = useState(getStoredPageSize)
+  const [isExporting, setIsExporting] = useState(false)
 
   const updateParams = createUpdateParams(setSearchParams)
+
+  // Any manual search interaction drops the restored hint and remembers the
+  // new term; clearing the box stores '' so the old term can never re-apply.
+  const handleSearchChange = (next: string) => {
+    setRestoredSearch('')
+    try {
+      localStorage.setItem(SEARCH_STORAGE_KEY, next)
+    } catch {
+      // Storage unavailable: remembering is best-effort.
+    }
+    updateParams({ search: next || null })
+  }
+
+  // The export endpoint honors ONLY the date range and a single type filter -
+  // never imply the whole filter panel applies to the file.
+  const handleExportView = async () => {
+    const toastId = toast.loading('Preparing export...')
+    setIsExporting(true)
+    try {
+      const blob = await transactionsApi.exportView({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        transaction_type: typeFilter.length === 1 ? typeFilter[0] : undefined,
+      })
+      const url = URL.createObjectURL(blob)
+      triggerBrowserDownload(url, `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
+      URL.revokeObjectURL(url)
+      toast.success('Export complete', { id: toastId })
+    } catch {
+      toast.error('Export failed. Try again.', { id: toastId })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   // Each facet counts once, however many values it holds.
   const activeFilterCount = [
@@ -93,7 +169,7 @@ export default function Transactions() {
   const [deleting, setDeleting] = useState<Transaction | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, pageSize, search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['transactions', page, pageSize, ordering, search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       transactionsApi.getAll({
         page,
@@ -108,10 +184,33 @@ export default function Transactions() {
         amount_lte: amountParam(amountMax),
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        ordering: ordering || undefined,
       }),
     // Previous page stays rendered while the next one loads — no skeleton
     // flash on page/filter changes (v5 placeholderData pattern).
     placeholderData: keepPreviousData,
+  })
+
+  // Keyed INSIDE the ['transactions'] family so every existing invalidation of
+  // that prefix (form modal, delete, extraction) refetches the strip too.
+  // Same dependency values as the list query minus page/pageSize/ordering -
+  // totals do not depend on pagination or sort.
+  const { data: totalsData, isLoading: totalsIsLoading } = useQuery({
+    queryKey: ['transactions', 'totals', search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryFn: () =>
+      transactionsApi.getTotals({
+        search: search || undefined,
+        account_id: accountFilter.length ? accountFilter : undefined,
+        transaction_type: typeFilter.length ? typeFilter : undefined,
+        currency_code: currencyFilter.length ? currencyFilter : undefined,
+        budget_id: budgetFilter.length ? budgetFilter : undefined,
+        category_id: categoryFilter.length ? categoryFilter : undefined,
+        amount_gte: amountParam(amountMin),
+        amount_lte: amountParam(amountMax),
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        group_by: 'type',
+      }),
   })
 
   const deleteMutation = useMutation({
@@ -140,25 +239,43 @@ export default function Transactions() {
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text">Transactions</h1>
-        {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
-        {canWrite && (
-          <div className="flex items-center gap-2 max-sm:hidden">
-            <button onClick={openNew} className={primaryButtonClass}>
+        <div className="flex items-center gap-2">
+          {/* Visible on mobile too: export is a read action with no FAB twin. */}
+          <button
+            type="button"
+            onClick={handleExportView}
+            disabled={isExporting}
+            title="Exports the date and type filters"
+            className={secondaryButtonClass}
+          >
+            <Download size={13} className="inline mr-1" /> Export view
+          </button>
+          {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
+          {canWrite && (
+            <button onClick={openNew} className={`${primaryButtonClass} max-sm:hidden`}>
               <Plus size={13} className="inline mr-1" /> New transaction
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2 mb-3">
         <SearchInput
           value={search}
-          onChange={(next) => updateParams({ search: next || null })}
+          onChange={handleSearchChange}
           placeholder="Search descriptions…"
           aria-label="Search transactions"
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        <Select
+          value={ordering}
+          onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
+          options={SORT_OPTIONS}
+          placeholder="Newest"
+          aria-label="Sort"
+          className="w-48 flex-shrink-0"
+        />
       </div>
 
       {filtersOpen && (
@@ -184,6 +301,17 @@ export default function Transactions() {
           </FilterField>
           <ListFilterFields />
         </FilterPanel>
+      )}
+
+      {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
+      {(data?.total ?? 0) > 0 && (
+        <ListTotalsStrip
+          caption={`Totals - ${data?.total ?? 0} transactions`}
+          items={totalsData?.totals ?? []}
+          tone={(group) => (group === 'income' ? 'positive' : group === 'expense' ? 'negative' : 'neutral')}
+          help="Adjustments are excluded."
+          isLoading={totalsIsLoading}
+        />
       )}
 
       {isLoading ? (
@@ -244,7 +372,7 @@ export default function Transactions() {
         </div>
       )}
 
-      {data && data.total_pages > 1 && (
+      {data && data.total > 0 && (
         <div className="mt-4">
           <Pagination
             page={data.page}
