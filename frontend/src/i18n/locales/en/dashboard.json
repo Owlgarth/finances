@@ -1,1 +1,23 @@
-{}
+{
+  "title": "Dashboard",
+  "viewAll": "View all →",
+  "budgetsLink": "Manage budgets and category plans →",
+  "balances": {
+    "title": "Accounts",
+    "empty": "No accounts."
+  },
+  "recent": {
+    "title": "Recent activity",
+    "empty": "No transactions yet."
+  },
+  "legal": {
+    "back": "Back",
+    "backToLogin": "Back to login",
+    "effective": "Effective date: {{date}} · Version {{version}}",
+    "loading": "Loading…",
+    "privacyTitle": "Privacy Policy",
+    "privacyFailure": "Failed to load privacy policy. Please try again later.",
+    "termsTitle": "Terms of Service",
+    "termsFailure": "Failed to load terms of service. Please try again later."
+  }
+}
