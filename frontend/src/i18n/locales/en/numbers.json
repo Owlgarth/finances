@@ -1,1 +1,36 @@
-{}
+{
+  "datePicker": {
+    "selectDate": "Select date",
+    "today": "Today"
+  },
+  "insights": {
+    "selectBudget": "Select budget",
+    "budgetAriaLabel": "Budget",
+    "currencyAriaLabel": "Currency",
+    "viewBudget": "View budget \u2192",
+    "plannedPeriodLabel": "Planned \u00b7 {{period}}",
+    "currentPeriodFallback": "current period",
+    "spent": "Spent",
+    "remaining": "Remaining",
+    "changeVsPeriod": "{{delta}} vs {{period}}",
+    "seriesPlanned": "planned",
+    "seriesActual": "actual",
+    "seriesSpent": "spent",
+    "rowAriaLabel": "{{name}}: planned {{planned}}, spent {{spent}} {{currency}}",
+    "noPlanSet": "No plan set for this period",
+    "overPlanUsed": "Over plan \u2014 {{pct}}% used",
+    "planUsed": "{{pct}}% of plan used",
+    "otherCategory": "Other",
+    "noCategoriesWithData": "No categories with data this period.",
+    "noPeriodsYet": "No periods yet.",
+    "showChart": "Show chart",
+    "showTable": "Show table",
+    "byCategoryTitle": "This period by category",
+    "byPeriodTitle": "Planned vs spent by period",
+    "colCategory": "Category",
+    "colPlanned": "Planned",
+    "colSpent": "Spent",
+    "colRemaining": "Remaining",
+    "colPeriod": "Period"
+  }
+}
