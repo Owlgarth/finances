@@ -30,7 +30,9 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
 - **Multi-Currency Support** - A global ISO 4217 catalog; each workspace enables a reorderable subset (first = primary, chosen as a set at registration), budgets carry an ordered currency set (first = default view), and transactions can be recorded without an account in their own currency
 - **Receipts** - Attach receipt images/PDFs; optionally extract line items and totals via a configurable model, then review and confirm
 - **Planned Transactions** - Schedule and execute future transactions, optionally on an account and always in their own currency
-- **Role-Based Access Control** - Owner, Admin, Member, and Viewer roles
+- **Role-Based Access Control** - Owner, Admin, Member, and Viewer roles; members join via email invites
+- **Two-Factor Authentication** - TOTP authenticator apps, single-use recovery codes, and admin-initiated 2FA resets
+- **Email Verification** - Verify your address after registration; email changes confirm via the new address and notify the old one
 - **GDPR** - Export/import, account deletion, and a legacy-import path for migrating older data
 - **Light & Dark Mode** - Theme toggle that follows the OS preference until you choose, with no flash on load
 
@@ -88,7 +90,12 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
    - API Docs: http://localhost:8000/api/docs
    - Storage console: http://localhost:9001
 
-4. **Log in** with the demo credentials: `demo@example.com` / `password123`
+4. **Create your account** - open the frontend URL from step 3 and register.
+   The new workspace comes with a starter setup (a Main account, a General
+   budget with starter categories, and the current period); tick
+   "Start with sample data" on the form to also seed sample transactions, a
+   savings transfer, and planned transactions. See "Starter & Demo Fixtures"
+   in [backend/README.md](backend/README.md) for exactly what gets created.
 
 From here, [Development](#development) covers everyday commands, tests, lint,
 and running without Docker.
@@ -187,13 +194,13 @@ finances/
 
 | Document | Description |
 |----------|-------------|
-| **[Backend README](backend/README.md)** | Reference for the Django API: a purpose table for every Django app, the shared `common/` module (JWT auth, email, storage), a complete endpoint reference covering every route with its method and purpose, the JWT auth and token lifecycle, the service-layer convention, testing instructions, and the environment variables. Answers "which API endpoints exist, and how do I call or test them?" |
-| **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars including the build-time `VITE_*` flags. Answers "where does a piece of the UI live, and how is it wired?" |
+| **[Backend README](backend/README.md)** | Reference for the Django API: a purpose table for every Django app, the shared `common/` module (JWT auth, email, storage), a complete endpoint reference covering every route with its method and purpose, the JWT token lifecycle including refresh and 2FA temp tokens, the service-layer convention, testing instructions, and the environment variables. Answers "which API endpoints exist, and how do I call or test them?" |
+| **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the complete pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars including the build-time `VITE_*` flags. Answers "where does a piece of the UI live, and how is it wired?" |
 | [Architecture](docs/architecture.md) | The system-level design: a component diagram, the account-based data model with its key-principles table (balances are computed and never stored, periods derive from a budget's cadence or are custom-defined, transfers replace the old exchanges, the original-amount facet, adjustments), directory maps for both sides, the async Celery flows, the four auth layers with rate limiting, env configuration, and deployment topology. Answers "how is the system designed, and why?" |
 | [Parser Contract](docs/parser-contract.md) | The public HTTP contract a receipt-extraction service implements: auth, the `/health` and `/parse` endpoints, the versioned result JSON (line items, totals, currency, confidence), upload and page limits, and error semantics, plus the backend client's timeout and retry knobs. Answers "how do I implement or plug in my own receipt parser?" |
 | [Workflow](docs/workflow.md) | The end-to-end user flows: registration with its anti-enumeration behavior, accounts and Set-balance adjustments, transfers, budget cadences and periods (derived or custom), transactions with line items, the receipt-extraction review flow, planned transactions, members and invites, reports, and export/import. Answers "what actually happens, step by step, when a user does X?" |
 | [Permissions](docs/permissions.md) | The authorization model: the four-layer security diagram, the role hierarchy, complete per-feature permission matrices (owner/admin/member/viewer × action) across accounts, currencies, budgets, categories, transactions, receipts, transfers, planned transactions, members, and settings, plus the backend enforcement code (`WorkspaceJWTAuth`, `require_role`, `for_workspace`), the frontend visibility hooks, and the error codes. Answers "who is allowed to do what, and where is it enforced?" |
-| [Users & Roles](docs/users-and-roles.md) | The user model and the people around it: user fields, per-role capability, restriction, and use-case write-ups for owner, admin, member, and viewer, the membership rules, member-management operations (adding, role changes, removal, password resets, leaving), the auth flow, and multi-workspace scenarios. Answers "what does each role mean in practice, and how are members managed?" |
+| [Users & Roles](docs/users-and-roles.md) | The user model and the people around it: user fields, per-role capability, restriction, and use-case write-ups for owner, admin, member, and viewer, the membership rules, member-management operations (adding, role changes, removal, password resets, 2FA resets, leaving), the auth flow with email verification, 2FA, and refresh tokens, and multi-workspace scenarios. Answers "what does each role mean in practice, and how are members managed?" |
 
 ## Development
 
@@ -303,10 +310,14 @@ See [Backend README](backend/README.md) and [Frontend README](frontend/README.md
 cd backend
 pytest
 
-# Frontend
+# Frontend - no test suite yet; lint and build are the checks
 cd frontend
-npm test
+npm run lint
+npm run build
 ```
+
+Frontend testing with Vitest is planned for a future release (see
+[CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Contributing
 

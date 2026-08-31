@@ -25,11 +25,12 @@ frontend/
 │   │   ├── client.ts         # Axios instance + typed API modules
 │   │   └── queryClient.ts    # App-wide QueryClient (own module - no import cycles)
 │   ├── components/
-│   │   ├── layout/           # MainLayout, Sidebar, UserMenu, WorkspaceSelector
+│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
+│   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
@@ -45,10 +46,13 @@ frontend/
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
-│   │   └── useMediaQuery.ts         # Responsive breakpoint detection
+│   │   ├── useMediaQuery.ts         # Responsive breakpoint detection
+│   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop, Tailwind-snapped) + useIsTouch (pointer: coarse)
+│   │   ├── useDebouncedField.ts     # Draft state for inputs whose committed value lives in URL params (search, amount filters)
+│   │   └── useOverlay.ts            # Blocking-overlay behavior for Modal/BottomSheet: stack-aware Escape, refcounted scroll lock, focus restore
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers)
+│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -64,6 +68,11 @@ and a 404 catch-all.
 | Path | Component | Description |
 |------|-----------|-------------|
 | `/login`, `/register` | Login, Register | Auth; registration picks a currency set (`CurrencySetField` on the pre-auth curated list; first = workspace primary) + optional sample data |
+| `/verify-email` | VerifyEmailPage | Public; consumes the email-verification `?token=` link (verifying/success/error states, plus a resend form); refreshes the logged-in user only when a session already exists |
+| `/confirm-email-change` | ConfirmEmailChangePage | Consumes the email-change `?token=` link; requires auth - the token is validated against the logged-in user's ID, so a fresh session lands on login and must re-click the link |
+| `/reconsent` | ReConsentPage | Requires auth; consent gate shown when terms/privacy were updated - states which document is outdated and requires accepting both before proceeding |
+| `/privacy` | PrivacyPolicyPage | Public; Privacy Policy rendered through the shared `LegalDocPage` shell (`legalApi.getPrivacy`) |
+| `/terms` | TermsPage | Public; Terms of Service through the same `LegalDocPage` shell (`legalApi.getTerms`) |
 | `/` | Dashboard | Account balances + recent activity; balance rows link to the account's filtered transactions |
 | `/accounts` | AccountsPage | Accounts, set-balance, transfers; per-account "View transactions" drill-down and a "View all transfers" link to `/transfers` |
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
@@ -78,9 +87,20 @@ and a 404 catch-all.
 
 ## Components
 
-**Layout** (`components/layout/`): `MainLayout` (responsive wrapper),
-`Sidebar` (6 destinations + workspace selector + user menu), `UserMenu`,
-`WorkspaceSelector`, and `CreateWorkspaceForm` (mount-per-use create-workspace
+**Layout** (`components/layout/`): `MainLayout` (responsive wrapper - renders the
+desktop `Sidebar` and the mobile `BottomNav`), `Sidebar` (6 destinations +
+workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`),
+`BottomNav` (mobile shell: bottom bar with Home/Txns/Budgets/More tabs around a
+center quick-add FAB - the FAB hides for viewers/workspace-less users but the
+slot stays so tabs don't shift; the FAB's ActionSheet offers new transaction,
+transfer, from-receipt (parse then seed the form) and planned; the More sheet
+carries the overflow destinations (Accounts, Planned, Members, Settings), search,
+logout, workspace switcher + create/settings, the theme row and the zoom toggle),
+`UserMenu`, `WorkspaceSelector`, `ThemeToggleRow` (dark-mode toggle row shared by
+the desktop UserMenu dropdown and the mobile More sheet), `WorkspaceSettingsPanel`
+(workspace rename/delete modal hosting the admin-gated
+`CurrenciesSettingsSection`; opened from the sidebar gear and the More sheet),
+and `CreateWorkspaceForm` (mount-per-use create-workspace
 modal - name + ordered currency multi-select via `CurrencySetField` in compact
 mode - opened as a modal from all three call sites: the sidebar button, the
 workspace selector dropdown, and the mobile More sheet; also exports
@@ -88,13 +108,34 @@ workspace selector dropdown, and the mobile More sheet; also exports
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
-`Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, `ListFilterFields` (the
+`Pagination`, `EmptyState`, `Switch`, `SegmentedControl`, `BottomSheet` (the
+universal mobile container - slide-up panel with scrim dismiss, body scroll lock
+and safe-area padding; modals, selects, action menus and pickers render inside
+it on mobile), `ActionSheet` (titled list of 44px tap actions in a bottom sheet -
+the touch replacement for hover-revealed row actions; closes the sheet before
+running the action so it can safely open a modal), `CommandPalette`
+(Ctrl/Cmd+K page search, summoned via the exported `openPageSearch()` from the
+sidebar and the More sheet: static destinations plus server-backed
+Budgets/Accounts/Transactions/Planned results once the query reaches 2 chars;
+desktop popover, mobile bottom sheet), `FilterBar` (list-page filter scaffolding -
+`FiltersToggle` with an active-filter count badge, the `FilterPanel` region with
+Clear filters, `FilterField`; the pages own the actual filter state in URL search
+params), `SearchInput` (search box with leading icon, debounced commit and clear
+X - the remembered search on the list pages), `AmountInput` (debounced numeric
+input for the min/max amount filters), `Skeleton` (wireframe loading bars -
+`Skeleton` single bar + `SkeletonRows` stack), `RoleBadge` (inline workspace-role
+chip next to workspace rows in the selector dropdown and the mobile More sheet),
+`ListFilterFields` (the
 shared Transactions/Planned filter panel, with date-preset chips: This month /
 Last month / Last 30 days / This year), `ListTotalsStrip` (presentational totals
 strip for the list pages - the owning page runs the query and passes the results),
 and `formStyles.ts` (the input/label/button
 class constants - the redesign's form primitives). `DatePicker` (react-day-picker) and
-`LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`.
+`LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`,
+alongside `ProtectedRoute` (the auth gate: loading splash while auth resolves,
+redirect to `/login` when unauthenticated; wraps the workspace/preferences
+providers around all in-app routes, and `/reconsent` and `/confirm-email-change`
+individually).
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
 balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate;
@@ -129,6 +170,12 @@ period; the name is derived from the date range until edited), `ManageCategories
 offered only on already-archived rows and states the live transaction count, merge
 picks the target that keeps the history; mount-per-use, lists archived-inclusive).
 
+**Dashboard** (`components/dashboard/`): `BudgetInsights` (planned-vs-actual
+widget: horizontal paired bars per category (top 6 + Other) or grouped columns
+per period, a table/chart view toggle, per-currency Select and hover tooltips;
+chart tokens - series-1 = planned, series-2 = actual, text never wears series
+color).
+
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormModal` (with Items/Receipts tabs; optional account - "No account"
 is first-class, adjustments excepted - plus an own-currency select that locks to
@@ -137,7 +184,10 @@ the parsed code when it is enabled and auto-selects the matching account -
 preferring the per-currency default; description autocomplete over frequent
 descriptions of the picked type, applied only on explicit Enter/click; an
 optional free-text note behind an "Add note" disclosure that opens pre-expanded
-when the edited transaction carries one), `TransactionItemsEditor`,
+when the edited transaction carries one), `TransactionItemsEditor` (loads a saved transaction's items and persists edits
+through the list), `TransactionItemsList` (the editable rows grid both the
+editor and the create modal render - name/quantity/unit price/line total with
+add/remove/reorder, stable per-row identity, touch-aware),
 `TransactionAttachments` (upload + view/download, extraction),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
 own-currency pairing; account-less plans default to the workspace primary).

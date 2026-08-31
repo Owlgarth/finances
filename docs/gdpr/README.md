@@ -50,10 +50,13 @@ This directory contains documentation for Owlgarth Finances' GDPR compliance imp
 Users can restore data from a previously exported JSON file:
 
 - **Service:** `UserService.import_all_data` in `backend/users/services.py`
-- **Normalizer:** `UserService.normalize_export_v1_to_v2` converts v1.0 exports to v2.0 format
 - **Endpoint:** `POST /api/users/me/import` - imports all data from JSON export file
 - **Frontend:** Import Data button in Profile Settings → Account tab
-- **Version support:** Both v1.0 (legacy, auto-normalized) and v2.0 export formats
+- **Version support:** v3.0 exports only (same-system restore). Pre-redesign
+  (v1/v2) data must use the legacy endpoint instead: `POST /api/users/import-legacy`
+  ([Legacy Import](../../backend/README.md#legacy-import-pre-redesign-data)),
+  which converts it to the account-based model and returns a per-account
+  balance verification report
 - **Conflict handling:** Duplicate workspace names are renamed automatically (or skipped)
 - **Response:** Returns counts of imported records and any skipped/renamed items
 
@@ -93,5 +96,5 @@ To update policies:
 | Rectification (Art. 16) | `/api/users/me` (PATCH) |
 | Erasure (Art. 17) | `/api/users/me` (DELETE) |
 | Portability (Art. 20) | `/api/users/me/export` (JSON download) |
-| Data Import | `/api/users/me/import` (JSON upload, v1.0 and v2.0) |
+| Data Import | `/api/users/me/import` (v3.0 JSON upload); pre-redesign data via `/api/users/import-legacy` |
 | Withdraw Consent (Art. 7) | `/api/users/me/consents/{type}` (DELETE) |

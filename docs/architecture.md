@@ -96,6 +96,11 @@ active workspace.
 ```
 backend/
 ├── config/                 # Django project config (settings, urls, celery)
+├── core/                   # Auth API + AuthService (register, login, verify-2fa,
+│                           #   refresh, email verification, password reset),
+│                           #   legal docs (LegalDocument + /terms /privacy +
+│                           #   seeded templates), shared API schemas,
+│                           #   init_storage_buckets + seed_legal_documents commands
 ├── common/                 # Shared: JWT auth, permissions, storage, test mixins
 │   ├── services/base.py    # delete_workspace_financial_records (dependency-ordered)
 │   └── idempotency.py      # Idempotency-Key create dedup (transactions + planned)
@@ -164,7 +169,9 @@ frontend/src/
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
-│   └── modals/transactions/# Transaction / Planned / NewFromReceipt modals
+│   └── modals/transactions/# Transaction / Planned modals (receipt-first create is a
+│                           #   TransactionFormModal mode seeded via its prefillReceipt
+│                           #   prop from the mobile "From receipt" action)
 ├── contexts/
 │   ├── AuthContext.tsx         # Auth state + consent status
 │   ├── WorkspaceContext.tsx    # Current workspace + role
@@ -173,12 +180,19 @@ frontend/src/
 ├── hooks/
 │   ├── useDomain.ts            # useAccounts, useBudgets, useEnabledCurrencies,
 │   │                          #   useMultiCurrency, useExtractionEnabled
-│   └── usePermissions.ts       # canManageAccounts, canWrite, …
+│   ├── usePermissions.ts       # canManageAccounts, canWrite, …
+│   └── (other hooks)           # useAttachments, useListboxPanel,
+│                              #   useWorkspaceSwitch, useMediaQuery,
+│                              #   useBreakpoint, useDebouncedField, useOverlay
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
 │                           #   Transfers (no sidebar slot - reached from
 │                           #   Accounts and the command palette), Members,
-│                           #   Settings
+│                           #   Settings, plus auth/legal pages (Login, Register,
+│                           #   VerifyEmail, ConfirmEmailChange, ReConsent,
+│                           #   PrivacyPolicy, Terms, NotFound)
+├── utils/                  # format, errors, pageSize, params, transactionItems,
+│                           #   attachments, currencies, tappable, zoomLock
 └── types/index.ts          # TypeScript interfaces
 ```
 
