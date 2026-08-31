@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -16,7 +17,7 @@ class ConsentIn(BaseModel):
     def validate_consent_type(cls, v: str) -> str:
         valid_types = ['terms_of_service', 'privacy_policy']
         if v not in valid_types:
-            raise ValueError(f'consent_type must be one of: {", ".join(valid_types)}')
+            raise ValueError(_('consent_type must be one of: %(types)s') % {'types': ', '.join(valid_types)})
         return v
 
 

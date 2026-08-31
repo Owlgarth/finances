@@ -1,0 +1,494 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-31 19:16+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
+"|| n%100>=20) ? 1 : 2);\n"
+
+#: accounts/exceptions.py:9
+msgid "Account not found"
+msgstr ""
+
+#: accounts/exceptions.py:14
+msgid "Account with this name already exists"
+msgstr ""
+
+#: accounts/exceptions.py:19
+msgid "Account currency cannot be changed after creation"
+msgstr ""
+
+#: accounts/exceptions.py:24
+msgid "Account has records and cannot be deleted. Archive it instead."
+msgstr ""
+
+#: accounts/schemas.py:25 accounts/schemas.py:43 budgeting/schemas.py:32
+#: budgeting/schemas.py:61 budgeting/schemas.py:110 budgeting/schemas.py:131
+#: categories/schemas.py:18 categories/schemas.py:31
+#: planned_transactions/schemas.py:32 planned_transactions/schemas.py:48
+#: workspaces/schemas.py:21 workspaces/schemas.py:61
+msgid "Name cannot be empty"
+msgstr ""
+
+#: budgeting/exceptions.py:9
+msgid "Budget not found"
+msgstr ""
+
+#: budgeting/exceptions.py:14
+msgid "Budget with this name already exists"
+msgstr ""
+
+#: budgeting/exceptions.py:19
+msgid ""
+"Every-N-weeks cadence requires cadence_weeks >= 1 and a cadence_anchor date"
+msgstr ""
+
+#: budgeting/exceptions.py:24
+msgid "Period not found"
+msgstr ""
+
+#: budgeting/exceptions.py:29
+msgid "This budget uses custom periods and no period covers the given date"
+msgstr ""
+
+#: budgeting/exceptions.py:34
+msgid "Period overlaps an existing period of this budget"
+msgstr ""
+
+#: budgeting/exceptions.py:39
+msgid ""
+"Auto-created periods cannot be edited or deleted; only custom periods can"
+msgstr ""
+
+#: budgeting/exceptions.py:44
+msgid "Category budget not found"
+msgstr ""
+
+#: budgeting/exceptions.py:49
+msgid "Category does not belong to this budget"
+msgstr ""
+
+#: budgeting/schemas.py:39 budgeting/schemas.py:68
+msgid "Color must be a valid hex color code (e.g. #FF5733)"
+msgstr ""
+
+#: budgeting/schemas.py:116
+msgid "end_date must be on or after start_date"
+msgstr ""
+
+#: categories/exceptions.py:9
+msgid "Category not found"
+msgstr ""
+
+#: categories/exceptions.py:14
+msgid "A category with this name already exists in this budget period."
+msgstr ""
+
+#: categories/exceptions.py:19
+msgid "A category cannot be merged into itself."
+msgstr ""
+
+#: common/exceptions.py:19
+msgid "An unexpected error occurred"
+msgstr ""
+
+#: common/exceptions.py:32
+msgid "Not found"
+msgstr ""
+
+#: common/exceptions.py:39
+msgid "Authentication failed"
+msgstr ""
+
+#: common/exceptions.py:46
+msgid "Validation error"
+msgstr ""
+
+#: common/exceptions.py:54
+#, python-format
+msgid "Currency %(currency)s not found in workspace"
+msgstr ""
+
+#: common/exceptions.py:63
+msgid "Insufficient permissions"
+msgstr ""
+
+#: common/models.py:48
+#, python-format
+msgid "%(model)s.workspace_id must be set before save"
+msgstr ""
+
+#: common/models.py:55
+#, python-format
+msgid "%(model)s.workspace_id cannot be changed after creation"
+msgstr ""
+
+#: common/querysets.py:11
+#, python-format
+msgid "workspace_id is required for %(model)s.for_workspace(), got %(value)r"
+msgstr ""
+
+#: core/schemas/auth.py:19
+msgid "Enter a valid email address"
+msgstr ""
+
+#: core/schemas/auth.py:68
+#, python-format
+msgid "Must accept current Terms of Service version (%(version)s)"
+msgstr ""
+
+#: core/schemas/auth.py:78
+#, python-format
+msgid "Must accept current Privacy Policy version (%(version)s)"
+msgstr ""
+
+#: core/schemas/consent.py:20
+#, python-format
+msgid "consent_type must be one of: %(types)s"
+msgstr ""
+
+#: core/schemas/users.py:57
+msgid "calendar_start_day must be between 1 and 7"
+msgstr ""
+
+#: core/schemas/users.py:66
+#, python-format
+msgid "font_family must be one of: %(fonts)s"
+msgstr ""
+
+#: core/schemas/users.py:73
+#, python-format
+msgid "language must be one of: %(codes)s"
+msgstr ""
+
+#: core/schemas/users.py:80
+#, python-format
+msgid "number_format must be one of: %(codes)s"
+msgstr ""
+
+#: currencies/exceptions.py:12
+#, python-format
+msgid "Currency %(code)s not found in the catalog"
+msgstr ""
+
+#: currencies/exceptions.py:19
+#, python-format
+msgid "Currency %(code)s is not enabled for this workspace"
+msgstr ""
+
+#: currencies/exceptions.py:26
+#, python-format
+msgid "Currency %(code)s already exists"
+msgstr ""
+
+#: currencies/exceptions.py:30
+msgid "Cannot disable the only enabled currency of a workspace"
+msgstr ""
+
+#: currencies/exceptions.py:36
+msgid ""
+"The currency order must list exactly the workspace's enabled currencies "
+"(same set, no duplicates, none missing, none extra)"
+msgstr ""
+
+#: currencies/exceptions.py:50
+msgid "account"
+msgid_plural "accounts"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: currencies/exceptions.py:52
+msgid "planned amount"
+msgid_plural "planned amounts"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: currencies/exceptions.py:54
+msgid "budget currency set"
+msgid_plural "budget currency sets"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: currencies/exceptions.py:56
+msgid "planned transaction"
+msgid_plural "planned transactions"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: currencies/exceptions.py:58
+msgid "transaction"
+msgid_plural "transactions"
+msgstr[0] ""
+msgstr[1] ""
+msgstr[2] ""
+
+#: currencies/exceptions.py:67
+msgid "other records"
+msgstr ""
+
+#: currencies/exceptions.py:69
+#, python-format
+msgid ""
+"Currency %(code)s is in use: %(summary)s. Remove those references before "
+"disabling it."
+msgstr ""
+
+#: currencies/schemas.py:43
+msgid "Value cannot be blank"
+msgstr ""
+
+#: currencies/schemas.py:49
+msgid "name and symbol are required when creating a custom currency"
+msgstr ""
+
+#: planned_transactions/exceptions.py:9
+msgid "Planned transaction not found"
+msgstr ""
+
+#: planned_transactions/exceptions.py:14
+msgid "Account is archived and cannot receive new planned transactions"
+msgstr ""
+
+#: planned_transactions/exceptions.py:19
+msgid "Currency does not match the account currency"
+msgstr ""
+
+#: planned_transactions/exceptions.py:24
+msgid "Currency is required when no account is set"
+msgstr ""
+
+#: planned_transactions/exceptions.py:29 transactions/exceptions.py:14
+msgid "Category not found, archived, or not in this workspace"
+msgstr ""
+
+#: planned_transactions/exceptions.py:34
+msgid "Already executed"
+msgstr ""
+
+#: planned_transactions/exceptions.py:39
+msgid "Cannot change status of an executed planned transaction"
+msgstr ""
+
+#: transactions/exceptions.py:9
+msgid "Transaction not found"
+msgstr ""
+
+#: transactions/exceptions.py:19
+msgid "Account is archived and cannot receive new transactions"
+msgstr ""
+
+#: transactions/exceptions.py:24
+msgid ""
+"Amount must be positive (income/expense) or a non-zero delta (adjustment)"
+msgstr ""
+
+#: transactions/exceptions.py:29
+msgid "Adjustments cannot have a category"
+msgstr ""
+
+#: transactions/exceptions.py:34
+msgid "Adjustments require an account"
+msgstr ""
+
+#: transactions/exceptions.py:39
+msgid "Transactions without an account require an explicit currency_code"
+msgstr ""
+
+#: transactions/exceptions.py:44
+msgid "currency_code does not match the account currency"
+msgstr ""
+
+#: transactions/exceptions.py:51
+msgid "Original currency is unknown or equals the transaction currency"
+msgstr ""
+
+#: transactions/exceptions.py:56
+msgid "All transactions and the target account must belong to the workspace"
+msgstr ""
+
+#: transactions/exceptions.py:61
+msgid ""
+"Target account currency must match the currency of every moved transaction"
+msgstr ""
+
+#: transactions/exceptions.py:71
+msgid "Attachment not found"
+msgstr ""
+
+#: transactions/exceptions.py:76
+msgid "Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF"
+msgstr ""
+
+#: transactions/exceptions.py:82
+msgid "File storage is not configured"
+msgstr ""
+
+#: transactions/exceptions.py:87
+msgid "The stored file is no longer available"
+msgstr ""
+
+#: transactions/schemas.py:50 transactions/schemas.py:74
+msgid "Description cannot be empty"
+msgstr ""
+
+#: transactions/schemas.py:56
+msgid ""
+"original_amount and original_currency_code must both be set or both be "
+"omitted"
+msgstr ""
+
+#: transactions/schemas.py:163
+msgid "Item name cannot be empty"
+msgstr ""
+
+#: transfers/exceptions.py:9
+msgid "Transfer not found"
+msgstr ""
+
+#: transfers/exceptions.py:14 transfers/schemas.py:28
+msgid "From and to accounts must differ"
+msgstr ""
+
+#: transfers/exceptions.py:19
+msgid "Cannot transfer to or from an archived account"
+msgstr ""
+
+#: transfers/exceptions.py:24
+msgid "Transfer amounts must be positive"
+msgstr ""
+
+#: transfers/exceptions.py:29
+msgid "Amounts must match for same-currency transfers"
+msgstr ""
+
+#: transfers/exceptions.py:34
+msgid "to_amount is required for cross-currency transfers"
+msgstr ""
+
+#: users/exceptions.py:9
+msgid "Invalid current password"
+msgstr ""
+
+#: users/exceptions.py:16
+#, python-format
+msgid "Invalid consent type: %(consent_type)s"
+msgstr ""
+
+#: users/exceptions.py:22
+msgid "No active consent found for this type"
+msgstr ""
+
+#: users/exceptions.py:27
+msgid "Two-factor authentication is not enabled for this user"
+msgstr ""
+
+#: users/exceptions.py:34
+#, python-format
+msgid ""
+"Cannot delete account. You own workspaces with other members: "
+"%(workspaces)s. Transfer ownership or remove all members first."
+msgstr ""
+
+#: users/exceptions.py:41
+msgid "Email is already verified"
+msgstr ""
+
+#: users/exceptions.py:46
+msgid "Invalid or expired verification token"
+msgstr ""
+
+#: users/exceptions.py:51
+msgid "This email is already in use"
+msgstr ""
+
+#: users/exceptions.py:56
+msgid "Invalid or expired email change token"
+msgstr ""
+
+#: users/exceptions.py:61
+msgid "New email must be different from current email"
+msgstr ""
+
+#: users/models.py:27
+msgid "The Email field must be set"
+msgstr ""
+
+#: workspaces/exceptions.py:10
+msgid "Workspace not found"
+msgstr ""
+
+#: workspaces/exceptions.py:15
+msgid "Member not found in this workspace"
+msgstr ""
+
+#: workspaces/exceptions.py:20
+msgid "User is already a member of this workspace"
+msgstr ""
+
+#: workspaces/exceptions.py:27
+#, python-format
+msgid ""
+"Workspace member limit reached. Maximum %(max)s members allowed per "
+"workspace."
+msgstr ""
+
+#: workspaces/exceptions.py:34
+msgid "Cannot remove yourself. Use the leave endpoint instead."
+msgstr ""
+
+#: workspaces/exceptions.py:39
+msgid "Cannot change your own role"
+msgstr ""
+
+#: workspaces/exceptions.py:44
+msgid ""
+"Workspace owner cannot leave. Transfer ownership first or delete the "
+"workspace."
+msgstr ""
+
+#: workspaces/exceptions.py:49
+msgid "Cannot change the owner's role"
+msgstr ""
+
+#: workspaces/exceptions.py:54
+msgid "Cannot remove the workspace owner"
+msgstr ""
+
+#: workspaces/exceptions.py:59
+msgid ""
+"Cannot reset your own password. Use the change password feature instead."
+msgstr ""
+
+#: workspaces/exceptions.py:64
+msgid "Cannot reset the owner's password"
+msgstr ""
+
+#: workspaces/exceptions.py:69
+msgid "Only the workspace owner can perform this action."
+msgstr ""
+
+#: workspaces/exceptions.py:77
+#, python-format
+msgid "Admin cannot %(action)s another admin. Owner required."
+msgstr ""
+
+#: workspaces/schemas.py:83
+msgid "Password cannot be blank"
+msgstr ""

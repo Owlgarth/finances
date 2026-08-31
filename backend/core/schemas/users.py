@@ -1,5 +1,6 @@
 """User-related schemas."""
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, field_validator
 
 from common.languages import LANGUAGE_CODES, NUMBER_FORMAT_CODES
@@ -53,7 +54,7 @@ class UserPreferencesUpdate(BaseModel):
     @classmethod
     def validate_calendar_start_day(cls, v: int | None) -> int | None:
         if v is not None and (v < 1 or v > 7):
-            raise ValueError('calendar_start_day must be between 1 and 7')
+            raise ValueError(_('calendar_start_day must be between 1 and 7'))
         return v
 
     @field_validator('font_family')
@@ -62,19 +63,19 @@ class UserPreferencesUpdate(BaseModel):
         if v is not None:
             valid_fonts = [choice[0] for choice in FontChoices.choices]
             if v not in valid_fonts:
-                raise ValueError(f'font_family must be one of: {", ".join(valid_fonts)}')
+                raise ValueError(_('font_family must be one of: %(fonts)s') % {'fonts': ', '.join(valid_fonts)})
         return v
 
     @field_validator('language')
     @classmethod
     def validate_language(cls, v: str | None) -> str | None:
         if v is not None and v not in LANGUAGE_CODES:
-            raise ValueError(f'language must be one of: {", ".join(LANGUAGE_CODES)}')
+            raise ValueError(_('language must be one of: %(codes)s') % {'codes': ', '.join(LANGUAGE_CODES)})
         return v
 
     @field_validator('number_format')
     @classmethod
     def validate_number_format(cls, v: str | None) -> str | None:
         if v is not None and v not in NUMBER_FORMAT_CODES:
-            raise ValueError(f'number_format must be one of: {", ".join(NUMBER_FORMAT_CODES)}')
+            raise ValueError(_('number_format must be one of: %(codes)s') % {'codes': ', '.join(NUMBER_FORMAT_CODES)})
         return v

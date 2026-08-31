@@ -4,6 +4,7 @@ from typing import Annotated
 
 from django.core.validators import EmailValidator
 from django.core.validators import ValidationError as DjangoValidationError
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from currencies.schemas import CurrencyCode
@@ -15,7 +16,7 @@ def _validate_email(v: str) -> str:
     try:
         validator(v)
     except DjangoValidationError:
-        raise ValueError('Enter a valid email address')
+        raise ValueError(_('Enter a valid email address'))
     return v
 
 
@@ -64,7 +65,7 @@ class RegisterIn(BaseModel):
 
         required = get_terms()['version']
         if v != required:
-            raise ValueError(f'Must accept current Terms of Service version ({required})')
+            raise ValueError(_('Must accept current Terms of Service version (%(version)s)') % {'version': required})
         return v
 
     @field_validator('accepted_privacy_version')
@@ -74,7 +75,7 @@ class RegisterIn(BaseModel):
 
         required = get_privacy()['version']
         if v != required:
-            raise ValueError(f'Must accept current Privacy Policy version ({required})')
+            raise ValueError(_('Must accept current Privacy Policy version (%(version)s)') % {'version': required})
         return v
 
 

@@ -5,6 +5,8 @@ A global Django Ninja exception handler in config/urls.py converts these to HTTP
 responses automatically, so API endpoints do not need try/except for service errors.
 """
 
+from django.utils.translation import gettext_lazy
+
 
 class ServiceError(Exception):
     """Base for all domain service exceptions.
@@ -14,7 +16,7 @@ class ServiceError(Exception):
     """
 
     http_status: int = 500
-    default_message: str = 'An unexpected error occurred'
+    default_message = gettext_lazy('An unexpected error occurred')
     default_code: str | None = None
 
     def __init__(self, message: str | None = None, code: str | None = None):
@@ -27,32 +29,35 @@ class NotFoundError(ServiceError):
     """Resource does not exist. Maps to HTTP 404."""
 
     http_status = 404
-    default_message = 'Not found'
+    default_message = gettext_lazy('Not found')
 
 
 class AuthenticationError(ServiceError):
     """Caller identity / credentials invalid. Maps to HTTP 401."""
 
     http_status = 401
-    default_message = 'Authentication failed'
+    default_message = gettext_lazy('Authentication failed')
 
 
 class ValidationError(ServiceError):
     """Input fails domain validation. Maps to HTTP 400."""
 
     http_status = 400
-    default_message = 'Validation error'
+    default_message = gettext_lazy('Validation error')
 
 
 class CurrencyNotFoundInWorkspaceError(ValidationError):
     """Currency symbol not found in the target workspace."""
 
     def __init__(self, currency: str):
-        super().__init__(f'Currency {currency} not found in workspace', code='currency_not_found')
+        super().__init__(
+            gettext_lazy('Currency %(currency)s not found in workspace') % {'currency': currency},
+            code='currency_not_found',
+        )
 
 
 class PermissionDeniedError(ServiceError):
     """Caller lacks required role. Maps to HTTP 403."""
 
     http_status = 403
-    default_message = 'Insufficient permissions'
+    default_message = gettext_lazy('Insufficient permissions')

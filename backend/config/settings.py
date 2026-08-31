@@ -79,6 +79,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -151,6 +152,13 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
+
+# Server-rendered API message catalogs. English is the source language
+# (msgids); uk/pl catalogs live under locale/<lang>/LC_MESSAGES/. No
+# LANGUAGES setting: with none defined Django treats every language
+# equally and falls back to LANGUAGE_CODE ('en-us') for unmatched
+# Accept-Language headers - the fallback is source English.
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 USE_TZ = True
 

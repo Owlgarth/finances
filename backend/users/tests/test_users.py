@@ -171,3 +171,34 @@ class TestPreferences(AuthTestCase):
         )
         self.assertStatus(200)
         self.assertEqual(data['language'], 'pl')
+
+
+class TestPreferencesMessageLocalization(AuthTestCase):
+    """Accept-Language mechanism proof for schema validator messages.
+
+    No compiled catalogs exist yet, so every locale still renders the
+    English msgid. These tests pin the plumbing: the message is
+    server-rendered per the request's Accept-Language header, and the
+    no-header default is English.
+    """
+
+    def test_validator_message_rendered_per_accept_language(self):
+        """The validator message is rendered server-side under the request's Accept-Language locale."""
+        token = self.register_and_login('prefs_lang_pl@example.com', 'password123', 'Prefs Test')
+        self.patch(
+            '/api/users/me/preferences',
+            {'calendar_start_day': 13},
+            **self.auth_headers(token),
+            HTTP_ACCEPT_LANGUAGE='pl',
+        )
+        self.assertStatus(422)
+        # Ninja's 422 detail is a list of error dicts; str() makes the
+        # assertion robust to that shape.
+        self.assertIn('calendar_start_day must be between 1 and 7', str(self.response.json()['detail']))
+
+    def test_validator_message_english_without_header(self):
+        """Without an Accept-Language header the message falls back to the LANGUAGE_CODE default (English)."""
+        token = self.register_and_login('prefs_lang_none@example.com', 'password123', 'Prefs Test')
+        self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token))
+        self.assertStatus(422)
+        self.assertIn('calendar_start_day must be between 1 and 7', str(self.response.json()['detail']))
