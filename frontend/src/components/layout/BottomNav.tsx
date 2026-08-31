@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -39,6 +40,7 @@ import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
 import RoleBadge from '../common/RoleBadge'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
+import LanguageMenu from './LanguageMenu'
 import ThemeToggleRow from './ThemeToggleRow'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
@@ -47,12 +49,14 @@ import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
 
 // Overflow destinations live in the More sheet (plan decision 5).
+// Keys only: t() is resolved at render time inside the component (a
+// module-level t() call would freeze the language at load time).
 const MORE_DESTINATIONS = [
-  { to: '/accounts', label: 'Accounts', icon: Wallet },
-  { to: '/planned', label: 'Planned', icon: Calendar },
-  { to: '/members', label: 'Members', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
+  { to: '/accounts', labelKey: 'accounts', icon: Wallet },
+  { to: '/planned', labelKey: 'planned', icon: Calendar },
+  { to: '/members', labelKey: 'members', icon: Users },
+  { to: '/settings', labelKey: 'settings', icon: Settings },
+] as const
 
 // Mirrors the accept list in TransactionFormModal's inline receipt upload.
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
@@ -99,6 +103,7 @@ const moreRowClass =
  * and the workspace/user controls the sidebar provides on desktop.
  */
 export default function BottomNav() {
+  const { t } = useTranslation('nav')
   const location = useLocation()
   const { user, logout } = useAuth()
   const { workspace, workspaces } = useWorkspace()
@@ -134,7 +139,7 @@ export default function BottomNav() {
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
     onMutate: () => {
-      parseToastId.current = toast.loading('Reading receipt…')
+      parseToastId.current = toast.loading(t('receiptReading'))
     },
     onSuccess: (result: ParsedReceipt, file: File) => {
       // No success toast — the form opening IS the signal.
@@ -144,7 +149,7 @@ export default function BottomNav() {
     },
     onError: (error) => {
       // Replace the loading toast with the error (single toast, no duplicate).
-      toast.error(getApiErrorMessage(error, 'Could not read the receipt'), { id: parseToastId.current })
+      toast.error(getApiErrorMessage(error, t('receiptReadFailed')), { id: parseToastId.current })
     },
   })
 
@@ -164,18 +169,18 @@ export default function BottomNav() {
   }, [location.pathname])
 
   const quickAddActions: ActionSheetAction[] = [
-    { label: 'New transaction', icon: Receipt, onSelect: () => setTransactionOpen(true) },
-    { label: 'Transfer', icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
+    { label: t('quickAdd.newTransaction'), icon: Receipt, onSelect: () => setTransactionOpen(true) },
+    { label: t('quickAdd.transfer'), icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
     // Shown disabled rather than dropped while the self-hosted scanner is off,
     // so the action list doesn't silently change shape.
     ...(extractionEnabled
       ? [
           extractionReachable
-            ? { label: 'From receipt', icon: ScanLine, onSelect: () => receiptFileRef.current?.click() }
-            : { label: 'Scanning offline', icon: CloudOff, onSelect: () => {}, disabled: true },
+            ? { label: t('quickAdd.fromReceipt'), icon: ScanLine, onSelect: () => receiptFileRef.current?.click() }
+            : { label: t('quickAdd.scanningOffline'), icon: CloudOff, onSelect: () => {}, disabled: true },
         ]
       : []),
-    { label: 'Planned transaction', icon: Calendar, onSelect: () => setPlannedOpen(true) },
+    { label: t('quickAdd.plannedTransaction'), icon: Calendar, onSelect: () => setPlannedOpen(true) },
   ]
 
   const moreActive = MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to))
@@ -183,8 +188,8 @@ export default function BottomNav() {
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-bottom-nav bg-surface border-t border-border flex items-end pb-safe">
-        <Tab to="/" label="Home" icon={Home} exact />
-        <Tab to="/transactions" label="Txns" icon={Receipt} />
+        <Tab to="/" label={t('home')} icon={Home} exact />
+        <Tab to="/transactions" label={t('txns')} icon={Receipt} />
 
         {/* Center FAB slot — kept even when the FAB is hidden (viewer role /
             no workspace) so the four tabs don't shift. */}
@@ -193,7 +198,7 @@ export default function BottomNav() {
             <button
               type="button"
               onClick={() => setQuickAddOpen(true)}
-              aria-label="Add record"
+              aria-label={t('addRecord')}
               className="-mt-5 w-12 h-12 bg-primary border border-border rounded-sm flex items-center justify-center text-background hover:bg-primary-hover active:scale-95 transition-all"
             >
               <Plus size={20} strokeWidth={1.5} />
@@ -201,7 +206,7 @@ export default function BottomNav() {
           )}
         </div>
 
-        <Tab to="/budgets" label="Budgets" icon={PieChart} />
+        <Tab to="/budgets" label={t('budgets')} icon={PieChart} />
 
         <button
           type="button"
@@ -211,7 +216,7 @@ export default function BottomNav() {
           }`}
         >
           <MoreHorizontal size={20} strokeWidth={1.5} />
-          <span className="text-[10px] font-medium uppercase tracking-wider">More</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider">{t('more')}</span>
         </button>
       </nav>
 
@@ -219,7 +224,7 @@ export default function BottomNav() {
       <BottomSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        aria-label="More"
+        aria-label={t('more')}
       >
         <div className="pb-2">
           <button
@@ -231,7 +236,7 @@ export default function BottomNav() {
             className={moreRowClass}
           >
             <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
-            Search
+            {t('search')}
           </button>
           {MORE_DESTINATIONS.map((d) => (
             <NavLink
@@ -242,7 +247,7 @@ export default function BottomNav() {
               }
             >
               <d.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              {d.label}
+              {t(d.labelKey)}
             </NavLink>
           ))}
           {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
@@ -257,11 +262,11 @@ export default function BottomNav() {
             className={moreRowClass}
           >
             <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-            Logout
+            {t('logout')}
           </button>
 
           <div className="border-t border-border mt-2">
-            <SectionLabel>Workspace</SectionLabel>
+            <SectionLabel>{t('workspace')}</SectionLabel>
             {workspaces.map((ws) => (
               <button
                 key={ws.id}
@@ -292,7 +297,7 @@ export default function BottomNav() {
               className={moreRowClass}
             >
               <Plus size={16} className="flex-shrink-0" />
-              Create workspace
+              {t('createWorkspace')}
             </button>
             {workspace && (
               <button
@@ -304,7 +309,7 @@ export default function BottomNav() {
                 className={moreRowClass}
               >
                 <Landmark size={16} className="flex-shrink-0" />
-                Workspace settings
+                {t('workspaceSettings')}
               </button>
             )}
           </div>
@@ -314,13 +319,14 @@ export default function BottomNav() {
             {/* PWA has no browser chrome to refresh with. */}
             <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
               <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              Reload
+              {t('reload')}
             </button>
             <ThemeToggleRow />
+            <LanguageMenu />
             <div className="flex items-center justify-between min-h-[44px] px-4">
               <span className="flex items-center gap-3 text-sm text-text">
                 <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Disable zoom
+                {t('disableZoom')}
               </span>
               <Switch
                 checked={zoomLocked}
@@ -329,7 +335,7 @@ export default function BottomNav() {
                   setZoomLocked(next)
                   setZoomDisabled(next)
                 }}
-                aria-label="Disable zoom"
+                aria-label={t('disableZoom')}
               />
             </div>
             {/* Logout's old slot (the double-tap misclick zone): only the
@@ -343,7 +349,7 @@ export default function BottomNav() {
                 className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
               >
                 <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Close
+                {t('close')}
               </button>
             </div>
           </div>

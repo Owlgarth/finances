@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, RotateCw, User } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
+import LanguageMenu from './LanguageMenu'
 import ThemeToggleRow from './ThemeToggleRow'
 
 interface UserMenuProps {
@@ -10,6 +12,7 @@ interface UserMenuProps {
 
 export default function UserMenu({ collapsed = false }: UserMenuProps) {
   const { user, logout } = useAuth()
+  const { t } = useTranslation('nav')
   const [isOpen, setIsOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -43,9 +46,10 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
               className="w-full text-left px-4 py-2 text-sm text-text hover:bg-surface-hover transition-colors flex items-center gap-2"
             >
               <RotateCw size={14} />
-              Reload
+              {t('reload')}
             </button>
             <ThemeToggleRow />
+            <LanguageMenu />
             <div className="border-b border-border my-1" />
             <div className="px-4 py-2 text-sm text-text-muted mb-1 truncate">
               {user?.email}
@@ -58,7 +62,7 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
               className="w-full text-left px-4 py-2 text-sm text-text hover:bg-surface-hover transition-colors flex items-center gap-2"
             >
               <User size={14} />
-              Profile
+              {t('profile')}
             </button>
             <button
               onClick={() => {
@@ -68,7 +72,7 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
               className="w-full text-left px-4 py-2 text-sm text-text hover:bg-surface-hover transition-colors flex items-center gap-2"
             >
               <LogOut size={14} />
-              Logout
+              {t('logout')}
             </button>
           </div>
         </>

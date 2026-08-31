@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { authApi, setAuthToken, setRefreshToken, clearAuthToken, getAuthToken } from '../api/client';
 import { queryClient } from '../api/queryClient';
 import type { User, LoginRequest, RegisterRequest } from '../types';
@@ -22,6 +23,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('auth');
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [needsReconsent, setNeedsReconsent] = useState(false);
@@ -81,17 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
-        toast.success('Logged in successfully');
+        toast.success(t('toasts.loggedIn'));
         const reconsent = await checkConsentStatus();
         if (!reconsent) navigate('/');
       } else {
-        toast.error('Unexpected response from server. Please try again.');
+        toast.error(t('toasts.unexpectedResponse'));
       }
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, 'Login failed'));
+      toast.error(getApiErrorMessage(error, t('toasts.loginFailed')));
       throw error;
     }
-  }, [checkConsentStatus, navigate]);
+  }, [checkConsentStatus, navigate, t]);
 
   const register = useCallback(async (data: RegisterRequest) => {
     try {
@@ -102,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRefreshToken(response.refresh_token);
         }
       } else {
-        toast.error('Unexpected response from server. Please try again.');
+        toast.error(t('toasts.unexpectedResponse'));
         return;
       }
 
@@ -111,13 +113,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
 
-      toast.success('Registration successful! Welcome!');
+      toast.success(t('toasts.registered'));
       navigate('/');
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, 'Registration failed'));
+      toast.error(getApiErrorMessage(error, t('toasts.registrationFailed')));
       throw error;
     }
-  }, [navigate]);
+  }, [navigate, t]);
 
   const verify2FA = useCallback(async (tempToken: string, code: string) => {
     try {
@@ -130,25 +132,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
-        toast.success('Logged in successfully');
+        toast.success(t('toasts.loggedIn'));
         const reconsent = await checkConsentStatus();
         if (!reconsent) navigate('/');
       } else {
-        toast.error('Unexpected response from server. Please try again.');
+        toast.error(t('toasts.unexpectedResponse'));
       }
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, 'Verification failed'));
+      toast.error(getApiErrorMessage(error, t('toasts.verificationFailed')));
       throw error;
     }
-  }, [checkConsentStatus, navigate]);
+  }, [checkConsentStatus, navigate, t]);
 
   const logout = useCallback(() => {
     clearAuthToken();
     setUser(null);
     queryClient.clear();
-    toast.success('Logged out successfully');
+    toast.success(t('toasts.loggedOut'));
     navigate('/login');
-  }, [navigate]);
+  }, [navigate, t]);
 
   const updateUser = useCallback((userData: Partial<User>) => {
     // Functional update: no `user` dependency → stable identity forever, so
