@@ -48,7 +48,13 @@ class UserService:
     def get_or_create_preferences(user: User) -> UserPreferences:
         """Get or create user preferences."""
         preferences, _ = UserPreferences.objects.get_or_create(
-            user=user, defaults={'calendar_start_day': WeekdayChoices.MONDAY, 'font_family': FontChoices.GEIST}
+            user=user,
+            defaults={
+                'calendar_start_day': WeekdayChoices.MONDAY,
+                'font_family': FontChoices.GEIST,
+                'language': settings.DEFAULT_LANGUAGE,
+                'number_format': settings.DEFAULT_NUMBER_FORMAT,
+            },
         )
         if not preferences.font_family:
             preferences.font_family = FontChoices.GEIST
@@ -65,6 +71,12 @@ class UserService:
 
         if data.font_family is not None:
             preferences.font_family = data.font_family
+
+        if data.language is not None:
+            preferences.language = data.language
+
+        if data.number_format is not None:
+            preferences.number_format = data.number_format
 
         preferences.save()
         return preferences
@@ -546,6 +558,8 @@ class UserService:
             preferences = {
                 'calendar_start_day': prefs.calendar_start_day,
                 'font_family': prefs.font_family,
+                'language': prefs.language,
+                'number_format': prefs.number_format,
                 'created_at': prefs.created_at.isoformat(),
                 'updated_at': prefs.updated_at.isoformat(),
             }

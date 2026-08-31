@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, field_validator
 
+from common.languages import LANGUAGE_CODES, NUMBER_FORMAT_CODES
 from users.models import FontChoices
 
 
@@ -36,6 +37,8 @@ class UserPreferencesOut(BaseModel):
 
     calendar_start_day: int
     font_family: str
+    language: str
+    number_format: str
 
 
 class UserPreferencesUpdate(BaseModel):
@@ -43,6 +46,8 @@ class UserPreferencesUpdate(BaseModel):
 
     calendar_start_day: int | None = None
     font_family: str | None = None
+    language: str | None = None
+    number_format: str | None = None
 
     @field_validator('calendar_start_day')
     @classmethod
@@ -58,4 +63,18 @@ class UserPreferencesUpdate(BaseModel):
             valid_fonts = [choice[0] for choice in FontChoices.choices]
             if v not in valid_fonts:
                 raise ValueError(f'font_family must be one of: {", ".join(valid_fonts)}')
+        return v
+
+    @field_validator('language')
+    @classmethod
+    def validate_language(cls, v: str | None) -> str | None:
+        if v is not None and v not in LANGUAGE_CODES:
+            raise ValueError(f'language must be one of: {", ".join(LANGUAGE_CODES)}')
+        return v
+
+    @field_validator('number_format')
+    @classmethod
+    def validate_number_format(cls, v: str | None) -> str | None:
+        if v is not None and v not in NUMBER_FORMAT_CODES:
+            raise ValueError(f'number_format must be one of: {", ".join(NUMBER_FORMAT_CODES)}')
         return v

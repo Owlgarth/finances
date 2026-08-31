@@ -15,6 +15,11 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 TOKEN_MAX_AGE = get_int_env('TOKEN_MAX_AGE', 7 * 24 * 60 * 60)
 
+# Default UI language and number-format style for new users. Values are
+# validated against common/languages.json (languages[].code / numberFormats[].code).
+DEFAULT_LANGUAGE = os.getenv('DEFAULT_LANGUAGE', 'en')
+DEFAULT_NUMBER_FORMAT = os.getenv('DEFAULT_NUMBER_FORMAT', 'en')
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ['SECRET_KEY']
 

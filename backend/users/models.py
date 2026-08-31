@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models import IntegerChoices
@@ -102,6 +103,16 @@ class UserPreferences(models.Model):
         choices=FontChoices,
         default=FontChoices.GEIST,
         help_text='Font family for the user interface',
+    )
+    language = models.CharField(
+        max_length=10,
+        default=settings.DEFAULT_LANGUAGE,
+        help_text='UI language code from the language registry',
+    )
+    number_format = models.CharField(
+        max_length=10,
+        default=settings.DEFAULT_NUMBER_FORMAT,
+        help_text='Number and date formatting style from the language registry',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

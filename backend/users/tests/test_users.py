@@ -117,3 +117,57 @@ class TestPasswordChange(AuthTestCase):
             **self.auth_headers(token),
         )
         self.assertStatus(422)
+
+
+class TestPreferences(AuthTestCase):
+    """Tests for the language and number_format preference fields."""
+
+    def test_get_preferences_defaults(self):
+        """Fresh preferences carry the settings/registry defaults for the new fields."""
+        token = self.register_and_login('prefs_default@example.com', 'password123', 'Prefs Test')
+
+        data = self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['calendar_start_day'], 1)
+        self.assertEqual(data['font_family'], 'geist')
+        self.assertEqual(data['language'], 'en')
+        self.assertEqual(data['number_format'], 'en')
+
+    def test_update_language_and_number_format(self):
+        """Valid registry codes are accepted and persisted."""
+        token = self.register_and_login('prefs_update@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch(
+            '/api/users/me/preferences',
+            {'language': 'uk', 'number_format': 'eu'},
+            **self.auth_headers(token),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['language'], 'uk')
+        self.assertEqual(data['number_format'], 'eu')
+
+    def test_update_invalid_language_rejected(self):
+        """Language codes outside the registry are rejected with 422."""
+        token = self.register_and_login('prefs_bad_lang@example.com', 'password123', 'Prefs Test')
+
+        self.patch('/api/users/me/preferences', {'language': 'xx'}, **self.auth_headers(token))
+        self.assertStatus(422)
+
+    def test_update_invalid_number_format_rejected(self):
+        """Number format codes outside the registry are rejected with 422."""
+        token = self.register_and_login('prefs_bad_fmt@example.com', 'password123', 'Prefs Test')
+
+        self.patch('/api/users/me/preferences', {'number_format': 'xx'}, **self.auth_headers(token))
+        self.assertStatus(422)
+
+    def test_validation_is_registry_driven(self):
+        """Every registry entry validates - the check is not a hardcoded 'en' allowlist."""
+        token = self.register_and_login('prefs_registry@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch(
+            '/api/users/me/preferences',
+            {'language': 'pl', 'number_format': 'eu'},
+            **self.auth_headers(token),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['language'], 'pl')
