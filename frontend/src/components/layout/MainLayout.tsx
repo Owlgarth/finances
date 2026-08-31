@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
@@ -15,13 +16,14 @@ interface MainLayoutProps {
 }
 
 function NoWorkspaceMessage() {
+  const { t } = useTranslation('common')
   const [showForm, setShowForm] = useState(false)
 
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <h2 className="text-lg font-semibold text-text mb-2">No workspace selected</h2>
-        <p className="text-text-muted mb-4">Create a workspace or ask to be added to one.</p>
+        <h2 className="text-lg font-semibold text-text mb-2">{t('layout.noWorkspaceTitle')}</h2>
+        <p className="text-text-muted mb-4">{t('layout.noWorkspaceBody')}</p>
 
         <CreateWorkspaceButton onClick={() => setShowForm(true)} />
         {/* Mount-per-use: the conditional render is the open/close mechanism

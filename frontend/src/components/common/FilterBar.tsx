@@ -1,5 +1,6 @@
 import { SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { controlHeightClass, labelClass } from './formStyles'
 
 /**
@@ -20,6 +21,7 @@ interface FiltersToggleProps {
 }
 
 export function FiltersToggle({ open, count, onToggle, 'aria-controls': ariaControls }: FiltersToggleProps) {
+  const { t } = useTranslation('common')
   return (
     <button
       type="button"
@@ -29,7 +31,7 @@ export function FiltersToggle({ open, count, onToggle, 'aria-controls': ariaCont
       className={`bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 ${controlHeightClass} flex-shrink-0`}
     >
       <SlidersHorizontal size={13} />
-      Filters
+      {t('filters.toggle')}
       {count > 0 && (
         <span className="min-w-[16px] h-4 px-1 rounded-sm bg-primary text-white text-[10px] font-mono inline-flex items-center justify-center">
           {count}
@@ -49,11 +51,12 @@ interface FilterPanelProps {
 }
 
 export function FilterPanel({ children, onClear, id }: FilterPanelProps) {
+  const { t } = useTranslation('common')
   return (
     <div
       id={id}
       role="region"
-      aria-label="Filters"
+      aria-label={t('filters.regionLabel')}
       className="border border-border rounded-sm bg-surface p-3 mb-4"
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{children}</div>
@@ -63,7 +66,7 @@ export function FilterPanel({ children, onClear, id }: FilterPanelProps) {
           onClick={onClear}
           className="mt-3 text-xs text-text-muted hover:text-text transition-colors max-sm:min-h-[44px]"
         >
-          Clear filters
+          {t('filters.clear')}
         </button>
       )}
     </div>

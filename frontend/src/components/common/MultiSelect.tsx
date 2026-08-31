@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import BottomSheet from './BottomSheet'
@@ -53,6 +54,7 @@ export default function MultiSelect<T extends string | number>({
   // Adaptive variant: all panel state lives in useListboxPanel above the
   // variant branches, so a resize mid-open loses nothing.
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation('common')
 
   const selected = new Set(values)
   const firstSelectedIndex = options.findIndex((opt) => selected.has(opt.value))
@@ -61,8 +63,8 @@ export default function MultiSelect<T extends string | number>({
       ? // nbsp, not ' ': a plain space collapses and the trigger loses height (Select's deliberate choice)
         (placeholder ?? '\u00A0')
       : values.length === 1
-        ? (options.find((opt) => opt.value === values[0])?.label ?? '1 selected')
-        : `${values.length} selected`
+        ? (options.find((opt) => opt.value === values[0])?.label ?? t('multiSelect.selectedCount', { count: 1 }))
+        : t('multiSelect.selectedCount', { count: values.length })
 
   // `toggleIndex` below is a hoisted function declaration — see Select's note:
   // it is only invoked from event handlers after render (no TDZ at call time).
@@ -138,7 +140,7 @@ export default function MultiSelect<T extends string | number>({
         <BottomSheet
           open={open}
           onClose={() => closePanel(true)}
-          aria-label={ariaLabel ?? placeholder ?? 'Select options'}
+          aria-label={ariaLabel ?? placeholder ?? t('multiSelect.defaultSheetLabel')}
         >
           {searchable && (
             <PanelSearchInput

@@ -1,1 +1,67 @@
-{}
+{
+  "modal": {
+    "close": "Zamknij"
+  },
+  "confirmDialog": {
+    "cancel": "Anuluj",
+    "delete": "Usuń"
+  },
+  "actionSheet": {
+    "defaultLabel": "Akcje",
+    "cancel": "Anuluj"
+  },
+  "filters": {
+    "toggle": "Filtry",
+    "regionLabel": "Filtry",
+    "clear": "Wyczyść filtry"
+  },
+  "pagination": {
+    "rowsPerPage": "Wierszy na stronę",
+    "range": "{{from}}\u2013{{to}} z {{total}}",
+    "previousPage": "Poprzednia strona",
+    "nextPage": "Następna strona"
+  },
+  "search": {
+    "defaultPlaceholder": "Szukaj\u2026",
+    "clear": "Wyczyść wyszukiwanie"
+  },
+  "select": {
+    "defaultSheetLabel": "Wybierz opcję"
+  },
+  "multiSelect": {
+    "defaultSheetLabel": "Wybierz opcje",
+    "selectedCount_one": "{{count}} wybrany",
+    "selectedCount_few": "{{count}} wybrane",
+    "selectedCount_many": "{{count}} wybranych",
+    "selectedCount_other": "{{count}} wybranych"
+  },
+  "listbox": {
+    "searchPlaceholder": "Szukaj\u2026",
+    "searchLabel": "Szukaj opcji",
+    "noOptions": "Brak opcji"
+  },
+  "palette": {
+    "searchPlaceholder": "Szukaj stron i danych\u2026",
+    "searchLabel": "Szukaj",
+    "seeAllResults": "Zobacz wszystkie wyniki",
+    "noMatches": "Brak pasujących stron",
+    "hintNavigate": "\u2191\u2193 nawigacja",
+    "hintOpen": "\u21b5 otwórz",
+    "hintClose": "esc zamknij",
+    "groupPages": "Strony",
+    "groupBudgets": "Budżety",
+    "groupAccounts": "Konta",
+    "groupTransactions": "Transakcje",
+    "groupPlanned": "Zaplanowane",
+    "transfers": "Przelewy"
+  },
+  "layout": {
+    "noWorkspaceTitle": "Nie wybrano przestrzeni roboczej",
+    "noWorkspaceBody": "Utwórz przestrzeń roboczą lub poproś o dodanie do istniejącej."
+  },
+  "notFound": {
+    "title": "Nie znaleziono strony",
+    "body": "Strona, której szukasz, nie istnieje lub została przeniesiona.",
+    "cta": "Przejdź do pulpitu"
+  }
+}
