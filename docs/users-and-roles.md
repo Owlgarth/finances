@@ -183,6 +183,7 @@ Rules:
 - Admin can only reset for member/viewer
 - Cannot reset own password via this feature
 - User must be notified of new password
+- Resetting a member's 2FA follows the same hierarchy (see 2FA Reset below)
 ```
 
 ### 2FA Reset
@@ -229,7 +230,11 @@ Rules:
    - Default "Main" account and "General" budget
    - Workspace membership (owner role)
    - Optional sample data if requested at registration
-4. JWT token returned
+4. Access + refresh JWTs returned
+5. A verification email is sent (its token is consumed via
+   POST /api/auth/verify-email; POST /api/auth/resend-verification re-sends
+   it, rate-limited). Login does not require a verified email - verification
+   status never gates authentication
 ```
 
 A duplicate email returns a generic error that never reveals whether the address is
@@ -241,17 +246,40 @@ notice instead (anti-enumeration).
 ```
 1. User provides email and password
 2. System validates credentials
-3. JWT token returned with:
-   - user_id
-   - email
-   - current_workspace_id
-4. Token valid for 60 minutes (configurable)
+3. 2FA off: an access + refresh token pair is returned
+4. 2FA on: a short-lived temporary token is returned instead and must be
+   exchanged (with a TOTP or recovery code) at POST /api/auth/verify-2fa,
+   which then issues the token pair
+5. Access tokens are short-lived; POST /api/auth/refresh rotates the pair,
+   and refresh tokens issued before the user's last password change are
+   rejected
 ```
 
 Login attempts are rate-limited per IP and per account (email) - exceeding either
 limit returns `429 Too Many Requests`. Unknown-email logins run the same password
 hash check as wrong-password ones, so response timing cannot reveal whether an
 email is registered.
+
+See [workflow.md](workflow.md) for the canonical authentication narrative.
+
+### Two-Factor Authentication (2FA)
+
+- **Enabling:** users opt in from Settings: `POST /api/users/me/2fa/setup`
+  returns a QR code + secret for an authenticator app; confirming a code via
+  `POST /api/users/me/2fa/verify-setup` enables 2FA and returns single-use
+  recovery codes (shown once; regenerable with the password via
+  `POST /api/users/me/2fa/regenerate-codes`). Disabling
+  (`POST /api/users/me/2fa/disable`) also requires the password.
+- **Login:** with 2FA enabled, login returns a temporary token that is exchanged
+  for the token pair at `POST /api/auth/verify-2fa` with a TOTP or recovery
+  code. Both code kinds are single-use (TOTP has a timestep replay guard);
+  recovery codes are stored hashed.
+- **Storage:** 2FA secrets are Fernet-encrypted (`TWO_FACTOR_ENCRYPTION_KEY`;
+  empty falls back to a `SECRET_KEY`-derived key).
+- **Admin reset:** owners/admins can reset a lower-role member's 2FA via
+  `POST /api/workspaces/{id}/members/{userId}/reset-2fa` (same hierarchy as
+  password reset - see [2FA Reset](#2fa-reset)); the member is emailed a
+  notice and must set 2FA up again.
 
 ### Password Requirements
 
