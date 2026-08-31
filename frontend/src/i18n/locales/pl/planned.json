@@ -1,1 +1,100 @@
-{}
+{
+  "title": "Planowane transakcje",
+  "newPlanned": "Nowa planowana",
+  "exportView": "Eksportuj widok",
+  "exportTitle": "Eksportuje filtry statusu i dat",
+  "preparingExport": "Przygotowywanie eksportu…",
+  "exportComplete": "Eksport zakończony",
+  "exportFailed": "Eksport nie powiódł się. Spróbuj ponownie.",
+  "searchPlaceholder": "Szukaj nazw…",
+  "searchAria": "Szukaj planowanych transakcji",
+  "sortAria": "Sortowanie",
+  "status": {
+    "all": "Wszystkie",
+    "pending": "Oczekujące",
+    "done": "Zrobione",
+    "cancelled": "Anulowane"
+  },
+  "statusAria": "Filtruj według statusu",
+  "sort": {
+    "soonest": "Najwcześniejsze",
+    "latest": "Najpóźniejsze",
+    "amountDesc": "Kwota: od najwyższej do najniższej",
+    "amountAsc": "Kwota: od najniższej do najwyższej",
+    "name": "Nazwa A-Z"
+  },
+  "filters": {
+    "account": "Konto",
+    "currency": "Waluta",
+    "allAccounts": "Wszystkie konta",
+    "allCurrencies": "Wszystkie waluty",
+    "byAccountAria": "Filtruj według konta",
+    "byCurrencyAria": "Filtruj według waluty",
+    "plannedDate": "Planowana data"
+  },
+  "totals": {
+    "caption_one": "Ogółem - {{count}} zaplanowana",
+    "caption_few": "Ogółem - {{count}} zaplanowane",
+    "caption_many": "Ogółem - {{count}} zaplanowanych",
+    "caption_other": "Ogółem - {{count}} zaplanowanych"
+  },
+  "emptyFiltered": "Żadna planowana transakcja nie pasuje do wyszukiwania ani filtrów.",
+  "empty": "Brak planowanych transakcji.",
+  "emptyWithStatus": "Brak planowanych transakcji ze statusem „{{status}}”.",
+  "noAccount": "Bez konta",
+  "rowActions": {
+    "execute": "Zrealizuj",
+    "cancelPlan": "Anuluj plan",
+    "edit": "Edytuj",
+    "copy": "Kopiuj",
+    "delete": "Usuń"
+  },
+  "executed": "Zrealizowano - utworzono transakcję",
+  "executeFailed": "Nie udało się zrealizować",
+  "cancelledToast": "Plan anulowany",
+  "cancelFailed": "Nie udało się anulować",
+  "deleted": "Usunięto",
+  "deleteFailed": "Nie udało się usunąć",
+  "deleteDialog": {
+    "title": "Usuń planowaną transakcję",
+    "message": "Usunąć „{{name}}”?"
+  },
+  "cancelDialog": {
+    "title": "Anuluj plan",
+    "message": "Oznaczyć „{{name}}” jako anulowaną? Wiersz zostaje na liście, ale nie można go już zrealizować.",
+    "confirm": "Anuluj plan"
+  },
+  "form": {
+    "editTitle": "Edytuj planowaną",
+    "newTitle": "Nowa planowana transakcja",
+    "nameLabel": "Nazwa",
+    "amountLabel": "Kwota",
+    "dateLabel": "Data",
+    "accountLabel": "Konto",
+    "selectAccount": "Wybierz konto",
+    "accountAria": "Konto",
+    "currencyLabel": "Waluta",
+    "selectCurrency": "Wybierz walutę",
+    "currencyAria": "Waluta",
+    "budgetLabel": "Budżet",
+    "budgetPlaceholder": "Budżet",
+    "budgetAria": "Budżet",
+    "categoryLabel": "Kategoria (opcjonalnie)",
+    "uncategorized": "Bez kategorii",
+    "categoryAria": "Kategoria",
+    "execute": "Zrealizuj",
+    "copy": "Kopiuj",
+    "cancelPlan": "Anuluj plan",
+    "delete": "Usuń",
+    "cancel": "Anuluj",
+    "saving": "Zapisywanie…",
+    "save": "Zapisz",
+    "add": "Dodaj",
+    "updated": "Zapisano zmiany",
+    "added": "Planowaną dodano",
+    "saveFailed": "Nie udało się zapisać",
+    "nameRequired": "Podaj nazwę",
+    "amountRequired": "Podaj kwotę",
+    "currencyRequired": "Wybierz walutę"
+  }
+}

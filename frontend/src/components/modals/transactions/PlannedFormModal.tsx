@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Ban, CheckCircle, Copy, Trash2 } from 'lucide-react'
@@ -41,6 +42,7 @@ interface Props {
 }
 
 export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute, onCancelPlan }: Props) {
+  const { t } = useTranslation('planned')
   const isEdit = !!planned
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
@@ -119,24 +121,26 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(isEdit ? 'Updated' : 'Planned added')
+      toast.success(isEdit ? t('form.updated') : t('form.added'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('form.saveFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return toast.error('Name is required')
-    if (!amount) return toast.error('Amount is required')
+    if (!name.trim()) return toast.error(t('form.nameRequired'))
+    if (!amount) return toast.error(t('form.amountRequired'))
     // Only reachable before the currencies query lands on an account-less
     // create: a picked account sets the code, and edit/copy seeds it.
-    if (!currencyCode) return toast.error('Currency is required')
+    if (!currencyCode) return toast.error(t('form.currencyRequired'))
     mutation.mutate()
   }
 
+  // The sentinel option's label translates; the sentinel value itself is a
+  // numeric constant that must never change (see NO_ACCOUNT above).
   const accountOptions = [
-    { value: NO_ACCOUNT, label: 'No account' },
+    { value: NO_ACCOUNT, label: t('noAccount') },
     ...accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` })),
   ]
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
@@ -154,42 +158,42 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? 'Edit planned' : 'New planned transaction'}>
+    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? t('form.editTitle') : t('form.newTitle')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="planned-name" className={labelClass}>Name</label>
+          <label htmlFor="planned-name" className={labelClass}>{t('form.nameLabel')}</label>
           <input id="planned-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="planned-amount" className={labelClass}>Amount</label>
+            <label htmlFor="planned-amount" className={labelClass}>{t('form.amountLabel')}</label>
             <input id="planned-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Date</label>
+            <label className={labelClass}>{t('form.dateLabel')}</label>
             <DatePicker value={plannedDate} onChange={setPlannedDate} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Account</label>
-            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder="Select account" aria-label="Account" />
+            <label className={labelClass}>{t('form.accountLabel')}</label>
+            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder={t('form.selectAccount')} aria-label={t('form.accountAria')} />
           </div>
           <div>
-            <label className={labelClass}>Currency</label>
-            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder="Select currency" aria-label="Currency" mono disabled={accountId !== null} />
+            <label className={labelClass}>{t('form.currencyLabel')}</label>
+            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder={t('form.selectCurrency')} aria-label={t('form.currencyAria')} mono disabled={accountId !== null} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {budgets.length > 1 && (
             <div>
-              <label className={labelClass}>Budget</label>
-              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder="Budget" aria-label="Budget" />
+              <label className={labelClass}>{t('form.budgetLabel')}</label>
+              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
             </div>
           )}
           <div className={budgets.length > 1 ? '' : 'col-span-2'}>
-            <label className={labelClass}>Category (optional)</label>
-            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder="Uncategorized" aria-label="Category" disabled={!budgetId} />
+            <label className={labelClass}>{t('form.categoryLabel')}</label>
+            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-2 pb-4">
@@ -198,29 +202,29 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
             <div className="flex items-center gap-2">
               {onExecute && planned.status === 'pending' && (
                 <button type="button" onClick={() => onExecute(planned)} className={positiveButtonClass}>
-                  <CheckCircle size={13} className="inline mr-1" /> Execute
+                  <CheckCircle size={13} className="inline mr-1" /> {t('form.execute')}
                 </button>
               )}
               {onCopy && (
                 <button type="button" onClick={() => onCopy(planned)} className={secondaryButtonClass}>
-                  <Copy size={13} className="inline mr-1" /> Copy
+                  <Copy size={13} className="inline mr-1" /> {t('form.copy')}
                 </button>
               )}
               {onCancelPlan && planned.status === 'pending' && (
                 <button type="button" onClick={() => onCancelPlan(planned)} className={warningButtonClass}>
-                  <Ban size={13} className="inline mr-1" /> Cancel plan
+                  <Ban size={13} className="inline mr-1" /> {t('form.cancelPlan')}
                 </button>
               )}
               {onDelete && (
                 <button type="button" onClick={() => onDelete(planned)} className={destructiveButtonClass}>
-                  <Trash2 size={13} className="inline mr-1" /> Delete
+                  <Trash2 size={13} className="inline mr-1" /> {t('form.delete')}
                 </button>
               )}
             </div>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
-            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}</button>
+            <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('form.cancel')}</button>
+            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>{mutation.isPending ? t('form.saving') : isEdit ? t('form.save') : t('form.add')}</button>
           </div>
         </div>
       </form>
