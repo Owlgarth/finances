@@ -31,7 +31,7 @@ frontend/
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
-│   │   ├── transactions/     # TransactionItemsEditor, TransactionAttachments, ExtractionReviewModal
+│   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
 │   │   └── profile/          # Settings/profile sections
