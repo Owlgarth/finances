@@ -117,7 +117,7 @@ backend/
 ├── transfers/              # Transfers between accounts
 ├── planned_transactions/   # Scheduled transactions
 │   └── tasks.py            # Celery task: execute_planned_transaction
-└── reports/                # budget-summary (planned vs actual), current-balances
+└── reports/                # budget-summary, budget-history (planned vs actual), current-balances
 ```
 
 Each app with business logic has a `services.py`; `api.py` files are thin request
