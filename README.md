@@ -290,6 +290,7 @@ uv venv && source .venv/bin/activate
 uv sync
 cp example.env .env  # Configure database
 python manage.py migrate
+python manage.py seed_currencies       # Seed the global ISO 4217 catalog
 python manage.py seed_legal_documents  # Seed privacy policy and terms
 python manage.py runserver
 ```
