@@ -71,7 +71,7 @@ class TwoFactorService:
     def setup(user: User) -> dict:
         twofa = UserTwoFactor.objects.filter(user=user).first()
         if twofa and twofa.is_enabled:
-            raise ValidationError('Two-factor authentication is already enabled')
+            raise ValidationError(_('Two-factor authentication is already enabled'))
 
         secret = pyotp.random_base32()
         encrypted = encrypt_secret(secret)

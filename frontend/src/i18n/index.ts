@@ -60,4 +60,10 @@ void i18next
     },
   })
 
+// Detection has run: keep <html lang> in sync with the resolved language.
+// The FOUC script in index.html only knows the localStorage choice, so a
+// first visit detected from navigator settings would otherwise keep the
+// hardcoded lang="en" while the UI renders in the detected language.
+document.documentElement.lang = i18next.resolvedLanguage ?? DEFAULT_LANGUAGE
+
 export default i18next

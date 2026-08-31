@@ -1,5 +1,6 @@
 import { AlertTriangle, Ban, Lock, Search, WifiOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   message: string
@@ -8,38 +9,55 @@ interface Props {
   onRetry?: () => void
 }
 
+// Literal key unions keep t(config.titleKey) type-checked against the common
+// catalog (the keys are module constants, so plain `string` would widen and
+// lose the typegen literal union).
+type ErrorMessageTitleKey =
+  | 'errorMessage.sessionExpiredTitle'
+  | 'errorMessage.accessDeniedTitle'
+  | 'errorMessage.notFoundTitle'
+  | 'errorMessage.serverErrorTitle'
+  | 'errorMessage.connectionErrorTitle'
+
+type ErrorMessageBodyKey =
+  | 'errorMessage.sessionExpiredBody'
+  | 'errorMessage.accessDeniedBody'
+  | 'errorMessage.notFoundBody'
+  | 'errorMessage.serverErrorBody'
+  | 'errorMessage.connectionErrorBody'
+
 interface ErrorConfig {
-  title: string
-  description: string
+  titleKey: ErrorMessageTitleKey
+  descriptionKey: ErrorMessageBodyKey
   icon: LucideIcon
 }
 
 const errorConfigs: Record<number, ErrorConfig> = {
   401: {
-    title: 'Session Expired',
-    description: 'Your session has expired. Please log in again.',
+    titleKey: 'errorMessage.sessionExpiredTitle',
+    descriptionKey: 'errorMessage.sessionExpiredBody',
     icon: Lock,
   },
   403: {
-    title: 'Access Denied',
-    description: 'You do not have permission to access this resource.',
+    titleKey: 'errorMessage.accessDeniedTitle',
+    descriptionKey: 'errorMessage.accessDeniedBody',
     icon: Ban,
   },
   404: {
-    title: 'Not Found',
-    description: 'The requested resource could not be found.',
+    titleKey: 'errorMessage.notFoundTitle',
+    descriptionKey: 'errorMessage.notFoundBody',
     icon: Search,
   },
   500: {
-    title: 'Server Error',
-    description: 'An unexpected error occurred. Please try again later.',
+    titleKey: 'errorMessage.serverErrorTitle',
+    descriptionKey: 'errorMessage.serverErrorBody',
     icon: AlertTriangle,
   },
 }
 
 const networkConfig: ErrorConfig = {
-  title: 'Connection Error',
-  description: 'Unable to connect to the server. Check your internet connection.',
+  titleKey: 'errorMessage.connectionErrorTitle',
+  descriptionKey: 'errorMessage.connectionErrorBody',
   icon: WifiOff,
 }
 
@@ -62,6 +80,7 @@ const buttonColors = {
 }
 
 export default function ErrorMessage({ message, type = 'error', statusCode, onRetry }: Props) {
+  const { t } = useTranslation('common')
   const isNetworkError = message.toLowerCase().includes('network') ||
                          message.toLowerCase().includes('connection') ||
                          message.toLowerCase().includes('offline')
@@ -81,11 +100,11 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
         <div className="flex-1">
           {config && (
             <h4 className={`font-semibold ${textColors[type]} mb-1`}>
-              {config.title}
+              {t(config.titleKey)}
             </h4>
           )}
           <p className={`${textColors[type]} text-sm`}>
-            {message || config?.description}
+            {message || (config ? t(config.descriptionKey) : undefined)}
           </p>
           {onRetry && (
             <button
@@ -93,7 +112,7 @@ export default function ErrorMessage({ message, type = 'error', statusCode, onRe
               onClick={onRetry}
               className={`mt-3 px-3 py-1.5 rounded-sm text-xs font-medium font-mono uppercase tracking-wider border border-border ${buttonColors[type]} transition-colors`}
             >
-              Try Again
+              {t('errorMessage.retry')}
             </button>
           )}
         </div>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 interface Props {
   message?: string
   size?: 'sm' | 'md' | 'lg'
@@ -11,12 +13,13 @@ const sizeClasses = {
 }
 
 export default function Loading({ message, size = 'md', fullPage = false }: Props) {
+  const { t } = useTranslation('common')
   const content = (
     <div className="flex flex-col justify-center items-center gap-3">
       <div
         className={`animate-spin rounded-full border-primary border-b-transparent ${sizeClasses[size]}`}
         role="status"
-        aria-label="Loading"
+        aria-label={t('loading')}
       />
       {message && (
         <p className="text-sm text-text-muted font-sans">{message}</p>

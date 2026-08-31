@@ -95,10 +95,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [language])
 
   // Server preference wins on first load after authentication (silent, no
-  // PATCH). Deliberate shape: the effect calls ONLY external mutators -
-  // i18next/localStorage/axios - never setState, so it cannot add a
-  // set-state-in-effect warning; the ref stops re-application after a manual
-  // in-session switch (preferences?.language does not change then).
+  // PATCH). Effect bodies stay lint-quiet by delegating to the exposed
+  // event-handler callbacks (setLanguage/setNumberFormat) instead of raw
+  // setState; the refs stop re-application after a manual in-session switch
+  // (preferences?.language / ?.number_format do not change then).
   const { data: preferences } = useQuery<UserPreferences>({
     queryKey: ['user-preferences'],
     queryFn: () => authApi.getPreferences(),
@@ -106,6 +106,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000,
   })
   const appliedServerLanguage = useRef<string | null>(null)
+  const appliedServerNumberFormat = useRef<string | null>(null)
   useEffect(() => {
     // Server preference wins for the number style whenever the query has
     // data (resolveNumberStyle's precedence chain); on logout preferences
@@ -122,13 +123,22 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     if (i18next.resolvedLanguage !== serverLanguage) {
       void setLanguage(serverLanguage)
     }
-    // numberFormat stays a local (localStorage) preference for now; it
-    // becomes server-synced once it is user-editable in the profile form.
-    // Persist the server value for next mount.
-    if (preferences?.number_format) {
-      localStorage.setItem(NUMBER_FORMAT_STORAGE_KEY, preferences.number_format)
+    // Server number_format wins the same way the language does. Going through
+    // setNumberFormat (not just the module config above) is load-bearing:
+    // mutating the singleton alone re-renders nothing, so a cold authenticated
+    // load would keep painting the first render's localStorage/default style.
+    // The microtask defers the setState out of the effect body (the frozen
+    // set-state-in-effect baseline; the async setLanguage seam above gets the
+    // same deferral from its await). The ref stops re-application after a
+    // manual in-session switch.
+    const serverNumberFormat = preferences?.number_format
+    if (serverNumberFormat && appliedServerNumberFormat.current !== serverNumberFormat) {
+      appliedServerNumberFormat.current = serverNumberFormat
+      if (serverNumberFormat !== numberFormat) {
+        void Promise.resolve().then(() => setNumberFormat(serverNumberFormat))
+      }
     }
-  }, [preferences?.language, preferences?.number_format, setLanguage])
+  }, [preferences?.language, preferences?.number_format, setLanguage, setNumberFormat, numberFormat])
 
   const value = useMemo(
     () => ({ language, numberFormat, setLanguage, setNumberFormat }),

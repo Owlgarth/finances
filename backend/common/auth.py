@@ -7,6 +7,7 @@ import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.utils.translation import gettext as _
 from ninja.errors import HttpError
 from ninja.security import HttpBearer
 
@@ -50,11 +51,11 @@ class WorkspaceJWTAuth(JWTAuth):
         if user is None:
             return None
         if not user.current_workspace_id:
-            raise HttpError(400, 'No active workspace. Please create or join a workspace.')
+            raise HttpError(400, _('No active workspace. Please create or join a workspace.'))
         try:
             member = WorkspaceMember.objects.get(workspace_id=user.current_workspace_id, user=user)
         except WorkspaceMember.DoesNotExist:
-            raise HttpError(403, 'Not a member of this workspace')
+            raise HttpError(403, _('Not a member of this workspace'))
         user._workspace_member_role = member.role
         return user
 

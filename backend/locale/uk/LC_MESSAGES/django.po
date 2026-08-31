@@ -708,3 +708,43 @@ msgstr "скинути пароль"
 #: workspaces/services.py:621
 msgid "Password reset successfully"
 msgstr "Пароль успішно скинуто"
+
+#: common/auth.py:54
+msgid "No active workspace. Please create or join a workspace."
+msgstr "Немає активного робочого простору. Створіть робочий простір або приєднайтеся до наявного."
+
+#: common/auth.py:58
+msgid "Not a member of this workspace"
+msgstr "Ви не є учасником цього робочого простору"
+
+#: common/idempotency.py:43
+msgid "Idempotency-Key header must be at most %(max_length)s characters."
+msgstr "Заголовок Idempotency-Key має містити не більше %(max_length)s символів."
+
+#: core/services.py:67
+msgid "Registration is disabled in demo mode"
+msgstr "Реєстрацію вимкнено в демонстраційному режимі"
+
+#: core/services.py:119 core/services.py:121
+msgid "Invalid email or password"
+msgstr "Неправильна електронна пошта або пароль"
+
+#: core/services.py:123
+msgid "User account is disabled"
+msgstr "Обліковий запис користувача вимкнено"
+
+#: core/services.py:147 core/services.py:177
+msgid "User not found"
+msgstr "Користувача не знайдено"
+
+#: core/services.py:154
+msgid "Invalid verification code"
+msgstr "Неправильний код підтвердження"
+
+#: core/services.py:173 core/services.py:181
+msgid "Invalid or expired refresh token"
+msgstr "Недійсний або прострочений токен оновлення"
+
+#: users/two_factor.py:74
+msgid "Two-factor authentication is already enabled"
+msgstr "Двофакторну автентифікацію вже увімкнено"

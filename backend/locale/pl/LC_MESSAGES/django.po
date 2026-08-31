@@ -708,3 +708,43 @@ msgstr "zresetować hasło"
 #: workspaces/services.py:621
 msgid "Password reset successfully"
 msgstr "Hasło zostało pomyślnie zresetowane"
+
+#: common/auth.py:54
+msgid "No active workspace. Please create or join a workspace."
+msgstr "Brak aktywnej przestrzeni roboczej. Utwórz przestrzeń roboczą lub dołącz do istniejącej."
+
+#: common/auth.py:58
+msgid "Not a member of this workspace"
+msgstr "Nie jesteś członkiem tej przestrzeni roboczej"
+
+#: common/idempotency.py:43
+msgid "Idempotency-Key header must be at most %(max_length)s characters."
+msgstr "Nagłówek Idempotency-Key może mieć co najwyżej %(max_length)s znaków."
+
+#: core/services.py:67
+msgid "Registration is disabled in demo mode"
+msgstr "Rejestracja jest wyłączona w trybie demo"
+
+#: core/services.py:119 core/services.py:121
+msgid "Invalid email or password"
+msgstr "Nieprawidłowy adres e-mail lub hasło"
+
+#: core/services.py:123
+msgid "User account is disabled"
+msgstr "Konto użytkownika jest wyłączone"
+
+#: core/services.py:147 core/services.py:177
+msgid "User not found"
+msgstr "Nie znaleziono użytkownika"
+
+#: core/services.py:154
+msgid "Invalid verification code"
+msgstr "Nieprawidłowy kod weryfikacyjny"
+
+#: core/services.py:173 core/services.py:181
+msgid "Invalid or expired refresh token"
+msgstr "Nieprawidłowy lub wygasły token odświeżania"
+
+#: users/two_factor.py:74
+msgid "Two-factor authentication is already enabled"
+msgstr "Uwierzytelnianie dwuskładnikowe jest już włączone"
