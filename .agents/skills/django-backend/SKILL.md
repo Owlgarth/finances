@@ -1,6 +1,6 @@
 ---
 name: django-backend
-description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code — endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, concurrency patterns, and migration authoring.
+description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code — endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, translatable error messages (gettext, Accept-Language), concurrency patterns, and migration authoring.
 ---
 
 # Django Backend Conventions
@@ -639,22 +639,40 @@ Read `django.conf.settings` values inside the function body, not at module impor
 - **Transactions**: Use `@db_transaction.atomic` for database operations that update balances
 - **Exception Naming**: `<Domain><ErrorType>Error` — e.g., `TwoFactorNotEnabledError`. Always set `default_message` and `default_code` as class attributes
 - **Exception Codes**: Every domain exception should include a `default_code` (snake_case string) for frontend error matching (e.g., `'two_factor_not_enabled'`)
+- **Translatable by default:** `default_message` is `gettext_lazy`-wrapped; dynamic messages %-format into a wrapped msgid (see Error Messages Are Translated)
 
 ```python
 # users/exceptions.py
+from django.utils.translation import gettext_lazy
+
 class TwoFactorNotEnabledError(NotFoundError):
-    default_message = 'Two-factor authentication is not enabled for this user'
+    default_message = gettext_lazy('Two-factor authentication is not enabled for this user')
     default_code = 'two_factor_not_enabled'
 
-# For exceptions with dynamic messages, accept params in __init__:
+# For exceptions with dynamic messages, accept params in __init__ and
+# %-format into the wrapped msgid (never an f-string; see Error Messages Are Translated):
 class CurrencyNotFoundInWorkspaceError(ValidationError):
     def __init__(self, currency: str):
-        super().__init__(f'Currency {currency} not found in workspace', code='currency_not_found')
+        super().__init__(
+            gettext_lazy('Currency %(currency)s not found in workspace') % {'currency': currency},
+            code='currency_not_found',
+        )
 ```
 
 **Disable/delete guards enumerate their blockers per type.** A guard that counts blocking references returns a per-type breakdown dict (`{'accounts': n, 'category_budgets': n, ...}`), not a summed int, and the exception composes the human-readable sentence from a module-level label map (`REFERENCE_LABELS = {'accounts': 'account', ...}` in `currencies/exceptions.py`), pluralizing per count with a generic fallback for unknown kinds. The sentence rides the existing `{'detail': ...}` handler channel, so the frontend renders it verbatim with zero client-side enumeration logic. Dict iteration order drives sentence order - the label map and the breakdown dict are the only places to touch when a new PROTECT FK joins the guard. Exemplar: `CurrencyInUseError`. Guard extensions are append-only: a new reference type joins `_reference_count` LAST and its label joins `REFERENCE_LABELS` LAST - the composed sentence's word order stays stable for every existing test assertion; inserting mid-order silently rewrites every pinned sentence.
 
 **An FK that does not gate an operation can still pin the row against its cleanup.** When un-blocking a guard (transaction original-currency facets stopped counting toward currency disable), check `on_delete` at every DELETION site, not just in the guard: `Transaction.original_currency` is `on_delete=PROTECT`, so the "orphaned" custom-row cleanup that now runs anyway would raise `ProtectedError` (500) on a facet-referenced row. The deletion site needs its own reference check - a facet-referenced row is not orphaned (it stays, re-enablable). Excluding a reference type from the guard NEVER means the row is safe to delete; it means the guard and the cleanup answer different questions.
+
+## Error Messages Are Translated (gettext)
+
+API error details are user-facing UI: every message that can reach the `{'detail': ...}` handler is translatable. Selection is request-driven - `LocaleMiddleware` (after SessionMiddleware) picks the catalog from the request's `Accept-Language` header (the frontend sends it on every request); no header, an unknown language, or a missing translation falls back to the English source string.
+
+- **`<app>/exceptions.py` uses `gettext_lazy` throughout.** Class attributes are assigned at import time, so only a lazy proxy resolves the language at response time: `default_message = gettext_lazy('...')`, and dynamic constructors %-format the lazy msgid (`super().__init__(gettext_lazy('Currency %(code)s not found') % {'code': code})`).
+- **Service raise sites and Pydantic validators use runtime `gettext` `_()`** - the same split as any other import-time vs. request-time evaluation: `raise ValidationError(_('Currency %(code)s not found') % {'code': code})`.
+- **Placeholders in translatable messages are named %-format, never f-strings.** An f-string interpolates before gettext sees it, baking English word order into the message; the msgid must be one complete sentence.
+- **Updating translations:** `uv run python manage.py makemessages -l uk -l pl --no-obsolete` regenerates `locale/<lang>/LC_MESSAGES/django.po`; translate the msgstrs, run `compilemessages` (the Docker entrypoints compile on boot; a gettext-absent host runs the same command through `./dev.sh manage makemessages ...`). The full workflow is in `docs/i18n.md`.
+- **Scope: API error details only.** Emails and legal document text stay English by design (see the `email-sending` skill); do not gettext those.
+- Testing translated responses (headers, fallback assertions) is in the `backend-testing` skill's Accept-Language pattern.
 
 ## Case-Insensitive Grouping with Display Casing
 
