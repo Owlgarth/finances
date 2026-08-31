@@ -12,6 +12,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { workspaceMembersApi, authApi } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
@@ -29,6 +30,7 @@ import { tappableProps } from '../utils/tappable'
 import type { WorkspaceMember, AddMemberRequest } from '../types'
 
 export default function WorkspaceMembersPage() {
+  const { t } = useTranslation('members')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(null)
   const [removingMember, setRemovingMember] = useState<WorkspaceMember | null>(null)
@@ -56,10 +58,10 @@ export default function WorkspaceMembersPage() {
     mutationFn: (data: AddMemberRequest) => workspaceMembersApi.add(workspaceId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
-      toast.success('Member added to workspace')
+      toast.success(t('toasts.memberAdded'))
       setIsAddModalOpen(false)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to add member')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toasts.addFailed'))),
   })
 
   const updateRoleMutation = useMutation({
@@ -67,21 +69,21 @@ export default function WorkspaceMembersPage() {
       workspaceMembersApi.updateRole(workspaceId!, userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
-      toast.success('Role updated')
+      toast.success(t('toasts.roleUpdated'))
       setEditingMember(null)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update role')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toasts.roleUpdateFailed'))),
   })
 
   const removeMutation = useMutation({
     mutationFn: (userId: number) => workspaceMembersApi.remove(workspaceId!, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
-      toast.success('Member removed')
+      toast.success(t('toasts.memberRemoved'))
       setRemovingMember(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to remove member'))
+      toast.error(getApiErrorMessage(error, t('toasts.removeFailed')))
       setRemovingMember(null)
     },
   })
@@ -90,21 +92,21 @@ export default function WorkspaceMembersPage() {
     mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) =>
       workspaceMembersApi.resetPassword(workspaceId!, userId, newPassword),
     onSuccess: (data) => {
-      toast.success(`Password reset successfully for ${data.email}`)
+      toast.success(t('toasts.passwordReset', { email: data.email }))
       setResetPasswordMember(null)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to reset password')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toasts.passwordResetFailed'))),
   })
 
   const reset2FAMutation = useMutation({
     mutationFn: (userId: number) => workspaceMembersApi.reset2FA(workspaceId!, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-members'] })
-      toast.success('Two-factor authentication reset')
+      toast.success(t('toasts.twoFactorReset'))
       setResetting2FA(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to reset 2FA'))
+      toast.error(getApiErrorMessage(error, t('toasts.twoFactorResetFailed')))
       setResetting2FA(null)
     },
   })
@@ -113,10 +115,10 @@ export default function WorkspaceMembersPage() {
     mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
       authApi.changePassword(currentPassword, newPassword),
     onSuccess: () => {
-      toast.success('Your password has been changed successfully')
+      toast.success(t('toasts.ownPasswordChanged'))
       setIsChangeMyPasswordModalOpen(false)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to change password')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toasts.ownPasswordChangeFailed'))),
   })
 
   if (workspaceLoading || membersLoading) {
@@ -165,23 +167,23 @@ export default function WorkspaceMembersPage() {
       </div>
     )
   }
-  if (error) return <div className="text-negative p-4">Failed to load workspace members</div>
+  if (error) return <div className="text-negative p-4">{t('page.loadError')}</div>
 
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-base font-semibold text-text">Workspace Members</h1>
+          <h1 className="text-base font-semibold text-text">{t('page.title')}</h1>
           <p className="text-text-muted mt-1">{workspace?.name}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setIsChangeMyPasswordModalOpen(true)}
             className={`flex items-center gap-2 ${secondaryButtonClass}`}
-            title="Change My Password"
+            title={t('page.changeMyPassword')}
           >
             <KeyRound size={14} />
-            <span className="hidden sm:inline">Change My Password</span>
+            <span className="hidden sm:inline">{t('page.changeMyPassword')}</span>
           </button>
           {canManageMembers && (
             <button
@@ -189,7 +191,7 @@ export default function WorkspaceMembersPage() {
               className={`flex items-center gap-2 ${primaryButtonClass}`}
             >
               <UserPlus size={14} />
-              <span className="hidden sm:inline">Add Member</span>
+              <span className="hidden sm:inline">{t('page.addMember')}</span>
             </button>
           )}
         </div>
@@ -197,10 +199,10 @@ export default function WorkspaceMembersPage() {
 
       {members && members.length === 0 ? (
         <EmptyState
-          message="No members in this workspace yet."
+          message={t('page.empty')}
         />
       ) : isMobile ? (
-        /* Mobile: card list, tap → action sheet — the 4-column table can't fit 375px. */
+        /* Mobile: card list, tap → action sheet - the 4-column table can't fit 375px. */
         <div className="bg-surface rounded-sm border border-border divide-y divide-border">
           {members?.map((member) => {
             const tappable = canEditMember(member) || canResetPasswordFor(member)
@@ -221,17 +223,17 @@ export default function WorkspaceMembersPage() {
             <thead className="bg-surface-hover">
               <tr>
                 <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
-                  User
+                  {t('table.user')}
                 </th>
                 <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
-                  Role
+                  {t('table.role')}
                 </th>
                 <th className="px-6 py-3 text-left font-mono text-[9px] uppercase tracking-widest text-text-muted">
-                  Status
+                  {t('table.status')}
                 </th>
                 {canManageMembers && (
                   <th className="px-6 py-3 text-right font-mono text-[9px] uppercase tracking-widest text-text-muted">
-                    Actions
+                    {t('table.actions')}
                   </th>
                 )}
               </tr>
@@ -264,23 +266,23 @@ export default function WorkspaceMembersPage() {
           actionMember
             ? [
                 ...(canEditMember(actionMember)
-                  ? [{ label: 'Edit role', icon: Pencil, onSelect: () => setEditingMember(actionMember) }]
+                  ? [{ label: t('sheet.editRole'), icon: Pencil, onSelect: () => setEditingMember(actionMember) }]
                   : []),
                 ...(canResetPasswordFor(actionMember)
-                  ? [{ label: 'Reset password', icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
+                  ? [{ label: t('sheet.resetPassword'), icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
                   : []),
                 ...(canResetPasswordFor(actionMember)
-                  ? [{ label: 'Reset 2FA', icon: ShieldOff, onSelect: () => setResetting2FA(actionMember) }]
+                  ? [{ label: t('sheet.reset2fa'), icon: ShieldOff, onSelect: () => setResetting2FA(actionMember) }]
                   : []),
                 ...(canEditMember(actionMember)
-                  ? [{ label: 'Remove from workspace', icon: Trash2, destructive: true, onSelect: () => setRemovingMember(actionMember) }]
+                  ? [{ label: t('sheet.removeFromWorkspace'), icon: Trash2, destructive: true, onSelect: () => setRemovingMember(actionMember) }]
                   : []),
               ]
             : []
         }
       />
 
-      {/* Add Member Modal */}
+      {/* AddMemberModal */}
       {isAddModalOpen && (
         <AddMemberModal
           onClose={() => setIsAddModalOpen(false)}
@@ -289,7 +291,7 @@ export default function WorkspaceMembersPage() {
         />
       )}
 
-      {/* Edit Role Modal */}
+      {/* EditRoleModal */}
       {editingMember && (
         <EditRoleModal
           member={editingMember}
@@ -302,14 +304,14 @@ export default function WorkspaceMembersPage() {
       {/* Remove Confirmation */}
       <ConfirmDialog
         isOpen={!!removingMember}
-        title="Remove Member"
-        message={removingMember ? `Are you sure you want to remove "${removingMember.email}" from this workspace? They will lose access to all workspace data.` : ''}
+        title={t('removeConfirm.title')}
+        message={removingMember ? t('removeConfirm.message', { email: removingMember.email }) : ''}
         isPending={removeMutation.isPending}
         onConfirm={() => removingMember && removeMutation.mutate(removingMember.user_id)}
         onCancel={() => setRemovingMember(null)}
       />
 
-      {/* Reset Password Modal */}
+      {/* ResetPasswordModal */}
       {resetPasswordMember && (
         <ResetPasswordModal
           member={resetPasswordMember}
@@ -322,18 +324,18 @@ export default function WorkspaceMembersPage() {
         />
       )}
 
-      {/* Reset 2FA Confirmation */}
+      {/* Reset-2FA ConfirmDialog */}
       <ConfirmDialog
         isOpen={!!resetting2FA}
-        title="Reset 2FA"
-        message={resetting2FA ? `Reset two-factor authentication for ${resetting2FA.full_name || resetting2FA.email}? They will need to set up 2FA again on their next login.` : ''}
-        confirmLabel="Reset 2FA"
+        title={t('reset2faConfirm.title')}
+        message={resetting2FA ? t('reset2faConfirm.message', { name: resetting2FA.full_name || resetting2FA.email }) : ''}
+        confirmLabel={t('reset2faConfirm.confirm')}
         isPending={reset2FAMutation.isPending}
         onConfirm={() => resetting2FA && reset2FAMutation.mutate(resetting2FA.user_id)}
         onCancel={() => setResetting2FA(null)}
       />
 
-      {/* Change My Password Modal */}
+      {/* ChangeMyPasswordModal */}
       {isChangeMyPasswordModalOpen && (
         <ChangeMyPasswordModal
           onClose={() => setIsChangeMyPasswordModalOpen(false)}
@@ -386,8 +388,9 @@ interface MemberCardProps {
   onTap: () => void
 }
 
-/** Mobile list row (S5) — same identity/badges as the table, stacked. */
+/** Mobile list row (S5) - same identity/badges as the table, stacked. */
 function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps) {
+  const { t } = useTranslation('members')
   return (
     <div
       {...(tappable ? tappableProps(onTap) : {})}
@@ -403,7 +406,7 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
           <span className="truncate">{member.full_name || member.email}</span>
           {isCurrentUser && (
             <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border flex-shrink-0">
-              You
+              {t('badges.you')}
             </span>
           )}
         </div>
@@ -412,7 +415,7 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
             className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border font-mono text-[10px] font-bold uppercase tracking-wider ${getRoleBadgeColor(member.role)}`}
           >
             {getRoleIcon(member.role)}
-            {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+            {t(`roles.${member.role}`, { defaultValue: member.role })}
           </span>
           <span
             className={`inline-flex px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider rounded-sm border ${
@@ -421,7 +424,7 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
                 : 'bg-negative-bg text-negative border-negative/30'
             }`}
           >
-            {member.is_active ? 'Active' : 'Inactive'}
+            {member.is_active ? t('badges.active') : t('badges.inactive')}
           </span>
         </div>
       </div>
@@ -441,6 +444,7 @@ interface MemberRowProps {
 }
 
 function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEditRole, onRemove, onResetPassword, onReset2FA }: MemberRowProps) {
+  const { t } = useTranslation('members')
   const { canManageMembers, canEditMember } = usePermissions()
   const canEditThisMember = canEditMember(member)
   const showActions = canEditThisMember || canResetPassword || canReset2FA
@@ -458,7 +462,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
             <div className="text-sm font-medium text-text flex items-center gap-2">
               {member.full_name || member.email}
               {isCurrentUser && (
-                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border">You</span>
+                <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border">{t('badges.you')}</span>
               )}
             </div>
             {member.full_name && (
@@ -470,14 +474,14 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
       <td className="px-6 py-4 whitespace-nowrap">
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-border font-mono text-[10px] font-bold uppercase tracking-wider ${getRoleBadgeColor(member.role)}`}>
           {getRoleIcon(member.role)}
-          {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+          {t(`roles.${member.role}`, { defaultValue: member.role })}
         </span>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <span className={`inline-flex px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider rounded-sm border ${
           member.is_active ? 'bg-positive-bg text-positive border-positive/30' : 'bg-negative-bg text-negative border-negative/30'
         }`}>
-          {member.is_active ? 'Active' : 'Inactive'}
+          {member.is_active ? t('badges.active') : t('badges.inactive')}
         </span>
       </td>
       {canManageMembers && (
@@ -488,7 +492,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
                 <button
                   onClick={onEditRole}
                   className="p-1.5 text-text-muted hover:text-text transition-colors"
-                  title="Edit Role"
+                  title={t('row.editRole')}
                 >
                   <Pencil size={14} />
                 </button>
@@ -497,7 +501,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
                 <button
                   onClick={onResetPassword}
                   className="p-1.5 text-text-muted hover:text-text transition-colors"
-                  title="Reset Password"
+                  title={t('row.resetPassword')}
                 >
                   <KeyRound size={14} />
                 </button>
@@ -507,7 +511,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
                   type="button"
                   onClick={onReset2FA}
                   className="p-1.5 text-text-muted hover:text-text transition-colors"
-                  title="Reset 2FA"
+                  title={t('row.reset2fa')}
                 >
                   <ShieldOff size={14} />
                 </button>
@@ -516,7 +520,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEdi
                 <button
                   onClick={onRemove}
                   className="p-1.5 text-text-muted hover:text-negative transition-colors"
-                  title="Remove"
+                  title={t('row.remove')}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -536,6 +540,7 @@ interface AddMemberModalProps {
 }
 
 function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps) {
+  const { t } = useTranslation('members')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -552,11 +557,11 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Add Member">
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title={t('addModal.title')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>
-              Email Address *
+              {t('addModal.emailLabel')}
             </label>
             <input
               type="email"
@@ -564,13 +569,13 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={inputClass}
-              placeholder="user@example.com"
+              placeholder={t('addModal.emailPlaceholder')}
             />
           </div>
 
           <div>
             <label className={labelClass}>
-              Password
+              {t('addModal.passwordLabel')}
             </label>
             <input
               type="password"
@@ -578,40 +583,40 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputClass}
-              placeholder="Minimum 8 characters (optional)"
+              placeholder={t('addModal.passwordPlaceholder')}
               autoComplete="new-password"
             />
             <p className="text-xs text-text-muted mt-1">
-              Only used if no account exists for this email yet.
+              {t('addModal.passwordHelper')}
             </p>
           </div>
 
           <div>
             <label className={labelClass}>
-              Full Name
+              {t('addModal.fullNameLabel')}
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className={inputClass}
-              placeholder="John Doe (optional)"
+              placeholder={t('addModal.fullNamePlaceholder')}
             />
           </div>
 
           <div>
             <label className={labelClass}>
-              Role *
+              {t('addModal.roleLabel')}
             </label>
             <Select
               value={role}
               onChange={(v) => setRole(v)}
               options={[
-                { value: 'viewer', label: 'Viewer - Can view all data' },
-                { value: 'member', label: 'Member - Can view and edit data' },
-                { value: 'admin', label: 'Admin - Can manage members and settings' },
+                { value: 'viewer', label: t('addModal.roleViewer') },
+                { value: 'member', label: t('addModal.roleMember') },
+                { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
-              aria-label="Role"
+              aria-label={t('addModal.roleAria')}
             />
           </div>
 
@@ -622,14 +627,14 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
               className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
-              Cancel
+              {t('addModal.cancel')}
             </button>
             <button
               type="submit"
               className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Adding...' : 'Add Member'}
+              {isSubmitting ? t('addModal.submitting') : t('addModal.submit')}
             </button>
           </div>
         </form>
@@ -645,6 +650,7 @@ interface EditRoleModalProps {
 }
 
 function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModalProps) {
+  const { t } = useTranslation('members')
   const [role, setRole] = useState(member.role)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -653,24 +659,25 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Change Role">
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title={t('editRoleModal.title')}>
         <p className="text-text-muted mb-4">
-          Update role for <strong className="text-text">{member.full_name || member.email}</strong>
+          {t('editRoleModal.updateFor')}{' '}
+          <strong className="text-text">{member.full_name || member.email}</strong>
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>
-              Role
+              {t('editRoleModal.roleLabel')}
             </label>
             <Select
               value={role}
               onChange={(v) => setRole(v)}
               options={[
-                { value: 'viewer', label: 'Viewer - Can view all data' },
-                { value: 'member', label: 'Member - Can view and edit data' },
-                { value: 'admin', label: 'Admin - Can manage members and settings' },
+                { value: 'viewer', label: t('addModal.roleViewer') },
+                { value: 'member', label: t('addModal.roleMember') },
+                { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
-              aria-label="Role"
+              aria-label={t('editRoleModal.roleAria')}
             />
           </div>
 
@@ -681,14 +688,14 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
               className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
-              Cancel
+              {t('editRoleModal.cancel')}
             </button>
             <button
               type="submit"
               className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting || role === member.role}
             >
-              {isSubmitting ? 'Updating...' : 'Update Role'}
+              {isSubmitting ? t('editRoleModal.submitting') : t('editRoleModal.submit')}
             </button>
           </div>
         </form>
@@ -704,6 +711,7 @@ interface ResetPasswordModalProps {
 }
 
 function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPasswordModalProps) {
+  const { t } = useTranslation('members')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -713,12 +721,12 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
     setError('')
 
     if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters')
+      setError(t('resetPasswordModal.tooShort'))
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match')
+      setError(t('resetPasswordModal.mismatch'))
       return
     }
 
@@ -726,15 +734,16 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Reset Password">
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title={t('resetPasswordModal.title')}>
         <p className="text-text-muted mb-4">
-          Resetting password for <strong className="text-text">{member.full_name || member.email}</strong>
+          {t('resetPasswordModal.resettingFor')}{' '}
+          <strong className="text-text">{member.full_name || member.email}</strong>
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>
-              New Password *
+              {t('resetPasswordModal.newPasswordLabel')}
             </label>
             <input
               type="password"
@@ -743,14 +752,14 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className={inputClass}
-              placeholder="Enter new password"
+              placeholder={t('resetPasswordModal.newPasswordPlaceholder')}
               autoComplete="new-password"
             />
           </div>
 
           <div>
             <label className={labelClass}>
-              Confirm Password *
+              {t('resetPasswordModal.confirmPasswordLabel')}
             </label>
             <input
               type="password"
@@ -759,7 +768,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className={inputClass}
-              placeholder="Confirm new password"
+              placeholder={t('resetPasswordModal.confirmPasswordPlaceholder')}
               autoComplete="new-password"
             />
           </div>
@@ -770,7 +779,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
 
           <div className="bg-warning-bg text-warning rounded-sm p-3">
             <p className="text-sm">
-              The user will need to log in with this new password. Please share it with them securely.
+              {t('resetPasswordModal.warning')}
             </p>
           </div>
 
@@ -781,14 +790,14 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
               className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
-              Cancel
+              {t('resetPasswordModal.cancel')}
             </button>
             <button
               type="submit"
               className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Resetting...' : 'Reset Password'}
+              {isSubmitting ? t('resetPasswordModal.submitting') : t('resetPasswordModal.submit')}
             </button>
           </div>
         </form>
@@ -803,6 +812,7 @@ interface ChangeMyPasswordModalProps {
 }
 
 function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPasswordModalProps) {
+  const { t } = useTranslation('members')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -813,22 +823,22 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
     setError('')
 
     if (!currentPassword) {
-      setError('Current password is required')
+      setError(t('changeMyPasswordModal.currentRequired'))
       return
     }
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters')
+      setError(t('changeMyPasswordModal.tooShort'))
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match')
+      setError(t('changeMyPasswordModal.mismatch'))
       return
     }
 
     if (currentPassword === newPassword) {
-      setError('New password must be different from current password')
+      setError(t('changeMyPasswordModal.sameAsCurrent'))
       return
     }
 
@@ -836,15 +846,15 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
   }
 
   return (
-    <Modal open={true} onClose={onClose} size="md" className="p-6" title="Change My Password">
+    <Modal open={true} onClose={onClose} size="md" className="p-6" title={t('changeMyPasswordModal.title')}>
         <p className="text-text-muted mb-4">
-          Update your account password
+          {t('changeMyPasswordModal.intro')}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>
-              Current Password *
+              {t('changeMyPasswordModal.currentLabel')}
             </label>
             <input
               type="password"
@@ -852,14 +862,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               className={inputClass}
-              placeholder="Enter current password"
+              placeholder={t('changeMyPasswordModal.currentPlaceholder')}
               autoComplete="current-password"
             />
           </div>
 
           <div>
             <label className={labelClass}>
-              New Password *
+              {t('changeMyPasswordModal.newLabel')}
             </label>
             <input
               type="password"
@@ -868,17 +878,17 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className={inputClass}
-              placeholder="Enter new password"
+              placeholder={t('changeMyPasswordModal.newPlaceholder')}
               autoComplete="new-password"
             />
             <p className="text-xs text-text-muted mt-1">
-              Minimum 8 characters
+              {t('changeMyPasswordModal.minLength')}
             </p>
           </div>
 
           <div>
             <label className={labelClass}>
-              Confirm New Password *
+              {t('changeMyPasswordModal.confirmLabel')}
             </label>
             <input
               type="password"
@@ -887,7 +897,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className={inputClass}
-              placeholder="Confirm new password"
+              placeholder={t('changeMyPasswordModal.confirmPlaceholder')}
               autoComplete="new-password"
             />
           </div>
@@ -898,7 +908,7 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
 
           <div className="bg-surface-hover rounded-sm p-3">
             <p className="text-sm text-text">
-              You will remain logged in after changing your password.
+              {t('changeMyPasswordModal.stayLoggedIn')}
             </p>
           </div>
 
@@ -909,14 +919,14 @@ function ChangeMyPasswordModal({ onClose, onSubmit, isSubmitting }: ChangeMyPass
               className={`flex-1 ${secondaryButtonClass}`}
               disabled={isSubmitting}
             >
-              Cancel
+              {t('changeMyPasswordModal.cancel')}
             </button>
             <button
               type="submit"
               className={`flex-1 ${primaryButtonClass}`}
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Changing...' : 'Change Password'}
+              {isSubmitting ? t('changeMyPasswordModal.submitting') : t('changeMyPasswordModal.submit')}
             </button>
           </div>
         </form>
