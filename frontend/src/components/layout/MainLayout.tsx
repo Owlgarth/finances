@@ -35,7 +35,7 @@ function NoWorkspaceMessage() {
 }
 
 /**
- * Native-tab scroll memory (N2): each route keeps its scroll position, so
+ * Native-tab scroll memory: each route keeps its scroll position, so
  * switching bottom-nav tabs returns you where you left off instead of
  * carrying the previous page's offset. Mobile only — desktop scrolls <main>,
  * whose position React keeps across route swaps anyway.

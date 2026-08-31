@@ -60,7 +60,7 @@ export default function Modal({
     </div>
   )
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3). The header
+  // Mobile: same API, bottom-sheet presentation. The header
   // row (with the labeled Close button) renders inside the sheet body, below
   // the drag handle.
   if (isMobile) {

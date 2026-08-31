@@ -21,8 +21,8 @@ interface ActionSheetProps {
 }
 
 /**
- * Titled list of 44px tap actions in a bottom sheet — the touch replacement
- * for hover-revealed row actions (plan decision 7). Selecting an action closes
+ * Titled list of 44px tap actions in a bottom sheet - the touch replacement
+ * for hover-revealed row actions. Selecting an action closes
  * the sheet first, then runs it, so actions can safely open modals.
  */
 export default function ActionSheet({ open, onClose, title, actions }: ActionSheetProps) {

@@ -246,7 +246,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // runs at open time. prefillReceipt is set once by the parent on parse
       // success and cleared on close, so it cannot re-seed mid-edit. Merchant
       // fills description unconditionally here because the line above just set
-      // it to '' (CODING_SUMMARIES T18 — create-mode default is ''). Do NOT
+      // it to '' (create-mode default is ''). Do NOT
       // touch the inline "Upload invoice/receipt" button below; it stays
       // functional for an in-place re-scan after prefill.
       if (prefillReceipt) {
@@ -337,8 +337,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         // onSuccess can destructure { uploadFailed } for both branches.
         return { trans, uploadFailed: false }
       }
-      // Inline the items on the create call (Task 1 backend) and send the
-      // idempotency key as a header (Task 2 backend). This is the atomic
+      // Inline the items on the create call and send the idempotency key as
+      // a header. This is the atomic
       // tx + items commit — once it returns, the data is durable.
       const trans = await transactionsApi.create(
         { ...payload, items: rowsToItems(pendingRows) },

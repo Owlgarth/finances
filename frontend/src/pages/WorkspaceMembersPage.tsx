@@ -37,7 +37,7 @@ export default function WorkspaceMembersPage() {
   const [resetPasswordMember, setResetPasswordMember] = useState<WorkspaceMember | null>(null)
   const [resetting2FA, setResetting2FA] = useState<WorkspaceMember | null>(null)
   const [isChangeMyPasswordModalOpen, setIsChangeMyPasswordModalOpen] = useState(false)
-  // Mobile card list: tap → action sheet (plan decision 7).
+  // Mobile card list: tapping a card opens an action sheet with its actions.
   const [actionMember, setActionMember] = useState<WorkspaceMember | null>(null)
   const { isMobile } = useBreakpoint()
   const queryClient = useQueryClient()

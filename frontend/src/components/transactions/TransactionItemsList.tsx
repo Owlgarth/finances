@@ -41,7 +41,7 @@ const cardShell = (isOpen: boolean): string =>
   'bg-surface border rounded-sm p-3 ' + (isOpen ? 'border-primary ring-1 ring-primary' : 'border-border')
 
 // Action icon buttons: real 44×44 boxes on mobile (NOT .touch-hit — adjacent expanded
-// hit areas would overlap; see CODING_SUMMARIES Task 10 for the .touch-hit cascade trap).
+// hit areas of neighboring buttons would overlap).
 const actionBtn =
   'inline-flex items-center justify-center p-1.5 text-text-muted max-sm:min-h-[44px] max-sm:min-w-[44px]'
 

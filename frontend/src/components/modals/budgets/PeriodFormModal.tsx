@@ -27,8 +27,8 @@ function plusDaysIso(isoDate: string, days: number): string {
 }
 
 /**
- * Add/edit form for a custom budget period. Mount-per-use (frontend-react
- * SKILL §Modal state lifecycle): fields seed from `mode`/`period` in the
+ * Add/edit form for a custom budget period. Mount-per-use modal shape:
+ * fields seed from `mode`/`period` in the
  * useState initializers, so the caller must render this component ONLY while
  * the form is open (unmount on close, per-session `key`) — that remount is
  * what re-seeds state for the next session, with zero open-effects.

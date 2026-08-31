@@ -31,7 +31,8 @@ export default function AccountsPage() {
   const { data: currencies = [] } = useEnabledCurrencies()
   const isTouch = useIsTouch()
   const [showArchived, setShowArchived] = useState(false)
-  // Touch replacement for the small inline card action links (plan decision 7).
+  // Selected account for the touch action sheet that replaces the desktop
+  // inline card action links.
   const [cardAction, setCardAction] = useState<Account | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)

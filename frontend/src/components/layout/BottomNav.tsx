@@ -48,7 +48,7 @@ import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
 
-// Overflow destinations live in the More sheet (plan decision 5).
+// Overflow destinations live in the More sheet.
 // Keys only: t() is resolved at render time inside the component (a
 // module-level t() call would freeze the language at load time).
 const MORE_DESTINATIONS = [
@@ -157,7 +157,7 @@ export default function BottomNav() {
     const f = e.target.files?.[0]
     if (f) parse.mutate(f)
     // Same-file reselect must re-fire onChange; the File is already captured by
-    // parse.mutate, so clearing the input value is safe (CODING_SUMMARIES T4-fix).
+    // parse.mutate, so clearing the input value is safe.
     if (receiptFileRef.current) receiptFileRef.current.value = ''
   }
 
@@ -356,7 +356,7 @@ export default function BottomNav() {
         </div>
       </BottomSheet>
 
-      {/* FAB quick-add (plan decision 6) — owned here so it works on any route */}
+      {/* FAB quick-add - owned here so it works on any route */}
       <ActionSheet
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}

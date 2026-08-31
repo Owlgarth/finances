@@ -98,7 +98,7 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       setPlannedDate(new Date().toISOString().slice(0, 10))
       // Fresh key per open in create mode. Persists across mutation retries
       // within this open session — a double-click or network-blip replay
-      // returns the original 201 instead of a duplicate (Task 3 backend).
+      // returns the original 201 instead of a duplicate.
       setIdempotencyKey(crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

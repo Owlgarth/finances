@@ -16,7 +16,7 @@ interface FiltersToggleProps {
   onToggle: () => void
   /** id of the FilterPanel this toggle controls — accordion wiring (skill:
       toggle carries aria-expanded + aria-controls; region is its sibling).
-      Optional so current call sites stay valid; pages wire it in Task 10. */
+      Optional so call sites without a wired panel stay valid. */
   'aria-controls'?: string
 }
 

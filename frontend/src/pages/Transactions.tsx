@@ -254,7 +254,7 @@ export default function Transactions() {
           >
             <Download size={13} className="inline mr-1" /> {t('exportView')}
           </button>
-          {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
+          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
           {canWrite && (
             <button onClick={openNew} className={`${primaryButtonClass} max-sm:hidden`}>
               <Plus size={13} className="inline mr-1" /> {t('newTransaction')}
