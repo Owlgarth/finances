@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Plus, ArrowLeftRight, Archive, Pencil, Receipt, Wallet, Landmark, Coins, Repeat, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
 import type { Account, AccountType, Transfer } from '../types'
 import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -22,6 +23,7 @@ import { primaryButtonClass, secondaryButtonClass } from '../components/common/f
 const TYPE_ICON: Record<AccountType, typeof Wallet> = { cash: Coins, bank: Landmark, other: Wallet }
 
 export default function AccountsPage() {
+  const { t } = useTranslation('accounts')
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { canManageAccounts, canWrite, canManageCurrencies } = usePermissions()
@@ -70,18 +72,18 @@ export default function AccountsPage() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to archive account')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toast.archiveFailed'))),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => accountsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      toast.success('Account deleted')
+      toast.success(t('toast.deleted'))
       setDeleting(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete account'))
+      toast.error(getApiErrorMessage(error, t('toast.deleteFailed')))
       setDeleting(null)
     },
   })
@@ -93,17 +95,17 @@ export default function AccountsPage() {
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Accounts</h1>
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
         <div className="flex items-center gap-2">
           {/* Hidden on mobile: the FAB quick-add has Transfer. */}
           {canWrite && (
             <button onClick={() => openTransfer()} className={`${secondaryButtonClass} max-sm:hidden`}>
-              <ArrowLeftRight size={13} className="inline mr-1" /> Transfer
+              <ArrowLeftRight size={13} className="inline mr-1" /> {t('actions.transfer')}
             </button>
           )}
           {canManageAccounts && (
             <button onClick={openNew} className={primaryButtonClass}>
-              <Plus size={13} className="inline mr-1" /> New account
+              <Plus size={13} className="inline mr-1" /> {t('actions.newAccount')}
             </button>
           )}
         </div>
@@ -114,7 +116,7 @@ export default function AccountsPage() {
           {[0, 1].map((i) => <div key={i} className="h-24 bg-surface-muted rounded-sm animate-pulse" />)}
         </div>
       ) : accounts.length === 0 ? (
-        <p className="text-sm text-text-muted">No accounts yet.</p>
+        <p className="text-sm text-text-muted">{t('emptyState')}</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {sortedAccounts.map((account) => {
@@ -133,7 +135,7 @@ export default function AccountsPage() {
                     <Icon size={16} className="text-text-muted flex-shrink-0" />
                     <span className="text-sm font-medium text-text truncate">{account.name}</span>
                     {account.is_archived && (
-                      <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">Archived</span>
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">{t('accountCard.archivedBadge')}</span>
                     )}
                   </div>
                   {multiCurrency && (
@@ -145,21 +147,21 @@ export default function AccountsPage() {
                 <div className="mt-3 font-mono text-xl text-text">
                   {formatAmount(balance)} {multiCurrency ? '' : account.currency_code}
                 </div>
-                {/* Inline links are pointer-fine only — card tap opens the sheet on touch. */}
+                {/* Inline links are pointer-fine only - card tap opens the sheet on touch. */}
                 {canManageAccounts && !isTouch && (
                   <div className="mt-3 flex items-center gap-3 text-xs">
-                    <button type="button" onClick={() => navigate(`/transactions?account=${account.id}`)} className="text-primary hover:text-primary-hover">View transactions</button>
-                    <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">Set balance…</button>
-                    <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> Edit</button>
+                    <button type="button" onClick={() => navigate(`/transactions?account=${account.id}`)} className="text-primary hover:text-primary-hover">{t('accountCard.viewTransactions')}</button>
+                    <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">{t('accountCard.setBalance')}</button>
+                    <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> {t('accountCard.edit')}</button>
                     <button
                       onClick={() => archiveMutation.mutate({ id: account.id, archived: !account.is_archived })}
                       className="text-text-muted hover:text-text inline-flex items-center gap-1"
                     >
-                      <Archive size={12} /> {account.is_archived ? 'Unarchive' : 'Archive'}
+                      <Archive size={12} /> {account.is_archived ? t('accountCard.unarchive') : t('accountCard.archive')}
                     </button>
                     {account.is_archived && (
                       <button onClick={() => setDeleting(account)} className="text-text-muted hover:text-negative inline-flex items-center gap-1">
-                        <Trash2 size={12} /> Delete
+                        <Trash2 size={12} /> {t('accountCard.delete')}
                       </button>
                     )}
                   </div>
@@ -173,40 +175,40 @@ export default function AccountsPage() {
       <div className="mt-4">
         <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer max-sm:min-h-[44px]">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          Show archived accounts
+          {t('showArchivedLabel')}
         </label>
       </div>
 
-      {/* Recent transfers */}
+      {/* Latest transfer history preview */}
       {(transfers?.items.length ?? 0) > 0 && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-text">Recent transfers</h2>
-            <Link to="/transfers" className="text-xs text-primary hover:text-primary-hover touch-hit">View all transfers</Link>
+            <h2 className="text-sm font-medium text-text">{t('recentTransfers.title')}</h2>
+            <Link to="/transfers" className="text-xs text-primary hover:text-primary-hover touch-hit">{t('recentTransfers.viewAll')}</Link>
           </div>
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-            {transfers!.items.map((t) => (
-              <div key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+            {transfers!.items.map((row) => (
+              <div key={row.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <div className="min-w-0 flex-1">
                   <div className="text-text truncate">
-                    {t.from_account_name} → {t.to_account_name}
-                    {t.description && <span className="text-text-muted"> · {t.description}</span>}
+                    {row.from_account_name} → {row.to_account_name}
+                    {row.description && <span className="text-text-muted"> · {row.description}</span>}
                   </div>
-                  <div className="text-[10px] font-mono text-text-muted">{t.date}</div>
+                  <div className="text-[10px] font-mono text-text-muted">{row.date}</div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0 pl-3">
                   {/* Cross-currency: second small line instead of one long string
                       that would overflow 375px. */}
                   <span className="font-mono text-text text-right">
-                    <span className="whitespace-nowrap">{formatAmount(t.from_amount)} {t.from_currency_code}</span>
-                    {t.from_currency_code !== t.to_currency_code && (
+                    <span className="whitespace-nowrap">{formatAmount(row.from_amount)} {row.from_currency_code}</span>
+                    {row.from_currency_code !== row.to_currency_code && (
                       <span className="block text-[10px] text-text-muted whitespace-nowrap">
-                        → {formatAmount(t.to_amount)} {t.to_currency_code}
+                        → {formatAmount(row.to_amount)} {row.to_currency_code}
                       </span>
                     )}
                   </span>
                   {canWrite && (
-                    <button onClick={() => openTransfer(t)} className="text-text-muted hover:text-primary touch-hit" title="Repeat" aria-label="Repeat transfer">
+                    <button onClick={() => openTransfer(row)} className="text-text-muted hover:text-primary touch-hit" title={t('recentTransfers.repeatTitle')} aria-label={t('recentTransfers.repeatAria')}>
                       <Repeat size={13} />
                     </button>
                   )}
@@ -222,17 +224,17 @@ export default function AccountsPage() {
         onClose={() => setCardAction(null)}
         title={cardAction?.name}
         actions={[
-          { label: 'View transactions', icon: Receipt, onSelect: () => cardAction && navigate(`/transactions?account=${cardAction.id}`) },
-          { label: 'Set balance…', icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
-          { label: 'Edit', icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
+          { label: t('accountCard.viewTransactions'), icon: Receipt, onSelect: () => cardAction && navigate(`/transactions?account=${cardAction.id}`) },
+          { label: t('accountCard.setBalance'), icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
+          { label: t('accountCard.edit'), icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
           {
-            label: cardAction?.is_archived ? 'Unarchive' : 'Archive',
+            label: cardAction?.is_archived ? t('accountCard.unarchive') : t('accountCard.archive'),
             icon: Archive,
             onSelect: () =>
               cardAction && archiveMutation.mutate({ id: cardAction.id, archived: !cardAction.is_archived }),
           },
           ...(cardAction?.is_archived
-            ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => cardAction && setDeleting(cardAction) }]
+            ? [{ label: t('accountCard.delete'), icon: Trash2, destructive: true, onSelect: () => cardAction && setDeleting(cardAction) }]
             : []),
         ]}
       />
@@ -248,8 +250,8 @@ export default function AccountsPage() {
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} repeatFrom={repeatTransfer} />
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete account"
-        message={`Delete "${deleting?.name}"? This cannot be undone.`}
+        title={t('confirmDelete.title')}
+        message={t('confirmDelete.message', { name: deleting?.name ?? '' })}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />

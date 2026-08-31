@@ -1,1 +1,80 @@
-{}
+{
+  "title": "Accounts",
+  "actions": {
+    "transfer": "Transfer",
+    "newAccount": "New account"
+  },
+  "emptyState": "No accounts yet.",
+  "showArchivedLabel": "Show archived accounts",
+  "accountCard": {
+    "archivedBadge": "Archived",
+    "viewTransactions": "View transactions",
+    "setBalance": "Set balance\u2026",
+    "edit": "Edit",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "delete": "Delete"
+  },
+  "recentTransfers": {
+    "title": "Recent transfers",
+    "viewAll": "View all transfers",
+    "repeatTitle": "Repeat",
+    "repeatAria": "Repeat transfer"
+  },
+  "confirmDelete": {
+    "title": "Delete account",
+    "message": "Delete \"{{name}}\"? This cannot be undone."
+  },
+  "toast": {
+    "archiveFailed": "Failed to archive account",
+    "deleted": "Account deleted",
+    "deleteFailed": "Failed to delete account",
+    "updated": "Account updated",
+    "created": "Account created",
+    "saveFailed": "Failed to save account"
+  },
+  "modal": {
+    "titleEdit": "Edit account",
+    "titleCreate": "New account"
+  },
+  "typeOptions": {
+    "bank": "Bank",
+    "cash": "Cash",
+    "other": "Other"
+  },
+  "currencyOption": "{{code}} \u2014 {{name}}",
+  "fields": {
+    "name": "Name",
+    "type": "Type",
+    "typeAria": "Account type",
+    "currency": "Currency",
+    "currencyPlaceholder": "Select currency",
+    "currencyAria": "Account currency",
+    "openingBalance": "Opening balance",
+    "defaultFor": "Set as default for {{code}}"
+  },
+  "manageCurrencies": "Manage currencies...",
+  "formActions": {
+    "cancel": "Cancel",
+    "saving": "Saving\u2026",
+    "save": "Save",
+    "create": "Create"
+  },
+  "validation": {
+    "nameRequired": "Name is required",
+    "currencyRequired": "Currency is required"
+  },
+  "setBalance": {
+    "title": "Set balance \u2014 {{name}}",
+    "currentLabel": "Current balance:",
+    "newLabel": "New balance",
+    "adjustmentLabel": "Adjustment:",
+    "loading": "Loading\u2026",
+    "submit": "Set balance",
+    "updated": "Balance updated",
+    "stillLoading": "Current balance is still loading",
+    "enterTarget": "Enter a target balance",
+    "alreadyThisAmount": "Balance is already this amount",
+    "adjustFailed": "Failed to adjust balance"
+  }
+}

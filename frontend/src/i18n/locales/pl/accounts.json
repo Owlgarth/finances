@@ -1,1 +1,80 @@
-{}
+{
+  "title": "Konta",
+  "actions": {
+    "transfer": "Przelew",
+    "newAccount": "Nowe konto"
+  },
+  "emptyState": "Nie masz jeszcze kont.",
+  "showArchivedLabel": "Pokaż zarchiwizowane konta",
+  "accountCard": {
+    "archivedBadge": "Zarchiwizowane",
+    "viewTransactions": "Zobacz transakcje",
+    "setBalance": "Ustaw saldo…",
+    "edit": "Edytuj",
+    "archive": "Archiwizuj",
+    "unarchive": "Cofnij archiwizację",
+    "delete": "Usuń"
+  },
+  "recentTransfers": {
+    "title": "Ostatnie przelewy",
+    "viewAll": "Zobacz wszystkie przelewy",
+    "repeatTitle": "Powtórz",
+    "repeatAria": "Powtórz przelew"
+  },
+  "confirmDelete": {
+    "title": "Usuń konto",
+    "message": "Usunąć \"{{name}}\"? Tej operacji nie można cofnąć."
+  },
+  "toast": {
+    "archiveFailed": "Nie udało się zarchiwizować konta",
+    "deleted": "Konto usunięte",
+    "deleteFailed": "Nie udało się usunąć konta",
+    "updated": "Konto zaktualizowane",
+    "created": "Konto utworzone",
+    "saveFailed": "Nie udało się zapisać konta"
+  },
+  "modal": {
+    "titleEdit": "Edytuj konto",
+    "titleCreate": "Nowe konto"
+  },
+  "typeOptions": {
+    "bank": "Bankowe",
+    "cash": "Gotówkowe",
+    "other": "Inne"
+  },
+  "currencyOption": "{{code}} - {{name}}",
+  "fields": {
+    "name": "Nazwa",
+    "type": "Typ",
+    "typeAria": "Typ konta",
+    "currency": "Waluta",
+    "currencyPlaceholder": "Wybierz walutę",
+    "currencyAria": "Waluta konta",
+    "openingBalance": "Saldo początkowe",
+    "defaultFor": "Ustaw jako domyślną dla {{code}}"
+  },
+  "manageCurrencies": "Zarządzaj walutami...",
+  "formActions": {
+    "cancel": "Anuluj",
+    "saving": "Zapisywanie…",
+    "save": "Zapisz",
+    "create": "Utwórz"
+  },
+  "validation": {
+    "nameRequired": "Podaj nazwę",
+    "currencyRequired": "Wybierz walutę"
+  },
+  "setBalance": {
+    "title": "Ustaw saldo - {{name}}",
+    "currentLabel": "Bieżące saldo:",
+    "newLabel": "Nowe saldo",
+    "adjustmentLabel": "Korekta:",
+    "loading": "Ładowanie…",
+    "submit": "Ustaw saldo",
+    "updated": "Saldo zaktualizowane",
+    "stillLoading": "Bieżące saldo się jeszcze ładuje",
+    "enterTarget": "Podaj saldo docelowe",
+    "alreadyThisAmount": "Saldo już ma tę wartość",
+    "adjustFailed": "Nie udało się zmienić salda"
+  }
+}

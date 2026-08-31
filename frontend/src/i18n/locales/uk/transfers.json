@@ -1,1 +1,65 @@
-{}
+{
+  "title": "Перекази",
+  "actions": {
+    "newTransfer": "Створити переказ"
+  },
+  "filters": {
+    "accountLabel": "Рахунок",
+    "allAccounts": "Усі рахунки",
+    "filterByAccountAria": "Фільтрувати за рахунком",
+    "dateLabel": "Дата",
+    "fromDateAria": "Дата від",
+    "toDateAria": "Дата до"
+  },
+  "noMatch": "Жоден переказ не відповідає фільтрам.",
+  "emptyHeading": "Переказів ще немає",
+  "emptyMessage": "Створіть переказ зі сторінки рахунків або з меню створення; він з'явиться тут.",
+  "row": {
+    "edit": "Редагувати",
+    "editAria": "Редагувати переказ",
+    "repeat": "Повторити",
+    "repeatAria": "Повторити переказ",
+    "delete": "Видалити",
+    "deleteAria": "Видалити переказ"
+  },
+  "confirmDelete": {
+    "title": "Видалити переказ",
+    "message": "Видалити переказ з \"{{from}}\" на \"{{to}}\"? Буде видалено обидві сторони."
+  },
+  "toast": {
+    "deleted": "Переказ видалено",
+    "deleteFailed": "Не вдалося видалити переказ",
+    "updated": "Переказ оновлено",
+    "recorded": "Переказ зареєстровано",
+    "updateFailed": "Не вдалося оновити переказ",
+    "recordFailed": "Не вдалося зареєструвати переказ"
+  },
+  "modal": {
+    "titleEdit": "Редагування переказу",
+    "titleDefault": "Переказ"
+  },
+  "fields": {
+    "from": "З",
+    "fromAccount": "З рахунку",
+    "to": "На",
+    "toAccount": "На рахунок",
+    "amount": "Сума",
+    "amountSent": "Надіслана сума ({{code}})",
+    "amountReceived": "Отримана сума ({{code}})",
+    "date": "Дата",
+    "description": "Опис (необов'язково)"
+  },
+  "impliedRate": "Розрахунковий курс: 1 {{from}} = {{rate}} {{to}}",
+  "formActions": {
+    "cancel": "Скасувати",
+    "saving": "Збереження…",
+    "save": "Зберегти",
+    "transfer": "Переказати"
+  },
+  "validation": {
+    "chooseBoth": "Виберіть обидва рахунки",
+    "accountsDiffer": "Рахунки мають відрізнятися",
+    "enterAmount": "Вкажіть суму",
+    "enterReceived": "Вкажіть отриману суму"
+  }
+}

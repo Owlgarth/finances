@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import Modal from '../common/Modal'
 import Select from '../common/Select'
 import DatePicker from '../DatePicker'
@@ -27,8 +28,9 @@ function accountById(accounts: Account[], id: number | null): Account | undefine
 }
 
 export default function TransferModal({ open, onClose, repeatFrom, editFrom }: Props) {
+  const { t } = useTranslation('transfers')
   const queryClient = useQueryClient()
-  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
   const { data: accounts = [] } = useAccounts(false)
 
@@ -109,42 +111,42 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
       queryClient.invalidateQueries({ queryKey: ['transfers'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success(editFrom ? 'Transfer updated' : 'Transfer recorded')
+      toast.success(editFrom ? t('toast.updated') : t('toast.recorded'))
       onClose()
     },
     onError: (error) =>
-      toast.error(getApiErrorMessage(error, editFrom ? 'Failed to update transfer' : 'Failed to record transfer')),
+      toast.error(getApiErrorMessage(error, editFrom ? t('toast.updateFailed') : t('toast.recordFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!fromId || !toId) return toast.error('Choose both accounts')
-    if (fromId === toId) return toast.error('Accounts must differ')
-    if (!fromAmount || parseFloat(fromAmount) <= 0) return toast.error('Enter an amount')
-    if (crossCurrency && (!toAmount || parseFloat(toAmount) <= 0)) return toast.error('Enter the received amount')
+    if (!fromId || !toId) return toast.error(t('validation.chooseBoth'))
+    if (fromId === toId) return toast.error(t('validation.accountsDiffer'))
+    if (!fromAmount || parseFloat(fromAmount) <= 0) return toast.error(t('validation.enterAmount'))
+    if (crossCurrency && (!toAmount || parseFloat(toAmount) <= 0)) return toast.error(t('validation.enterReceived'))
     mutation.mutate()
   }
 
   const options = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title={editFrom ? 'Edit transfer' : 'Transfer'}>
+    <Modal open={open} onClose={onClose} className="p-6" title={editFrom ? t('modal.titleEdit') : t('modal.titleDefault')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>From</label>
-            <Select value={fromId} onChange={setFromId} options={options} placeholder="From account" aria-label="From account" />
+            <label className={labelClass}>{t('fields.from')}</label>
+            <Select value={fromId} onChange={setFromId} options={options} placeholder={t('fields.fromAccount')} aria-label={t('fields.fromAccount')} />
           </div>
           <div>
-            <label className={labelClass}>To</label>
-            <Select value={toId} onChange={setToId} options={options} placeholder="To account" aria-label="To account" />
+            <label className={labelClass}>{t('fields.to')}</label>
+            <Select value={toId} onChange={setToId} options={options} placeholder={t('fields.toAccount')} aria-label={t('fields.toAccount')} />
           </div>
         </div>
 
         <div className={crossCurrency ? 'grid grid-cols-2 gap-3' : ''}>
           <div>
             <label htmlFor="from-amount" className={labelClass}>
-              {crossCurrency ? `Amount sent (${fromAccount?.currency_code})` : 'Amount'}
+              {crossCurrency ? t('fields.amountSent', { code: fromAccount?.currency_code ?? '' }) : t('fields.amount')}
             </label>
             <input
               id="from-amount"
@@ -158,7 +160,7 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
           </div>
           {crossCurrency && (
             <div>
-              <label htmlFor="to-amount" className={labelClass}>Amount received ({toAccount?.currency_code})</label>
+              <label htmlFor="to-amount" className={labelClass}>{t('fields.amountReceived', { code: toAccount?.currency_code ?? '' })}</label>
               <input
                 id="to-amount"
                 type="number" inputMode="decimal"
@@ -173,24 +175,24 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
 
         {impliedRate && (
           <p className="text-xs text-text-muted font-mono">
-            Implied rate: 1 {fromAccount?.currency_code} = {impliedRate} {toAccount?.currency_code}
+            {t('impliedRate', { from: fromAccount?.currency_code ?? '', rate: impliedRate, to: toAccount?.currency_code ?? '' })}
           </p>
         )}
 
         <div>
-          <label className={labelClass}>Date</label>
+          <label className={labelClass}>{t('fields.date')}</label>
           <DatePicker value={date} onChange={setDate} />
         </div>
 
         <div>
-          <label htmlFor="transfer-desc" className={labelClass}>Description (optional)</label>
+          <label htmlFor="transfer-desc" className={labelClass}>{t('fields.description')}</label>
           <input id="transfer-desc" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('formActions.cancel')}</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : editFrom ? 'Save' : 'Transfer'}
+            {mutation.isPending ? t('formActions.saving') : editFrom ? t('formActions.save') : t('formActions.transfer')}
           </button>
         </div>
       </form>

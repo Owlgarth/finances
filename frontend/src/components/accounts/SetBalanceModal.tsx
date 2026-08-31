@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import Modal from '../common/Modal'
 import { accountsApi, transactionsApi } from '../../api/client'
 import type { Account } from '../../types'
@@ -15,10 +16,11 @@ interface Props {
   account: Account
 }
 
-/** "Set balance to X" — records an adjustment transaction for the computed delta. */
+/** Sets the account balance to a target - records an adjustment transaction for the computed delta. */
 export default function SetBalanceModal({ open, onClose, account }: Props) {
+  const { t } = useTranslation('accounts')
   const queryClient = useQueryClient()
-  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
   const [target, setTarget] = useState('')
 
@@ -29,7 +31,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
   })
 
   // Money rule (utils/format.ts): never run backend Decimals through float
-  // math — large balances get off-by-cent deltas recorded as real
+  // math - large balances get off-by-cent deltas recorded as real
   // transactions. Exact string math via subtractAmounts. The regex gates
   // e-notation ("1e5" is a valid number-input value that BigInt cannot
   // parse) and is also the "did they type an amount" check.
@@ -49,31 +51,31 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
       queryClient.invalidateQueries({ queryKey: ['account-balance', account.id] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      toast.success('Balance updated')
+      toast.success(t('setBalance.updated'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to adjust balance')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('setBalance.adjustFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!balance) return toast.error('Current balance is still loading')
-    if (!validTarget) return toast.error('Enter a target balance')
-    if (delta === '0.00') return toast.error('Balance is already this amount')
+    if (!balance) return toast.error(t('setBalance.stillLoading'))
+    if (!validTarget) return toast.error(t('setBalance.enterTarget'))
+    if (delta === '0.00') return toast.error(t('setBalance.alreadyThisAmount'))
     mutation.mutate()
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title={`Set balance — ${account.name}`}>
+    <Modal open={open} onClose={onClose} className="p-6" title={t('setBalance.title', { name: account.name })}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-text-muted">
-          Current balance:{' '}
+          {t('setBalance.currentLabel')}{' '}
           <span className="font-mono text-text">
-            {balance ? `${formatAmount(balance.balance)} ${account.currency_code}` : 'Loading…'}
+            {balance ? `${formatAmount(balance.balance)} ${account.currency_code}` : t('setBalance.loading')}
           </span>
         </p>
         <div>
-          <label htmlFor="target-balance" className={labelClass}>New balance</label>
+          <label htmlFor="target-balance" className={labelClass}>{t('setBalance.newLabel')}</label>
           <input
             id="target-balance"
             type="number" inputMode="decimal"
@@ -86,16 +88,16 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
         </div>
         {delta !== null && delta !== '0.00' && (
           <p className="text-sm text-text-muted">
-            Adjustment: {' '}
+            {t('setBalance.adjustmentLabel')} {' '}
             <span className={`font-mono ${delta.startsWith('-') ? 'text-negative' : 'text-positive'}`}>
               {delta.startsWith('-') ? '' : '+'}{formatAmount(delta)} {account.currency_code}
             </span>
           </p>
         )}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('formActions.cancel')}</button>
           <button type="submit" disabled={mutation.isPending || !balance} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : 'Set balance'}
+            {mutation.isPending ? t('formActions.saving') : t('setBalance.submit')}
           </button>
         </div>
       </form>

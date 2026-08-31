@@ -1,1 +1,65 @@
-{}
+{
+  "title": "Transfers",
+  "actions": {
+    "newTransfer": "New transfer"
+  },
+  "filters": {
+    "accountLabel": "Account",
+    "allAccounts": "All accounts",
+    "filterByAccountAria": "Filter by account",
+    "dateLabel": "Date",
+    "fromDateAria": "From date",
+    "toDateAria": "To date"
+  },
+  "noMatch": "No transfers match your filters.",
+  "emptyHeading": "No transfers yet",
+  "emptyMessage": "Record a transfer from Accounts or the create menu; it will appear here.",
+  "row": {
+    "edit": "Edit",
+    "editAria": "Edit transfer",
+    "repeat": "Repeat",
+    "repeatAria": "Repeat transfer",
+    "delete": "Delete",
+    "deleteAria": "Delete transfer"
+  },
+  "confirmDelete": {
+    "title": "Delete transfer",
+    "message": "Delete this transfer from \"{{from}}\" to \"{{to}}\"? Both sides will be removed."
+  },
+  "toast": {
+    "deleted": "Transfer deleted",
+    "deleteFailed": "Failed to delete transfer",
+    "updated": "Transfer updated",
+    "recorded": "Transfer recorded",
+    "updateFailed": "Failed to update transfer",
+    "recordFailed": "Failed to record transfer"
+  },
+  "modal": {
+    "titleEdit": "Edit transfer",
+    "titleDefault": "Transfer"
+  },
+  "fields": {
+    "from": "From",
+    "fromAccount": "From account",
+    "to": "To",
+    "toAccount": "To account",
+    "amount": "Amount",
+    "amountSent": "Amount sent ({{code}})",
+    "amountReceived": "Amount received ({{code}})",
+    "date": "Date",
+    "description": "Description (optional)"
+  },
+  "impliedRate": "Implied rate: 1 {{from}} = {{rate}} {{to}}",
+  "formActions": {
+    "cancel": "Cancel",
+    "saving": "Saving\u2026",
+    "save": "Save",
+    "transfer": "Transfer"
+  },
+  "validation": {
+    "chooseBoth": "Choose both accounts",
+    "accountsDiffer": "Accounts must differ",
+    "enterAmount": "Enter an amount",
+    "enterReceived": "Enter the received amount"
+  }
+}

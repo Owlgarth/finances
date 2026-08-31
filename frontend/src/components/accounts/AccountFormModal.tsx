@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Settings2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../common/Modal'
 import Select from '../common/Select'
 import Switch from '../common/Switch'
@@ -21,16 +22,18 @@ interface Props {
   onManageCurrencies?: () => void
 }
 
-const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
-  { value: 'bank', label: 'Bank' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'other', label: 'Other' },
+// Keys only: t() is a hook result, so labels resolve inside the component.
+const TYPE_OPTIONS: { value: AccountType; labelKey: 'typeOptions.bank' | 'typeOptions.cash' | 'typeOptions.other' }[] = [
+  { value: 'bank', labelKey: 'typeOptions.bank' },
+  { value: 'cash', labelKey: 'typeOptions.cash' },
+  { value: 'other', labelKey: 'typeOptions.other' },
 ]
 
 export default function AccountFormModal({ open, onClose, account, onManageCurrencies }: Props) {
+  const { t } = useTranslation('accounts')
   const isEdit = !!account
   const queryClient = useQueryClient()
-  // No autofocus on touch — don't yank the keyboard up over a fresh modal.
+  // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
   const { data: currencies = [] } = useEnabledCurrencies()
 
@@ -41,7 +44,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
   const [isDefault, setIsDefault] = useState(account?.is_default_for_currency ?? false)
 
   // Permanently mounted (AccountsPage renders us unconditionally, no `key`),
-  // so the useState initializers above ran once at page load — with `account`
+  // so the useState initializers above ran once at page load - with `account`
   // undefined. Re-seed from the prop on every open (TransferModal-style), or
   // Edit opens a blank form that saves `opening_balance: '0'`.
   useEffect(() => {
@@ -69,43 +72,48 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success(isEdit ? 'Account updated' : 'Account created')
+      toast.success(isEdit ? t('toast.updated') : t('toast.created'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save account')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('toast.saveFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return toast.error('Name is required')
-    if (!isEdit && !currencyCode) return toast.error('Currency is required')
+    if (!name.trim()) return toast.error(t('validation.nameRequired'))
+    if (!isEdit && !currencyCode) return toast.error(t('validation.currencyRequired'))
     mutation.mutate()
   }
 
-  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))
+  const currencyOptions = currencies.map((c) => ({ value: c.code, label: t('currencyOption', { code: c.code, name: c.name }) }))
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? 'Edit account' : 'New account'}>
+    <Modal open={open} onClose={onClose} className="p-6" title={isEdit ? t('modal.titleEdit') : t('modal.titleCreate')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="acc-name" className={labelClass}>Name</label>
+          <label htmlFor="acc-name" className={labelClass}>{t('fields.name')}</label>
           <input id="acc-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
 
         <div>
-          <label className={labelClass}>Type</label>
-          <Select value={type} onChange={(v) => setType(v)} options={TYPE_OPTIONS} aria-label="Account type" />
+          <label className={labelClass}>{t('fields.type')}</label>
+          <Select
+            value={type}
+            onChange={(v) => setType(v)}
+            options={TYPE_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
+            aria-label={t('fields.typeAria')}
+          />
         </div>
 
         {!isEdit && (
           <div>
-            <label className={labelClass}>Currency</label>
+            <label className={labelClass}>{t('fields.currency')}</label>
             <Select
               value={currencyCode}
               onChange={(v) => setCurrencyCode(v)}
               options={currencyOptions}
-              placeholder="Select currency"
-              aria-label="Account currency"
+              placeholder={t('fields.currencyPlaceholder')}
+              aria-label={t('fields.currencyAria')}
               mono
               searchable
             />
@@ -117,7 +125,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
                   className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors"
                 >
                   <Settings2 size={13} />
-                  Manage currencies...
+                  {t('manageCurrencies')}
                 </button>
               </div>
             )}
@@ -125,7 +133,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
         )}
 
         <div>
-          <label htmlFor="acc-opening" className={labelClass}>Opening balance</label>
+          <label htmlFor="acc-opening" className={labelClass}>{t('fields.openingBalance')}</label>
           <input
             id="acc-opening"
             type="number" inputMode="decimal"
@@ -141,16 +149,16 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
             <Switch
               checked={isDefault}
               onChange={setIsDefault}
-              aria-label={`Set as default for ${isEdit ? account!.currency_code : currencyCode}`}
+              aria-label={t('fields.defaultFor', { code: isEdit ? account!.currency_code : currencyCode })}
             />
-            Set as default for {isEdit ? account!.currency_code : currencyCode}
+            {t('fields.defaultFor', { code: isEdit ? account!.currency_code : currencyCode })}
           </label>
         )}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('formActions.cancel')}</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Create'}
+            {mutation.isPending ? t('formActions.saving') : isEdit ? t('formActions.save') : t('formActions.create')}
           </button>
         </div>
       </form>
