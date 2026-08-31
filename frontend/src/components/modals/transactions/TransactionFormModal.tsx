@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Copy, Plus, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
@@ -39,11 +40,11 @@ interface Props {
   prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
 }
 
-const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
-  { value: 'expense', label: 'Expense' },
-  { value: 'income', label: 'Income' },
-  { value: 'adjustment', label: 'Adjustment' },
-]
+const TYPE_OPTIONS = [
+  { value: 'expense', labelKey: 'type.expense' },
+  { value: 'income', labelKey: 'type.income' },
+  { value: 'adjustment', labelKey: 'type.adjustment' },
+] as const
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
@@ -79,6 +80,7 @@ const pickAccountForCurrency = (
 }
 
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy, prefillReceipt = null }: Props) {
+  const { t } = useTranslation('transactions')
   const isEdit = !!transaction
   const queryClient = useQueryClient()
   // No autofocus on touch: focusing an input on open yanks the keyboard up
@@ -170,7 +172,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     },
     // A 503 here means the self-hosted scanner is off — the backend's detail
     // already says so, so surface it rather than a generic error.
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Could not read the receipt')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('form.parseFailedFallback'))),
   })
 
   const handleFile = (f: File | null) => {
@@ -362,34 +364,35 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // The transaction IS durable either way — invalidations + close run in
       // both cases. Only the message differs: a single error vs a single success.
       if (uploadFailed) {
-        toast.error('Transaction saved, but the receipt upload failed — you can add it from the edit screen.')
+        toast.error(t('form.uploadFailedPartial'))
       } else {
-        toast.success(isEdit ? 'Transaction updated' : 'Transaction added')
+        toast.success(isEdit ? t('form.updated') : t('form.added'))
       }
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save transaction')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('form.saveFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!description.trim()) return toast.error('Description is required')
-    if (!amount) return toast.error('Amount is required')
-    if (type === 'adjustment' && !accountId) return toast.error('Adjustments require an account')
-    if (!currencyCode) return toast.error('Choose a currency')
+    if (!description.trim()) return toast.error(t('form.descriptionRequired'))
+    if (!amount) return toast.error(t('form.amountRequired'))
+    if (type === 'adjustment' && !accountId) return toast.error(t('form.adjustmentNeedsAccount'))
+    if (!currencyCode) return toast.error(t('form.chooseCurrency'))
     mutation.mutate()
   }
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
   const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
+  const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   // Adjustments must book to an account (an account-less adjustment moves no
   // balance), so the sentinel disappears from the option list for them; a
   // stale null accountId then simply shows the placeholder.
   const accountSelectOptions =
     type === 'adjustment'
       ? accountOptions
-      : [{ value: NO_ACCOUNT, label: 'No account' }, ...accountOptions]
+      : [{ value: NO_ACCOUNT, label: t('noAccount') }, ...accountOptions]
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
   const otherCurrencyOptions = useMemo(
     () => currencies.filter((c) => c.code !== currencyCode).map((c) => ({ value: c.code, label: c.code })),
@@ -448,7 +451,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   }
 
   return (
-    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? 'Edit transaction' : 'New transaction'}>
+    <Modal open={open} onClose={onClose} className="p-6 max-h-[90vh] overflow-y-auto" title={isEdit ? t('form.editTitle') : t('form.newTitle')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Inline receipt scan — create mode only, hidden when extraction is disabled. */}
         {!isEdit && extractionEnabled && (
@@ -465,20 +468,20 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={parse.isPending || !extractionReachable}
-              title={extractionReachable ? undefined : 'The receipt scanner is offline right now'}
+              title={extractionReachable ? undefined : t('form.scannerOfflineTitle')}
               className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1`}
             >
               {parse.isPending ? (
                 <>
-                  <Loader2 size={13} className="animate-spin" /> Reading…
+                  <Loader2 size={13} className="animate-spin" /> {t('form.reading')}
                 </>
               ) : extractionReachable ? (
                 <>
-                  <Upload size={13} /> Upload invoice/receipt
+                  <Upload size={13} /> {t('form.uploadReceipt')}
                 </>
               ) : (
                 <>
-                  <CloudOff size={13} /> Scanning offline
+                  <CloudOff size={13} /> {t('form.scanningOffline')}
                 </>
               )}
             </button>
@@ -487,7 +490,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Type</label>
+            <label className={labelClass}>{t('form.typeLabel')}</label>
             <Select
               value={type}
               onChange={(v) => {
@@ -497,20 +500,20 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
                 setHighlighted(-1)
                 setSuggestionsOpen(false)
               }}
-              options={TYPE_OPTIONS}
-              aria-label="Transaction type"
+              options={typeOptions}
+              aria-label={t('form.typeAria')}
             />
           </div>
           <div>
             <label htmlFor="tx-amount" className={labelClass}>
-              {type === 'adjustment' ? 'Delta amount' : 'Amount'} {currencyCode ? `(${currencyCode})` : ''}
+              {type === 'adjustment' ? t('form.deltaAmountLabel') : t('form.amountLabel')} {currencyCode ? `(${currencyCode})` : ''}
             </label>
             <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
           </div>
         </div>
 
         <div>
-          <label htmlFor="tx-desc" className={labelClass}>Description</label>
+          <label htmlFor="tx-desc" className={labelClass}>{t('form.descriptionLabel')}</label>
           <div className="relative">
             <input
               id="tx-desc"
@@ -538,7 +541,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               // max-w-full caps the fit-widest panel at the description
               // field's width - frequent descriptions can be arbitrarily
               // long (max-width clamps width regardless of class order).
-              <div id={descListId} role="listbox" aria-label="Frequent descriptions" className={listboxPanelClass + ' max-w-full'}>
+              <div id={descListId} role="listbox" aria-label={t('form.frequentAria')} className={listboxPanelClass + ' max-w-full'}>
                 {suggestions.map((s, i) => (
                   <button
                     key={s.description}
@@ -571,8 +574,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             Collapsed by default so the form stays compact; the textarea
             replaces the button once opened. */}
         {noteOpen ? (
-          <div id={noteId} role="region" aria-label="Note">
-            <label htmlFor="tx-note" className={labelClass}>Note</label>
+          <div id={noteId} role="region" aria-label={t('form.noteAria')}>
+            <label htmlFor="tx-note" className={labelClass}>{t('form.noteLabel')}</label>
             <textarea
               id="tx-note"
               rows={3}
@@ -592,7 +595,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             aria-controls={noteId}
             className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors max-sm:min-h-[44px]"
           >
-            <Plus size={13} /> Add note
+            <Plus size={13} /> {t('form.addNote')}
           </button>
         )}
 
@@ -600,23 +603,23 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             while traveling, a closed account's history) is a first-class path. */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Account</label>
+            <label className={labelClass}>{t('form.accountLabel')}</label>
             <Select
               value={accountId ?? NO_ACCOUNT}
               onChange={handleAccountChange}
               options={accountSelectOptions}
-              placeholder="Select account"
-              aria-label="Account"
+              placeholder={t('form.selectAccount')}
+              aria-label={t('form.accountAria')}
             />
           </div>
           <div>
-            <label className={labelClass}>Currency</label>
+            <label className={labelClass}>{t('form.currencyLabel')}</label>
             <Select
               value={currencyCode}
               onChange={setCurrencyCode}
               options={currencyOptions}
-              placeholder="Currency"
-              aria-label="Currency"
+              placeholder={t('form.currencyPlaceholder')}
+              aria-label={t('form.currencyAria')}
               disabled={accountId !== null}
               mono
             />
@@ -627,19 +630,19 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           <div className="grid grid-cols-2 gap-3">
             {budgets.length > 1 && (
               <div>
-                <label className={labelClass}>Budget</label>
-                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder="Budget" aria-label="Budget" />
+                <label className={labelClass}>{t('form.budgetLabel')}</label>
+                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
               </div>
             )}
             <div className={budgets.length > 1 ? '' : 'col-span-2'}>
-              <label className={labelClass}>Category (optional)</label>
-              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder="Uncategorized" aria-label="Category" disabled={!budgetId} />
+              <label className={labelClass}>{t('form.categoryLabel')}</label>
+              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
             </div>
           </div>
         )}
 
         <div>
-          <label className={labelClass}>Date</label>
+          <label className={labelClass}>{t('form.dateLabel')}</label>
           <DatePicker value={date} onChange={setDate} />
         </div>
 
@@ -647,12 +650,12 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           <div>
             <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer">
               <input type="checkbox" checked={otherCurrency} onChange={(e) => setOtherCurrency(e.target.checked)} />
-              Paid in another currency?
+              {t('form.otherCurrency')}
             </label>
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
-                <input type="number" inputMode="decimal" step="0.01" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder="Original amount" className={inputClass} />
-                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder="Currency" aria-label="Original currency" mono />
+                <input type="number" inputMode="decimal" step="0.01" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
+                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono />
               </div>
             )}
           </div>
@@ -674,20 +677,20 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             <div className="flex items-center gap-2">
               {onCopy && (
                 <button type="button" onClick={() => onCopy(transaction)} className={secondaryButtonClass}>
-                  <Copy size={13} className="inline mr-1" /> Copy
+                  <Copy size={13} className="inline mr-1" /> {t('form.copy')}
                 </button>
               )}
               {onDelete && (
                 <button type="button" onClick={() => onDelete(transaction)} className={destructiveButtonClass}>
-                  <Trash2 size={13} className="inline mr-1" /> Delete
+                  <Trash2 size={13} className="inline mr-1" /> {t('form.delete')}
                 </button>
               )}
             </div>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+            <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('form.cancel')}</button>
             <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-              {mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}
+              {mutation.isPending ? t('form.saving') : isEdit ? t('form.save') : t('form.add')}
             </button>
           </div>
         </div>
@@ -705,7 +708,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
                   detailTab === tab ? 'bg-surface-hover text-text' : 'text-text-muted hover:text-text hover:bg-surface-hover'
                 }`}
               >
-                {tab}
+                {t(tab === 'items' ? 'form.tabs.items' : 'form.tabs.receipts')}
               </button>
             ))}
           </div>

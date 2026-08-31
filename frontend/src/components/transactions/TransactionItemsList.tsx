@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, AlertTriangle, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { formatAmount } from '../../utils/format'
 import { inputClass, labelClass } from '../common/formStyles'
@@ -45,6 +46,7 @@ const actionBtn =
   'inline-flex items-center justify-center p-1.5 text-text-muted max-sm:min-h-[44px] max-sm:min-w-[44px]'
 
 export default function TransactionItemsList({ rows, onChange, amount, currencyCode }: Props) {
+  const { t } = useTranslation('transactions')
   const isTouch = useIsTouch()
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   // Set only on Add; cleared the first time the new card's Name input receives focus.
@@ -135,7 +137,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
             >
               <div className="min-w-0 flex-1">
                 <span className={`block truncate ${row.name.trim() ? 'text-text' : 'text-text-muted'}`}>
-                  {row.name.trim() || 'Untitled item'}
+                  {row.name.trim() || t('items.untitled')}
                 </span>
                 <div className="text-[10px] font-mono text-text-muted truncate">
                   {row.quantity}
@@ -154,9 +156,9 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
 
             {/* Expanded form — SIBLING of the header button, never nested inside it. */}
             {isOpen && (
-              <div id={formId} role="region" aria-label="Item details" className="mt-3 border-t border-border pt-3 space-y-2">
+              <div id={formId} role="region" aria-label={t('items.detailsAria')} className="mt-3 border-t border-border pt-3 space-y-2">
                 <div>
-                  <label className={labelClass} htmlFor={nameId}>Name</label>
+                  <label className={labelClass} htmlFor={nameId}>{t('items.nameLabel')}</label>
                   <input
                     id={nameId}
                     value={row.name}
@@ -174,7 +176,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className={labelClass}>Quantity</label>
+                    <label className={labelClass}>{t('items.quantityLabel')}</label>
                     <input
                       value={row.quantity}
                       inputMode="decimal"
@@ -183,7 +185,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Unit price</label>
+                    <label className={labelClass}>{t('items.unitPriceLabel')}</label>
                     <input
                       value={row.unit_price}
                       inputMode="decimal"
@@ -194,7 +196,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Line total</label>
+                  <label className={labelClass}>{t('items.lineTotalLabel')}</label>
                   <input
                     value={row.line_total}
                     inputMode="decimal"
@@ -207,7 +209,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    aria-label="Move item up"
+                    aria-label={t('items.moveUpAria')}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                     className={`${actionBtn} hover:text-text disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -216,7 +218,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </button>
                   <button
                     type="button"
-                    aria-label="Move item down"
+                    aria-label={t('items.moveDownAria')}
                     disabled={index === rows.length - 1}
                     onClick={() => move(index, 1)}
                     className={`${actionBtn} hover:text-text disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -225,7 +227,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </button>
                   <button
                     type="button"
-                    aria-label="Delete item"
+                    aria-label={t('items.deleteAria')}
                     onClick={() => removeRow(index)}
                     className={`${actionBtn} hover:text-negative`}
                   >
@@ -245,21 +247,20 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
           onClick={handleAdd}
           className="text-xs text-primary hover:text-primary-hover inline-flex items-center gap-1"
         >
-          <Plus size={12} /> Add item
+          <Plus size={12} /> {t('items.addItem')}
         </button>
         {rows.some((r) => r.name.trim()) && (
           <span className="text-xs font-mono text-text-muted">
             {currencyCode
-              ? `Items: ${formatAmount(itemsTotal)} ${currencyCode}`
-              : `Items: ${formatAmount(itemsTotal)}`}
+              ? `${t('items.itemsTotal', { total: formatAmount(itemsTotal) })} ${currencyCode}`
+              : t('items.itemsTotal', { total: formatAmount(itemsTotal) })}
           </span>
         )}
       </div>
 
       {mismatch && (
         <p className="text-xs text-warning inline-flex items-center gap-1">
-          <AlertTriangle size={12} /> Items total ({formatAmount(itemsTotal)}) doesn’t match the transaction
-          amount ({formatAmount(absAmount)}).
+          <AlertTriangle size={12} /> {t('items.mismatch', { items: formatAmount(itemsTotal), amount: formatAmount(absAmount) })}
         </p>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { AlertTriangle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../common/Modal'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput } from '../../types'
@@ -34,6 +35,7 @@ interface Row {
  * close) — that remount is what re-seeds rows for the next extraction.
  */
 export default function ExtractionReviewModal({ onClose, transaction, parsed }: Props) {
+  const { t } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const [rows, setRows] = useState<Row[]>(
     parsed.items.map((i) => ({
@@ -97,10 +99,10 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
       if (merchantFillsDescription()) {
         queryClient.invalidateQueries({ queryKey: ['transactions'] })
       }
-      toast.success('Items saved from receipt')
+      toast.success(t('extraction.saved'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save items')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('extraction.saveFailed'))),
   })
 
   const updateRow = (index: number, patch: Partial<Row>) =>
@@ -108,35 +110,35 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
 
   const flag = (value: string | null, confidence: number) =>
     value && confidence < LOW_CONFIDENCE ? (
-      <span className="ml-1 text-warning" title="Low confidence — please verify"><AlertTriangle size={11} className="inline" /></span>
+      <span className="ml-1 text-warning" title={t('extraction.lowConfidenceTitle')}><AlertTriangle size={11} className="inline" /></span>
     ) : null
 
   return (
-    <Modal open onClose={onClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title="Review extracted receipt">
+    <Modal open onClose={onClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title={t('extraction.title')}>
 
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div>
-          <span className="text-text-muted">Merchant:</span> {parsed.merchant ?? '—'}
+          <span className="text-text-muted">{t('extraction.merchant')}</span> {parsed.merchant ?? '—'}
           {flag(parsed.merchant, parsed.confidence.merchant)}
         </div>
         <div>
-          <span className="text-text-muted">Date:</span> {parsed.date ?? '—'}
+          <span className="text-text-muted">{t('extraction.date')}</span> {parsed.date ?? '—'}
           {flag(parsed.date, parsed.confidence.date)}
         </div>
         <div>
-          <span className="text-text-muted">Total:</span>{' '}
+          <span className="text-text-muted">{t('extraction.total')}</span>{' '}
           <span className="font-mono">{parsed.total ?? '—'} {parsed.currency ?? ''}</span>
           {flag(parsed.total, parsed.confidence.total)}
         </div>
         <div>
-          <span className="text-text-muted">Currency:</span> {parsed.currency ?? '—'}
+          <span className="text-text-muted">{t('extraction.currency')}</span> {parsed.currency ?? '—'}
           {flag(parsed.currency, parsed.confidence.currency)}
         </div>
       </div>
 
       {parsed.warnings.length > 0 && (
         <div className="mb-4 p-3 bg-warning/10 border border-warning/40 rounded-sm text-xs text-warning">
-          <p className="font-medium inline-flex items-center gap-1 mb-1"><AlertTriangle size={12} /> The parser flagged:</p>
+          <p className="font-medium inline-flex items-center gap-1 mb-1"><AlertTriangle size={12} /> {t('extraction.parserFlagged')}</p>
           <ul className="list-disc pl-4">
             {parsed.warnings.map((w) => <li key={w}>{w.replace(/_/g, ' ')}</li>)}
           </ul>
@@ -147,10 +149,10 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
         <table className="w-full text-xs">
           <thead>
             <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
-              <th className="text-left px-2 py-1.5">Item</th>
-              <th className="px-2 py-1.5 w-16">Qty</th>
-              <th className="px-2 py-1.5 w-20">Unit</th>
-              <th className="px-2 py-1.5 w-20">Total</th>
+              <th className="text-left px-2 py-1.5">{t('extraction.colItem')}</th>
+              <th className="px-2 py-1.5 w-16">{t('extraction.colQty')}</th>
+              <th className="px-2 py-1.5 w-20">{t('extraction.colUnit')}</th>
+              <th className="px-2 py-1.5 w-20">{t('extraction.colTotal')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -163,19 +165,19 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={4} className="px-2 py-4 text-center text-text-muted">No line items detected.</td></tr>
+              <tr><td colSpan={4} className="px-2 py-4 text-center text-text-muted">{t('extraction.noItems')}</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+        <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('extraction.cancel')}</button>
         <button type="button" onClick={() => save.mutate('append')} disabled={save.isPending || rows.length === 0} className={secondaryButtonClass}>
-          Append to items
+          {t('extraction.append')}
         </button>
         <button type="button" onClick={() => save.mutate('replace')} disabled={save.isPending || rows.length === 0} className={primaryButtonClass}>
-          {save.isPending ? 'Saving…' : 'Replace items'}
+          {save.isPending ? t('extraction.saving') : t('extraction.replace')}
         </button>
       </div>
     </Modal>
