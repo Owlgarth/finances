@@ -111,18 +111,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     // Server preference wins for the number style whenever the query has
     // data (resolveNumberStyle's precedence chain); on logout preferences
     // is undefined and the locally stored value applies again through the
-    // provider-mount application above. Runs before the language guard so
-    // a number_format-only server change still lands.
+    // provider-mount application above.
     applyFormatting(
       i18next.resolvedLanguage || registry.defaultLanguage,
       resolveNumberStyle(preferences?.number_format),
     )
-    const serverLanguage = preferences?.language
-    if (!serverLanguage || appliedServerLanguage.current === serverLanguage) return
-    appliedServerLanguage.current = serverLanguage
-    if (i18next.resolvedLanguage !== serverLanguage) {
-      void setLanguage(serverLanguage)
-    }
     // Server number_format wins the same way the language does. Going through
     // setNumberFormat (not just the module config above) is load-bearing:
     // mutating the singleton alone re-renders nothing, so a cold authenticated
@@ -130,13 +123,23 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     // The microtask defers the setState out of the effect body (the frozen
     // set-state-in-effect baseline; the async setLanguage seam above gets the
     // same deferral from its await). The ref stops re-application after a
-    // manual in-session switch.
+    // manual in-session switch. This block must stay ABOVE the language
+    // guard: the guard returns early when the language is unchanged, and a
+    // number_format-only server change still has to reach setNumberFormat -
+    // otherwise every later provider render and setLanguage re-apply the
+    // stale state style, reverting the amounts until a full reload.
     const serverNumberFormat = preferences?.number_format
     if (serverNumberFormat && appliedServerNumberFormat.current !== serverNumberFormat) {
       appliedServerNumberFormat.current = serverNumberFormat
       if (serverNumberFormat !== numberFormat) {
         void Promise.resolve().then(() => setNumberFormat(serverNumberFormat))
       }
+    }
+    const serverLanguage = preferences?.language
+    if (!serverLanguage || appliedServerLanguage.current === serverLanguage) return
+    appliedServerLanguage.current = serverLanguage
+    if (i18next.resolvedLanguage !== serverLanguage) {
+      void setLanguage(serverLanguage)
     }
   }, [preferences?.language, preferences?.number_format, setLanguage, setNumberFormat, numberFormat])
 
