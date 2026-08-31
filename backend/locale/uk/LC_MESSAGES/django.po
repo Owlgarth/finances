@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 19:16+0000\n"
+"POT-Creation-Date: 2026-08-31 19:30+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -85,7 +85,7 @@ msgstr ""
 msgid "Color must be a valid hex color code (e.g. #FF5733)"
 msgstr ""
 
-#: budgeting/schemas.py:116
+#: budgeting/schemas.py:116 budgeting/services.py:333
 msgid "end_date must be on or after start_date"
 msgstr ""
 
@@ -139,6 +139,47 @@ msgstr ""
 #: common/querysets.py:11
 #, python-format
 msgid "workspace_id is required for %(model)s.for_workspace(), got %(value)r"
+msgstr ""
+
+#: common/throttle.py:55 common/throttle.py:88 common/throttle.py:127
+msgid "Too many requests. Please try again later."
+msgstr ""
+
+#: common/throttle.py:149
+#, python-format
+msgid "File too large. Maximum %(max)sMB allowed."
+msgstr ""
+
+#: core/api.py:127
+msgid "Email verified successfully"
+msgstr ""
+
+#: core/api.py:140
+msgid "If your email is unverified, a new verification email has been sent."
+msgstr ""
+
+#: core/api.py:151
+msgid "If an account exists with this email, a reset link has been sent."
+msgstr ""
+
+#: core/api.py:165
+msgid "Invalid reset link"
+msgstr ""
+
+#: core/api.py:168
+msgid "Invalid or expired reset link"
+msgstr ""
+
+#: core/api.py:172
+msgid "Password has been reset successfully"
+msgstr ""
+
+#: core/api.py:180
+msgid "Verification email sent to your new address"
+msgstr ""
+
+#: core/api.py:188
+msgid "Email changed successfully"
 msgstr ""
 
 #: core/schemas/auth.py:19
@@ -258,6 +299,19 @@ msgstr ""
 msgid "name and symbol are required when creating a custom currency"
 msgstr ""
 
+#: planned_transactions/api.py:171 transactions/api.py:175
+msgid "Invalid JSON file."
+msgstr ""
+
+#: planned_transactions/api.py:175
+msgid "No new planned transactions to import."
+msgstr ""
+
+#: planned_transactions/api.py:176
+#, python-format
+msgid "Successfully imported %(count)s new planned transactions."
+msgstr ""
+
 #: planned_transactions/exceptions.py:9
 msgid "Planned transaction not found"
 msgstr ""
@@ -284,6 +338,23 @@ msgstr ""
 
 #: planned_transactions/exceptions.py:39
 msgid "Cannot change status of an executed planned transaction"
+msgstr ""
+
+#: transactions/api.py:180
+msgid "No new transactions to import."
+msgstr ""
+
+#: transactions/api.py:181
+#, python-format
+msgid "Successfully imported %(count)s new transactions."
+msgstr ""
+
+#: transactions/api.py:349 transactions/api.py:372
+msgid "Receipt extraction is not configured."
+msgstr ""
+
+#: transactions/api.py:356
+msgid "Receipt scanning is temporarily offline. Please try again later."
 msgstr ""
 
 #: transactions/exceptions.py:9
@@ -358,6 +429,20 @@ msgstr ""
 msgid "Item name cannot be empty"
 msgstr ""
 
+#: transactions/services.py:123
+#, python-format
+msgid "Original currency %(code)s not found in the catalog"
+msgstr ""
+
+#: transactions/services.py:126
+msgid "Original currency must differ from the transaction currency"
+msgstr ""
+
+#: transactions/services.py:767
+#, python-format
+msgid "Invalid data format: %(error)s"
+msgstr ""
+
 #: transfers/exceptions.py:9
 msgid "Transfer not found"
 msgstr ""
@@ -380,6 +465,22 @@ msgstr ""
 
 #: transfers/exceptions.py:34
 msgid "to_amount is required for cross-currency transfers"
+msgstr ""
+
+#: users/api.py:72
+msgid "Password updated successfully"
+msgstr ""
+
+#: users/api.py:159
+msgid "Account and all associated data deleted successfully."
+msgstr ""
+
+#: users/api.py:181
+msgid "Account reset. A fresh workspace is ready."
+msgstr ""
+
+#: users/api.py:259
+msgid "Two-factor authentication has been disabled"
 msgstr ""
 
 #: users/exceptions.py:9
@@ -428,6 +529,62 @@ msgstr ""
 
 #: users/models.py:27
 msgid "The Email field must be set"
+msgstr ""
+
+#: users/services.py:249
+msgid "This email change request is no longer valid"
+msgstr ""
+
+#: users/services.py:417 users/services.py:496
+msgid "Invalid password"
+msgstr ""
+
+#: users/services.py:505
+#, python-format
+msgid ""
+"These workspaces are shared with other members: %(workspaces)s. Set "
+"confirm_shared to delete them anyway."
+msgstr ""
+
+#: users/services.py:771
+#, python-format
+msgid ""
+"Incompatible export version: %(version)s. The main import accepts v3 exports "
+"only; use the legacy import for v1/v2 files."
+msgstr ""
+
+#: users/services.py:774
+msgid "unknown"
+msgstr ""
+
+#: users/services.py:796
+#, python-format
+msgid "Invalid date in import data: %(value)r (expected YYYY-MM-DD)"
+msgstr ""
+
+#: users/services.py:918
+#, python-format
+msgid "%(name)s: transaction references unknown account"
+msgstr ""
+
+#: users/services.py:924
+#, python-format
+msgid "%(name)s: account-less transaction missing currency_code"
+msgstr ""
+
+#: users/services.py:969
+#, python-format
+msgid "%(name)s: transfer references unknown account"
+msgstr ""
+
+#: users/services.py:990
+#, python-format
+msgid "%(name)s: planned transaction references unknown account"
+msgstr ""
+
+#: users/services.py:996
+#, python-format
+msgid "%(name)s: account-less planned transaction missing currency_code"
 msgstr ""
 
 #: workspaces/exceptions.py:10
@@ -491,4 +648,25 @@ msgstr ""
 
 #: workspaces/schemas.py:83
 msgid "Password cannot be blank"
+msgstr ""
+
+#: workspaces/services.py:193
+msgid "Budget not found in this workspace"
+msgstr ""
+
+#: workspaces/services.py:482
+#, python-format
+msgid "Cannot assign role: %(role)s. Allowed: %(allowed)s"
+msgstr ""
+
+#: workspaces/services.py:509
+msgid "change role of"
+msgstr ""
+
+#: workspaces/services.py:564
+msgid "remove"
+msgstr ""
+
+#: workspaces/services.py:604
+msgid "reset password of"
 msgstr ""

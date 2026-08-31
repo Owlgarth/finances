@@ -3,6 +3,7 @@
 from functools import wraps
 
 from django.core.cache import cache
+from django.utils.translation import gettext as _
 from ninja.errors import HttpError
 
 from common.utils import get_client_ip
@@ -51,7 +52,7 @@ def rate_limit(key_prefix: str, limit: int = 10, period: int = 60):
             count = _atomic_increment(cache_key, period)
 
             if count > limit:
-                raise HttpError(429, 'Too many requests. Please try again later.')
+                raise HttpError(429, _('Too many requests. Please try again later.'))
 
             return func(request, *args, **kwargs)
 
@@ -84,7 +85,7 @@ def rate_limit_by_key(key_prefix: str, key_extractor, limit: int = 10, period: i
             count = _atomic_increment(cache_key, period)
 
             if count > limit:
-                raise HttpError(429, 'Too many requests. Please try again later.')
+                raise HttpError(429, _('Too many requests. Please try again later.'))
 
             return func(request, *args, **kwargs)
 
@@ -123,7 +124,7 @@ def rate_limit_account(key_prefix: str, key_extractor, limit: int = 10, period: 
             count = _atomic_increment(cache_key, period)
 
             if count > limit:
-                raise HttpError(429, 'Too many requests. Please try again later.')
+                raise HttpError(429, _('Too many requests. Please try again later.'))
 
             return func(request, *args, **kwargs)
 
@@ -145,4 +146,4 @@ def validate_file_size(file, max_size_mb: int = 5):
     """
     max_size_bytes = max_size_mb * 1024 * 1024
     if file.size > max_size_bytes:
-        raise HttpError(400, f'File too large. Maximum {max_size_mb}MB allowed.')
+        raise HttpError(400, _('File too large. Maximum %(max)sMB allowed.') % {'max': max_size_mb})

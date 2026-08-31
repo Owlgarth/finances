@@ -6,6 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction as db_transaction
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from django.utils.translation import gettext as _
 
 from accounts.models import Account, AccountType
 from budgeting.models import Budget, BudgetCurrency, Cadence
@@ -189,7 +190,7 @@ class WorkspaceService:
         if budget_id is not None:
             budget = Budget.objects.filter(id=budget_id, workspace_id=workspace_id, is_active=True).first()
             if not budget:
-                raise ValidationError('Budget not found in this workspace')
+                raise ValidationError(_('Budget not found in this workspace'))
         workspace.default_budget = budget
         workspace.save(update_fields=['default_budget'])
         return WorkspaceService._to_response(workspace, user_role)
@@ -478,7 +479,8 @@ class WorkspaceMemberService:
         """
         if new_role not in WorkspaceMemberService.ASSIGNABLE_ROLES:
             raise ValidationError(
-                f'Cannot assign role: {new_role}. Allowed: {", ".join(WorkspaceMemberService.ASSIGNABLE_ROLES)}'
+                _('Cannot assign role: %(role)s. Allowed: %(allowed)s')
+                % {'role': new_role, 'allowed': ', '.join(WorkspaceMemberService.ASSIGNABLE_ROLES)}
             )
 
         workspace_name = Workspace.objects.get(id=workspace_id).name
@@ -504,7 +506,7 @@ class WorkspaceMemberService:
                 raise WorkspaceOwnerRoleChangeError()
 
             if current_role == Role.ADMIN and member.role == Role.ADMIN:
-                raise WorkspaceMemberAdminInsufficientError('change role of')
+                raise WorkspaceMemberAdminInsufficientError(_('change role of'))
 
             old_role = member.role
             member.role = new_role
@@ -559,7 +561,7 @@ class WorkspaceMemberService:
                 raise WorkspaceOwnerRemoveError()
 
             if current_role == Role.ADMIN and member.role == Role.ADMIN:
-                raise WorkspaceMemberAdminInsufficientError('remove')
+                raise WorkspaceMemberAdminInsufficientError(_('remove'))
 
             member.delete()
 
@@ -599,7 +601,7 @@ class WorkspaceMemberService:
             raise WorkspaceOwnerPasswordResetError()
 
         if current_role == Role.ADMIN and target_member.role == Role.ADMIN:
-            raise WorkspaceMemberAdminInsufficientError('reset password of')
+            raise WorkspaceMemberAdminInsufficientError(_('reset password of'))
 
         target_user = User.objects.filter(id=target_user_id).first()
         if not target_user:

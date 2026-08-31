@@ -5,6 +5,7 @@ from typing import Literal
 
 from django.conf import settings
 from django.http import HttpResponse
+from django.utils.translation import gettext as _
 from ninja import Router
 
 from common.auth import JWTAuth, user_to_schema
@@ -68,7 +69,7 @@ def update_my_password(request, data: UserPasswordUpdate):
     User must provide current password to set new password.
     """
     services.UserService.change_password(request.auth, data.current_password, data.new_password)
-    return 200, {'message': 'Password updated successfully'}
+    return 200, {'message': _('Password updated successfully')}
 
 
 @router.get('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 401: DetailOut})
@@ -155,7 +156,7 @@ def delete_account(request, data: AccountDeleteIn):
     """
     result = services.UserService.delete_account(request.auth, data.password)
     return 200, {
-        'message': 'Account and all associated data deleted successfully.',
+        'message': _('Account and all associated data deleted successfully.'),
         'deleted_workspaces': result['deleted_workspaces'],
     }
 
@@ -177,7 +178,7 @@ def reset_account(request, data: AccountResetIn):
         confirm_shared=data.confirm_shared,
     )
     return 200, {
-        'message': 'Account reset. A fresh workspace is ready.',
+        'message': _('Account reset. A fresh workspace is ready.'),
         'deleted_workspaces': result['deleted_workspaces'],
         'workspace_id': result['workspace_id'],
         'workspace_name': result['workspace_name'],
@@ -255,7 +256,7 @@ def verify_setup_2fa(request, data: TwoFAVerifySetupIn):
 @router.post('/me/2fa/disable', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut, 404: DetailOut})
 def disable_2fa(request, data: TwoFADisableIn):
     TwoFactorService.disable(request.auth, data.password)
-    return 200, {'message': 'Two-factor authentication has been disabled'}
+    return 200, {'message': _('Two-factor authentication has been disabled')}
 
 
 @router.post(

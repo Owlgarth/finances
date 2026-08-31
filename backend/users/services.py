@@ -11,6 +11,7 @@ from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from django.utils.translation import gettext as _
 
 from accounts.models import Account
 from common.email import EmailService
@@ -245,7 +246,7 @@ class UserService:
             raise UserInvalidEmailChangeTokenError()
 
         if user.pending_email != new_email:
-            raise UserInvalidEmailChangeTokenError('This email change request is no longer valid')
+            raise UserInvalidEmailChangeTokenError(_('This email change request is no longer valid'))
 
         if User.objects.filter(email=new_email).exclude(id=user.id).exists():
             raise UserEmailAlreadyInUseError()
@@ -413,7 +414,7 @@ class UserService:
             HttpError(400): User owns workspaces with other members
         """
         if not user.check_password(password):
-            raise UserInvalidPasswordError('Invalid password')
+            raise UserInvalidPasswordError(_('Invalid password'))
 
         # Capture user details before deletion
         user_email = user.email
@@ -492,7 +493,7 @@ class UserService:
         from workspaces.services import WorkspaceService
 
         if not user.check_password(password):
-            raise UserInvalidPasswordError('Invalid password')
+            raise UserInvalidPasswordError(_('Invalid password'))
 
         owned_workspaces = Workspace.objects.filter(owner=user)
 
@@ -500,8 +501,11 @@ class UserService:
             shared = [ws.name for ws in owned_workspaces if WorkspaceMember.objects.filter(workspace=ws).count() > 1]
             if shared:
                 raise ValidationError(
-                    'These workspaces are shared with other members: '
-                    f'{", ".join(sorted(shared))}. Set confirm_shared to delete them anyway.',
+                    _(
+                        'These workspaces are shared with other members: %(workspaces)s. '
+                        'Set confirm_shared to delete them anyway.'
+                    )
+                    % {'workspaces': ', '.join(sorted(shared))},
                     code='reset_shared_workspaces',
                 )
         deleted_workspace_names = list(owned_workspaces.values_list('name', flat=True))
@@ -763,8 +767,11 @@ class UserService:
         export_version = str(export_data.get('export_version', ''))
         if not export_version.startswith('3.'):
             raise ValidationError(
-                f'Incompatible export version: {export_version or "unknown"}. '
-                'The main import accepts v3 exports only; use the legacy import for v1/v2 files.'
+                _(
+                    'Incompatible export version: %(version)s. '
+                    'The main import accepts v3 exports only; use the legacy import for v1/v2 files.'
+                )
+                % {'version': export_version or _('unknown')}
             )
 
         counts = {
@@ -785,7 +792,9 @@ class UserService:
             try:
                 return datetime.strptime(value, '%Y-%m-%d').date()
             except (ValueError, TypeError):
-                raise ValidationError(f'Invalid date in import data: {value!r} (expected YYYY-MM-DD)')
+                raise ValidationError(
+                    _('Invalid date in import data: %(value)r (expected YYYY-MM-DD)') % {'value': value}
+                )
 
         for ws_data in export_data.get('workspaces', []):
             original_name = ws_data.get('workspace_name')
@@ -905,11 +914,15 @@ class UserService:
                 # skip+error (the row references an account the export lacks).
                 account = account_map.get(account_name) if account_name else None
                 if account_name and not account:
-                    skipped['errors'].append(f'{original_name}: transaction references unknown account')
+                    skipped['errors'].append(
+                        _('%(name)s: transaction references unknown account') % {'name': original_name}
+                    )
                     continue
                 currency_code = tx_data.get('currency_code')
                 if not account and not currency_code:
-                    skipped['errors'].append(f'{original_name}: account-less transaction missing currency_code')
+                    skipped['errors'].append(
+                        _('%(name)s: account-less transaction missing currency_code') % {'name': original_name}
+                    )
                     continue
                 currency = (
                     account.currency if account else UserService._resolve_import_currency(workspace, currency_code)
@@ -952,7 +965,9 @@ class UserService:
                 from_account = account_map.get(tr_data.get('from_account_name'))
                 to_account = account_map.get(tr_data.get('to_account_name'))
                 if not from_account or not to_account or from_account.id == to_account.id:
-                    skipped['errors'].append(f'{original_name}: transfer references unknown account')
+                    skipped['errors'].append(
+                        _('%(name)s: transfer references unknown account') % {'name': original_name}
+                    )
                     continue
                 Transfer.objects.create(
                     workspace=workspace,
@@ -971,11 +986,15 @@ class UserService:
                 account_name = pt_data.get('account_name')
                 account = account_map.get(account_name) if account_name else None
                 if account_name and not account:
-                    skipped['errors'].append(f'{original_name}: planned transaction references unknown account')
+                    skipped['errors'].append(
+                        _('%(name)s: planned transaction references unknown account') % {'name': original_name}
+                    )
                     continue
                 currency_code = pt_data.get('currency_code')
                 if not account and not currency_code:
-                    skipped['errors'].append(f'{original_name}: account-less planned transaction missing currency_code')
+                    skipped['errors'].append(
+                        _('%(name)s: account-less planned transaction missing currency_code') % {'name': original_name}
+                    )
                     continue
                 currency = (
                     account.currency if account else UserService._resolve_import_currency(workspace, currency_code)

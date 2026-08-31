@@ -9,6 +9,7 @@ from django.db import transaction as db_transaction
 from django.db.models import Count, F, Sum, Value
 from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from accounts.models import Account
 from accounts.services import AccountService
@@ -118,9 +119,11 @@ class TransactionService:
             or Currency.objects.filter(workspace_id=workspace_id, code=code).first()
         )
         if not facet:
-            raise TransactionOriginalCurrencyError(f'Original currency {code} not found in the catalog')
+            raise TransactionOriginalCurrencyError(
+                _('Original currency %(code)s not found in the catalog') % {'code': code}
+            )
         if facet.code == currency.code:
-            raise TransactionOriginalCurrencyError('Original currency must differ from the transaction currency')
+            raise TransactionOriginalCurrencyError(_('Original currency must differ from the transaction currency'))
         return facet
 
     @staticmethod
@@ -761,7 +764,7 @@ class TransactionService:
             try:
                 import_item = TransactionImport(**item)
             except Exception as e:
-                raise TransactionImportError(f'Invalid data format: {e}')
+                raise TransactionImportError(_('Invalid data format: %(error)s') % {'error': e})
 
             category_id = None
             if import_item.type != 'income' and import_item.category_name:
