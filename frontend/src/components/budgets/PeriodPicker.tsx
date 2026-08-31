@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { CalendarRange, Check, ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import { formatPeriodRange } from '../../utils/format'
@@ -28,13 +29,13 @@ export interface PeriodPickerProps {
   'aria-label'?: string
 }
 
-/** Value of the "View all periods" pseudo-option appended to the hook's
- *  options. A NUMBER (not a string sentinel) keeps the hook's generic
+/** Value of the view-all pseudo-option appended to the hook's options. A
+ *  NUMBER (not a string sentinel) keeps the hook's generic
  *  ListboxOption<number> shape honest; period ids are positive DB primary
  *  keys, so -1 can never collide with a real period. Module-private: callers
- *  pass `onViewAll`, never the sentinel. */
+ *  pass `onViewAll`, never the sentinel. Its label is translated inside the
+ *  component (module scope has no t). */
 const VIEW_ALL_VALUE = -1
-const VIEW_ALL_LABEL = 'View all periods'
 
 /** Temporal classification of a period against today (spec §6). */
 type Temporal = 'past' | 'current' | 'future'
@@ -61,20 +62,24 @@ interface PeriodGroup {
 
 /** Composed accessible label (spec §7.3): the visual row omits the year (the
  *  group label carries it) and truncates long names, so the button's label
- *  always carries BOTH endpoints with years plus ", current" when temporal is
- *  current. `aria-selected` remains the selection signal. */
-function optionAriaLabel(period: Period, todayIso: string): string {
+ *  always carries BOTH endpoints with years plus the translated current
+ *  suffix when temporal is current. `aria-selected` remains the selection
+ *  signal. Module helper, so the suffix is threaded in by the row components
+ *  (hooks cannot run at module scope); the data parts (name, range) are
+ *  persisted/computed data and stay untranslated by design. */
+function optionAriaLabel(period: Period, todayIso: string, currentSuffix: string): string {
   const range = formatPeriodRange(period.start_date, period.end_date, { withYears: true })
-  return `${period.name}, ${range}` + (temporalOf(period, todayIso) === 'current' ? ', current' : '')
+  return `${period.name}, ${range}` + (temporalOf(period, todayIso) === 'current' ? `, ${currentSuffix}` : '')
 }
 
 /** §8 CURRENT tag - the components.md §10 neutral chip, class string verbatim.
  *  The bg-surface fill keeps it legible on surface-muted (selected) and
- *  surface-hover (hovered) rows. No icon. */
-function CurrentChip() {
+ *  surface-hover (hovered) rows. No icon. Label is a prop: the chip text is
+ *  translated by the row components that render it. */
+function CurrentChip({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none flex-shrink-0">
-      CURRENT
+      {label}
     </span>
   )
 }
@@ -101,6 +106,7 @@ interface DesktopRowProps {
  * a selected current period renders check + bg + chip.
  */
 function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActivate }: DesktopRowProps) {
+  const { t } = useTranslation('budgets')
   const temporal = temporalOf(period, todayIso)
   return (
     <button
@@ -108,7 +114,7 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       role="option"
       id={id}
       aria-selected={selected}
-      aria-label={optionAriaLabel(period, todayIso)}
+      aria-label={optionAriaLabel(period, todayIso, t('periodPicker.currentAriaSuffix'))}
       tabIndex={-1}
       onClick={onActivate}
       className={
@@ -138,7 +144,7 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       >
         {formatPeriodRange(period.start_date, period.end_date)}
       </span>
-      {temporal === 'current' && <CurrentChip />}
+      {temporal === 'current' && <CurrentChip label={t('periodPicker.current')} />}
     </button>
   )
 }
@@ -159,13 +165,14 @@ interface SheetRowProps {
  * (min-w-0) while the chip never does (flex-shrink-0).
  */
 function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProps) {
+  const { t } = useTranslation('budgets')
   const temporal = temporalOf(period, todayIso)
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
-      aria-label={optionAriaLabel(period, todayIso)}
+      aria-label={optionAriaLabel(period, todayIso, t('periodPicker.currentAriaSuffix'))}
       onClick={onActivate}
       className={
         'w-full min-h-[44px] px-4 py-2 flex items-center gap-3 text-left text-sm transition-colors active:bg-surface-hover ' +
@@ -192,7 +199,7 @@ function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProp
           >
             {formatPeriodRange(period.start_date, period.end_date)}
           </span>
-          {temporal === 'current' && <CurrentChip />}
+          {temporal === 'current' && <CurrentChip label={t('periodPicker.current')} />}
         </span>
       </span>
     </button>
@@ -218,8 +225,13 @@ export default function PeriodPicker({
   onChange,
   limit,
   onViewAll,
-  'aria-label': ariaLabel = 'Period',
+  'aria-label': ariaLabel,
 }: PeriodPickerProps) {
+  // The default accessible name resolves here, not in the props destructure:
+  // useTranslation runs after destructuring, and a module-scope default would
+  // freeze the language at load time.
+  const { t } = useTranslation('budgets')
+  const resolvedAriaLabel = ariaLabel ?? t('periodPicker.ariaLabel')
   // Adaptive pattern (patterns.md §13): all panel state lives in
   // useListboxPanel above the variant branches, so a resize mid-open loses
   // nothing. Desktop = anchored popover, mobile = BottomSheet.
@@ -262,9 +274,10 @@ export default function PeriodPicker({
   // typing "v" jumps to it (unless an earlier windowed period name also
   // starts with "v" - type-ahead is first-match; uniform participation is
   // accepted design). With searchable: false, filteredOptions === options.
+  const viewAllLabel = t('periodPicker.viewAll')
   const options = [
     ...windowedPeriods.map((p) => ({ value: p.id, label: p.name })),
-    ...(onViewAll ? [{ value: VIEW_ALL_VALUE, label: VIEW_ALL_LABEL }] : []),
+    ...(onViewAll ? [{ value: VIEW_ALL_VALUE, label: viewAllLabel }] : []),
   ]
   // Flat index of the pseudo-option in the hook's option space; -1 = absent.
   const viewAllIndex = onViewAll ? windowedPeriods.length : -1
@@ -383,7 +396,7 @@ export default function PeriodPicker({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel}
+        aria-label={resolvedAriaLabel}
         aria-activedescendant={
           open && !isMobile && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
         }
@@ -392,7 +405,7 @@ export default function PeriodPicker({
         className={listboxTriggerBaseClass}
       >
         <span className={value == null ? 'truncate text-text-muted' : 'truncate'}>
-          {selectedPeriod ? selectedPeriod.name : 'Select period'}
+          {selectedPeriod ? selectedPeriod.name : t('periodPicker.placeholder')}
         </span>
         <ChevronDown
           size={12}
@@ -406,8 +419,8 @@ export default function PeriodPicker({
           inherited from the hook's sheetListRef effect. No sheet title; the
           dialog and the listbox are both labeled "Periods" (spec §5.1). */}
       {isMobile && (
-        <BottomSheet open={open} onClose={() => closePanel(true)} aria-label="Periods">
-          <div ref={sheetListRef} role="listbox" aria-label="Periods" className="pb-1">
+        <BottomSheet open={open} onClose={() => closePanel(true)} aria-label={t('periodPicker.panelLabel')}>
+          <div ref={sheetListRef} role="listbox" aria-label={t('periodPicker.panelLabel')} className="pb-1">
             {groups.map((group, gi) => (
               <Fragment key={group.year}>
                 {gi > 0 && <div className="h-px bg-border my-1 mx-2" aria-hidden="true" />}
@@ -436,12 +449,12 @@ export default function PeriodPicker({
                 type="button"
                 role="option"
                 aria-selected={false}
-                aria-label={VIEW_ALL_LABEL}
+                aria-label={viewAllLabel}
                 onClick={() => activateIndex(viewAllIndex)}
                 className="w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover"
               >
                 <CalendarRange size={16} className="text-text-muted flex-shrink-0" />
-                <span className="truncate">{VIEW_ALL_LABEL}</span>
+                <span className="truncate">{viewAllLabel}</span>
               </button>
             )}
           </div>
@@ -453,7 +466,7 @@ export default function PeriodPicker({
           groups only, both aria-hidden - years travel in each option's
           composed aria-label (deviation 8). */}
       {open && !isMobile && (
-        <div ref={panelRef} role="listbox" aria-label="Periods" className={panelClass}>
+        <div ref={panelRef} role="listbox" aria-label={t('periodPicker.panelLabel')} className={panelClass}>
           {groups.map((group, gi) => (
             <Fragment key={group.year}>
               {gi > 0 && <div className="h-px bg-border my-1 mx-2" aria-hidden="true" />}
@@ -490,7 +503,7 @@ export default function PeriodPicker({
               role="option"
               id={optionId(viewAllIndex)}
               aria-selected={false}
-              aria-label={VIEW_ALL_LABEL}
+              aria-label={viewAllLabel}
               tabIndex={-1}
               onClick={() => activateIndex(viewAllIndex)}
               className={
@@ -500,7 +513,7 @@ export default function PeriodPicker({
               }
             >
               <CalendarRange size={14} className="text-text-muted flex-shrink-0" />
-              <span className="flex-1 min-w-0 truncate">{VIEW_ALL_LABEL}</span>
+              <span className="flex-1 min-w-0 truncate">{viewAllLabel}</span>
             </button>
           )}
         </div>

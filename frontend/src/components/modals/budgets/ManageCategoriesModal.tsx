@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Archive, Merge, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { budgetsApi, transactionsApi } from '../../../api/client'
 import type { Category } from '../../../types'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
@@ -26,6 +27,7 @@ interface Props {
  * per-session state (merge target, pending dialogs) with zero open-effects.
  */
 export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
+  const { t } = useTranslation('budgets')
   const queryClient = useQueryClient()
   const isTouch = useIsTouch()
 
@@ -75,9 +77,9 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       budgetsApi.setCategoryArchive(budgetId, id, archived),
     onSuccess: (_category, { archived }) => {
       invalidateCategories()
-      toast.success(archived ? 'Category archived' : 'Category unarchived')
+      toast.success(archived ? t('manageCategories.categoryArchived') : t('manageCategories.categoryUnarchived'))
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update category')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('manageCategories.updateFailed'))),
   })
 
   const mergeMutation = useMutation({
@@ -85,22 +87,22 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       budgetsApi.mergeCategory(budgetId, targetId, sourceId),
     onSuccess: () => {
       invalidateCategories()
-      toast.success('Categories merged')
+      toast.success(t('manageCategories.merged'))
       setMerging(null)
       setMergeTargetId(null)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to merge categories')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('manageCategories.mergeFailed'))),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => budgetsApi.deleteCategory(budgetId, id),
     onSuccess: () => {
       invalidateCategories()
-      toast.success('Category deleted')
+      toast.success(t('manageCategories.deleted'))
       setDeleting(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete category'))
+      toast.error(getApiErrorMessage(error, t('manageCategories.deleteFailed')))
       setDeleting(null)
     },
   })
@@ -129,7 +131,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       <span className="flex items-center gap-2 flex-shrink-0">
         {category.is_archived && (
           <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">
-            Archived
+            {t('manageCategories.archived')}
           </span>
         )}
         {/* Hover actions are pointer-fine only - row tap opens the sheet on
@@ -139,8 +141,8 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
             <button
               type="button"
               onClick={() => archiveMutation.mutate({ id: category.id, archived: !category.is_archived })}
-              title={category.is_archived ? 'Unarchive' : 'Archive'}
-              aria-label={category.is_archived ? `Unarchive ${category.name}` : `Archive ${category.name}`}
+              title={category.is_archived ? t('manageCategories.unarchive') : t('manageCategories.archive')}
+              aria-label={category.is_archived ? t('manageCategories.unarchiveAria', { name: category.name }) : t('manageCategories.archiveAria', { name: category.name })}
               className="text-text-muted hover:text-text p-1"
             >
               <Archive size={13} />
@@ -148,8 +150,8 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
             <button
               type="button"
               onClick={() => openMerge(category)}
-              title="Merge into…"
-              aria-label={`Merge ${category.name} into another category`}
+              title={t('manageCategories.mergeInto')}
+              aria-label={t('manageCategories.mergeAria', { name: category.name })}
               className="text-text-muted hover:text-text p-1"
             >
               <Merge size={13} />
@@ -158,8 +160,8 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
               <button
                 type="button"
                 onClick={() => setDeleting(category)}
-                title="Delete"
-                aria-label={`Delete ${category.name}`}
+                title={t('manageCategories.delete')}
+                aria-label={t('manageCategories.deleteAria', { name: category.name })}
                 className="text-text-muted hover:text-negative p-1"
               >
                 <Trash2 size={13} />
@@ -173,7 +175,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
 
   return (
     <>
-      <Modal open onClose={onClose} size="md" className="p-6 max-h-[90vh] overflow-y-auto" title="Manage categories">
+      <Modal open onClose={onClose} size="md" className="p-6 max-h-[90vh] overflow-y-auto" title={t('manageCategories.title')}>
         {isLoading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
@@ -181,22 +183,22 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
             ))}
           </div>
         ) : isError ? (
-          <p className="text-sm text-text-muted">Failed to load categories. Close and reopen to retry.</p>
+          <p className="text-sm text-text-muted">{t('manageCategories.loadFailed')}</p>
         ) : (
           <div className="space-y-4">
-            <section aria-label="Active categories">
-              <h3 className={sectionHeaderClass}>Active</h3>
+            <section aria-label={t('manageCategories.activeSectionAria')}>
+              <h3 className={sectionHeaderClass}>{t('manageCategories.activeSection')}</h3>
               <div className="border border-border rounded-sm divide-y divide-border">
                 {active.length > 0 ? (
                   active.map(renderRow)
                 ) : (
-                  <p className="px-3 py-3 text-sm text-text-muted">No categories yet.</p>
+                  <p className="px-3 py-3 text-sm text-text-muted">{t('manageCategories.noCategories')}</p>
                 )}
               </div>
             </section>
             {archived.length > 0 && (
-              <section aria-label="Archived categories">
-                <h3 className={sectionHeaderClass}>Archived</h3>
+              <section aria-label={t('manageCategories.archivedSectionAria')}>
+                <h3 className={sectionHeaderClass}>{t('manageCategories.archivedSection')}</h3>
                 <div className="border border-border rounded-sm divide-y divide-border">
                   {archived.map(renderRow)}
                 </div>
@@ -209,27 +211,25 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       {/* Nested overlays render AFTER the outer modal so DOM order stacks
           them above it (both sit at z-modal) and Escape unwinds top-first. */}
       {merging && (
-        <Modal open onClose={() => setMerging(null)} size="sm" className="p-6" title={`Merge “${merging.name}” into…`}>
+        <Modal open onClose={() => setMerging(null)} size="sm" className="p-6" title={t('manageCategories.mergeTitle', { name: merging.name })}>
           <p className="text-xs text-text-muted -mt-3 mb-4">
-            All transactions, planned transactions and planned amounts of “{merging.name}” will
-            move to the category you pick, and “{merging.name}” will be deleted. Planned amounts
-            for the same period are added together. This cannot be undone.
+            {t('manageCategories.mergeBody', { name: merging.name })}
           </p>
           <div className="mb-4">
-            <label className={labelClass}>Merge into</label>
+            <label className={labelClass}>{t('manageCategories.mergeTargetLabel')}</label>
             <Select
               value={mergeTargetId}
               onChange={setMergeTargetId}
               options={active
                 .filter((c) => c.id !== merging.id)
                 .map((c) => ({ value: c.id, label: c.name }))}
-              placeholder="Select category"
-              aria-label="Merge into category"
+              placeholder={t('manageCategories.selectCategoryPlaceholder')}
+              aria-label={t('manageCategories.mergeTargetAria')}
             />
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setMerging(null)} className={secondaryButtonClass}>
-              Cancel
+              {t('manageCategories.cancel')}
             </button>
             <button
               type="button"
@@ -237,7 +237,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
               disabled={mergeTargetId == null || mergeMutation.isPending}
               className={primaryButtonClass}
             >
-              {mergeMutation.isPending ? 'Merging…' : 'Merge'}
+              {mergeMutation.isPending ? t('manageCategories.merging') : t('manageCategories.merge')}
             </button>
           </div>
         </Modal>
@@ -245,8 +245,10 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
 
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete category"
-        message={`Delete "${deleting?.name}"? ${deleteCount ?? 'Counting...'} transactions will become uncategorized. This cannot be undone.`}
+        title={t('manageCategories.deleteDialog.title')}
+        message={deleteCount == null
+          ? t('manageCategories.deleteDialog.countingMessage', { name: deleting?.name })
+          : t('manageCategories.deleteDialog.message', { name: deleting?.name, count: deleteCount })}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
         isPending={deleteMutation.isPending}
@@ -258,13 +260,13 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
         title={rowAction?.name}
         actions={rowAction ? [
           {
-            label: rowAction.is_archived ? 'Unarchive' : 'Archive',
+            label: rowAction.is_archived ? t('manageCategories.unarchive') : t('manageCategories.archive'),
             icon: Archive,
             onSelect: () => archiveMutation.mutate({ id: rowAction.id, archived: !rowAction.is_archived }),
           },
-          { label: 'Merge into…', icon: Merge, onSelect: () => openMerge(rowAction) },
+          { label: t('manageCategories.mergeInto'), icon: Merge, onSelect: () => openMerge(rowAction) },
           ...(rowAction.is_archived
-            ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleting(rowAction) }]
+            ? [{ label: t('manageCategories.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(rowAction) }]
             : []),
         ] : []}
       />
