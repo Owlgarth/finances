@@ -287,6 +287,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | PUT/DELETE | `/api/budgets/{id}/periods/{pid}` | Update / delete period |
 | GET/POST | `/api/budgets/{id}/categories` | List (`include_archived`) / create category |
 | PUT/PATCH/DELETE | `/api/budgets/{id}/categories/{cid}` | Update / archive / delete category |
+| POST | `/api/budgets/{id}/categories/{cid}/merge` | Merge another category into this one (`source_category_id`): its history moves here and the source is deleted |
 | GET | `/api/budgets/categories` | List categories across all of the workspace's budgets (filter pickers; `include_archived`) |
 | GET | `/api/budgets/{id}/periods/{pid}/category-budgets` | List planned amounts |
 | PUT | `/api/budgets/{id}/periods/{pid}/category-budgets` | Set a category's planned amount |
@@ -485,6 +486,9 @@ For self-hosted deployments, you can also edit legal documents directly via Djan
 # Run migrations
 python manage.py migrate
 
+# Seed the global ISO 4217 currency catalog (idempotent)
+python manage.py seed_currencies
+
 # Create superuser (optional, for admin access)
 python manage.py createsuperuser
 ```
@@ -501,7 +505,7 @@ Interactive docs at `http://127.0.0.1:8000/api/docs`
 
 ## Docker Support
 
-A Dockerfile is provided for containerized deployment. The image includes an entrypoint script that automatically runs database migrations and seeds legal documents before starting the server:
+A Dockerfile is provided for containerized deployment. The image includes an entrypoint script that automatically runs database migrations, seeds the currency catalog and legal documents, and (when `USE_S3_STORAGE=true`) initializes storage buckets and collects static files before starting the server:
 
 ```bash
 # Build image

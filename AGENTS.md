@@ -118,3 +118,4 @@ Detailed conventions are split into skills under `.agents/skills/`. Load the rel
 | `frontend-live-stack-probing` | Interactive verification of frontend behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available |
 | `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
 | `docker-infra` | docker-compose, Dockerfiles, entrypoints, nginx, S3 storage |
+| `docs-accuracy` | Editing READMEs or docs/ markdown - accuracy sweeps, census/grep gates, code-fenced trees, verbatim transcription |
