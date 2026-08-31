@@ -209,7 +209,7 @@ class WorkspaceService:
             raise WorkspaceNotFoundError()
         user.current_workspace_id = workspace_id
         user.save(update_fields=['current_workspace'])
-        return {'message': 'Workspace switched successfully', 'workspace_id': workspace_id}
+        return {'message': _('Workspace switched successfully'), 'workspace_id': workspace_id}
 
     @staticmethod
     def delete_workspace(user, workspace_id: int) -> None:
@@ -374,7 +374,7 @@ class WorkspaceMemberService:
                     existing_user.save(update_fields=['current_workspace'])
 
                 result = {
-                    'message': 'Member added to workspace',
+                    'message': _('Member added to workspace'),
                     'user_id': existing_user.id,
                     'member_id': new_member.id,
                 }
@@ -401,7 +401,7 @@ class WorkspaceMemberService:
                 )
 
                 result = {
-                    'message': 'Member added to workspace',
+                    'message': _('Member added to workspace'),
                     'user_id': new_user.id,
                     'member_id': new_member.id,
                 }
@@ -463,7 +463,7 @@ class WorkspaceMemberService:
         for admin_email, admin_name in admin_recipients:
             WorkspaceMemberService._send_member_left_email(admin_email, admin_name, leaver_name, workspace_name)
 
-        return {'message': 'Successfully left workspace'}
+        return {'message': _('Successfully left workspace')}
 
     ASSIGNABLE_ROLES = (Role.ADMIN, Role.MEMBER, Role.VIEWER)
 
@@ -521,7 +521,7 @@ class WorkspaceMemberService:
         )
 
         return {
-            'message': 'Role updated successfully',
+            'message': _('Role updated successfully'),
             'user_id': member_user_id,
             'old_role': old_role,
             'new_role': new_role,
@@ -618,7 +618,7 @@ class WorkspaceMemberService:
         UserService.send_password_changed_email(target_user, changed_by_admin=True)
 
         return {
-            'message': 'Password reset successfully',
+            'message': _('Password reset successfully'),
             'user_id': target_user_id,
             'email': target_user_email,
         }

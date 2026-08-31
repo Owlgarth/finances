@@ -3,14 +3,13 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 19:30+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"POT-Creation-Date: 2026-08-31 20:03+0000\n"
+"PO-Revision-Date: 2026-08-31 21:00+0000\n"
+"Last-Translator: Owlgarth Finances Team\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
@@ -21,19 +20,19 @@ msgstr ""
 
 #: accounts/exceptions.py:9
 msgid "Account not found"
-msgstr ""
+msgstr "Рахунок не знайдено"
 
 #: accounts/exceptions.py:14
 msgid "Account with this name already exists"
-msgstr ""
+msgstr "Рахунок з такою назвою вже існує"
 
 #: accounts/exceptions.py:19
 msgid "Account currency cannot be changed after creation"
-msgstr ""
+msgstr "Валюту рахунку не можна змінити після створення"
 
 #: accounts/exceptions.py:24
 msgid "Account has records and cannot be deleted. Archive it instead."
-msgstr ""
+msgstr "Рахунок містить записи і не може бути видалений. Заархівуйте його натомість."
 
 #: accounts/schemas.py:25 accounts/schemas.py:43 budgeting/schemas.py:32
 #: budgeting/schemas.py:61 budgeting/schemas.py:110 budgeting/schemas.py:131
@@ -41,632 +40,671 @@ msgstr ""
 #: planned_transactions/schemas.py:32 planned_transactions/schemas.py:48
 #: workspaces/schemas.py:21 workspaces/schemas.py:61
 msgid "Name cannot be empty"
-msgstr ""
+msgstr "Назва не може бути порожньою"
 
 #: budgeting/exceptions.py:9
 msgid "Budget not found"
-msgstr ""
+msgstr "Бюджет не знайдено"
 
 #: budgeting/exceptions.py:14
 msgid "Budget with this name already exists"
-msgstr ""
+msgstr "Бюджет з такою назвою вже існує"
 
 #: budgeting/exceptions.py:19
 msgid ""
 "Every-N-weeks cadence requires cadence_weeks >= 1 and a cadence_anchor date"
-msgstr ""
+msgstr "Періодичність „кожні N тижнів“ вимагає cadence_weeks >= 1 і дати cadence_anchor"
 
 #: budgeting/exceptions.py:24
 msgid "Period not found"
-msgstr ""
+msgstr "Період не знайдено"
 
 #: budgeting/exceptions.py:29
 msgid "This budget uses custom periods and no period covers the given date"
-msgstr ""
+msgstr "Цей бюджет використовує власні періоди, і жоден період не охоплює вказану дату"
 
 #: budgeting/exceptions.py:34
 msgid "Period overlaps an existing period of this budget"
-msgstr ""
+msgstr "Період перекриває наявний період цього бюджету"
 
 #: budgeting/exceptions.py:39
 msgid ""
 "Auto-created periods cannot be edited or deleted; only custom periods can"
-msgstr ""
+msgstr "Автоматично створені періоди не можна редагувати чи видаляти; це можливо лише для власних періодів"
 
 #: budgeting/exceptions.py:44
 msgid "Category budget not found"
-msgstr ""
+msgstr "Бюджет категорії не знайдено"
 
 #: budgeting/exceptions.py:49
 msgid "Category does not belong to this budget"
-msgstr ""
+msgstr "Категорія не належить цьому бюджету"
 
 #: budgeting/schemas.py:39 budgeting/schemas.py:68
 msgid "Color must be a valid hex color code (e.g. #FF5733)"
-msgstr ""
+msgstr "Колір має бути допустимим шістнадцятковим кодом кольору (наприклад, #FF5733)"
 
 #: budgeting/schemas.py:116 budgeting/services.py:333
 msgid "end_date must be on or after start_date"
-msgstr ""
+msgstr "end_date має бути не раніше за start_date"
 
 #: categories/exceptions.py:9
 msgid "Category not found"
-msgstr ""
+msgstr "Категорію не знайдено"
 
 #: categories/exceptions.py:14
 msgid "A category with this name already exists in this budget period."
-msgstr ""
+msgstr "Категорія з такою назвою вже існує в цьому періоді бюджету."
 
 #: categories/exceptions.py:19
 msgid "A category cannot be merged into itself."
-msgstr ""
+msgstr "Категорію не можна об’єднати з самою собою."
 
 #: common/exceptions.py:19
 msgid "An unexpected error occurred"
-msgstr ""
+msgstr "Сталася неочікувана помилка"
 
 #: common/exceptions.py:32
 msgid "Not found"
-msgstr ""
+msgstr "Не знайдено"
 
 #: common/exceptions.py:39
 msgid "Authentication failed"
-msgstr ""
+msgstr "Помилка автентифікації"
 
 #: common/exceptions.py:46
 msgid "Validation error"
-msgstr ""
+msgstr "Помилка валідації"
 
 #: common/exceptions.py:54
 #, python-format
 msgid "Currency %(currency)s not found in workspace"
-msgstr ""
+msgstr "Валюту %(currency)s не знайдено в робочому просторі"
 
 #: common/exceptions.py:63
 msgid "Insufficient permissions"
-msgstr ""
+msgstr "Недостатньо прав"
 
 #: common/models.py:48
 #, python-format
 msgid "%(model)s.workspace_id must be set before save"
-msgstr ""
+msgstr "%(model)s.workspace_id потрібно встановити до збереження"
 
 #: common/models.py:55
 #, python-format
 msgid "%(model)s.workspace_id cannot be changed after creation"
-msgstr ""
+msgstr "%(model)s.workspace_id не можна змінювати після створення"
 
 #: common/querysets.py:11
 #, python-format
 msgid "workspace_id is required for %(model)s.for_workspace(), got %(value)r"
-msgstr ""
+msgstr "Для %(model)s.for_workspace() потрібен workspace_id, отримано %(value)r"
 
 #: common/throttle.py:55 common/throttle.py:88 common/throttle.py:127
 msgid "Too many requests. Please try again later."
-msgstr ""
+msgstr "Забагато запитів. Будь ласка, спробуйте пізніше."
 
 #: common/throttle.py:149
 #, python-format
 msgid "File too large. Maximum %(max)sMB allowed."
-msgstr ""
+msgstr "Файл завеликий. Максимально допустимо %(max)s МБ."
 
 #: core/api.py:127
 msgid "Email verified successfully"
-msgstr ""
+msgstr "Електронну пошту успішно підтверджено"
 
 #: core/api.py:140
 msgid "If your email is unverified, a new verification email has been sent."
-msgstr ""
+msgstr "Якщо ваша електронна пошта ще не підтверджена, надіслано новий лист для підтвердження."
 
 #: core/api.py:151
 msgid "If an account exists with this email, a reset link has been sent."
-msgstr ""
+msgstr "Якщо обліковий запис із цією адресою існує, надіслано посилання для відновлення."
 
 #: core/api.py:165
 msgid "Invalid reset link"
-msgstr ""
+msgstr "Недійсне посилання для відновлення"
 
 #: core/api.py:168
 msgid "Invalid or expired reset link"
-msgstr ""
+msgstr "Недійсне або прострочене посилання для відновлення"
 
 #: core/api.py:172
 msgid "Password has been reset successfully"
-msgstr ""
+msgstr "Пароль успішно скинуто"
 
 #: core/api.py:180
 msgid "Verification email sent to your new address"
-msgstr ""
+msgstr "Лист для підтвердження надіслано на вашу нову адресу"
 
 #: core/api.py:188
 msgid "Email changed successfully"
-msgstr ""
+msgstr "Електронну пошту успішно змінено"
 
 #: core/schemas/auth.py:19
 msgid "Enter a valid email address"
-msgstr ""
+msgstr "Введіть дійсну адресу електронної пошти"
 
 #: core/schemas/auth.py:68
 #, python-format
 msgid "Must accept current Terms of Service version (%(version)s)"
-msgstr ""
+msgstr "Потрібно прийняти поточну версію Умов обслуговування (%(version)s)"
 
 #: core/schemas/auth.py:78
 #, python-format
 msgid "Must accept current Privacy Policy version (%(version)s)"
-msgstr ""
+msgstr "Потрібно прийняти поточну версію Політики конфіденційності (%(version)s)"
 
 #: core/schemas/consent.py:20
 #, python-format
 msgid "consent_type must be one of: %(types)s"
-msgstr ""
+msgstr "consent_type має бути одним із: %(types)s"
 
 #: core/schemas/users.py:57
 msgid "calendar_start_day must be between 1 and 7"
-msgstr ""
+msgstr "calendar_start_day має бути в межах від 1 до 7"
 
 #: core/schemas/users.py:66
 #, python-format
 msgid "font_family must be one of: %(fonts)s"
-msgstr ""
+msgstr "font_family має бути одним із: %(fonts)s"
 
 #: core/schemas/users.py:73
 #, python-format
 msgid "language must be one of: %(codes)s"
-msgstr ""
+msgstr "language має бути одним із: %(codes)s"
 
 #: core/schemas/users.py:80
 #, python-format
 msgid "number_format must be one of: %(codes)s"
-msgstr ""
+msgstr "number_format має бути одним із: %(codes)s"
 
 #: currencies/exceptions.py:12
 #, python-format
 msgid "Currency %(code)s not found in the catalog"
-msgstr ""
+msgstr "Валюту %(code)s не знайдено в каталозі"
 
 #: currencies/exceptions.py:19
 #, python-format
 msgid "Currency %(code)s is not enabled for this workspace"
-msgstr ""
+msgstr "Валюту %(code)s не увімкнено для цього робочого простору"
 
 #: currencies/exceptions.py:26
 #, python-format
 msgid "Currency %(code)s already exists"
-msgstr ""
+msgstr "Валюта %(code)s вже існує"
 
 #: currencies/exceptions.py:30
 msgid "Cannot disable the only enabled currency of a workspace"
-msgstr ""
+msgstr "Не можна вимкнути єдину увімкнену валюту робочого простору"
 
 #: currencies/exceptions.py:36
 msgid ""
 "The currency order must list exactly the workspace's enabled currencies "
 "(same set, no duplicates, none missing, none extra)"
-msgstr ""
+msgstr "Порядок валют має точно відтворювати увімкнені валюти робочого простору (той самий набір, без дублікатів, без пропущених і зайвих)"
 
 #: currencies/exceptions.py:50
 msgid "account"
 msgid_plural "accounts"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
+msgstr[0] "рахунок"
+msgstr[1] "рахунки"
+msgstr[2] "рахунків"
 
 #: currencies/exceptions.py:52
 msgid "planned amount"
 msgid_plural "planned amounts"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
+msgstr[0] "запланована сума"
+msgstr[1] "заплановані суми"
+msgstr[2] "запланованих сум"
 
 #: currencies/exceptions.py:54
 msgid "budget currency set"
 msgid_plural "budget currency sets"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
+msgstr[0] "набір валют бюджету"
+msgstr[1] "набори валют бюджету"
+msgstr[2] "наборів валют бюджету"
 
 #: currencies/exceptions.py:56
 msgid "planned transaction"
 msgid_plural "planned transactions"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
+msgstr[0] "запланована транзакція"
+msgstr[1] "заплановані транзакції"
+msgstr[2] "запланованих транзакцій"
 
 #: currencies/exceptions.py:58
 msgid "transaction"
 msgid_plural "transactions"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
+msgstr[0] "транзакція"
+msgstr[1] "транзакції"
+msgstr[2] "транзакцій"
 
 #: currencies/exceptions.py:67
 msgid "other records"
-msgstr ""
+msgstr "інші записи"
 
 #: currencies/exceptions.py:69
 #, python-format
 msgid ""
 "Currency %(code)s is in use: %(summary)s. Remove those references before "
 "disabling it."
-msgstr ""
+msgstr "Валюта %(code)s використовується: %(summary)s. Видаліть ці посилання, перш ніж вимкнути її."
 
 #: currencies/schemas.py:43
 msgid "Value cannot be blank"
-msgstr ""
+msgstr "Значення не може бути порожнім"
 
 #: currencies/schemas.py:49
 msgid "name and symbol are required when creating a custom currency"
-msgstr ""
+msgstr "name і symbol є обов’язковими під час створення власної валюти"
 
 #: planned_transactions/api.py:171 transactions/api.py:175
 msgid "Invalid JSON file."
-msgstr ""
+msgstr "Недійсний файл JSON."
 
 #: planned_transactions/api.py:175
 msgid "No new planned transactions to import."
-msgstr ""
+msgstr "Немає нових запланованих транзакцій для імпорту."
 
 #: planned_transactions/api.py:176
 #, python-format
 msgid "Successfully imported %(count)s new planned transactions."
-msgstr ""
+msgstr "Успішно імпортовано нові заплановані транзакції (%(count)s)."
 
 #: planned_transactions/exceptions.py:9
 msgid "Planned transaction not found"
-msgstr ""
+msgstr "Заплановану транзакцію не знайдено"
 
 #: planned_transactions/exceptions.py:14
 msgid "Account is archived and cannot receive new planned transactions"
-msgstr ""
+msgstr "Рахунок архівовано, він не може отримувати нові заплановані транзакції"
 
 #: planned_transactions/exceptions.py:19
 msgid "Currency does not match the account currency"
-msgstr ""
+msgstr "Валюта не відповідає валюті рахунку"
 
 #: planned_transactions/exceptions.py:24
 msgid "Currency is required when no account is set"
-msgstr ""
+msgstr "Валюта потрібна, коли рахунок не вказано"
 
 #: planned_transactions/exceptions.py:29 transactions/exceptions.py:14
 msgid "Category not found, archived, or not in this workspace"
-msgstr ""
+msgstr "Категорію не знайдено, архівовано або її немає в цьому робочому просторі"
 
 #: planned_transactions/exceptions.py:34
 msgid "Already executed"
-msgstr ""
+msgstr "Вже виконано"
 
 #: planned_transactions/exceptions.py:39
 msgid "Cannot change status of an executed planned transaction"
-msgstr ""
+msgstr "Не можна змінювати статус виконаної запланованої транзакції"
 
 #: transactions/api.py:180
 msgid "No new transactions to import."
-msgstr ""
+msgstr "Немає нових транзакцій для імпорту."
 
 #: transactions/api.py:181
 #, python-format
 msgid "Successfully imported %(count)s new transactions."
-msgstr ""
+msgstr "Успішно імпортовано нові транзакції (%(count)s)."
 
 #: transactions/api.py:349 transactions/api.py:372
 msgid "Receipt extraction is not configured."
-msgstr ""
+msgstr "Розпізнавання позицій чека не налаштовано."
 
 #: transactions/api.py:356
 msgid "Receipt scanning is temporarily offline. Please try again later."
-msgstr ""
+msgstr "Сканування чеків тимчасово недоступне. Будь ласка, спробуйте пізніше."
 
 #: transactions/exceptions.py:9
 msgid "Transaction not found"
-msgstr ""
+msgstr "Транзакцію не знайдено"
 
 #: transactions/exceptions.py:19
 msgid "Account is archived and cannot receive new transactions"
-msgstr ""
+msgstr "Рахунок архівовано, він не може отримувати нові транзакції"
 
 #: transactions/exceptions.py:24
 msgid ""
 "Amount must be positive (income/expense) or a non-zero delta (adjustment)"
-msgstr ""
+msgstr "Сума має бути додатною (дохід/витрата) або ненульовою дельтою (коригування)"
 
 #: transactions/exceptions.py:29
 msgid "Adjustments cannot have a category"
-msgstr ""
+msgstr "Коригування не можуть мати категорію"
 
 #: transactions/exceptions.py:34
 msgid "Adjustments require an account"
-msgstr ""
+msgstr "Коригування потребують рахунку"
 
 #: transactions/exceptions.py:39
 msgid "Transactions without an account require an explicit currency_code"
-msgstr ""
+msgstr "Транзакції без рахунку потребують явного currency_code"
 
 #: transactions/exceptions.py:44
 msgid "currency_code does not match the account currency"
-msgstr ""
+msgstr "currency_code не відповідає валюті рахунку"
 
 #: transactions/exceptions.py:51
 msgid "Original currency is unknown or equals the transaction currency"
-msgstr ""
+msgstr "Початкова валюта невідома або збігається з валютою транзакції"
 
 #: transactions/exceptions.py:56
 msgid "All transactions and the target account must belong to the workspace"
-msgstr ""
+msgstr "Усі транзакції та цільовий рахунок мають належати робочому простору"
 
 #: transactions/exceptions.py:61
 msgid ""
 "Target account currency must match the currency of every moved transaction"
-msgstr ""
+msgstr "Валюта цільового рахунку має збігатися з валютою кожної перенесеної транзакції"
 
 #: transactions/exceptions.py:71
 msgid "Attachment not found"
-msgstr ""
+msgstr "Вкладення не знайдено"
 
 #: transactions/exceptions.py:76
 msgid "Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF"
-msgstr ""
+msgstr "Непідтримуваний тип файлу — допустимо: JPEG, PNG, HEIC, WebP, PDF"
 
 #: transactions/exceptions.py:82
 msgid "File storage is not configured"
-msgstr ""
+msgstr "Файлове сховище не налаштовано"
 
 #: transactions/exceptions.py:87
 msgid "The stored file is no longer available"
-msgstr ""
+msgstr "Збережений файл більше недоступний"
 
 #: transactions/schemas.py:50 transactions/schemas.py:74
 msgid "Description cannot be empty"
-msgstr ""
+msgstr "Опис не може бути порожнім"
 
 #: transactions/schemas.py:56
 msgid ""
 "original_amount and original_currency_code must both be set or both be "
 "omitted"
-msgstr ""
+msgstr "original_amount і original_currency_code потрібно встановити обидва або пропустити обидва"
 
 #: transactions/schemas.py:163
 msgid "Item name cannot be empty"
-msgstr ""
+msgstr "Назва позиції не може бути порожньою"
 
 #: transactions/services.py:123
 #, python-format
 msgid "Original currency %(code)s not found in the catalog"
-msgstr ""
+msgstr "Початкову валюту %(code)s не знайдено в каталозі"
 
 #: transactions/services.py:126
 msgid "Original currency must differ from the transaction currency"
-msgstr ""
+msgstr "Початкова валюта має відрізнятися від валюти транзакції"
 
 #: transactions/services.py:767
 #, python-format
 msgid "Invalid data format: %(error)s"
-msgstr ""
+msgstr "Недійсний формат даних: %(error)s"
 
 #: transfers/exceptions.py:9
 msgid "Transfer not found"
-msgstr ""
+msgstr "Переказ не знайдено"
 
 #: transfers/exceptions.py:14 transfers/schemas.py:28
 msgid "From and to accounts must differ"
-msgstr ""
+msgstr "Рахунок-джерело і рахунок-призначення мають відрізнятися"
 
 #: transfers/exceptions.py:19
 msgid "Cannot transfer to or from an archived account"
-msgstr ""
+msgstr "Не можна переказувати на архівований рахунок або з нього"
 
 #: transfers/exceptions.py:24
 msgid "Transfer amounts must be positive"
-msgstr ""
+msgstr "Суми переказу мають бути додатними"
 
 #: transfers/exceptions.py:29
 msgid "Amounts must match for same-currency transfers"
-msgstr ""
+msgstr "Суми мають збігатися для переказів у межах однієї валюти"
 
 #: transfers/exceptions.py:34
 msgid "to_amount is required for cross-currency transfers"
-msgstr ""
+msgstr "to_amount потрібен для переказів між різними валютами"
 
 #: users/api.py:72
 msgid "Password updated successfully"
-msgstr ""
+msgstr "Пароль успішно оновлено"
 
 #: users/api.py:159
 msgid "Account and all associated data deleted successfully."
-msgstr ""
+msgstr "Обліковий запис і всі пов’язані дані успішно видалено."
 
 #: users/api.py:181
 msgid "Account reset. A fresh workspace is ready."
-msgstr ""
+msgstr "Обліковий запис скинуто. Новий робочий простір готовий."
 
 #: users/api.py:259
 msgid "Two-factor authentication has been disabled"
-msgstr ""
+msgstr "Двофакторну автентифікацію вимкнено"
 
 #: users/exceptions.py:9
 msgid "Invalid current password"
-msgstr ""
+msgstr "Недійсний поточний пароль"
 
 #: users/exceptions.py:16
 #, python-format
 msgid "Invalid consent type: %(consent_type)s"
-msgstr ""
+msgstr "Недійсний тип згоди: %(consent_type)s"
 
 #: users/exceptions.py:22
 msgid "No active consent found for this type"
-msgstr ""
+msgstr "Активної згоди цього типу не знайдено"
 
 #: users/exceptions.py:27
 msgid "Two-factor authentication is not enabled for this user"
-msgstr ""
+msgstr "Двофакторна автентифікація не увімкнена для цього користувача"
 
 #: users/exceptions.py:34
 #, python-format
 msgid ""
 "Cannot delete account. You own workspaces with other members: "
 "%(workspaces)s. Transfer ownership or remove all members first."
-msgstr ""
+msgstr "Не можна видалити обліковий запис. Ви володієте робочими просторами з іншими учасниками: %(workspaces)s. Спочатку передайте право власності або видаліть усіх учасників."
 
 #: users/exceptions.py:41
 msgid "Email is already verified"
-msgstr ""
+msgstr "Електронну пошту вже підтверджено"
 
 #: users/exceptions.py:46
 msgid "Invalid or expired verification token"
-msgstr ""
+msgstr "Недійсний або прострочений токен підтвердження"
 
 #: users/exceptions.py:51
 msgid "This email is already in use"
-msgstr ""
+msgstr "Ця адреса електронної пошти вже використовується"
 
 #: users/exceptions.py:56
 msgid "Invalid or expired email change token"
-msgstr ""
+msgstr "Недійсний або прострочений токен зміни електронної пошти"
 
 #: users/exceptions.py:61
 msgid "New email must be different from current email"
-msgstr ""
+msgstr "Нова електронна пошта має відрізнятися від поточної"
+
+#: users/legacy_import.py:69
+#, python-format
+msgid "%(context)s: invalid date %(value)r (expected YYYY-MM-DD)"
+msgstr "%(context)s: недійсна дата %(value)r (очікується YYYY-MM-DD)"
+
+#: users/legacy_import.py:77
+#, python-format
+msgid "%(context)s: date is missing"
+msgstr "%(context)s: дата відсутня"
+
+#: users/legacy_import.py:85
+#, python-format
+msgid "%(context)s: name is missing"
+msgstr "%(context)s: назва відсутня"
 
 #: users/models.py:27
 msgid "The Email field must be set"
-msgstr ""
+msgstr "Поле Email має бути встановлено"
 
 #: users/services.py:249
 msgid "This email change request is no longer valid"
-msgstr ""
+msgstr "Цей запит на зміну електронної пошти більше недійсний"
 
 #: users/services.py:417 users/services.py:496
 msgid "Invalid password"
-msgstr ""
+msgstr "Недійсний пароль"
 
 #: users/services.py:505
 #, python-format
 msgid ""
 "These workspaces are shared with other members: %(workspaces)s. Set "
 "confirm_shared to delete them anyway."
-msgstr ""
+msgstr "Ці робочі простори є спільними з іншими учасниками: %(workspaces)s. Встановіть confirm_shared, щоб усе одно видалити їх."
 
 #: users/services.py:771
 #, python-format
 msgid ""
 "Incompatible export version: %(version)s. The main import accepts v3 exports "
 "only; use the legacy import for v1/v2 files."
-msgstr ""
+msgstr "Несумісна версія експорту: %(version)s. Головний імпорт приймає лише експорти v3; для файлів v1/v2 використовуйте старий імпорт."
 
 #: users/services.py:774
 msgid "unknown"
-msgstr ""
+msgstr "невідома"
 
 #: users/services.py:796
 #, python-format
 msgid "Invalid date in import data: %(value)r (expected YYYY-MM-DD)"
-msgstr ""
+msgstr "Недійсна дата в даних імпорту: %(value)r (очікується YYYY-MM-DD)"
 
 #: users/services.py:918
 #, python-format
 msgid "%(name)s: transaction references unknown account"
-msgstr ""
+msgstr "%(name)s: транзакція посилається на невідомий рахунок"
 
 #: users/services.py:924
 #, python-format
 msgid "%(name)s: account-less transaction missing currency_code"
-msgstr ""
+msgstr "%(name)s: транзакція без рахунку не містить currency_code"
 
 #: users/services.py:969
 #, python-format
 msgid "%(name)s: transfer references unknown account"
-msgstr ""
+msgstr "%(name)s: переказ посилається на невідомий рахунок"
 
 #: users/services.py:990
 #, python-format
 msgid "%(name)s: planned transaction references unknown account"
-msgstr ""
+msgstr "%(name)s: запланована транзакція посилається на невідомий рахунок"
 
 #: users/services.py:996
 #, python-format
 msgid "%(name)s: account-less planned transaction missing currency_code"
-msgstr ""
+msgstr "%(name)s: запланована транзакція без рахунку не містить currency_code"
+
+#: users/two_factor.py:215
+msgid "Two-factor authentication has been reset"
+msgstr "Двофакторну автентифікацію скинуто"
 
 #: workspaces/exceptions.py:10
 msgid "Workspace not found"
-msgstr ""
+msgstr "Робочий простір не знайдено"
 
 #: workspaces/exceptions.py:15
 msgid "Member not found in this workspace"
-msgstr ""
+msgstr "Учасника не знайдено в цьому робочому просторі"
 
 #: workspaces/exceptions.py:20
 msgid "User is already a member of this workspace"
-msgstr ""
+msgstr "Користувач уже є учасником цього робочого простору"
 
 #: workspaces/exceptions.py:27
 #, python-format
 msgid ""
 "Workspace member limit reached. Maximum %(max)s members allowed per "
 "workspace."
-msgstr ""
+msgstr "Досягнуто ліміту учасників робочого простору. Максимум %(max)s учасників на робочий простір."
 
 #: workspaces/exceptions.py:34
 msgid "Cannot remove yourself. Use the leave endpoint instead."
-msgstr ""
+msgstr "Не можна видалити себе. Скористайтеся натомість виходом із робочого простору."
 
 #: workspaces/exceptions.py:39
 msgid "Cannot change your own role"
-msgstr ""
+msgstr "Не можна змінювати власну роль"
 
 #: workspaces/exceptions.py:44
 msgid ""
 "Workspace owner cannot leave. Transfer ownership first or delete the "
 "workspace."
-msgstr ""
+msgstr "Власник не може залишити робочий простір. Спочатку передайте право власності або видаліть робочий простір."
 
 #: workspaces/exceptions.py:49
 msgid "Cannot change the owner's role"
-msgstr ""
+msgstr "Не можна змінювати роль власника"
 
 #: workspaces/exceptions.py:54
 msgid "Cannot remove the workspace owner"
-msgstr ""
+msgstr "Не можна видалити власника робочого простору"
 
 #: workspaces/exceptions.py:59
 msgid ""
 "Cannot reset your own password. Use the change password feature instead."
-msgstr ""
+msgstr "Не можна скинути власний пароль. Скористайтеся натомість функцією зміни пароля."
 
 #: workspaces/exceptions.py:64
 msgid "Cannot reset the owner's password"
-msgstr ""
+msgstr "Не можна скинути пароль власника"
 
 #: workspaces/exceptions.py:69
 msgid "Only the workspace owner can perform this action."
-msgstr ""
+msgstr "Лише власник робочого простору може виконати цю дію."
 
 #: workspaces/exceptions.py:77
 #, python-format
 msgid "Admin cannot %(action)s another admin. Owner required."
-msgstr ""
+msgstr "Адміністратор не може %(action)s іншого адміністратора. Потрібен власник."
 
 #: workspaces/schemas.py:83
 msgid "Password cannot be blank"
-msgstr ""
+msgstr "Пароль не може бути порожнім"
 
 #: workspaces/services.py:193
 msgid "Budget not found in this workspace"
-msgstr ""
+msgstr "Бюджет не знайдено в цьому робочому просторі"
+
+#: workspaces/services.py:212
+msgid "Workspace switched successfully"
+msgstr "Робочий простір успішно змінено"
+
+#: workspaces/services.py:377 workspaces/services.py:404
+msgid "Member added to workspace"
+msgstr "Учасника додано до робочого простору"
+
+#: workspaces/services.py:466
+msgid "Successfully left workspace"
+msgstr "Ви успішно залишили робочий простір"
 
 #: workspaces/services.py:482
 #, python-format
 msgid "Cannot assign role: %(role)s. Allowed: %(allowed)s"
-msgstr ""
+msgstr "Не можна призначити роль: %(role)s. Дозволено: %(allowed)s"
 
 #: workspaces/services.py:509
 msgid "change role of"
-msgstr ""
+msgstr "змінити роль"
+
+#: workspaces/services.py:524
+msgid "Role updated successfully"
+msgstr "Роль успішно оновлено"
 
 #: workspaces/services.py:564
 msgid "remove"
-msgstr ""
+msgstr "видалити"
 
 #: workspaces/services.py:604
 msgid "reset password of"
-msgstr ""
+msgstr "скинути пароль"
+
+#: workspaces/services.py:621
+msgid "Password reset successfully"
+msgstr "Пароль успішно скинуто"

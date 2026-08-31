@@ -22,6 +22,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction as db_transaction
+from django.utils.translation import gettext as _
 
 from accounts.models import Account, AccountType
 from accounts.services import AccountService
@@ -64,13 +65,16 @@ def _date(value, context: str = ''):
     try:
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (ValueError, TypeError):
-        raise ValidationError(f'{context or "record"}: invalid date {value!r} (expected YYYY-MM-DD)')
+        raise ValidationError(
+            _('%(context)s: invalid date %(value)r (expected YYYY-MM-DD)')
+            % {'context': context or 'record', 'value': value}
+        )
 
 
 def _required_date(value, context: str):
     parsed = _date(value, context)
     if parsed is None:
-        raise ValidationError(f'{context}: date is missing')
+        raise ValidationError(_('%(context)s: date is missing') % {'context': context})
     return parsed
 
 
@@ -78,7 +82,7 @@ def _required_str(value, context: str) -> str:
     """Require a non-empty name — a null/blank one would otherwise surface as
     an opaque NOT NULL IntegrityError 500."""
     if value is None or not str(value).strip():
-        raise ValidationError(f'{context}: name is missing')
+        raise ValidationError(_('%(context)s: name is missing') % {'context': context})
     return str(value)
 
 

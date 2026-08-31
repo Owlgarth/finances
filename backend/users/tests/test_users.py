@@ -1,6 +1,10 @@
 """Tests for user profile management."""
 
+import shutil
+import unittest
+
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 
 from core.tests.base import AuthTestCase
 
@@ -173,32 +177,56 @@ class TestPreferences(AuthTestCase):
         self.assertEqual(data['language'], 'pl')
 
 
+@unittest.skipUnless(shutil.which('msgfmt'), 'gettext not installed')
 class TestPreferencesMessageLocalization(AuthTestCase):
-    """Accept-Language mechanism proof for schema validator messages.
+    """Accept-Language selection for schema validator messages.
 
-    No compiled catalogs exist yet, so every locale still renders the
-    English msgid. These tests pin the plumbing: the message is
-    server-rendered per the request's Accept-Language header, and the
-    no-header default is English.
+    Requires compiled catalogs: setUpClass compiles them via
+    ``manage.py compilemessages`` (msgfmt must be on PATH - hence the class
+    skip guard; the Docker image ships gettext and its entrypoint compiles).
+    Without .mo files the translated assertions fail by design.
     """
 
-    def test_validator_message_rendered_per_accept_language(self):
-        """The validator message is rendered server-side under the request's Accept-Language locale."""
-        token = self.register_and_login('prefs_lang_pl@example.com', 'password123', 'Prefs Test')
-        self.patch(
-            '/api/users/me/preferences',
-            {'calendar_start_day': 13},
-            **self.auth_headers(token),
-            HTTP_ACCEPT_LANGUAGE='pl',
-        )
+    POLISH_DETAIL = 'calendar_start_day musi mieć wartość od 1 do 7'
+    UKRAINIAN_DETAIL = 'calendar_start_day має бути в межах від 1 до 7'
+    ENGLISH_DETAIL = 'calendar_start_day must be between 1 and 7'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        call_command('compilemessages', verbosity=0)
+
+    def _patch_bad_calendar(self, accept_language: str | None):
+        token = self.register_and_login('prefs_lang@example.com', 'password123', 'Prefs Test')
+        kwargs = {'HTTP_ACCEPT_LANGUAGE': accept_language} if accept_language else {}
+        self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token), **kwargs)
         self.assertStatus(422)
         # Ninja's 422 detail is a list of error dicts; str() makes the
         # assertion robust to that shape.
-        self.assertIn('calendar_start_day must be between 1 and 7', str(self.response.json()['detail']))
+        return str(self.response.json()['detail'])
+
+    def test_validator_message_polish(self):
+        """The validator message renders in Polish under an Accept-Language: pl header."""
+        detail = self._patch_bad_calendar('pl')
+        self.assertIn(self.POLISH_DETAIL, detail)
+        self.assertNotIn(self.ENGLISH_DETAIL, detail)
+
+    def test_validator_message_ukrainian(self):
+        """The validator message renders in Ukrainian under an Accept-Language: uk header."""
+        detail = self._patch_bad_calendar('uk')
+        self.assertIn(self.UKRAINIAN_DETAIL, detail)
 
     def test_validator_message_english_without_header(self):
         """Without an Accept-Language header the message falls back to the LANGUAGE_CODE default (English)."""
-        token = self.register_and_login('prefs_lang_none@example.com', 'password123', 'Prefs Test')
-        self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token))
-        self.assertStatus(422)
-        self.assertIn('calendar_start_day must be between 1 and 7', str(self.response.json()['detail']))
+        detail = self._patch_bad_calendar(None)
+        self.assertIn(self.ENGLISH_DETAIL, detail)
+
+    def test_unknown_language_falls_back_to_english(self):
+        """An unknown language code ('xx') negotiates to the English default."""
+        detail = self._patch_bad_calendar('xx')
+        self.assertIn(self.ENGLISH_DETAIL, detail)
+
+    def test_q_values_pick_strongest_match(self):
+        """q-values order the candidates: uk;q=0.9 wins over pl;q=0.8."""
+        detail = self._patch_bad_calendar('uk;q=0.9, pl;q=0.8')
+        self.assertIn(self.UKRAINIAN_DETAIL, detail)

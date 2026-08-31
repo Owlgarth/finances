@@ -10,6 +10,7 @@ import qrcode.image.svg
 from django.conf import settings
 from django.db import transaction as db_transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from common.crypto import decrypt_secret, encrypt_secret
 from common.email import EmailService
@@ -41,7 +42,7 @@ def _generate_recovery_codes(count: int | None = None) -> list[str]:
     if count is None:
         count = settings.TWO_FACTOR_RECOVERY_CODE_COUNT
     codes = []
-    for _ in range(count):
+    for _i in range(count):
         raw = ''.join(
             secrets.choice(settings.TWO_FACTOR_RECOVERY_CHARSET)
             for _ in range(settings.TWO_FACTOR_RECOVERY_CODE_LENGTH)
@@ -211,4 +212,4 @@ class TwoFactorService:
             admin_name=admin.full_name or admin.email,
         )
 
-        return {'message': 'Two-factor authentication has been reset', 'user_id': target_user_id}
+        return {'message': _('Two-factor authentication has been reset'), 'user_id': target_user_id}
