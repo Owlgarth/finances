@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import Select from '../common/Select'
 import { PAGE_SIZE_OPTIONS, getStoredPageSize, setStoredPageSize } from '../../utils/pageSize'
@@ -9,23 +10,24 @@ import { PAGE_SIZE_OPTIONS, getStoredPageSize, setStoredPageSize } from '../../u
  * table page-size dropdowns write to the same stored value.
  */
 export default function LocalSettingsSection() {
+  const { t } = useTranslation('settings')
   const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   return (
     <div className="pt-6 mt-6 border-t border-border">
-      <h3 className="text-sm font-medium text-text mb-1">This device</h3>
+      <h3 className="text-sm font-medium text-text mb-1">{t('localSettings.title')}</h3>
       <p className="text-sm text-text-muted mb-4">
-        Saved in this browser only — not synced to your account.
+        {t('localSettings.body')}
       </p>
       <div>
         <label
           htmlFor="rows_per_page"
           className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2"
         >
-          Rows per page
+          {t('localSettings.rowsLabel')}
         </label>
         <p className="text-sm text-text-muted mb-3">
-          Default number of rows shown in paginated tables (transactions, planned).
+          {t('localSettings.rowsHelper')}
         </p>
         <Select
           id="rows_per_page"
@@ -36,7 +38,7 @@ export default function LocalSettingsSection() {
           }}
           options={PAGE_SIZE_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
           mono
-          aria-label="Rows per page"
+          aria-label={t('localSettings.rowsAria')}
           className="w-32"
         />
       </div>
