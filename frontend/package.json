@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "lang:list": "node scripts/lang-list.mjs",
+    "lang:add": "node scripts/lang-add.mjs",
+    "lang:rm": "node scripts/lang-rm.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
