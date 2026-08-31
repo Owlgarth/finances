@@ -68,7 +68,7 @@ Two role groups drive enforcement:
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View categories | ✓ | ✓ | ✓ | ✓ |
-| Create / edit / archive / delete category | ✓ | ✓ | ✓ | ✗ |
+| Create / edit / archive / delete / merge category | ✓ | ✓ | ✓ | ✗ |
 | Set / clear category budget amount | ✓ | ✓ | ✓ | ✗ |
 
 ### Transaction Management (`WRITE_ROLES`)
