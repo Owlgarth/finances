@@ -118,6 +118,7 @@ Detailed conventions are split into skills under `.agents/skills/`. Load the rel
 | `email-sending` | Sending emails, email templates, EmailService |
 | `frontend-react` | Any frontend code — design tokens, components, modals, API client, auth flows |
 | `frontend-live-stack-probing` | Interactive verification of frontend behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available |
+| `i18n-tooling` | i18n toolchain - language lifecycle scripts (lang:add/lang:rm, key:find/key:rm, i18n:check, i18n:extract), byte-preserving writers for the language registry and .i18rc, catalog \uXXXX escape preservation, i18next ESLint rule config |
 | `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
 | `docker-infra` | docker-compose, Dockerfiles, entrypoints, nginx, S3 storage |
 | `docs-accuracy` | Editing READMEs or docs/ markdown - accuracy sweeps, census/grep gates, code-fenced trees, verbatim transcription |

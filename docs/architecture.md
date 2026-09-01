@@ -103,7 +103,9 @@ backend/
 │                           #   init_storage_buckets + seed_legal_documents commands
 ├── common/                 # Shared: JWT auth, permissions, storage, test mixins
 │   ├── services/base.py    # delete_workspace_financial_records (dependency-ordered)
-│   └── idempotency.py      # Idempotency-Key create dedup (transactions + planned)
+│   ├── idempotency.py      # Idempotency-Key create dedup (transactions + planned)
+│   └── languages.py +      # language/number-format registry (single source of truth,
+│       languages.json      #   read by backend validation and imported by the frontend)
 ├── users/                  # Custom user model (email auth), GDPR export/import, legacy import
 ├── workspaces/             # Multi-tenant workspaces, members, enabled currencies
 ├── currencies/             # Global ISO 4217 catalog + per-workspace enablement
@@ -117,7 +119,8 @@ backend/
 ├── transfers/              # Transfers between accounts
 ├── planned_transactions/   # Scheduled transactions
 │   └── tasks.py            # Celery task: execute_planned_transaction
-└── reports/                # budget-summary, budget-history (planned vs actual), current-balances
+├── reports/                # budget-summary, budget-history (planned vs actual), current-balances
+└── locale/                 # gettext catalogs (uk/pl) for translated API error messages
 ```
 
 Each app with business logic has a `services.py`; `api.py` files are thin request
@@ -162,7 +165,7 @@ Fernet-encrypted with a dedicated `TWO_FACTOR_ENCRYPTION_KEY` (empty → legacy
 frontend/src/
 ├── api/client.ts           # Axios instance + typed API modules
 ├── components/
-│   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu
+│   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu, LanguageModal
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
 │   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
@@ -184,6 +187,9 @@ frontend/src/
 │   └── (other hooks)           # useAttachments, useListboxPanel,
 │                              #   useWorkspaceSwitch, useMediaQuery,
 │                              #   useBreakpoint, useDebouncedField, useOverlay
+├── i18n/                   # i18next bootstrap (synchronous, before first render),
+│                           #   LanguageContext + useLanguage, date-fns locales,
+│                           #   and the per-language catalogs in locales/<lang>/
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
 │                           #   Transfers (no sidebar slot - reached from
@@ -192,7 +198,9 @@ frontend/src/
 │                           #   VerifyEmail, ConfirmEmailChange, ReConsent,
 │                           #   PrivacyPolicy, Terms, NotFound)
 ├── utils/                  # format, errors, pageSize, params, transactionItems,
-│                           #   attachments, currencies, tappable, zoomLock
+│                           #   attachments, currencies, tappable, zoomLock,
+│                           #   amountInput (both decimal separators, normalized
+│                           #   per the active number style at submit)
 └── types/index.ts          # TypeScript interfaces
 ```
 
@@ -261,6 +269,7 @@ do not change to 404.
 | `USE_S3_STORAGE`, `S3_*` | Object storage for attachments and static files; browser-facing URLs follow `S3_EXTERNAL_URL` |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
 | `DEMO_MODE` | Disable registration when true |
+| `DEFAULT_LANGUAGE`, `DEFAULT_NUMBER_FORMAT` | Default UI language / number-format style for new users (registry-validated; see [i18n.md](i18n.md)) |
 
 ### Frontend
 
