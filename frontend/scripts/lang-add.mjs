@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Add a UI language: registry entry + locale files.
+// Add a UI language: registry entry + locale files + .i18rc locales list.
 // usage: node scripts/lang-add.mjs <code> <englishName> <nativeName> <dateFnsLocale>
 //   code           ISO 639 code, ^[a-z]{2,3}$ (validated)
 //   englishName    e.g. "German"
@@ -7,7 +7,7 @@
 //   dateFnsLocale  date-fns export name, e.g. "de"
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { LOCALES_DIR, NAMESPACES, readRegistry, writeRegistry } from './i18n-lib.mjs'
+import { LOCALES_DIR, NAMESPACES, readRegistry, syncI18rcLocale, writeRegistry } from './i18n-lib.mjs'
 
 function usage() {
   console.error('usage: node scripts/lang-add.mjs <code> <englishName> <nativeName> <dateFnsLocale>')
@@ -43,6 +43,7 @@ const index = registry.languages.findIndex((l) => l.code > code)
 if (index === -1) registry.languages.push(entry)
 else registry.languages.splice(index, 0, entry)
 writeRegistry(registry)
+const i18rcLocales = syncI18rcLocale(code, true)
 
 const langDir = path.join(LOCALES_DIR, code)
 mkdirSync(langDir, { recursive: true })
@@ -55,6 +56,9 @@ for (const ns of NAMESPACES) {
 }
 
 console.log(`Added language '${code}' (${nativeName}) with ${NAMESPACES.length} namespace files copied from en.`)
+if (i18rcLocales) {
+  console.log(`Updated frontend/.i18rc locales: ${i18rcLocales.join(', ')}`)
+}
 console.log('REMEMBER: add the date-fns import in frontend/src/i18n/dateLocales.ts')
 console.log(`  import { ${dateFnsLocale} } from 'date-fns/locale'  (export name: ${dateFnsLocale})`)
 console.log("REMEMBER: update the hardcoded mini-list in frontend/index.html's FOUC script.")

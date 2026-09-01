@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Remove a UI language: deletes its locale directory and registry entry.
+// Remove a UI language: deletes its locale directory, registry entry, and
+// .i18rc locales entry.
 // usage: node scripts/lang-rm.mjs <code>
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
-import { LOCALES_DIR, readRegistry, writeRegistry } from './i18n-lib.mjs'
+import { LOCALES_DIR, readRegistry, syncI18rcLocale, writeRegistry } from './i18n-lib.mjs'
 
 function usage() {
   console.error('usage: node scripts/lang-rm.mjs <code>')
@@ -39,5 +40,6 @@ if (existsSync(langDir)) {
 
 registry.languages = registry.languages.filter((l) => l.code !== code)
 writeRegistry(registry)
+const i18rcUpdated = syncI18rcLocale(code, false)
 
-console.log(`Removed language '${code}' (${entry.nativeName}): ${nsCount} namespace file(s) deleted, registry entry removed.`)
+console.log(`Removed language '${code}' (${entry.nativeName}): ${nsCount} namespace file(s) deleted, registry entry removed${i18rcUpdated ? ', .i18rc locales entry removed' : ''}.`)
