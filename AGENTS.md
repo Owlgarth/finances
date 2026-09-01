@@ -122,4 +122,5 @@ Detailed conventions are split into skills under `.agents/skills/`. Load the rel
 | `i18n-tooling` | i18n toolchain - language lifecycle scripts (lang:add/lang:rm, key:find/key:rm, i18n:check, i18n:extract), byte-preserving writers for the language registry and .i18rc, catalog \uXXXX escape preservation, i18next ESLint rule config |
 | `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
 | `docker-infra` | docker-compose, Dockerfiles, entrypoints, nginx, S3 storage |
+| `ci-releases` | GitHub Actions workflows, release tooling (VERSION, cliff.toml, GHCR publishing), Renovate config - action pin verification via git refs, reusable test-gate workflow, render-testing pinned binaries |
 | `docs-accuracy` | Editing READMEs or docs/ markdown - accuracy sweeps, census/grep gates, code-fenced trees, verbatim transcription |
