@@ -28,7 +28,10 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   logout, then workspace switching
   (with role badges), a create-workspace row (closes the sheet and opens the
   create-workspace modal - a bottom sheet with the ordered currency multi-select - as the
-  only overlay layer), workspace settings, dark mode, disable-zoom toggle (opt-in,
+  only overlay layer), workspace settings, dark mode, language (closes the sheet
+  and opens the language picker - one card per registry language, showing the
+  active one's native name on the row; a tap applies the switch immediately),
+  disable-zoom toggle (opt-in,
   per-device: kills double-tap/pinch zoom for a native feel), close. The bottom-most row
   (logout's old slot, directly above the just-tapped More button, which collected
   accidental logouts) holds a Close button on its left side only - the rest of the row

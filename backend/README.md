@@ -455,6 +455,12 @@ JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
 DEMO_MODE=false
 ```
 
+Default UI language settings (optional; values are validated against the registry in `common/languages.json` - see [docs/i18n.md](../docs/i18n.md)):
+```bash
+DEFAULT_LANGUAGE=en       # UI language for new users
+DEFAULT_NUMBER_FORMAT=en  # number/date formatting style for new users (en or eu separators)
+```
+
 Legal document operator settings (optional, customize for your deployment):
 ```bash
 LEGAL_OPERATOR_NAME=Your Company Name    # Company or individual name
@@ -505,7 +511,7 @@ Interactive docs at `http://127.0.0.1:8000/api/docs`
 
 ## Docker Support
 
-A Dockerfile is provided for containerized deployment. The image includes an entrypoint script that automatically runs database migrations, seeds the currency catalog and legal documents, and (when `USE_S3_STORAGE=true`) initializes storage buckets and collects static files before starting the server:
+A Dockerfile is provided for containerized deployment. The image includes an entrypoint script that automatically runs database migrations, seeds the currency catalog and legal documents, compiles the gettext translation catalogs (`compilemessages`; the image installs gettext), and (when `USE_S3_STORAGE=true`) initializes storage buckets and collects static files before starting the server:
 
 ```bash
 # Build image

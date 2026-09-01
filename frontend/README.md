@@ -12,6 +12,7 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 | React Router 7 | Client routing |
 | TanStack Query 5 | Server state |
 | Axios | HTTP client |
+| i18next / react-i18next | Internationalization (UI catalogs; en/uk/pl - see [docs/i18n.md](../docs/i18n.md)) |
 | Tailwind CSS 3 | Styling (Architectural Ledger design system) |
 | Lucide React | Icon library |
 | React Hot Toast | Notifications |
@@ -25,7 +26,7 @@ frontend/
 │   │   ├── client.ts         # Axios instance + typed API modules
 │   │   └── queryClient.ts    # App-wide QueryClient (own module - no import cycles)
 │   ├── components/
-│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm
+│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
@@ -50,9 +51,17 @@ frontend/
 │   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop, Tailwind-snapped) + useIsTouch (pointer: coarse)
 │   │   ├── useDebouncedField.ts     # Draft state for inputs whose committed value lives in URL params (search, amount filters)
 │   │   └── useOverlay.ts            # Blocking-overlay behavior for Modal/BottomSheet: stack-aware Escape, refcounted scroll lock, focus restore
+│   ├── i18n/
+│   │   ├── index.ts             # Synchronous i18next bootstrap (all catalogs inlined at build time; detection: localStorage then navigator)
+│   │   ├── LanguageContext.tsx  # LanguageProvider + useLanguage() - active language/number format, switching, server-preference sync
+│   │   ├── dateLocales.ts       # date-fns locale per registry language
+│   │   ├── i18n.d.ts            # Key types derived from the en catalogs
+│   │   └── locales/<lang>/      # One JSON file per domain namespace (12), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors, pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
+├── .i18rc                   # i18next-parser config (i18n:extract; locales list)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -97,7 +106,12 @@ transfer, from-receipt (parse then seed the form) and planned; the More sheet
 carries the overflow destinations (Accounts, Planned, Members, Settings), search,
 logout, workspace switcher + create/settings, the theme row and the zoom toggle),
 `UserMenu`, `WorkspaceSelector`, `ThemeToggleRow` (dark-mode toggle row shared by
-the desktop UserMenu dropdown and the mobile More sheet), `WorkspaceSettingsPanel`
+the desktop UserMenu dropdown and the mobile More sheet), `LanguageModal`
+(mount-per-use language picker - one card per registry language with the active
+one checked; opened by the "Language" row in the desktop UserMenu dropdown and
+the mobile More sheet, each closing itself first so the modal is the only
+overlay; a tap applies the switch immediately, then a fire-and-forget
+preferences PATCH persists it when authenticated), `WorkspaceSettingsPanel`
 (workspace rename/delete modal hosting the admin-gated
 `CurrenciesSettingsSection`; opened from the sidebar gear and the More sheet),
 and `CreateWorkspaceForm` (mount-per-use create-workspace
@@ -252,7 +266,22 @@ interface ThemeContextType {
 }
 ```
 
-The choice is persisted to `localStorage` under `owlgarth_theme` (`'light'` | `'dark'` | `null`). `null` (no stored value) means the light theme - the OS `prefers-color-scheme` is ignored; once the user toggles, the stored choice wins. An inline script in `index.html` sets the `.dark` class on `<html>` before React hydration to prevent a flash of the wrong theme.
+The choice is persisted to `localStorage` under `owlgarth_theme` (`'light'` | `'dark'` | `null`). `null` (no stored value) means the light theme - the OS `prefers-color-scheme` is ignored; once the user toggles, the stored choice wins. An inline script in `index.html` sets the `.dark` class on `<html>` before React hydration to prevent a flash of the wrong theme (the same script also syncs `<html lang>` from the stored UI language pre-paint).
+
+### LanguageContext
+
+Lives in `src/i18n/LanguageContext.tsx` (beside the i18next bootstrap it drives, not under `contexts/`). Mounted inside `<AuthProvider>`, wrapping every route; owns the active UI language and number format.
+
+```typescript
+interface LanguageContextType {
+  language: string;
+  numberFormat: string;
+  setLanguage: (code: string) => Promise<void>;
+  setNumberFormat: (code: string) => void;
+}
+```
+
+Resolution precedence: the authenticated server preference (`UserPreferences.language` / `.number_format`, applied silently on load, never re-applied after an in-session switch) > `localStorage` (`owlgarth_language` / `owlgarth_number_format`) > the registry default; i18next's browser detection (localStorage, then navigator) covers anonymous visitors. `setLanguage` switches i18next, persists the choice, syncs `<html lang>` and the API client's `Accept-Language` header, and reconfigures number/date formatting; `setNumberFormat` persists the choice and reconfigures formatting. Both re-apply `configureFormatting` in `src/utils/format.ts`. The full reference (registry, catalogs, lifecycle) is in [docs/i18n.md](../docs/i18n.md).
 
 ## Hooks
 
@@ -291,7 +320,7 @@ const api = axios.create({
 
 | Module | Purpose |
 |--------|---------|
-| `authApi` | Login, register, current user, GDPR export/import + legacy import |
+| `authApi` | Login, register, current user, preferences (incl. language / number-format), GDPR export/import + legacy import |
 | `workspacesApi` | Workspace management |
 | `workspaceMembersApi` | Member management |
 | `currenciesApi` | Catalog + enabled currencies (enable/disable/custom/reorder) |
@@ -314,6 +343,13 @@ clearAuthToken();
 // Get saved token
 const token = getAuthToken();
 ```
+
+The instance also tracks the UI language: `setApiLanguage(code)` sets the
+`Accept-Language` header (seeded from the stored language at startup, updated on
+every switch) so backend error details arrive translated. `getApiErrorMessage`
+in `utils/errors` renders them - string details pass through, and Django Ninja
+422 detail arrays are flattened (deduplicated `msg` strings joined with `; `)
+into one line.
 
 ## Data Types
 
@@ -408,6 +444,21 @@ Application runs at `http://localhost:{VITE_PORT}` (default: 5173)
 npm run build
 npm run preview  # Preview production build
 ```
+
+### Translation Tooling (i18n)
+
+```bash
+npm run i18n:check                              # Catalog gate: key parity vs en, untranslated/empty values (CI runs this)
+npm run i18n:extract                            # i18next-parser: extract keys into the en catalogs (.i18rc)
+npm run lang:list                               # Print the language registry + locale directories
+npm run lang:add <code> <englishName> <nativeName> <dateFnsLocale>  # Scaffold a new language
+npm run lang:rm <code>                          # Remove a language (locale dir + registry + .i18rc)
+npm run key:find <ns.key.path>                  # Find code references to a translation key
+npm run key:rm <ns.key.path>                    # Remove a key from every catalog (refuses while still referenced)
+```
+
+The full workflow (adding, editing, and removing languages; backend gettext
+catalogs) is in [docs/i18n.md](../docs/i18n.md).
 
 ### Docker
 

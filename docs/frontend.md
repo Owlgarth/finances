@@ -8,7 +8,7 @@ The detailed, authoritative frontend documentation lives next to the code:
   routes (Dashboard · Accounts · Budgets · Transactions · Planned · Transfers ·
   Members · Settings), components, contexts, hooks (`useDomain`, `usePermissions`), the typed
   `api/client.ts` modules, core TypeScript types, query-key and mutation conventions,
-  and styling.
+  translation tooling, and styling.
 - **[docs/architecture.md](architecture.md)** - how the frontend maps onto the
   account-based data model and the backend API.
 - **[design/](../design/)** - the "Architectural Ledger" design system: `tokens.md`,
