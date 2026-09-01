@@ -281,6 +281,27 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         as_map = {t['currency']: t['total'] for t in data['totals']}
         self.assertEqual(as_map, {'PLN': '1350.00'})
 
+    def test_totals_filtered_by_currency(self):
+        # Unfiltered totals span both currencies (unchanged by the filter's arrival).
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        as_map = {t['currency']: t['total'] for t in data['totals']}
+        self.assertEqual(as_map, {'PLN': '1350.00', 'USD': '30.00'})
+
+        # Filtered totals return only the filtered currency's sums...
+        data = self.get('/api/planned-transactions/totals?currency_code=USD', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['totals'], [{'group': 'USD', 'currency': 'USD', 'total': '30.00'}])
+
+        # ...and agree with the currency-filtered list (aggregation parity).
+        listing = self.get('/api/planned-transactions?currency_code=USD', **self.auth_headers())
+        listed_sum = sum(Decimal(item['amount']) for item in listing['items'])
+        self.assertEqual(listed_sum, Decimal('30.00'))
+
+        # Group totals respect the filter too, not just the currency strip.
+        data = self.get('/api/planned-transactions/totals?group_by=category&currency_code=USD', **self.auth_headers())
+        groups = {t['group']: t['total'] for t in data['totals']}
+        self.assertEqual(groups, {str(TotalsLabel.UNCATEGORIZED): '30.00'})
+
     def test_totals_filtered_by_search_and_amount(self):
         data = self.get('/api/planned-transactions/totals?search=rent&amount_gte=1000', **self.auth_headers())
         self.assertEqual(len(data['totals']), 1)
