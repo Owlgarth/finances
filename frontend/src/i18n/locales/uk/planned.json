@@ -1,0 +1,100 @@
+{
+  "title": "Планові транзакції",
+  "newPlanned": "Нова запланована",
+  "exportView": "Експортувати подання",
+  "exportTitle": "Експортує фільтри статусу та дат",
+  "preparingExport": "Підготовка експорту…",
+  "exportComplete": "Експорт завершено",
+  "exportFailed": "Не вдалося експортувати. Спробуйте ще раз.",
+  "searchPlaceholder": "Пошук за назвами…",
+  "searchAria": "Пошук планованих транзакцій",
+  "sortAria": "Сортування",
+  "status": {
+    "all": "Усі",
+    "pending": "Очікується",
+    "done": "Виконано",
+    "cancelled": "Скасовано"
+  },
+  "statusAria": "Фільтрувати за статусом",
+  "sort": {
+    "soonest": "Найближчі",
+    "latest": "Найпізніші",
+    "amountDesc": "Сума: від більшої до меншої",
+    "amountAsc": "Сума: від меншої до більшої",
+    "name": "Назва А-Я"
+  },
+  "filters": {
+    "account": "Рахунок",
+    "currency": "Валюта",
+    "allAccounts": "Усі рахунки",
+    "allCurrencies": "Усі валюти",
+    "byAccountAria": "Фільтрувати за рахунком",
+    "byCurrencyAria": "Фільтрувати за валютою",
+    "plannedDate": "Дата плану"
+  },
+  "totals": {
+    "caption_one": "Підсумки - {{count}} запланована",
+    "caption_few": "Підсумки - {{count}} заплановані",
+    "caption_many": "Підсумки - {{count}} запланованих",
+    "caption_other": "Підсумки - {{count}} запланованих"
+  },
+  "emptyFiltered": "Жодна запланована транзакція не відповідає пошуку чи фільтрам.",
+  "empty": "Запланованих транзакцій немає.",
+  "emptyWithStatus": "Запланованих транзакцій зі статусом «{{status}}» немає.",
+  "noAccount": "Без рахунку",
+  "rowActions": {
+    "execute": "Виконати",
+    "cancelPlan": "Скасувати план",
+    "edit": "Редагувати",
+    "copy": "Копіювати",
+    "delete": "Видалити"
+  },
+  "executed": "Виконано - транзакцію створено",
+  "executeFailed": "Не вдалося виконати",
+  "cancelledToast": "План скасовано",
+  "cancelFailed": "Не вдалося скасувати",
+  "deleted": "Видалено",
+  "deleteFailed": "Не вдалося видалити",
+  "deleteDialog": {
+    "title": "Видалити заплановану транзакцію",
+    "message": "Видалити «{{name}}»?"
+  },
+  "cancelDialog": {
+    "title": "Скасувати план",
+    "message": "Позначити «{{name}}» як скасовану? Рядок залишається у списку, але його більше не можна виконати.",
+    "confirm": "Скасувати план"
+  },
+  "form": {
+    "editTitle": "Редагувати заплановану",
+    "newTitle": "Нова запланована транзакція",
+    "nameLabel": "Назва",
+    "amountLabel": "Сума",
+    "dateLabel": "Дата",
+    "accountLabel": "Рахунок",
+    "selectAccount": "Виберіть рахунок",
+    "accountAria": "Рахунок",
+    "currencyLabel": "Валюта",
+    "selectCurrency": "Виберіть валюту",
+    "currencyAria": "Валюта",
+    "budgetLabel": "Бюджет",
+    "budgetPlaceholder": "Бюджет",
+    "budgetAria": "Бюджет",
+    "categoryLabel": "Категорія (необов'язково)",
+    "uncategorized": "Без категорії",
+    "categoryAria": "Категорія",
+    "execute": "Виконати",
+    "copy": "Копіювати",
+    "cancelPlan": "Скасувати план",
+    "delete": "Видалити",
+    "cancel": "Скасувати",
+    "saving": "Збереження…",
+    "save": "Зберегти",
+    "add": "Додати",
+    "updated": "Оновлено",
+    "added": "Заплановану додано",
+    "saveFailed": "Не вдалося зберегти",
+    "nameRequired": "Вкажіть назву",
+    "amountRequired": "Вкажіть суму",
+    "currencyRequired": "Вкажіть валюту"
+  }
+}

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Check, Plus, Settings, Landmark, ChevronDown, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
 import { hasActiveOverlay } from '../../hooks/useOverlay'
@@ -13,6 +14,7 @@ interface WorkspaceSelectorProps {
 }
 
 export default function WorkspaceSelector({ onOpenSettings, collapsed = false }: WorkspaceSelectorProps) {
+  const { t } = useTranslation('settings')
   const { workspace, workspaces, isLoading } = useWorkspace()
   const { switchingToId, switchTo } = useWorkspaceSwitch()
   const [isOpen, setIsOpen] = useState(false)
@@ -32,7 +34,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
   useEffect(() => {
     if (!isOpen) return
     function handleKeyDown(event: KeyboardEvent) {
-      // Yield Escape while a Modal/BottomSheet is open — the overlay stack
+      // Yield Escape while a Modal/BottomSheet is open - the overlay stack
       // owns the key then (topmost-only close).
       if (event.key === 'Escape' && !hasActiveOverlay()) {
         setIsOpen(false)
@@ -48,8 +50,8 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
         <button
           onClick={() => setIsOpen(!isOpen)}
           disabled={isLoading}
-          title={workspace ? workspace.name : 'No workspace'}
-          aria-label={workspace ? `Workspace: ${workspace.name}` : 'No workspace'}
+          title={workspace ? workspace.name : t('workspaceSelector.noWorkspace')}
+          aria-label={workspace ? t('workspaceSelector.workspaceAria', { name: workspace.name }) : t('workspaceSelector.noWorkspace')}
           className="flex items-center justify-center w-full py-2 min-h-[44px] rounded-sm text-text-muted hover:bg-surface-hover hover:text-text transition-colors disabled:opacity-50"
         >
           <Landmark size={14} className="flex-shrink-0" />
@@ -62,7 +64,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
         >
           <Landmark size={14} className="flex-shrink-0 text-text-muted" />
           <span className="text-sm font-medium text-text truncate flex-1 text-left">
-            {workspace ? workspace.name : 'No workspace'}
+            {workspace ? workspace.name : t('workspaceSelector.noWorkspace')}
           </span>
           <ChevronDown size={14} className={`text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
@@ -105,7 +107,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
               className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
             >
               <Plus size={14} />
-              Create workspace
+              {t('workspaceSelector.createWorkspace')}
             </button>
             <button
               onClick={() => {
@@ -115,7 +117,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
               className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-muted hover:bg-surface-hover transition-colors"
             >
               <Settings size={14} />
-              Workspace settings
+              {t('workspaceSelector.workspaceSettings')}
             </button>
           </div>
         </div>

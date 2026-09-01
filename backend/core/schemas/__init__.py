@@ -2,8 +2,8 @@
 
 This module re-exports all schemas for backward compatibility.
 Schemas are organized by domain in separate modules:
-- auth: Token, LoginIn, RegisterIn, UserPasswordUpdate, RefreshToken
-- users: UserBase, UserOut, UserUpdate
+- auth: Token, LoginIn, RegisterIn, UserPasswordUpdate
+- users: UserOut, UserUpdate
 - workspaces: WorkspaceOut, WorkspaceMemberOut, WorkspaceMemberAdd, MemberPasswordReset
 - common: MessageOut, ErrorOut, DetailOut
 - consent: ConsentIn, ConsentOut
@@ -20,7 +20,6 @@ from core.schemas.auth import (
     ForgotPasswordIn,
     LoginIn,
     LoginOut,
-    RefreshToken,
     RefreshTokenIn,
     RegisterIn,
     ResendVerificationIn,
@@ -71,7 +70,6 @@ from core.schemas.gdpr import (
 # User Schemas
 # =============================================================================
 from core.schemas.users import (
-    UserBase,
     UserOut,
     UserPreferencesOut,
     UserPreferencesUpdate,
@@ -91,7 +89,6 @@ from core.schemas.workspaces import (
 __all__ = [
     # Auth
     'Token',
-    'RefreshToken',
     'RefreshTokenIn',
     'LoginIn',
     'LoginOut',
@@ -112,7 +109,6 @@ __all__ = [
     'EmailChangeRequestIn',
     'EmailChangeConfirmIn',
     # Users
-    'UserBase',
     'UserOut',
     'UserUpdate',
     'UserPreferencesOut',

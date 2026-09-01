@@ -1,0 +1,68 @@
+{
+  "modal": {
+    "close": "Close"
+  },
+  "confirmDialog": {
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "actionSheet": {
+    "defaultLabel": "Actions",
+    "cancel": "Cancel"
+  },
+  "filters": {
+    "toggle": "Filters",
+    "regionLabel": "Filters",
+    "clear": "Clear filters"
+  },
+  "pagination": {
+    "rowsPerPage": "Rows per page",
+    "range": "{{from}}\u2013{{to}} of {{total}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
+  },
+  "search": {
+    "defaultPlaceholder": "Search\u2026",
+    "clear": "Clear search"
+  },
+  "select": {
+    "defaultSheetLabel": "Select an option"
+  },
+  "multiSelect": {
+    "defaultSheetLabel": "Select options",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected"
+  },
+  "listbox": {
+    "searchPlaceholder": "Search\u2026",
+    "searchLabel": "Search options",
+    "noOptions": "No options"
+  },
+  "palette": {
+    "searchPlaceholder": "Search pages and data\u2026",
+    "searchLabel": "Search",
+    "seeAllResults": "See all results",
+    "noMatches": "No matching pages",
+    "hintNavigate": "\u2191\u2193 navigate",
+    "hintOpen": "\u21b5 open",
+    "hintClose": "esc close",
+    "groupPages": "Pages",
+    "groupBudgets": "Budgets",
+    "groupAccounts": "Accounts",
+    "groupTransactions": "Transactions",
+    "groupPlanned": "Planned",
+    "transfers": "Transfers"
+  },
+  "layout": {
+    "noWorkspaceTitle": "No workspace selected",
+    "noWorkspaceBody": "Create a workspace or ask to be added to one."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you're looking for doesn't exist or has moved.",
+    "cta": "Go to Dashboard"
+  },
+  "validation": {
+    "amountInvalid": "Enter a valid amount"
+  }
+}

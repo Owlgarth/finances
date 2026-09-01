@@ -170,11 +170,3 @@ class AccountService:
             + AccountService._transactions_delta(account)
             + AccountService._transfers_delta(account)
         )
-
-    @staticmethod
-    def single_active_account(workspace_id: int) -> Account | None:
-        """Return the workspace's account iff exactly one non-archived account exists."""
-        accounts = list(Account.objects.for_workspace(workspace_id).filter(is_archived=False)[:2])
-        if len(accounts) == 1:
-            return accounts[0]
-        return None

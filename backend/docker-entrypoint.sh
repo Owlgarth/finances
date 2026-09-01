@@ -20,5 +20,8 @@ if [ "$USE_S3_STORAGE" = "true" ]; then
     uv run python manage.py collectstatic --noinput
 fi
 
+echo "Compiling translation files..."
+uv run python manage.py compilemessages
+
 echo "Starting server..."
 exec "$@"

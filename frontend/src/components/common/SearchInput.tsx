@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useDebouncedField } from '../../hooks/useDebouncedField'
 import { controlHeightClass } from './formStyles'
 
@@ -16,11 +17,15 @@ interface SearchInputProps {
 export default function SearchInput({
   value,
   onChange,
-  placeholder = 'Search…',
+  placeholder,
   'aria-label': ariaLabel,
   className = '',
 }: SearchInputProps) {
+  const { t } = useTranslation('common')
   const [draft, setDraft] = useDebouncedField(value, onChange)
+  // The default resolves here, not in the destructure - prop defaults cannot
+  // call hooks (the translated placeholder needs t()).
+  const resolvedPlaceholder = placeholder ?? t('search.defaultPlaceholder')
 
   return (
     <div className={`relative ${className}`}>
@@ -32,8 +37,8 @@ export default function SearchInput({
         type="search"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder={placeholder}
-        aria-label={ariaLabel ?? placeholder}
+        placeholder={resolvedPlaceholder}
+        aria-label={ariaLabel ?? resolvedPlaceholder}
         // 16px font floor on mobile so iOS doesn't zoom the input (mobile-ux §4).
         className={`w-full bg-surface border border-border rounded-none pl-7 pr-7 py-1.5 font-mono text-xs max-sm:text-base ${controlHeightClass} text-text placeholder:text-text-muted focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus transition-colors [&::-webkit-search-cancel-button]:hidden`}
       />
@@ -44,7 +49,7 @@ export default function SearchInput({
             setDraft('')
             onChange('')
           }}
-          aria-label="Clear search"
+          aria-label={t('search.clear')}
           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text transition-colors"
         >
           <X size={13} strokeWidth={1.5} />

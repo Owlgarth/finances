@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { controlHeightClass } from './formStyles'
 
 // Shared listbox trigger styling for Select and MultiSelect (§4 form controls),
@@ -37,6 +38,7 @@ interface PanelSearchInputProps {
  * was missing it in both components (fixed once, here).
  */
 export function PanelSearchInput({ value, onChange, onKeyDown, variant }: PanelSearchInputProps) {
+  const { t } = useTranslation('common')
   return (
     // sheet: top-4 sits just below BottomSheet's 16px drag-handle row
     <div className={variant === 'sheet' ? 'sticky top-4 z-10 bg-surface px-4 pb-2' : 'px-2 pb-1'}>
@@ -44,8 +46,8 @@ export function PanelSearchInput({ value, onChange, onKeyDown, variant }: PanelS
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="Search…"
-        aria-label="Search options"
+        placeholder={t('listbox.searchPlaceholder')}
+        aria-label={t('listbox.searchLabel')}
         className={
           'w-full bg-background border border-border rounded-none px-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50 ' +
           (variant === 'sheet' ? 'py-2' : 'py-1.5')
@@ -127,6 +129,7 @@ export function DropdownOptionRow({ id, label, selected, highlighted, onClick }:
 
 /** "No options" empty state for either panel variant. */
 export function EmptyOptions({ variant }: { variant: 'sheet' | 'dropdown' }) {
+  const { t } = useTranslation('common')
   return (
     <div
       className={
@@ -135,7 +138,7 @@ export function EmptyOptions({ variant }: { variant: 'sheet' | 'dropdown' }) {
           : 'px-2 py-1.5 text-xs text-text-muted'
       }
     >
-      No options
+      {t('listbox.noOptions')}
     </div>
   )
 }

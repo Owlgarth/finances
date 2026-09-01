@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { CircleCheck, CircleX } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { authApi, getAuthToken } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type State = 'loading' | 'success' | 'error'
 
 export default function ConfirmEmailChangePage() {
+  const { t } = useTranslation('auth')
   const [searchParams] = useSearchParams()
   const [state, setState] = useState<State>('loading')
   const { updateUser } = useAuth()
@@ -62,7 +64,7 @@ export default function ConfirmEmailChangePage() {
           {state === 'loading' && (
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 rounded-sm bg-primary animate-pulse" />
-              <p className="text-sm text-text-muted">Confirming email change...</p>
+              <p className="text-sm text-text-muted">{t('confirmEmailChange.loading')}</p>
             </div>
           )}
 
@@ -71,13 +73,13 @@ export default function ConfirmEmailChangePage() {
               <div className="flex justify-center">
                 <CircleCheck size={16} className="text-positive" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Email Changed Successfully</h3>
-              <p className="text-sm text-text-muted">Your email has been updated.</p>
+              <h3 className="font-sans font-medium text-text text-sm">{t('confirmEmailChange.successTitle')}</h3>
+              <p className="text-sm text-text-muted">{t('confirmEmailChange.successBody')}</p>
               <Link
                 to="/"
                 className="inline-block bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
               >
-                Go to Dashboard
+                {t('shared.goToDashboard')}
               </Link>
             </div>
           )}
@@ -87,15 +89,15 @@ export default function ConfirmEmailChangePage() {
               <div className="flex justify-center">
                 <CircleX size={16} className="text-negative" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Invalid or Expired Link</h3>
+              <h3 className="font-sans font-medium text-text text-sm">{t('shared.invalidLinkTitle')}</h3>
               <p className="text-sm text-text-muted">
-                This email change link is invalid or has expired.
+                {t('confirmEmailChange.errorBody')}
               </p>
               <Link
                 to="/settings"
                 className="text-primary hover:text-primary-hover text-sm font-medium"
               >
-                Go to Settings
+                {t('confirmEmailChange.goToSettings')}
               </Link>
             </div>
           )}

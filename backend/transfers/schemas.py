@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -24,7 +25,7 @@ class TransferCreate(BaseModel):
     @model_validator(mode='after')
     def accounts_must_differ(self):
         if self.from_account_id == self.to_account_id:
-            raise ValueError('From and to accounts must differ')
+            raise ValueError(_('From and to accounts must differ'))
         return self
 
 

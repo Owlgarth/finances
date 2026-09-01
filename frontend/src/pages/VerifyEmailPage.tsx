@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { CircleCheck, CircleX } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { authApi, getAuthToken } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 
 type State = 'loading' | 'success' | 'error' | 'resend' | 'resend-success' | 'resend-error'
 
 export default function VerifyEmailPage() {
+  const { t } = useTranslation('auth')
   const [searchParams] = useSearchParams()
   const [state, setState] = useState<State>('loading')
   const [resendEmail, setResendEmail] = useState('')
@@ -79,7 +81,7 @@ export default function VerifyEmailPage() {
           {state === 'loading' && (
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 rounded-sm bg-primary animate-pulse" />
-              <p className="text-sm text-text-muted">Verifying your email...</p>
+              <p className="text-sm text-text-muted">{t('verifyEmail.loading')}</p>
             </div>
           )}
 
@@ -88,13 +90,13 @@ export default function VerifyEmailPage() {
               <div className="flex justify-center">
                 <CircleCheck size={16} className="text-positive" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Email Verified!</h3>
-              <p className="text-sm text-text-muted">You can now close this page.</p>
+              <h3 className="font-sans font-medium text-text text-sm">{t('verifyEmail.successTitle')}</h3>
+              <p className="text-sm text-text-muted">{t('verifyEmail.successBody')}</p>
               <Link
                 to="/"
                 className="inline-block bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
               >
-                Go to Dashboard
+                {t('shared.goToDashboard')}
               </Link>
             </div>
           )}
@@ -104,38 +106,38 @@ export default function VerifyEmailPage() {
               <div className="flex justify-center">
                 <CircleX size={16} className="text-negative" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Invalid or Expired Link</h3>
+              <h3 className="font-sans font-medium text-text text-sm">{t('shared.invalidLinkTitle')}</h3>
               <p className="text-sm text-text-muted">
-                This verification link is invalid or has expired.
+                {t('verifyEmail.errorBody')}
               </p>
               <button
                 type="button"
                 onClick={() => setState('resend')}
                 className="text-primary hover:text-primary-hover text-sm font-medium"
               >
-                Resend verification email
+                {t('verifyEmail.resendLink')}
               </button>
             </div>
           )}
 
           {state === 'resend' && (
             <form onSubmit={handleResend} className="space-y-4">
-              <h3 className="font-sans font-medium text-text text-sm">Resend Verification</h3>
-              <p className="text-sm text-text-muted">Enter your email to receive a new verification link.</p>
+              <h3 className="font-sans font-medium text-text text-sm">{t('verifyEmail.resendTitle')}</h3>
+              <p className="text-sm text-text-muted">{t('verifyEmail.resendBody')}</p>
               <input
                 type="email"
                 required
                 value={resendEmail}
                 onChange={(e) => setResendEmail(e.target.value)}
                 className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-                placeholder="Enter your email address"
+                placeholder={t('verifyEmail.resendPlaceholder')}
               />
               <button
                 type="submit"
                 disabled={isResending}
                 className="w-full bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
               >
-                {isResending ? 'Sending...' : 'Send Verification Email'}
+                {isResending ? t('verifyEmail.sending') : t('verifyEmail.sendButton')}
               </button>
             </form>
           )}
@@ -145,9 +147,9 @@ export default function VerifyEmailPage() {
               <div className="flex justify-center">
                 <CircleCheck size={16} className="text-positive" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Check Your Email</h3>
+              <h3 className="font-sans font-medium text-text text-sm">{t('verifyEmail.resendSuccessTitle')}</h3>
               <p className="text-sm text-text-muted">
-                If your email is unverified, a new verification email has been sent.
+                {t('verifyEmail.resendSuccessBody')}
               </p>
             </div>
           )}
@@ -157,16 +159,16 @@ export default function VerifyEmailPage() {
               <div className="flex justify-center">
                 <CircleX size={16} className="text-negative" />
               </div>
-              <h3 className="font-sans font-medium text-text text-sm">Something went wrong</h3>
+              <h3 className="font-sans font-medium text-text text-sm">{t('shared.somethingWentWrong')}</h3>
               <p className="text-sm text-text-muted">
-                Could not send verification email. Please try again later.
+                {t('verifyEmail.resendErrorBody')}
               </p>
               <button
                 type="button"
                 onClick={() => setState('resend')}
                 className="text-primary hover:text-primary-hover text-sm font-medium"
               >
-                Try again
+                {t('shared.tryAgain')}
               </button>
             </div>
           )}

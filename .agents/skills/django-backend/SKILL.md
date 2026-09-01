@@ -1,6 +1,6 @@
 ---
 name: django-backend
-description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code — endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, concurrency patterns, and migration authoring.
+description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code - endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, translatable error messages (gettext, Accept-Language), concurrency patterns, and migration authoring.
 ---
 
 # Django Backend Conventions
@@ -230,20 +230,20 @@ class TransactionService:
     def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
         currency = resolve_currency(workspace_id, data.currency)
         if not currency:
-            raise CurrencyNotFoundInWorkspaceError(data.currency)
+            raise UnknownCurrencyError(data.currency)
         trans = Transaction.objects.create(..., created_by=user, updated_by=user)
         TransactionService.update_period_balance(...)
         return trans
 ```
 
-**Service-level uniqueness checks:** When a uniqueness constraint is workspace-scoped but no `unique_together` DB constraint exists, validate at the service level (single place, clear domain error):
+**Service-level uniqueness checks:** Validate uniqueness at the service level so a violation raises one clear domain error from a single place (the DB constraint stays the real guard). Exemplar: the category duplicate-name guard (`_check_ci_duplicate` in `categories/services.py`):
 
 ```python
-existing = ExchangeShortcut.objects.for_workspace(workspace_id).filter(
-    from_currency=data.from_currency, to_currency=data.to_currency
-).exclude(id=shortcut_id).first()  # exclude self on update
-if existing:
-    raise ExchangeShortcutDuplicateError()
+queryset = Category.objects.filter(budget_id=budget_id, name__iexact=name)
+if exclude_id is not None:
+    queryset = queryset.exclude(id=exclude_id)
+if queryset.exists():
+    raise CategoryDuplicateNameError()
 ```
 
 **Pre-clear-then-set for partial-unique-constraint partitions:** When a partial unique constraint enforces "at most one flagged row per partition" (see §Workspace-Scoped Models), the service pre-clears the partition *before* setting the new flag so well-behaved clients never hit the constraint — the DB constraint is the real guard, the pre-clear exists for clean UX, never as the only enforcement (no `try/except IntegrityError`):
@@ -260,12 +260,12 @@ def create(user, workspace_id, data):
 
 On update, `.exclude(id=account.id)` so a row never clears its own flag.
 
-**Per-resource limit checks:** When a resource has a workspace-scoped maximum count, validate against a settings-backed env var before creation:
+**Per-resource limit checks:** When a resource has a workspace-scoped maximum count, validate against a settings-backed env var before creation. Exemplar: the workspace member limit (`add_member` in `workspaces/services.py`):
 
 ```python
-count = ExchangeShortcut.objects.for_workspace(workspace_id).count()
-if count >= settings.EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE:
-    raise ExchangeShortcutLimitError()
+current_member_count = WorkspaceMember.objects.filter(workspace_id=workspace_id).count()
+if current_member_count >= settings.WORKSPACE_MAX_MEMBERS:
+    raise WorkspaceMemberLimitReachedError()
 ```
 
 **Ordered member sets are through-models with a `position` column, not FK flags on the parent** (`BudgetCurrency`, after the `WorkspaceCurrency` precedent: plain `Model` - scoped transitively via the parent FK, no audit fields - `Meta.ordering = ['position', 'id']`, unique together on parent+member). Writes validate ALL members first (every `get_enabled(...)` raise happens BEFORE any delete - a bad payload must not wipe the existing set inside the caller's atomic block), dedupe preserving first occurrence (`list(dict.fromkeys(codes))`), then delete + `bulk_create` with `position=enumerate_index`. Importers restore junction rows the same way, inside their existing atomic block - per-row creates matching the neighboring children, codes resolved through the same path the sibling entities use. The read side serializes through a model property (see §Pydantic Schemas).
@@ -639,22 +639,39 @@ Read `django.conf.settings` values inside the function body, not at module impor
 - **Transactions**: Use `@db_transaction.atomic` for database operations that update balances
 - **Exception Naming**: `<Domain><ErrorType>Error` — e.g., `TwoFactorNotEnabledError`. Always set `default_message` and `default_code` as class attributes
 - **Exception Codes**: Every domain exception should include a `default_code` (snake_case string) for frontend error matching (e.g., `'two_factor_not_enabled'`)
+- **Translatable by default:** `default_message` is `gettext_lazy`-wrapped; dynamic messages %-format into a wrapped msgid (see Error Messages Are Translated)
 
 ```python
 # users/exceptions.py
+from django.utils.translation import gettext_lazy
+
 class TwoFactorNotEnabledError(NotFoundError):
-    default_message = 'Two-factor authentication is not enabled for this user'
+    default_message = gettext_lazy('Two-factor authentication is not enabled for this user')
     default_code = 'two_factor_not_enabled'
 
-# For exceptions with dynamic messages, accept params in __init__:
-class CurrencyNotFoundInWorkspaceError(ValidationError):
-    def __init__(self, currency: str):
-        super().__init__(f'Currency {currency} not found in workspace', code='currency_not_found')
+# For exceptions with dynamic messages, accept params in __init__ and
+# %-format into the wrapped msgid (never an f-string; see Error Messages Are Translated):
+class UnknownCurrencyError(NotFoundError):
+    default_code = 'unknown_currency'
+
+    def __init__(self, code: str):
+        super().__init__(gettext_lazy('Currency %(code)s not found in the catalog') % {'code': code})
 ```
 
 **Disable/delete guards enumerate their blockers per type.** A guard that counts blocking references returns a per-type breakdown dict (`{'accounts': n, 'category_budgets': n, ...}`), not a summed int, and the exception composes the human-readable sentence from a module-level label map (`REFERENCE_LABELS = {'accounts': 'account', ...}` in `currencies/exceptions.py`), pluralizing per count with a generic fallback for unknown kinds. The sentence rides the existing `{'detail': ...}` handler channel, so the frontend renders it verbatim with zero client-side enumeration logic. Dict iteration order drives sentence order - the label map and the breakdown dict are the only places to touch when a new PROTECT FK joins the guard. Exemplar: `CurrencyInUseError`. Guard extensions are append-only: a new reference type joins `_reference_count` LAST and its label joins `REFERENCE_LABELS` LAST - the composed sentence's word order stays stable for every existing test assertion; inserting mid-order silently rewrites every pinned sentence.
 
 **An FK that does not gate an operation can still pin the row against its cleanup.** When un-blocking a guard (transaction original-currency facets stopped counting toward currency disable), check `on_delete` at every DELETION site, not just in the guard: `Transaction.original_currency` is `on_delete=PROTECT`, so the "orphaned" custom-row cleanup that now runs anyway would raise `ProtectedError` (500) on a facet-referenced row. The deletion site needs its own reference check - a facet-referenced row is not orphaned (it stays, re-enablable). Excluding a reference type from the guard NEVER means the row is safe to delete; it means the guard and the cleanup answer different questions.
+
+## Error Messages Are Translated (gettext)
+
+API error details are user-facing UI: every message that can reach the `{'detail': ...}` handler is translatable. Selection is request-driven - `LocaleMiddleware` (after SessionMiddleware) picks the catalog from the request's `Accept-Language` header (the frontend sends it on every request); no header, an unknown language, or a missing translation falls back to the English source string.
+
+- **`<app>/exceptions.py` uses `gettext_lazy` throughout.** Class attributes are assigned at import time, so only a lazy proxy resolves the language at response time: `default_message = gettext_lazy('...')`, and dynamic constructors %-format the lazy msgid (`super().__init__(gettext_lazy('Currency %(code)s not found') % {'code': code})`).
+- **Service raise sites and Pydantic validators use runtime `gettext` `_()`** - the same split as any other import-time vs. request-time evaluation: `raise ValidationError(_('Currency %(code)s not found') % {'code': code})`.
+- **Placeholders in translatable messages are named %-format, never f-strings.** An f-string interpolates before gettext sees it, baking English word order into the message; the msgid must be one complete sentence.
+- **Updating translations:** `uv run python manage.py makemessages -l uk -l pl --no-obsolete` regenerates `locale/<lang>/LC_MESSAGES/django.po`; translate the msgstrs, run `compilemessages` (the Docker entrypoints compile on boot; a gettext-absent host runs the same command through `./dev.sh manage makemessages ...`). The full workflow is in `docs/i18n.md`.
+- **Scope: API error details only.** Emails and legal document text stay English by design (see the `email-sending` skill); do not gettext those.
+- Testing translated responses (headers, fallback assertions) is in the `backend-testing` skill's Accept-Language pattern.
 
 ## Case-Insensitive Grouping with Display Casing
 

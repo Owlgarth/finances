@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
+  const { t } = useTranslation('auth');
   const { login, verify2FA, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -65,15 +67,15 @@ export default function Login() {
           </h2>
           {!requires2FA ? (
             <p className="mt-2 text-sm text-text-muted">
-              Sign in to your account
+              {t('loginForm.subtitle')}
             </p>
           ) : (
             <>
               <p className="mt-2 text-sm font-medium text-text">
-                Two-Factor Authentication
+                {t('twoFactor.title')}
               </p>
               <p className="mt-1 text-sm text-text-muted">
-                Enter the code from your authenticator app
+                {t('twoFactor.subtitle')}
               </p>
             </>
           )}
@@ -83,7 +85,7 @@ export default function Login() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="mb-4">
               <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                Email address
+                {t('loginForm.emailLabel')}
               </label>
               <input
                 id="email"
@@ -94,13 +96,13 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={authInputClass}
-                placeholder="Email address"
+                placeholder={t('loginForm.emailPlaceholder')}
               />
             </div>
 
             <div className="mb-4">
               <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                Password
+                {t('loginForm.passwordLabel')}
               </label>
               <input
                 id="password"
@@ -111,7 +113,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={authInputClass}
-                placeholder="Password"
+                placeholder={t('loginForm.passwordPlaceholder')}
               />
             </div>
 
@@ -124,10 +126,10 @@ export default function Login() {
                 {isSubmitting ? (
                   <>
                     <Loader2 size={13} className="animate-spin" />
-                    Signing in...
+                    {t('loginForm.submitting')}
                   </>
                 ) : (
-                  'Sign in'
+                  t('loginForm.submit')
                 )}
               </button>
             </div>
@@ -138,22 +140,22 @@ export default function Login() {
                   to="/register"
                   className="font-medium text-primary hover:text-primary-hover"
                 >
-                  Don't have an account? Register
+                  {t('loginForm.registerLink')}
                 </Link>
               </div>
             )}
 
             <div className="text-center text-xs text-text-muted">
-              <Link to="/privacy" className="hover:text-text">Privacy Policy</Link>
+              <Link to="/privacy" className="hover:text-text">{t('loginForm.privacyLink')}</Link>
               {' · '}
-              <Link to="/terms" className="hover:text-text">Terms of Service</Link>
+              <Link to="/terms" className="hover:text-text">{t('loginForm.termsLink')}</Link>
             </div>
           </form>
         ) : (
           <form className="space-y-6" onSubmit={handle2FAVerify}>
             <div className="mb-4">
               <label htmlFor="2fa-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                {useRecoveryCode ? 'Recovery code' : 'Verification code'}
+                {useRecoveryCode ? t('twoFactor.recoveryLabel') : t('twoFactor.codeLabel')}
               </label>
               <input
                 id="2fa-code"
@@ -179,10 +181,10 @@ export default function Login() {
                 {isSubmitting ? (
                   <>
                     <Loader2 size={13} className="animate-spin" />
-                    Verifying...
+                    {t('twoFactor.submitting')}
                   </>
                 ) : (
-                  'Verify'
+                  t('twoFactor.submit')
                 )}
               </button>
             </div>
@@ -196,7 +198,7 @@ export default function Login() {
                 }}
                 className="text-sm text-primary hover:text-primary-hover"
               >
-                {useRecoveryCode ? 'Use authenticator code' : 'Use recovery code'}
+                {useRecoveryCode ? t('twoFactor.useAuthenticatorCode') : t('twoFactor.useRecoveryCode')}
               </button>
               <div>
                 <button
@@ -204,7 +206,7 @@ export default function Login() {
                   onClick={handleBack}
                   className="text-sm text-text-muted hover:text-text"
                 >
-                  &larr; Back to sign in
+                  {t('twoFactor.backToSignIn')}
                 </button>
               </div>
             </div>

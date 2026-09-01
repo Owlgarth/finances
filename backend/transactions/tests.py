@@ -1383,7 +1383,7 @@ class TestDerivedPeriodServiceLevel(TestCase):
 
 
 class TestTransactionItems(TransactionTestCase):
-    """Line items: informational, ordered, replace-all semantics (R2)."""
+    """Line items: informational, ordered, replace-all semantics."""
 
     def setUp(self):
         super().setUp()
@@ -1466,7 +1466,7 @@ class TestTransactionItems(TransactionTestCase):
 
 
 class TestTransactionAttachments(TransactionTestCase):
-    """Attachment endpoints with StorageService mocked (R1)."""
+    """Attachment endpoints with StorageService mocked."""
 
     def setUp(self):
         super().setUp()
@@ -1692,7 +1692,7 @@ CONTRACT_RESULT = {
 
 
 class TestExtraction(TransactionTestCase):
-    """Receipt extraction dispatch + polling (R5). Celery runs eager in tests."""
+    """Receipt extraction dispatch + polling. Celery runs eager in tests."""
 
     def setUp(self):
         super().setUp()
@@ -1798,7 +1798,7 @@ class TestExtraction(TransactionTestCase):
 
 
 class TestParserReachability(TransactionTestCase):
-    """Live reachability probing (T14) — the parser host is intermittently powered on."""
+    """Live reachability probing - the parser host is intermittently powered on."""
 
     def setUp(self):
         super().setUp()
@@ -1899,7 +1899,7 @@ class TestParserClientErrorClassification(TestCase):
 
 
 class TestExtractionRetries(TransactionTestCase):
-    """The extraction task must survive the parser host being off for hours (T14)."""
+    """The extraction task must survive the parser host being off for hours."""
 
     def setUp(self):
         super().setUp()

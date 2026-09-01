@@ -160,7 +160,7 @@ class AttachmentService:
         for key in keys:
             StorageService.delete_file(bucket, key)
 
-    # --- Extraction (R5) ---
+    # --- Extraction ---
 
     @staticmethod
     def read_bytes(attachment: TransactionAttachment) -> bytes | None:

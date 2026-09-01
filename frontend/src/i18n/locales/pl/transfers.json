@@ -1,0 +1,65 @@
+{
+  "title": "Przelewy",
+  "actions": {
+    "newTransfer": "Nowy przelew"
+  },
+  "filters": {
+    "accountLabel": "Konto",
+    "allAccounts": "Wszystkie konta",
+    "filterByAccountAria": "Filtruj według konta",
+    "dateLabel": "Data",
+    "fromDateAria": "Data od",
+    "toDateAria": "Data do"
+  },
+  "noMatch": "Żaden przelew nie pasuje do filtrów.",
+  "emptyHeading": "Nie masz jeszcze przelewów",
+  "emptyMessage": "Zarejestruj przelew z poziomu kont lub z menu tworzenia; pojawi się tutaj.",
+  "row": {
+    "edit": "Edytuj",
+    "editAria": "Edytuj przelew",
+    "repeat": "Powtórz",
+    "repeatAria": "Powtórz przelew",
+    "delete": "Usuń",
+    "deleteAria": "Usuń przelew"
+  },
+  "confirmDelete": {
+    "title": "Usuń przelew",
+    "message": "Usunąć przelew z \"{{from}}\" na \"{{to}}\"? Obie strony zostaną usunięte."
+  },
+  "toast": {
+    "deleted": "Przelew usunięty",
+    "deleteFailed": "Nie udało się usunąć przelewu",
+    "updated": "Przelew zaktualizowany",
+    "recorded": "Przelew zarejestrowany",
+    "updateFailed": "Nie udało się zaktualizować przelewu",
+    "recordFailed": "Nie udało się zarejestrować przelewu"
+  },
+  "modal": {
+    "titleEdit": "Edytuj przelew",
+    "titleDefault": "Przelew"
+  },
+  "fields": {
+    "from": "Z",
+    "fromAccount": "Z konta",
+    "to": "Na",
+    "toAccount": "Na konto",
+    "amount": "Kwota",
+    "amountSent": "Wysyłana kwota ({{code}})",
+    "amountReceived": "Otrzymywana kwota ({{code}})",
+    "date": "Data",
+    "description": "Opis (opcjonalnie)"
+  },
+  "impliedRate": "Kurs wynikowy: 1 {{from}} = {{rate}} {{to}}",
+  "formActions": {
+    "cancel": "Anuluj",
+    "saving": "Zapisywanie…",
+    "save": "Zapisz",
+    "transfer": "Przelej"
+  },
+  "validation": {
+    "chooseBoth": "Wybierz oba konta",
+    "accountsDiffer": "Konta muszą się różnić",
+    "enterAmount": "Podaj kwotę",
+    "enterReceived": "Podaj otrzymywaną kwotę"
+  }
+}

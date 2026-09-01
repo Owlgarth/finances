@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useBudgets, useWorkspaceCategories } from '../../hooks/useDomain'
 import { createUpdateParams, intListParam } from '../../utils/params'
 import AmountInput from './AmountInput'
@@ -22,33 +23,29 @@ function monthRange(year: number, month: number): { from: string; to: string } {
   }
 }
 
-interface DatePreset {
-  label: string
-  /** "Today" is computed at click/render time so a session crossing midnight
-      never serves a stale range. */
-  range: () => { from: string; to: string }
-}
-
 // Ranges span the WHOLE period (month/year ends included): future dates inside
 // the period matter for the Planned list, and post-dated transactions are not
-// silently excluded either.
-const DATE_PRESETS: DatePreset[] = [
+// silently excluded either. "Today" is computed at click/render time so a
+// session crossing midnight never serves a stale range. Labels resolve
+// through t() at render time - the stable labelKey doubles as the React key
+// so a language switch never re-keys the chips.
+const DATE_PRESETS = [
   {
-    label: 'This month',
+    labelKey: 'listFilters.presetThisMonth',
     range: () => {
       const now = new Date()
       return monthRange(now.getFullYear(), now.getMonth())
     },
   },
   {
-    label: 'Last month',
+    labelKey: 'listFilters.presetLastMonth',
     range: () => {
       const now = new Date()
       return monthRange(now.getFullYear(), now.getMonth() - 1)
     },
   },
   {
-    label: 'Last 30 days',
+    labelKey: 'listFilters.presetLast30',
     range: () => {
       const start = new Date()
       start.setDate(start.getDate() - 29)
@@ -56,13 +53,13 @@ const DATE_PRESETS: DatePreset[] = [
     },
   },
   {
-    label: 'This year',
+    labelKey: 'listFilters.presetThisYear',
     range: () => {
       const year = new Date().getFullYear()
       return { from: `${year}-01-01`, to: `${year}-12-31` }
     },
   },
-]
+] as const
 
 /**
  * The budget/category/amount/date filter-field group shared by the
@@ -77,7 +74,8 @@ interface Props {
   dateLabel?: string
 }
 
-export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
+export default function ListFilterFields({ dateLabel }: Props) {
+  const { t } = useTranslation('transactions')
   const [searchParams, setSearchParams] = useSearchParams()
   const updateParams = createUpdateParams(setSearchParams)
   const budgetFilter = intListParam(searchParams, 'budget')
@@ -116,23 +114,23 @@ export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
   return (
     <>
       {budgets.length > 0 && (
-        <FilterField label="Budget">
-          <MultiSelect values={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder="All budgets" aria-label="Filter by budget" />
+        <FilterField label={t('listFilters.budget')}>
+          <MultiSelect values={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder={t('listFilters.allBudgets')} aria-label={t('listFilters.byBudgetAria')} />
         </FilterField>
       )}
       {categories.length > 0 && (
-        <FilterField label="Category">
-          <MultiSelect values={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder="All categories" aria-label="Filter by category" searchable />
+        <FilterField label={t('listFilters.category')}>
+          <MultiSelect values={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder={t('listFilters.allCategories')} aria-label={t('listFilters.byCategoryAria')} searchable />
         </FilterField>
       )}
-      <FilterField label="Amount">
+      <FilterField label={t('listFilters.amount')}>
         <div className="flex items-center gap-1.5">
-          <AmountInput value={amountMin} onCommit={(v) => updateParams({ amount_min: v || null })} placeholder="Min" aria-label="Minimum amount" />
+          <AmountInput value={amountMin} onCommit={(v) => updateParams({ amount_min: v || null })} placeholder={t('listFilters.min')} aria-label={t('listFilters.minAmountAria')} />
           <span className="text-text-muted text-xs">–</span>
-          <AmountInput value={amountMax} onCommit={(v) => updateParams({ amount_max: v || null })} placeholder="Max" aria-label="Maximum amount" />
+          <AmountInput value={amountMax} onCommit={(v) => updateParams({ amount_max: v || null })} placeholder={t('listFilters.max')} aria-label={t('listFilters.maxAmountAria')} />
         </div>
       </FilterField>
-      <FilterField label={dateLabel} className="col-span-2">
+      <FilterField label={dateLabel ?? t('listFilters.dateLabel')} className="col-span-2">
         <div className="flex flex-wrap gap-1.5 mb-2">
           {DATE_PRESETS.map((preset) => {
             const { from, to } = preset.range()
@@ -141,7 +139,7 @@ export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
             const active = dateFrom === from && dateTo === to
             return (
               <button
-                key={preset.label}
+                key={preset.labelKey}
                 type="button"
                 aria-pressed={active}
                 onClick={() => updateParams({ from, to })}
@@ -149,15 +147,15 @@ export default function ListFilterFields({ dateLabel = 'Date' }: Props) {
                   active ? 'border-border-focus bg-surface-hover text-text' : 'border-border text-text-muted'
                 }`}
               >
-                {preset.label}
+                {t(preset.labelKey)}
               </button>
             )
           })}
         </div>
         <div className="flex items-center gap-1.5">
-          <input type="date" value={dateFrom} onChange={(e) => updateParams({ from: e.target.value || null })} aria-label="From date" className={`${inputClass} max-sm:min-h-[44px]`} />
+          <input type="date" value={dateFrom} onChange={(e) => updateParams({ from: e.target.value || null })} aria-label={t('listFilters.fromDateAria')} className={`${inputClass} max-sm:min-h-[44px]`} />
           <span className="text-text-muted text-xs">–</span>
-          <input type="date" value={dateTo} onChange={(e) => updateParams({ to: e.target.value || null })} aria-label="To date" className={`${inputClass} max-sm:min-h-[44px]`} />
+          <input type="date" value={dateTo} onChange={(e) => updateParams({ to: e.target.value || null })} aria-label={t('listFilters.toDateAria')} className={`${inputClass} max-sm:min-h-[44px]`} />
         </div>
       </FilterField>
     </>

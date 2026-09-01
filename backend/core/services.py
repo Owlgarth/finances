@@ -6,6 +6,7 @@ import time
 from django.conf import settings
 from django.contrib.auth import get_user_model, hashers
 from django.db import transaction as db_transaction
+from django.utils.translation import gettext as _
 
 from common.auth import (
     consume_refresh_token,
@@ -63,7 +64,7 @@ class AuthService:
             (201, {'access_token', 'refresh_token', 'token_type'}) on success.
         """
         if settings.DEMO_MODE:
-            return 403, {'detail': 'Registration is disabled in demo mode'}
+            return 403, {'detail': _('Registration is disabled in demo mode')}
 
         existing_user = User.objects.filter(email=data.email).first()
         if existing_user:
@@ -115,11 +116,11 @@ class AuthService:
             # Burn the same hash-check cost as the wrong-password path below so
             # response timing cannot reveal whether the email is registered.
             hashers.check_password(data.password, _DUMMY_PASSWORD_HASH)
-            return 401, {'detail': 'Invalid email or password'}
+            return 401, {'detail': _('Invalid email or password')}
         if not user.check_password(data.password):
-            return 401, {'detail': 'Invalid email or password'}
+            return 401, {'detail': _('Invalid email or password')}
         if not user.is_active:
-            return 401, {'detail': 'User account is disabled'}
+            return 401, {'detail': _('User account is disabled')}
 
         if UserTwoFactor.objects.filter(user=user, is_enabled=True).exists():
             return 200, LoginOut(requires_2fa=True, temp_token=create_temp_token(user))
@@ -139,18 +140,18 @@ class AuthService:
         """
         payload = consume_temp_token(data.temp_token)
         if not payload:
-            return 401, {'detail': 'Invalid or expired verification token'}
+            return 401, {'detail': _('Invalid or expired verification token')}
 
         user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
         if not user:
-            return 401, {'detail': 'User not found'}
+            return 401, {'detail': _('User not found')}
 
         tf = UserTwoFactor.objects.filter(user=user).first()
         if not tf or not tf.is_enabled:
             raise TwoFactorNotEnabledError()
 
         if not TwoFactorService.verify_code(user, data.code):
-            return 401, {'detail': 'Invalid verification code'}
+            return 401, {'detail': _('Invalid verification code')}
 
         return 200, {
             'access_token': create_access_token(user),
@@ -169,15 +170,15 @@ class AuthService:
         """
         payload = consume_refresh_token(data.refresh_token)
         if not payload:
-            return 401, {'detail': 'Invalid or expired refresh token'}
+            return 401, {'detail': _('Invalid or expired refresh token')}
 
         user = User.objects.filter(id=payload.get('user_id'), is_active=True).first()
         if not user:
-            return 401, {'detail': 'User not found'}
+            return 401, {'detail': _('User not found')}
 
         last_change = user.password_changed_at.timestamp() if user.password_changed_at else 0
         if payload.get('iat', 0) < last_change:
-            return 401, {'detail': 'Invalid or expired refresh token'}
+            return 401, {'detail': _('Invalid or expired refresh token')}
 
         return 200, {
             'access_token': create_access_token(user),

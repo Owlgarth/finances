@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
 import type { Transaction } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function TransactionItemsEditor({ transaction }: Props) {
+  const { t } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const [rows, setRows] = useState<Row[]>([])
 
@@ -40,7 +42,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
     mutationFn: () => transactionsApi.replaceItems(transaction.id, rowsToItems(rows)),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['transaction-items', transaction.id] })
-      toast.success('Items saved')
+      toast.success(t('editor.saved'))
       setRows(
         res.items.map((i) => ({
           id: crypto.randomUUID(),
@@ -51,7 +53,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
         })),
       )
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save items')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('editor.saveFailed'))),
   })
 
   if (isLoading) return <div className="h-16 bg-surface-muted rounded-sm animate-pulse" />
@@ -65,7 +67,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
         currencyCode={transaction.currency_code}
       />
       <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className={primaryButtonClass}>
-        {save.isPending ? 'Saving…' : 'Save items'}
+        {save.isPending ? t('editor.saving') : t('editor.save')}
       </button>
     </div>
   )

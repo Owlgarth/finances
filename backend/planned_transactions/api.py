@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.http import HttpRequest, HttpResponse
+from django.utils.translation import gettext as _
 from ninja import File, Form, Query, Router
 from ninja.files import UploadedFile
 
@@ -167,12 +168,12 @@ def import_planned_transactions(
     try:
         data = json.loads(file.read())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return 400, {'detail': 'Invalid JSON file.'}
+        return 400, {'detail': _('Invalid JSON file.')}
 
     count = PlannedTransactionService.import_data(user, workspace_id, account_id, data, budget_id)
     if count == 0:
-        return 201, {'message': 'No new planned transactions to import.'}
-    return 201, {'message': f'Successfully imported {count} new planned transactions.'}
+        return 201, {'message': _('No new planned transactions to import.')}
+    return 201, {'message': _('Successfully imported %(count)s new planned transactions.') % {'count': count}}
 
 
 # Parameterized routes must come after specific routes

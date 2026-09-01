@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { AlertCircle, ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import BottomSheet from './BottomSheet'
@@ -55,11 +56,12 @@ export default function Select<T extends string | number>({
   error,
   className,
 }: SelectProps<T>) {
-  // Adaptive variant (plan decision 4): shared trigger/state, panel presentation
+  // Adaptive variant: shared trigger/state, panel presentation
   // switches — anchored dropdown on desktop, bottom sheet on mobile. All panel
   // state lives in useListboxPanel above the variant branches, so a resize
   // mid-open loses nothing.
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation('common')
 
   const selectedIndex = options.findIndex((opt) => opt.value === value)
   const selectedLabel =
@@ -138,7 +140,7 @@ export default function Select<T extends string | number>({
         <BottomSheet
           open={open}
           onClose={() => closePanel(true)}
-          aria-label={ariaLabel ?? placeholder ?? 'Select an option'}
+          aria-label={ariaLabel ?? placeholder ?? t('select.defaultSheetLabel')}
         >
           {searchable && (
             <PanelSearchInput

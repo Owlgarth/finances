@@ -145,7 +145,7 @@ class TransactionAttachment(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # Receipt extraction (R5). Result holds the parser's contract JSON; a review
+    # Receipt extraction. Result holds the parser's contract JSON; a review
     # screen turns it into line items on user confirmation. Failures are retryable.
     extraction_status = models.CharField(max_length=20, choices=EXTRACTION_CHOICES, default=EXTRACTION_NONE)
     extraction_result = models.JSONField(null=True, blank=True)

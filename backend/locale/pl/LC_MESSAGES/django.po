@@ -1,0 +1,745 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-31 20:03+0000\n"
+"PO-Revision-Date: 2026-08-31 21:00+0000\n"
+"Last-Translator: Owlgarth Finances Team\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
+"|| n%100>=20) ? 1 : 2);\n"
+
+#: accounts/exceptions.py:9
+msgid "Account not found"
+msgstr "Nie znaleziono rachunku"
+
+#: accounts/exceptions.py:14
+msgid "Account with this name already exists"
+msgstr "Rachunek o tej nazwie już istnieje"
+
+#: accounts/exceptions.py:19
+msgid "Account currency cannot be changed after creation"
+msgstr "Waluty rachunku nie można zmienić po utworzeniu"
+
+#: accounts/exceptions.py:24
+msgid "Account has records and cannot be deleted. Archive it instead."
+msgstr "Rachunek zawiera dane i nie może zostać usunięty. Zarchiwizuj go zamiast tego."
+
+#: accounts/schemas.py:25 accounts/schemas.py:43 budgeting/schemas.py:32
+#: budgeting/schemas.py:61 budgeting/schemas.py:110 budgeting/schemas.py:131
+#: categories/schemas.py:18 categories/schemas.py:31
+#: planned_transactions/schemas.py:32 planned_transactions/schemas.py:48
+#: workspaces/schemas.py:21 workspaces/schemas.py:61
+msgid "Name cannot be empty"
+msgstr "Nazwa nie może być pusta"
+
+#: budgeting/exceptions.py:9
+msgid "Budget not found"
+msgstr "Nie znaleziono budżetu"
+
+#: budgeting/exceptions.py:14
+msgid "Budget with this name already exists"
+msgstr "Budżet o tej nazwie już istnieje"
+
+#: budgeting/exceptions.py:19
+msgid ""
+"Every-N-weeks cadence requires cadence_weeks >= 1 and a cadence_anchor date"
+msgstr "Cykl „co N tygodni” wymaga cadence_weeks >= 1 i daty cadence_anchor"
+
+#: budgeting/exceptions.py:24
+msgid "Period not found"
+msgstr "Nie znaleziono okresu"
+
+#: budgeting/exceptions.py:29
+msgid "This budget uses custom periods and no period covers the given date"
+msgstr "Ten budżet używa okresów niestandardowych i żaden okres nie obejmuje podanej daty"
+
+#: budgeting/exceptions.py:34
+msgid "Period overlaps an existing period of this budget"
+msgstr "Okres nakłada się na istniejący okres tego budżetu"
+
+#: budgeting/exceptions.py:39
+msgid ""
+"Auto-created periods cannot be edited or deleted; only custom periods can"
+msgstr "Okresów utworzonych automatycznie nie można edytować ani usuwać; można to robić tylko w przypadku okresów niestandardowych"
+
+#: budgeting/exceptions.py:44
+msgid "Category budget not found"
+msgstr "Nie znaleziono budżetu kategorii"
+
+#: budgeting/exceptions.py:49
+msgid "Category does not belong to this budget"
+msgstr "Kategoria nie należy do tego budżetu"
+
+#: budgeting/schemas.py:39 budgeting/schemas.py:68
+msgid "Color must be a valid hex color code (e.g. #FF5733)"
+msgstr "Kolor musi być prawidłowym kodem szesnastkowym koloru (np. #FF5733)"
+
+#: budgeting/schemas.py:116 budgeting/services.py:333
+msgid "end_date must be on or after start_date"
+msgstr "end_date nie może być wcześniejsza niż start_date"
+
+#: categories/exceptions.py:9
+msgid "Category not found"
+msgstr "Nie znaleziono kategorii"
+
+#: categories/exceptions.py:14
+msgid "A category with this name already exists in this budget period."
+msgstr "Kategoria o tej nazwie już istnieje w tym okresie budżetu."
+
+#: categories/exceptions.py:19
+msgid "A category cannot be merged into itself."
+msgstr "Kategorii nie można scalić z nią samą."
+
+#: common/exceptions.py:19
+msgid "An unexpected error occurred"
+msgstr "Wystąpił nieoczekiwany błąd"
+
+#: common/exceptions.py:32
+msgid "Not found"
+msgstr "Nie znaleziono"
+
+#: common/exceptions.py:39
+msgid "Authentication failed"
+msgstr "Uwierzytelnianie nie powiodło się"
+
+#: common/exceptions.py:46
+msgid "Validation error"
+msgstr "Błąd walidacji"
+
+#: common/exceptions.py:63
+msgid "Insufficient permissions"
+msgstr "Brak wystarczających uprawnień"
+
+#: common/models.py:48
+#, python-format
+msgid "%(model)s.workspace_id must be set before save"
+msgstr "%(model)s.workspace_id musi być ustawione przed zapisaniem"
+
+#: common/models.py:55
+#, python-format
+msgid "%(model)s.workspace_id cannot be changed after creation"
+msgstr "%(model)s.workspace_id nie można zmienić po utworzeniu"
+
+#: common/querysets.py:11
+#, python-format
+msgid "workspace_id is required for %(model)s.for_workspace(), got %(value)r"
+msgstr "%(model)s.for_workspace() wymaga workspace_id, a otrzymano %(value)r"
+
+#: common/throttle.py:55 common/throttle.py:88 common/throttle.py:127
+msgid "Too many requests. Please try again later."
+msgstr "Zbyt wiele żądań. Spróbuj ponownie później."
+
+#: common/throttle.py:149
+#, python-format
+msgid "File too large. Maximum %(max)sMB allowed."
+msgstr "Plik jest za duży. Maksymalny dozwolony rozmiar to %(max)s MB."
+
+#: core/api.py:127
+msgid "Email verified successfully"
+msgstr "Adres e-mail został pomyślnie zweryfikowany"
+
+#: core/api.py:140
+msgid "If your email is unverified, a new verification email has been sent."
+msgstr "Jeśli Twój adres e-mail nie jest zweryfikowany, wysłano nową wiadomość weryfikacyjną."
+
+#: core/api.py:151
+msgid "If an account exists with this email, a reset link has been sent."
+msgstr "Jeśli istnieje konto z tym adresem e-mail, wysłano link resetujący."
+
+#: core/api.py:165
+msgid "Invalid reset link"
+msgstr "Nieprawidłowy link do resetowania hasła"
+
+#: core/api.py:168
+msgid "Invalid or expired reset link"
+msgstr "Nieprawidłowy lub wygasły link do resetowania hasła"
+
+#: core/api.py:172
+msgid "Password has been reset successfully"
+msgstr "Hasło zostało pomyślnie zresetowane"
+
+#: core/api.py:180
+msgid "Verification email sent to your new address"
+msgstr "Wiadomość weryfikacyjna została wysłana na Twój nowy adres"
+
+#: core/api.py:188
+msgid "Email changed successfully"
+msgstr "Adres e-mail został pomyślnie zmieniony"
+
+#: core/schemas/auth.py:19
+msgid "Enter a valid email address"
+msgstr "Wprowadź prawidłowy adres e-mail"
+
+#: core/schemas/auth.py:68
+#, python-format
+msgid "Must accept current Terms of Service version (%(version)s)"
+msgstr "Musisz zaakceptować aktualną wersję Regulaminu (%(version)s)"
+
+#: core/schemas/auth.py:78
+#, python-format
+msgid "Must accept current Privacy Policy version (%(version)s)"
+msgstr "Musisz zaakceptować aktualną wersję Polityki prywatności (%(version)s)"
+
+#: core/schemas/consent.py:20
+#, python-format
+msgid "consent_type must be one of: %(types)s"
+msgstr "consent_type musi mieć jedną z wartości: %(types)s"
+
+#: core/schemas/users.py:57
+msgid "calendar_start_day must be between 1 and 7"
+msgstr "calendar_start_day musi mieć wartość od 1 do 7"
+
+#: core/schemas/users.py:66
+#, python-format
+msgid "font_family must be one of: %(fonts)s"
+msgstr "font_family musi mieć jedną z wartości: %(fonts)s"
+
+#: core/schemas/users.py:73
+#, python-format
+msgid "language must be one of: %(codes)s"
+msgstr "language musi mieć jedną z wartości: %(codes)s"
+
+#: core/schemas/users.py:80
+#, python-format
+msgid "number_format must be one of: %(codes)s"
+msgstr "number_format musi mieć jedną z wartości: %(codes)s"
+
+#: currencies/exceptions.py:12
+#, python-format
+msgid "Currency %(code)s not found in the catalog"
+msgstr "Nie znaleziono waluty %(code)s w katalogu"
+
+#: currencies/exceptions.py:19
+#, python-format
+msgid "Currency %(code)s is not enabled for this workspace"
+msgstr "Waluta %(code)s nie jest włączona dla tej przestrzeni roboczej"
+
+#: currencies/exceptions.py:26
+#, python-format
+msgid "Currency %(code)s already exists"
+msgstr "Waluta %(code)s już istnieje"
+
+#: currencies/exceptions.py:30
+msgid "Cannot disable the only enabled currency of a workspace"
+msgstr "Nie można wyłączyć jedynej włączonej waluty przestrzeni roboczej"
+
+#: currencies/exceptions.py:36
+msgid ""
+"The currency order must list exactly the workspace's enabled currencies "
+"(same set, no duplicates, none missing, none extra)"
+msgstr "Kolejność walut musi zawierać dokładnie włączone waluty przestrzeni roboczej (ten sam zestaw, bez duplikatów, bez brakujących i bez dodatkowych)"
+
+#: currencies/exceptions.py:50
+msgid "account"
+msgid_plural "accounts"
+msgstr[0] "rachunek"
+msgstr[1] "rachunki"
+msgstr[2] "rachunków"
+
+#: currencies/exceptions.py:52
+msgid "planned amount"
+msgid_plural "planned amounts"
+msgstr[0] "zaplanowana kwota"
+msgstr[1] "zaplanowane kwoty"
+msgstr[2] "zaplanowanych kwot"
+
+#: currencies/exceptions.py:54
+msgid "budget currency set"
+msgid_plural "budget currency sets"
+msgstr[0] "zestaw walut budżetu"
+msgstr[1] "zestawy walut budżetu"
+msgstr[2] "zestawów walut budżetu"
+
+#: currencies/exceptions.py:56
+msgid "planned transaction"
+msgid_plural "planned transactions"
+msgstr[0] "zaplanowana transakcja"
+msgstr[1] "zaplanowane transakcje"
+msgstr[2] "zaplanowanych transakcji"
+
+#: currencies/exceptions.py:58
+msgid "transaction"
+msgid_plural "transactions"
+msgstr[0] "transakcja"
+msgstr[1] "transakcje"
+msgstr[2] "transakcji"
+
+#: currencies/exceptions.py:67
+msgid "other records"
+msgstr "inne rekordy"
+
+#: currencies/exceptions.py:69
+#, python-format
+msgid ""
+"Currency %(code)s is in use: %(summary)s. Remove those references before "
+"disabling it."
+msgstr "Waluta %(code)s jest w użyciu: %(summary)s. Usuń te odwołania, zanim ją wyłączysz."
+
+#: currencies/schemas.py:43
+msgid "Value cannot be blank"
+msgstr "Wartość nie może być pusta"
+
+#: currencies/schemas.py:49
+msgid "name and symbol are required when creating a custom currency"
+msgstr "name i symbol są wymagane przy tworzeniu własnej waluty"
+
+#: planned_transactions/api.py:171 transactions/api.py:175
+msgid "Invalid JSON file."
+msgstr "Nieprawidłowy plik JSON."
+
+#: planned_transactions/api.py:175
+msgid "No new planned transactions to import."
+msgstr "Brak nowych zaplanowanych transakcji do zaimportowania."
+
+#: planned_transactions/api.py:176
+#, python-format
+msgid "Successfully imported %(count)s new planned transactions."
+msgstr "Pomyślnie zaimportowano nowe zaplanowane transakcje (%(count)s)."
+
+#: planned_transactions/exceptions.py:9
+msgid "Planned transaction not found"
+msgstr "Nie znaleziono zaplanowanej transakcji"
+
+#: planned_transactions/exceptions.py:14
+msgid "Account is archived and cannot receive new planned transactions"
+msgstr "Rachunek jest zarchiwizowany i nie może otrzymywać nowych zaplanowanych transakcji"
+
+#: planned_transactions/exceptions.py:19
+msgid "Currency does not match the account currency"
+msgstr "Waluta nie zgadza się z walutą rachunku"
+
+#: planned_transactions/exceptions.py:24
+msgid "Currency is required when no account is set"
+msgstr "Waluta jest wymagana, gdy nie ustawiono rachunku"
+
+#: planned_transactions/exceptions.py:29 transactions/exceptions.py:14
+msgid "Category not found, archived, or not in this workspace"
+msgstr "Nie znaleziono kategorii, jest zarchiwizowana lub nie należy do tej przestrzeni roboczej"
+
+#: planned_transactions/exceptions.py:34
+msgid "Already executed"
+msgstr "Już wykonano"
+
+#: planned_transactions/exceptions.py:39
+msgid "Cannot change status of an executed planned transaction"
+msgstr "Nie można zmienić statusu wykonanej zaplanowanej transakcji"
+
+#: transactions/api.py:180
+msgid "No new transactions to import."
+msgstr "Brak nowych transakcji do zaimportowania."
+
+#: transactions/api.py:181
+#, python-format
+msgid "Successfully imported %(count)s new transactions."
+msgstr "Pomyślnie zaimportowano nowe transakcje (%(count)s)."
+
+#: transactions/api.py:349 transactions/api.py:372
+msgid "Receipt extraction is not configured."
+msgstr "Wyodrębnianie pozycji z paragonu nie jest skonfigurowane."
+
+#: transactions/api.py:356
+msgid "Receipt scanning is temporarily offline. Please try again later."
+msgstr "Skanowanie paragonów jest tymczasowo niedostępne. Spróbuj ponownie później."
+
+#: transactions/exceptions.py:9
+msgid "Transaction not found"
+msgstr "Nie znaleziono transakcji"
+
+#: transactions/exceptions.py:19
+msgid "Account is archived and cannot receive new transactions"
+msgstr "Rachunek jest zarchiwizowany i nie może otrzymywać nowych transakcji"
+
+#: transactions/exceptions.py:24
+msgid ""
+"Amount must be positive (income/expense) or a non-zero delta (adjustment)"
+msgstr "Kwota musi być dodatnia (przychód/wydatek) lub niezerową deltą (korekta)"
+
+#: transactions/exceptions.py:29
+msgid "Adjustments cannot have a category"
+msgstr "Korekty nie mogą mieć kategorii"
+
+#: transactions/exceptions.py:34
+msgid "Adjustments require an account"
+msgstr "Korekty wymagają rachunku"
+
+#: transactions/exceptions.py:39
+msgid "Transactions without an account require an explicit currency_code"
+msgstr "Transakcje bez rachunku wymagają jawnego currency_code"
+
+#: transactions/exceptions.py:44
+msgid "currency_code does not match the account currency"
+msgstr "currency_code nie zgadza się z walutą rachunku"
+
+#: transactions/exceptions.py:51
+msgid "Original currency is unknown or equals the transaction currency"
+msgstr "Waluta pierwotna jest nieznana lub równa walucie transakcji"
+
+#: transactions/exceptions.py:56
+msgid "All transactions and the target account must belong to the workspace"
+msgstr "Wszystkie transakcje i rachunek docelowy muszą należeć do przestrzeni roboczej"
+
+#: transactions/exceptions.py:61
+msgid ""
+"Target account currency must match the currency of every moved transaction"
+msgstr "Waluta rachunku docelowego musi zgadzać się z walutą każdej przenoszonej transakcji"
+
+#: transactions/exceptions.py:71
+msgid "Attachment not found"
+msgstr "Nie znaleziono załącznika"
+
+#: transactions/exceptions.py:76
+msgid "Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF"
+msgstr "Nieobsługiwany typ pliku — dozwolone: JPEG, PNG, HEIC, WebP, PDF"
+
+#: transactions/exceptions.py:82
+msgid "File storage is not configured"
+msgstr "Magazyn plików nie jest skonfigurowany"
+
+#: transactions/exceptions.py:87
+msgid "The stored file is no longer available"
+msgstr "Zapisany plik nie jest już dostępny"
+
+#: transactions/schemas.py:50 transactions/schemas.py:74
+msgid "Description cannot be empty"
+msgstr "Opis nie może być pusty"
+
+#: transactions/schemas.py:56
+msgid ""
+"original_amount and original_currency_code must both be set or both be "
+"omitted"
+msgstr "original_amount i original_currency_code muszą być ustawione oba albo pominięte oba"
+
+#: transactions/schemas.py:163
+msgid "Item name cannot be empty"
+msgstr "Nazwa pozycji nie może być pusta"
+
+#: transactions/services.py:123
+#, python-format
+msgid "Original currency %(code)s not found in the catalog"
+msgstr "Nie znaleziono waluty pierwotnej %(code)s w katalogu"
+
+#: transactions/services.py:126
+msgid "Original currency must differ from the transaction currency"
+msgstr "Waluta pierwotna musi różnić się od waluty transakcji"
+
+#: transactions/services.py:767
+#, python-format
+msgid "Invalid data format: %(error)s"
+msgstr "Nieprawidłowy format danych: %(error)s"
+
+#: transfers/exceptions.py:9
+msgid "Transfer not found"
+msgstr "Nie znaleziono przelewu"
+
+#: transfers/exceptions.py:14 transfers/schemas.py:28
+msgid "From and to accounts must differ"
+msgstr "Rachunek źródłowy i docelowy muszą się różnić"
+
+#: transfers/exceptions.py:19
+msgid "Cannot transfer to or from an archived account"
+msgstr "Nie można wykonywać przelewów na zarchiwizowany rachunek ani z niego"
+
+#: transfers/exceptions.py:24
+msgid "Transfer amounts must be positive"
+msgstr "Kwoty przelewu muszą być dodatnie"
+
+#: transfers/exceptions.py:29
+msgid "Amounts must match for same-currency transfers"
+msgstr "Kwoty muszą się zgadzać w przypadku przelewów w tej samej walucie"
+
+#: transfers/exceptions.py:34
+msgid "to_amount is required for cross-currency transfers"
+msgstr "to_amount jest wymagane w przypadku przelewów między walutami"
+
+#: users/api.py:72
+msgid "Password updated successfully"
+msgstr "Hasło zostało pomyślnie zmienione"
+
+#: users/api.py:159
+msgid "Account and all associated data deleted successfully."
+msgstr "Konto i wszystkie powiązane dane zostały pomyślnie usunięte."
+
+#: users/api.py:181
+msgid "Account reset. A fresh workspace is ready."
+msgstr "Konto zostało zresetowane. Nowa przestrzeń robocza jest gotowa."
+
+#: users/api.py:259
+msgid "Two-factor authentication has been disabled"
+msgstr "Uwierzytelnianie dwuskładnikowe zostało wyłączone"
+
+#: users/exceptions.py:9
+msgid "Invalid current password"
+msgstr "Nieprawidłowe obecne hasło"
+
+#: users/exceptions.py:16
+#, python-format
+msgid "Invalid consent type: %(consent_type)s"
+msgstr "Nieprawidłowy typ zgody: %(consent_type)s"
+
+#: users/exceptions.py:22
+msgid "No active consent found for this type"
+msgstr "Nie znaleziono aktywnej zgody tego typu"
+
+#: users/exceptions.py:27
+msgid "Two-factor authentication is not enabled for this user"
+msgstr "Uwierzytelnianie dwuskładnikowe nie jest włączone dla tego użytkownika"
+
+#: users/exceptions.py:34
+#, python-format
+msgid ""
+"Cannot delete account. You own workspaces with other members: "
+"%(workspaces)s. Transfer ownership or remove all members first."
+msgstr "Nie można usunąć konta. Jesteś właścicielem przestrzeni roboczych z innymi członkami: %(workspaces)s. Najpierw przekaż własność albo usuń wszystkich członków."
+
+#: users/exceptions.py:41
+msgid "Email is already verified"
+msgstr "Adres e-mail jest już zweryfikowany"
+
+#: users/exceptions.py:46
+msgid "Invalid or expired verification token"
+msgstr "Nieprawidłowy lub wygasły token weryfikacyjny"
+
+#: users/exceptions.py:51
+msgid "This email is already in use"
+msgstr "Ten adres e-mail jest już używany"
+
+#: users/exceptions.py:56
+msgid "Invalid or expired email change token"
+msgstr "Nieprawidłowy lub wygasły token zmiany adresu e-mail"
+
+#: users/exceptions.py:61
+msgid "New email must be different from current email"
+msgstr "Nowy adres e-mail musi różnić się od obecnego"
+
+#: users/legacy_import.py:69
+#, python-format
+msgid "%(context)s: invalid date %(value)r (expected YYYY-MM-DD)"
+msgstr "%(context)s: nieprawidłowa data %(value)r (oczekiwano YYYY-MM-DD)"
+
+#: users/legacy_import.py:77
+#, python-format
+msgid "%(context)s: date is missing"
+msgstr "%(context)s: brak daty"
+
+#: users/legacy_import.py:85
+#, python-format
+msgid "%(context)s: name is missing"
+msgstr "%(context)s: brak nazwy"
+
+#: users/models.py:27
+msgid "The Email field must be set"
+msgstr "Pole Email musi być ustawione"
+
+#: users/services.py:249
+msgid "This email change request is no longer valid"
+msgstr "To żądanie zmiany adresu e-mail nie jest już ważne"
+
+#: users/services.py:417 users/services.py:496
+msgid "Invalid password"
+msgstr "Nieprawidłowe hasło"
+
+#: users/services.py:505
+#, python-format
+msgid ""
+"These workspaces are shared with other members: %(workspaces)s. Set "
+"confirm_shared to delete them anyway."
+msgstr "Te przestrzenie robocze są współdzielone z innymi członkami: %(workspaces)s. Ustaw confirm_shared, aby mimo to je usunąć."
+
+#: users/services.py:771
+#, python-format
+msgid ""
+"Incompatible export version: %(version)s. The main import accepts v3 exports "
+"only; use the legacy import for v1/v2 files."
+msgstr "Niekompatybilna wersja eksportu: %(version)s. Główny import obsługuje tylko eksporty v3; w przypadku plików v1/v2 użyj starszego importu."
+
+#: users/services.py:774
+msgid "unknown"
+msgstr "nieznana"
+
+#: users/services.py:796
+#, python-format
+msgid "Invalid date in import data: %(value)r (expected YYYY-MM-DD)"
+msgstr "Nieprawidłowa data w danych importu: %(value)r (oczekiwano YYYY-MM-DD)"
+
+#: users/services.py:918
+#, python-format
+msgid "%(name)s: transaction references unknown account"
+msgstr "%(name)s: transakcja odwołuje się do nieznanego rachunku"
+
+#: users/services.py:924
+#, python-format
+msgid "%(name)s: account-less transaction missing currency_code"
+msgstr "%(name)s: transakcja bez rachunku nie zawiera currency_code"
+
+#: users/services.py:969
+#, python-format
+msgid "%(name)s: transfer references unknown account"
+msgstr "%(name)s: przelew odwołuje się do nieznanego rachunku"
+
+#: users/services.py:990
+#, python-format
+msgid "%(name)s: planned transaction references unknown account"
+msgstr "%(name)s: zaplanowana transakcja odwołuje się do nieznanego rachunku"
+
+#: users/services.py:996
+#, python-format
+msgid "%(name)s: account-less planned transaction missing currency_code"
+msgstr "%(name)s: zaplanowana transakcja bez rachunku nie zawiera currency_code"
+
+#: users/two_factor.py:215
+msgid "Two-factor authentication has been reset"
+msgstr "Uwierzytelnianie dwuskładnikowe zostało zresetowane"
+
+#: workspaces/exceptions.py:10
+msgid "Workspace not found"
+msgstr "Nie znaleziono przestrzeni roboczej"
+
+#: workspaces/exceptions.py:15
+msgid "Member not found in this workspace"
+msgstr "Nie znaleziono członka w tej przestrzeni roboczej"
+
+#: workspaces/exceptions.py:20
+msgid "User is already a member of this workspace"
+msgstr "Użytkownik jest już członkiem tej przestrzeni roboczej"
+
+#: workspaces/exceptions.py:27
+#, python-format
+msgid ""
+"Workspace member limit reached. Maximum %(max)s members allowed per "
+"workspace."
+msgstr "Osiągnięto limit członków przestrzeni roboczej. Maksymalnie %(max)s członków na przestrzeń roboczą."
+
+#: workspaces/exceptions.py:34
+msgid "Cannot remove yourself. Use the leave endpoint instead."
+msgstr "Nie możesz usunąć siebie. Użyj zamiast tego opcji opuszczenia przestrzeni roboczej."
+
+#: workspaces/exceptions.py:39
+msgid "Cannot change your own role"
+msgstr "Nie można zmienić własnej roli"
+
+#: workspaces/exceptions.py:44
+msgid ""
+"Workspace owner cannot leave. Transfer ownership first or delete the "
+"workspace."
+msgstr "Właściciel nie może opuścić przestrzeni roboczej. Najpierw przekaż własność albo usuń przestrzeń roboczą."
+
+#: workspaces/exceptions.py:49
+msgid "Cannot change the owner's role"
+msgstr "Nie można zmienić roli właściciela"
+
+#: workspaces/exceptions.py:54
+msgid "Cannot remove the workspace owner"
+msgstr "Nie można usunąć właściciela przestrzeni roboczej"
+
+#: workspaces/exceptions.py:59
+msgid ""
+"Cannot reset your own password. Use the change password feature instead."
+msgstr "Nie możesz zresetować własnego hasła. Użyj zamiast tego opcji zmiany hasła."
+
+#: workspaces/exceptions.py:64
+msgid "Cannot reset the owner's password"
+msgstr "Nie można zresetować hasła właściciela"
+
+#: workspaces/exceptions.py:69
+msgid "Only the workspace owner can perform this action."
+msgstr "Tylko właściciel przestrzeni roboczej może wykonać tę czynność."
+
+#: workspaces/exceptions.py:77
+#, python-format
+msgid "Admin cannot %(action)s another admin. Owner required."
+msgstr "Administrator nie może %(action)s innego administratora. Wymagany jest właściciel."
+
+#: workspaces/schemas.py:83
+msgid "Password cannot be blank"
+msgstr "Hasło nie może być puste"
+
+#: workspaces/services.py:193
+msgid "Budget not found in this workspace"
+msgstr "Nie znaleziono budżetu w tej przestrzeni roboczej"
+
+#: workspaces/services.py:212
+msgid "Workspace switched successfully"
+msgstr "Przestrzeń robocza została pomyślnie przełączona"
+
+#: workspaces/services.py:377 workspaces/services.py:404
+msgid "Member added to workspace"
+msgstr "Członek został dodany do przestrzeni roboczej"
+
+#: workspaces/services.py:466
+msgid "Successfully left workspace"
+msgstr "Pomyślnie opuszczono przestrzeń roboczą"
+
+#: workspaces/services.py:482
+#, python-format
+msgid "Cannot assign role: %(role)s. Allowed: %(allowed)s"
+msgstr "Nie można przypisać roli: %(role)s. Dozwolone: %(allowed)s"
+
+#: workspaces/services.py:509
+msgid "change role of"
+msgstr "zmienić rolę"
+
+#: workspaces/services.py:524
+msgid "Role updated successfully"
+msgstr "Rola została pomyślnie zaktualizowana"
+
+#: workspaces/services.py:564
+msgid "remove"
+msgstr "usunąć"
+
+#: workspaces/services.py:604
+msgid "reset password of"
+msgstr "zresetować hasło"
+
+#: workspaces/services.py:621
+msgid "Password reset successfully"
+msgstr "Hasło zostało pomyślnie zresetowane"
+
+#: common/auth.py:54
+msgid "No active workspace. Please create or join a workspace."
+msgstr "Brak aktywnej przestrzeni roboczej. Utwórz przestrzeń roboczą lub dołącz do istniejącej."
+
+#: common/auth.py:58
+msgid "Not a member of this workspace"
+msgstr "Nie jesteś członkiem tej przestrzeni roboczej"
+
+#: common/idempotency.py:43
+msgid "Idempotency-Key header must be at most %(max_length)s characters."
+msgstr "Nagłówek Idempotency-Key może mieć co najwyżej %(max_length)s znaków."
+
+#: core/services.py:67
+msgid "Registration is disabled in demo mode"
+msgstr "Rejestracja jest wyłączona w trybie demo"
+
+#: core/services.py:119 core/services.py:121
+msgid "Invalid email or password"
+msgstr "Nieprawidłowy adres e-mail lub hasło"
+
+#: core/services.py:123
+msgid "User account is disabled"
+msgstr "Konto użytkownika jest wyłączone"
+
+#: core/services.py:147 core/services.py:177
+msgid "User not found"
+msgstr "Nie znaleziono użytkownika"
+
+#: core/services.py:154
+msgid "Invalid verification code"
+msgstr "Nieprawidłowy kod weryfikacyjny"
+
+#: core/services.py:173 core/services.py:181
+msgid "Invalid or expired refresh token"
+msgstr "Nieprawidłowy lub wygasły token odświeżania"
+
+#: users/two_factor.py:74
+msgid "Two-factor authentication is already enabled"
+msgstr "Uwierzytelnianie dwuskładnikowe jest już włączone"

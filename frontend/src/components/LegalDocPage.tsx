@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { useTranslation } from 'react-i18next';
 import type { LegalDoc } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,6 +15,7 @@ export default function LegalDocPage({ fetcher, title, failureText }: LegalDocPa
   const [doc, setDoc] = useState<LegalDoc | null>(null);
   const [error, setError] = useState(false);
   const { isAuthenticated } = useAuth();
+  const { t } = useTranslation('dashboard');
 
   useEffect(() => {
     const loadDoc = async () => {
@@ -32,7 +34,7 @@ export default function LegalDocPage({ fetcher, title, failureText }: LegalDocPa
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
           <Link to={isAuthenticated ? '/' : '/login'} className="text-sm text-primary hover:text-primary-hover">
-            &larr; {isAuthenticated ? 'Back' : 'Back to login'}
+            &larr; {isAuthenticated ? t('legal.back') : t('legal.backToLogin')}
           </Link>
         </div>
 
@@ -41,7 +43,7 @@ export default function LegalDocPage({ fetcher, title, failureText }: LegalDocPa
             <h1 className="text-base font-semibold text-text">{title}</h1>
             {doc && (
               <p className="mt-2 text-sm text-text-muted">
-                Effective date: {doc.effective_date} &middot; Version {doc.version}
+                {t('legal.effective', { date: doc.effective_date, version: doc.version })}
               </p>
             )}
           </div>
@@ -51,7 +53,7 @@ export default function LegalDocPage({ fetcher, title, failureText }: LegalDocPa
           )}
 
           {!doc && !error && (
-            <p className="text-text-muted">Loading…</p>
+            <p className="text-text-muted">{t('legal.loading')}</p>
           )}
 
           {doc && (

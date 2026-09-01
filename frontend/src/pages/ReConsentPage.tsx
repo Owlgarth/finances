@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { CircleX } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
 import { authApi } from '../api/client';
 import type { ConsentStatus } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function ReConsentPage() {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const { checkConsentStatus } = useAuth();
   const [status, setStatus] = useState<ConsentStatus | null>(null);
@@ -16,7 +18,7 @@ export default function ReConsentPage() {
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Loads on mount and on every retry (the error card's Try again bumps
+  // Loads on mount and on every retry (the error card's retry button bumps
   // retryTick from an event handler). The loader stays declared INSIDE the
   // effect with its setters after the await: a hoisted useCallback loader
   // called from here gets traced by set-state-in-effect and flagged, while
@@ -52,11 +54,11 @@ export default function ReConsentPage() {
       if (needsPrivacy && status) {
         await authApi.grantConsent('privacy_policy', status.privacy_version_required);
       }
-      toast.success('Thank you for accepting the updated documents');
+      toast.success(t('reConsent.successToast'));
       await checkConsentStatus();
       navigate('/');
     } catch {
-      toast.error('Failed to record consent. Please try again.');
+      toast.error(t('reConsent.errorToast'));
     } finally {
       setIsSubmitting(false);
     }
@@ -69,16 +71,16 @@ export default function ReConsentPage() {
           <div className="flex justify-center">
             <CircleX size={16} className="text-negative" />
           </div>
-          <h1 className="mt-3 text-base font-semibold text-text">Something went wrong</h1>
+          <h1 className="mt-3 text-base font-semibold text-text">{t('shared.somethingWentWrong')}</h1>
           <p className="mt-2 text-sm text-text-muted">
-            Could not load your consent status. Please try again.
+            {t('reConsent.loadErrorBody')}
           </p>
           <button
             type="button"
             onClick={() => setRetryTick((t) => t + 1)}
             className="mt-6 bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
           >
-            Try again
+            {t('shared.tryAgain')}
           </button>
         </div>
       </div>
@@ -88,7 +90,7 @@ export default function ReConsentPage() {
   if (!status) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-text-muted">Loading…</div>
+        <div className="text-text-muted">{t('reConsent.loading')}</div>
       </div>
     );
   }
@@ -96,9 +98,9 @@ export default function ReConsentPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4">
       <div className="max-w-md w-full bg-surface rounded-sm border border-border p-8">
-        <h1 className="text-base font-semibold text-text mb-2">Updated agreements</h1>
+        <h1 className="text-base font-semibold text-text mb-2">{t('reConsent.title')}</h1>
         <p className="text-text-muted mb-6">
-          We've updated our legal documents. Please review and accept the changes to continue using Owlgarth Finances.
+          {t('reConsent.intro')}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,11 +113,14 @@ export default function ReConsentPage() {
                 className="mt-1 h-4 w-4 rounded-none border-border"
               />
               <span className="text-sm text-text">
-                I accept the updated{' '}
-                <Link to="/terms" target="_blank" className="text-primary hover:text-primary-hover">
-                  Terms of Service
-                </Link>{' '}
-                {`(v${status.terms_version_required})`}
+                <Trans
+                  i18nKey="reConsent.acceptTerms"
+                  t={t}
+                  values={{ version: status.terms_version_required }}
+                  components={{
+                    termsLink: <Link to="/terms" target="_blank" className="text-primary hover:text-primary-hover" />,
+                  }}
+                />
               </span>
             </label>
           )}
@@ -129,11 +134,14 @@ export default function ReConsentPage() {
                 className="mt-1 h-4 w-4 rounded-none border-border"
               />
               <span className="text-sm text-text">
-                I accept the updated{' '}
-                <Link to="/privacy" target="_blank" className="text-primary hover:text-primary-hover">
-                  Privacy Policy
-                </Link>{' '}
-                {`(v${status.privacy_version_required})`}
+                <Trans
+                  i18nKey="reConsent.acceptPrivacy"
+                  t={t}
+                  values={{ version: status.privacy_version_required }}
+                  components={{
+                    privacyLink: <Link to="/privacy" target="_blank" className="text-primary hover:text-primary-hover" />,
+                  }}
+                />
               </span>
             </label>
           )}
@@ -143,7 +151,7 @@ export default function ReConsentPage() {
             disabled={!canSubmit || isSubmitting}
             className="w-full py-2 px-4 bg-primary text-white rounded-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
-            {isSubmitting ? 'Saving…' : 'Accept and continue'}
+            {isSubmitting ? t('reConsent.saving') : t('reConsent.submit')}
           </button>
         </form>
       </div>

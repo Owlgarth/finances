@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import Modal from '../../common/Modal'
 import DatePicker from '../../DatePicker'
 import { budgetsApi } from '../../../api/client'
@@ -26,13 +27,14 @@ function plusDaysIso(isoDate: string, days: number): string {
 }
 
 /**
- * Add/edit form for a custom budget period. Mount-per-use (frontend-react
- * SKILL §Modal state lifecycle): fields seed from `mode`/`period` in the
+ * Add/edit form for a custom budget period. Mount-per-use modal shape:
+ * fields seed from `mode`/`period` in the
  * useState initializers, so the caller must render this component ONLY while
  * the form is open (unmount on close, per-session `key`) — that remount is
  * what re-seeds state for the next session, with zero open-effects.
  */
 export default function PeriodFormModal({ mode, budgetId, period, onClose }: Props) {
+  const { t } = useTranslation('budgets')
   const queryClient = useQueryClient()
   const isEdit = mode === 'edit' && !!period
 
@@ -73,38 +75,38 @@ export default function PeriodFormModal({ mode, budgetId, period, onClose }: Pro
       // BudgetInsights history is period-keyed: ['budget-history', budgetId, periodId|null].
       queryClient.invalidateQueries({ queryKey: ['budget-history', budgetId] })
       // ['current-period', budgetId] never fires for custom budgets — leave it alone.
-      toast.success(isEdit ? 'Period updated' : 'Period created')
+      toast.success(isEdit ? t('periodForm.updated') : t('periodForm.created'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save period')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('periodForm.saveFailed'))),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return toast.error('Name is required')
-    if (end < start) return toast.error('End date must be on or after the start date')
+    if (!name.trim()) return toast.error(t('periodForm.nameRequired'))
+    if (end < start) return toast.error(t('periodForm.endAfterStart'))
     mutation.mutate()
   }
 
   return (
     // size="md" per components.md §11 — sm is reserved for confirms/prompts.
     // `open` hardcoded: mount-per-use, the caller's render IS the open state.
-    <Modal open onClose={onClose} size="md" className="p-6" title={isEdit ? 'Edit period' : 'Add period'}>
+    <Modal open onClose={onClose} size="md" className="p-6" title={isEdit ? t('periodForm.editTitle') : t('periodForm.addTitle')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Dates first, name second: the name derives from the dates, so the
             pair leads and the prefilled name follows (mobile: single column). */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="period-start" className={labelClass}>Start date</label>
-            <DatePicker id="period-start" value={start} onChange={handleStartChange} placeholder="Start date" />
+            <label htmlFor="period-start" className={labelClass}>{t('periodForm.startLabel')}</label>
+            <DatePicker id="period-start" value={start} onChange={handleStartChange} placeholder={t('periodForm.startPlaceholder')} />
           </div>
           <div>
-            <label htmlFor="period-end" className={labelClass}>End date</label>
-            <DatePicker id="period-end" value={end} onChange={handleEndChange} placeholder="End date" />
+            <label htmlFor="period-end" className={labelClass}>{t('periodForm.endLabel')}</label>
+            <DatePicker id="period-end" value={end} onChange={handleEndChange} placeholder={t('periodForm.endPlaceholder')} />
           </div>
         </div>
         <div>
-          <label htmlFor="period-name" className={labelClass}>Name</label>
+          <label htmlFor="period-name" className={labelClass}>{t('periodForm.nameLabel')}</label>
           {/* Backend PeriodCreate caps names at 100 chars. No autoFocus: the
               first field is a read-only date input — focusing it would pop the
               calendar open over a freshly mounted modal. */}
@@ -117,9 +119,9 @@ export default function PeriodFormModal({ mode, budgetId, period, onClose }: Pro
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('periodForm.cancel')}</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save' : 'Add'}
+            {mutation.isPending ? t('periodForm.saving') : isEdit ? t('periodForm.save') : t('periodForm.add')}
           </button>
         </div>
       </form>

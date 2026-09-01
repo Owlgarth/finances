@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Pencil, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { usePermissions } from '../../hooks/usePermissions'
 import { formatPeriodRange } from '../../utils/format'
 import type { Period } from '../../types'
@@ -20,11 +21,12 @@ function temporalOf(period: Period, todayIso: string): Temporal {
 /** CURRENT tag - class string verbatim from PeriodPicker's CurrentChip
  *  (module-private there; copied, not extracted - two consumers do not
  *  justify churning the picker in this task). The bg-surface fill keeps it
- *  legible over the card's hover bg. No icon. */
-function CurrentChip() {
+ *  legible over the card's hover bg. No icon. Label is a prop: the chip text
+ *  is translated by the component that renders it. */
+function CurrentChip({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none flex-shrink-0">
-      CURRENT
+      {label}
     </span>
   )
 }
@@ -58,6 +60,7 @@ interface PeriodCardProps {
  * Zero state, zero effects - lint-quiet by construction.
  */
 export default function PeriodCard({ period, budgetId, onEdit, onDelete }: PeriodCardProps) {
+  const { t } = useTranslation('budgets')
   const { canManageAccounts } = usePermissions()
   // Page idiom (PeriodPicker line 257 / BudgetDetailPage line 245): UTC ISO
   // date string computed per render, compared against the period's ISO dates.
@@ -79,7 +82,7 @@ export default function PeriodCard({ period, budgetId, onEdit, onDelete }: Perio
         >
           {period.name}
         </span>
-        {temporal === 'current' && <CurrentChip />}
+        {temporal === 'current' && <CurrentChip label={t('periodCard.current')} />}
         {canManagePeriod && (
           <span className="ml-auto flex items-center gap-1">
             <button
@@ -89,8 +92,8 @@ export default function PeriodCard({ period, budgetId, onEdit, onDelete }: Perio
                 e.stopPropagation()
                 onEdit(period)
               }}
-              title={`Edit period ${period.name}`}
-              aria-label={`Edit period ${period.name}`}
+              title={t('periodCard.editTitle', { name: period.name })}
+              aria-label={t('periodCard.editTitle', { name: period.name })}
               className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
             >
               <Pencil size={13} />
@@ -102,8 +105,8 @@ export default function PeriodCard({ period, budgetId, onEdit, onDelete }: Perio
                 e.stopPropagation()
                 onDelete(period)
               }}
-              title={`Delete period ${period.name}`}
-              aria-label={`Delete period ${period.name}`}
+              title={t('periodCard.deleteTitle', { name: period.name })}
+              aria-label={t('periodCard.deleteTitle', { name: period.name })}
               className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
             >
               <Trash2 size={13} />

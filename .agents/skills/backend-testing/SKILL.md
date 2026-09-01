@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions
@@ -153,6 +153,21 @@ Patch the clock the code under test actually reads, at the module where it reads
 - Test the boundary at the exact cap: N−1 failures followed by one success must succeed (`count > limit` blocks only above the limit — a lock must not fire AT the limit on a legitimate user).
 - Exact attempt counts require exact auth traffic: create users directly (`AuthTestCase.create_user` or factory + token), not via helpers that themselves log in — `register_and_login` pre-increments the login counter.
 - Unit-testing a throttle: `@patch('common.throttle.cache')` with `add`/`incr` return values, and assert the exact cache-key string — that is how "no IP component in the key" gets pinned.
+
+## Accept-Language and Translated Error Tests
+
+Backend error messages are selected per request from the `Accept-Language` header (`LocaleMiddleware`), so translated responses are testable with plain client headers - no translation activation needed. `APIClientMixin`'s helpers forward `**kwargs` to the Django test client, and request headers ride the same `HTTP_*` kwarg convention as `auth_headers()`:
+
+```python
+detail = str(self.patch('/api/users/me/preferences', {'calendar_start_day': 13},
+                        **self.auth_headers(), HTTP_ACCEPT_LANGUAGE='pl')['detail'])
+```
+
+Translated assertions need compiled catalogs: guard the class with `@unittest.skipUnless(shutil.which('msgfmt'), 'gettext not installed')` and compile in `setUpClass` via `call_command('compilemessages', verbosity=0)` - without .mo files the translated assertions fail by design. Exemplar: `TestPreferencesMessageLocalization` in `users/tests/test_users.py`.
+
+- **No header = English fallback.** Every pre-existing test that asserts an error `detail` already pins this path (source msgid string); an unknown language (`xx`) negotiates to English and a partial tag (`uk-UA`) resolves to the `uk` catalog - one boundary test each is enough.
+- **Assert the exact translated msgstr**, not just "not the English string" - a partial overlap (shared prefix, punctuation-only difference) passes a negative assertion while proving nothing about selection. Keep the msgid English in code and pin the expected Ukrainian/Polish sentence in the test.
+- A request can assert BOTH the error status and the language selection in one call; do not burn a second request re-triggering the same error for the translation assertion.
 
 ## Testing Import-Time Settings Branches (Subprocess Probe)
 

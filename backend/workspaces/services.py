@@ -6,6 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction as db_transaction
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from django.utils.translation import gettext as _
 
 from accounts.models import Account, AccountType
 from budgeting.models import Budget, BudgetCurrency, Cadence
@@ -189,7 +190,7 @@ class WorkspaceService:
         if budget_id is not None:
             budget = Budget.objects.filter(id=budget_id, workspace_id=workspace_id, is_active=True).first()
             if not budget:
-                raise ValidationError('Budget not found in this workspace')
+                raise ValidationError(_('Budget not found in this workspace'))
         workspace.default_budget = budget
         workspace.save(update_fields=['default_budget'])
         return WorkspaceService._to_response(workspace, user_role)
@@ -208,7 +209,7 @@ class WorkspaceService:
             raise WorkspaceNotFoundError()
         user.current_workspace_id = workspace_id
         user.save(update_fields=['current_workspace'])
-        return {'message': 'Workspace switched successfully', 'workspace_id': workspace_id}
+        return {'message': _('Workspace switched successfully'), 'workspace_id': workspace_id}
 
     @staticmethod
     def delete_workspace(user, workspace_id: int) -> None:
@@ -303,11 +304,6 @@ class WorkspaceMemberService:
         return workspace
 
     @staticmethod
-    def get_member(workspace_id: int, user_id: int) -> WorkspaceMember | None:
-        """Get a workspace member by user ID within a workspace."""
-        return WorkspaceMember.objects.filter(workspace_id=workspace_id, user_id=user_id).first()
-
-    @staticmethod
     def list_members(workspace_id: int) -> list[WorkspaceMemberOut]:
         """List all members of a workspace, ordered by role desc then email."""
         members = (
@@ -373,7 +369,7 @@ class WorkspaceMemberService:
                     existing_user.save(update_fields=['current_workspace'])
 
                 result = {
-                    'message': 'Member added to workspace',
+                    'message': _('Member added to workspace'),
                     'user_id': existing_user.id,
                     'member_id': new_member.id,
                 }
@@ -400,7 +396,7 @@ class WorkspaceMemberService:
                 )
 
                 result = {
-                    'message': 'Member added to workspace',
+                    'message': _('Member added to workspace'),
                     'user_id': new_user.id,
                     'member_id': new_member.id,
                 }
@@ -462,7 +458,7 @@ class WorkspaceMemberService:
         for admin_email, admin_name in admin_recipients:
             WorkspaceMemberService._send_member_left_email(admin_email, admin_name, leaver_name, workspace_name)
 
-        return {'message': 'Successfully left workspace'}
+        return {'message': _('Successfully left workspace')}
 
     ASSIGNABLE_ROLES = (Role.ADMIN, Role.MEMBER, Role.VIEWER)
 
@@ -478,7 +474,8 @@ class WorkspaceMemberService:
         """
         if new_role not in WorkspaceMemberService.ASSIGNABLE_ROLES:
             raise ValidationError(
-                f'Cannot assign role: {new_role}. Allowed: {", ".join(WorkspaceMemberService.ASSIGNABLE_ROLES)}'
+                _('Cannot assign role: %(role)s. Allowed: %(allowed)s')
+                % {'role': new_role, 'allowed': ', '.join(WorkspaceMemberService.ASSIGNABLE_ROLES)}
             )
 
         workspace_name = Workspace.objects.get(id=workspace_id).name
@@ -504,7 +501,7 @@ class WorkspaceMemberService:
                 raise WorkspaceOwnerRoleChangeError()
 
             if current_role == Role.ADMIN and member.role == Role.ADMIN:
-                raise WorkspaceMemberAdminInsufficientError('change role of')
+                raise WorkspaceMemberAdminInsufficientError(_('change role of'))
 
             old_role = member.role
             member.role = new_role
@@ -519,7 +516,7 @@ class WorkspaceMemberService:
         )
 
         return {
-            'message': 'Role updated successfully',
+            'message': _('Role updated successfully'),
             'user_id': member_user_id,
             'old_role': old_role,
             'new_role': new_role,
@@ -559,7 +556,7 @@ class WorkspaceMemberService:
                 raise WorkspaceOwnerRemoveError()
 
             if current_role == Role.ADMIN and member.role == Role.ADMIN:
-                raise WorkspaceMemberAdminInsufficientError('remove')
+                raise WorkspaceMemberAdminInsufficientError(_('remove'))
 
             member.delete()
 
@@ -599,7 +596,7 @@ class WorkspaceMemberService:
             raise WorkspaceOwnerPasswordResetError()
 
         if current_role == Role.ADMIN and target_member.role == Role.ADMIN:
-            raise WorkspaceMemberAdminInsufficientError('reset password of')
+            raise WorkspaceMemberAdminInsufficientError(_('reset password of'))
 
         target_user = User.objects.filter(id=target_user_id).first()
         if not target_user:
@@ -616,7 +613,7 @@ class WorkspaceMemberService:
         UserService.send_password_changed_email(target_user, changed_by_admin=True)
 
         return {
-            'message': 'Password reset successfully',
+            'message': _('Password reset successfully'),
             'user_id': target_user_id,
             'email': target_user_email,
         }

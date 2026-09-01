@@ -1,0 +1,98 @@
+{
+  "title": "Planned",
+  "newPlanned": "New planned",
+  "exportView": "Export view",
+  "exportTitle": "Exports the status and date filters",
+  "preparingExport": "Preparing export...",
+  "exportComplete": "Export complete",
+  "exportFailed": "Export failed. Try again.",
+  "searchPlaceholder": "Search names…",
+  "searchAria": "Search planned transactions",
+  "sortAria": "Sort",
+  "status": {
+    "all": "All",
+    "pending": "Pending",
+    "done": "Done",
+    "cancelled": "Cancelled"
+  },
+  "statusAria": "Filter by status",
+  "sort": {
+    "soonest": "Soonest",
+    "latest": "Latest",
+    "amountDesc": "Amount high to low",
+    "amountAsc": "Amount low to high",
+    "name": "Name A-Z"
+  },
+  "filters": {
+    "account": "Account",
+    "currency": "Currency",
+    "allAccounts": "All accounts",
+    "allCurrencies": "All currencies",
+    "byAccountAria": "Filter by account",
+    "byCurrencyAria": "Filter by currency",
+    "plannedDate": "Planned date"
+  },
+  "totals": {
+    "caption_one": "Totals - {{count}} planned",
+    "caption_other": "Totals - {{count}} planned"
+  },
+  "emptyFiltered": "No planned transactions match your search or filters.",
+  "empty": "No planned transactions.",
+  "emptyWithStatus": "No {{status}} planned transactions.",
+  "noAccount": "No account",
+  "rowActions": {
+    "execute": "Execute",
+    "cancelPlan": "Cancel plan",
+    "edit": "Edit",
+    "copy": "Copy",
+    "delete": "Delete"
+  },
+  "executed": "Executed \u2014 transaction created",
+  "executeFailed": "Failed to execute",
+  "cancelledToast": "Plan cancelled",
+  "cancelFailed": "Failed to cancel",
+  "deleted": "Deleted",
+  "deleteFailed": "Failed to delete",
+  "deleteDialog": {
+    "title": "Delete planned transaction",
+    "message": "Delete \"{{name}}\"?"
+  },
+  "cancelDialog": {
+    "title": "Cancel plan",
+    "message": "Mark \"{{name}}\" as cancelled? The row stays in the list but can no longer be executed.",
+    "confirm": "Cancel plan"
+  },
+  "form": {
+    "editTitle": "Edit planned",
+    "newTitle": "New planned transaction",
+    "nameLabel": "Name",
+    "amountLabel": "Amount",
+    "dateLabel": "Date",
+    "accountLabel": "Account",
+    "selectAccount": "Select account",
+    "accountAria": "Account",
+    "currencyLabel": "Currency",
+    "selectCurrency": "Select currency",
+    "currencyAria": "Currency",
+    "budgetLabel": "Budget",
+    "budgetPlaceholder": "Budget",
+    "budgetAria": "Budget",
+    "categoryLabel": "Category (optional)",
+    "uncategorized": "Uncategorized",
+    "categoryAria": "Category",
+    "execute": "Execute",
+    "copy": "Copy",
+    "cancelPlan": "Cancel plan",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save",
+    "add": "Add",
+    "updated": "Updated",
+    "added": "Planned added",
+    "saveFailed": "Failed to save",
+    "nameRequired": "Name is required",
+    "amountRequired": "Amount is required",
+    "currencyRequired": "Currency is required"
+  }
+}

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeft, CalendarRange, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { budgetsApi } from '../api/client'
 import type { Period } from '../types'
 import { usePermissions } from '../hooks/usePermissions'
@@ -42,6 +43,7 @@ function groupPeriodsByYear(periods: Period[]): PeriodGroup[] {
  * state is event-handler-only, so the set-state-in-effect baseline is safe.
  */
 export default function BudgetPeriodsPage() {
+  const { t } = useTranslation('budgets')
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const queryClient = useQueryClient()
@@ -84,11 +86,11 @@ export default function BudgetPeriodsPage() {
       queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
       // BudgetInsights history is period-keyed: ['budget-history', budgetId, periodId|null].
       queryClient.invalidateQueries({ queryKey: ['budget-history', budgetId] })
-      toast.success('Period deleted')
+      toast.success(t('detail.periodDeleted'))
       setDeletingPeriod(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete period'))
+      toast.error(getApiErrorMessage(error, t('detail.deletePeriodFailed')))
       setDeletingPeriod(null)
     },
   })
@@ -101,14 +103,14 @@ export default function BudgetPeriodsPage() {
         to={`/budgets/${budgetId}`}
         className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]"
       >
-        <ArrowLeft size={13} /> {budget?.name ?? 'Budget'}
+        <ArrowLeft size={13} /> {budget?.name ?? t('budgetFallback')}
       </Link>
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Periods</h1>
+        <h1 className="text-lg font-semibold text-text">{t('periods.title')}</h1>
         {canAddPeriod && (
           <button type="button" onClick={() => openPeriodModal('add')} className={primaryButtonClass}>
-            <Plus size={13} className="inline mr-1" /> Add period
+            <Plus size={13} className="inline mr-1" /> {t('periods.addPeriod')}
           </button>
         )}
       </div>
@@ -128,9 +130,9 @@ export default function BudgetPeriodsPage() {
            page, so an empty list there is transient - CTA stays custom-only. */
         <EmptyState
           icon={<CalendarRange size={48} strokeWidth={1.5} className="text-text-muted/30" />}
-          heading="No budget periods"
-          message="Create a period to start budgeting."
-          action={canAddPeriod ? { label: 'Add period', onClick: () => openPeriodModal('add') } : undefined}
+          heading={t('periods.emptyHeading')}
+          message={t('periods.emptyMessage')}
+          action={canAddPeriod ? { label: t('periods.addPeriod'), onClick: () => openPeriodModal('add') } : undefined}
         />
       ) : (
         /* Year sections are per-year blocks: each year renders its own header
@@ -175,8 +177,8 @@ export default function BudgetPeriodsPage() {
 
       <ConfirmDialog
         isOpen={!!deletingPeriod}
-        title="Delete period"
-        message={`Delete "${deletingPeriod?.name}"? Its planned amounts will be deleted. Transactions are not affected. This cannot be undone.`}
+        title={t('detail.deletePeriodDialog.title')}
+        message={t('detail.deletePeriodDialog.message', { name: deletingPeriod?.name })}
         onConfirm={() => deletingPeriod && deletePeriod.mutate(deletingPeriod.id)}
         onCancel={() => setDeletingPeriod(null)}
         isPending={deletePeriod.isPending}
