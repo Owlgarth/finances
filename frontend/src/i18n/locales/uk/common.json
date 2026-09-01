@@ -66,19 +66,5 @@
   },
   "validation": {
     "amountInvalid": "Введіть коректну суму"
-  },
-  "loading": "Завантаження",
-  "errorMessage": {
-    "retry": "Спробувати ще раз",
-    "sessionExpiredTitle": "Сесію завершено",
-    "sessionExpiredBody": "Ваша сесія завершилася. Увійдіть знову.",
-    "accessDeniedTitle": "Доступ заборонено",
-    "accessDeniedBody": "Ви не маєте дозволу на доступ до цього ресурсу.",
-    "notFoundTitle": "Не знайдено",
-    "notFoundBody": "Запитаний ресурс не знайдено.",
-    "serverErrorTitle": "Помилка сервера",
-    "serverErrorBody": "Сталася неочікувана помилка. Спробуйте пізніше.",
-    "connectionErrorTitle": "Помилка з'єднання",
-    "connectionErrorBody": "Не вдається підключитися до сервера. Перевірте інтернет-з'єднання."
   }
 }

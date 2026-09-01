@@ -66,19 +66,5 @@
   },
   "validation": {
     "amountInvalid": "Wpisz prawidłową kwotę"
-  },
-  "loading": "Wczytywanie",
-  "errorMessage": {
-    "retry": "Spróbuj ponownie",
-    "sessionExpiredTitle": "Sesja wygasła",
-    "sessionExpiredBody": "Twoja sesja wygasła. Zaloguj się ponownie.",
-    "accessDeniedTitle": "Brak dostępu",
-    "accessDeniedBody": "Nie masz uprawnień do dostępu do tego zasobu.",
-    "notFoundTitle": "Nie znaleziono",
-    "notFoundBody": "Nie można znaleźć żądanego zasobu.",
-    "serverErrorTitle": "Błąd serwera",
-    "serverErrorBody": "Wystąpił nieoczekiwany błąd. Spróbuj ponownie później.",
-    "connectionErrorTitle": "Błąd połączenia",
-    "connectionErrorBody": "Nie można połączyć się z serwerem. Sprawdź połączenie internetowe."
   }
 }

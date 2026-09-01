@@ -64,19 +64,5 @@
   },
   "validation": {
     "amountInvalid": "Enter a valid amount"
-  },
-  "loading": "Loading",
-  "errorMessage": {
-    "retry": "Try Again",
-    "sessionExpiredTitle": "Session Expired",
-    "sessionExpiredBody": "Your session has expired. Please log in again.",
-    "accessDeniedTitle": "Access Denied",
-    "accessDeniedBody": "You do not have permission to access this resource.",
-    "notFoundTitle": "Not Found",
-    "notFoundBody": "The requested resource could not be found.",
-    "serverErrorTitle": "Server Error",
-    "serverErrorBody": "An unexpected error occurred. Please try again later.",
-    "connectionErrorTitle": "Connection Error",
-    "connectionErrorBody": "Unable to connect to the server. Check your internet connection."
   }
 }
