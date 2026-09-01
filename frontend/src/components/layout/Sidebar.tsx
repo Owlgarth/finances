@@ -11,20 +11,26 @@ import {
   Wallet,
   Users,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { isMacLike, openPageSearch } from '../common/CommandPalette'
 import UserMenu from './UserMenu'
 import WorkspaceSelector from './WorkspaceSelector'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 
+// Keys only: t() is resolved at render time inside the component (a
+// module-level t() call would freeze the language at load time). `as const`
+// keeps labelKey a literal union so t(item.labelKey) is checked against the
+// nav catalog - which is also why every item carries an explicit `exact`
+// (union members without the property would fail item.exact below).
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: Home, exact: true },
-  { to: '/accounts', label: 'Accounts', icon: Wallet },
-  { to: '/budgets', label: 'Budgets', icon: PieChart },
-  { to: '/transactions', label: 'Transactions', icon: Receipt },
-  { to: '/planned', label: 'Planned', icon: Calendar },
-  { to: '/members', label: 'Members', icon: Users },
-]
+  { to: '/', labelKey: 'dashboard', icon: Home, exact: true },
+  { to: '/accounts', labelKey: 'accounts', icon: Wallet, exact: false },
+  { to: '/budgets', labelKey: 'budgets', icon: PieChart, exact: false },
+  { to: '/transactions', labelKey: 'transactions', icon: Receipt, exact: false },
+  { to: '/planned', labelKey: 'planned', icon: Calendar, exact: false },
+  { to: '/members', labelKey: 'members', icon: Users, exact: false },
+] as const
 
 interface SidebarProps {
   collapsed: boolean
@@ -32,6 +38,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
+  const { t } = useTranslation('nav')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { workspace } = useWorkspace()
 
@@ -52,7 +59,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             onClick={onToggleCollapse}
             className={`p-1.5 rounded-sm text-text-muted hover:text-text hover:bg-surface-hover transition-colors
               ${collapsed ? 'mx-auto' : ''}`}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? t('expandSidebar') : t('collapseSidebar')}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
@@ -69,13 +76,13 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             <button
               type="button"
               onClick={openPageSearch}
-              title={collapsed ? 'Search' : undefined}
+              title={collapsed ? t('search') : undefined}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1 text-text-muted hover:bg-surface-hover hover:text-text"
             >
               <Search size={14} className="flex-shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="font-mono text-xs uppercase tracking-wider flex-1 text-left">Search</span>
+                  <span className="font-mono text-xs uppercase tracking-wider flex-1 text-left">{t('search')}</span>
                   <kbd className="text-[10px] font-mono border border-border rounded-sm px-1 py-0.5 text-text-muted">
                     {isMacLike ? '⌘K' : 'Ctrl K'}
                   </kbd>
@@ -94,12 +101,12 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     : 'text-text-muted hover:bg-surface-hover hover:text-text'
                   }`
                 }
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? t(item.labelKey) : undefined}
               >
                 <item.icon size={14} className="flex-shrink-0" />
                 {!collapsed && (
                   <span className="font-mono text-xs uppercase tracking-wider">
-                    {item.label}
+                    {t(item.labelKey)}
                   </span>
                 )}
               </NavLink>
@@ -108,9 +115,9 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">
-              <p className="text-sm text-text-muted mb-2">No workspace selected</p>
+              <p className="text-sm text-text-muted mb-2">{t('noWorkspace')}</p>
               <p className="text-xs text-text-muted">
-                Create or join a workspace to get started
+                {t('noWorkspaceHint')}
               </p>
             </div>
           </div>

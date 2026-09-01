@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { Upload } from 'lucide-react'
 import Modal from '../common/Modal'
 import { authApi, workspacesApi } from '../../api/client'
@@ -16,6 +17,7 @@ interface Props {
 type Phase = 'select' | 'importing' | 'report'
 
 export default function LegacyImportModal({ open, onClose }: Props) {
+  const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -48,7 +50,7 @@ export default function LegacyImportModal({ open, onClose }: Props) {
       const text = await file.text()
       const exportData = JSON.parse(text)
       const imported = await authApi.importLegacy(exportData)
-      // The import switches the current workspace server-side — refresh everything.
+      // The import switches the current workspace server-side - refresh everything.
       queryClient.invalidateQueries()
       setResult(imported)
       // Preselect when a workspace got exactly one budget.
@@ -60,9 +62,9 @@ export default function LegacyImportModal({ open, onClose }: Props) {
       setPhase('report')
     } catch (error: unknown) {
       if (error instanceof SyntaxError) {
-        toast.error('Invalid JSON file. Please select a valid export file.')
+        toast.error(t('legacyModal.invalidJson'))
       } else {
-        toast.error(getApiErrorMessage(error, 'Failed to import legacy data. Please try again.'))
+        toast.error(getApiErrorMessage(error, t('legacyModal.importFailed')))
       }
       setPhase('select')
     }
@@ -80,38 +82,35 @@ export default function LegacyImportModal({ open, onClose }: Props) {
       )
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       queryClient.invalidateQueries({ queryKey: ['workspace-current'] })
-      toast.success(`Imported ${result.workspaces.length} workspace(s).`)
+      toast.success(t('legacyModal.imported', { count: result.workspaces.length }))
       reset()
       onClose()
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to save default budgets'))
+      toast.error(getApiErrorMessage(error, t('legacyModal.saveFailed')))
       setSaving(false)
     }
   }
 
   return (
-    <Modal open={open} onClose={handleClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title="Import from an older Denarly version">
+    <Modal open={open} onClose={handleClose} size="lg" className="p-6 max-h-[90vh] overflow-y-auto" title={t('legacySection.title')}>
 
       {phase === 'select' && (
         <div className="space-y-4">
           <p className="text-sm text-text-muted">
-            Upload the JSON export from the old app. It will be converted to the new account-based
-            model — exchanges become transfers, and a verification report shows each account's
-            balance. Afterwards you'll pick a default budget for each imported workspace, so new
-            transactions come pre-filled with a budget and its categories.
+            {t('legacyModal.intro')}
           </p>
           <input ref={fileRef} type="file" accept=".json" onChange={handleFile} className="hidden" />
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
+            <button type="button" onClick={handleClose} className={secondaryButtonClass}>{t('legacyModal.cancel')}</button>
             <button type="button" onClick={() => fileRef.current?.click()} className={primaryButtonClass}>
-              <Upload size={13} className="inline mr-1" /> Choose export file
+              <Upload size={13} className="inline mr-1" /> {t('legacyModal.chooseFile')}
             </button>
           </div>
         </div>
       )}
 
       {phase === 'importing' && (
-        <div className="py-10 text-center text-sm text-text-muted">Importing your data…</div>
+        <div className="py-10 text-center text-sm text-text-muted">{t('legacyModal.importing')}</div>
       )}
 
       {phase === 'report' && result && (
@@ -119,22 +118,26 @@ export default function LegacyImportModal({ open, onClose }: Props) {
           {result.workspaces.map((ws) => (
             <div key={ws.workspace_id} className="p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-3">
               <p className="font-medium text-text">{ws.workspace_name}</p>
+              {/* The created-list entries are API-derived English data keys
+                  with counts - the joined contents stay untranslated. */}
               <p className="text-text-muted">
-                Created: {Object.entries(ws.created).map(([k, v]) => `${v} ${k}`).join(', ')}
+                {t('legacyModal.created', {
+                  list: Object.entries(ws.created).map(([k, v]) => `${v} ${k}`).join(', '),
+                })}
               </p>
               {ws.deduped_transactions.length > 0 && (
                 <p className="text-text-muted">
-                  Skipped {ws.deduped_transactions.length} linked exchange transaction(s) to avoid double-counting.
+                  {t('legacyModal.skippedLinked', { count: ws.deduped_transactions.length })}
                 </p>
               )}
               <div>
-                <p className="text-text-muted mb-1">Balance verification:</p>
+                <p className="text-text-muted mb-1">{t('legacyModal.balanceVerification')}</p>
                 <ul className="space-y-0.5">
                   {ws.balances.map((b) => (
                     <li key={b.account_name} className={`font-mono text-xs ${b.matches ? 'text-positive' : 'text-warning'}`}>
                       {b.account_name}: {b.computed_balance} {b.currency_code}
                       {!b.matches && b.expected_closing_balance !== null && (
-                        <> (expected {b.expected_closing_balance} — reconcile)</>
+                        <> {t('legacyModal.expectedReconcile', { amount: b.expected_closing_balance })}</>
                       )}
                     </li>
                   ))}
@@ -147,9 +150,9 @@ export default function LegacyImportModal({ open, onClose }: Props) {
               )}
               {ws.budgets.length > 0 && (
                 <div>
-                  <p className="text-text mb-1.5 font-medium">Default budget</p>
+                  <p className="text-text mb-1.5 font-medium">{t('legacyModal.defaultBudget')}</p>
                   <p className="text-xs text-text-muted mb-2">
-                    Pre-selected in transaction forms so its categories are immediately available.
+                    {t('legacyModal.defaultBudgetHelper')}
                   </p>
                   <div className="space-y-1">
                     {ws.budgets.map((b) => (
@@ -171,14 +174,14 @@ export default function LegacyImportModal({ open, onClose }: Props) {
 
           {result.skipped_workspaces.length > 0 && (
             <p className="text-sm text-text-muted">
-              Skipped (already exist): {result.skipped_workspaces.join(', ')}
+              {t('legacyModal.skippedExisting', { list: result.skipped_workspaces.join(', ') })}
             </p>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-2">
-            {!allChosen && <span className="text-xs text-text-muted mr-auto">Select a default budget for each workspace to finish.</span>}
+            {!allChosen && <span className="text-xs text-text-muted mr-auto">{t('legacyModal.choosePrompt')}</span>}
             <button type="button" onClick={handleFinish} disabled={!allChosen || saving} className={primaryButtonClass}>
-              {saving ? 'Saving…' : 'Finish'}
+              {saving ? t('legacyModal.saving') : t('legacyModal.finish')}
             </button>
           </div>
         </div>

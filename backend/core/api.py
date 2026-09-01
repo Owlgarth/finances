@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+from django.utils.translation import gettext as _
 from ninja import Router
 
 from common.auth import JWTAuth, decode_temp_token
@@ -123,7 +124,7 @@ def verify_email(request, data: VerifyEmailIn):
     from users.services import UserService
 
     UserService.verify_email(data.token)
-    return 200, {'message': 'Email verified successfully'}
+    return 200, {'message': _('Email verified successfully')}
 
 
 @router.post('/resend-verification', response={200: MessageOut, 429: DetailOut})
@@ -136,7 +137,7 @@ def resend_verification(request, data: ResendVerificationIn):
     from users.services import UserService
 
     UserService.resend_verification(data.email)
-    return 200, {'message': 'If your email is unverified, a new verification email has been sent.'}
+    return 200, {'message': _('If your email is unverified, a new verification email has been sent.')}
 
 
 @router.post('/forgot-password', response={200: MessageOut, 429: DetailOut})
@@ -147,7 +148,7 @@ def forgot_password(request, data: ForgotPasswordIn):
     from users.services import UserService
 
     UserService.send_reset_password_email(data.email)
-    return 200, {'message': 'If an account exists with this email, a reset link has been sent.'}
+    return 200, {'message': _('If an account exists with this email, a reset link has been sent.')}
 
 
 @router.post('/reset-password', response={200: MessageOut, 400: DetailOut, 429: DetailOut})
@@ -161,14 +162,14 @@ def reset_password(request, data: ResetPasswordIn):
         uid = force_str(urlsafe_base64_decode(data.uidb64))
         user = User.objects.get(pk=uid)
     except (User.DoesNotExist, ValueError, TypeError):
-        return 400, {'detail': 'Invalid reset link'}
+        return 400, {'detail': _('Invalid reset link')}
 
     if not default_token_generator.check_token(user, data.token):
-        return 400, {'detail': 'Invalid or expired reset link'}
+        return 400, {'detail': _('Invalid or expired reset link')}
 
     UserService.reset_password(user, data.new_password)
 
-    return 200, {'message': 'Password has been reset successfully'}
+    return 200, {'message': _('Password has been reset successfully')}
 
 
 @router.post('/request-email-change', response={200: MessageOut, 400: DetailOut}, auth=JWTAuth())
@@ -176,7 +177,7 @@ def request_email_change(request, data: EmailChangeRequestIn):
     from users.services import UserService
 
     UserService.request_email_change(request.auth, data.password, data.new_email)
-    return 200, {'message': 'Verification email sent to your new address'}
+    return 200, {'message': _('Verification email sent to your new address')}
 
 
 @router.post('/confirm-email-change', response={200: MessageOut, 400: DetailOut}, auth=JWTAuth())
@@ -184,4 +185,4 @@ def confirm_email_change(request, data: EmailChangeConfirmIn):
     from users.services import UserService
 
     UserService.confirm_email_change(request.auth, data.token)
-    return 200, {'message': 'Email changed successfully'}
+    return 200, {'message': _('Email changed successfully')}

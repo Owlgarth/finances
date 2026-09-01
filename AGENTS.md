@@ -45,9 +45,10 @@ npm install                               # Setup
 npm run dev                               # Runs at http://localhost:5173 (or VITE_PORT)
 npm run build                             # TypeScript check + Vite build
 npm run lint                              # ESLint check
+npm run i18n:check                        # Translation catalog parity (CI runs this too)
 ```
 
-Always run `npm run lint` after making changes.
+Always run `npm run lint` after making changes; run `npm run i18n:check` after changing translation catalogs.
 
 There is no frontend test suite - verification is `npm run lint` + `npm run build`.
 
@@ -98,6 +99,7 @@ Every endpoint must verify resources belong to the user's workspace. Four securi
 
 - `docs/architecture.md`: system architecture and data model
 - `docs/frontend.md`: frontend structure
+- `docs/i18n.md`: internationalization - languages, namespaces, translation tooling, backend gettext workflow
 - `docs/mobile-ux.md`: mobile interaction spec
 - `docs/permissions.md`, `docs/users-and-roles.md`: roles and access
 - `docs/workflow.md`: development workflow

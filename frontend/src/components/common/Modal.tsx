@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useOverlay } from '../../hooks/useOverlay'
 import BottomSheet from './BottomSheet'
@@ -36,6 +37,7 @@ export default function Modal({
   title,
 }: ModalProps) {
   const { isMobile } = useBreakpoint()
+  const { t } = useTranslation('common')
   // Desktop-only wiring — BottomSheet runs its own useOverlay on mobile.
   const panelRef = useOverlay(open && !isMobile, onClose)
 
@@ -53,12 +55,12 @@ export default function Modal({
         className="-mr-1 flex-shrink-0 flex items-center gap-1.5 px-2 py-1 pointer-coarse:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
       >
         <X size={14} strokeWidth={1.5} />
-        Close
+        {t('modal.close')}
       </button>
     </div>
   )
 
-  // Mobile: same API, bottom-sheet presentation (plan decision 3). The header
+  // Mobile: same API, bottom-sheet presentation. The header
   // row (with the labeled Close button) renders inside the sheet body, below
   // the drag handle.
   if (isMobile) {

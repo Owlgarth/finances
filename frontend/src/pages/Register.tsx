@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Check, Loader2 } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
 import { legalApi } from '../api/client';
 import { authInputClass } from '../components/common/formStyles';
 import CurrencySetField from '../components/currencies/CurrencySetField';
@@ -9,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { PRE_AUTH_CURRENCIES } from '../utils/currencies';
 
 export default function Register() {
+  const { t } = useTranslation('auth');
   const { register, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,13 +52,18 @@ export default function Register() {
   // entry is unmounted by the panel swap, so the list cannot change mid-flight.
   const setupStages = startWithSampleData
     ? [
-        'Creating your account',
-        'Setting up your workspace',
-        'Preparing your budget',
-        'Adding sample data',
-        'Finishing up',
+        t('setupStages.creatingAccount'),
+        t('setupStages.settingUpWorkspace'),
+        t('setupStages.preparingBudget'),
+        t('setupStages.addingSampleData'),
+        t('setupStages.finishingUp'),
       ]
-    : ['Creating your account', 'Setting up your workspace', 'Preparing your budget', 'Finishing up'];
+    : [
+        t('setupStages.creatingAccount'),
+        t('setupStages.settingUpWorkspace'),
+        t('setupStages.preparingBudget'),
+        t('setupStages.finishingUp'),
+      ];
 
   // Panel takeover: focus the panel (DOM mutation only) and advance the stage
   // every 1200ms while the request is in flight. setState appears ONLY inside
@@ -95,16 +102,16 @@ export default function Register() {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error(t('registerForm.passwordsMismatch'));
       return;
     }
 
     if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
+      toast.error(t('registerForm.passwordTooShort'));
       return;
     }
 
-    if (currencyCodes.length === 0) return toast.error('Select at least one currency');
+    if (currencyCodes.length === 0) return toast.error(t('registerForm.currencyRequired'));
 
     setIsSubmitting(true);
     setStage(0);
@@ -137,10 +144,10 @@ export default function Register() {
           <div ref={panelRef} tabIndex={-1} className="outline-none">
             <div className="text-center mb-8">
               <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
-                Setting up your workspace
+                {t('setupPanel.title')}
               </h2>
               <p className="mt-2 text-sm text-text-muted">
-                This may take a few seconds
+                {t('setupPanel.subtitle')}
               </p>
             </div>
 
@@ -148,7 +155,7 @@ export default function Register() {
                 must NOT announce, so the step list stays outside any live
                 region. */}
             <span className="sr-only" role="status" aria-live="polite">
-              Setting up your workspace - this may take a moment
+              {t('setupPanel.statusAnnouncement')}
             </span>
 
             <ol className="space-y-3">
@@ -179,17 +186,17 @@ export default function Register() {
           <>
             <div className="text-center mb-8">
               <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
-                Create your account
+                {t('registerForm.title')}
               </h2>
               <p className="mt-2 text-sm text-text-muted">
-                Start tracking your budget today
+                {t('registerForm.subtitle')}
               </p>
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                  Email address *
+                  {t('registerForm.emailLabel')}
                 </label>
                 <input
                   id="email"
@@ -205,7 +212,7 @@ export default function Register() {
 
               <div>
                 <label htmlFor="full-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                  Full name
+                  {t('registerForm.fullNameLabel')}
                 </label>
                 <input
                   id="full-name"
@@ -220,7 +227,7 @@ export default function Register() {
 
               <div>
                 <label htmlFor="workspace-name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                  Workspace name *
+                  {t('registerForm.workspaceNameLabel')}
                 </label>
                 <input
                   id="workspace-name"
@@ -229,7 +236,7 @@ export default function Register() {
                   required
                   value={workspaceName}
                   onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="My Budget"
+                  placeholder={t('registerForm.workspaceNamePlaceholder')}
                   className={inputClassName}
                 />
               </div>
@@ -238,8 +245,8 @@ export default function Register() {
                 value={currencyCodes}
                 onChange={setCurrencyCodes}
                 currencies={PRE_AUTH_CURRENCIES}
-                primaryLabel="Main account"
-                placeholder="Select currencies"
+                primaryLabel={t('registerForm.mainAccountLabel')}
+                placeholder={t('registerForm.selectCurrenciesPlaceholder')}
               />
 
               <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
@@ -248,12 +255,12 @@ export default function Register() {
                   checked={startWithSampleData}
                   onChange={(e) => setStartWithSampleData(e.target.checked)}
                 />
-                Start with sample data (example accounts and transactions)
+                {t('registerForm.sampleDataLabel')}
               </label>
 
               <div>
                 <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                  Password * (min 8 characters)
+                  {t('registerForm.passwordLabel')}
                 </label>
                 <input
                   id="password"
@@ -269,7 +276,7 @@ export default function Register() {
 
               <div>
                 <label htmlFor="confirm-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-                  Confirm password *
+                  {t('registerForm.confirmPasswordLabel')}
                 </label>
                 <input
                   id="confirm-password"
@@ -294,9 +301,13 @@ export default function Register() {
                     className="mt-1"
                   />
                   <label htmlFor="accept-terms" className="text-sm text-text-muted">
-                    I accept the{' '}
-                    <Link to="/terms" className="text-primary hover:text-primary-hover">Terms of Service</Link>
-                    {' '}*
+                    <Trans
+                      i18nKey="registerForm.acceptTerms"
+                      t={t}
+                      components={{
+                        termsLink: <Link to="/terms" className="text-primary hover:text-primary-hover" />,
+                      }}
+                    />
                   </label>
                 </div>
                 <div className="flex items-start gap-2">
@@ -309,9 +320,13 @@ export default function Register() {
                     className="mt-1"
                   />
                   <label htmlFor="accept-privacy" className="text-sm text-text-muted">
-                    I accept the{' '}
-                    <Link to="/privacy" className="text-primary hover:text-primary-hover">Privacy Policy</Link>
-                    {' '}*
+                    <Trans
+                      i18nKey="registerForm.acceptPrivacy"
+                      t={t}
+                      components={{
+                        privacyLink: <Link to="/privacy" className="text-primary hover:text-primary-hover" />,
+                      }}
+                    />
                   </label>
                 </div>
               </div>
@@ -323,7 +338,7 @@ export default function Register() {
                   disabled={isSubmitting || !acceptedTerms || !acceptedPrivacy || !termsVersion || !privacyVersion}
                   className="w-full flex justify-center py-2 px-3 text-xs font-medium rounded-sm text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create account
+                  {t('registerForm.submit')}
                 </button>
               </div>
 
@@ -332,14 +347,14 @@ export default function Register() {
                   to="/login"
                   className="font-medium text-primary hover:text-primary-hover"
                 >
-                  Already have an account? Sign in
+                  {t('registerForm.signInLink')}
                 </Link>
               </div>
 
               <div className="text-center text-xs text-text-muted">
-                <Link to="/privacy" className="hover:text-text">Privacy Policy</Link>
+                <Link to="/privacy" className="hover:text-text">{t('loginForm.privacyLink')}</Link>
                 {' · '}
-                <Link to="/terms" className="hover:text-text">Terms of Service</Link>
+                <Link to="/terms" className="hover:text-text">{t('loginForm.termsLink')}</Link>
               </div>
             </form>
           </>

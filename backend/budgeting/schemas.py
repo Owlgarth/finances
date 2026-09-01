@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
+from django.utils.translation import gettext as _
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from currencies.schemas import CurrencyCode
@@ -28,14 +29,14 @@ class BudgetCreate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip()
 
     @field_validator('color')
     @classmethod
     def color_hex_format(cls, v):
         if v is not None and not re.match(r'^#[0-9A-Fa-f]{6}$', v):
-            raise ValueError('Color must be a valid hex color code (e.g. #FF5733)')
+            raise ValueError(_('Color must be a valid hex color code (e.g. #FF5733)'))
         return v
 
 
@@ -57,14 +58,14 @@ class BudgetUpdate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if v is not None and not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip() if v is not None else v
 
     @field_validator('color')
     @classmethod
     def color_hex_format(cls, v):
         if v is not None and not re.match(r'^#[0-9A-Fa-f]{6}$', v):
-            raise ValueError('Color must be a valid hex color code (e.g. #FF5733)')
+            raise ValueError(_('Color must be a valid hex color code (e.g. #FF5733)'))
         return v
 
 
@@ -106,13 +107,13 @@ class PeriodCreate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip()
 
     @model_validator(mode='after')
     def end_not_before_start(self):
         if self.end_date < self.start_date:
-            raise ValueError('end_date must be on or after start_date')
+            raise ValueError(_('end_date must be on or after start_date'))
         return self
 
 
@@ -127,7 +128,7 @@ class PeriodUpdate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if v is not None and not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip() if v is not None else v
 
 

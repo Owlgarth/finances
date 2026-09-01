@@ -1,0 +1,121 @@
+{
+  "roles": {
+    "owner": "Właściciel",
+    "admin": "Administrator",
+    "member": "Użytkownik",
+    "viewer": "Obserwator"
+  },
+  "page": {
+    "title": "Użytkownicy obszaru roboczego",
+    "loadError": "Nie udało się wczytać użytkowników obszaru roboczego",
+    "empty": "W tym obszarze roboczym nie ma jeszcze użytkowników.",
+    "addMember": "Dodaj użytkownika",
+    "changeMyPassword": "Zmień moje hasło"
+  },
+  "table": {
+    "user": "Użytkownik",
+    "role": "Rola",
+    "status": "Stan",
+    "actions": "Akcje"
+  },
+  "badges": {
+    "you": "Ty",
+    "active": "Aktywny",
+    "inactive": "Nieaktywny"
+  },
+  "row": {
+    "editRole": "Edytuj rolę",
+    "resetPassword": "Zresetuj hasło",
+    "reset2fa": "Zresetuj 2FA",
+    "remove": "Usuń"
+  },
+  "sheet": {
+    "editRole": "Edytuj rolę",
+    "resetPassword": "Zresetuj hasło",
+    "reset2fa": "Zresetuj 2FA",
+    "removeFromWorkspace": "Usuń z obszaru roboczego"
+  },
+  "toasts": {
+    "memberAdded": "Dodano użytkownika do obszaru roboczego",
+    "addFailed": "Nie udało się dodać użytkownika",
+    "roleUpdated": "Zaktualizowano rolę",
+    "roleUpdateFailed": "Nie udało się zaktualizować roli",
+    "memberRemoved": "Usunięto użytkownika",
+    "removeFailed": "Nie udało się usunąć użytkownika",
+    "passwordReset": "Hasło zostało pomyślnie zresetowane dla {{email}}",
+    "passwordResetFailed": "Nie udało się zresetować hasła",
+    "twoFactorReset": "Uwierzytelnianie dwuskładnikowe zostało zresetowane",
+    "twoFactorResetFailed": "Nie udało się zresetować 2FA",
+    "ownPasswordChanged": "Twoje hasło zostało pomyślnie zmienione",
+    "ownPasswordChangeFailed": "Nie udało się zmienić hasła"
+  },
+  "removeConfirm": {
+    "title": "Usuwanie użytkownika",
+    "message": "Czy na pewno chcesz usunąć „{{email}}” z tego obszaru roboczego? Ta osoba straci dostęp do wszystkich danych."
+  },
+  "reset2faConfirm": {
+    "title": "Resetowanie 2FA",
+    "message": "Zresetować uwierzytelnianie dwuskładnikowe dla {{name}}? Przy następnym logowaniu trzeba będzie ponownie skonfigurować 2FA.",
+    "confirm": "Zresetuj 2FA"
+  },
+  "addModal": {
+    "title": "Dodawanie użytkownika",
+    "emailLabel": "Adres e-mail *",
+    "emailPlaceholder": "jan@example.com",
+    "passwordLabel": "Hasło",
+    "passwordPlaceholder": "Minimum 8 znaków (opcjonalnie)",
+    "passwordHelper": "Używane tylko wtedy, gdy dla tego adresu e-mail nie istnieje jeszcze konto.",
+    "fullNameLabel": "Imię i nazwisko",
+    "fullNamePlaceholder": "Jan Kowalski (opcjonalnie)",
+    "roleLabel": "Rola *",
+    "roleAria": "Rola",
+    "roleViewer": "Obserwator - może wyświetlać wszystkie dane",
+    "roleMember": "Użytkownik - może wyświetlać i edytować dane",
+    "roleAdmin": "Administrator - zarządza użytkownikami i ustawieniami",
+    "cancel": "Anuluj",
+    "submitting": "Dodawanie...",
+    "submit": "Dodaj użytkownika"
+  },
+  "editRoleModal": {
+    "title": "Zmiana roli",
+    "updateFor": "Aktualizacja roli dla",
+    "roleLabel": "Rola",
+    "roleAria": "Rola",
+    "cancel": "Anuluj",
+    "submitting": "Aktualizacja...",
+    "submit": "Zaktualizuj rolę"
+  },
+  "resetPasswordModal": {
+    "title": "Resetowanie hasła",
+    "resettingFor": "Resetowanie hasła dla",
+    "newPasswordLabel": "Nowe hasło *",
+    "newPasswordPlaceholder": "Wpisz nowe hasło",
+    "confirmPasswordLabel": "Potwierdź hasło *",
+    "confirmPasswordPlaceholder": "Potwierdź nowe hasło",
+    "tooShort": "Hasło musi mieć co najmniej 8 znaków",
+    "mismatch": "Hasła nie są identyczne",
+    "warning": "Użytkownik będzie musiał logować się tym nowym hasłem. Przekaż mu je bezpiecznym kanałem.",
+    "cancel": "Anuluj",
+    "submitting": "Resetowanie...",
+    "submit": "Zresetuj hasło"
+  },
+  "changeMyPasswordModal": {
+    "title": "Zmiana mojego hasła",
+    "intro": "Zaktualizuj hasło swojego konta",
+    "currentLabel": "Obecne hasło *",
+    "currentPlaceholder": "Wpisz obecne hasło",
+    "newLabel": "Nowe hasło *",
+    "newPlaceholder": "Wpisz nowe hasło",
+    "minLength": "Minimum 8 znaków",
+    "confirmLabel": "Potwierdź nowe hasło *",
+    "confirmPlaceholder": "Potwierdź nowe hasło",
+    "currentRequired": "Obecne hasło jest wymagane",
+    "tooShort": "Nowe hasło musi mieć co najmniej 8 znaków",
+    "mismatch": "Nowe hasła nie są identyczne",
+    "sameAsCurrent": "Nowe hasło musi różnić się od obecnego",
+    "stayLoggedIn": "Po zmianie hasła pozostaniesz zalogowany.",
+    "cancel": "Anuluj",
+    "submitting": "Zmiana...",
+    "submit": "Zmień hasło"
+  }
+}

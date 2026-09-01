@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   CloudOff,
+  Globe,
   Home,
   Landmark,
   Loader2,
@@ -25,12 +26,14 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
 import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
+import { useLanguage } from '../../i18n/LanguageContext'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
 import { openPageSearch } from '../common/CommandPalette'
@@ -39,20 +42,24 @@ import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
 import RoleBadge from '../common/RoleBadge'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
+import LanguageModal from './LanguageModal'
 import ThemeToggleRow from './ThemeToggleRow'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
+import registry from '../../../../backend/common/languages.json'
 
-// Overflow destinations live in the More sheet (plan decision 5).
+// Overflow destinations live in the More sheet.
+// Keys only: t() is resolved at render time inside the component (a
+// module-level t() call would freeze the language at load time).
 const MORE_DESTINATIONS = [
-  { to: '/accounts', label: 'Accounts', icon: Wallet },
-  { to: '/planned', label: 'Planned', icon: Calendar },
-  { to: '/members', label: 'Members', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
+  { to: '/accounts', labelKey: 'accounts', icon: Wallet },
+  { to: '/planned', labelKey: 'planned', icon: Calendar },
+  { to: '/members', labelKey: 'members', icon: Users },
+  { to: '/settings', labelKey: 'settings', icon: Settings },
+] as const
 
 // Mirrors the accept list in TransactionFormModal's inline receipt upload.
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
@@ -99,18 +106,22 @@ const moreRowClass =
  * and the workspace/user controls the sidebar provides on desktop.
  */
 export default function BottomNav() {
+  const { t } = useTranslation('nav')
   const location = useLocation()
   const { user, logout } = useAuth()
   const { workspace, workspaces } = useWorkspace()
   const { switchingToId, switchTo } = useWorkspaceSwitch()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
+  const { language } = useLanguage()
 
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
   const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
+  // Language picker modal; the More sheet closes itself before this opens.
+  const [langOpen, setLangOpen] = useState(false)
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
@@ -134,7 +145,7 @@ export default function BottomNav() {
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),
     onMutate: () => {
-      parseToastId.current = toast.loading('Reading receipt…')
+      parseToastId.current = toast.loading(t('receiptReading'))
     },
     onSuccess: (result: ParsedReceipt, file: File) => {
       // No success toast — the form opening IS the signal.
@@ -144,7 +155,7 @@ export default function BottomNav() {
     },
     onError: (error) => {
       // Replace the loading toast with the error (single toast, no duplicate).
-      toast.error(getApiErrorMessage(error, 'Could not read the receipt'), { id: parseToastId.current })
+      toast.error(getApiErrorMessage(error, t('receiptReadFailed')), { id: parseToastId.current })
     },
   })
 
@@ -152,39 +163,42 @@ export default function BottomNav() {
     const f = e.target.files?.[0]
     if (f) parse.mutate(f)
     // Same-file reselect must re-fire onChange; the File is already captured by
-    // parse.mutate, so clearing the input value is safe (CODING_SUMMARIES T4-fix).
+    // parse.mutate, so clearing the input value is safe.
     if (receiptFileRef.current) receiptFileRef.current.value = ''
   }
 
   // Close the More sheet when navigation happens from inside it; the create
-  // modal follows suit so no form outlives the page it was opened on.
+  // and language modals follow suit so no modal outlives the page it was
+  // opened on.
   useEffect(() => {
     setMoreOpen(false)
     setCreateWorkspaceOpen(false)
+    setLangOpen(false)
   }, [location.pathname])
 
   const quickAddActions: ActionSheetAction[] = [
-    { label: 'New transaction', icon: Receipt, onSelect: () => setTransactionOpen(true) },
-    { label: 'Transfer', icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
+    { label: t('quickAdd.newTransaction'), icon: Receipt, onSelect: () => setTransactionOpen(true) },
+    { label: t('quickAdd.transfer'), icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
     // Shown disabled rather than dropped while the self-hosted scanner is off,
     // so the action list doesn't silently change shape.
     ...(extractionEnabled
       ? [
           extractionReachable
-            ? { label: 'From receipt', icon: ScanLine, onSelect: () => receiptFileRef.current?.click() }
-            : { label: 'Scanning offline', icon: CloudOff, onSelect: () => {}, disabled: true },
+            ? { label: t('quickAdd.fromReceipt'), icon: ScanLine, onSelect: () => receiptFileRef.current?.click() }
+            : { label: t('quickAdd.scanningOffline'), icon: CloudOff, onSelect: () => {}, disabled: true },
         ]
       : []),
-    { label: 'Planned transaction', icon: Calendar, onSelect: () => setPlannedOpen(true) },
+    { label: t('quickAdd.plannedTransaction'), icon: Calendar, onSelect: () => setPlannedOpen(true) },
   ]
 
   const moreActive = MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to))
+  const activeLanguage = registry.languages.find((l) => l.code === language)
 
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-bottom-nav bg-surface border-t border-border flex items-end pb-safe">
-        <Tab to="/" label="Home" icon={Home} exact />
-        <Tab to="/transactions" label="Txns" icon={Receipt} />
+        <Tab to="/" label={t('home')} icon={Home} exact />
+        <Tab to="/transactions" label={t('txns')} icon={Receipt} />
 
         {/* Center FAB slot — kept even when the FAB is hidden (viewer role /
             no workspace) so the four tabs don't shift. */}
@@ -193,7 +207,7 @@ export default function BottomNav() {
             <button
               type="button"
               onClick={() => setQuickAddOpen(true)}
-              aria-label="Add record"
+              aria-label={t('addRecord')}
               className="-mt-5 w-12 h-12 bg-primary border border-border rounded-sm flex items-center justify-center text-background hover:bg-primary-hover active:scale-95 transition-all"
             >
               <Plus size={20} strokeWidth={1.5} />
@@ -201,7 +215,7 @@ export default function BottomNav() {
           )}
         </div>
 
-        <Tab to="/budgets" label="Budgets" icon={PieChart} />
+        <Tab to="/budgets" label={t('budgets')} icon={PieChart} />
 
         <button
           type="button"
@@ -211,7 +225,7 @@ export default function BottomNav() {
           }`}
         >
           <MoreHorizontal size={20} strokeWidth={1.5} />
-          <span className="text-[10px] font-medium uppercase tracking-wider">More</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider">{t('more')}</span>
         </button>
       </nav>
 
@@ -219,7 +233,7 @@ export default function BottomNav() {
       <BottomSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        aria-label="More"
+        aria-label={t('more')}
       >
         <div className="pb-2">
           <button
@@ -231,7 +245,7 @@ export default function BottomNav() {
             className={moreRowClass}
           >
             <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
-            Search
+            {t('search')}
           </button>
           {MORE_DESTINATIONS.map((d) => (
             <NavLink
@@ -242,7 +256,7 @@ export default function BottomNav() {
               }
             >
               <d.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              {d.label}
+              {t(d.labelKey)}
             </NavLink>
           ))}
           {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
@@ -257,11 +271,11 @@ export default function BottomNav() {
             className={moreRowClass}
           >
             <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
-            Logout
+            {t('logout')}
           </button>
 
           <div className="border-t border-border mt-2">
-            <SectionLabel>Workspace</SectionLabel>
+            <SectionLabel>{t('workspace')}</SectionLabel>
             {workspaces.map((ws) => (
               <button
                 key={ws.id}
@@ -292,7 +306,7 @@ export default function BottomNav() {
               className={moreRowClass}
             >
               <Plus size={16} className="flex-shrink-0" />
-              Create workspace
+              {t('createWorkspace')}
             </button>
             {workspace && (
               <button
@@ -304,7 +318,7 @@ export default function BottomNav() {
                 className={moreRowClass}
               >
                 <Landmark size={16} className="flex-shrink-0" />
-                Workspace settings
+                {t('workspaceSettings')}
               </button>
             )}
           </div>
@@ -314,13 +328,30 @@ export default function BottomNav() {
             {/* PWA has no browser chrome to refresh with. */}
             <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
               <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
-              Reload
+              {t('reload')}
             </button>
             <ThemeToggleRow />
+            {/* Closes the sheet before opening the language picker, so the
+                modal is the only overlay layer (one Escape press, one
+                dismissal). The active language's native name is registry
+                data, shown truncated so a long name cannot stretch the
+                row. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false)
+                setLangOpen(true)
+              }}
+              className={moreRowClass}
+            >
+              <Globe size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              <span className="flex-1 truncate">{t('language')}</span>
+              <span className="flex-shrink-0 max-w-[96px] truncate text-text-muted">{activeLanguage?.nativeName}</span>
+            </button>
             <div className="flex items-center justify-between min-h-[44px] px-4">
               <span className="flex items-center gap-3 text-sm text-text">
                 <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Disable zoom
+                {t('disableZoom')}
               </span>
               <Switch
                 checked={zoomLocked}
@@ -329,7 +360,7 @@ export default function BottomNav() {
                   setZoomLocked(next)
                   setZoomDisabled(next)
                 }}
-                aria-label="Disable zoom"
+                aria-label={t('disableZoom')}
               />
             </div>
             {/* Logout's old slot (the double-tap misclick zone): only the
@@ -343,14 +374,14 @@ export default function BottomNav() {
                 className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
               >
                 <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                Close
+                {t('close')}
               </button>
             </div>
           </div>
         </div>
       </BottomSheet>
 
-      {/* FAB quick-add (plan decision 6) — owned here so it works on any route */}
+      {/* FAB quick-add - owned here so it works on any route */}
       <ActionSheet
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
@@ -371,6 +402,10 @@ export default function BottomNav() {
       {createWorkspaceOpen && (
         <CreateWorkspaceForm onClose={() => setCreateWorkspaceOpen(false)} />
       )}
+      {/* Language picker modal (mount-per-use): the More sheet's opener row
+          closes the sheet first, so this is the only overlay layer while
+          open. */}
+      {langOpen && <LanguageModal onClose={() => setLangOpen(false)} />}
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
       <input

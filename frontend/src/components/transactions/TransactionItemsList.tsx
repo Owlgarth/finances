@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Plus, Trash2, AlertTriangle, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useIsTouch } from '../../hooks/useBreakpoint'
+import { parseAmountNumber } from '../../utils/amountInput'
 import { formatAmount } from '../../utils/format'
 import { inputClass, labelClass } from '../common/formStyles'
 
@@ -27,8 +29,14 @@ const emptyRow = (): Row => ({ id: crypto.randomUUID(), name: '', quantity: '1',
 /** Sum of line totals, falling back to quantity × unit price — mirrors the backend. */
 function computeTotal(rows: Row[]): number {
   return rows.reduce((sum, r) => {
-    if (r.line_total !== '') return sum + (parseFloat(r.line_total) || 0)
-    if (r.unit_price !== '') return sum + (parseFloat(r.quantity || '1') || 0) * (parseFloat(r.unit_price) || 0)
+    if (r.line_total !== '') return sum + (parseAmountNumber(r.line_total) ?? 0)
+    if (r.unit_price !== '') {
+      // Display-only tolerance: an empty or mid-edit quantity reads as 1
+      // (the row's own default) so the live preview total never errors
+      // while the user is still typing.
+      const qty = parseAmountNumber(r.quantity) ?? 1
+      return sum + qty * (parseAmountNumber(r.unit_price) ?? 0)
+    }
     return sum
   }, 0)
 }
@@ -40,11 +48,12 @@ const cardShell = (isOpen: boolean): string =>
   'bg-surface border rounded-sm p-3 ' + (isOpen ? 'border-primary ring-1 ring-primary' : 'border-border')
 
 // Action icon buttons: real 44×44 boxes on mobile (NOT .touch-hit — adjacent expanded
-// hit areas would overlap; see CODING_SUMMARIES Task 10 for the .touch-hit cascade trap).
+// hit areas of neighboring buttons would overlap).
 const actionBtn =
   'inline-flex items-center justify-center p-1.5 text-text-muted max-sm:min-h-[44px] max-sm:min-w-[44px]'
 
 export default function TransactionItemsList({ rows, onChange, amount, currencyCode }: Props) {
+  const { t } = useTranslation('transactions')
   const isTouch = useIsTouch()
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   // Set only on Add; cleared the first time the new card's Name input receives focus.
@@ -92,10 +101,10 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
   }
 
   const itemsTotal = computeTotal(rows)
-  const parsedAmount = parseFloat(amount)
+  const parsedAmount = parseAmountNumber(amount)
   // Suppress the mismatch warning when amount is empty or unparseable — the
   // user hasn't entered one yet (create mode) or the field is mid-edit.
-  const hasAmount = amount !== '' && !isNaN(parsedAmount)
+  const hasAmount = amount !== '' && parsedAmount !== null
   const absAmount = hasAmount ? Math.abs(parsedAmount) : 0
   const mismatch = hasAmount && rows.some((r) => r.name.trim()) && Math.abs(itemsTotal - absAmount) > 0.01
 
@@ -109,12 +118,14 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
         //  - explicit line_total (shown RAW, as-typed — do NOT reformat mid-edit)
         //  - else computed qty × unit_price (formatted) when both parse
         //  - else em-dash placeholder
-        const qtyNum = parseFloat(row.quantity || '1')
-        const unitNum = parseFloat(row.unit_price)
+        // Unparseable mid-edit quantity falls back to 1 (the row default);
+        // only unit_price can still disqualify the computed preview.
+        const qtyNum = parseAmountNumber(row.quantity) ?? 1
+        const unitNum = parseAmountNumber(row.unit_price)
         const rightValue =
           row.line_total !== ''
             ? row.line_total
-            : row.unit_price !== '' && !isNaN(unitNum) && !isNaN(qtyNum)
+            : row.unit_price !== '' && unitNum !== null
               ? formatAmount(qtyNum * unitNum)
               : '—'
 
@@ -135,7 +146,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
             >
               <div className="min-w-0 flex-1">
                 <span className={`block truncate ${row.name.trim() ? 'text-text' : 'text-text-muted'}`}>
-                  {row.name.trim() || 'Untitled item'}
+                  {row.name.trim() || t('items.untitled')}
                 </span>
                 <div className="text-[10px] font-mono text-text-muted truncate">
                   {row.quantity}
@@ -154,9 +165,9 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
 
             {/* Expanded form — SIBLING of the header button, never nested inside it. */}
             {isOpen && (
-              <div id={formId} role="region" aria-label="Item details" className="mt-3 border-t border-border pt-3 space-y-2">
+              <div id={formId} role="region" aria-label={t('items.detailsAria')} className="mt-3 border-t border-border pt-3 space-y-2">
                 <div>
-                  <label className={labelClass} htmlFor={nameId}>Name</label>
+                  <label className={labelClass} htmlFor={nameId}>{t('items.nameLabel')}</label>
                   <input
                     id={nameId}
                     value={row.name}
@@ -174,7 +185,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className={labelClass}>Quantity</label>
+                    <label className={labelClass}>{t('items.quantityLabel')}</label>
                     <input
                       value={row.quantity}
                       inputMode="decimal"
@@ -183,7 +194,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Unit price</label>
+                    <label className={labelClass}>{t('items.unitPriceLabel')}</label>
                     <input
                       value={row.unit_price}
                       inputMode="decimal"
@@ -194,7 +205,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Line total</label>
+                  <label className={labelClass}>{t('items.lineTotalLabel')}</label>
                   <input
                     value={row.line_total}
                     inputMode="decimal"
@@ -207,7 +218,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    aria-label="Move item up"
+                    aria-label={t('items.moveUpAria')}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                     className={`${actionBtn} hover:text-text disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -216,7 +227,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </button>
                   <button
                     type="button"
-                    aria-label="Move item down"
+                    aria-label={t('items.moveDownAria')}
                     disabled={index === rows.length - 1}
                     onClick={() => move(index, 1)}
                     className={`${actionBtn} hover:text-text disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -225,7 +236,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                   </button>
                   <button
                     type="button"
-                    aria-label="Delete item"
+                    aria-label={t('items.deleteAria')}
                     onClick={() => removeRow(index)}
                     className={`${actionBtn} hover:text-negative`}
                   >
@@ -245,21 +256,20 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
           onClick={handleAdd}
           className="text-xs text-primary hover:text-primary-hover inline-flex items-center gap-1"
         >
-          <Plus size={12} /> Add item
+          <Plus size={12} /> {t('items.addItem')}
         </button>
         {rows.some((r) => r.name.trim()) && (
           <span className="text-xs font-mono text-text-muted">
             {currencyCode
-              ? `Items: ${formatAmount(itemsTotal)} ${currencyCode}`
-              : `Items: ${formatAmount(itemsTotal)}`}
+              ? `${t('items.itemsTotal', { total: formatAmount(itemsTotal) })} ${currencyCode}`
+              : t('items.itemsTotal', { total: formatAmount(itemsTotal) })}
           </span>
         )}
       </div>
 
       {mismatch && (
         <p className="text-xs text-warning inline-flex items-center gap-1">
-          <AlertTriangle size={12} /> Items total ({formatAmount(itemsTotal)}) doesn’t match the transaction
-          amount ({formatAmount(absAmount)}).
+          <AlertTriangle size={12} /> {t('items.mismatch', { items: formatAmount(itemsTotal), amount: formatAmount(absAmount) })}
         </p>
       )}
     </div>

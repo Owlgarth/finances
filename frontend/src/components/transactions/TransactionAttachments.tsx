@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Upload, Trash2, FileText, X, Sparkles, Loader2, RotateCw, CloudOff, Download } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionAttachment } from '../../types'
 import {
@@ -41,6 +42,7 @@ function AttachmentMedia({
   onPreview: (preview: { attachment: TransactionAttachment; url: string }) => void
   onDownload: (attachment: TransactionAttachment) => void
 }) {
+  const { t } = useTranslation('transactions')
   const image = isImage(attachment.content_type)
   // Only image tiles prefetch the blob; non-image tiles download on click.
   const blobQuery = useAttachmentBlob(transactionId, attachment.id, image)
@@ -59,7 +61,7 @@ function AttachmentMedia({
           type="button"
           onClick={() => blobQuery.refetch()}
           disabled={blobQuery.isFetching}
-          aria-label={`Retry loading ${attachment.filename}`}
+          aria-label={t('attachments.retryLoadingAria', { filename: attachment.filename })}
           className="flex flex-col items-center justify-center w-full h-full text-text-muted p-2 hover:text-text transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-border-focus disabled:cursor-not-allowed"
         >
           {blobQuery.isFetching ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
@@ -87,13 +89,13 @@ function AttachmentMedia({
       type="button"
       onClick={() => onDownload(attachment)}
       disabled={downloading}
-      aria-label={`Download ${attachment.filename}`}
+      aria-label={t('attachments.downloadAria', { filename: attachment.filename })}
       className="flex flex-col items-center justify-center w-full h-full text-text-muted p-2 hover:text-text transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-border-focus disabled:cursor-not-allowed"
     >
       {downloading ? (
         <>
           <Loader2 size={14} className="animate-spin" />
-          <span className="text-[10px] font-mono mt-1">Downloading…</span>
+          <span className="text-[10px] font-mono mt-1">{t('attachments.downloading')}</span>
         </>
       ) : (
         <>
@@ -109,6 +111,7 @@ function AttachmentMedia({
 }
 
 export default function TransactionAttachments({ transaction }: Props) {
+  const { t } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -135,7 +138,7 @@ export default function TransactionAttachments({ transaction }: Props) {
   const startExtraction = useMutation({
     mutationFn: (attachmentId: number) => transactionsApi.extractAttachment(transaction.id, attachmentId),
     onSuccess: (_res, attachmentId) => { setPendingId(attachmentId); invalidate() },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to start extraction')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('attachments.startExtractionFailed'))),
   })
 
   // Poll the extraction state while a job is pending. While the scanner is
@@ -165,7 +168,7 @@ export default function TransactionAttachments({ transaction }: Props) {
       setPendingId(null)
       invalidate()
     } else if (extraction.status === 'failed') {
-      toast.error(extraction.error || 'Extraction failed')
+      toast.error(extraction.error || t('attachments.extractionFailed'))
       setPendingId(null)
       invalidate()
     }
@@ -184,7 +187,7 @@ export default function TransactionAttachments({ transaction }: Props) {
     // refetch happens (the thumbnail already loaded it), so this is a
     // synchronous anchor click with no failure path.
     triggerBrowserDownload(preview.url, preview.attachment.filename)
-    toast.success('Receipt downloaded')
+    toast.success(t('attachments.downloaded'))
   }
 
   const isExtracting = (a: TransactionAttachment) =>
@@ -217,7 +220,7 @@ export default function TransactionAttachments({ transaction }: Props) {
                 type="button"
                 onClick={() => remove.mutate(a.id)}
                 className="!absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
-                aria-label="Remove attachment"
+                aria-label={t('attachments.removeAria')}
               >
                 <Trash2 size={12} />
               </button>
@@ -227,9 +230,9 @@ export default function TransactionAttachments({ transaction }: Props) {
                   {isExtracting(a) ? (
                     <span className="flex items-center justify-center gap-1 bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-text-muted">
                       {extractionReachable ? (
-                        <><Loader2 size={11} className="animate-spin" /> Extracting…</>
+                        <><Loader2 size={11} className="animate-spin" /> {t('attachments.extracting')}</>
                       ) : (
-                        <><CloudOff size={11} /> Queued</>
+                        <><CloudOff size={11} /> {t('attachments.queued')}</>
                       )}
                     </span>
                   ) : (
@@ -239,11 +242,11 @@ export default function TransactionAttachments({ transaction }: Props) {
                     <button
                       type="button"
                       onClick={() => startExtraction.mutate(a.id)}
-                      title={extractionReachable ? undefined : 'The scanner is offline — this will run when it is back'}
+                      title={extractionReachable ? undefined : t('attachments.scannerOfflineTitle')}
                       className="flex items-center justify-center gap-1 w-full bg-surface/90 border border-border rounded-sm py-1 text-[10px] font-mono text-primary hover:bg-surface opacity-0 group-hover:opacity-100 touch-reveal transition-opacity"
                     >
                       {a.extraction_status === 'failed' ? <RotateCw size={11} /> : <Sparkles size={11} />}
-                      {a.extraction_status === 'failed' ? 'Retry' : 'Extract items'}
+                      {a.extraction_status === 'failed' ? t('attachments.retry') : t('attachments.extractItems')}
                     </button>
                   )}
                 </div>
@@ -252,7 +255,7 @@ export default function TransactionAttachments({ transaction }: Props) {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-text-muted">No receipts attached.</p>
+        <p className="text-xs text-text-muted">{t('attachments.none')}</p>
       )}
 
       <input
@@ -270,7 +273,7 @@ export default function TransactionAttachments({ transaction }: Props) {
         disabled={upload.isPending}
         className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors disabled:opacity-50 inline-flex items-center gap-1"
       >
-        <Upload size={13} /> {upload.isPending ? 'Uploading…' : 'Add receipt'}
+        <Upload size={13} /> {upload.isPending ? t('attachments.uploading') : t('attachments.addReceipt')}
       </button>
 
       {preview && (
@@ -299,12 +302,12 @@ export default function TransactionAttachments({ transaction }: Props) {
                 onClick={handleDownloadFromLightbox}
                 className={`${secondaryButtonClass} inline-flex items-center gap-1.5`}
               >
-                <Download size={14} strokeWidth={1.5} /> Download
+                <Download size={14} strokeWidth={1.5} /> {t('attachments.download')}
               </button>
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                aria-label="Close preview"
+                aria-label={t('attachments.closePreviewAria')}
                 className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] text-white/80 hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
               >
                 <X size={20} strokeWidth={1.5} />

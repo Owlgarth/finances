@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
@@ -10,6 +11,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
+import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
 import { intParam } from '../utils/params'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
@@ -51,6 +53,8 @@ function loadStoredCurrencyView(budgetId: number): string | null {
 }
 
 export default function BudgetDetailPage() {
+  const { t } = useTranslation('budgets')
+  const { t: tCommon } = useTranslation('common')
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -206,14 +210,14 @@ export default function BudgetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['categories', budgetId] })
       setNewCategory('')
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to add category')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('detail.addCategoryFailed'))),
   })
 
   const setAmount = useMutation({
     mutationFn: ({ categoryId, amount, currencyCode }: { categoryId: number; amount: string; currencyCode: string }) =>
       budgetsApi.setCategoryBudget(budgetId, periodId!, { category_id: categoryId, currency_code: currencyCode, amount }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId, periodId] }),
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to set amount')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('detail.setAmountFailed'))),
   })
 
   // Editing key: `${categoryId}:${currencyCode}` — one editable planned cell per currency.
@@ -237,11 +241,11 @@ export default function BudgetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success('Categories merged')
+      toast.success(t('detail.merged'))
       setMergeOpen(false)
       setMergeSourceId(null)
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to merge categories')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('detail.mergeFailed'))),
   })
 
   // Custom-cadence period management. `nonce` forces a keyed remount of
@@ -266,7 +270,7 @@ export default function BudgetDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ['periods', budgetId] })
       queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId] })
       queryClient.invalidateQueries({ queryKey: ['budget-history', budgetId] })
-      toast.success('Period deleted')
+      toast.success(t('detail.periodDeleted'))
       // Category selection is period-independent - leave selectedCategory alone.
       if (deletedId === periodId) {
         // Param clear is safe here: mutation onSuccess is a callback, not an
@@ -278,7 +282,7 @@ export default function BudgetDetailPage() {
       setDeletingPeriod(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete period'))
+      toast.error(getApiErrorMessage(error, t('detail.deletePeriodFailed')))
       setDeletingPeriod(null)
     },
   })
@@ -317,7 +321,7 @@ export default function BudgetDetailPage() {
         setPeriodId(next.id)
         writePeriodParam(next.id)
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Failed to open the next period'))
+        toast.error(getApiErrorMessage(error, t('detail.openNextFailed')))
       } finally {
         setIsPlanningNext(false)
       }
@@ -412,6 +416,17 @@ export default function BudgetDetailPage() {
     selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
   }
 
+  // Save the planned-amount cell editor: an empty draft clears the budget
+  // (the '0' the API stores for "no plan"), a typed one must normalize to
+  // the wire's dot-decimal shape - on failure the editor stays open with
+  // the draft intact so the user can fix it instead of losing it.
+  const saveCell = (categoryId: number, raw: string) => {
+    const amount = raw === '' ? '0' : normalizeAmountInput(raw)
+    if (amount === null) return toast.error(tCommon('validation.amountInvalid'))
+    setAmount.mutate({ categoryId, amount, currencyCode: activeCurrency })
+    setEditingCell(null)
+  }
+
   // Focus targets of the strip chips, keyed by code (roving tabindex).
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
@@ -466,7 +481,7 @@ export default function BudgetDetailPage() {
   const currencyStrip = multiCurrency && (
     <div
       role="tablist"
-      aria-label="Budget currency"
+      aria-label={t('detail.currencyTablist')}
       onKeyDown={onStripKeyDown}
       className="flex flex-wrap gap-2 mb-3 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:scrollbar-none"
     >
@@ -476,8 +491,8 @@ export default function BudgetDetailPage() {
       <span className="sr-only" aria-live="polite">{activeCurrency}</span>
       {activeCurrencies.map((code) => {
         const codeTotals = totals[code]
-        const planned = codeTotals ? parseFloat(codeTotals.planned) : 0
-        const actual = codeTotals ? parseFloat(codeTotals.actual) : 0
+        const planned = codeTotals ? (parseAmountNumber(codeTotals.planned) ?? 0) : 0
+        const actual = codeTotals ? (parseAmountNumber(codeTotals.actual) ?? 0) : 0
         const isActive = code === activeCurrency
         // Display-only ratio math (the meter fill); never persisted.
         const spendPct = planned > 0 ? (actual / planned) * 100 : 0
@@ -534,19 +549,19 @@ export default function BudgetDetailPage() {
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
       <Link to="/budgets" className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]">
-        <ArrowLeft size={13} /> Budgets
+        <ArrowLeft size={13} /> {t('title')}
       </Link>
 
       {/* Mobile: title first line, period switcher wraps to a full-width row below. */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-lg font-semibold text-text">{budget?.name ?? 'Budget'}</h1>
+        <h1 className="text-lg font-semibold text-text">{budget?.name ?? t('budgetFallback')}</h1>
         {allPeriods.length > 0 && (
           <div className="flex items-center gap-1 max-sm:w-full">
             <button
               type="button"
               onClick={() => goToPeriod(-1)}
               disabled={!hasPrev}
-              aria-label="Previous period"
+              aria-label={t('detail.previousPeriod')}
               className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
             >
               <ChevronLeft size={14} />
@@ -564,8 +579,8 @@ export default function BudgetDetailPage() {
               type="button"
               onClick={() => goToPeriod(1)}
               disabled={!hasNext || isPlanningNext}
-              aria-label="Next period"
-              title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? 'Plan the next period' : undefined}
+              aria-label={t('detail.nextPeriod')}
+              title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? t('detail.planNextPeriod') : undefined}
               className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
             >
               <ChevronRight size={14} />
@@ -583,8 +598,8 @@ export default function BudgetDetailPage() {
                 <button
                   type="button"
                   onClick={() => openPeriodModal('add')}
-                  title="Add period"
-                  aria-label="Add period"
+                  title={t('detail.addPeriod')}
+                  aria-label={t('detail.addPeriod')}
                   className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
                 >
                   <Plus size={14} />
@@ -593,8 +608,8 @@ export default function BudgetDetailPage() {
                   type="button"
                   onClick={() => selectedPeriod && openPeriodModal('edit', selectedPeriod)}
                   disabled={!selectedPeriod}
-                  title={selectedPeriod ? `Edit period ${selectedPeriod.name}` : 'Edit period'}
-                  aria-label={selectedPeriod ? `Edit period ${selectedPeriod.name}` : 'Edit period'}
+                  title={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
+                  aria-label={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
                   className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <Pencil size={14} />
@@ -603,8 +618,8 @@ export default function BudgetDetailPage() {
                   type="button"
                   onClick={() => selectedPeriod && setDeletingPeriod(selectedPeriod)}
                   disabled={!selectedPeriod}
-                  title={selectedPeriod ? `Delete period ${selectedPeriod.name}` : 'Delete period'}
-                  aria-label={selectedPeriod ? `Delete period ${selectedPeriod.name}` : 'Delete period'}
+                  title={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
+                  aria-label={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
                   className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <Trash2 size={14} />
@@ -615,16 +630,16 @@ export default function BudgetDetailPage() {
         )}
         {canWrite && (
           <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
-            <Tags size={13} className="inline mr-1" /> Manage categories
+            <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
           </button>
         )}
       </div>
 
       {isPast && (
-        <p className="text-xs text-warning mb-3">Viewing a past period — a historical plan-vs-actual snapshot.</p>
+        <p className="text-xs text-warning mb-3">{t('detail.pastPeriodNote')}</p>
       )}
       {isFuture && (
-        <p className="text-xs text-text-muted mb-3">Planning ahead — actuals will appear once this period starts.</p>
+        <p className="text-xs text-text-muted mb-3">{t('detail.futurePeriodNote')}</p>
       )}
 
       {budget?.cadence === 'custom' && periods.length === 0 ? (
@@ -633,9 +648,9 @@ export default function BudgetDetailPage() {
            ledger. Non-admins see the message without the CTA. */
         <EmptyState
           icon={<CalendarRange size={48} strokeWidth={1.5} className="text-text-muted/30" />}
-          heading="No budget periods"
-          message="Create a period to start budgeting."
-          action={canManageAccounts ? { label: 'Add period', onClick: () => openPeriodModal('add') } : undefined}
+          heading={t('periods.emptyHeading')}
+          message={t('periods.emptyMessage')}
+          action={canManageAccounts ? { label: t('periods.addPeriod'), onClick: () => openPeriodModal('add') } : undefined}
         />
       ) : summaryLoading ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
@@ -661,10 +676,10 @@ export default function BudgetDetailPage() {
               )}
               <tr className="text-[9px] font-mono uppercase tracking-widest text-text-muted border-b border-border">
                 {/* Sticky: row identity stays put while amount columns scroll (S3). */}
-                <th className="text-left px-4 py-2 sticky left-0 z-10 bg-surface">Category</th>
-                <th className="text-right px-4 py-2">Planned</th>
-                <th className="text-right px-4 py-2">Actual</th>
-                <th className="text-right px-4 py-2">Remaining</th>
+                <th className="text-left px-4 py-2 sticky left-0 z-10 bg-surface">{t('detail.colCategory')}</th>
+                <th className="text-right px-4 py-2">{t('detail.colPlanned')}</th>
+                <th className="text-right px-4 py-2">{t('detail.colActual')}</th>
+                <th className="text-right px-4 py-2">{t('detail.colRemaining')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -695,17 +710,18 @@ export default function BudgetDetailPage() {
                     <td className="px-4 py-2 text-right font-mono text-planned">
                       {editingCell === cellKey ? (
                         <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          {/* text (not number): comma-decimal typing must reach
+                              JS as text; saveCell normalizes at the save seam. */}
                           <input
-                            type="number"
+                            type="text"
                             inputMode="decimal"
-                            step="0.01"
                             value={cellValue}
                             onChange={(e) => setCellValue(e.target.value)}
                             className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                             autoFocus
                           />
-                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label="Save planned amount" className="text-positive touch-hit"><Check size={14} /></button>
-                          <button onClick={() => setEditingCell(null)} aria-label="Cancel" className="text-text-muted touch-hit"><X size={14} /></button>
+                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={14} /></button>
+                          <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={14} /></button>
                         </span>
                       ) : canEditPlan ? (
                         /* Whole cell is the tap target, not just the digits. */
@@ -717,14 +733,14 @@ export default function BudgetDetailPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-actual">{formatAmount(actual)}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
+                    <td className={`px-4 py-2 text-right font-mono ${(parseAmountNumber(remaining) ?? 0) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </td>
                   </tr>
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">No categories yet.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">{t('detail.noCategories')}</td></tr>
               )}
             </tbody>
           </table>
@@ -762,21 +778,22 @@ export default function BudgetDetailPage() {
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-border text-center">
                   <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Planned</div>
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colPlanned')}</div>
                     {editingCell === cellKey ? (
                       <div className="flex flex-col items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {/* Same as the desktop cell: text so comma-decimal
+                            entry reaches saveCell's parser intact. */}
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
-                          step="0.01"
                           value={cellValue}
                           onChange={(e) => setCellValue(e.target.value)}
                           className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                           autoFocus
                         />
                         <div className="flex items-center gap-5">
-                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label="Save planned amount" className="text-positive touch-hit"><Check size={16} /></button>
-                          <button onClick={() => setEditingCell(null)} aria-label="Cancel" className="text-text-muted touch-hit"><X size={16} /></button>
+                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={16} /></button>
+                          <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={16} /></button>
                         </div>
                       </div>
                     ) : canEditPlan ? (
@@ -793,14 +810,14 @@ export default function BudgetDetailPage() {
                     )}
                   </div>
                   <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Actual</div>
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colActual')}</div>
                     <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-actual truncate">
                       {formatAmount(actual)}
                     </div>
                   </div>
                   <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">Remaining</div>
-                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colRemaining')}</div>
+                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${(parseAmountNumber(remaining) ?? 0) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </div>
                   </div>
@@ -810,7 +827,7 @@ export default function BudgetDetailPage() {
           })}
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">
-              No categories yet.
+              {t('detail.noCategories')}
             </div>
           )}
         </div>
@@ -822,7 +839,7 @@ export default function BudgetDetailPage() {
           onSubmit={(e) => { e.preventDefault(); if (newCategory.trim()) addCategory.mutate() }}
           className="mt-4 flex items-center gap-2 max-w-sm"
         >
-          <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="New category" className={inputClass} />
+          <input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder={t('detail.newCategoryPlaceholder')} className={inputClass} />
           <button type="submit" className={primaryButtonClass}><Plus size={13} /></button>
         </form>
       )}
@@ -833,7 +850,7 @@ export default function BudgetDetailPage() {
           onClick={() => { setMergeSourceId(null); setMergeOpen(true) }}
           className="mt-3 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text transition-colors touch-hit"
         >
-          <Merge size={13} /> Merge another category into “{selectedCategoryObj.name}”…
+          <Merge size={13} /> {t('detail.mergeInto', { name: selectedCategoryObj.name })}
         </button>
       )}
 
@@ -842,28 +859,26 @@ export default function BudgetDetailPage() {
         onClose={() => setMergeOpen(false)}
         size="sm"
         className="p-6"
-        title="Merge categories"
+        title={t('detail.mergeTitle')}
       >
         <p className="text-xs text-text-muted -mt-3 mb-4">
-          All transactions, planned transactions and planned amounts of the category you pick will
-          move to “{selectedCategoryObj?.name}”, and the picked category will be deleted. Planned
-          amounts for the same period are added together. This cannot be undone.
+          {t('detail.mergeBody', { name: selectedCategoryObj?.name })}
         </p>
         <div className="mb-4">
-          <label className={labelClass}>Category to merge in</label>
+          <label className={labelClass}>{t('detail.mergeSourceLabel')}</label>
           <Select
             value={mergeSourceId}
             onChange={setMergeSourceId}
             options={categories
               .filter((c) => c.id !== selectedCategory)
               .map((c) => ({ value: c.id, label: c.name }))}
-            placeholder="Select category"
-            aria-label="Category to merge in"
+            placeholder={t('detail.selectCategoryPlaceholder')}
+            aria-label={t('detail.mergeSourceLabel')}
           />
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => setMergeOpen(false)} className={secondaryButtonClass}>
-            Cancel
+            {t('detail.cancel')}
           </button>
           <button
             type="button"
@@ -871,7 +886,7 @@ export default function BudgetDetailPage() {
             disabled={mergeSourceId == null || mergeCategory.isPending}
             className={primaryButtonClass}
           >
-            {mergeCategory.isPending ? 'Merging…' : 'Merge'}
+            {mergeCategory.isPending ? t('detail.merging') : t('detail.merge')}
           </button>
         </div>
       </Modal>
@@ -892,8 +907,8 @@ export default function BudgetDetailPage() {
 
       <ConfirmDialog
         isOpen={!!deletingPeriod}
-        title="Delete period"
-        message={`Delete "${deletingPeriod?.name}"? Its planned amounts will be deleted. Transactions are not affected. This cannot be undone.`}
+        title={t('detail.deletePeriodDialog.title')}
+        message={t('detail.deletePeriodDialog.message', { name: deletingPeriod?.name })}
         onConfirm={() => deletingPeriod && deletePeriod.mutate(deletingPeriod.id)}
         onCancel={() => setDeletingPeriod(null)}
         isPending={deletePeriod.isPending}

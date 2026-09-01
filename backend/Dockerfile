@@ -14,6 +14,7 @@ ENV APP_VERSION=${APP_VERSION}
 
 RUN apt-get update && apt-get install -y \
     gcc \
+    gettext \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 

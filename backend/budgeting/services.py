@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from django.db import IntegrityError
 from django.db import transaction as db_transaction
 from django.db.models import Prefetch
+from django.utils.translation import gettext as _
 
 from budgeting.exceptions import (
     BudgetCadenceConfigError,
@@ -329,7 +330,7 @@ class PeriodService:
         new_start = data.start_date if data.start_date is not None else period.start_date
         new_end = data.end_date if data.end_date is not None else period.end_date
         if new_end < new_start:
-            raise PeriodOverlapError('end_date must be on or after start_date', code='period_invalid_range')
+            raise PeriodOverlapError(_('end_date must be on or after start_date'), code='period_invalid_range')
         PeriodService._check_overlap(period.budget, new_start, new_end, exclude_id=period.id)
 
         if data.name is not None:

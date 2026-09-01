@@ -15,6 +15,11 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 TOKEN_MAX_AGE = get_int_env('TOKEN_MAX_AGE', 7 * 24 * 60 * 60)
 
+# Default UI language and number-format style for new users. Values are
+# validated against common/languages.json (languages[].code / numberFormats[].code).
+DEFAULT_LANGUAGE = os.getenv('DEFAULT_LANGUAGE', 'en')
+DEFAULT_NUMBER_FORMAT = os.getenv('DEFAULT_NUMBER_FORMAT', 'en')
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ['SECRET_KEY']
 
@@ -74,6 +79,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -146,6 +152,13 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
+
+# Server-rendered API message catalogs. English is the source language
+# (msgids); uk/pl catalogs live under locale/<lang>/LC_MESSAGES/. No
+# LANGUAGES setting: with none defined Django treats every language
+# equally and falls back to LANGUAGE_CODE ('en-us') for unmatched
+# Accept-Language headers - the fallback is source English.
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 USE_TZ = True
 
@@ -289,9 +302,6 @@ RATE_LIMIT_RESET_PASSWORD_PERIOD = int(os.getenv('RATE_LIMIT_RESET_PASSWORD_PERI
 RATE_LIMIT_DATA_IMPORT = int(os.getenv('RATE_LIMIT_DATA_IMPORT', '3'))
 # Time window (seconds) for data-import rate limiting
 RATE_LIMIT_DATA_IMPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_IMPORT_PERIOD', '3600'))
-
-# Max exchange shortcuts per workspace
-EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE = int(os.getenv('EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE', '5'))
 
 # Cache configuration (used for rate limiting)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')

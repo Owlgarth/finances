@@ -1,0 +1,36 @@
+{
+  "datePicker": {
+    "selectDate": "Виберіть дату",
+    "today": "Сьогодні"
+  },
+  "insights": {
+    "selectBudget": "Виберіть бюджет",
+    "budgetAriaLabel": "Бюджет",
+    "currencyAriaLabel": "Валюта",
+    "viewBudget": "Відкрити бюджет \u2192",
+    "plannedPeriodLabel": "Заплановано \u00b7 {{period}}",
+    "currentPeriodFallback": "поточний період",
+    "spent": "Витрачено",
+    "remaining": "Залишилось",
+    "changeVsPeriod": "{{delta}} проти {{period}}",
+    "seriesPlanned": "заплановано",
+    "seriesActual": "фактично",
+    "seriesSpent": "витрачено",
+    "rowAriaLabel": "{{name}}: заплановано {{planned}}, витрачено {{spent}} {{currency}}",
+    "noPlanSet": "На цей період не задано план",
+    "overPlanUsed": "Перевищено план - використано {{pct}}%",
+    "planUsed": "використано {{pct}}% плану",
+    "otherCategory": "Інші",
+    "noCategoriesWithData": "У цьому періоді немає категорій із даними.",
+    "noPeriodsYet": "Періодів ще немає.",
+    "showChart": "Показати діаграму",
+    "showTable": "Показати таблицю",
+    "byCategoryTitle": "Цей період за категоріями",
+    "byPeriodTitle": "Заплановано і витрачено за періодами",
+    "colCategory": "Категорія",
+    "colPlanned": "Заплановано",
+    "colSpent": "Витрачено",
+    "colRemaining": "Залишилось",
+    "colPeriod": "Період"
+  }
+}
