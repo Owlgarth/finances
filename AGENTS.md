@@ -61,6 +61,7 @@ cp example.env .env    # every setting, including published ports
 ./dev.sh backend       # migrate + seed, then uvicorn --reload + Celery worker
 ./dev.sh frontend      # Vite dev server
 ./dev.sh up --full     # everything in Docker instead (adds api, ui, worker, beat)
+./dev.sh release 0.1.0 # cut a release: checks, changelog, commit, tag, push
 ```
 
 `./dev.sh` is the single entry point and covers everything else too —
