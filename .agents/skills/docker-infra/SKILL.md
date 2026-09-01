@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances — DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, or storage/S3 configuration.
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, or the dev.sh release command.
 ---
 
 # Docker & Infrastructure
@@ -41,7 +41,19 @@ services:
 - Only merge where the shared vars genuinely match in kind — forcing an anchor onto a service that never had those vars injects them (and `environment:` wins over `env_file`, so it would also shadow `.env` values).
 - Map-form quoting: quote `true`/`false`/numbers to document intent, and `*`-valued keys MUST be quoted (`ALLOWED_HOSTS: '*'` — a bare `*` is the YAML alias indicator). Rule of thumb: quote any value that is a bool/null/number or starts with `*`/`&`/`!`/`|`/`>`/`{`/`[`.
 
-**Verification gate — `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk — the rendered `x-*` block itself — and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.)
+**Verification gate - `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk - the rendered `x-*` block itself - and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.) Two more edges for any count-based gate over rendered output: top-level `x-*` extension fields render verbatim in addition to every service that merges them, so anchor-block copies inflate counts (this is why `restart: unless-stopped` sits on `api`/`worker`/`beat` individually in `prod/` rather than the shared anchor - inside the anchor it renders an extra time and a 7-policy gate counts 8); and `config` renders interpolated secrets in cleartext, so before/after captures stay under /tmp/opencode, never in the repo.
+
+## Third-Party Image Pins: Tag+Digest, Resolved at Edit Time
+
+Third-party service images are pinned `tag@sha256:...`. Digests are moving targets - resolve them at implementation time, never carry one from a plan snapshot or an older checkout. Pin the manifest-LIST digest: the top-level `Digest:` field of `docker buildx imagetools inspect` (MediaType `...image.index`), not a per-platform digest, and require both amd64 and arm64 in the list before pinning.
+
+When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs: 131 tags, all prerelease, pinned `1.0.0-rc.4`).
+
+`prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently; Renovate keeps both files in sync.
+
+## Dockerfile ARG Hygiene
+
+ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
 
 ## Dev Script
 
@@ -49,9 +61,14 @@ services:
 
 - `up` — `db redis storage`; `up --full` adds `api ui worker beat`; `up <svc...>` passes through
 - `backend` / `frontend` — start the app; `logs`, `manage`, `migrate`, `seed`, `psql`, `test`, `lint`, `npm`
+- `release <version>` - fail-closed release pipeline (see below)
 - helpers: `load_env`, `use_local_hosts`, `require_service`, `on_host`, `in_service`
 
 It `source`s `.env`, so **values containing spaces must be quoted there** — compose parses that file itself and doesn't care, bash does.
+
+### The `release` command
+
+`./dev.sh release 0.1.0` (bare version; the script adds the `v`) is a fail-closed, ordered pipeline: git-state checks → test gate → VERSION bump → changelog → remote sync → stage → commit → tag → push. Preserve the ordering and its irreversibility guards: VERSION is re-read after write, tag absence is re-verified immediately before `git tag`, and staging is always an explicit literal file list. Git-state checks (branch, clean tree) are fatal in real runs but report-only under `--dry-run` so a dry run works from any checkout; the local gate invokes `./dev.sh lint` / `./dev.sh test` as child processes rather than refactoring the case arms.
 
 ### DEV_TARGET: container or host
 
