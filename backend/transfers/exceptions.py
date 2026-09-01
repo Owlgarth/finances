@@ -20,11 +20,6 @@ class TransferAccountArchivedError(ValidationError):
     default_code = 'transfer_account_archived'
 
 
-class TransferAmountError(ValidationError):
-    default_message = gettext_lazy('Transfer amounts must be positive')
-    default_code = 'transfer_amount_invalid'
-
-
 class TransferAmountsMismatchError(ValidationError):
     default_message = gettext_lazy('Amounts must match for same-currency transfers')
     default_code = 'transfer_amounts_mismatch'

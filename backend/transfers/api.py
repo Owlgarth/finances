@@ -48,7 +48,7 @@ def get_transfer(request: HttpRequest, transfer_id: int):
     return TransferService.get(transfer_id, workspace_id)
 
 
-@router.post('', response={201: TransferOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+@router.post('', response={201: TransferOut, 400: DetailOut, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def create_transfer(request: HttpRequest, data: TransferCreate):
     """Create a transfer between two accounts (requires write access)."""
     user = request.auth
@@ -57,7 +57,11 @@ def create_transfer(request: HttpRequest, data: TransferCreate):
     return 201, TransferService.create(user, workspace_id, data)
 
 
-@router.put('/{transfer_id}', response={200: TransferOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+@router.put(
+    '/{transfer_id}',
+    response={200: TransferOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
 def update_transfer(request: HttpRequest, transfer_id: int, data: TransferCreate):
     """Update a transfer (requires write access)."""
     user = request.auth
@@ -66,7 +70,7 @@ def update_transfer(request: HttpRequest, transfer_id: int, data: TransferCreate
     return TransferService.update(user, workspace_id, transfer_id, data)
 
 
-@router.delete('/{transfer_id}', response={204: None, 404: DetailOut}, auth=WorkspaceJWTAuth())
+@router.delete('/{transfer_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def delete_transfer(request: HttpRequest, transfer_id: int):
     """Delete a transfer (requires write access)."""
     user = request.auth
