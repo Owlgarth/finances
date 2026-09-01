@@ -4,6 +4,7 @@ from ninja import Router
 from pydantic import BaseModel
 
 from core.legal import get_privacy, get_terms
+from core.schemas import DetailOut
 
 router = Router(tags=['Legal'])
 
@@ -14,13 +15,13 @@ class LegalDocOut(BaseModel):
     content: str
 
 
-@router.get('/terms', response=LegalDocOut)
+@router.get('/terms', response={200: LegalDocOut, 503: DetailOut})
 def legal_terms(request):
     """Return the current Terms of Service (version, effective date, markdown content)."""
     return get_terms()
 
 
-@router.get('/privacy', response=LegalDocOut)
+@router.get('/privacy', response={200: LegalDocOut, 503: DetailOut})
 def legal_privacy(request):
     """Return the current Privacy Policy (version, effective date, markdown content)."""
     return get_privacy()

@@ -1,9 +1,6 @@
 """Tests for workspace event notification emails."""
 
-from unittest.mock import patch
-
 from django.core import mail
-from django.db import transaction
 from django.test import TestCase
 
 from common.tests.factories import UserFactory
@@ -11,13 +8,8 @@ from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.services import WorkspaceMemberService, WorkspaceService
 
 
-def _immediate_on_commit(func, *args, **kwargs):
-    func()
-
-
 class TestRemoveMemberEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_remove_member_sends_email(self, mock_on_commit):
+    def test_remove_member_sends_email(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -31,8 +23,7 @@ class TestRemoveMemberEmail(TestCase):
         self.assertEqual(email.to, ['removed@example.com'])
         self.assertIn('removed', email.subject.lower())
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_remove_member_email_has_workspace_name(self, mock_on_commit):
+    def test_remove_member_email_has_workspace_name(self):
         workspace = WorkspaceFactory(name='Finance Hub')
         owner = UserFactory(full_name='Owner', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -47,8 +38,7 @@ class TestRemoveMemberEmail(TestCase):
 
 
 class TestLeaveEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_leave_sends_admin_notifications(self, mock_on_commit):
+    def test_leave_sends_admin_notifications(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', email='owner@example.com', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -64,8 +54,7 @@ class TestLeaveEmail(TestCase):
         self.assertIn('admin@example.com', recipients)
         self.assertEqual(len(mail.outbox), 2)
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_leave_does_not_notify_leaver(self, mock_on_commit):
+    def test_leave_does_not_notify_leaver(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', email='owner@example.com', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -77,8 +66,7 @@ class TestLeaveEmail(TestCase):
         recipients = [msg.to[0] for msg in mail.outbox]
         self.assertNotIn('leaver@example.com', recipients)
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_leave_does_not_notify_viewers(self, mock_on_commit):
+    def test_leave_does_not_notify_viewers(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', email='owner@example.com', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -96,8 +84,7 @@ class TestLeaveEmail(TestCase):
 
 
 class TestDeleteWorkspaceEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_delete_workspace_sends_member_notifications(self, mock_on_commit):
+    def test_delete_workspace_sends_member_notifications(self):
         workspace = WorkspaceFactory(name='Doomed WS')
         owner = UserFactory(full_name='Owner', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -112,8 +99,7 @@ class TestDeleteWorkspaceEmail(TestCase):
         self.assertIn('member1@example.com', recipients)
         self.assertTrue(any('Doomed WS' in msg.subject for msg in mail.outbox))
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_delete_workspace_deleter_not_notified(self, mock_on_commit):
+    def test_delete_workspace_deleter_not_notified(self):
         workspace = WorkspaceFactory(name='Doomed WS')
         owner = UserFactory(full_name='Owner', email='owner@example.com', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -125,8 +111,7 @@ class TestDeleteWorkspaceEmail(TestCase):
 
 
 class TestUpdateRoleEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_update_role_sends_email(self, mock_on_commit):
+    def test_update_role_sends_email(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')
@@ -141,8 +126,7 @@ class TestUpdateRoleEmail(TestCase):
         self.assertIn('member', email.body.lower())
         self.assertIn('admin', email.body.lower())
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_update_role_admin_not_notified(self, mock_on_commit):
+    def test_update_role_admin_not_notified(self):
         workspace = WorkspaceFactory(name='Team')
         owner = UserFactory(full_name='Owner', email='owner@example.com', current_workspace=workspace)
         WorkspaceMemberFactory(workspace=workspace, user=owner, role='owner')

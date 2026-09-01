@@ -316,9 +316,8 @@ class TestGetOrCreateForDate(TestCase):
 
     def test_race_returns_existing_row(self):
         # Pre-insert the row another request would have created.
-        existing = Period.objects.create(
+        existing = PeriodFactory(
             budget=self.budget,
-            workspace_id=self.budget.workspace_id,
             name='July 2026',
             start_date=date(2026, 7, 1),
             end_date=date(2026, 7, 31),
@@ -330,9 +329,8 @@ class TestGetOrCreateForDate(TestCase):
 
     def test_covering_period_from_old_cadence_wins(self):
         """After a cadence change, dates inside a leftover period resolve to it — never a new overlap."""
-        leftover = Period.objects.create(
+        leftover = PeriodFactory(
             budget=self.budget,
-            workspace_id=self.budget.workspace_id,
             name='22 Jun – 5 Jul',
             start_date=date(2026, 6, 22),
             end_date=date(2026, 7, 5),
@@ -346,9 +344,8 @@ class TestGetOrCreateForDate(TestCase):
 
     def test_new_period_clamped_after_leftover_from_old_cadence(self):
         """A freshly derived range starts after the latest leftover period it would overlap."""
-        Period.objects.create(
+        PeriodFactory(
             budget=self.budget,
-            workspace_id=self.budget.workspace_id,
             name='22 Jun – 5 Jul',
             start_date=date(2026, 6, 22),
             end_date=date(2026, 7, 5),
@@ -362,9 +359,8 @@ class TestGetOrCreateForDate(TestCase):
 
     def test_new_period_clamped_before_future_leftover(self):
         """A freshly derived range ends before the next leftover period it would overlap."""
-        Period.objects.create(
+        PeriodFactory(
             budget=self.budget,
-            workspace_id=self.budget.workspace_id,
             name='20 Jul – 2 Aug',
             start_date=date(2026, 7, 20),
             end_date=date(2026, 8, 2),
@@ -378,9 +374,8 @@ class TestGetOrCreateForDate(TestCase):
 
     def test_custom_cadence_returns_covering_period(self):
         budget = BudgetFactory(cadence=Cadence.CUSTOM)
-        period = Period.objects.create(
+        period = PeriodFactory(
             budget=budget,
-            workspace_id=budget.workspace_id,
             name='Trip',
             start_date=date(2026, 7, 10),
             end_date=date(2026, 7, 20),

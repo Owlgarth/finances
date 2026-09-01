@@ -4,7 +4,6 @@ This module re-exports all schemas for backward compatibility.
 Schemas are organized by domain in separate modules:
 - auth: Token, LoginIn, RegisterIn, UserPasswordUpdate
 - users: UserOut, UserUpdate
-- workspaces: WorkspaceOut, WorkspaceMemberOut, WorkspaceMemberAdd, MemberPasswordReset
 - common: MessageOut, ErrorOut, DetailOut
 - consent: ConsentIn, ConsentOut
 - gdpr: AccountDeleteIn, AccountDeleteCheckOut, AccountDeleteOut
@@ -76,16 +75,6 @@ from core.schemas.users import (
     UserUpdate,
 )
 
-# =============================================================================
-# Workspace Schemas
-# =============================================================================
-from core.schemas.workspaces import (
-    MemberPasswordReset,
-    WorkspaceMemberAdd,
-    WorkspaceMemberOut,
-    WorkspaceOut,
-)
-
 __all__ = [
     # Auth
     'Token',
@@ -113,11 +102,6 @@ __all__ = [
     'UserUpdate',
     'UserPreferencesOut',
     'UserPreferencesUpdate',
-    # Workspaces
-    'WorkspaceOut',
-    'WorkspaceMemberOut',
-    'WorkspaceMemberAdd',
-    'MemberPasswordReset',
     # Common
     'MessageOut',
     'ErrorOut',
