@@ -6,6 +6,7 @@ import {
   Calendar,
   Check,
   CloudOff,
+  Globe,
   Home,
   Landmark,
   Loader2,
@@ -32,6 +33,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
 import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
+import { useLanguage } from '../../i18n/LanguageContext'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
 import { openPageSearch } from '../common/CommandPalette'
@@ -40,13 +42,14 @@ import BottomSheet from '../common/BottomSheet'
 import Switch from '../common/Switch'
 import RoleBadge from '../common/RoleBadge'
 import CreateWorkspaceForm from './CreateWorkspaceForm'
-import LanguageMenu from './LanguageMenu'
+import LanguageModal from './LanguageModal'
 import ThemeToggleRow from './ThemeToggleRow'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
+import registry from '../../../../backend/common/languages.json'
 
 // Overflow destinations live in the More sheet.
 // Keys only: t() is resolved at render time inside the component (a
@@ -110,12 +113,15 @@ export default function BottomNav() {
   const { switchingToId, switchTo } = useWorkspaceSwitch()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
+  const { language } = useLanguage()
 
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
   const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
+  // Language picker modal; the More sheet closes itself before this opens.
+  const [langOpen, setLangOpen] = useState(false)
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
@@ -162,10 +168,12 @@ export default function BottomNav() {
   }
 
   // Close the More sheet when navigation happens from inside it; the create
-  // modal follows suit so no form outlives the page it was opened on.
+  // and language modals follow suit so no modal outlives the page it was
+  // opened on.
   useEffect(() => {
     setMoreOpen(false)
     setCreateWorkspaceOpen(false)
+    setLangOpen(false)
   }, [location.pathname])
 
   const quickAddActions: ActionSheetAction[] = [
@@ -184,6 +192,7 @@ export default function BottomNav() {
   ]
 
   const moreActive = MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to))
+  const activeLanguage = registry.languages.find((l) => l.code === language)
 
   return (
     <>
@@ -322,7 +331,23 @@ export default function BottomNav() {
               {t('reload')}
             </button>
             <ThemeToggleRow />
-            <LanguageMenu />
+            {/* Closes the sheet before opening the language picker, so the
+                modal is the only overlay layer (one Escape press, one
+                dismissal). The active language's native name is registry
+                data, shown truncated so a long name cannot stretch the
+                row. */}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false)
+                setLangOpen(true)
+              }}
+              className={moreRowClass}
+            >
+              <Globe size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              <span className="flex-1 truncate">{t('language')}</span>
+              <span className="flex-shrink-0 max-w-[96px] truncate text-text-muted">{activeLanguage?.nativeName}</span>
+            </button>
             <div className="flex items-center justify-between min-h-[44px] px-4">
               <span className="flex items-center gap-3 text-sm text-text">
                 <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
@@ -377,6 +402,10 @@ export default function BottomNav() {
       {createWorkspaceOpen && (
         <CreateWorkspaceForm onClose={() => setCreateWorkspaceOpen(false)} />
       )}
+      {/* Language picker modal (mount-per-use): the More sheet's opener row
+          closes the sheet first, so this is the only overlay layer while
+          open. */}
+      {langOpen && <LanguageModal onClose={() => setLangOpen(false)} />}
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
       <input
