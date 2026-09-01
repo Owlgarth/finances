@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.http import HttpRequest, HttpResponse
+from django.utils.translation import gettext as _
 from ninja import File, Form, Query, Router
 from ninja.files import UploadedFile
 
@@ -171,13 +172,13 @@ def import_transactions(
     try:
         data = json.loads(file.read())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return 400, {'detail': 'Invalid JSON file.'}
+        return 400, {'detail': _('Invalid JSON file.')}
 
     count = TransactionService.import_data(user, workspace_id, account_id, data, budget_id)
 
     if count == 0:
-        return 201, {'message': 'No new transactions to import.'}
-    return 201, {'message': f'Successfully imported {count} new transactions.'}
+        return 201, {'message': _('No new transactions to import.')}
+    return 201, {'message': _('Successfully imported %(count)s new transactions.') % {'count': count}}
 
 
 @router.post(
@@ -345,14 +346,14 @@ def parse_receipt_preview(request: HttpRequest, file: UploadedFile = File(...)):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     if not parser_client.is_enabled():
-        return 503, {'detail': 'Receipt extraction is not configured.'}
+        return 503, {'detail': _('Receipt extraction is not configured.')}
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     try:
         return parser_client.parse_receipt(file.read(), file.name or 'receipt', file.content_type or '')
     except parser_client.ParserUnavailableError:
         # Nothing is wrong with the upload — the scanning host is simply off.
         # 503 (not 400) so the client shows "offline", not "bad receipt".
-        return 503, {'detail': 'Receipt scanning is temporarily offline. Please try again later.'}
+        return 503, {'detail': _('Receipt scanning is temporarily offline. Please try again later.')}
     except parser_client.ParserServiceError as exc:
         return 400, {'detail': str(exc)}
 
@@ -368,7 +369,7 @@ def extract_attachment(request: HttpRequest, transaction_id: int, attachment_id:
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     if not parser_client.is_enabled():
-        return 503, {'detail': 'Receipt extraction is not configured.'}
+        return 503, {'detail': _('Receipt extraction is not configured.')}
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     attachment = AttachmentService.get_attachment(trans, attachment_id)
     AttachmentService.dispatch_extraction(attachment)

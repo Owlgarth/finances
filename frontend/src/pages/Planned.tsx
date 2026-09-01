@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Ban, Copy, Download, Plus, Pencil, Trash2, CheckCircle } from 'lucide-react'
@@ -34,22 +35,25 @@ const STATUS_STYLE: Record<string, string> = {
 
 type StatusFilter = 'all' | 'pending' | 'done' | 'cancelled'
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'done', label: 'Done' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
+// Option arrays carry keys only: values are wire enums (URL ?status=/,
+// ?ordering=, API payloads) and never translate; labels resolve through t()
+// inside the component.
+const STATUS_OPTIONS = [
+  { value: 'all', labelKey: 'status.all' },
+  { value: 'pending', labelKey: 'status.pending' },
+  { value: 'done', labelKey: 'status.done' },
+  { value: 'cancelled', labelKey: 'status.cancelled' },
+] as const
 
 // Curated sort options; the backend's ORDERING_PATTERN allows more, but the
 // Select only offers what reads well in a divider-row list.
-const SORT_OPTIONS: { value: PlannedTransactionOrdering; label: string }[] = [
-  { value: 'planned_date', label: 'Soonest' },
-  { value: '-planned_date', label: 'Latest' },
-  { value: '-amount', label: 'Amount high to low' },
-  { value: 'amount', label: 'Amount low to high' },
-  { value: 'name', label: 'Name A-Z' },
-]
+const SORT_OPTIONS = [
+  { value: 'planned_date', labelKey: 'sort.soonest' },
+  { value: '-planned_date', labelKey: 'sort.latest' },
+  { value: '-amount', labelKey: 'sort.amountDesc' },
+  { value: 'amount', labelKey: 'sort.amountAsc' },
+  { value: 'name', labelKey: 'sort.name' },
+] as const
 
 // The backend's default when no ?ordering= is sent: picking it clears the
 // param so the URL stays clean for the common case.
@@ -69,6 +73,7 @@ function readStoredSearch(): string {
 }
 
 export default function Planned() {
+  const { t } = useTranslation('planned')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -76,6 +81,10 @@ export default function Planned() {
   const { data: currencies = [] } = useEnabledCurrencies()
 
   const isTouch = useIsTouch()
+
+  const statusOptions = STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  const statusLabel = (value: StatusFilter) => t(STATUS_OPTIONS.find((o) => o.value === value)!.labelKey)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
@@ -145,7 +154,7 @@ export default function Planned() {
   // The export endpoint honors ONLY the status and date-range filters - never
   // imply the whole filter panel applies to the file.
   const handleExportView = async () => {
-    const toastId = toast.loading('Preparing export...')
+    const toastId = toast.loading(t('preparingExport'))
     setIsExporting(true)
     try {
       const blob = await plannedTransactionsApi.exportView({
@@ -156,9 +165,9 @@ export default function Planned() {
       const url = URL.createObjectURL(blob)
       triggerBrowserDownload(url, `planned_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
       URL.revokeObjectURL(url)
-      toast.success('Export complete', { id: toastId })
+      toast.success(t('exportComplete'), { id: toastId })
     } catch {
-      toast.error('Export failed. Try again.', { id: toastId })
+      toast.error(t('exportFailed'), { id: toastId })
     } finally {
       setIsExporting(false)
     }
@@ -235,9 +244,9 @@ export default function Planned() {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success('Executed — transaction created')
+      toast.success(t('executed'))
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to execute')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('executeFailed'))),
   })
 
   // Cancel keeps the row (status → cancelled) — softer than delete. PUT wants
@@ -255,37 +264,37 @@ export default function Planned() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success('Plan cancelled')
+      toast.success(t('cancelledToast'))
       setCancelling(null)
     },
-    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to cancel')); setCancelling(null) },
+    onError: (error) => { toast.error(getApiErrorMessage(error, t('cancelFailed'))); setCancelling(null) },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['planned'] }); toast.success('Deleted'); setDeleting(null) },
-    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to delete')); setDeleting(null) },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['planned'] }); toast.success(t('deleted')); setDeleting(null) },
+    onError: (error) => { toast.error(getApiErrorMessage(error, t('deleteFailed'))); setDeleting(null) },
   })
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Planned</h1>
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
         <div className="flex items-center gap-2">
           {/* Visible on mobile too: export is a read action with no FAB twin. */}
           <button
             type="button"
             onClick={handleExportView}
             disabled={isExporting}
-            title="Exports the status and date filters"
+            title={t('exportTitle')}
             className={secondaryButtonClass}
           >
-            <Download size={13} className="inline mr-1" /> Export view
+            <Download size={13} className="inline mr-1" /> {t('exportView')}
           </button>
-          {/* Hidden on mobile: the FAB quick-add has Planned (plan decision 6). */}
+          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
           {canWrite && (
             <button onClick={openNew} className={`${primaryButtonClass} max-sm:hidden`}>
-              <Plus size={13} className="inline mr-1" /> New planned
+              <Plus size={13} className="inline mr-1" /> {t('newPlanned')}
             </button>
           )}
         </div>
@@ -295,8 +304,8 @@ export default function Planned() {
         <SegmentedControl
           value={statusFilter}
           onChange={(v) => updateParams({ status: v === 'all' ? null : v })}
-          options={STATUS_OPTIONS}
-          aria-label="Filter by status"
+          options={statusOptions}
+          aria-label={t('statusAria')}
         />
       </div>
 
@@ -304,17 +313,17 @@ export default function Planned() {
         <SearchInput
           value={search}
           onChange={handleSearchChange}
-          placeholder="Search names…"
-          aria-label="Search planned transactions"
+          placeholder={t('searchPlaceholder')}
+          aria-label={t('searchAria')}
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
-          options={SORT_OPTIONS}
-          placeholder="Soonest"
-          aria-label="Sort"
+          options={sortOptions}
+          placeholder={t('sort.soonest')}
+          aria-label={t('sortAria')}
           className="w-48 flex-shrink-0"
         />
       </div>
@@ -322,29 +331,29 @@ export default function Planned() {
       {filtersOpen && (
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {accounts.length > 1 && (
-            <FilterField label="Account">
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
+            <FilterField label={t('filters.account')}>
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
             </FilterField>
           )}
           {multiCurrency && (
-            <FilterField label="Currency">
+            <FilterField label={t('filters.currency')}>
               <MultiSelect
                 values={currencyFilter}
                 onChange={(v) => updateParams({ currency: v })}
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
-                placeholder="All currencies"
-                aria-label="Filter by currency"
+                placeholder={t('filters.allCurrencies')}
+                aria-label={t('filters.byCurrencyAria')}
               />
             </FilterField>
           )}
-          <ListFilterFields dateLabel="Planned date" />
+          <ListFilterFields dateLabel={t('filters.plannedDate')} />
         </FilterPanel>
       )}
 
       {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
       {(data?.total ?? 0) > 0 && (
         <ListTotalsStrip
-          caption={`Totals - ${data?.total ?? 0} planned`}
+          caption={t('totals.caption', { count: data?.total ?? 0 })}
           items={totalsData?.totals ?? []}
           tone={() => 'neutral'}
           isLoading={totalsIsLoading}
@@ -356,10 +365,10 @@ export default function Planned() {
       ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">
           {search || activeFilterCount > 0
-            ? 'No planned transactions match your search or filters.'
+            ? t('emptyFiltered')
             : statusFilter === 'all'
-              ? 'No planned transactions.'
-              : `No ${statusFilter} planned transactions.`}
+              ? t('empty')
+              : t('emptyWithStatus', { status: statusLabel(statusFilter) })}
         </p>
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
@@ -374,10 +383,10 @@ export default function Planned() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-text truncate">{p.name}</span>
-                  <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{p.status}</span>
+                  <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{statusLabel(p.status)}</span>
                 </div>
                 <div className="text-[10px] font-mono text-text-muted">
-                  {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? 'No account'}
+                  {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 pl-3">
@@ -387,14 +396,14 @@ export default function Planned() {
                 {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {p.status === 'pending' && (
-                      <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title="Execute"><CheckCircle size={13} /></button>
+                      <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title={t('rowActions.execute')}><CheckCircle size={13} /></button>
                     )}
                     {p.status === 'pending' && (
-                      <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title="Cancel plan"><Ban size={13} /></button>
+                      <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title={t('rowActions.cancelPlan')}><Ban size={13} /></button>
                     )}
-                    <button onClick={() => openEdit(p)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button onClick={() => openCopy(p)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                    <button onClick={() => setDeleting(p)} title="Delete" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                    <button onClick={() => openEdit(p)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                    <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
                 )}
               </div>
@@ -425,17 +434,17 @@ export default function Planned() {
       />
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete planned transaction"
-        message={`Delete "${deleting?.name}"?`}
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message', { name: deleting?.name })}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
       <ConfirmDialog
         isOpen={!!cancelling}
-        title="Cancel plan"
-        message={`Mark "${cancelling?.name}" as cancelled? The row stays in the list but can no longer be executed.`}
-        confirmLabel="Cancel plan"
+        title={t('cancelDialog.title')}
+        message={t('cancelDialog.message', { name: cancelling?.name })}
+        confirmLabel={t('cancelDialog.confirm')}
         isPending={cancelMutation.isPending}
         onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
         onCancel={() => setCancelling(null)}

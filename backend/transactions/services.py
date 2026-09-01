@@ -9,6 +9,7 @@ from django.db import transaction as db_transaction
 from django.db.models import Count, F, Sum, Value
 from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from accounts.models import Account
 from accounts.services import AccountService
@@ -118,9 +119,11 @@ class TransactionService:
             or Currency.objects.filter(workspace_id=workspace_id, code=code).first()
         )
         if not facet:
-            raise TransactionOriginalCurrencyError(f'Original currency {code} not found in the catalog')
+            raise TransactionOriginalCurrencyError(
+                _('Original currency %(code)s not found in the catalog') % {'code': code}
+            )
         if facet.code == currency.code:
-            raise TransactionOriginalCurrencyError('Original currency must differ from the transaction currency')
+            raise TransactionOriginalCurrencyError(_('Original currency must differ from the transaction currency'))
         return facet
 
     @staticmethod
@@ -648,10 +651,11 @@ class TransactionService:
         This is the server-side twin of the "if blank or 'Receipt', fill from
         parsed merchant" rule that already lives in two client-side spots:
         `ExtractionReviewModal.merchantFillsDescription`
-        (frontend/src/components/transactions/ExtractionReviewModal.tsx, L53–59)
-        and `NewFromReceiptModal`, which seeds `description = 'Receipt'` while
-        the receipt-first flow is in progress. All three agree an intentional
-        description is never overwritten.
+        (frontend/src/components/transactions/ExtractionReviewModal.tsx, L53-56)
+        and `TransactionFormModal`'s receipt prefill, where the inline parse
+        (`parse.onSuccess`) fills only an empty description and the
+        receipt-first entry (`prefillReceipt`) seeds it at open time. All
+        three agree an intentional description is never overwritten.
 
         Rules (idempotent — a second call is a no-op):
         - Items are created only when the transaction currently has zero. Never clobbers user-entered rows.
@@ -761,7 +765,7 @@ class TransactionService:
             try:
                 import_item = TransactionImport(**item)
             except Exception as e:
-                raise TransactionImportError(f'Invalid data format: {e}')
+                raise TransactionImportError(_('Invalid data format: %(error)s') % {'error': e})
 
             category_id = None
             if import_item.type != 'income' and import_item.category_name:

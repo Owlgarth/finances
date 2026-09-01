@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { CalendarRange, Check, ChevronDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useListboxPanel } from '../../hooks/useListboxPanel'
 import { formatPeriodRange } from '../../utils/format'
@@ -24,19 +25,19 @@ export interface PeriodPickerProps {
    *  BOTH panels; activating it fires this (instead of onChange) and closes
    *  the picker. The row is always visible - not conditional on list length. */
   onViewAll?: () => void
-  /** Accessible name for the trigger (spec §2). Panels are labeled "Periods". */
+  /** Accessible name for the trigger. Panels are labeled "Periods". */
   'aria-label'?: string
 }
 
-/** Value of the "View all periods" pseudo-option appended to the hook's
- *  options. A NUMBER (not a string sentinel) keeps the hook's generic
+/** Value of the view-all pseudo-option appended to the hook's options. A
+ *  NUMBER (not a string sentinel) keeps the hook's generic
  *  ListboxOption<number> shape honest; period ids are positive DB primary
  *  keys, so -1 can never collide with a real period. Module-private: callers
- *  pass `onViewAll`, never the sentinel. */
+ *  pass `onViewAll`, never the sentinel. Its label is translated inside the
+ *  component (module scope has no t). */
 const VIEW_ALL_VALUE = -1
-const VIEW_ALL_LABEL = 'View all periods'
 
-/** Temporal classification of a period against today (spec §6). */
+/** Temporal classification of a period against today. */
 type Temporal = 'past' | 'current' | 'future'
 
 /** Same string-compare idiom as BudgetDetailPage's isPast/isFuture: ISO
@@ -59,22 +60,26 @@ interface PeriodGroup {
   items: PeriodGroupItem[]
 }
 
-/** Composed accessible label (spec §7.3): the visual row omits the year (the
+/** Composed accessible label: the visual row omits the year (the
  *  group label carries it) and truncates long names, so the button's label
- *  always carries BOTH endpoints with years plus ", current" when temporal is
- *  current. `aria-selected` remains the selection signal. */
-function optionAriaLabel(period: Period, todayIso: string): string {
+ *  always carries BOTH endpoints with years plus the translated current
+ *  suffix when temporal is current. `aria-selected` remains the selection
+ *  signal. Module helper, so the suffix is threaded in by the row components
+ *  (hooks cannot run at module scope); the data parts (name, range) are
+ *  persisted/computed data and stay untranslated by design. */
+function optionAriaLabel(period: Period, todayIso: string, currentSuffix: string): string {
   const range = formatPeriodRange(period.start_date, period.end_date, { withYears: true })
-  return `${period.name}, ${range}` + (temporalOf(period, todayIso) === 'current' ? ', current' : '')
+  return `${period.name}, ${range}` + (temporalOf(period, todayIso) === 'current' ? `, ${currentSuffix}` : '')
 }
 
-/** §8 CURRENT tag - the components.md §10 neutral chip, class string verbatim.
+/** CURRENT tag - the components.md §10 neutral chip, class string verbatim.
  *  The bg-surface fill keeps it legible on surface-muted (selected) and
- *  surface-hover (hovered) rows. No icon. */
-function CurrentChip() {
+ *  surface-hover (hovered) rows. No icon. Label is a prop: the chip text is
+ *  translated by the row components that render it. */
+function CurrentChip({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none flex-shrink-0">
-      CURRENT
+      {label}
     </span>
   )
 }
@@ -90,9 +95,9 @@ interface DesktopRowProps {
 }
 
 /**
- * Desktop popover row (spec §4.3): 32px single line, patterns.md §5 menu-item
- * anatomy (px-3 gap-2.5 text-[13px], Check 14px / w-3.5 spacer - deviation 2).
- * Row state composition (spec §6): selected = bg-surface-muted + font-medium +
+ * Desktop popover row: 32px single line, patterns.md §5 menu-item anatomy
+ * (px-3 gap-2.5 text-[13px], Check 14px / w-3.5 spacer).
+ * Row state composition: selected = bg-surface-muted + font-medium +
  * leading Check with NO hover swap (listboxParts parity - a hover swap would
  * recreate the indistinguishable-from-hover problem); keyboard highlight =
  * bg-surface-hover; plain rows (including past) get hover:bg-surface-hover.
@@ -101,6 +106,7 @@ interface DesktopRowProps {
  * a selected current period renders check + bg + chip.
  */
 function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActivate }: DesktopRowProps) {
+  const { t } = useTranslation('budgets')
   const temporal = temporalOf(period, todayIso)
   return (
     <button
@@ -108,7 +114,7 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       role="option"
       id={id}
       aria-selected={selected}
-      aria-label={optionAriaLabel(period, todayIso)}
+      aria-label={optionAriaLabel(period, todayIso, t('periodPicker.currentAriaSuffix'))}
       tabIndex={-1}
       onClick={onActivate}
       className={
@@ -138,7 +144,7 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       >
         {formatPeriodRange(period.start_date, period.end_date)}
       </span>
-      {temporal === 'current' && <CurrentChip />}
+      {temporal === 'current' && <CurrentChip label={t('periodPicker.current')} />}
     </button>
   )
 }
@@ -151,7 +157,7 @@ interface SheetRowProps {
 }
 
 /**
- * Mobile sheet row (spec §5.3): two lines, min-h-[44px] (natural ~48px),
+ * Mobile sheet row: two lines, min-h-[44px] (natural ~48px),
  * SheetOptionRow parity for the leading slot (Check 16px / w-4 spacer) and
  * press feedback (active:bg-surface-hover - no hover on touch). Selection is
  * row-level (font-medium + bg-surface-muted + Check); the CURRENT chip is
@@ -159,13 +165,14 @@ interface SheetRowProps {
  * (min-w-0) while the chip never does (flex-shrink-0).
  */
 function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProps) {
+  const { t } = useTranslation('budgets')
   const temporal = temporalOf(period, todayIso)
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
-      aria-label={optionAriaLabel(period, todayIso)}
+      aria-label={optionAriaLabel(period, todayIso, t('periodPicker.currentAriaSuffix'))}
       onClick={onActivate}
       className={
         'w-full min-h-[44px] px-4 py-2 flex items-center gap-3 text-left text-sm transition-colors active:bg-surface-hover ' +
@@ -192,7 +199,7 @@ function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProp
           >
             {formatPeriodRange(period.start_date, period.end_date)}
           </span>
-          {temporal === 'current' && <CurrentChip />}
+          {temporal === 'current' && <CurrentChip label={t('periodPicker.current')} />}
         </span>
       </span>
     </button>
@@ -200,13 +207,14 @@ function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProp
 }
 
 /**
- * Budget period overview picker (PERIOD_PICKER_SPEC.md) - a SIBLING CONSUMER
+ * Budget period overview picker - a SIBLING CONSUMER
  * of useListboxPanel alongside Select/MultiSelect, not a fork: shared trigger
  * + open/highlight/type-ahead machinery, picker-specific rich rows (name +
  * date range + CURRENT chip) grouped by year, temporal muting, composed
- * per-option aria-labels. Intentional deviations from listboxParts defaults
- * are the 8 items in spec §12. Hosted by BudgetDetailPage's period switcher;
- * selection semantics identical to Select (pick and close, no toggle-off).
+ * per-option aria-labels. A few presentation details intentionally deviate
+ * from listboxParts defaults (noted inline). Hosted by BudgetDetailPage's
+ * period switcher; selection semantics identical to Select (pick and close,
+ * no toggle-off).
  * Optional variant props: `limit` caps the list to a window centered on the
  * selected/viewed period, and `onViewAll` appends a "View all periods"
  * pseudo-option (sticky footer in the desktop popover, last row in the
@@ -218,16 +226,21 @@ export default function PeriodPicker({
   onChange,
   limit,
   onViewAll,
-  'aria-label': ariaLabel = 'Period',
+  'aria-label': ariaLabel,
 }: PeriodPickerProps) {
+  // The default accessible name resolves here, not in the props destructure:
+  // useTranslation runs after destructuring, and a module-scope default would
+  // freeze the language at load time.
+  const { t } = useTranslation('budgets')
+  const resolvedAriaLabel = ariaLabel ?? t('periodPicker.ariaLabel')
   // Adaptive pattern (patterns.md §13): all panel state lives in
   // useListboxPanel above the variant branches, so a resize mid-open loses
   // nothing. Desktop = anchored popover, mobile = BottomSheet.
   const { isMobile } = useBreakpoint()
 
-  // Deviation 7: options are { value: id, label: name } so the hook's
+  // Options are { value: id, label: name } so the hook's
   // type-ahead and filtering stay honest; rich rows look the full Period up
-  // by flat index. Deviation 6: searchable: false - the search input is
+  // by flat index. searchable: false - the search input is
   // deferred; printable-letter type-ahead still works (labels carry the
   // period names, and the view-all pseudo-option's label matches it too).
   const selectedIndex = periods.findIndex((p) => p.id === value)
@@ -262,9 +275,10 @@ export default function PeriodPicker({
   // typing "v" jumps to it (unless an earlier windowed period name also
   // starts with "v" - type-ahead is first-match; uniform participation is
   // accepted design). With searchable: false, filteredOptions === options.
+  const viewAllLabel = t('periodPicker.viewAll')
   const options = [
     ...windowedPeriods.map((p) => ({ value: p.id, label: p.name })),
-    ...(onViewAll ? [{ value: VIEW_ALL_VALUE, label: VIEW_ALL_LABEL }] : []),
+    ...(onViewAll ? [{ value: VIEW_ALL_VALUE, label: viewAllLabel }] : []),
   ]
   // Flat index of the pseudo-option in the hook's option space; -1 = absent.
   const viewAllIndex = onViewAll ? windowedPeriods.length : -1
@@ -273,7 +287,7 @@ export default function PeriodPicker({
   const selectedWindowIndex = selectedIndex >= 0 ? selectedIndex - windowStart : -1
 
   // Desktop popover ref - the hook has no desktop panel ref; scroll-into-view
-  // on open is done locally (deviation 5), NOT by extending the hook (which
+  // on open is done locally, NOT by extending the hook (which
   // would change Select/MultiSelect behavior).
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -343,7 +357,7 @@ export default function PeriodPicker({
     return acc
   }, [])
 
-  // Desktop scroll-into-view on open (spec §9, deviation 5): center the
+  // Desktop scroll-into-view on open: center the
   // initially highlighted row (= the selected period via
   // initialHighlightIndex, falling back to the first option when nothing is
   // selected) INSTANTLY. Manual scrollTop math, NOT the DOM scroll-into-view
@@ -366,10 +380,11 @@ export default function PeriodPicker({
     panel.scrollTop = row.offsetTop - panel.clientHeight / 2 + row.clientHeight / 2
   }, [open, isMobile])
 
-  // Deviation 1: spec §4.1 panel classes verbatim + w-72 + left-0 +
-  // animate-fade-in (Step 2's utility). NOT listboxPanelClass - it is w-full
-  // (tied to the w-56 trigger), while the three-field row needs ~270px. Note
-  // py-1 is in spec §4.1 but absent from listboxPanelClass - keep it.
+  // Panel classes: the shared listbox-panel shape + w-72 + left-0 + py-1 +
+  // animate-fade-in (the root-level fadeIn utility). NOT listboxPanelClass -
+  // it sizes to the widest option row (w-max min-w-full), while the
+  // three-field row needs ~270px. Note py-1 is added here but absent from
+  // listboxPanelClass - keep it.
   const panelClass =
     'absolute z-dropdown mt-1 left-0 w-72 ' +
     'bg-surface border border-border rounded-sm py-1 ' +
@@ -383,7 +398,7 @@ export default function PeriodPicker({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel}
+        aria-label={resolvedAriaLabel}
         aria-activedescendant={
           open && !isMobile && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
         }
@@ -392,7 +407,7 @@ export default function PeriodPicker({
         className={listboxTriggerBaseClass}
       >
         <span className={value == null ? 'truncate text-text-muted' : 'truncate'}>
-          {selectedPeriod ? selectedPeriod.name : 'Select period'}
+          {selectedPeriod ? selectedPeriod.name : t('periodPicker.placeholder')}
         </span>
         <ChevronDown
           size={12}
@@ -404,10 +419,10 @@ export default function PeriodPicker({
           Select's - rendered whenever isMobile (NOT gated on `open`) so the
           sheet can play its exit animation. Scroll-into-view on open is
           inherited from the hook's sheetListRef effect. No sheet title; the
-          dialog and the listbox are both labeled "Periods" (spec §5.1). */}
+          dialog and the listbox are both labeled "Periods". */}
       {isMobile && (
-        <BottomSheet open={open} onClose={() => closePanel(true)} aria-label="Periods">
-          <div ref={sheetListRef} role="listbox" aria-label="Periods" className="pb-1">
+        <BottomSheet open={open} onClose={() => closePanel(true)} aria-label={t('periodPicker.panelLabel')}>
+          <div ref={sheetListRef} role="listbox" aria-label={t('periodPicker.panelLabel')} className="pb-1">
             {groups.map((group, gi) => (
               <Fragment key={group.year}>
                 {gi > 0 && <div className="h-px bg-border my-1 mx-2" aria-hidden="true" />}
@@ -436,12 +451,12 @@ export default function PeriodPicker({
                 type="button"
                 role="option"
                 aria-selected={false}
-                aria-label={VIEW_ALL_LABEL}
+                aria-label={viewAllLabel}
                 onClick={() => activateIndex(viewAllIndex)}
                 className="w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover"
               >
                 <CalendarRange size={16} className="text-text-muted flex-shrink-0" />
-                <span className="truncate">{VIEW_ALL_LABEL}</span>
+                <span className="truncate">{viewAllLabel}</span>
               </button>
             )}
           </div>
@@ -449,11 +464,11 @@ export default function PeriodPicker({
       )}
 
       {/* Desktop panel: anchored popover, keyboard nav + type-ahead inherited
-          from the hook. Group labels px-3 on desktop (§4.2), dividers between
+          from the hook. Group labels px-3 on desktop, dividers between
           groups only, both aria-hidden - years travel in each option's
-          composed aria-label (deviation 8). */}
+          composed aria-label. */}
       {open && !isMobile && (
-        <div ref={panelRef} role="listbox" aria-label="Periods" className={panelClass}>
+        <div ref={panelRef} role="listbox" aria-label={t('periodPicker.panelLabel')} className={panelClass}>
           {groups.map((group, gi) => (
             <Fragment key={group.year}>
               {gi > 0 && <div className="h-px bg-border my-1 mx-2" aria-hidden="true" />}
@@ -479,7 +494,7 @@ export default function PeriodPicker({
           {/* View-all pseudo-option as a PINNED FOOTER: in-flow after 7 rows
               it lands below the 280px scroll fold, so it sticks to the panel's
               visible bottom instead - always visible without raising the
-              shared max-h (spec §9). role="option" + optionId(viewAllIndex)
+              shared max-h. role="option" + optionId(viewAllIndex)
               keep it inside the hook's option space: ArrowDown/End/type-ahead
               reach it, aria-activedescendant can point at it, Enter/click
               activate it (activateIndex branch). aria-selected={false}: it is
@@ -490,7 +505,7 @@ export default function PeriodPicker({
               role="option"
               id={optionId(viewAllIndex)}
               aria-selected={false}
-              aria-label={VIEW_ALL_LABEL}
+              aria-label={viewAllLabel}
               tabIndex={-1}
               onClick={() => activateIndex(viewAllIndex)}
               className={
@@ -500,7 +515,7 @@ export default function PeriodPicker({
               }
             >
               <CalendarRange size={14} className="text-text-muted flex-shrink-0" />
-              <span className="flex-1 min-w-0 truncate">{VIEW_ALL_LABEL}</span>
+              <span className="flex-1 min-w-0 truncate">{viewAllLabel}</span>
             </button>
           )}
         </div>

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { authApi, clearAuthToken } from '../../api/client';
 import { getApiErrorMessage } from '../../utils/errors';
 
 export default function DeleteAccountSection() {
+  const { t } = useTranslation('settings');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const checkQuery = useQuery({
@@ -23,22 +25,22 @@ export default function DeleteAccountSection() {
     try {
       await authApi.deleteAccount(password);
       queryClient.clear();
-      toast.success('Account deleted successfully.');
+      toast.success(t('deleteAccount.success'));
       clearAuthToken();
       navigate('/login');
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete account'));
+      toast.error(getApiErrorMessage(error, t('deleteAccount.failed')));
     } finally {
       setIsDeleting(false);
     }
   };
 
   if (checkQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Loading...</p>;
+    return <p className="text-sm text-text-muted">{t('deleteAccount.loading')}</p>;
   }
 
   if (checkQuery.isError || !checkQuery.data) {
-    return <p className="text-sm text-text-muted">Failed to load account deletion info</p>;
+    return <p className="text-sm text-text-muted">{t('deleteAccount.loadError')}</p>;
   }
 
   const check = checkQuery.data;
@@ -46,24 +48,24 @@ export default function DeleteAccountSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-sans font-semibold text-negative text-sm mb-1">Delete Account</h3>
+        <h3 className="font-sans font-semibold text-negative text-sm mb-1">{t('deleteAccount.title')}</h3>
         <p className="text-sm text-text-muted">
-          Permanently delete your account and all associated data. This action is irreversible.
+          {t('deleteAccount.body')}
         </p>
       </div>
 
       {check && !check.can_delete && (
         <div className="bg-warning-bg rounded-sm p-4">
           <p className="text-sm font-medium text-warning mb-2">
-            Account deletion is blocked
+            {t('deleteAccount.blockedTitle')}
           </p>
           <p className="text-sm text-warning mb-2">
-            You own workspaces with other members. Transfer ownership or remove all members first.
+            {t('deleteAccount.blockedBody')}
           </p>
           {check.blocking_workspaces && (
             <ul className="text-sm text-warning list-disc list-inside">
               {check.blocking_workspaces.map(ws => (
-                <li key={ws.id}>{ws.name} ({ws.member_count} members)</li>
+                <li key={ws.id}>{ws.name} ({t('deleteAccount.memberCount', { count: ws.member_count })})</li>
               ))}
             </ul>
           )}
@@ -72,10 +74,10 @@ export default function DeleteAccountSection() {
 
       {check && check.can_delete && (
         <div className="bg-negative-bg rounded-sm p-4 space-y-2">
-          <p className="text-sm font-medium text-negative">The following will be permanently deleted:</p>
+          <p className="text-sm font-medium text-negative">{t('deleteAccount.willDelete')}</p>
           {check.solo_workspaces.length > 0 && (
             <div>
-              <p className="text-sm text-negative">Workspaces and all their data:</p>
+              <p className="text-sm text-negative">{t('deleteAccount.workspacesLabel')}</p>
               <ul className="text-sm text-negative list-disc list-inside">
                 {check.solo_workspaces.map(name => <li key={name}>{name}</li>)}
               </ul>
@@ -83,12 +85,13 @@ export default function DeleteAccountSection() {
           )}
           {check.shared_workspace_memberships > 0 && (
             <p className="text-sm text-negative">
-              You will be removed from {check.shared_workspace_memberships} shared workspace(s).
+              {t('deleteAccount.sharedRemoval', { count: check.shared_workspace_memberships })}
             </p>
           )}
           <p className="text-sm text-negative">
-            Total records affected: {check.total_transactions} transactions,{' '}
-            {check.total_planned_transactions} planned transactions.
+            {t('deleteAccount.totalAffected')}{' '}
+            {t('deleteAccount.txnCount', { count: check.total_transactions })},{' '}
+            {t('deleteAccount.plannedCount', { count: check.total_planned_transactions })}.
           </p>
         </div>
       )}
@@ -96,7 +99,7 @@ export default function DeleteAccountSection() {
       <form onSubmit={handleDelete} className="space-y-4">
         <div>
           <label htmlFor="delete-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
-            Confirm your password
+            {t('deleteAccount.passwordLabel')}
           </label>
           <input
             id="delete-password"
@@ -105,7 +108,7 @@ export default function DeleteAccountSection() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
-            placeholder="Enter your password"
+            placeholder={t('deleteAccount.passwordPlaceholder')}
           />
         </div>
 
@@ -114,7 +117,7 @@ export default function DeleteAccountSection() {
           disabled={isDeleting || !check?.can_delete || !password}
           className="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isDeleting ? 'Deleting...' : 'Delete My Account'}
+          {isDeleting ? t('deleteAccount.deleting') : t('deleteAccount.submit')}
         </button>
       </form>
     </div>

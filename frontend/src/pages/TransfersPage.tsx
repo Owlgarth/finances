@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeftRight, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { transfersApi } from '../api/client'
 import type { Transfer } from '../types'
 import { useAccounts } from '../hooks/useDomain'
@@ -23,6 +24,7 @@ import { FilterPanel, FilterField } from '../components/common/FilterBar'
 import { inputClass, primaryButtonClass } from '../components/common/formStyles'
 
 export default function TransfersPage() {
+  const { t } = useTranslation('transfers')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
@@ -79,17 +81,19 @@ export default function TransfersPage() {
       queryClient.invalidateQueries({ queryKey: ['transfers'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
       queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success('Transfer deleted')
+      toast.success(t('toast.deleted'))
       setDeleting(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete transfer'))
+      toast.error(getApiErrorMessage(error, t('toast.deleteFailed')))
       setDeleting(null)
     },
   })
 
   const openCreate = () => { setRepeatTransfer(null); setTransferOpen(true) }
-  const openRepeat = (t: Transfer) => { setRepeatTransfer(t); setTransferOpen(true) }
+  // Parameter is `transfer`, not `t`, so the translation function stays
+  // reachable inside this helper.
+  const openRepeat = (transfer: Transfer) => { setRepeatTransfer(transfer); setTransferOpen(true) }
 
   const clearFilters = () => updateParams({ account: null, from: null, to: null })
 
@@ -99,12 +103,12 @@ export default function TransfersPage() {
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Transfers</h1>
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
         <div className="flex items-center gap-2">
           {/* Hidden on mobile: the FAB quick-add has Transfer. */}
           {canWrite && (
             <button type="button" onClick={openCreate} className={`${primaryButtonClass} max-sm:hidden`}>
-              <Plus size={13} className="inline mr-1" /> New transfer
+              <Plus size={13} className="inline mr-1" /> {t('actions.newTransfer')}
             </button>
           )}
         </div>
@@ -112,22 +116,22 @@ export default function TransfersPage() {
 
       {/* Always visible: three controls don't justify a collapsible panel. */}
       <FilterPanel onClear={hasFilters ? clearFilters : null}>
-        <FilterField label="Account">
+        <FilterField label={t('filters.accountLabel')}>
           <Select
             value={account}
             onChange={(v) => updateParams({ account: v })}
             options={accountOptions}
-            placeholder="All accounts"
-            aria-label="Filter by account"
+            placeholder={t('filters.allAccounts')}
+            aria-label={t('filters.filterByAccountAria')}
           />
         </FilterField>
-        <FilterField label="Date" className="col-span-2">
+        <FilterField label={t('filters.dateLabel')} className="col-span-2">
           <div className="flex items-center gap-1.5">
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => updateParams({ from: e.target.value || null })}
-              aria-label="From date"
+              aria-label={t('filters.fromDateAria')}
               className={`${inputClass} max-sm:min-h-[44px]`}
             />
             <span className="text-text-muted text-xs">-</span>
@@ -135,7 +139,7 @@ export default function TransfersPage() {
               type="date"
               value={dateTo}
               onChange={(e) => updateParams({ to: e.target.value || null })}
-              aria-label="To date"
+              aria-label={t('filters.toDateAria')}
               className={`${inputClass} max-sm:min-h-[44px]`}
             />
           </div>
@@ -146,39 +150,39 @@ export default function TransfersPage() {
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : items.length === 0 ? (
         hasFilters ? (
-          <p className="text-sm text-text-muted">No transfers match your filters.</p>
+          <p className="text-sm text-text-muted">{t('noMatch')}</p>
         ) : (
           <EmptyState
             icon={<ArrowLeftRight size={48} strokeWidth={1.5} className="text-text-muted/30" />}
-            heading="No transfers yet"
-            message="Record a transfer from Accounts or the create menu; it will appear here."
+            heading={t('emptyHeading')}
+            message={t('emptyMessage')}
           />
         )
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-          {items.map((t) => (
+          {items.map((row) => (
             <div
-              key={t.id}
-              {...(isTouch && canWrite ? tappableProps(() => setRowAction(t)) : {})}
+              key={row.id}
+              {...(isTouch && canWrite ? tappableProps(() => setRowAction(row)) : {})}
               className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
                 isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
             >
               <div className="min-w-0 flex-1">
                 <div className="text-text truncate">
-                  {t.from_account_name} → {t.to_account_name}
-                  {t.description && <span className="text-text-muted"> · {t.description}</span>}
+                  {row.from_account_name} → {row.to_account_name}
+                  {row.description && <span className="text-text-muted"> · {row.description}</span>}
                 </div>
-                <div className="text-[10px] font-mono text-text-muted">{t.date}</div>
+                <div className="text-[10px] font-mono text-text-muted">{row.date}</div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 pl-3">
                 {/* Cross-currency: second small line instead of one long string
                     that would overflow 375px. */}
                 <span className="font-mono text-text text-right">
-                  <span className="whitespace-nowrap">{formatAmount(t.from_amount)} {t.from_currency_code}</span>
-                  {t.from_currency_code !== t.to_currency_code && (
+                  <span className="whitespace-nowrap">{formatAmount(row.from_amount)} {row.from_currency_code}</span>
+                  {row.from_currency_code !== row.to_currency_code && (
                     <span className="block text-[10px] text-text-muted whitespace-nowrap">
-                      → {formatAmount(t.to_amount)} {t.to_currency_code}
+                      → {formatAmount(row.to_amount)} {row.to_currency_code}
                     </span>
                   )}
                 </span>
@@ -186,9 +190,9 @@ export default function TransfersPage() {
                     invisible tap targets; the row tap opens the sheet instead. */}
                 {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button type="button" onClick={() => setEditingId(t.id)} title="Edit" aria-label="Edit transfer" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button type="button" onClick={() => openRepeat(t)} title="Repeat" aria-label="Repeat transfer" className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
-                    <button type="button" onClick={() => setDeleting(t)} title="Delete" aria-label="Delete transfer" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                    <button type="button" onClick={() => setEditingId(row.id)} title={t('row.edit')} aria-label={t('row.editAria')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button type="button" onClick={() => openRepeat(row)} title={t('row.repeat')} aria-label={t('row.repeatAria')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
+                    <button type="button" onClick={() => setDeleting(row)} title={t('row.delete')} aria-label={t('row.deleteAria')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
                 )}
               </div>
@@ -215,9 +219,9 @@ export default function TransfersPage() {
         onClose={() => setRowAction(null)}
         title={rowAction ? `${rowAction.from_account_name} → ${rowAction.to_account_name}` : undefined}
         actions={[
-          { label: 'Edit', icon: Pencil, onSelect: () => rowAction && setEditingId(rowAction.id) },
-          { label: 'Repeat', icon: Repeat, onSelect: () => rowAction && openRepeat(rowAction) },
-          { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => rowAction && setDeleting(rowAction) },
+          { label: t('row.edit'), icon: Pencil, onSelect: () => rowAction && setEditingId(rowAction.id) },
+          { label: t('row.repeat'), icon: Repeat, onSelect: () => rowAction && openRepeat(rowAction) },
+          { label: t('row.delete'), icon: Trash2, destructive: true, onSelect: () => rowAction && setDeleting(rowAction) },
         ]}
       />
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} repeatFrom={repeatTransfer} />
@@ -228,8 +232,11 @@ export default function TransfersPage() {
       )}
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete transfer"
-        message={`Delete this transfer from "${deleting?.from_account_name}" to "${deleting?.to_account_name}"? Both sides will be removed.`}
+        title={t('confirmDelete.title')}
+        message={t('confirmDelete.message', {
+          from: deleting?.from_account_name ?? '',
+          to: deleting?.to_account_name ?? '',
+        })}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}

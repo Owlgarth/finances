@@ -1,0 +1,121 @@
+{
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "member": "Member",
+    "viewer": "Viewer"
+  },
+  "page": {
+    "title": "Workspace Members",
+    "loadError": "Failed to load workspace members",
+    "empty": "No members in this workspace yet.",
+    "addMember": "Add Member",
+    "changeMyPassword": "Change My Password"
+  },
+  "table": {
+    "user": "User",
+    "role": "Role",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "badges": {
+    "you": "You",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "row": {
+    "editRole": "Edit Role",
+    "resetPassword": "Reset Password",
+    "reset2fa": "Reset 2FA",
+    "remove": "Remove"
+  },
+  "sheet": {
+    "editRole": "Edit role",
+    "resetPassword": "Reset password",
+    "reset2fa": "Reset 2FA",
+    "removeFromWorkspace": "Remove from workspace"
+  },
+  "toasts": {
+    "memberAdded": "Member added to workspace",
+    "addFailed": "Failed to add member",
+    "roleUpdated": "Role updated",
+    "roleUpdateFailed": "Failed to update role",
+    "memberRemoved": "Member removed",
+    "removeFailed": "Failed to remove member",
+    "passwordReset": "Password reset successfully for {{email}}",
+    "passwordResetFailed": "Failed to reset password",
+    "twoFactorReset": "Two-factor authentication reset",
+    "twoFactorResetFailed": "Failed to reset 2FA",
+    "ownPasswordChanged": "Your password has been changed successfully",
+    "ownPasswordChangeFailed": "Failed to change password"
+  },
+  "removeConfirm": {
+    "title": "Remove Member",
+    "message": "Are you sure you want to remove \"{{email}}\" from this workspace? They will lose access to all workspace data."
+  },
+  "reset2faConfirm": {
+    "title": "Reset 2FA",
+    "message": "Reset two-factor authentication for {{name}}? They will need to set up 2FA again on their next login.",
+    "confirm": "Reset 2FA"
+  },
+  "addModal": {
+    "title": "Add Member",
+    "emailLabel": "Email Address *",
+    "emailPlaceholder": "user@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Minimum 8 characters (optional)",
+    "passwordHelper": "Only used if no account exists for this email yet.",
+    "fullNameLabel": "Full Name",
+    "fullNamePlaceholder": "John Doe (optional)",
+    "roleLabel": "Role *",
+    "roleAria": "Role",
+    "roleViewer": "Viewer - Can view all data",
+    "roleMember": "Member - Can view and edit data",
+    "roleAdmin": "Admin - Can manage members and settings",
+    "cancel": "Cancel",
+    "submitting": "Adding...",
+    "submit": "Add Member"
+  },
+  "editRoleModal": {
+    "title": "Change Role",
+    "updateFor": "Update role for",
+    "roleLabel": "Role",
+    "roleAria": "Role",
+    "cancel": "Cancel",
+    "submitting": "Updating...",
+    "submit": "Update Role"
+  },
+  "resetPasswordModal": {
+    "title": "Reset Password",
+    "resettingFor": "Resetting password for",
+    "newPasswordLabel": "New Password *",
+    "newPasswordPlaceholder": "Enter new password",
+    "confirmPasswordLabel": "Confirm Password *",
+    "confirmPasswordPlaceholder": "Confirm new password",
+    "tooShort": "Password must be at least 8 characters",
+    "mismatch": "Passwords do not match",
+    "warning": "The user will need to log in with this new password. Please share it with them securely.",
+    "cancel": "Cancel",
+    "submitting": "Resetting...",
+    "submit": "Reset Password"
+  },
+  "changeMyPasswordModal": {
+    "title": "Change My Password",
+    "intro": "Update your account password",
+    "currentLabel": "Current Password *",
+    "currentPlaceholder": "Enter current password",
+    "newLabel": "New Password *",
+    "newPlaceholder": "Enter new password",
+    "minLength": "Minimum 8 characters",
+    "confirmLabel": "Confirm New Password *",
+    "confirmPlaceholder": "Confirm new password",
+    "currentRequired": "Current password is required",
+    "tooShort": "New password must be at least 8 characters",
+    "mismatch": "New passwords do not match",
+    "sameAsCurrent": "New password must be different from current password",
+    "stayLoggedIn": "You will remain logged in after changing your password.",
+    "cancel": "Cancel",
+    "submitting": "Changing...",
+    "submit": "Change Password"
+  }
+}

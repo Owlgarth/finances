@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.db.models import IntegerChoices
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 
 class WeekdayChoices(IntegerChoices):
@@ -22,7 +24,7 @@ class UserManager(BaseUserManager):
 
     def create_user(self, email, password=None, **extra_fields):
         if not email:
-            raise ValueError('The Email field must be set')
+            raise ValueError(_('The Email field must be set'))
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -102,6 +104,16 @@ class UserPreferences(models.Model):
         choices=FontChoices,
         default=FontChoices.GEIST,
         help_text='Font family for the user interface',
+    )
+    language = models.CharField(
+        max_length=10,
+        default=settings.DEFAULT_LANGUAGE,
+        help_text='UI language code from the language registry',
+    )
+    number_format = models.CharField(
+        max_length=10,
+        default=settings.DEFAULT_NUMBER_FORMAT,
+        help_text='Number and date formatting style from the language registry',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
