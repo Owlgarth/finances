@@ -141,9 +141,9 @@ export function formatPeriodName(startIso: string, endIso: string): string {
  * (passed unconditionally, so any shape containing name tokens localizes
  * with the UI language; eu shapes are numeric).
  *
- * Worked examples (PERIOD_PICKER_SPEC.md §7.2 is the contract for the en
- * shapes; the frontend has no test runner, so these docblock examples are
- * the review reference - keep them in sync if the formats ever change):
+ * Worked examples (these docblock examples are the contract for the en
+ * shapes - the frontend has no test runner, so they are the review
+ * reference; keep them in sync if the formats ever change):
  *   en style (default):
  *     formatPeriodRange('2026-04-01', '2026-04-30') === 'Apr 1 - Apr 30'
  *     formatPeriodRange('2028-02-01', '2028-02-29') === 'Feb 1 - Feb 29'
@@ -163,7 +163,7 @@ export function formatPeriodName(startIso: string, endIso: string): string {
  * en-dash separator, year only on the end, e.g. "04 Sep" en-dash "03 Oct
  * 2026") and must stay byte-identical to it (hand-created periods persist it
  * as their name). Do NOT unify the two formats. This one is a display-only
- * context-selector range (spec §7): month-first, no leading zeros, year on
+ * context-selector range: month-first, no leading zeros, year on
  * BOTH endpoints or neither, regular hyphen " - " separator, no same-month
  * compression - same function, style-aware since the number-format
  * preference exists (the eu style changes the date shapes only; the " - "
