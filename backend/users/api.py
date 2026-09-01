@@ -96,13 +96,13 @@ def update_preferences(request, data: UserPreferencesUpdate):
     }
 
 
-@router.get('/me/consents', auth=JWTAuth(), response={200: list[ConsentOut]})
+@router.get('/me/consents', auth=JWTAuth(), response={200: list[ConsentOut], 401: DetailOut})
 def list_consents(request):
     """List all active consents for the current user."""
     return 200, services.UserService.get_active_consents(request.auth)
 
 
-@router.post('/me/consents', auth=JWTAuth(), response={201: ConsentOut})
+@router.post('/me/consents', auth=JWTAuth(), response={201: ConsentOut, 401: DetailOut})
 def grant_consent(request, data: ConsentIn):
     """Record a new consent (e.g., after accepting updated terms)."""
     ip = get_client_ip(request)
@@ -110,7 +110,7 @@ def grant_consent(request, data: ConsentIn):
     return 201, consent
 
 
-@router.get('/me/consent-status', auth=JWTAuth(), response={200: ConsentStatusOut})
+@router.get('/me/consent-status', auth=JWTAuth(), response={200: ConsentStatusOut, 401: DetailOut})
 def get_consent_status(request):
     """
     Check whether the user's active consents match the current document versions.
@@ -121,14 +121,16 @@ def get_consent_status(request):
     return 200, services.UserService.get_consent_status(request.auth)
 
 
-@router.delete('/me/consents/{consent_type}', auth=JWTAuth(), response={200: ConsentOut, 404: DetailOut})
+@router.delete(
+    '/me/consents/{consent_type}', auth=JWTAuth(), response={200: ConsentOut, 401: DetailOut, 404: DetailOut}
+)
 def withdraw_consent(request, consent_type: ConsentTypeLiteral):
     """Withdraw consent of a specific type."""
     consent = services.UserService.withdraw_consent(request.auth, consent_type)
     return 200, consent
 
 
-@router.get('/me/deletion-check', auth=JWTAuth(), response={200: AccountDeleteCheckOut})
+@router.get('/me/deletion-check', auth=JWTAuth(), response={200: AccountDeleteCheckOut, 401: DetailOut})
 def check_account_deletion(request):
     """
     Pre-check what would happen if the user deletes their account.
@@ -185,7 +187,7 @@ def reset_account(request, data: AccountResetIn):
     }
 
 
-@router.get('/me/export', auth=JWTAuth())
+@router.get('/me/export', auth=JWTAuth(), response={401: DetailOut, 429: DetailOut})
 @rate_limit('data_export', limit=settings.RATE_LIMIT_DATA_EXPORT, period=settings.RATE_LIMIT_DATA_EXPORT_PERIOD)
 def export_my_data(request):
     """
@@ -193,8 +195,9 @@ def export_my_data(request):
 
     Downloads a comprehensive JSON file containing the user's profile,
     preferences, consent records, and all financial data across all workspaces.
-
-    Rate limited to 3 exports per hour.
+    Returns a plain HttpResponse (no Ninja 200 schema) - only error status
+    codes are declared. Status codes: 200 file bytes, 401 invalid or expired
+    token, 429 rate limit exceeded (3 exports per hour).
     """
     export_data = services.UserService.export_all_data(request.auth)
 
@@ -206,7 +209,9 @@ def export_my_data(request):
     return response
 
 
-@router.post('/me/import', auth=JWTAuth(), response={200: ImportResultOut, 400: DetailOut})
+@router.post(
+    '/me/import', auth=JWTAuth(), response={200: ImportResultOut, 400: DetailOut, 401: DetailOut, 429: DetailOut}
+)
 @rate_limit('data_import', limit=settings.RATE_LIMIT_DATA_IMPORT, period=settings.RATE_LIMIT_DATA_IMPORT_PERIOD)
 def import_my_data(request, data: FullImportIn):
     """
@@ -219,7 +224,11 @@ def import_my_data(request, data: FullImportIn):
     return 200, result
 
 
-@router.post('/import-legacy', auth=JWTAuth(), response={200: LegacyImportResultOut, 400: DetailOut})
+@router.post(
+    '/import-legacy',
+    auth=JWTAuth(),
+    response={200: LegacyImportResultOut, 400: DetailOut, 401: DetailOut, 429: DetailOut},
+)
 @rate_limit('data_import', limit=settings.RATE_LIMIT_DATA_IMPORT, period=settings.RATE_LIMIT_DATA_IMPORT_PERIOD)
 def import_legacy_data(request, data: LegacyImportIn):
     """
@@ -236,12 +245,12 @@ def import_legacy_data(request, data: LegacyImportIn):
     return 200, result
 
 
-@router.get('/me/2fa', auth=JWTAuth(), response={200: TwoFAStatusOut})
+@router.get('/me/2fa', auth=JWTAuth(), response={200: TwoFAStatusOut, 401: DetailOut})
 def get_2fa_status(request):
     return 200, TwoFactorService.get_status(request.auth)
 
 
-@router.post('/me/2fa/setup', auth=JWTAuth(), response={200: TwoFASetupOut, 400: DetailOut})
+@router.post('/me/2fa/setup', auth=JWTAuth(), response={200: TwoFASetupOut, 400: DetailOut, 401: DetailOut})
 def setup_2fa(request):
     return 200, TwoFactorService.setup(request.auth)
 
