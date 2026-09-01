@@ -15,6 +15,7 @@ import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } fr
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
+import { normalizeAmountInput } from '../../../utils/amountInput'
 import { rowsToItems } from '../../../utils/transactionItems'
 import { listboxPanelClass } from '../../common/listboxParts'
 import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
@@ -81,6 +82,7 @@ const pickAccountForCurrency = (
 
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy, prefillReceipt = null }: Props) {
   const { t } = useTranslation('transactions')
+  const { t: tCommon } = useTranslation('common')
   const isEdit = !!transaction
   const queryClient = useQueryClient()
   // No autofocus on touch: focusing an input on open yanks the keyboard up
@@ -316,7 +318,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     open && suggestionsOpen && suggestions.length > 0 && description.trim().length >= 2
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (amounts: { amount: string; originalAmount: string }) => {
       const payload = {
         date,
         description: description.trim(),
@@ -324,11 +326,13 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         // would silently clear a stored note.
         note: note.trim() || null,
         type,
-        amount,
+        // Already-normalized drafts (handleSubmit): the fields keep what
+        // the user typed, the wire gets dot-decimal.
+        amount: amounts.amount,
         account_id: accountId,
         currency_code: currencyCode,
         category_id: type === 'adjustment' ? null : categoryId,
-        original_amount: otherCurrency ? originalAmount : null,
+        original_amount: otherCurrency ? amounts.originalAmount : null,
         original_currency_code: otherCurrency ? originalCurrencyCode : null,
       }
       if (isEdit) {
@@ -377,9 +381,15 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     e.preventDefault()
     if (!description.trim()) return toast.error(t('form.descriptionRequired'))
     if (!amount) return toast.error(t('form.amountRequired'))
+    const normAmount = normalizeAmountInput(amount)
+    if (normAmount === null) return toast.error(tCommon('validation.amountInvalid'))
+    // The other-currency amount is optional: an empty field keeps today's
+    // empty payload, a typed one must parse.
+    const normOriginalAmount = originalAmount === '' ? '' : normalizeAmountInput(originalAmount)
+    if (normOriginalAmount === null) return toast.error(tCommon('validation.amountInvalid'))
     if (type === 'adjustment' && !accountId) return toast.error(t('form.adjustmentNeedsAccount'))
     if (!currencyCode) return toast.error(t('form.chooseCurrency'))
-    mutation.mutate()
+    mutation.mutate({ amount: normAmount, originalAmount: normOriginalAmount })
   }
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
@@ -508,7 +518,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             <label htmlFor="tx-amount" className={labelClass}>
               {type === 'adjustment' ? t('form.deltaAmountLabel') : t('form.amountLabel')} {currencyCode ? `(${currencyCode})` : ''}
             </label>
-            <input id="tx-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
+            {/* text (not number): browsers strip comma entry from number
+                inputs before JS sees it, so comma-decimal typing must be
+                received as text and parsed at submit (normalizeAmountInput). */}
+            <input id="tx-amount" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
           </div>
         </div>
 
@@ -654,7 +667,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             </label>
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
-                <input type="number" inputMode="decimal" step="0.01" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
+                <input type="text" inputMode="decimal" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
                 <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono />
               </div>
             )}

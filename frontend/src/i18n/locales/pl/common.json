@@ -64,6 +64,9 @@
     "body": "Strona, której szukasz, nie istnieje lub została przeniesiona.",
     "cta": "Przejdź do pulpitu"
   },
+  "validation": {
+    "amountInvalid": "Wpisz prawidłową kwotę"
+  },
   "loading": "Wczytywanie",
   "errorMessage": {
     "retry": "Spróbuj ponownie",

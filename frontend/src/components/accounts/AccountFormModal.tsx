@@ -11,6 +11,7 @@ import type { Account, AccountType } from '../../types'
 import { useEnabledCurrencies } from '../../hooks/useDomain'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
+import { normalizeAmountInput } from '../../utils/amountInput'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 interface Props {
@@ -31,6 +32,7 @@ const TYPE_OPTIONS: { value: AccountType; labelKey: 'typeOptions.bank' | 'typeOp
 
 export default function AccountFormModal({ open, onClose, account, onManageCurrencies }: Props) {
   const { t } = useTranslation('accounts')
+  const { t: tCommon } = useTranslation('common')
   const isEdit = !!account
   const queryClient = useQueryClient()
   // No autofocus on touch - don't yank the keyboard up over a fresh modal.
@@ -57,15 +59,15 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
   }, [open, account])
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (normOpeningBalance: string) => {
       if (isEdit) {
-        return accountsApi.update(account.id, { name: name.trim(), type, opening_balance: openingBalance, is_default_for_currency: isDefault })
+        return accountsApi.update(account.id, { name: name.trim(), type, opening_balance: normOpeningBalance, is_default_for_currency: isDefault })
       }
       return accountsApi.create({
         name: name.trim(),
         type,
         currency_code: currencyCode!,
-        opening_balance: openingBalance,
+        opening_balance: normOpeningBalance,
         is_default_for_currency: isDefault,
       })
     },
@@ -82,7 +84,11 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
     e.preventDefault()
     if (!name.trim()) return toast.error(t('validation.nameRequired'))
     if (!isEdit && !currencyCode) return toast.error(t('validation.currencyRequired'))
-    mutation.mutate()
+    // The opening balance may be left empty (today's empty payload is kept
+    // as-is); a typed value must parse in the active number style.
+    const normOpeningBalance = openingBalance === '' ? '' : normalizeAmountInput(openingBalance)
+    if (normOpeningBalance === null) return toast.error(tCommon('validation.amountInvalid'))
+    mutation.mutate(normOpeningBalance)
   }
 
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: t('currencyOption', { code: c.code, name: c.name }) }))
@@ -134,10 +140,11 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
 
         <div>
           <label htmlFor="acc-opening" className={labelClass}>{t('fields.openingBalance')}</label>
+          {/* text (not number): comma-decimal entry must reach the
+              submit-time parser as typed (normalizeAmountInput). */}
           <input
             id="acc-opening"
-            type="number" inputMode="decimal"
-            step="0.01"
+            type="text" inputMode="decimal"
             value={openingBalance}
             onChange={(e) => setOpeningBalance(e.target.value)}
             className={inputClass}

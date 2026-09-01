@@ -12,6 +12,7 @@ import { useAccounts, useBudgets, useEnabledCurrencies } from '../../../hooks/us
 import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
+import { normalizeAmountInput } from '../../../utils/amountInput'
 import { destructiveButtonClass, inputClass, labelClass, positiveButtonClass, primaryButtonClass, secondaryButtonClass, warningButtonClass } from '../../common/formStyles'
 
 // Sentinel for the deliberate account-less state. Select's value contract is
@@ -43,6 +44,7 @@ interface Props {
 
 export default function PlannedFormModal({ open, onClose, planned, copyFrom, onDelete, onCopy, onExecute, onCancelPlan }: Props) {
   const { t } = useTranslation('planned')
+  const { t: tCommon } = useTranslation('common')
   const isEdit = !!planned
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
@@ -111,8 +113,8 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   })
 
   const mutation = useMutation({
-    mutationFn: () => {
-      const payload = { name: name.trim(), amount, account_id: accountId, currency_code: currencyCode, category_id: categoryId, planned_date: plannedDate }
+    mutationFn: (normAmount: string) => {
+      const payload = { name: name.trim(), amount: normAmount, account_id: accountId, currency_code: currencyCode, category_id: categoryId, planned_date: plannedDate }
       // Echo the current status back on edit: the schema defaults a missing
       // status to 'pending', which the backend rejects as a revert for done rows.
       return isEdit
@@ -131,10 +133,12 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
     e.preventDefault()
     if (!name.trim()) return toast.error(t('form.nameRequired'))
     if (!amount) return toast.error(t('form.amountRequired'))
+    const normAmount = normalizeAmountInput(amount)
+    if (normAmount === null) return toast.error(tCommon('validation.amountInvalid'))
     // Only reachable before the currencies query lands on an account-less
     // create: a picked account sets the code, and edit/copy seeds it.
     if (!currencyCode) return toast.error(t('form.currencyRequired'))
-    mutation.mutate()
+    mutation.mutate(normAmount)
   }
 
   // The sentinel option's label translates; the sentinel value itself is a
@@ -167,7 +171,9 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="planned-amount" className={labelClass}>{t('form.amountLabel')}</label>
-            <input id="planned-amount" type="number" inputMode="decimal" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
+            {/* text (not number): comma-decimal entry must reach the
+                submit-time parser as typed (normalizeAmountInput). */}
+            <input id="planned-amount" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
           </div>
           <div>
             <label className={labelClass}>{t('form.dateLabel')}</label>

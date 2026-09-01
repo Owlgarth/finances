@@ -6,6 +6,7 @@ import Modal from '../common/Modal'
 import { accountsApi, transactionsApi } from '../../api/client'
 import type { Account } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
+import { normalizeAmountInput } from '../../utils/amountInput'
 import { formatAmount, subtractAmounts } from '../../utils/format'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
@@ -32,11 +33,13 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
 
   // Money rule (utils/format.ts): never run backend Decimals through float
   // math - large balances get off-by-cent deltas recorded as real
-  // transactions. Exact string math via subtractAmounts. The regex gates
-  // e-notation ("1e5" is a valid number-input value that BigInt cannot
-  // parse) and is also the "did they type an amount" check.
-  const validTarget = /^-?(\d+(\.\d*)?|\.\d+)$/.test(target)
-  const delta = balance && validTarget ? subtractAmounts(target, balance.balance) : null
+  // transactions. Exact string math via subtractAmounts. The shared amount
+  // parser (utils/amountInput.ts) gates what BigInt sees - it rejects
+  // e-notation and unparseable separator mixes, accepting either decimal
+  // separator per the active number style - and doubles as the "did they
+  // type an amount" check.
+  const normTarget = normalizeAmountInput(target)
+  const delta = balance && normTarget !== null ? subtractAmounts(normTarget, balance.balance) : null
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -60,7 +63,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!balance) return toast.error(t('setBalance.stillLoading'))
-    if (!validTarget) return toast.error(t('setBalance.enterTarget'))
+    if (normTarget === null) return toast.error(t('setBalance.enterTarget'))
     if (delta === '0.00') return toast.error(t('setBalance.alreadyThisAmount'))
     mutation.mutate()
   }
@@ -76,10 +79,11 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
         </p>
         <div>
           <label htmlFor="target-balance" className={labelClass}>{t('setBalance.newLabel')}</label>
+          {/* text (not number): comma-decimal entry must reach the
+              submit-time parser as typed (normalizeAmountInput). */}
           <input
             id="target-balance"
-            type="number" inputMode="decimal"
-            step="0.01"
+            type="text" inputMode="decimal"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             className={inputClass}
