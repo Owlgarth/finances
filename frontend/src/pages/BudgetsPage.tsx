@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Archive, CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
@@ -19,11 +20,15 @@ import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from
 import Select from '../components/common/Select'
 import DatePicker from '../components/DatePicker'
 
-const CADENCE_OPTIONS: { value: Cadence; label: string }[] = [
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'weeks', label: 'Every N weeks' },
-  { value: 'custom', label: 'Custom periods' },
-]
+// Keys only: t() is resolved at render time inside the components (a
+// module-level t() would freeze the language at load time). `as const`
+// keeps labelKey a literal union so t(o.labelKey) is checked against the
+// budgets catalog.
+const CADENCE_OPTIONS = [
+  { value: 'monthly', labelKey: 'cadence.monthly' },
+  { value: 'weeks', labelKey: 'cadence.weeks' },
+  { value: 'custom', labelKey: 'cadence.custom' },
+] as const
 
 // Default custom-period window: today through today + 29 days (a 30-day
 // window), pre-named with formatPeriodName exactly as date changes re-name
@@ -48,6 +53,7 @@ function formatCardCurrencyCodes(codes: string[]): string {
 }
 
 function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolean; onClose: () => void; onManageCurrencies?: () => void }) {
+  const { t } = useTranslation('budgets')
   const queryClient = useQueryClient()
   // No autofocus on touch — don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -121,47 +127,54 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
         } catch (error) {
           // The budget exists; only the first period failed. Point the user
           // at the recovery path but treat the overall create as successful.
-          toast.error(`${getApiErrorMessage(error, 'Failed to create the first period')} — you can add it from the budget page.`)
+          toast.error(t('createForm.firstPeriodFailed', {
+            message: getApiErrorMessage(error, t('createForm.firstPeriodFailedFallback')),
+          }))
         }
       }
       return budget
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
-      toast.success('Budget created')
+      toast.success(t('createForm.created'))
       handleClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create budget')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('createForm.createFailed'))),
   })
 
   return (
-    <Modal open={open} onClose={handleClose} className="p-6" title="New budget">
+    <Modal open={open} onClose={handleClose} className="p-6" title={t('createForm.title')}>
       <form onSubmit={(e) => {
         e.preventDefault()
-        if (!name.trim()) return toast.error('Name required')
+        if (!name.trim()) return toast.error(t('createForm.nameRequired'))
         if (cadence === 'custom') {
-          if (!customName.trim()) return toast.error('Period name required')
+          if (!customName.trim()) return toast.error(t('createForm.periodNameRequired'))
           // yyyy-MM-dd strings compare correctly lexicographically.
-          if (customEnd < customStart) return toast.error('End date must be on or after the start date')
+          if (customEnd < customStart) return toast.error(t('createForm.endAfterStart'))
         }
         mutation.mutate()
       }} className="space-y-4">
         <div>
-          <label htmlFor="budget-name" className={labelClass}>Name</label>
+          <label htmlFor="budget-name" className={labelClass}>{t('createForm.nameLabel')}</label>
           <input id="budget-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <div>
-          <label className={labelClass}>Cadence</label>
-          <Select value={cadence} onChange={setCadence} options={CADENCE_OPTIONS} aria-label="Cadence" />
+          <label className={labelClass}>{t('createForm.cadenceLabel')}</label>
+          <Select
+            value={cadence}
+            onChange={setCadence}
+            options={CADENCE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+            aria-label={t('createForm.cadenceLabel')}
+          />
         </div>
         {cadence === 'weeks' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="budget-weeks" className={labelClass}>Every N weeks</label>
+              <label htmlFor="budget-weeks" className={labelClass}>{t('createForm.weeksLabel')}</label>
               <input id="budget-weeks" type="number" inputMode="numeric" min="1" value={weeks} onChange={(e) => setWeeks(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Anchor date</label>
+              <label className={labelClass}>{t('createForm.anchorLabel')}</label>
               <DatePicker value={anchor} onChange={setAnchor} />
             </div>
           </div>
@@ -170,10 +183,10 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="budget-period-start" className={labelClass}>Start date</label>
+                <label htmlFor="budget-period-start" className={labelClass}>{t('createForm.startLabel')}</label>
                 <DatePicker
                   id="budget-period-start"
-                  placeholder="Start"
+                  placeholder={t('createForm.startPlaceholder')}
                   value={customStart}
                   onChange={(v) => {
                     setCustomStart(v)
@@ -182,10 +195,10 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
                 />
               </div>
               <div>
-                <label htmlFor="budget-period-end" className={labelClass}>End date</label>
+                <label htmlFor="budget-period-end" className={labelClass}>{t('createForm.endLabel')}</label>
                 <DatePicker
                   id="budget-period-end"
-                  placeholder="End"
+                  placeholder={t('createForm.endPlaceholder')}
                   value={customEnd}
                   onChange={(v) => {
                     setCustomEnd(v)
@@ -195,7 +208,7 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
               </div>
             </div>
             <div>
-              <label htmlFor="budget-period-name" className={labelClass}>Period name</label>
+              <label htmlFor="budget-period-name" className={labelClass}>{t('createForm.periodNameLabel')}</label>
               <input
                 id="budget-period-name"
                 value={customName}
@@ -211,9 +224,9 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
           onManageCurrencies={onManageCurrencies}
         />
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={handleClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={handleClose} className={secondaryButtonClass}>{t('createForm.cancel')}</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Creating…' : 'Create'}
+            {mutation.isPending ? t('createForm.creating') : t('createForm.create')}
           </button>
         </div>
       </form>
@@ -226,6 +239,7 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
 // the form is open (unmount on close). That remount re-seeds state per open
 // with zero open-effects.
 function EditBudgetModal({ budget, onClose, onManageCurrencies }: { budget: Budget; onClose: () => void; onManageCurrencies?: () => void }) {
+  const { t } = useTranslation('budgets')
   const queryClient = useQueryClient()
   // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -241,24 +255,24 @@ function EditBudgetModal({ budget, onClose, onManageCurrencies }: { budget: Budg
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
       // The detail page switcher reads ['budget', id].
       queryClient.invalidateQueries({ queryKey: ['budget', budget.id] })
-      toast.success('Budget updated')
+      toast.success(t('editForm.updated'))
       onClose()
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update budget')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('editForm.updateFailed'))),
   })
 
   return (
-    <Modal open onClose={onClose} className="p-6" title="Edit budget">
-      <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error('Name required'); mutation.mutate() }} className="space-y-4">
+    <Modal open onClose={onClose} className="p-6" title={t('editForm.title')}>
+      <form onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return toast.error(t('editForm.nameRequired')); mutation.mutate() }} className="space-y-4">
         <div>
-          <label htmlFor="budget-edit-name" className={labelClass}>Name</label>
+          <label htmlFor="budget-edit-name" className={labelClass}>{t('editForm.nameLabel')}</label>
           <input id="budget-edit-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoFocus={!isTouch} />
         </div>
         <CurrencySetField value={currencyCodes} onChange={setCurrencyCodes} onManageCurrencies={onManageCurrencies} />
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>Cancel</button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('editForm.cancel')}</button>
           <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-            {mutation.isPending ? 'Saving…' : 'Save'}
+            {mutation.isPending ? t('editForm.saving') : t('editForm.save')}
           </button>
         </div>
       </form>
@@ -267,6 +281,7 @@ function EditBudgetModal({ budget, onClose, onManageCurrencies }: { budget: Budg
 }
 
 export default function BudgetsPage() {
+  const { t } = useTranslation('budgets')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canManageAccounts, canManageCurrencies } = usePermissions()
@@ -297,11 +312,11 @@ export default function BudgetsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
       queryClient.invalidateQueries({ queryKey: ['workspace-categories'] })
-      toast.success('Budget deleted')
+      toast.success(t('deleted'))
       setDeleting(null)
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, 'Failed to delete budget'))
+      toast.error(getApiErrorMessage(error, t('deleteFailed')))
       setDeleting(null)
     },
   })
@@ -313,18 +328,18 @@ export default function BudgetsPage() {
     mutationFn: (id: number) => budgetsApi.setArchive(id, true),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
-      toast.success('Budget unarchived')
+      toast.success(t('unarchived'))
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to unarchive budget')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('unarchiveFailed'))),
   })
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Budgets</h1>
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
         {canManageAccounts && (
           <button onClick={() => setCreateOpen(true)} className={primaryButtonClass}>
-            <Plus size={13} className="inline mr-1" /> New budget
+            <Plus size={13} className="inline mr-1" /> {t('newBudget')}
           </button>
         )}
       </div>
@@ -332,7 +347,7 @@ export default function BudgetsPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[0, 1].map((i) => <div key={i} className="h-20 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : budgets.length === 0 ? (
-        <p className="text-sm text-text-muted">No budgets yet.</p>
+        <p className="text-sm text-text-muted">{t('noBudgetsYet')}</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {budgets.map((b) => (
@@ -344,7 +359,7 @@ export default function BudgetsPage() {
                     muted (badge chip identical to AccountsPage's). */}
                 <span className={`text-sm font-medium truncate ${b.is_active ? 'text-text' : 'text-text-muted'}`}>{b.name}</span>
                 {!b.is_active && (
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">Archived</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">{t('archived')}</span>
                 )}
                 {/* Adjacent icon buttons: real padded hit areas instead of
                     the shared hit-area utility, whose expanded areas would
@@ -361,8 +376,8 @@ export default function BudgetsPage() {
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/budgets/${b.id}/periods`) }}
                     className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
-                    title="View periods"
-                    aria-label={`View periods for ${b.name}`}
+                    title={t('cardActions.viewPeriods')}
+                    aria-label={t('cardActions.viewPeriodsAria', { name: b.name })}
                   >
                     <CalendarRange size={13} />
                   </button>
@@ -371,8 +386,8 @@ export default function BudgetsPage() {
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPeriodModal(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
-                      title="Add period"
-                      aria-label={`Add period to ${b.name}`}
+                      title={t('cardActions.addPeriod')}
+                      aria-label={t('cardActions.addPeriodAria', { name: b.name })}
                     >
                       <Plus size={13} />
                     </button>
@@ -382,8 +397,8 @@ export default function BudgetsPage() {
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
-                      title="Edit"
-                      aria-label={`Edit budget ${b.name}`}
+                      title={t('cardActions.edit')}
+                      aria-label={t('cardActions.editBudgetAria', { name: b.name })}
                     >
                       <Pencil size={13} />
                     </button>
@@ -395,8 +410,8 @@ export default function BudgetsPage() {
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); unarchiveMutation.mutate(b.id) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-text"
-                      title="Unarchive"
-                      aria-label={`Unarchive budget ${b.name}`}
+                      title={t('cardActions.unarchive')}
+                      aria-label={t('cardActions.unarchiveAria', { name: b.name })}
                     >
                       <Archive size={13} />
                     </button>
@@ -406,8 +421,8 @@ export default function BudgetsPage() {
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleting(b) }}
                       className="flex items-center justify-center p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-3 text-text-muted hover:text-negative"
-                      title="Delete"
-                      aria-label={`Delete budget ${b.name}`}
+                      title={t('cardActions.delete')}
+                      aria-label={t('cardActions.deleteBudgetAria', { name: b.name })}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -415,7 +430,9 @@ export default function BudgetsPage() {
                 </span>
               </div>
               <div className="mt-2 text-[10px] font-mono uppercase tracking-wider text-text-muted">
-                {b.cadence === 'weeks' ? `Every ${b.cadence_weeks} weeks` : b.cadence}
+                {b.cadence === 'weeks'
+                  ? t('everyWeeks', { count: b.cadence_weeks })
+                  : t(CADENCE_OPTIONS.find((o) => o.value === b.cadence)!.labelKey)}
               </div>
               {b.currency_codes.length > 0 && (
                 <div className="mt-1 text-[10px] font-mono uppercase tracking-wider text-text-muted">
@@ -430,7 +447,7 @@ export default function BudgetsPage() {
       <div className="mt-4">
         <label className="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer max-sm:min-h-[44px]">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-          Show archived budgets
+          {t('showArchived')}
         </label>
       </div>
 
@@ -459,8 +476,8 @@ export default function BudgetsPage() {
       )}
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete budget"
-        message={`Delete "${deleting?.name}"? Its periods and categories will be deleted, and transactions in those categories will become uncategorized. This cannot be undone.`}
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message', { name: deleting?.name })}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
         isPending={deleteMutation.isPending}

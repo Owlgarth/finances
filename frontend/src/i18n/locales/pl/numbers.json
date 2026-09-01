@@ -1,0 +1,36 @@
+{
+  "datePicker": {
+    "selectDate": "Wybierz datę",
+    "today": "Dzisiaj"
+  },
+  "insights": {
+    "selectBudget": "Wybierz budżet",
+    "budgetAriaLabel": "Budżet",
+    "currencyAriaLabel": "Waluta",
+    "viewBudget": "Zobacz budżet \u2192",
+    "plannedPeriodLabel": "Zaplanowano \u00b7 {{period}}",
+    "currentPeriodFallback": "bieżący okres",
+    "spent": "Wydano",
+    "remaining": "Pozostało",
+    "changeVsPeriod": "{{delta}} względem {{period}}",
+    "seriesPlanned": "zaplanowane",
+    "seriesActual": "faktyczne",
+    "seriesSpent": "wydane",
+    "rowAriaLabel": "{{name}}: zaplanowane {{planned}}, wydane {{spent}} {{currency}}",
+    "noPlanSet": "Brak planu na ten okres",
+    "overPlanUsed": "Ponad plan - wykorzystano {{pct}}%",
+    "planUsed": "wykorzystano {{pct}}% planu",
+    "otherCategory": "Inne",
+    "noCategoriesWithData": "Brak kategorii z danymi w tym okresie.",
+    "noPeriodsYet": "Brak okresów.",
+    "showChart": "Pokaż wykres",
+    "showTable": "Pokaż tabelę",
+    "byCategoryTitle": "Ten okres według kategorii",
+    "byPeriodTitle": "Zaplanowane i wydane według okresów",
+    "colCategory": "Kategoria",
+    "colPlanned": "Zaplanowane",
+    "colSpent": "Wydano",
+    "colRemaining": "Pozostało",
+    "colPeriod": "Okres"
+  }
+}

@@ -1,4 +1,5 @@
 import { Moon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../contexts/ThemeContext'
 import Switch from '../common/Switch'
 
@@ -6,14 +7,15 @@ import Switch from '../common/Switch'
  *  mobile More sheet (BottomNav). 44px minimum height per the touch-target
  *  rule; hover affordance for the desktop dropdown. */
 export default function ThemeToggleRow() {
+  const { t } = useTranslation('nav')
   const { isDark, toggleTheme } = useTheme()
   return (
     <div className="flex items-center justify-between min-h-[44px] px-4 hover:bg-surface-hover transition-colors">
       <span className="flex items-center gap-3 text-sm text-text">
         <Moon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-        Dark mode
+        {t('darkMode')}
       </span>
-      <Switch checked={isDark} onChange={() => toggleTheme()} aria-label="Dark mode" />
+      <Switch checked={isDark} onChange={() => toggleTheme()} aria-label={t('darkMode')} />
     </div>
   )
 }

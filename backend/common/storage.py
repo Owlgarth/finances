@@ -1,6 +1,5 @@
 import json
 import logging
-from datetime import datetime, timezone
 
 import boto3
 from botocore.exceptions import ClientError
@@ -173,28 +172,3 @@ class StorageService:
         except ClientError:
             logger.exception('Failed to delete file %s from bucket %s', key, bucket_name)
             return False
-
-    @staticmethod
-    def write_log(log_name: str, content: str) -> str | None:
-        """Write a log entry to the logs bucket. Returns the object key, or None if disabled.
-
-        Key format: {log_name}/{YYYY}/{MM}/{DD}/{HHMMSSffffff}.log
-        """
-        if not StorageService._is_enabled():
-            return None
-
-        now = datetime.now(timezone.utc)
-        key = f'{log_name}/{now.strftime("%Y/%m/%d/%H%M%S%f")}.log'
-
-        client = StorageService._get_client()
-        try:
-            client.put_object(
-                Bucket=settings.S3_BUCKET_LOGS,
-                Key=key,
-                Body=content.encode('utf-8'),
-                ContentType='text/plain',
-            )
-            return key
-        except ClientError:
-            logger.exception('Failed to write log %s', log_name)
-            return None

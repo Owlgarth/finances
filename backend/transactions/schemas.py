@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from currencies.schemas import CurrencyCode
@@ -46,13 +47,13 @@ class TransactionCreate(BaseModel):
     @classmethod
     def description_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Description cannot be empty')
+            raise ValueError(_('Description cannot be empty'))
         return v.strip()
 
     @model_validator(mode='after')
     def original_facet_both_or_neither(self):
         if (self.original_amount is None) != (self.original_currency_code is None):
-            raise ValueError('original_amount and original_currency_code must both be set or both be omitted')
+            raise ValueError(_('original_amount and original_currency_code must both be set or both be omitted'))
         return self
 
 
@@ -70,7 +71,7 @@ class TransactionImport(BaseModel):
     @classmethod
     def description_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Description cannot be empty')
+            raise ValueError(_('Description cannot be empty'))
         return v.strip()
 
 
@@ -159,7 +160,7 @@ class TransactionItemIn(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Item name cannot be empty')
+            raise ValueError(_('Item name cannot be empty'))
         return v.strip()
 
 

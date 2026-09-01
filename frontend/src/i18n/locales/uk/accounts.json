@@ -1,0 +1,80 @@
+{
+  "title": "Рахунки",
+  "actions": {
+    "transfer": "Переказ",
+    "newAccount": "Створити рахунок"
+  },
+  "emptyState": "Рахунків ще немає.",
+  "showArchivedLabel": "Показувати архівовані рахунки",
+  "accountCard": {
+    "archivedBadge": "Архівовано",
+    "viewTransactions": "Переглянути операції",
+    "setBalance": "Встановити баланс…",
+    "edit": "Редагувати",
+    "archive": "Архівувати",
+    "unarchive": "Розархівувати",
+    "delete": "Видалити"
+  },
+  "recentTransfers": {
+    "title": "Останні перекази",
+    "viewAll": "Переглянути всі перекази",
+    "repeatTitle": "Повторити",
+    "repeatAria": "Повторити переказ"
+  },
+  "confirmDelete": {
+    "title": "Видалити рахунок",
+    "message": "Видалити \"{{name}}\"? Цю дію неможливо скасувати."
+  },
+  "toast": {
+    "archiveFailed": "Не вдалося архівувати рахунок",
+    "deleted": "Рахунок видалено",
+    "deleteFailed": "Не вдалося видалити рахунок",
+    "updated": "Рахунок оновлено",
+    "created": "Рахунок створено",
+    "saveFailed": "Не вдалося зберегти рахунок"
+  },
+  "modal": {
+    "titleEdit": "Редагування рахунку",
+    "titleCreate": "Новий рахунок"
+  },
+  "typeOptions": {
+    "bank": "Банк",
+    "cash": "Готівка",
+    "other": "Інше"
+  },
+  "currencyOption": "{{code}} - {{name}}",
+  "fields": {
+    "name": "Назва",
+    "type": "Тип",
+    "typeAria": "Тип рахунку",
+    "currency": "Валюта",
+    "currencyPlaceholder": "Виберіть валюту",
+    "currencyAria": "Валюта рахунку",
+    "openingBalance": "Початковий баланс",
+    "defaultFor": "Зробити стандартною для {{code}}"
+  },
+  "manageCurrencies": "Керувати валютами...",
+  "formActions": {
+    "cancel": "Скасувати",
+    "saving": "Збереження…",
+    "save": "Зберегти",
+    "create": "Створити"
+  },
+  "validation": {
+    "nameRequired": "Вкажіть назву",
+    "currencyRequired": "Вкажіть валюту"
+  },
+  "setBalance": {
+    "title": "Встановити баланс - {{name}}",
+    "currentLabel": "Поточний баланс:",
+    "newLabel": "Новий баланс",
+    "adjustmentLabel": "Коригування:",
+    "loading": "Завантаження…",
+    "submit": "Встановити баланс",
+    "updated": "Баланс оновлено",
+    "stillLoading": "Поточний баланс ще завантажується",
+    "enterTarget": "Вкажіть цільовий баланс",
+    "alreadyThisAmount": "Баланс уже дорівнює цій сумі",
+    "adjustFailed": "Не вдалося змінити баланс"
+  }
+}

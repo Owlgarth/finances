@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import BottomSheet from './BottomSheet'
 
 export interface ActionSheetAction {
@@ -20,13 +21,14 @@ interface ActionSheetProps {
 }
 
 /**
- * Titled list of 44px tap actions in a bottom sheet — the touch replacement
- * for hover-revealed row actions (plan decision 7). Selecting an action closes
+ * Titled list of 44px tap actions in a bottom sheet - the touch replacement
+ * for hover-revealed row actions. Selecting an action closes
  * the sheet first, then runs it, so actions can safely open modals.
  */
 export default function ActionSheet({ open, onClose, title, actions }: ActionSheetProps) {
+  const { t } = useTranslation('common')
   return (
-    <BottomSheet open={open} onClose={onClose} aria-label={title ?? 'Actions'}>
+    <BottomSheet open={open} onClose={onClose} aria-label={title ?? t('actionSheet.defaultLabel')}>
       {title && (
         <div className="px-4 pt-1 pb-2 text-[11px] font-medium uppercase tracking-wider text-text-muted truncate">
           {title}
@@ -58,7 +60,7 @@ export default function ActionSheet({ open, onClose, title, actions }: ActionShe
         onClick={onClose}
         className="w-full min-h-[44px] px-4 text-sm font-medium text-text-muted border-t border-border transition-colors active:bg-surface-hover"
       >
-        Cancel
+        {t('actionSheet.cancel')}
       </button>
     </BottomSheet>
   )

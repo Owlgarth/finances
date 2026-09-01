@@ -2,6 +2,7 @@
 
 from typing import Annotated
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Shared validated ISO code type - budgeting and workspaces schemas import this.
@@ -39,13 +40,13 @@ class EnableCurrencyIn(BaseModel):
         if v is None:
             return v
         if not v.strip():
-            raise ValueError('Value cannot be blank')
+            raise ValueError(_('Value cannot be blank'))
         return v.strip()
 
     @model_validator(mode='after')
     def custom_requires_name_and_symbol(self):
         if self.custom and (self.name is None or self.symbol is None):
-            raise ValueError('name and symbol are required when creating a custom currency')
+            raise ValueError(_('name and symbol are required when creating a custom currency'))
         return self
 
 

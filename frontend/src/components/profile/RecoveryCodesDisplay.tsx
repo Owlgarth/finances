@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   codes: string[]
@@ -7,19 +8,22 @@ interface Props {
 }
 
 export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
+  const { t } = useTranslation('settings')
   const [copied, setCopied] = useState(false)
 
   const handleCopyAll = async () => {
     try {
       await navigator.clipboard.writeText(codes.join('\n'))
       setCopied(true)
-      toast.success('Recovery codes copied to clipboard')
+      toast.success(t('recovery.copiedToast'))
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Failed to copy codes')
+      toast.error(t('recovery.copyFailedToast'))
     }
   }
 
+  // The downloaded .txt content stays English by policy: it is a document
+  // artifact saved to disk (same rule as emails and legal text), not UI chrome.
   const handleDownload = () => {
     const content = [
       'Owlgarth Finances Recovery Codes',
@@ -47,9 +51,9 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-medium text-text mb-1">Recovery Codes</h3>
+        <h3 className="text-sm font-medium text-text mb-1">{t('recovery.title')}</h3>
         <p className="text-sm text-text-muted">
-          Save these codes in a safe place. You will not be able to see them again.
+          {t('recovery.body')}
         </p>
       </div>
 
@@ -72,14 +76,14 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
           onClick={handleCopyAll}
           className="px-4 py-2 text-sm font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover hover:text-text transition-colors"
         >
-          {copied ? 'Copied!' : 'Copy All Codes'}
+          {copied ? t('recovery.copied') : t('recovery.copyAll')}
         </button>
         <button
           type="button"
           onClick={handleDownload}
           className="px-4 py-2 text-sm font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover hover:text-text transition-colors"
         >
-          Download Codes
+          {t('recovery.download')}
         </button>
       </div>
 
@@ -90,7 +94,7 @@ export default function RecoveryCodesDisplay({ codes, onAcknowledge }: Props) {
             onClick={onAcknowledge}
             className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors"
           >
-            I've Saved My Codes
+            {t('recovery.acknowledge')}
           </button>
         </div>
       )}

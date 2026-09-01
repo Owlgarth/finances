@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -14,7 +15,7 @@ class CategoryCreate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip()
 
 
@@ -27,7 +28,7 @@ class CategoryUpdate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if v is not None and not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip() if v is not None else v
 
 

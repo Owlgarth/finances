@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { authApi } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
@@ -19,6 +20,7 @@ import type { ImportResult } from '../types'
 type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
 export default function ProfilePage() {
+  const { t } = useTranslation('settings')
   const { user, updateUser } = useAuth()
   const { preferences } = useUserPreferences()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
@@ -41,9 +43,9 @@ export default function ProfilePage() {
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
-      toast.success('Data exported successfully!')
+      toast.success(t('profilePage.exportSuccess'))
     } catch {
-      toast.error('Failed to export data. Please try again later.')
+      toast.error(t('profilePage.exportFailed'))
     } finally {
       setIsExporting(false)
     }
@@ -60,12 +62,12 @@ export default function ProfilePage() {
       const exportData = JSON.parse(text)
       const result = await authApi.importData(exportData)
       setImportResult(result)
-      toast.success(`Imported ${result.imported_workspaces} workspace(s) successfully!`)
+      toast.success(t('profilePage.importToast', { count: result.imported_workspaces }))
     } catch (error: unknown) {
       if (error instanceof SyntaxError) {
-        toast.error('Invalid JSON file. Please select a valid export file.')
+        toast.error(t('profilePage.importInvalidJson'))
       } else {
-        toast.error(getApiErrorMessage(error, 'Failed to import data. Please try again.'))
+        toast.error(getApiErrorMessage(error, t('profilePage.importFailed')))
       }
     } finally {
       setIsImporting(false)
@@ -80,19 +82,26 @@ export default function ProfilePage() {
       authApi.updateProfile(data),
     onSuccess: (updatedUser) => {
       updateUser(updatedUser)
-      toast.success('Profile updated successfully!')
+      toast.success(t('profilePage.profileUpdated'))
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update profile'))
+    onError: (error) => toast.error(getApiErrorMessage(error, t('profilePage.profileUpdateFailed')))
   })
 
   const updatePreferencesMutation = useMutation({
-    mutationFn: (data: { calendar_start_day: number; font_family: string }) =>
-      authApi.updatePreferences(data),
+    mutationFn: (data: {
+      calendar_start_day: number
+      font_family: string
+      language: string
+      number_format: string
+    }) => authApi.updatePreferences(data),
     onSuccess: () => {
+      // LanguageContext watches this query and applies the server language
+      // globally (server-wins). Do NOT switch languages here - the
+      // invalidation below is the whole wiring.
       queryClient.invalidateQueries({ queryKey: ['user-preferences'] })
-      toast.success('Preferences updated successfully!')
+      toast.success(t('profilePage.prefsUpdated'))
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update preferences'))
+    onError: (error) => toast.error(getApiErrorMessage(error, t('profilePage.prefsUpdateFailed')))
   })
 
   if (!user) {
@@ -101,7 +110,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-base font-semibold text-text mb-8">Profile Settings</h1>
+      <h1 className="text-base font-semibold text-text mb-8">{t('profilePage.title')}</h1>
 
       <div className="bg-surface border border-border rounded-sm">
         <div className="py-3 px-3">
@@ -114,7 +123,7 @@ export default function ProfilePage() {
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
-              Profile
+              {t('tabs.profile')}
             </button>
             <button
               onClick={() => setActiveTab('password')}
@@ -124,7 +133,7 @@ export default function ProfilePage() {
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
-              Password
+              {t('tabs.password')}
             </button>
             <button
               onClick={() => setActiveTab('security')}
@@ -134,7 +143,7 @@ export default function ProfilePage() {
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
-              Security
+              {t('tabs.security')}
             </button>
             <button
               onClick={() => setActiveTab('preferences')}
@@ -144,7 +153,7 @@ export default function ProfilePage() {
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
-              Preferences
+              {t('tabs.preferences')}
             </button>
             <button
               onClick={() => setActiveTab('account')}
@@ -154,7 +163,7 @@ export default function ProfilePage() {
                   : 'text-text-muted hover:text-text hover:bg-surface-hover'
               }`}
             >
-              Account
+              {t('tabs.account')}
             </button>
           </nav>
         </div>
@@ -188,10 +197,9 @@ export default function ProfilePage() {
           {activeTab === 'account' && (
             <div className="space-y-10">
               <div>
-                <h3 className="text-sm font-medium text-text mb-2">Import Your Data</h3>
+                <h3 className="text-sm font-medium text-text mb-2">{t('importSection.title')}</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Restore your data from an Owlgarth Finances export (v3.0) JSON file.
-                  If a workspace with the same name already exists, it will be renamed automatically.
+                  {t('importSection.body')}
                 </p>
                 <input
                   ref={importFileRef}
@@ -205,21 +213,23 @@ export default function ProfilePage() {
                   disabled={isImporting}
                   className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                 >
-                  {isImporting ? 'Importing...' : 'Import Data'}
+                  {isImporting ? t('importSection.importing') : t('importSection.submit')}
                 </button>
                 {importResult && (
                   <div className="mt-4 p-4 bg-surface-hover rounded-sm border border-border text-sm space-y-1">
-                    <p className="font-medium text-text">Import Summary</p>
-                    <p className="text-text-muted">Workspaces: {importResult.imported_workspaces}</p>
-                    <p className="text-text-muted">Accounts: {importResult.imported_accounts}</p>
-                    <p className="text-text-muted">Budgets: {importResult.imported_budgets}</p>
-                    <p className="text-text-muted">Categories: {importResult.imported_categories}</p>
-                    <p className="text-text-muted">Transactions: {importResult.imported_transactions}</p>
-                    <p className="text-text-muted">Transfers: {importResult.imported_transfers}</p>
-                    <p className="text-text-muted">Planned Transactions: {importResult.imported_planned_transactions}</p>
+                    <p className="font-medium text-text">{t('importSection.summaryTitle')}</p>
+                    <p className="text-text-muted">{t('importSection.workspaces', { count: importResult.imported_workspaces })}</p>
+                    <p className="text-text-muted">{t('importSection.accounts', { count: importResult.imported_accounts })}</p>
+                    <p className="text-text-muted">{t('importSection.budgets', { count: importResult.imported_budgets })}</p>
+                    <p className="text-text-muted">{t('importSection.categories', { count: importResult.imported_categories })}</p>
+                    <p className="text-text-muted">{t('importSection.transactions', { count: importResult.imported_transactions })}</p>
+                    <p className="text-text-muted">{t('importSection.transfers', { count: importResult.imported_transfers })}</p>
+                    <p className="text-text-muted">{t('importSection.planned', { count: importResult.imported_planned_transactions })}</p>
                     {Object.keys(importResult.renamed).length > 0 && (
                       <p className="text-text-muted">
-                        Renamed: {Object.entries(importResult.renamed).map(([from, to]) => `${from} → ${to}`).join(', ')}
+                        {t('importSection.renamed', {
+                          list: Object.entries(importResult.renamed).map(([from, to]) => `${from} → ${to}`).join(', '),
+                        })}
                       </p>
                     )}
                   </div>
@@ -227,34 +237,30 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-text mb-2">Import from an older Denarly version</h3>
+                <h3 className="text-sm font-medium text-text mb-2">{t('legacySection.title')}</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Migrating from a previous version? Upload the JSON export from the old app. It will be
-                  converted to the new account-based model — exchanges become transfers, and a verification
-                  report shows each account's balance. Reconcile any warnings with a "Set balance…" on the
-                  Accounts page.
+                  {t('legacySection.body')}
                 </p>
                 <button
                   onClick={() => setLegacyImportOpen(true)}
                   className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
                 >
-                  Import legacy export
+                  {t('legacySection.open')}
                 </button>
                 <LegacyImportModal open={legacyImportOpen} onClose={() => setLegacyImportOpen(false)} />
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-text mb-2">Export Your Data</h3>
+                <h3 className="text-sm font-medium text-text mb-2">{t('exportSection.title')}</h3>
                 <p className="text-sm text-text-muted mb-4">
-                  Download a complete copy of all your personal data in JSON format.
-                  This includes your profile, preferences, all transactions, budgets, and workspace data.
+                  {t('exportSection.body')}
                 </p>
                 <button
                   onClick={handleExportData}
                   disabled={isExporting}
                   className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                 >
-                  {isExporting ? 'Exporting...' : 'Export All My Data'}
+                  {isExporting ? t('exportSection.exporting') : t('exportSection.submit')}
                 </button>
               </div>
 

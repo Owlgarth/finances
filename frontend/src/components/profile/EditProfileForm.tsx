@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import type { User } from '../../types'
 import { authApi } from '../../api/client'
 import { getApiErrorMessage } from '../../utils/errors'
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
+  const { t } = useTranslation('settings')
   const [fullName, setFullName] = useState(user.full_name || '')
   const [showChangeEmail, setShowChangeEmail] = useState(false)
   const [newEmail, setNewEmail] = useState('')
@@ -32,19 +34,20 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
     setIsChangingEmail(true)
     try {
       await authApi.requestEmailChange(password, newEmail)
-      toast.success('Check your new email for confirmation')
+      toast.success(t('editProfile.emailSent'))
       setShowChangeEmail(false)
       setNewEmail('')
       setPassword('')
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, 'Failed to request email change'))
+      toast.error(getApiErrorMessage(error, t('editProfile.emailFailed')))
     } finally {
       setIsChangingEmail(false)
     }
   }
 
   // Enter inside the change-email inputs must submit the email change, not the
-  // outer profile form (implicit submission — "Confirm" is type="button").
+  // outer profile form (implicit submission - the confirm button is
+  // type="button").
   const handleEmailKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Enter' || isChangingEmail) return
     e.preventDefault()
@@ -55,7 +58,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <label htmlFor="full_name" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
-          Full Name
+          {t('editProfile.fullNameLabel')}
         </label>
         <input
           type="text"
@@ -63,14 +66,14 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           className="w-full bg-surface-hover border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-          placeholder="Enter your full name"
+          placeholder={t('editProfile.fullNamePlaceholder')}
         />
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="block font-mono text-[9px] uppercase tracking-widest text-text-muted">
-            Email Address
+            {t('editProfile.emailLabel')}
           </label>
           <EmailVerificationBadge verified={user.email_verified} email={user.email} />
         </div>
@@ -84,7 +87,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               onClick={() => setShowChangeEmail(true)}
               className="text-sm font-medium text-primary hover:text-primary-hover whitespace-nowrap"
             >
-              Change Email
+              {t('editProfile.changeEmail')}
             </button>
           )}
         </div>
@@ -97,7 +100,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={handleEmailKeyDown}
               className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              placeholder="New email address"
+              placeholder={t('editProfile.newEmailPlaceholder')}
             />
             <input
               type="password"
@@ -105,7 +108,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleEmailKeyDown}
               className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              placeholder="Current password"
+              placeholder={t('editProfile.currentPasswordPlaceholder')}
             />
             <div className="flex gap-2">
               <button
@@ -114,7 +117,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
                 disabled={isChangingEmail}
                 className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
               >
-                {isChangingEmail ? 'Sending...' : 'Confirm'}
+                {isChangingEmail ? t('editProfile.confirming') : t('editProfile.confirm')}
               </button>
               <button
                 type="button"
@@ -125,7 +128,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
                 }}
                 className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
               >
-                Cancel
+                {t('editProfile.cancel')}
               </button>
             </div>
           </div>
@@ -138,7 +141,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           disabled={isLoading}
           className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Saving...' : 'Save Changes'}
+          {isLoading ? t('editProfile.saving') : t('editProfile.save')}
         </button>
       </div>
     </form>

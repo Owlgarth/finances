@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext as _
 
 from common.querysets import WorkspaceScopedQuerySet
 
@@ -44,12 +45,14 @@ class WorkspaceScopedModel(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.workspace_id:
-            raise ValueError(f'{self.__class__.__name__}.workspace_id must be set before save')
+            raise ValueError(_('%(model)s.workspace_id must be set before save') % {'model': self.__class__.__name__})
 
         update_fields = kwargs.get('update_fields')
         if self.pk and (update_fields is None or 'workspace' in update_fields or 'workspace_id' in update_fields):
             current = self.__class__.objects.filter(pk=self.pk).values_list('workspace_id', flat=True).first()
             if current and current != self.workspace_id:
-                raise ValueError(f'{self.__class__.__name__}.workspace_id cannot be changed after creation')
+                raise ValueError(
+                    _('%(model)s.workspace_id cannot be changed after creation') % {'model': self.__class__.__name__}
+                )
 
         super().save(*args, **kwargs)
