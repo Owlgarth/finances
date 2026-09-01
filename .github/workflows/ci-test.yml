@@ -34,7 +34,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10
+        # Exact pin: upstream astral-sh/setup-uv publishes release tags but no
+        # bare vN major tag (refs/tags/v10 is absent), so @v10 does not resolve.
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Install dependencies
         run: uv sync
