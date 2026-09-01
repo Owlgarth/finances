@@ -104,10 +104,14 @@ Use `common/Modal.tsx` — it renders a centered panel on desktop and delegates 
 Escape, focus return, keyboard avoidance). Don't hand-roll fixed-overlay markup:
 
 ```tsx
-<Modal open={isOpen} onClose={onClose} title="Edit transaction" size="md" className="p-6">
+const { t } = useTranslation('transactions')
+// ...
+<Modal open={isOpen} onClose={onClose} title={t('form.editTitle')} size="md" className="p-6">
   {/* content */}
 </Modal>
 ```
+
+The `title` prop is UI text and goes through `t()` like any other label.
 
 **Titles go through the `title` prop — never a hand-rolled `<h2>`.** The prop is `string`,
 not `ReactNode`: dynamic titles are template literals or string ternaries
@@ -302,10 +306,12 @@ Every auth function expecting an `access_token` must have an `else` branch showi
 if (response.access_token) {
   // ... existing success logic
 } else {
-  toast.error('Unexpected response from server. Please try again.')
+  toast.error(t('errors.unexpectedResponse'))
   return
 }
 ```
+
+The toast message is UI text - the component has `useTranslation('auth')` in scope, and the key lives in the owning `auth` namespace.
 
 ## Stateful Component Preservation with CSS `hidden`
 
@@ -323,12 +329,14 @@ Only apply this where state loss is problematic — other tabs can continue usin
 ## API Error Message Extraction
 
 Every API-error toast or handler extracts its message with
-`getApiErrorMessage(error, 'Fallback message')` from `utils/errors.ts` — it wraps
+`getApiErrorMessage(error, t('uploadFailed'))` from `utils/errors.ts` - it wraps
 `axios.isAxiosError` and reads `response.data.detail`, returning the fallback when either
-is missing:
+is missing. Ninja 422 details arrive as an array of field-error objects; the helper joins
+their (server-translated) msg strings into one '; '-separated line and falls back when the
+array yields nothing - call sites never hand-roll array handling:
 
 ```typescript
-onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to upload'))
+onError: (error) => toast.error(getApiErrorMessage(error, t('uploadFailed')))
 ```
 
 Never hand-roll `(error as { response?: { data?: { detail?: string } } })` casts or
