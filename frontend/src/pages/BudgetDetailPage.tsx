@@ -11,6 +11,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
+import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
 import { intParam } from '../utils/params'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
@@ -53,6 +54,7 @@ function loadStoredCurrencyView(budgetId: number): string | null {
 
 export default function BudgetDetailPage() {
   const { t } = useTranslation('budgets')
+  const { t: tCommon } = useTranslation('common')
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -414,6 +416,17 @@ export default function BudgetDetailPage() {
     selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
   }
 
+  // Save the planned-amount cell editor: an empty draft clears the budget
+  // (the '0' the API stores for "no plan"), a typed one must normalize to
+  // the wire's dot-decimal shape - on failure the editor stays open with
+  // the draft intact so the user can fix it instead of losing it.
+  const saveCell = (categoryId: number, raw: string) => {
+    const amount = raw === '' ? '0' : normalizeAmountInput(raw)
+    if (amount === null) return toast.error(tCommon('validation.amountInvalid'))
+    setAmount.mutate({ categoryId, amount, currencyCode: activeCurrency })
+    setEditingCell(null)
+  }
+
   // Focus targets of the strip chips, keyed by code (roving tabindex).
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
@@ -478,8 +491,8 @@ export default function BudgetDetailPage() {
       <span className="sr-only" aria-live="polite">{activeCurrency}</span>
       {activeCurrencies.map((code) => {
         const codeTotals = totals[code]
-        const planned = codeTotals ? parseFloat(codeTotals.planned) : 0
-        const actual = codeTotals ? parseFloat(codeTotals.actual) : 0
+        const planned = codeTotals ? (parseAmountNumber(codeTotals.planned) ?? 0) : 0
+        const actual = codeTotals ? (parseAmountNumber(codeTotals.actual) ?? 0) : 0
         const isActive = code === activeCurrency
         // Display-only ratio math (the meter fill); never persisted.
         const spendPct = planned > 0 ? (actual / planned) * 100 : 0
@@ -697,16 +710,17 @@ export default function BudgetDetailPage() {
                     <td className="px-4 py-2 text-right font-mono text-planned">
                       {editingCell === cellKey ? (
                         <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          {/* text (not number): comma-decimal typing must reach
+                              JS as text; saveCell normalizes at the save seam. */}
                           <input
-                            type="number"
+                            type="text"
                             inputMode="decimal"
-                            step="0.01"
                             value={cellValue}
                             onChange={(e) => setCellValue(e.target.value)}
                             className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                             autoFocus
                           />
-                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={14} /></button>
+                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={14} /></button>
                           <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={14} /></button>
                         </span>
                       ) : canEditPlan ? (
@@ -719,7 +733,7 @@ export default function BudgetDetailPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-actual">{formatAmount(actual)}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
+                    <td className={`px-4 py-2 text-right font-mono ${(parseAmountNumber(remaining) ?? 0) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </td>
                   </tr>
@@ -767,17 +781,18 @@ export default function BudgetDetailPage() {
                     <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colPlanned')}</div>
                     {editingCell === cellKey ? (
                       <div className="flex flex-col items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {/* Same as the desktop cell: text so comma-decimal
+                            entry reaches saveCell's parser intact. */}
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
-                          step="0.01"
                           value={cellValue}
                           onChange={(e) => setCellValue(e.target.value)}
                           className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
                           autoFocus
                         />
                         <div className="flex items-center gap-5">
-                          <button onClick={() => { setAmount.mutate({ categoryId: category.id, amount: cellValue || '0', currencyCode: activeCurrency }); setEditingCell(null) }} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={16} /></button>
+                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={16} /></button>
                           <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={16} /></button>
                         </div>
                       </div>
@@ -802,7 +817,7 @@ export default function BudgetDetailPage() {
                   </div>
                   <div className="px-2 py-2 min-w-0">
                     <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colRemaining')}</div>
-                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${parseFloat(remaining) < 0 ? 'text-negative' : 'text-remaining'}`}>
+                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${(parseAmountNumber(remaining) ?? 0) < 0 ? 'text-negative' : 'text-remaining'}`}>
                       {formatAmount(remaining)}
                     </div>
                   </div>

@@ -7,6 +7,7 @@ import Modal from '../common/Modal'
 import { transactionsApi } from '../../api/client'
 import type { ParsedReceipt, Transaction, TransactionItemInput } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
+import { normalizeAmountInput } from '../../utils/amountInput'
 import { rowsToItems } from '../../utils/transactionItems'
 import { primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
@@ -36,6 +37,7 @@ interface Row {
  */
 export default function ExtractionReviewModal({ onClose, transaction, parsed }: Props) {
   const { t } = useTranslation('transactions')
+  const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
   const [rows, setRows] = useState<Row[]>(
     parsed.items.map((i) => ({
@@ -56,8 +58,8 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
   }
 
   const save = useMutation({
-    mutationFn: async (mode: 'replace' | 'append') => {
-      let items = rowsToItems(rows)
+    mutationFn: async ({ mode, rows: normalizedRows }: { mode: 'replace' | 'append'; rows: Row[] }) => {
+      let items = rowsToItems(normalizedRows)
       if (mode === 'append') {
         const existing = await transactionsApi.listItems(transaction.id)
         const current: TransactionItemInput[] = existing.items.map((i) => ({
@@ -107,6 +109,29 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
 
   const updateRow = (index: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+
+  /** Amount columns go to the wire in its dot-decimal shape: normalize every
+   * non-empty field at the save seam (the inputs keep the raw draft), empty
+   * fields pass through unchanged - rowsToItems owns their defaults. Any
+   * typed-but-unparseable value aborts the save: a comma-decimal quantity
+   * must never silently lose its fraction to truncation. */
+  const normalizeRows = (): Row[] | null => {
+    const next: Row[] = []
+    for (const r of rows) {
+      const quantity = r.quantity === '' ? '' : normalizeAmountInput(r.quantity)
+      const unit_price = r.unit_price === '' ? '' : normalizeAmountInput(r.unit_price)
+      const line_total = r.line_total === '' ? '' : normalizeAmountInput(r.line_total)
+      if (quantity === null || unit_price === null || line_total === null) return null
+      next.push({ ...r, quantity, unit_price, line_total })
+    }
+    return next
+  }
+
+  const handleSave = (mode: 'replace' | 'append') => {
+    const normalized = normalizeRows()
+    if (normalized === null) return toast.error(tCommon('validation.amountInvalid'))
+    save.mutate({ mode, rows: normalized })
+  }
 
   const flag = (value: string | null, confidence: number) =>
     value && confidence < LOW_CONFIDENCE ? (
@@ -173,10 +198,10 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
 
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('extraction.cancel')}</button>
-        <button type="button" onClick={() => save.mutate('append')} disabled={save.isPending || rows.length === 0} className={secondaryButtonClass}>
+        <button type="button" onClick={() => handleSave('append')} disabled={save.isPending || rows.length === 0} className={secondaryButtonClass}>
           {t('extraction.append')}
         </button>
-        <button type="button" onClick={() => save.mutate('replace')} disabled={save.isPending || rows.length === 0} className={primaryButtonClass}>
+        <button type="button" onClick={() => handleSave('replace')} disabled={save.isPending || rows.length === 0} className={primaryButtonClass}>
           {save.isPending ? t('extraction.saving') : t('extraction.replace')}
         </button>
       </div>

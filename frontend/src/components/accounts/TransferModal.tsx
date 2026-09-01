@@ -10,6 +10,7 @@ import type { Account, Transfer } from '../../types'
 import { useAccounts } from '../../hooks/useDomain'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { getApiErrorMessage } from '../../utils/errors'
+import { normalizeAmountInput, parseAmountNumber } from '../../utils/amountInput'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
 
 const LAST_PAIR_KEY = 'owlgarth-last-transfer-pair'
@@ -29,6 +30,7 @@ function accountById(accounts: Account[], id: number | null): Account | undefine
 
 export default function TransferModal({ open, onClose, repeatFrom, editFrom }: Props) {
   const { t } = useTranslation('transfers')
+  const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
   // No autofocus on touch - don't yank the keyboard up over a fresh modal.
   const isTouch = useIsTouch()
@@ -87,18 +89,18 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
   const toAccount = accountById(accounts, toId)
   const crossCurrency = !!fromAccount && !!toAccount && fromAccount.currency_code !== toAccount.currency_code
 
+  const fromNum = parseAmountNumber(fromAmount)
+  const toNum = parseAmountNumber(toAmount)
   const impliedRate =
-    crossCurrency && fromAmount && toAmount && parseFloat(fromAmount) > 0
-      ? (parseFloat(toAmount) / parseFloat(fromAmount)).toFixed(6)
-      : null
+    crossCurrency && fromNum !== null && toNum !== null && fromNum > 0 ? (toNum / fromNum).toFixed(6) : null
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (amounts: { fromAmount: string; toAmount: string | null }) => {
       const payload = {
         from_account_id: fromId!,
         to_account_id: toId!,
-        from_amount: fromAmount,
-        to_amount: crossCurrency ? toAmount : null,
+        from_amount: amounts.fromAmount,
+        to_amount: crossCurrency ? amounts.toAmount : null,
         date,
         description: description.trim(),
       }
@@ -122,9 +124,20 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
     e.preventDefault()
     if (!fromId || !toId) return toast.error(t('validation.chooseBoth'))
     if (fromId === toId) return toast.error(t('validation.accountsDiffer'))
-    if (!fromAmount || parseFloat(fromAmount) <= 0) return toast.error(t('validation.enterAmount'))
-    if (crossCurrency && (!toAmount || parseFloat(toAmount) <= 0)) return toast.error(t('validation.enterReceived'))
-    mutation.mutate()
+    if (!fromAmount) return toast.error(t('validation.enterAmount'))
+    const normFrom = normalizeAmountInput(fromAmount)
+    if (normFrom === null) return toast.error(tCommon('validation.amountInvalid'))
+    if (Number(normFrom) <= 0) return toast.error(t('validation.enterAmount'))
+    // The received amount only exists on a cross-currency transfer; same
+    // empty / unparseable / positive trio under its own message keys.
+    let normTo: string | null = null
+    if (crossCurrency) {
+      if (!toAmount) return toast.error(t('validation.enterReceived'))
+      normTo = normalizeAmountInput(toAmount)
+      if (normTo === null) return toast.error(tCommon('validation.amountInvalid'))
+      if (Number(normTo) <= 0) return toast.error(t('validation.enterReceived'))
+    }
+    mutation.mutate({ fromAmount: normFrom, toAmount: normTo })
   }
 
   const options = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
@@ -148,10 +161,13 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
             <label htmlFor="from-amount" className={labelClass}>
               {crossCurrency ? t('fields.amountSent', { code: fromAccount?.currency_code ?? '' }) : t('fields.amount')}
             </label>
+            {/* text (not number): browsers strip comma entry from number
+                inputs before JS sees it, so comma-decimal typing must be
+                received as text and parsed at submit (normalizeAmountInput). */}
             <input
               id="from-amount"
-              type="number" inputMode="decimal"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={fromAmount}
               onChange={(e) => setFromAmount(e.target.value)}
               className={inputClass}
@@ -161,10 +177,12 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
           {crossCurrency && (
             <div>
               <label htmlFor="to-amount" className={labelClass}>{t('fields.amountReceived', { code: toAccount?.currency_code ?? '' })}</label>
+              {/* Same as the sent-amount field: text so comma-decimal entry
+                  reaches the submit-time parser intact. */}
               <input
                 id="to-amount"
-                type="number" inputMode="decimal"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={toAmount}
                 onChange={(e) => setToAmount(e.target.value)}
                 className={inputClass}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2, AlertTriangle, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsTouch } from '../../hooks/useBreakpoint'
+import { parseAmountNumber } from '../../utils/amountInput'
 import { formatAmount } from '../../utils/format'
 import { inputClass, labelClass } from '../common/formStyles'
 
@@ -28,8 +29,14 @@ const emptyRow = (): Row => ({ id: crypto.randomUUID(), name: '', quantity: '1',
 /** Sum of line totals, falling back to quantity × unit price — mirrors the backend. */
 function computeTotal(rows: Row[]): number {
   return rows.reduce((sum, r) => {
-    if (r.line_total !== '') return sum + (parseFloat(r.line_total) || 0)
-    if (r.unit_price !== '') return sum + (parseFloat(r.quantity || '1') || 0) * (parseFloat(r.unit_price) || 0)
+    if (r.line_total !== '') return sum + (parseAmountNumber(r.line_total) ?? 0)
+    if (r.unit_price !== '') {
+      // Display-only tolerance: an empty or mid-edit quantity reads as 1
+      // (the row's own default) so the live preview total never errors
+      // while the user is still typing.
+      const qty = parseAmountNumber(r.quantity) ?? 1
+      return sum + qty * (parseAmountNumber(r.unit_price) ?? 0)
+    }
     return sum
   }, 0)
 }
@@ -94,10 +101,10 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
   }
 
   const itemsTotal = computeTotal(rows)
-  const parsedAmount = parseFloat(amount)
+  const parsedAmount = parseAmountNumber(amount)
   // Suppress the mismatch warning when amount is empty or unparseable — the
   // user hasn't entered one yet (create mode) or the field is mid-edit.
-  const hasAmount = amount !== '' && !isNaN(parsedAmount)
+  const hasAmount = amount !== '' && parsedAmount !== null
   const absAmount = hasAmount ? Math.abs(parsedAmount) : 0
   const mismatch = hasAmount && rows.some((r) => r.name.trim()) && Math.abs(itemsTotal - absAmount) > 0.01
 
@@ -111,12 +118,14 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
         //  - explicit line_total (shown RAW, as-typed — do NOT reformat mid-edit)
         //  - else computed qty × unit_price (formatted) when both parse
         //  - else em-dash placeholder
-        const qtyNum = parseFloat(row.quantity || '1')
-        const unitNum = parseFloat(row.unit_price)
+        // Unparseable mid-edit quantity falls back to 1 (the row default);
+        // only unit_price can still disqualify the computed preview.
+        const qtyNum = parseAmountNumber(row.quantity) ?? 1
+        const unitNum = parseAmountNumber(row.unit_price)
         const rightValue =
           row.line_total !== ''
             ? row.line_total
-            : row.unit_price !== '' && !isNaN(unitNum) && !isNaN(qtyNum)
+            : row.unit_price !== '' && unitNum !== null
               ? formatAmount(qtyNum * unitNum)
               : '—'
 
