@@ -163,10 +163,11 @@ class AccountService:
         account.delete()
 
     @staticmethod
+    def net_delta(account: Account) -> Decimal:
+        """Net effect of all records on the account, excluding the opening balance."""
+        return AccountService._transactions_delta(account) + AccountService._transfers_delta(account)
+
+    @staticmethod
     def balance(account: Account) -> Decimal:
         """Computed balance: opening balance plus the net effect of all records."""
-        return (
-            account.opening_balance
-            + AccountService._transactions_delta(account)
-            + AccountService._transfers_delta(account)
-        )
+        return account.opening_balance + AccountService.net_delta(account)

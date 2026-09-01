@@ -88,6 +88,11 @@ def _required_str(value, context: str) -> str:
 
 class LegacyImportService:
     @staticmethod
+    def _rename_record(record: dict, key_map: dict) -> dict:
+        """Rename v1 ORM-lookup keys to their v2 equivalents; unknown keys pass through."""
+        return {key_map.get(k, k): v for k, v in record.items()}
+
+    @staticmethod
     def _normalize_v1(export_data: dict) -> dict:
         """Normalize a v1.x export to the v2 key shape used below.
 
@@ -100,14 +105,13 @@ class LegacyImportService:
             'to_currency__symbol': 'to_currency_symbol',
         }
 
-        def rename(record: dict) -> dict:
-            return {key_map.get(k, k): v for k, v in record.items()}
-
         for ws_data in export_data.get('workspaces', []):
             for acc_data in ws_data.get('budget_accounts', []):
                 for period_data in acc_data.get('periods', []):
                     for section in ('budgets', 'transactions', 'planned_transactions', 'currency_exchanges'):
-                        period_data[section] = [rename(r) for r in period_data.get(section, [])]
+                        period_data[section] = [
+                            LegacyImportService._rename_record(r, key_map) for r in period_data.get(section, [])
+                        ]
         return export_data
 
     @staticmethod
@@ -195,6 +199,35 @@ class LegacyImportService:
         return account
 
     @staticmethod
+    def _base_matches(tx: dict, ex: dict, side: str) -> bool:
+        """Type/currency/amount/date match against one side (from/expense, to/income) of an exchange."""
+        if side == 'from':
+            amount, symbol, tx_type = ex.get('from_amount'), ex.get('from_currency_symbol'), 'expense'
+        else:
+            amount, symbol, tx_type = ex.get('to_amount'), ex.get('to_currency_symbol'), 'income'
+        if tx.get('type') != tx_type:
+            return False
+        if (tx.get('currency_symbol') or symbol) != symbol:
+            return False
+        if _dec(tx.get('amount')) != _dec(amount):
+            return False
+        return tx.get('date') == ex.get('date')
+
+    @staticmethod
+    def _exact_desc(tx: dict, ex: dict) -> bool:
+        """Exact match on the stripped exchange description (an empty one never matches)."""
+        ex_desc = (ex.get('description') or '').strip()
+        return bool(ex_desc) and (tx.get('description') or '').strip() == ex_desc
+
+    @staticmethod
+    def _fallback_desc(tx: dict, ex: dict) -> bool:
+        """Convention match: the auto-created exchange description, the ``XXX to YYY``
+        manual convention, or the bare code pair."""
+        desc = (tx.get('description') or '').strip()
+        code_pair = f'{ex.get("from_currency_symbol")} to {ex.get("to_currency_symbol")}'
+        return bool(_EXCHANGE_DESC_RE.match(desc) or _CODE_TO_CODE_RE.match(desc) or desc.lower() == code_pair.lower())
+
+    @staticmethod
     def _dedup_skip_indices(transactions: list[dict], exchanges: list[dict]) -> tuple[set[int], list[dict]]:
         """Return (indices to skip, deduped descriptors) for linked exchange transactions.
 
@@ -207,38 +240,14 @@ class LegacyImportService:
         consumed: set[int] = set()
         deduped: list[dict] = []
 
-        def base_matches(tx: dict, ex: dict, side: str) -> bool:
-            if side == 'from':
-                amount, symbol, tx_type = ex.get('from_amount'), ex.get('from_currency_symbol'), 'expense'
-            else:
-                amount, symbol, tx_type = ex.get('to_amount'), ex.get('to_currency_symbol'), 'income'
-            if tx.get('type') != tx_type:
-                return False
-            if (tx.get('currency_symbol') or symbol) != symbol:
-                return False
-            if _dec(tx.get('amount')) != _dec(amount):
-                return False
-            return tx.get('date') == ex.get('date')
-
-        def exact_desc(tx: dict, ex: dict) -> bool:
-            ex_desc = (ex.get('description') or '').strip()
-            return bool(ex_desc) and (tx.get('description') or '').strip() == ex_desc
-
-        def fallback_desc(tx: dict, ex: dict) -> bool:
-            desc = (tx.get('description') or '').strip()
-            code_pair = f'{ex.get("from_currency_symbol")} to {ex.get("to_currency_symbol")}'
-            return bool(
-                _EXCHANGE_DESC_RE.match(desc) or _CODE_TO_CODE_RE.match(desc) or desc.lower() == code_pair.lower()
-            )
-
         for ex in exchanges:
             for side in ('from', 'to'):
                 match_idx = next(
                     (
                         idx
-                        for desc_ok in (exact_desc, fallback_desc)
+                        for desc_ok in (LegacyImportService._exact_desc, LegacyImportService._fallback_desc)
                         for idx, tx in enumerate(transactions)
-                        if idx not in consumed and base_matches(tx, ex, side) and desc_ok(tx, ex)
+                        if idx not in consumed and LegacyImportService._base_matches(tx, ex, side) and desc_ok(tx, ex)
                     ),
                     None,
                 )
@@ -256,6 +265,30 @@ class LegacyImportService:
                     }
                 )
         return consumed, deduped
+
+    @staticmethod
+    def _resolve_currency(
+        workspace, symbol: str, name: str | None, currency_cache: dict, parse_warnings: list[str]
+    ) -> Currency:
+        """Map an exported currency symbol to a catalog currency via this import's caches.
+
+        Thin resolver over ``_map_currency`` binding the workspace-wide currency
+        cache and warning collector used throughout ``_import_workspace``.
+        """
+        return LegacyImportService._map_currency(workspace, symbol, name, currency_cache, parse_warnings)
+
+    @staticmethod
+    def _resolve_account(
+        user, workspace, symbol: str, currency_cache: dict, account_cache: dict, parse_warnings: list[str]
+    ) -> Account:
+        """Resolve a symbol to its currency and idempotently provision its ``Main <CODE>`` account."""
+        currency = LegacyImportService._resolve_currency(workspace, symbol, None, currency_cache, parse_warnings)
+        return LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
+
+    @staticmethod
+    def _get_category(user, workspace, budget, name: str | None, category_map: dict, counts: dict):
+        """Get-or-merge a category within the current budget's shared map (see ``_merge_category``)."""
+        return LegacyImportService._merge_category(user, workspace, budget, name, category_map, counts)
 
     @staticmethod
     @db_transaction.atomic
@@ -308,20 +341,15 @@ class LegacyImportService:
         account_cache: dict[str, Account] = {}
         parse_warnings: list[str] = []
 
-        def resolve_currency(symbol: str, name: str | None = None) -> Currency:
-            return LegacyImportService._map_currency(workspace, symbol, name, currency_cache, parse_warnings)
-
-        def resolve_account(symbol: str) -> Account:
-            currency = resolve_currency(symbol)
-            return LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
-
         # Pre-map declared currencies (keeps names) and provision their accounts.
         for cur_data in ws_data.get('currencies', []):
             symbol = cur_data.get('symbol')
             if not symbol:
                 parse_warnings.append(f'currency {cur_data.get("name")!r}: missing symbol, skipped')
                 continue
-            currency = resolve_currency(symbol, cur_data.get('name'))
+            currency = LegacyImportService._resolve_currency(
+                workspace, symbol, cur_data.get('name'), currency_cache, parse_warnings
+            )
             LegacyImportService._get_or_create_account(user, workspace, currency, account_cache)
 
         counts = {
@@ -361,7 +389,9 @@ class LegacyImportService:
                 if default_symbol:
                     BudgetCurrency.objects.create(
                         budget=budget,
-                        currency=resolve_currency(default_symbol),
+                        currency=LegacyImportService._resolve_currency(
+                            workspace, default_symbol, None, currency_cache, parse_warnings
+                        ),
                         position=0,
                     )
 
@@ -399,12 +429,11 @@ class LegacyImportService:
                 )
                 counts['periods'] += 1
 
-                def get_category(name):
-                    return LegacyImportService._merge_category(user, workspace, budget, name, category_map, counts)
-
                 # Merge declared categories first (so allocations/records resolve).
                 for cat_data in period_data.get('categories', []):
-                    get_category(cat_data.get('name'))
+                    LegacyImportService._get_category(
+                        user, workspace, budget, cat_data.get('name'), category_map, counts
+                    )
 
                 for alloc in period_data.get('budgets', []):
                     alloc_ctx = f'{period_ctx} / allocation {alloc.get("category_name")!r}'
@@ -412,13 +441,17 @@ class LegacyImportService:
                     if not symbol:
                         parse_warnings.append(f'{alloc_ctx}: missing currency, skipped')
                         continue
-                    category = get_category(alloc.get('category_name'))
+                    category = LegacyImportService._get_category(
+                        user, workspace, budget, alloc.get('category_name'), category_map, counts
+                    )
                     if not category:
                         continue
                     CategoryBudget.objects.update_or_create(
                         period=period,
                         category=category,
-                        currency=resolve_currency(symbol),
+                        currency=LegacyImportService._resolve_currency(
+                            workspace, symbol, None, currency_cache, parse_warnings
+                        ),
                         defaults={
                             'workspace_id': workspace.id,
                             'amount': _dec(alloc.get('amount'), parse_warnings, alloc_ctx),
@@ -452,8 +485,12 @@ class LegacyImportService:
                         parse_warnings.append(f'{tx_ctx}: negative {tx_type} amount {amount}, imported as adjustment')
                         amount = amount if tx_type == 'income' else -amount
                         tx_type = 'adjustment'
-                    account = resolve_account(symbol)
-                    category = get_category(tx.get('category_name'))
+                    account = LegacyImportService._resolve_account(
+                        user, workspace, symbol, currency_cache, account_cache, parse_warnings
+                    )
+                    category = LegacyImportService._get_category(
+                        user, workspace, budget, tx.get('category_name'), category_map, counts
+                    )
                     Transaction.objects.create(
                         workspace=workspace,
                         account=account,
@@ -495,8 +532,12 @@ class LegacyImportService:
                                 f'{pt_ctx}: no category in export and no matching transaction to infer one, '
                                 'left uncategorized'
                             )
-                    account = resolve_account(symbol)
-                    category = get_category(category_name)
+                    account = LegacyImportService._resolve_account(
+                        user, workspace, symbol, currency_cache, account_cache, parse_warnings
+                    )
+                    category = LegacyImportService._get_category(
+                        user, workspace, budget, category_name, category_map, counts
+                    )
                     PlannedTransaction.objects.create(
                         workspace=workspace,
                         account=account,
@@ -519,8 +560,12 @@ class LegacyImportService:
                     if not from_symbol or not to_symbol:
                         parse_warnings.append(f'{ex_ctx}: missing currency, skipped')
                         continue
-                    from_account = resolve_account(from_symbol)
-                    to_account = resolve_account(to_symbol)
+                    from_account = LegacyImportService._resolve_account(
+                        user, workspace, from_symbol, currency_cache, account_cache, parse_warnings
+                    )
+                    to_account = LegacyImportService._resolve_account(
+                        user, workspace, to_symbol, currency_cache, account_cache, parse_warnings
+                    )
                     from_amount = _dec(ex.get('from_amount'), parse_warnings, ex_ctx)
                     to_amount = _dec(ex.get('to_amount'), parse_warnings, ex_ctx)
                     if from_account.id == to_account.id:
@@ -568,7 +613,9 @@ class LegacyImportService:
                         continue
                     # Provision the account too: a currency that appears only in
                     # period balances still needs one to carry the opening solve.
-                    code = resolve_account(symbol).currency.code
+                    code = LegacyImportService._resolve_account(
+                        user, workspace, symbol, currency_cache, account_cache, parse_warnings
+                    ).currency.code
                     if code not in acc_latest or end_date >= acc_latest[code][0]:
                         acc_latest[code] = (
                             end_date,
@@ -581,7 +628,7 @@ class LegacyImportService:
         # Solve opening balances so computed balances match the exported closings.
         balance_report = []
         for code, account in account_cache.items():
-            net = AccountService._transactions_delta(account) + AccountService._transfers_delta(account)
+            net = AccountService.net_delta(account)
             expected = expected_close.get(code)
             if expected is not None:
                 account.opening_balance = expected - net
