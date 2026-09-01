@@ -590,6 +590,29 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         self.put(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
         self.assertStatus(403)
 
+    def test_update_role_nonexistent_member_returns_404(self):
+        """A nonexistent member_user_id returns the documented 404, not a 500."""
+        payload = {'role': 'viewer'}
+        data = self.put(f'/api/workspaces/{self.workspace.id}/members/99999/role', payload, **self.auth_headers())
+        self.assertStatus(404)
+        self.assertEqual(data['detail'], 'Member not found in this workspace')
+        self.assertEqual(data['code'], 'workspace_member_not_found')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_update_role_nonexistent_workspace_returns_404(self):
+        """A nonexistent workspace_id returns the documented 404, not a 500.
+
+        validate_access (API layer) raises WorkspaceNotFoundError before the
+        service runs; the service derives the same 404 from the locked member
+        fetch for direct callers.
+        """
+        payload = {'role': 'viewer'}
+        data = self.put(f'/api/workspaces/99999/members/{self.member_user.id}/role', payload, **self.auth_headers())
+        self.assertStatus(404)
+        self.assertEqual(data['detail'], 'Workspace not found')
+        self.assertEqual(data['code'], 'workspace_not_found')
+        self.assertEqual(len(mail.outbox), 0)
+
 
 # =============================================================================
 # Remove Member from Workspace Tests
