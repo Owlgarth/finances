@@ -149,7 +149,7 @@ class CategoryBudgetSet(BaseModel):
     """Schema for upserting a planned amount (period × category × currency)."""
 
     category_id: int
-    currency_code: str = Field(..., pattern=r'^[A-Z]{3,8}$')
+    currency_code: CurrencyCode
     amount: Decimal = Field(..., ge=0)
 
 
