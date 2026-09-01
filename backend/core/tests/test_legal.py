@@ -2,9 +2,9 @@
 
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
-from ninja.errors import HttpError
 
 from common.tests.mixins import APIClientMixin
+from core.exceptions import LegalDocumentUnavailableError
 from core.factories import LegalDocumentFactory
 from core.legal import _get_legal_context, get_privacy, get_terms, render_from_template
 from core.models import LegalDocument
@@ -186,9 +186,10 @@ class LegalDBTests(TestCase):
 
     def test_raises_if_no_active_document(self):
         LegalDocument.objects.filter(doc_type='terms_of_service').update(is_active=False)
-        with self.assertRaises(HttpError) as ctx:
+        with self.assertRaises(LegalDocumentUnavailableError) as ctx:
             get_terms()
-        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertEqual(ctx.exception.http_status, 503)
+        self.assertEqual(ctx.exception.code, 'legal_documents_unavailable')
 
 
 class LegalAPITests(APIClientMixin, TestCase):
@@ -244,6 +245,20 @@ class LegalAPITests(APIClientMixin, TestCase):
 
         self.assertEqual(response_terms.status_code, 200)
         self.assertEqual(response_privacy.status_code, 200)
+
+    def test_endpoints_return_503_when_no_active_document(self):
+        """Both endpoints should return 503 (DetailOut body via the global handler) when unseeded."""
+        LegalDocument.objects.all().delete()
+
+        response_terms = self.client.get('/api/legal/terms')
+        self.assertEqual(response_terms.status_code, 503)
+        data = response_terms.json()
+        self.assertEqual(data['code'], 'legal_documents_unavailable')
+        self.assertIn('seed_legal_documents', data['detail'])
+
+        response_privacy = self.client.get('/api/legal/privacy')
+        self.assertEqual(response_privacy.status_code, 503)
+        self.assertEqual(response_privacy.json()['code'], 'legal_documents_unavailable')
 
     def test_terms_content_matches_db(self):
         """Terms API should return content from database."""
