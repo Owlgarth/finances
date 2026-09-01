@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Settings2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import MultiSelect from '../common/MultiSelect'
 import type { CatalogCurrency } from '../../types'
 import { useEnabledCurrencies } from '../../hooks/useDomain'
@@ -10,10 +11,11 @@ interface CurrencySetFieldProps {
   /** Called with the full new order after a MultiSelect toggle or an arrow move. */
   onChange: (codes: string[]) => void
   /** Row-1 marker naming what index 0 means at this call site. Budgets pass
-   *  nothing ("Default"); the workspace-creation form passes "Main account". */
+   *  nothing (the translated default marker); the workspace-creation form
+   *  passes its own translated label. */
   primaryLabel?: string
-  /** Muted trigger text when the set is empty. Default "Automatic" - an empty
-   *  set means the budget derives its currency list from its data. */
+  /** Muted trigger text when the set is empty. The translated default marks
+   *  an empty set as derived-from-data (budgets). */
   placeholder?: string
   /** Explicit options source, for call sites that have no workspace yet (so no
    *  enabled-currencies query exists to read ambiently) - the workspace-creation
@@ -24,7 +26,7 @@ interface CurrencySetFieldProps {
    *  into the helper copy and the ordered list is omitted. For constrained call
    *  sites; the default (full) mode renders everything. */
   compact?: boolean
-  /** Bridge link callback: renders the "Manage currencies..." link under the
+  /** Bridge link callback: renders the currency-management link under the
    *  picker cluster, jumping to where the pickable set itself is configured.
    *  Absent = no link. */
   onManageCurrencies?: () => void
@@ -48,7 +50,7 @@ function moveCode(codes: string[], idx: number, dir: 1 | -1): string[] {
  * Ordered currency-set field (MultiSelect + optional reordering list).
  * Shared component: budgets use it in full mode with ambient
  * useEnabledCurrencies() options; the workspace-creation form uses compact
- * mode with explicit catalog options and primaryLabel "Main account". `value`
+ * mode with explicit catalog options and its own primaryLabel. `value`
  * is the single order-significant source of truth (index 0 = shown first): the
  * MultiSelect appends new picks at the end and removes deselections; only the
  * arrow list reorders. Zero useState/useEffect - structurally lint-quiet.
@@ -56,12 +58,17 @@ function moveCode(codes: string[], idx: number, dir: 1 | -1): string[] {
 export default function CurrencySetField({
   value,
   onChange,
-  primaryLabel = 'Default',
-  placeholder = 'Automatic',
+  primaryLabel,
+  placeholder,
   currencies: currenciesProp,
   compact = false,
   onManageCurrencies,
 }: CurrencySetFieldProps) {
+  const { t } = useTranslation('settings')
+  // Prop defaults cannot call hooks, so the translated fallbacks resolve here
+  // in the body instead of in the destructuring defaults.
+  const resolvedPrimaryLabel = primaryLabel ?? t('currencySet.defaultPrimary')
+  const resolvedPlaceholder = placeholder ?? t('currencySet.automaticPlaceholder')
   // Ambient by default (dedup-seam rule: reference data from the useDomain
   // hooks, not props); the explicit prop overrides for pre-workspace call
   // sites. The hook runs unconditionally, above every branch; its query is
@@ -74,20 +81,21 @@ export default function CurrencySetField({
 
   return (
     <div>
-      <label className={labelClass}>Currencies</label>
+      <label className={labelClass}>{t('currencySet.label')}</label>
       <MultiSelect
         values={value}
         onChange={onChange}
         options={currencyOptions}
-        placeholder={placeholder}
-        aria-label="Currencies"
+        placeholder={resolvedPlaceholder}
+        aria-label={t('currencySet.ariaLabel')}
       />
       {/* Compact: the primary marker folds into the helper copy; the ordered
-          list below is omitted. */}
+          list below is omitted. The label keeps its own casing - Slavic nouns
+          do not lowercase the way English cosmetics used to. */}
       {compact ? (
-        <p className="mt-1 text-[11px] text-text-muted">First {primaryLabel.toLowerCase()} is shown first.</p>
+        <p className="mt-1 text-[11px] text-text-muted">{t('currencySet.firstShown', { label: resolvedPrimaryLabel })}</p>
       ) : (
-        <p className="mt-1 text-[11px] text-text-muted">The first currency is shown by default in the budget table.</p>
+        <p className="mt-1 text-[11px] text-text-muted">{t('currencySet.budgetHelper')}</p>
       )}
       {/* Bridge: below the MultiSelect and helper line, ABOVE the ordered
           list - it manages what is pickable (the catalog), so it belongs to
@@ -98,11 +106,11 @@ export default function CurrencySetField({
         <button
           type="button"
           onClick={onManageCurrencies}
-          aria-label="Manage currencies..."
+          aria-label={t('currencySet.manageCurrenciesAria')}
           className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
         >
           <Settings2 size={13} />
-          Manage currencies...
+          {t('currencySet.manageCurrencies')}
         </button>
       )}
       {!compact && value.length > 0 && (
@@ -115,7 +123,7 @@ export default function CurrencySetField({
                   {currencies.find((c) => c.code === code)?.name ?? ''}
                 </span>
                 {idx === 0 && (
-                  <span className="ml-2 text-[9px] font-mono uppercase tracking-widest text-text-muted">{primaryLabel}</span>
+                  <span className="ml-2 text-[9px] font-mono uppercase tracking-widest text-text-muted">{resolvedPrimaryLabel}</span>
                 )}
               </span>
               <span className="flex items-center gap-2">
@@ -127,7 +135,7 @@ export default function CurrencySetField({
                   type="button"
                   onClick={() => onChange(moveCode(value, idx, -1))}
                   disabled={idx === 0}
-                  aria-label={`Move ${code} up`}
+                  aria-label={t('currencies.moveUp', { code })}
                   className="p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ArrowUp size={13} />
@@ -136,7 +144,7 @@ export default function CurrencySetField({
                   type="button"
                   onClick={() => onChange(moveCode(value, idx, 1))}
                   disabled={idx === value.length - 1}
-                  aria-label={`Move ${code} down`}
+                  aria-label={t('currencies.moveDown', { code })}
                   className="p-1.5 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ArrowDown size={13} />

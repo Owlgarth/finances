@@ -35,13 +35,13 @@ function useDelayedUnmount(open: boolean, exitMs: number): boolean {
 }
 
 /**
- * The universal mobile container (plan decision 3): modals, selects, action
+ * The universal mobile container: modals, selects, action
  * menus and pickers all render inside this on mobile. Slide-up panel pinned to
  * the bottom edge, scrim dismiss, body scroll-lock, safe-area padding.
- * Drag-to-dismiss gesture is deferred to N2 — the handle is a visual affordance.
+ * Drag-to-dismiss gesture is deliberately omitted; the handle is a visual affordance.
  */
 /**
- * Height of the on-screen keyboard overlapping the layout viewport (N2).
+ * Height of the on-screen keyboard overlapping the layout viewport.
  * iOS doesn't resize the layout viewport for the keyboard, so a bottom-fixed
  * sheet would sit behind it; visualViewport tells us how much to lift.
  */

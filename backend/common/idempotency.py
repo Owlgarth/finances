@@ -21,6 +21,7 @@ from django.db import IntegrityError, models
 from django.db import transaction as db_transaction
 from django.http import HttpRequest
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 IDEMPOTENCY_KEY_MAX_LENGTH = 100
 IDEMPOTENCY_TTL = timedelta(hours=24)
@@ -38,7 +39,10 @@ def parse_idempotency_key(request: HttpRequest) -> tuple[str | None, dict | None
         return None, None
     key = key.strip()
     if len(key) > IDEMPOTENCY_KEY_MAX_LENGTH:
-        return None, {'detail': f'Idempotency-Key header must be at most {IDEMPOTENCY_KEY_MAX_LENGTH} characters.'}
+        return None, {
+            'detail': _('Idempotency-Key header must be at most %(max_length)s characters.')
+            % {'max_length': IDEMPOTENCY_KEY_MAX_LENGTH}
+        }
     return (key or None), None
 
 

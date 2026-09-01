@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
+from django.utils.translation import gettext as _
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from currencies.schemas import CurrencyCode
@@ -28,7 +29,7 @@ class PlannedTransactionCreate(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip()
 
 
@@ -44,7 +45,7 @@ class PlannedTransactionImport(BaseModel):
     @classmethod
     def name_not_empty(cls, v):
         if not v.strip():
-            raise ValueError('Name cannot be empty')
+            raise ValueError(_('Name cannot be empty'))
         return v.strip()
 
 

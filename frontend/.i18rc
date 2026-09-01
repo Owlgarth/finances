@@ -1,0 +1,26 @@
+{
+  "createOldCatalogs": false,
+  "defaultNamespace": "common",
+  "defaultValue": "",
+  "indentation": 2,
+  "keepRemoved": true,
+  "keySeparator": ".",
+  "lexers": {
+    "ts": [{ "lexer": "JavascriptLexer" }],
+    "tsx": [{ "lexer": "JsxLexer" }]
+  },
+  "lineEnding": "lf",
+  "locales": ["en", "uk", "pl"],
+  "input": [
+    "src/pages/**/*.{ts,tsx}",
+    "src/components/**/*.{ts,tsx}",
+    "src/contexts/**/*.{ts,tsx}",
+    "src/hooks/**/*.{ts,tsx}",
+    "src/utils/**/*.{ts,tsx}",
+    "!src/i18n/**"
+  ],
+  "namespaceSeparator": ":",
+  "output": "src/i18n/locales/$LOCALE/$NAMESPACE.json",
+  "pluralSeparator": "_",
+  "sort": true
+}

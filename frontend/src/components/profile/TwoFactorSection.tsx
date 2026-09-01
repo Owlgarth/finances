@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { authApi } from '../../api/client'
 import type { TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse } from '../../types'
 import { getApiErrorMessage } from '../../utils/errors'
@@ -9,6 +10,7 @@ import RecoveryCodesDisplay from './RecoveryCodesDisplay'
 type SectionState = 'idle' | 'setup' | 'showing_codes' | 'disabling' | 'regenerating'
 
 export default function TwoFactorSection() {
+  const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
   const [state, setState] = useState<SectionState>('idle')
   const [setupData, setSetupData] = useState<TwoFASetupResponse | null>(null)
@@ -27,7 +29,7 @@ export default function TwoFactorSection() {
       setSetupData(data)
       setState('setup')
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to start 2FA setup')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('twoFactor.setupFailed'))),
   })
 
   const verifySetupMutation = useMutation({
@@ -39,18 +41,18 @@ export default function TwoFactorSection() {
       setSetupData(null)
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Invalid verification code')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('twoFactor.invalidCode'))),
   })
 
   const disableMutation = useMutation({
     mutationFn: authApi.disable2FA,
     onSuccess: () => {
-      toast.success('Two-factor authentication has been disabled')
+      toast.success(t('twoFactor.disabledToast'))
       setState('idle')
       setPassword('')
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to disable 2FA')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('twoFactor.disableFailed'))),
   })
 
   const regenerateMutation = useMutation({
@@ -61,7 +63,7 @@ export default function TwoFactorSection() {
       setPassword('')
       queryClient.invalidateQueries({ queryKey: ['2fa-status'] })
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to regenerate recovery codes')),
+    onError: (error) => toast.error(getApiErrorMessage(error, t('twoFactor.regenFailed'))),
   })
 
   const handleSetup = () => {
@@ -103,7 +105,7 @@ export default function TwoFactorSection() {
   }
 
   if (statusQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Loading...</p>
+    return <p className="text-sm text-text-muted">{t('twoFactor.loading')}</p>
   }
 
   const status = statusQuery.data
@@ -119,22 +121,22 @@ export default function TwoFactorSection() {
       <div className="space-y-6">
         <div>
           <h3 className="text-sm font-medium text-text mb-1">
-            Set Up Authenticator App
+            {t('twoFactor.setupTitle')}
           </h3>
           <p className="text-sm text-text-muted">
-            Scan this QR code with your authenticator app.
+            {t('twoFactor.setupBody')}
           </p>
         </div>
 
         <div className="flex justify-center">
           <div className="bg-surface rounded-sm p-4 inline-block border border-border">
-            <img src={setupData.qr_code_svg} alt="2FA QR Code" className="w-48 h-48" />
+            <img src={setupData.qr_code_svg} alt={t('twoFactor.qrAlt')} className="w-48 h-48" />
           </div>
         </div>
 
         <div className="bg-surface-muted rounded-sm p-4">
           <p className="text-sm text-text-muted mb-2">
-            Manual entry key:
+            {t('twoFactor.manualKey')}
           </p>
           <div className="flex items-center gap-2">
             <code className="font-mono text-sm text-text bg-surface px-3 py-1 rounded-none border border-border break-all select-all">
@@ -145,14 +147,14 @@ export default function TwoFactorSection() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(setupData.secret_key)
-                  toast.success('Secret key copied')
+                  toast.success(t('twoFactor.copiedToast'))
                 } catch {
-                  toast.error('Failed to copy')
+                  toast.error(t('twoFactor.copyFailedToast'))
                 }
               }}
               className="px-3 py-1.5 text-xs font-medium rounded-sm border border-border text-text-muted hover:bg-surface-hover transition-colors shrink-0"
             >
-              Copy
+              {t('twoFactor.copy')}
             </button>
           </div>
         </div>
@@ -160,7 +162,7 @@ export default function TwoFactorSection() {
         <form onSubmit={handleVerifySetup} className="space-y-4">
           <div>
             <label htmlFor="verify-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
-              Verification Code
+              {t('twoFactor.codeLabel')}
             </label>
             <input
               id="verify-code"
@@ -180,14 +182,14 @@ export default function TwoFactorSection() {
               disabled={verifySetupMutation.isPending || verifyCode.length !== 6}
               className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {verifySetupMutation.isPending ? 'Verifying...' : 'Verify'}
+              {verifySetupMutation.isPending ? t('twoFactor.verifying') : t('twoFactor.verify')}
             </button>
             <button
               type="button"
               onClick={cancelSetup}
               className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
-              Cancel
+              {t('twoFactor.cancel')}
             </button>
           </div>
         </form>
@@ -200,16 +202,16 @@ export default function TwoFactorSection() {
       <div className="space-y-6">
         <div>
           <h3 className="text-sm font-medium text-text mb-1">
-            Disable Two-Factor Authentication
+            {t('twoFactor.disableTitle')}
           </h3>
           <p className="text-sm text-text-muted">
-            Enter your password to disable 2FA. This will make your account less secure.
+            {t('twoFactor.disableBody')}
           </p>
         </div>
         <form onSubmit={handleDisable} className="space-y-4">
           <div>
             <label htmlFor="disable-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
-              Confirm your password
+              {t('twoFactor.passwordLabel')}
             </label>
             <input
               id="disable-password"
@@ -218,7 +220,7 @@ export default function TwoFactorSection() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              placeholder="Enter your password"
+              placeholder={t('twoFactor.passwordPlaceholder')}
             />
           </div>
           <div className="flex gap-2">
@@ -227,14 +229,14 @@ export default function TwoFactorSection() {
               disabled={disableMutation.isPending || !password}
               className="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {disableMutation.isPending ? 'Disabling...' : 'Disable 2FA'}
+              {disableMutation.isPending ? t('twoFactor.disabling') : t('twoFactor.disable')}
             </button>
             <button
               type="button"
               onClick={cancelPasswordAction}
               className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
-              Cancel
+              {t('twoFactor.cancel')}
             </button>
           </div>
         </form>
@@ -247,16 +249,16 @@ export default function TwoFactorSection() {
       <div className="space-y-6">
         <div>
           <h3 className="text-sm font-medium text-text mb-1">
-            Regenerate Recovery Codes
+            {t('twoFactor.regenTitle')}
           </h3>
           <p className="text-sm text-text-muted">
-            This will invalidate your current recovery codes and generate new ones.
+            {t('twoFactor.regenBody')}
           </p>
         </div>
         <form onSubmit={handleRegenerate} className="space-y-4">
           <div>
             <label htmlFor="regenerate-password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-2">
-              Confirm your password
+              {t('twoFactor.passwordLabel')}
             </label>
             <input
               id="regenerate-password"
@@ -265,7 +267,7 @@ export default function TwoFactorSection() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
-              placeholder="Enter your password"
+              placeholder={t('twoFactor.passwordPlaceholder')}
             />
           </div>
           <div className="flex gap-2">
@@ -274,14 +276,14 @@ export default function TwoFactorSection() {
               disabled={regenerateMutation.isPending || !password}
               className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {regenerateMutation.isPending ? 'Regenerating...' : 'Regenerate Codes'}
+              {regenerateMutation.isPending ? t('twoFactor.regenerating') : t('twoFactor.regen')}
             </button>
             <button
               type="button"
               onClick={cancelPasswordAction}
               className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
             >
-              Cancel
+              {t('twoFactor.cancel')}
             </button>
           </div>
         </form>
@@ -295,20 +297,21 @@ export default function TwoFactorSection() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-positive-bg text-positive border border-positive/20">
-              Enabled
+              {t('twoFactor.enabledBadge')}
             </span>
             <h3 className="text-sm font-medium text-text">
-              Two-Factor Authentication
+              {t('twoFactor.enabledTitle')}
             </h3>
           </div>
           <p className="text-sm text-text-muted">
-            Your account is protected with two-factor authentication.
+            {t('twoFactor.enabledBody')}
           </p>
         </div>
 
         <div className="bg-surface-muted rounded-sm p-4 border border-border">
           <p className="text-sm text-text-muted">
-            Recovery codes remaining: <span className="font-medium text-text">{status.remaining_recovery_codes}</span>
+            {t('twoFactor.remaining')}{' '}
+            <span className="font-medium text-text">{status.remaining_recovery_codes}</span>
           </p>
         </div>
 
@@ -320,9 +323,9 @@ export default function TwoFactorSection() {
               setState('regenerating')
             }}
             className="bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors"
-            >
-              Regenerate Recovery Codes
-            </button>
+          >
+            {t('twoFactor.regenerate')}
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -331,7 +334,7 @@ export default function TwoFactorSection() {
             }}
             className="bg-surface border border-negative/30 text-negative px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-negative-bg transition-colors"
           >
-            Disable 2FA
+            {t('twoFactor.disable')}
           </button>
         </div>
       </div>
@@ -342,10 +345,10 @@ export default function TwoFactorSection() {
     <div className="space-y-6">
       <div>
         <h3 className="text-sm font-medium text-text mb-1">
-          Two-Factor Authentication
+          {t('twoFactor.enabledTitle')}
         </h3>
         <p className="text-sm text-text-muted">
-          Add an extra layer of security by requiring a code from your authenticator app when you sign in.
+          {t('twoFactor.introBody')}
         </p>
       </div>
       <button
@@ -354,7 +357,7 @@ export default function TwoFactorSection() {
         disabled={setupMutation.isPending}
         className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {setupMutation.isPending ? 'Loading...' : 'Enable 2FA'}
+        {setupMutation.isPending ? t('twoFactor.loading') : t('twoFactor.enable')}
       </button>
     </div>
   )

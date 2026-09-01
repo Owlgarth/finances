@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeftRight, Calendar, CornerDownLeft, Home, PieChart, Receipt, Search, Settings, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { plannedTransactionsApi, transactionsApi } from '../../api/client'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { useAccounts, useBudgets } from '../../hooks/useDomain'
@@ -32,15 +33,42 @@ interface PageEntry {
   keywords?: string[]
 }
 
-const STATIC_PAGES: PageEntry[] = [
-  { label: 'Dashboard', to: '/', icon: Home, group: 'Pages', keywords: ['home'] },
-  { label: 'Accounts', to: '/accounts', icon: Wallet, group: 'Pages' },
-  { label: 'Budgets', to: '/budgets', icon: PieChart, group: 'Pages' },
-  { label: 'Transactions', to: '/transactions', icon: Receipt, group: 'Pages', keywords: ['txns'] },
-  { label: 'Planned', to: '/planned', icon: Calendar, group: 'Pages', keywords: ['scheduled', 'recurring'] },
-  { label: 'Transfers', to: '/transfers', icon: ArrowLeftRight, group: 'Pages', keywords: ['move money'] },
-  { label: 'Members', to: '/members', icon: Users, group: 'Pages' },
-  { label: 'Settings', to: '/settings', icon: Settings, group: 'Pages', keywords: ['profile', 'preferences'] },
+/** Page labels the sidebar also renders, keyed into the nav catalog (read-only
+ *  here - keyed, not inlined, so palette and sidebar can never drift). */
+type NavPageKey =
+  | 'dashboard'
+  | 'accounts'
+  | 'budgets'
+  | 'transactions'
+  | 'planned'
+  | 'members'
+  | 'settings'
+
+interface StaticPageBase {
+  to: string
+  icon: LucideIcon
+  keywords?: string[]
+}
+
+// The `ns` discriminant keeps each labelKey checked against its own catalog:
+// nav keys resolve through tNav, the common one through t.
+type StaticPageEntry =
+  | ({ ns: 'nav'; labelKey: NavPageKey } & StaticPageBase)
+  | ({ ns: 'common'; labelKey: 'palette.transfers' } & StaticPageBase)
+
+// Keys only: t() is resolved at render time inside the component (a
+// module-level t() call would freeze the language at load time).
+const STATIC_PAGES: StaticPageEntry[] = [
+  { ns: 'nav', labelKey: 'dashboard', to: '/', icon: Home, keywords: ['home'] },
+  { ns: 'nav', labelKey: 'accounts', to: '/accounts', icon: Wallet },
+  { ns: 'nav', labelKey: 'budgets', to: '/budgets', icon: PieChart },
+  { ns: 'nav', labelKey: 'transactions', to: '/transactions', icon: Receipt, keywords: ['txns'] },
+  { ns: 'nav', labelKey: 'planned', to: '/planned', icon: Calendar, keywords: ['scheduled', 'recurring'] },
+  // The nav catalog has no page label for Transfers (the sidebar doesn't link
+  // there), so this one label ships in the palette's own namespace.
+  { ns: 'common', labelKey: 'palette.transfers', to: '/transfers', icon: ArrowLeftRight, keywords: ['move money'] },
+  { ns: 'nav', labelKey: 'members', to: '/members', icon: Users },
+  { ns: 'nav', labelKey: 'settings', to: '/settings', icon: Settings, keywords: ['profile', 'preferences'] },
 ]
 
 function matches(entry: PageEntry, query: string): boolean {
@@ -56,6 +84,16 @@ function matches(entry: PageEntry, query: string): boolean {
 const MIN_ASYNC_QUERY = 2
 
 type PaletteGroup = 'Pages' | 'Budgets' | 'Accounts' | 'Transactions' | 'Planned'
+
+// Group headers are translated chrome; the union values themselves are
+// internal identifiers, never rendered raw. Keys only - resolved with t().
+const PALETTE_GROUP_KEYS = {
+  Pages: 'palette.groupPages',
+  Budgets: 'palette.groupBudgets',
+  Accounts: 'palette.groupAccounts',
+  Transactions: 'palette.groupTransactions',
+  Planned: 'palette.groupPlanned',
+} as const
 
 interface PaletteRow {
   kind: 'row'
@@ -86,6 +124,8 @@ type PaletteItem = PaletteRow | PaletteSkeleton
  */
 export default function CommandPalette() {
   const navigate = useNavigate()
+  const { t } = useTranslation('common')
+  const { t: tNav } = useTranslation('nav')
   const { isMobile } = useBreakpoint()
   const { workspace } = useWorkspace()
   const [open, setOpen] = useState(false)
@@ -159,7 +199,13 @@ export default function CommandPalette() {
 
   const entries = useMemo<PageEntry[]>(
     () => [
-      ...STATIC_PAGES,
+      ...STATIC_PAGES.map((p) => ({
+        to: p.to,
+        icon: p.icon,
+        keywords: p.keywords,
+        label: p.ns === 'nav' ? tNav(p.labelKey) : t(p.labelKey),
+        group: 'Pages' as const,
+      })),
       ...budgets.map<PageEntry>((b) => ({
         label: b.name,
         to: `/budgets/${b.id}`,
@@ -167,7 +213,7 @@ export default function CommandPalette() {
         group: 'Budgets',
       })),
     ],
-    [budgets],
+    [budgets, t, tNav],
   )
 
   const staticResults = useMemo(() => entries.filter((e) => matches(e, query)), [entries, query])
@@ -235,7 +281,7 @@ export default function CommandPalette() {
           kind: 'row',
           key: 'transactions-all',
           group: 'Transactions',
-          label: 'See all results',
+          label: t('palette.seeAllResults'),
           to: txResultsTo,
           icon: Search,
           isFooter: true,
@@ -259,7 +305,7 @@ export default function CommandPalette() {
           kind: 'row',
           key: 'planned-all',
           group: 'Planned',
-          label: 'See all results',
+          label: t('palette.seeAllResults'),
           to: plannedResultsTo,
           icon: Search,
           isFooter: true,
@@ -277,6 +323,7 @@ export default function CommandPalette() {
     txSearch.data,
     plannedSearch.isLoading,
     plannedSearch.data,
+    t,
   ])
 
   const results = useMemo(
@@ -324,22 +371,22 @@ export default function CommandPalette() {
           setHighlighted(0)
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Search pages and data…"
-        aria-label="Search"
+        placeholder={t('palette.searchPlaceholder')}
+        aria-label={t('palette.searchLabel')}
         className="w-full bg-transparent border-0 border-b border-border pl-8 pr-3 py-3 font-mono text-xs max-sm:text-base text-text placeholder:text-text-muted focus:outline-none"
       />
     </div>
   )
 
-  const groupHeader = (group: string) => (
+  const groupHeader = (group: PaletteGroup) => (
     <div className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
-      {group}
+      {t(PALETTE_GROUP_KEYS[group])}
     </div>
   )
 
   const list = (rowClass: string) => {
     if (results.length === 0 && !anySectionLoading) {
-      return <div className="px-4 py-3 text-sm text-text-muted">No matching pages</div>
+      return <div className="px-4 py-3 text-sm text-text-muted">{t('palette.noMatches')}</div>
     }
     let lastGroup: PaletteGroup | null = null
     let rowIndex = 0
@@ -385,7 +432,7 @@ export default function CommandPalette() {
 
   if (isMobile) {
     return (
-      <BottomSheet open={open} onClose={() => setOpen(false)} aria-label="Search">
+      <BottomSheet open={open} onClose={() => setOpen(false)} aria-label={t('palette.searchLabel')}>
         <div className="sticky top-4 z-10 bg-surface">{input}</div>
         <div className="pb-2 pt-1">
           {list('w-full min-h-[44px] px-3 flex items-center gap-3 text-sm text-text transition-colors active:bg-surface-hover')}
@@ -404,7 +451,7 @@ export default function CommandPalette() {
           ref={panelRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Search"
+          aria-label={t('palette.searchLabel')}
           tabIndex={-1}
           className="bg-surface border border-border rounded-sm w-full max-w-md outline-none overflow-hidden"
           onClick={(e) => e.stopPropagation()}
@@ -414,9 +461,9 @@ export default function CommandPalette() {
             {list('w-full h-8 px-3 flex items-center gap-2.5 text-xs text-text transition-colors hover:bg-surface-hover')}
           </div>
           <div className="px-3 py-1.5 border-t border-border text-[10px] font-mono text-text-muted flex items-center gap-3">
-            <span>↑↓ navigate</span>
-            <span>↵ open</span>
-            <span>esc close</span>
+            <span>{t('palette.hintNavigate')}</span>
+            <span>{t('palette.hintOpen')}</span>
+            <span>{t('palette.hintClose')}</span>
           </div>
         </div>
       </div>

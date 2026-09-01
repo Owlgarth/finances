@@ -25,6 +25,13 @@
         if (theme === 'dark') {
           document.documentElement.classList.add('dark');
         }
+        // Language: keep <html lang> in sync with the stored choice pre-paint.
+        // This mini-list MUST stay in sync with backend/common/languages.json
+        // (the inline script cannot import the registry).
+        var lang = localStorage.getItem('owlgarth_language');
+        if (lang === 'en' || lang === 'uk' || lang === 'pl') {
+          document.documentElement.lang = lang;
+        }
       })();
     </script>
   </head>

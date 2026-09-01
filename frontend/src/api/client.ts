@@ -74,6 +74,20 @@ if (savedToken) {
   api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
 }
 
+// ============= Language =============
+/** Keep the API's Accept-Language header in sync with the UI language so
+ *  backend error details arrive translated once the backend starts honoring
+ *  it. Global default on the axios instance - same shape as setAuthToken. */
+export const setApiLanguage = (code: string): void => {
+  api.defaults.headers.common['Accept-Language'] = code;
+};
+
+// Seed the header from the stored language on app start (savedToken precedent).
+const savedLanguage = localStorage.getItem('owlgarth_language');
+if (savedLanguage) {
+  setApiLanguage(savedLanguage);
+}
+
 // Response interceptor - handle 401 with token refresh
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason: unknown) => void }> = [];
@@ -415,7 +429,7 @@ export const authApi = {
   getPreferences: (): Promise<UserPreferences> =>
     api.get<UserPreferences>('/users/me/preferences').then(res => res.data),
 
-  updatePreferences: (data: { calendar_start_day?: number; font_family?: string }): Promise<UserPreferences> =>
+  updatePreferences: (data: { calendar_start_day?: number; font_family?: string; language?: string; number_format?: string }): Promise<UserPreferences> =>
     api.patch<UserPreferences>('/users/me/preferences', data).then(res => res.data),
 
   checkDeletion: (): Promise<AccountDeleteCheck> =>

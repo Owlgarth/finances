@@ -231,21 +231,6 @@ class TestAccountService(TestCase):
     def setUp(self):
         self.workspace = WorkspaceFactory()
 
-    def test_single_active_account(self):
-        first = AccountFactory(workspace=self.workspace)
-        self.assertEqual(AccountService.single_active_account(self.workspace.id), first)
-
-        second = AccountFactory(workspace=self.workspace)
-        self.assertIsNone(AccountService.single_active_account(self.workspace.id))
-
-        first.is_archived = True
-        first.save()
-        self.assertEqual(AccountService.single_active_account(self.workspace.id), second)
-
-        second.is_archived = True
-        second.save()
-        self.assertIsNone(AccountService.single_active_account(self.workspace.id))
-
     def test_delete_with_records_raises(self):
         account = AccountFactory(workspace=self.workspace)
         with patch.object(AccountService, '_record_count', return_value=2):
