@@ -1,0 +1,23 @@
+{
+  "title": "Pulpit",
+  "viewAll": "Zobacz wszystkie →",
+  "budgetsLink": "Zarządzaj budżetami i planami kategorii →",
+  "balances": {
+    "title": "Konta",
+    "empty": "Brak kont."
+  },
+  "recent": {
+    "title": "Ostatnia aktywność",
+    "empty": "Brak transakcji."
+  },
+  "legal": {
+    "back": "Wstecz",
+    "backToLogin": "Wróć do logowania",
+    "effective": "Data wejścia w życie: {{date}} · Wersja {{version}}",
+    "loading": "Ładowanie…",
+    "privacyTitle": "Polityka prywatności",
+    "privacyFailure": "Nie udało się załadować polityki prywatności. Spróbuj ponownie później.",
+    "termsTitle": "Regulamin usług",
+    "termsFailure": "Nie udało się załadować regulaminu usług. Spróbuj ponownie później."
+  }
+}

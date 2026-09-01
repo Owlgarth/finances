@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Modal from './Modal'
 import { primaryButtonClass, secondaryButtonClass, solidNegativeButtonClass } from './formStyles'
 
@@ -5,7 +6,7 @@ interface Props {
   isOpen: boolean
   title: string
   message: string
-  /** Confirm-button label. Defaults to 'Delete' (the most common use). */
+  /** Confirm-button label. Defaults to the translated Delete label (the most common use). */
   confirmLabel?: string
   /** Solid-negative confirm styling (default — the historical look). Pass
       false for a primary-styled, non-destructive confirm. */
@@ -21,12 +22,14 @@ export default function ConfirmDialog({
   isOpen,
   title,
   message,
-  confirmLabel = 'Delete',
+  confirmLabel,
   destructive = true,
   isPending = false,
   onConfirm,
   onCancel,
 }: Props) {
+  const { t } = useTranslation('common')
+  const confirmText = confirmLabel ?? t('confirmDialog.delete')
   return (
     <Modal open={isOpen} onClose={onCancel} size="sm" className="p-4" title={title}>
       <p className="text-text-muted mb-6">{message}</p>
@@ -39,7 +42,7 @@ export default function ConfirmDialog({
           disabled={isPending}
           className={secondaryButtonClass}
         >
-          Cancel
+          {t('confirmDialog.cancel')}
         </button>
         <button
           type="button"
@@ -47,7 +50,7 @@ export default function ConfirmDialog({
           disabled={isPending}
           className={destructive ? solidNegativeButtonClass : primaryButtonClass}
         >
-          {confirmLabel}
+          {confirmText}
         </button>
       </div>
     </Modal>

@@ -1,0 +1,13 @@
+{
+  "defaultLanguage": "en",
+  "languages": [
+    {"code": "en", "englishName": "English", "nativeName": "English", "dateFnsLocale": "enUS"},
+    {"code": "uk", "englishName": "Ukrainian", "nativeName": "Українська", "dateFnsLocale": "uk"},
+    {"code": "pl", "englishName": "Polish", "nativeName": "Polski", "dateFnsLocale": "pl"}
+  ],
+  "numberFormats": [
+    {"code": "en", "label": "1,234.56"},
+    {"code": "eu", "label": "1 234,56"}
+  ],
+  "defaultNumberFormat": "en"
+}

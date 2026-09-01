@@ -1,62 +1,64 @@
 """Custom exceptions for transactions app."""
 
+from django.utils.translation import gettext_lazy
+
 from common.exceptions import NotFoundError, ServiceError, ValidationError
 
 
 class TransactionNotFoundError(NotFoundError):
-    default_message = 'Transaction not found'
+    default_message = gettext_lazy('Transaction not found')
     default_code = 'not_found'
 
 
 class TransactionCategoryNotFoundError(ValidationError):
-    default_message = 'Category not found, archived, or not in this workspace'
+    default_message = gettext_lazy('Category not found, archived, or not in this workspace')
     default_code = 'category_not_found'
 
 
 class TransactionAccountArchivedError(ValidationError):
-    default_message = 'Account is archived and cannot receive new transactions'
+    default_message = gettext_lazy('Account is archived and cannot receive new transactions')
     default_code = 'account_archived'
 
 
 class TransactionAmountInvalidError(ValidationError):
-    default_message = 'Amount must be positive (income/expense) or a non-zero delta (adjustment)'
+    default_message = gettext_lazy('Amount must be positive (income/expense) or a non-zero delta (adjustment)')
     default_code = 'amount_invalid'
 
 
 class TransactionAdjustmentCategoryError(ValidationError):
-    default_message = 'Adjustments cannot have a category'
+    default_message = gettext_lazy('Adjustments cannot have a category')
     default_code = 'adjustment_category'
 
 
 class TransactionAdjustmentAccountError(ValidationError):
-    default_message = 'Adjustments require an account'
+    default_message = gettext_lazy('Adjustments require an account')
     default_code = 'adjustment_account_required'
 
 
 class TransactionCurrencyRequiredError(ValidationError):
-    default_message = 'Transactions without an account require an explicit currency_code'
+    default_message = gettext_lazy('Transactions without an account require an explicit currency_code')
     default_code = 'currency_required'
 
 
 class TransactionCurrencyMismatchError(ValidationError):
-    default_message = 'currency_code does not match the account currency'
+    default_message = gettext_lazy('currency_code does not match the account currency')
     default_code = 'currency_mismatch'
 
 
 class TransactionOriginalCurrencyError(ValidationError):
     default_code = 'original_currency_invalid'
 
-    def __init__(self, message: str = 'Original currency is unknown or equals the transaction currency'):
+    def __init__(self, message: str = gettext_lazy('Original currency is unknown or equals the transaction currency')):
         super().__init__(message)
 
 
 class TransactionBulkAccountError(ValidationError):
-    default_message = 'All transactions and the target account must belong to the workspace'
+    default_message = gettext_lazy('All transactions and the target account must belong to the workspace')
     default_code = 'bulk_account_invalid'
 
 
 class TransactionBulkCurrencyError(ValidationError):
-    default_message = 'Target account currency must match the currency of every moved transaction'
+    default_message = gettext_lazy('Target account currency must match the currency of every moved transaction')
     default_code = 'bulk_currency_mismatch'
 
 
@@ -66,21 +68,21 @@ class TransactionImportError(ValidationError):
 
 
 class AttachmentNotFoundError(NotFoundError):
-    default_message = 'Attachment not found'
+    default_message = gettext_lazy('Attachment not found')
     default_code = 'not_found'
 
 
 class AttachmentTypeError(ValidationError):
-    default_message = 'Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF'
+    default_message = gettext_lazy('Unsupported file type — allowed: JPEG, PNG, HEIC, WebP, PDF')
     default_code = 'unsupported_media_type'
 
 
 class AttachmentStorageUnavailableError(ServiceError):
     http_status = 503
-    default_message = 'File storage is not configured'
+    default_message = gettext_lazy('File storage is not configured')
     default_code = 'storage_unavailable'
 
 
 class AttachmentFileMissingError(NotFoundError):
-    default_message = 'The stored file is no longer available'
+    default_message = gettext_lazy('The stored file is no longer available')
     default_code = 'file_missing'

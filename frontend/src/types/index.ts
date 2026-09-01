@@ -265,6 +265,8 @@ export interface User {
 export interface UserPreferences {
   calendar_start_day: number;
   font_family: string;
+  language: string;
+  number_format: string;
 }
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';

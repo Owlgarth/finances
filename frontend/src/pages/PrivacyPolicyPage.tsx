@@ -1,12 +1,14 @@
+import { useTranslation } from 'react-i18next';
 import { legalApi } from '../api/client';
 import LegalDocPage from '../components/LegalDocPage';
 
 export default function PrivacyPolicyPage() {
+  const { t } = useTranslation('dashboard');
   return (
     <LegalDocPage
       fetcher={legalApi.getPrivacy}
-      title="Privacy Policy"
-      failureText="Failed to load privacy policy. Please try again later."
+      title={t('legal.privacyTitle')}
+      failureText={t('legal.privacyFailure')}
     />
   );
 }

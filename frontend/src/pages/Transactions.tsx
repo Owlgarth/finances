@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -32,20 +33,20 @@ const TYPE_STYLE: Record<string, string> = {
 }
 
 const TYPE_OPTIONS = [
-  { value: 'income', label: 'Income' },
-  { value: 'expense', label: 'Expense' },
-  { value: 'adjustment', label: 'Adjustment' },
-]
+  { value: 'income', labelKey: 'type.income' },
+  { value: 'expense', labelKey: 'type.expense' },
+  { value: 'adjustment', labelKey: 'type.adjustment' },
+] as const
 
 // Curated sort options; the backend's ORDERING_PATTERN allows more, but the
 // Select only offers what reads well in a divider-row list.
-const SORT_OPTIONS: { value: TransactionOrdering; label: string }[] = [
-  { value: '-date', label: 'Newest' },
-  { value: 'date', label: 'Oldest' },
-  { value: '-amount', label: 'Amount high to low' },
-  { value: 'amount', label: 'Amount low to high' },
-  { value: 'description', label: 'Description A-Z' },
-]
+const SORT_OPTIONS = [
+  { value: '-date', labelKey: 'sort.newest' },
+  { value: 'date', labelKey: 'sort.oldest' },
+  { value: '-amount', labelKey: 'sort.amountDesc' },
+  { value: 'amount', labelKey: 'sort.amountAsc' },
+  { value: 'description', labelKey: 'sort.description' },
+] as const
 
 // The backend's default when no ?ordering= is sent: picking it clears the
 // param so the URL stays clean for the common case.
@@ -65,6 +66,7 @@ function readStoredSearch(): string {
 }
 
 export default function Transactions() {
+  const { t } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -124,7 +126,7 @@ export default function Transactions() {
   // The export endpoint honors ONLY the date range and a single type filter -
   // never imply the whole filter panel applies to the file.
   const handleExportView = async () => {
-    const toastId = toast.loading('Preparing export...')
+    const toastId = toast.loading(t('preparingExport'))
     setIsExporting(true)
     try {
       const blob = await transactionsApi.exportView({
@@ -135,9 +137,9 @@ export default function Transactions() {
       const url = URL.createObjectURL(blob)
       triggerBrowserDownload(url, `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
       URL.revokeObjectURL(url)
-      toast.success('Export complete', { id: toastId })
+      toast.success(t('exportComplete'), { id: toastId })
     } catch {
-      toast.error('Export failed. Try again.', { id: toastId })
+      toast.error(t('exportFailed'), { id: toastId })
     } finally {
       setIsExporting(false)
     }
@@ -218,10 +220,10 @@ export default function Transactions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success('Transaction deleted')
+      toast.success(t('deleted'))
       setDeleting(null)
     },
-    onError: (error) => { toast.error(getApiErrorMessage(error, 'Failed to delete')); setDeleting(null) },
+    onError: (error) => { toast.error(getApiErrorMessage(error, t('deleteFailed'))); setDeleting(null) },
   })
 
   const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
@@ -234,26 +236,28 @@ export default function Transactions() {
   const items = data?.items ?? []
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
+  const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">Transactions</h1>
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
         <div className="flex items-center gap-2">
           {/* Visible on mobile too: export is a read action with no FAB twin. */}
           <button
             type="button"
             onClick={handleExportView}
             disabled={isExporting}
-            title="Exports the date and type filters"
+            title={t('exportTitle')}
             className={secondaryButtonClass}
           >
-            <Download size={13} className="inline mr-1" /> Export view
+            <Download size={13} className="inline mr-1" /> {t('exportView')}
           </button>
-          {/* Hidden on mobile: the FAB quick-add owns creation there (plan decision 6). */}
+          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
           {canWrite && (
             <button onClick={openNew} className={`${primaryButtonClass} max-sm:hidden`}>
-              <Plus size={13} className="inline mr-1" /> New transaction
+              <Plus size={13} className="inline mr-1" /> {t('newTransaction')}
             </button>
           )}
         </div>
@@ -263,17 +267,17 @@ export default function Transactions() {
         <SearchInput
           value={search}
           onChange={handleSearchChange}
-          placeholder="Search descriptions…"
-          aria-label="Search transactions"
+          placeholder={t('searchPlaceholder')}
+          aria-label={t('searchAria')}
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
-          options={SORT_OPTIONS}
-          placeholder="Newest"
-          aria-label="Sort"
+          options={sortOptions}
+          placeholder={t('sort.newest')}
+          aria-label={t('sortAria')}
           className="w-48 flex-shrink-0"
         />
       </div>
@@ -281,23 +285,23 @@ export default function Transactions() {
       {filtersOpen && (
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
-            <FilterField label="Account">
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder="All accounts" aria-label="Filter by account" />
+            <FilterField label={t('filters.account')}>
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
             </FilterField>
           )}
           {multiCurrency && (
-            <FilterField label="Currency">
+            <FilterField label={t('filters.currency')}>
               <MultiSelect
                 values={currencyFilter}
                 onChange={(v) => updateParams({ currency: v })}
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
-                placeholder="All currencies"
-                aria-label="Filter by currency"
+                placeholder={t('filters.allCurrencies')}
+                aria-label={t('filters.byCurrencyAria')}
               />
             </FilterField>
           )}
-          <FilterField label="Type">
-            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={TYPE_OPTIONS} placeholder="All types" aria-label="Filter by type" />
+          <FilterField label={t('filters.type')}>
+            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} />
           </FilterField>
           <ListFilterFields />
         </FilterPanel>
@@ -306,10 +310,10 @@ export default function Transactions() {
       {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
       {(data?.total ?? 0) > 0 && (
         <ListTotalsStrip
-          caption={`Totals - ${data?.total ?? 0} transactions`}
+          caption={t('totals.caption', { count: data?.total ?? 0 })}
           items={totalsData?.totals ?? []}
           tone={(group) => (group === 'income' ? 'positive' : group === 'expense' ? 'negative' : 'neutral')}
-          help="Adjustments are excluded."
+          help={t('totals.help')}
           isLoading={totalsIsLoading}
         />
       )}
@@ -318,42 +322,42 @@ export default function Transactions() {
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">
-          {search || activeFilterCount > 0 ? 'No transactions match your search or filters.' : 'No transactions yet.'}
+          {search || activeFilterCount > 0 ? t('emptyFiltered') : t('empty')}
         </p>
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-          {items.map((t) => (
+          {items.map((tx) => (
             <div
-              key={t.id}
-              {...(isTouch && canWrite ? tappableProps(() => openEdit(t)) : {})}
+              key={tx.id}
+              {...(isTouch && canWrite ? tappableProps(() => openEdit(tx)) : {})}
               className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
                 isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-text truncate">{t.description}</span>
-                  {t.type === 'adjustment' && (
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">Adj</span>
+                  <span className="text-text truncate">{tx.description}</span>
+                  {tx.type === 'adjustment' && (
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
                   )}
                 </div>
                 {/* Single truncating string — a flex row here would wrap on long
                     category/account names and grow the row past spec height. */}
                 <div className="text-[10px] font-mono text-text-muted truncate">
-                  {[t.date, t.category_name, showAccountColumn || !t.account_name ? t.account_name ?? 'No account' : null]
+                  {[tx.date, tx.category_name, showAccountColumn || !tx.account_name ? tx.account_name ?? t('noAccount') : null]
                     .filter(Boolean)
                     .join(' · ')}
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0 pl-3">
                 <div className="text-right">
-                  <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[t.type]}`}>
-                    {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}
-                    {formatAmount(t.amount)} {multiCurrency ? t.currency_code : ''}
+                  <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[tx.type]}`}>
+                    {tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}
+                    {formatAmount(tx.amount)} {multiCurrency ? tx.currency_code : ''}
                   </span>
-                  {t.original_amount && t.original_currency_code && (
+                  {tx.original_amount && tx.original_currency_code && (
                     <div className="text-[10px] font-mono text-text-muted">
-                      {formatAmount(t.original_amount)} {t.original_currency_code}
+                      {formatAmount(tx.original_amount)} {tx.original_currency_code}
                     </div>
                   )}
                 </div>
@@ -361,9 +365,9 @@ export default function Transactions() {
                     invisible tap targets; the row tap opens the sheet instead. */}
                 {canWrite && !isTouch && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(t)} title="Edit" className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button onClick={() => openCopy(t)} title="Copy" className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                    <button onClick={() => setDeleting(t)} title="Delete" className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                    <button onClick={() => openEdit(tx)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                    <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                    <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                   </div>
                 )}
               </div>
@@ -395,8 +399,8 @@ export default function Transactions() {
       />
       <ConfirmDialog
         isOpen={!!deleting}
-        title="Delete transaction"
-        message={`Delete "${deleting?.description}"?`}
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message', { description: deleting?.description })}
         isPending={deleteMutation.isPending}
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}

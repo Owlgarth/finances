@@ -1,7 +1,39 @@
 import { format, parseISO } from 'date-fns'
+import { enUS, type Locale } from 'date-fns/locale'
 
 /**
- * Format a monetary value with comma (,) thousands separators and 2 decimal places.
+ * Module-level formatting configuration (setAuthToken precedent: an external
+ * store with a setter, no React state). LanguageContext applies it on init,
+ * on language/number-format changes, and when authenticated preferences
+ * arrive (server wins).
+ *
+ * numberStyle drives digit separators in formatAmount/formatPeriodRange:
+ *   'en' -> grouping ','  decimal '.'   (byte-identical to the previous behavior)
+ *   'eu' -> grouping NBSP decimal ','   (NBSP written as the escaped literal
+ *          '\u00A0' per the invisible-character rule; never a raw 0xC2 0xA0 byte)
+ * dateLocale supplies month names for formatPeriodRange's display patterns.
+ */
+export interface FormattingConfig {
+  numberStyle: 'en' | 'eu'
+  dateLocale: Locale
+}
+
+let formattingConfig: FormattingConfig = { numberStyle: 'en', dateLocale: enUS }
+
+export function configureFormatting(cfg: FormattingConfig): void {
+  formattingConfig = cfg
+}
+
+/** Read-only separator-style lookup for number rendering outside
+ *  formatAmount (e.g. compact chart-axis formatters) - does not weaken the
+ *  singleton. */
+export function getNumberStyle(): FormattingConfig['numberStyle'] {
+  return formattingConfig.numberStyle
+}
+
+/**
+ * Format a monetary value with thousands and decimal separators per the
+ * configured numberStyle ('en': 1,234.56; 'eu': 1\u00A0234,56), 2 decimal places.
  *
  * Accepts the raw Decimal string from the backend (precision-safe for large
  * values like "123456789012345.67") or a number. Negatives render with a
@@ -39,10 +71,12 @@ export function formatAmount(value: string | number, currency?: string): string 
 
   const newDec = combined.slice(-2)
   const newInt = combined.slice(0, -2) || '0'
-  const formattedInt = newInt.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const groupingSeparator = formattingConfig.numberStyle === 'eu' ? '\u00A0' : ','
+  const decimalSeparator = formattingConfig.numberStyle === 'eu' ? ',' : '.'
+  const formattedInt = newInt.replace(/\B(?=(\d{3})+(?!\d))/g, groupingSeparator)
 
   const sign = isNegative ? '-' : ''
-  const base = `${sign}${formattedInt}.${newDec}`
+  const base = `${sign}${formattedInt}${decimalSeparator}${newDec}`
   return currency ? `${base} ${currency}` : base
 }
 
@@ -87,6 +121,10 @@ export function subtractAmounts(a: string, b: string): string {
  * hand-created custom periods read like derived weeks-cadence ones.
  * parseISO reads date-only strings as local time — no UTC-midnight day
  * shift in negative-offset zones (unlike new Date('yyyy-mm-dd')).
+ *
+ * configureFormatting deliberately has no effect on this function: its
+ * output is persisted as period.name and must stay byte-identical to the
+ * backend mirror regardless of the active number style or date locale.
  */
 export function formatPeriodName(startIso: string, endIso: string): string {
   return `${format(parseISO(startIso), 'dd MMM')} – ${format(parseISO(endIso), 'dd MMM y')}`
@@ -95,27 +133,41 @@ export function formatPeriodName(startIso: string, endIso: string): string {
 /**
  * Format a period's date range for the PeriodPicker rows (and any other short
  * period-range display): "Apr 1 - Apr 30" within one year, "Dec 28 2025 -
- * Jan 3 2026" across years.
+ * Jan 3 2026" across years (en style); "01.04 - 30.04" / "28.12.2025 -
+ * 03.01.2026" (eu style).
  *
- * Worked examples (PERIOD_PICKER_SPEC.md §7.2 is the contract; the frontend
- * has no test runner, so these docblock examples are the review reference -
- * keep them in sync if the format ever changes):
- *   formatPeriodRange('2026-04-01', '2026-04-30') === 'Apr 1 - Apr 30'
- *   formatPeriodRange('2028-02-01', '2028-02-29') === 'Feb 1 - Feb 29'
- *   formatPeriodRange('2026-01-05', '2026-01-11') === 'Jan 5 - Jan 11'
- *   formatPeriodRange('2025-12-28', '2026-01-03') === 'Dec 28 2025 - Jan 3 2026'
- *   formatPeriodRange('2026-11-15', '2027-02-28') === 'Nov 15 2026 - Feb 28 2027'
- *   formatPeriodRange('2026-07-01', '2026-09-30', { withYears: true })
- *     === 'Jul 1 2026 - Sep 30 2026'
+ * Style- and locale-aware: the separator style comes from the module-level
+ * formatting config, and month names follow the configured date-fns locale
+ * (passed unconditionally, so any shape containing name tokens localizes
+ * with the UI language; eu shapes are numeric).
+ *
+ * Worked examples (these docblock examples are the contract for the en
+ * shapes - the frontend has no test runner, so they are the review
+ * reference; keep them in sync if the formats ever change):
+ *   en style (default):
+ *     formatPeriodRange('2026-04-01', '2026-04-30') === 'Apr 1 - Apr 30'
+ *     formatPeriodRange('2028-02-01', '2028-02-29') === 'Feb 1 - Feb 29'
+ *     formatPeriodRange('2026-01-05', '2026-01-11') === 'Jan 5 - Jan 11'
+ *     formatPeriodRange('2025-12-28', '2026-01-03') === 'Dec 28 2025 - Jan 3 2026'
+ *     formatPeriodRange('2026-11-15', '2027-02-28') === 'Nov 15 2026 - Feb 28 2027'
+ *     formatPeriodRange('2026-07-01', '2026-09-30', { withYears: true })
+ *       === 'Jul 1 2026 - Sep 30 2026'
+ *   eu style (configureFormatting({ numberStyle: 'eu', ... }) active):
+ *     formatPeriodRange('2026-04-01', '2026-04-30') === '01.04 - 30.04'
+ *     formatPeriodRange('2025-12-28', '2026-01-03') === '28.12.2025 - 03.01.2026'
+ *     formatPeriodRange('2026-07-01', '2026-09-30', { withYears: true })
+ *       === '01.07.2026 - 30.09.2026'
  *
  * ADJACENCY WARNING - deliberately different from formatPeriodName above,
  * which mirrors the backend's derived-period naming (zero-padded days, an
  * en-dash separator, year only on the end, e.g. "04 Sep" en-dash "03 Oct
  * 2026") and must stay byte-identical to it (hand-created periods persist it
  * as their name). Do NOT unify the two formats. This one is a display-only
- * context-selector range (spec §7): month-first, no leading zeros, year on
+ * context-selector range: month-first, no leading zeros, year on
  * BOTH endpoints or neither, regular hyphen " - " separator, no same-month
- * compression.
+ * compression - same function, style-aware since the number-format
+ * preference exists (the eu style changes the date shapes only; the " - "
+ * separator itself stays in both styles).
  *
  * parseISO reads date-only strings as local time - no UTC-midnight day shift
  * in negative-offset zones (see formatPeriodName's note).
@@ -126,6 +178,9 @@ export function formatPeriodRange(
   opts?: { withYears?: boolean },
 ): string {
   const withYears = opts?.withYears === true || startIso.slice(0, 4) !== endIso.slice(0, 4)
-  const pattern = withYears ? 'MMM d y' : 'MMM d'
-  return `${format(parseISO(startIso), pattern)} - ${format(parseISO(endIso), pattern)}`
+  const { numberStyle, dateLocale } = formattingConfig
+  const pattern = numberStyle === 'eu'
+    ? (withYears ? 'dd.MM.yyyy' : 'dd.MM')
+    : (withYears ? 'MMM d y' : 'MMM d')
+  return `${format(parseISO(startIso), pattern, { locale: dateLocale })} - ${format(parseISO(endIso), pattern, { locale: dateLocale })}`
 }

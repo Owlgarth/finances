@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { DayPicker } from 'react-day-picker'
 import { format, parse } from 'date-fns'
 import 'react-day-picker/style.css'
+import { useTranslation } from 'react-i18next'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useLanguage } from '../i18n/LanguageContext'
+import { getDateLocale } from '../i18n/dateLocales'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import BottomSheet from './common/BottomSheet'
 import { inputClass } from './common/formStyles'
@@ -25,13 +28,21 @@ export default function DatePicker({
   required = false,
   disabled = false,
   id,
-  placeholder = 'Select date',
+  placeholder,
   inline = false,
 }: Props) {
+  const { t } = useTranslation('numbers')
+  const { language } = useLanguage()
   const { calendarStartDay } = useUserPreferences()
   const { isMobile } = useBreakpoint()
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Calendar chrome locale (month/weekday names). The input value stays ISO
+  // yyyy-MM-dd - it feeds the API - and weekStartsOn stays driven by the
+  // explicit calendar-start-day preference, overriding the locale default.
+  const locale = getDateLocale(language)
+  const resolvedPlaceholder = placeholder ?? t('datePicker.selectDate')
 
   const isoToJsWeekday = (isoDay: number): 0 | 1 | 2 | 3 | 4 | 5 | 6 => {
     return (isoDay === 7 ? 0 : isoDay) as 0 | 1 | 2 | 3 | 4 | 5 | 6
@@ -69,6 +80,7 @@ export default function DatePicker({
           onSelect={handleDaySelect}
           weekStartsOn={isoToJsWeekday(calendarStartDay)}
           defaultMonth={selectedDate}
+          locale={locale}
         />
       </div>
     )
@@ -96,7 +108,7 @@ export default function DatePicker({
         className={`${inputClass} ${className}`}
         required={required}
         disabled={disabled}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         readOnly
       />
       {isOpen && !isMobile && (
@@ -109,13 +121,14 @@ export default function DatePicker({
             onSelect={handleDaySelect}
             weekStartsOn={isoToJsWeekday(calendarStartDay)}
             defaultMonth={selectedDate}
+            locale={locale}
           />
         </div>
       )}
 
       {/* Mobile: calendar in a bottom sheet with 44px day targets (rdp-sheet scope). */}
       {isMobile && (
-        <BottomSheet open={isOpen} onClose={() => setIsOpen(false)} aria-label="Select date">
+        <BottomSheet open={isOpen} onClose={() => setIsOpen(false)} aria-label={t('datePicker.selectDate')}>
           <div className="rdp-inline rdp-sheet px-4 pb-2">
             <DayPicker
               mode="single"
@@ -123,6 +136,7 @@ export default function DatePicker({
               onSelect={handleDaySelect}
               weekStartsOn={isoToJsWeekday(calendarStartDay)}
               defaultMonth={selectedDate}
+              locale={locale}
             />
           </div>
           <div className="px-4 pb-3">
@@ -131,7 +145,7 @@ export default function DatePicker({
               onClick={() => handleDaySelect(new Date())}
               className="w-full min-h-[44px] bg-surface border border-border rounded-sm text-sm font-medium text-text transition-colors active:bg-surface-hover"
             >
-              Today
+              {t('datePicker.today')}
             </button>
           </div>
         </BottomSheet>

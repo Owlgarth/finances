@@ -1,6 +1,6 @@
 ---
 name: frontend-react
-description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances - design system tokens, theme reader atomicity (FOUC script, ThemeContext, theme-color metas), modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, dedup seams and domain hooks modules, API client, blob downloads and object-URL ownership, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
+description: Frontend (React/TypeScript/Vite) conventions for Owlgarth Finances - design system tokens, theme reader atomicity (FOUC script, ThemeContext, theme-color metas), modals, component patterns, TanStack Query widgets and cache invalidation, exact money math, UI text i18n (namespaces, plurals, formatPeriodName mirror), dedup seams and domain hooks modules, API client, blob downloads and object-URL ownership, auth token storage/refresh, lint and grep-gate discipline, naming and import order. Use when writing or modifying any code in frontend/.
 ---
 
 # Frontend Conventions (TypeScript/React)
@@ -104,10 +104,14 @@ Use `common/Modal.tsx` — it renders a centered panel on desktop and delegates 
 Escape, focus return, keyboard avoidance). Don't hand-roll fixed-overlay markup:
 
 ```tsx
-<Modal open={isOpen} onClose={onClose} title="Edit transaction" size="md" className="p-6">
+const { t } = useTranslation('transactions')
+// ...
+<Modal open={isOpen} onClose={onClose} title={t('form.editTitle')} size="md" className="p-6">
   {/* content */}
 </Modal>
 ```
+
+The `title` prop is UI text and goes through `t()` like any other label.
 
 **Titles go through the `title` prop — never a hand-rolled `<h2>`.** The prop is `string`,
 not `ReactNode`: dynamic titles are template literals or string ternaries
@@ -302,10 +306,12 @@ Every auth function expecting an `access_token` must have an `else` branch showi
 if (response.access_token) {
   // ... existing success logic
 } else {
-  toast.error('Unexpected response from server. Please try again.')
+  toast.error(t('errors.unexpectedResponse'))
   return
 }
 ```
+
+The toast message is UI text - the component has `useTranslation('auth')` in scope, and the key lives in the owning `auth` namespace.
 
 ## Stateful Component Preservation with CSS `hidden`
 
@@ -323,12 +329,14 @@ Only apply this where state loss is problematic — other tabs can continue usin
 ## API Error Message Extraction
 
 Every API-error toast or handler extracts its message with
-`getApiErrorMessage(error, 'Fallback message')` from `utils/errors.ts` — it wraps
+`getApiErrorMessage(error, t('uploadFailed'))` from `utils/errors.ts` - it wraps
 `axios.isAxiosError` and reads `response.data.detail`, returning the fallback when either
-is missing:
+is missing. Ninja 422 details arrive as an array of field-error objects; the helper joins
+their (server-translated) msg strings into one '; '-separated line and falls back when the
+array yields nothing - call sites never hand-roll array handling:
 
 ```typescript
-onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to upload'))
+onError: (error) => toast.error(getApiErrorMessage(error, t('uploadFailed')))
 ```
 
 Never hand-roll `(error as { response?: { data?: { detail?: string } } })` casts or
@@ -540,6 +548,8 @@ useEffect(() => {
 
 The project lints `react-hooks/set-state-in-effect`; the pre-existing warnings are codebase-wide backlog — never add a new one. The baseline is frozen at a fixed warning count (19 at PR #84, 16 since the multi-currency feature) and gated by counting rule-fired warning lines (`grep -cE '^\s+[0-9]+:[0-9]+\s+warning'`), never lines containing the word `warning` - the summary line (`0 errors, 19 warnings`) also matches a substring count and skews the gate by one. The baseline can also DROP: deleting the flagged call (not the whole effect) removes that effect's report - a drop caused by deleting the offending code is the good direction, not a gate failure (18 to 17 to 16 as flagged localStorage-seed calls were removed). When a spec pins a predicted count, re-measure clean HEAD instead of carrying the arithmetic forward - a stale prediction propagates a wrong gate. Build new components lint-quiet by construction: all state in a shared hook (zero `useState` in the component, e.g. `PeriodPicker`) and effects that only mutate the DOM (`scrollTop` math, no setters) - a structurally quiet component adds zero warnings whatever the baseline drifts to. For mount-time behavior (e.g. focusing a just-added row), set transient state inside the **event handler** that caused the mount, act via a plain HTML attribute (`autoFocus={condition}` — fires when the conditionally rendered content mounts), and self-clear in an `onFocus` handler — the self-clear keeps the behavior correct across unmount/remount of conditionally rendered content. Event handlers are not effects: the lint stays quiet. Don't reach for `useEffect` + `setState` or ref callbacks for this class of behavior.
 
+The same warn-baseline discipline covers a second rule: `i18next/no-literal-string` flags JSX text and the placeholder/title/alt/aria-label props so new hardcoded English cannot land silently. Its baseline is a ceiling documented in `frontend/eslint.config.js` that only goes DOWN as literals become t() keys - never add a warning of either rule.
+
 **Grep/lint done-criteria gates - classify the failure before touching code.** Gates that grep the working tree count comment text and exact-cased identifiers only: keep gated literals out of the comments/docblocks of gated files (the phrase "Zero useEffect by construction" tripped a `grep -c 'useEffect' == 0` gate; comment mentions of `scrollIntoView` tripped a banned-call gate - both fixed by rewording the comment, zero code change), and a lowercase grep pattern cannot see a PascalCase setter (`grep 'periodModalNonce'` finds 2 lines, not 3 - `setPeriodModalNonce` hides its capital P; count exact-cased occurrences only). When a lint count disagrees with the spec, prove "pre-existing" mechanically instead of fixing a non-regression: `git show main:<path> | npx eslint --stdin --stdin-filename <path>` lints main's copy without touching the working tree, and findings compare by IDENTIFIER, not line number - earlier tasks' import lines shift rows without adding warnings. The binding invariant is zero NEW warnings against the frozen baseline; a spec's per-file count that disagrees is a spec arithmetic error, and "improving" a pre-existing warning mid-pass is an out-of-scope refactor of working code. Diff-level special-char gates (no added em/en dashes) constrain which LINES you may touch, not just what you write: a line carrying a pre-existing gated character (a U+2014 placeholder in a fallback render) re-emits it in any edit's `+` twin, so ANY edit to that line fails the gate. When a pinned edit collides with one, restructure the change so the line stays byte-identical - name the derived const what the consumers already read (rename the raw picked state instead) so every consumer line goes untouched - never re-type the character and never relax the gate. A formatter can force the collision anyway (ruff format re-indenting a docstring re-emits a pre-existing dash as an added line); repair via byte-anchored whitespace surgery - replace only the leading-whitespace prefix of the line, never retyping the character - and prove preservation from BOTH directions: zero dashed lines added AND zero dashed lines removed, which together show the pre-existing dashes as unchanged context.
 
 When a `setState` in an effect is genuinely unavoidable, the rule reports **once per effect** (at the first violating call) — work within that granularity:
@@ -646,6 +656,16 @@ load-bearing contract is that exactly one site creates a URL per lifecycle, and
 Backend Decimal amounts cross the API as strings; any arithmetic whose result is **persisted or sent back** must be exact string/BigInt math via the helpers in `utils/format.ts` (`subtractAmounts` — BigInt cents, 3rd-digit round-half-up, never returns `'-0.00'`). Never `parseFloat` a backend Decimal that will be persisted: a 17-digit Decimal through `parseFloat` loses the last cent, and the wrong delta gets recorded as a real adjustment transaction. Floats are for validation/display only.
 
 Number-input values are arbitrary strings — `'1e5'`, `''`, `'.5'`, `'5.'` — so validate with a regex (`/^-?(\d+(\.\d*)?|\.\d+)$/`, which also rejects e-notation) before the BigInt math. BigInt itself accepts leading zeros; only the regex gate keeps scientific notation out.
+
+## UI Text and i18n
+
+Every user-visible string goes through `t()` from `useTranslation('<namespace>')`. The UI ships in English, Ukrainian, and Polish; a new UI string is THREE files' worth of work: the `t()` call plus the key in the owning namespace's `en`, `uk`, and `pl` JSONs under `src/i18n/locales/` - `npm run i18n:check` fails a key that exists in one language and not the others. Namespaces map to owning surfaces (auth, nav, accounts, transfers, budgets, transactions, planned, dashboard, members, settings, common, numbers - the table lives in `docs/i18n.md`); a component adds keys only to its own namespace.
+
+- **`aria-label`, `placeholder`, `title`, and `alt` are UI text.** They go through `t()` like JSX text. The ESLint `i18next/no-literal-string` rule (warn) flags new literals in those positions and in JSX children - see the baseline note in §State Changes in Event Handlers, Not Effects.
+- **Module-level label arrays hold keys, not text.** The nav-item arrays (`Sidebar`, `BottomNav`) store key strings (`as const`, so `labelKey` stays a literal union) and resolve them in the component body via `t(item.labelKey)` - the same trap shape as any module-level constant: English text at module scope has no hook in scope and silently ships untranslated.
+- **Plurals use i18next `count`:** `t('multiSelect.selectedCount', { count: n })` (exemplar: `MultiSelect`) with `selectedCount_one`/`selectedCount_other` in English and the full `_one`/`_few`/`_many`/`_other` set in Ukrainian and Polish - both Slavic languages need all four forms, and `i18n:check` validates the category set per language via `Intl.PluralRules`. Interpolation is `{{name}}`; never concatenate translated fragments with `+`.
+- **`formatPeriodName` never localizes** - it mirrors the backend's period-naming format and its output is persisted as period names (the full warning and the do-not-unify rule against `formatPeriodRange` are in Backend-mirrored constants under API Client Pattern). Do not route it through `t()`; do not "fix" its en dash.
+- **Backend errors arrive already translated** - the API client sends `Accept-Language` (`setApiLanguage`), so `getApiErrorMessage(error, ...)` receives a localized `detail`. The FALLBACK argument is frontend UI text and goes through `t()` like any other string.
 
 ## Contexts
 

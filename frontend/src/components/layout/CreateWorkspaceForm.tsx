@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { AxiosError } from 'axios'
 import { Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import CurrencySetField from '../currencies/CurrencySetField'
 import Modal from '../common/Modal'
 import { currenciesApi } from '../../api/client'
@@ -25,6 +26,7 @@ interface CreateWorkspaceFormProps {
  * so closing is the only cleanup the form owes.
  */
 export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProps) {
+  const { t } = useTranslation('settings')
   const { createWorkspace } = useWorkspace()
   // No autofocus on touch - don't yank the keyboard up over a fresh sheet.
   const isTouch = useIsTouch()
@@ -65,10 +67,10 @@ export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProp
     setIsSubmitting(true)
     try {
       await createWorkspace(name.trim(), currencyCodes)
-      toast.success('Workspace created')
+      toast.success(t('createWorkspace.created'))
       onClose()
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to create workspace'))
+      toast.error(getApiErrorMessage(error, t('createWorkspace.failed')))
     } finally {
       setIsSubmitting(false)
     }
@@ -85,16 +87,16 @@ export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProp
     // `open` hardcoded: mount-per-use, the caller's render IS the open state
     // (see docblock). Default size 'md' - wide enough for the ordered
     // currency list; the height cap keeps long catalogs scrollable.
-    <Modal open onClose={onClose} title="Create workspace" className="p-6 max-h-[85vh] overflow-y-auto">
+    <Modal open onClose={onClose} title={t('createWorkspace.title')} className="p-6 max-h-[85vh] overflow-y-auto">
       <div className="space-y-4">
         <div>
-          <label htmlFor="create-workspace-name" className={labelClass}>Name</label>
+          <label htmlFor="create-workspace-name" className={labelClass}>{t('createWorkspace.nameLabel')}</label>
           <input
             id="create-workspace-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Workspace name"
+            placeholder={t('createWorkspace.namePlaceholder')}
             maxLength={100}
             className={inputClass}
             autoFocus={!isTouch}
@@ -105,12 +107,12 @@ export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProp
           <CurrencySetField
             value={currencyCodes}
             onChange={setCurrencyCodes}
-            primaryLabel="Main account"
-            placeholder="Select currencies"
+            primaryLabel={t('createWorkspace.mainAccount')}
+            placeholder={t('createWorkspace.selectCurrencies')}
             currencies={catalogCurrencies}
           />
           <p className="mt-1 text-[11px] text-text-muted">
-            You can enable more currencies later in workspace settings.
+            {t('createWorkspace.helper')}
           </p>
         </div>
         <div className="flex justify-end gap-2 pt-2">
@@ -120,14 +122,14 @@ export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProp
             disabled={isSubmitting}
             className={secondaryButtonClass}
           >
-            Cancel
+            {t('createWorkspace.cancel')}
           </button>
           <button
             onClick={handleCreate}
             disabled={isSubmitting || !name.trim() || currencyCodes.length === 0}
             className={primaryButtonClass}
           >
-            {isSubmitting ? 'Creating...' : 'Create'}
+            {isSubmitting ? t('createWorkspace.submitting') : t('createWorkspace.submit')}
           </button>
         </div>
       </div>
@@ -136,6 +138,7 @@ export default function CreateWorkspaceForm({ onClose }: CreateWorkspaceFormProp
 }
 
 function CreateWorkspaceButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation('settings')
   return (
     <button
       type="button"
@@ -143,7 +146,7 @@ function CreateWorkspaceButton({ onClick }: { onClick: () => void }) {
       className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors"
     >
       <Plus size={14} />
-      Create Workspace
+      {t('createWorkspace.createButton')}
     </button>
   )
 }

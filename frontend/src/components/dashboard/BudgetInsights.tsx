@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { Table2, ChartColumn } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../../api/client'
 import { useBudgets, useEnabledCurrencies } from '../../hooks/useDomain'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { formatAmount } from '../../utils/format'
+import { formatAmount, getNumberStyle } from '../../utils/format'
 import { activeCurrencyCodes } from '../../utils/currencies'
 import Select from '../common/Select'
 import type { BudgetHistoryPeriod, BudgetSummaryItem } from '../../types'
@@ -18,10 +19,17 @@ const SERIES = {
   actual: 'var(--chart-series-2)',
 } as const
 
-const compactFmt = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
-const compact = (v: string | number) => compactFmt.format(typeof v === 'number' ? v : parseFloat(v))
+/* Compact axis numbers per numberStyle. 'fr-FR' supplies the eu shape:
+   NBSP grouping + ',' decimal + neutral Latin compact suffixes (k, M),
+   independent of the UI language (number format is its own preference). */
+const COMPACT_FMTS: Record<'en' | 'eu', Intl.NumberFormat> = {
+  en: new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }),
+  eu: new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }),
+}
+const compact = (v: string | number) =>
+  COMPACT_FMTS[getNumberStyle()].format(typeof v === 'number' ? v : parseFloat(v))
 
-/** Round up to 1/2/5 × 10^k — clean axis maximum. */
+/** Round up to 1/2/5 × 10^k - clean axis maximum. */
 function niceMax(max: number): number {
   if (max <= 0) return 1
   const exp = 10 ** Math.floor(Math.log10(max))
@@ -55,12 +63,13 @@ function Tooltip({ tip }: { tip: TipState }) {
 }
 
 function Legend() {
+  const { t } = useTranslation('numbers')
   return (
     <div className="flex items-center gap-3">
       {(['planned', 'actual'] as const).map((s) => (
         <span key={s} className="flex items-center gap-1.5 text-[10px] text-text-muted capitalize">
           <span className="inline-block w-2.5 h-2.5 rounded-[2px]" style={{ background: SERIES[s] }} />
-          {s}
+          {s === 'planned' ? t('insights.seriesPlanned') : t('insights.seriesActual')}
         </span>
       ))}
     </div>
@@ -80,14 +89,15 @@ function StatTile({ label, value, sub, subTone }: { label: string; value: string
 
 /** Spend meter: fill severity accent → warning → negative; track = lighter step of the fill's own ramp. */
 function SpendMeter({ planned, actual }: { planned: number; actual: number }) {
+  const { t } = useTranslation('numbers')
   const pct = planned > 0 ? (actual / planned) * 100 : 0
   const fill = pct > 100 ? 'var(--color-negative)' : pct >= 85 ? 'var(--color-warning)' : 'var(--chart-series-1)'
   const label =
     planned <= 0
-      ? 'No plan set for this period'
+      ? t('insights.noPlanSet')
       : pct > 100
-        ? `Over plan — ${Math.round(pct)}% used`
-        : `${Math.round(pct)}% of plan used`
+        ? t('insights.overPlanUsed', { pct: Math.round(pct) })
+        : t('insights.planUsed', { pct: Math.round(pct) })
   return (
     <div>
       <div className="h-2 rounded-sm overflow-hidden" style={{ background: 'var(--chart-track)' }}>
@@ -113,6 +123,7 @@ function useTip() {
 
 /** Horizontal paired bars: planned vs actual per category (top 6 + Other). */
 function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]; currency: string; loading: boolean }) {
+  const { t } = useTranslation('numbers')
   const { containerRef, tip, setTip, show } = useTip()
 
   const rows = useMemo(() => {
@@ -123,13 +134,13 @@ function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]
     const result = top.map((i) => ({ name: i.category_name, planned: parseFloat(i.planned), actual: parseFloat(i.actual) }))
     if (rest.length > 0) {
       result.push({
-        name: 'Other',
+        name: t('insights.otherCategory'),
         planned: rest.reduce((s, i) => s + parseFloat(i.planned), 0),
         actual: rest.reduce((s, i) => s + parseFloat(i.actual), 0),
       })
     }
     return result
-  }, [items, currency])
+  }, [items, currency, t])
 
   if (loading)
     return (
@@ -140,7 +151,7 @@ function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]
       </div>
     )
 
-  if (rows.length === 0) return <p className="text-sm text-text-muted py-6 text-center">No categories with data this period.</p>
+  if (rows.length === 0) return <p className="text-sm text-text-muted py-6 text-center">{t('insights.noCategoriesWithData')}</p>
 
   const max = niceMax(Math.max(...rows.map((r) => Math.max(r.planned, r.actual))))
 
@@ -151,19 +162,19 @@ function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]
         <div
           key={r.name}
           tabIndex={0}
-          aria-label={`${r.name}: planned ${formatAmount(r.planned)}, spent ${formatAmount(r.actual)} ${currency}`}
+          aria-label={t('insights.rowAriaLabel', { name: r.name, planned: formatAmount(r.planned), spent: formatAmount(r.actual), currency })}
           className="flex items-center gap-2 group outline-none focus-visible:ring-2 focus-visible:ring-border-focus rounded-sm"
           onPointerMove={(e) =>
             show(e.currentTarget, r.name, [
-              { series: 'planned', label: 'planned', value: formatAmount(r.planned) },
-              { series: 'actual', label: 'spent', value: formatAmount(r.actual) },
+              { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(r.planned) },
+              { series: 'actual', label: t('insights.seriesSpent'), value: formatAmount(r.actual) },
             ])
           }
           onPointerLeave={() => setTip(null)}
           onFocus={(e) =>
             show(e.currentTarget, r.name, [
-              { series: 'planned', label: 'planned', value: formatAmount(r.planned) },
-              { series: 'actual', label: 'spent', value: formatAmount(r.actual) },
+              { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(r.planned) },
+              { series: 'actual', label: t('insights.seriesSpent'), value: formatAmount(r.actual) },
             ])
           }
           onBlur={() => setTip(null)}
@@ -185,11 +196,15 @@ function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]
 
 /** Grouped columns: planned vs actual per period, oldest first. */
 function PeriodColumns({ periods, currency, currentPeriodId, loading }: { periods: BudgetHistoryPeriod[]; currency: string; currentPeriodId: number | null; loading: boolean }) {
+  const { t } = useTranslation('numbers')
   const { containerRef, tip, setTip, show } = useTip()
 
   const cols = periods.map((p) => ({
     id: p.id,
     name: p.name,
+    // Month-abbreviation axis labels: deliberately NOT wired to the
+    // date-fns locale yet (numeric eu-style axis labels would need the
+    // same plumbing) - tracked as follow-up, out of scope here.
     label: format(parseISO(p.start_date), periods.length > 1 && new Date(p.start_date).getFullYear() !== new Date().getFullYear() ? 'MMM yy' : 'MMM'),
     planned: parseFloat(p.totals[currency]?.planned ?? '0'),
     actual: parseFloat(p.totals[currency]?.actual ?? '0'),
@@ -197,7 +212,7 @@ function PeriodColumns({ periods, currency, currentPeriodId, loading }: { period
 
   if (loading) return <div className="h-44 bg-surface-muted rounded-sm animate-pulse" />
 
-  if (cols.length === 0) return <p className="text-sm text-text-muted py-6 text-center">No periods yet.</p>
+  if (cols.length === 0) return <p className="text-sm text-text-muted py-6 text-center">{t('insights.noPeriodsYet')}</p>
 
   const max = niceMax(Math.max(...cols.map((c) => Math.max(c.planned, c.actual)), 1))
   const ticks = [1, 2, 3, 4].map((i) => (max / 4) * i)
@@ -209,35 +224,35 @@ function PeriodColumns({ periods, currency, currentPeriodId, loading }: { period
       <div className="flex">
         {/* y ticks */}
         <div className="relative w-10 shrink-0" style={{ height: PLOT_H }}>
-          {ticks.map((t) => (
-            <span key={t} className="absolute right-1.5 -translate-y-1/2 text-[9px] font-mono tabular-nums text-text-muted" style={{ top: PLOT_H - (t / max) * PLOT_H }}>
-              {compact(t)}
+          {ticks.map((tick) => (
+            <span key={tick} className="absolute right-1.5 -translate-y-1/2 text-[9px] font-mono tabular-nums text-text-muted" style={{ top: PLOT_H - (tick / max) * PLOT_H }}>
+              {compact(tick)}
             </span>
           ))}
         </div>
         {/* plot */}
         <div className="relative flex-1 border-b border-border" style={{ height: PLOT_H }}>
-          {ticks.map((t) => (
-            <div key={t} className="absolute left-0 right-0 border-t border-border/60" style={{ top: PLOT_H - (t / max) * PLOT_H }} />
+          {ticks.map((tick) => (
+            <div key={tick} className="absolute left-0 right-0 border-t border-border/60" style={{ top: PLOT_H - (tick / max) * PLOT_H }} />
           ))}
           <div className="absolute inset-0 flex items-end justify-around">
             {cols.map((c) => (
               <div
                 key={c.id}
                 tabIndex={0}
-                aria-label={`${c.name}: planned ${formatAmount(c.planned)}, spent ${formatAmount(c.actual)} ${currency}`}
+                aria-label={t('insights.rowAriaLabel', { name: c.name, planned: formatAmount(c.planned), spent: formatAmount(c.actual), currency })}
                 className="flex items-end justify-center gap-[2px] h-full px-2 outline-none hover:bg-surface-hover focus-visible:bg-surface-hover transition-colors"
                 onPointerMove={(e) =>
                   show(e.currentTarget, c.name, [
-                    { series: 'planned', label: 'planned', value: formatAmount(c.planned) },
-                    { series: 'actual', label: 'spent', value: formatAmount(c.actual) },
+                    { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(c.planned) },
+                    { series: 'actual', label: t('insights.seriesSpent'), value: formatAmount(c.actual) },
                   ])
                 }
                 onPointerLeave={() => setTip(null)}
                 onFocus={(e) =>
                   show(e.currentTarget, c.name, [
-                    { series: 'planned', label: 'planned', value: formatAmount(c.planned) },
-                    { series: 'actual', label: 'spent', value: formatAmount(c.actual) },
+                    { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(c.planned) },
+                    { series: 'actual', label: t('insights.seriesSpent'), value: formatAmount(c.actual) },
                   ])
                 }
                 onBlur={() => setTip(null)}
@@ -290,6 +305,7 @@ function DataTable({ head, rows }: { head: string[]; rows: (string | number)[][]
 }
 
 function ChartCard({ title, children, table }: { title: string; children: React.ReactNode; table: React.ReactNode }) {
+  const { t } = useTranslation('numbers')
   const [showTable, setShowTable] = useState(false)
   return (
     <div className="border border-border rounded-sm bg-surface p-4">
@@ -300,7 +316,7 @@ function ChartCard({ title, children, table }: { title: string; children: React.
           <button
             type="button"
             onClick={() => setShowTable((v) => !v)}
-            aria-label={showTable ? 'Show chart' : 'Show table'}
+            aria-label={t(showTable ? 'insights.showChart' : 'insights.showTable')}
             className="text-text-muted hover:text-text p-1 rounded-sm hover:bg-surface-hover transition-colors"
           >
             {showTable ? <ChartColumn size={13} /> : <Table2 size={13} />}
@@ -313,6 +329,7 @@ function ChartCard({ title, children, table }: { title: string; children: React.
 }
 
 export default function BudgetInsights() {
+  const { t } = useTranslation('numbers')
   const { workspace } = useWorkspace()
   const { data: budgets = [] } = useBudgets(false)
   const { data: currencies = [] } = useEnabledCurrencies()
@@ -352,7 +369,7 @@ export default function BudgetInsights() {
     placeholderData: (prev) => prev,
   })
 
-  // First-load pendings — true from budget selection until the query chain
+  // First-load pendings - true from budget selection until the query chain
   // (currentPeriod → history → summary) delivers data. A query waiting on
   // prerequisites (`enabled: false`) also has no data yet, so gating on data
   // presence covers those windows that `isLoading` misses; `placeholderData`
@@ -442,15 +459,15 @@ export default function BudgetInsights() {
 
   return (
     <div className="mb-6">
-      {/* Filter row — scopes everything below it */}
+      {/* Filter row - scopes everything below it */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="w-56">
           <Select
             value={budgetId}
             onChange={selectBudget}
             options={budgets.map((b) => ({ value: b.id, label: b.name }))}
-            placeholder="Select budget"
-            aria-label="Budget"
+            placeholder={t('insights.selectBudget')}
+            aria-label={t('insights.budgetAriaLabel')}
           />
         </div>
         {showCurrencyControl &&
@@ -460,7 +477,7 @@ export default function BudgetInsights() {
                 value={currency}
                 onChange={selectCurrency}
                 options={activeCurrencies.map((c) => ({ value: c, label: c }))}
-                aria-label="Currency"
+                aria-label={t('insights.currencyAriaLabel')}
                 mono
               />
             </div>
@@ -471,13 +488,13 @@ export default function BudgetInsights() {
           ))}
         {budget && (
           <Link to={`/budgets/${budget.id}`} className="text-xs text-primary hover:text-primary-hover touch-hit">
-            View budget →
+            {t('insights.viewBudget')}
           </Link>
         )}
       </div>
 
       <div className={`space-y-4 transition-opacity ${isPlaceholderData ? 'opacity-60' : ''}`}>
-        {/* KPI row — current period */}
+        {/* KPI row - current period */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {summaryPending ? (
             [0, 1, 2].map((i) => (
@@ -488,18 +505,21 @@ export default function BudgetInsights() {
             ))
           ) : (
             <>
-              <StatTile label={`Planned · ${summary?.period.name ?? 'current period'}`} value={totals ? formatAmount(planned) : '—'} sub={currency ?? undefined} subTone="muted" />
+              <StatTile label={t('insights.plannedPeriodLabel', { period: summary?.period.name ?? t('insights.currentPeriodFallback') })} value={totals ? formatAmount(planned) : '—'} sub={currency ?? undefined} subTone="muted" />
               <StatTile
-                label="Spent"
+                label={t('insights.spent')}
                 value={totals ? formatAmount(actual) : '—'}
                 sub={
                   spentDelta !== null && prevPeriod
-                    ? `${spentDelta >= 0 ? '+' : '−'}${formatAmount(Math.abs(spentDelta))} vs ${prevPeriod.name}`
+                    ? t('insights.changeVsPeriod', {
+                        delta: `${spentDelta >= 0 ? '+' : '−'}${formatAmount(Math.abs(spentDelta))}`,
+                        period: prevPeriod.name,
+                      })
                     : (currency ?? undefined)
                 }
                 subTone={spentDelta === null ? 'muted' : spentDelta > 0 ? 'bad' : 'good'}
               />
-              <StatTile label="Remaining" value={totals ? formatAmount(remaining) : '—'} sub={currency ?? undefined} subTone={remaining < 0 ? 'bad' : 'muted'} />
+              <StatTile label={t('insights.remaining')} value={totals ? formatAmount(remaining) : '—'} sub={currency ?? undefined} subTone={remaining < 0 ? 'bad' : 'muted'} />
             </>
           )}
         </div>
@@ -510,14 +530,14 @@ export default function BudgetInsights() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard
-            title="This period by category"
-            table={<DataTable head={['Category', 'Planned', 'Spent', 'Remaining']} rows={categoryTableRows} />}
+            title={t('insights.byCategoryTitle')}
+            table={<DataTable head={[t('insights.colCategory'), t('insights.colPlanned'), t('insights.colSpent'), t('insights.colRemaining')]} rows={categoryTableRows} />}
           >
             <CategoryBars items={summary?.items ?? []} currency={currency ?? ''} loading={summaryPending} />
           </ChartCard>
           <ChartCard
-            title="Planned vs spent by period"
-            table={<DataTable head={['Period', 'Planned', 'Spent']} rows={periodTableRows} />}
+            title={t('insights.byPeriodTitle')}
+            table={<DataTable head={[t('insights.colPeriod'), t('insights.colPlanned'), t('insights.colSpent')]} rows={periodTableRows} />}
           >
             <PeriodColumns periods={periods} currency={currency ?? ''} currentPeriodId={currentPeriodId} loading={historyPending} />
           </ChartCard>
