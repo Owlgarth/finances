@@ -7,13 +7,18 @@ ENV PYTHONUNBUFFERED=1 \
     UV_SYSTEM_PYTHON=1 \
     UV_PROJECT_ENVIRONMENT=/venv
 
+# Public build metadata only: ARG values are recorded in image history and public
+# CI logs, so only public values ever become ARGs - secrets arrive at runtime.
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 RUN apt-get update && apt-get install -y \
     gcc \
     gettext \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.8 /uv /uvx /bin/
 
 RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
