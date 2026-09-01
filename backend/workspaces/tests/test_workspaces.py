@@ -428,6 +428,7 @@ class TestAddMemberToWorkspace(WorkspaceTestCase):
         }
         self.post(f'/api/workspaces/{self.workspace.id}/members/add', payload, **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_add_member_as_admin_succeeds(self):
         """Test that admin can add members."""
@@ -551,12 +552,14 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         payload = {'role': 'admin'}
         self.put(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_update_owner_role_fails(self):
         """Test that changing owner role fails."""
         payload = {'role': 'admin'}
         self.put(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/role', payload, **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_admin_cannot_update_other_admin(self):
         """Test that admin cannot update another admin's role."""
@@ -577,6 +580,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         payload = {'role': 'member'}
         self.put(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/role', payload, **headers)
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_update_role_as_member_fails(self):
         """Test that regular member cannot update roles."""
@@ -589,6 +593,7 @@ class TestUpdateMemberRole(WorkspaceTestCase):
         payload = {'role': 'viewer'}
         self.put(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/role', payload, **headers)
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_update_role_nonexistent_member_returns_404(self):
         """A nonexistent member_user_id returns the documented 404, not a 500."""
@@ -677,11 +682,13 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
         """Test that removing yourself fails."""
         self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_remove_owner_fails(self):
         """Test that removing owner fails."""
         self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.user.id}', **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_admin_cannot_remove_other_admin(self):
         """Test that admin cannot remove another admin."""
@@ -701,6 +708,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
 
         self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}', **headers)
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_remove_member_as_member_fails(self):
         """Test that regular member cannot remove other members."""
@@ -712,6 +720,7 @@ class TestRemoveMemberFromWorkspace(WorkspaceTestCase):
 
         self.delete(f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}', **headers)
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 # =============================================================================
@@ -761,11 +770,13 @@ class TestLeaveWorkspace(WorkspaceTestCase):
         """Test that owner cannot leave workspace."""
         self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {}, **self.auth_headers())
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_leave_workspace_without_auth_fails(self):
         """Test that leaving workspace without authentication fails."""
         self.post(f'/api/workspaces/{self.workspace.id}/members/leave', {})
         self.assertStatus(401)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 # =============================================================================
@@ -798,6 +809,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
             f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_reset_owner_password_fails(self):
         """Test that resetting owner's password fails."""
@@ -806,6 +818,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
             f'/api/workspaces/{self.workspace.id}/members/{self.user.id}/reset-password', payload, **self.auth_headers()
         )
         self.assertStatus(400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_admin_cannot_reset_other_admin_password(self):
         """Test that admin cannot reset another admin's password."""
@@ -828,6 +841,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
             f'/api/workspaces/{self.workspace.id}/members/{self.member_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_reset_password_as_member_fails(self):
         """Test that regular member cannot reset passwords."""
@@ -842,6 +856,7 @@ class TestResetMemberPassword(WorkspaceTestCase):
             f'/api/workspaces/{self.workspace.id}/members/{self.viewer_user.id}/reset-password', payload, **headers
         )
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 # =============================================================================
@@ -944,11 +959,13 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
 
         self.delete(f'/api/workspaces/{self.second_workspace.id}', **headers)
         self.assertStatus(403)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_delete_nonexistent_workspace_returns_404(self):
         """Test that deleting nonexistent workspace returns 404."""
         self.delete('/api/workspaces/99999', **self.auth_headers())
         self.assertStatus(404)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_delete_non_member_returns_404(self):
         """Test that deleting a workspace where user is not a member returns 404."""
@@ -958,11 +975,13 @@ class TestDeleteWorkspace(APIClientMixin, AuthMixin, TestCase):
 
         self.delete(f'/api/workspaces/{self.second_workspace.id}', **headers)
         self.assertStatus(404)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_delete_workspace_without_auth_fails(self):
         """Test that deleting workspace without authentication fails."""
         self.delete(f'/api/workspaces/{self.second_workspace.id}')
         self.assertStatus(401)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_delete_only_workspace_returns_204(self):
         """Test that deleting the user's only workspace returns 204 and sets current_workspace to None."""
@@ -1108,37 +1127,23 @@ class TestWorkspaceJWTAuthMembership(APIClientMixin, TestCase):
         self.assertStatus(200)
 
 
-class TestViewerCannotWrite(APIClientMixin, TestCase):
+class TestViewerCannotWrite(AuthMixin, APIClientMixin, TestCase):
     """Tests verifying viewer role is rejected on write endpoints."""
 
+    user_role = 'viewer'
+
     def setUp(self):
-        APIClientMixin.setUp(self)
+        super().setUp()
 
-        self.workspace = WorkspaceFactory(name='Test Workspace')
-        self.viewer_user = UserFactory(
-            email='viewer@example.com',
-            current_workspace=self.workspace,
-        )
-        WorkspaceMemberFactory(
-            workspace=self.workspace,
-            user=self.viewer_user,
-            role='viewer',
-        )
-
-        self.auth_token = create_access_token(self.viewer_user)
-
-        CurrencyCatalogService.enable(self.viewer_user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
         self.account = AccountFactory(workspace=self.workspace, name='Main')
         self.plan_budget = PlanBudgetFactory(workspace=self.workspace)
         self.category = CategoryFactory(
             budget=self.plan_budget,
             workspace=self.workspace,
             name='Groceries',
-            created_by=self.viewer_user,
+            created_by=self.user,
         )
-
-    def auth_headers(self):
-        return {'HTTP_AUTHORIZATION': f'Bearer {self.auth_token}'}
 
     def test_viewer_cannot_create_account(self):
         payload = {'name': 'New Account', 'currency_code': 'PLN'}
@@ -1175,7 +1180,7 @@ class TestViewerCannotWrite(APIClientMixin, TestCase):
         self.assertStatus(403)
 
     def test_viewer_cannot_set_category_budget(self):
-        period = PeriodService.get_or_create_for_date(self.viewer_user, self.plan_budget, date(2025, 1, 15))
+        period = PeriodService.get_or_create_for_date(self.user, self.plan_budget, date(2025, 1, 15))
         payload = {
             'category_id': self.category.id,
             'currency_code': 'PLN',
