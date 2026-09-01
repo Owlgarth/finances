@@ -184,3 +184,51 @@ whether the invitee already had an account (anti-enumeration).
   `rename`/`skip` conflict strategies.
 - **Legacy import** (`POST /users/import-legacy`): converts a pre-redesign export to
   the account-based model and returns a per-account balance verification report.
+
+## Releasing
+
+Releases are cut from `main` with `./dev.sh release 0.1.0` (a bare version - the
+script adds the `v` prefix). Pre-flight checks fail closed before anything is
+written: the version must be strict `X.Y.Z` (digits only, no pre-release
+suffix), the current branch must be `main`, the working tree clean, and the tag
+must not exist yet. `--dry-run` prints every step without executing anything.
+The command then:
+
+- **Local gate** - runs `./dev.sh lint` and `./dev.sh test`. The gate is on by
+  default; `--skip-tests` opts out - CI re-runs the tests as the authoritative
+  gate.
+- **Version files** - writes the version into `VERSION` and syncs it into
+  `backend/pyproject.toml` and `frontend/package.json`.
+- **Changelog** - prepends a section to `CHANGELOG.md` (the file is created by
+  the first release): git-cliff groups conventional commits under Features /
+  Bug Fixes / Documentation / Miscellaneous headings per `cliff.toml`; without
+  git-cliff installed, a plain `git log` section is written instead.
+- **Tag and push** - commits `chore(release): vX.Y.Z` (explicit file list
+  only), creates the annotated tag, and pushes `main` and the tag. The local
+  command stops there: the GitHub Release is created by CI, from the tag push.
+
+**CI.** Pull requests and pushes to `main` run `ci.yml`, which calls the
+reusable `ci-test.yml` workflow: backend `ruff check`, `ruff format --check`,
+and `pytest` against a Postgres 17 service; frontend `npm ci`, `i18n:check`,
+`lint`, `build`. Pushing a `v*` tag (or dispatching `release.yml` manually)
+re-runs the same `ci-test.yml` as a gate, then builds
+`ghcr.io/owlgarth/finances-backend` and `ghcr.io/owlgarth/finances-ui`
+natively for amd64 and arm64 (one native runner per arch, no QEMU emulation),
+merges the per-arch manifests into `vX.Y.Z` and `latest` tags, and - on a tag
+push - creates the GitHub Release with git-cliff-generated notes. A dispatch
+rebuild of an existing tag rebuilds the images but skips the Release.
+
+**git-cliff.** CI self-installs the pinned v2.13.1 binary on the runner to
+render the Release notes. Local runs need nothing: without git-cliff
+installed, the changelog falls back to a plain `git log` section. Install
+git-cliff v2.13.1 to `~/.local/bin` only if you want the grouped
+`CHANGELOG.md` sections from local runs.
+
+**One-time GitHub setup.** Set the `VITE_API_URL` repository variable
+(Settings > Secrets and variables > Actions > Variables); release images fall
+back to `https://finances.owlgarth.com/api` when it is unset. After the first
+successful release, flip both GHCR packages (`finances-backend`,
+`finances-ui`) to public - packages pushed by a workflow default to private.
+And install the Renovate app on the org: `renovate.json` schedules weekly
+update PRs for the Docker images (digest-pinned in the compose files), GitHub
+Actions, npm, and Python dependencies.
