@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "docker:pinDigests"],
+  "timezone": "Europe/Warsaw",
+  "schedule": ["* 5-8 * * 1"],
+  "enabledManagers": ["dockerfile", "docker-compose", "npm", "pep621"]
+}
