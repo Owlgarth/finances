@@ -28,7 +28,7 @@ x-backend: &backend
 
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -43,7 +43,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     command: redis-server --appendonly yes
     ports:
       - "${REDIS_PORT}:6379"
@@ -56,13 +56,14 @@ services:
 
   # rustfs runs as uid 10001 and cannot chown a fresh named volume itself.
   storage-init:
-    image: busybox:1.37
+    image: busybox:1.37@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
     command: chown -R 10001:10001 /data
     volumes:
       - storage-data:/data
 
   storage:
-    image: rustfs/rustfs:latest
+    # Digest-pinned for reproducibility; Renovate (renovate.json) keeps the digest fresh.
+    image: rustfs/rustfs:1.0.0-rc.4@sha256:a9fbb5e5bfce09ccd0869ac9a7b0e39191c6868d75ec4c5d08ebbd5475db5d6b
     environment:
       RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}

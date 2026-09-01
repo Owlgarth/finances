@@ -1,0 +1,219 @@
+# Release pipeline: test gate, dual-arch image builds pushed to GHCR, merged
+# manifests, and a GitHub Release with git-cliff notes. Nothing deploys.
+#
+# Two entry paths:
+#   - push of a v* tag (normal path; ./dev.sh release produces these tags)
+#   - workflow_dispatch with a ref input (rebuild a released version on
+#     demand; rebuilds images and manifests but skips the GitHub Release job)
+#
+# One-time manual steps (cannot be automated from inside the workflow):
+#   1. Set the repository variable VITE_API_URL (repo Settings > Secrets and
+#      variables > Actions > Variables tab). It is baked into the ui image at
+#      build time. If unset, the build falls back to
+#      https://finances.owlgarth.com/api. VITE_DEMO_MODE is optional too and
+#      defaults to false.
+#   2. After the first successful push, flip both GHCR packages to public:
+#      profile > Packages > finances-backend / finances-ui > Package settings
+#      > Danger Zone > Change visibility > Public. Packages pushed by a
+#      workflow default to private.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'v-prefixed semver tag to build, e.g. v0.2.0 (no branches)'
+        required: true
+        type: string
+
+# Serializes runs for the same release ref (tag pushes spell the group as
+# release-refs/tags/vX.Y.Z, dispatch rebuilds as release-vX.Y.Z). A queued
+# rebuild waits; an interrupted image push is worse than waiting.
+concurrency:
+  group: release-${{ inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # GitHub Release creation (also covers checkout)
+  packages: write  # push images to ghcr.io
+
+jobs:
+  version:
+    name: Derive version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      ref: ${{ steps.derive.outputs.ref }}
+    steps:
+      # Tag push: github.ref_name is vX.Y.Z. Dispatch: inputs.ref (required).
+      # Strict vX.Y.Z: no branches, no pre-release or build suffixes, matching
+      # the tags ./dev.sh release creates.
+      - name: Derive and validate the release ref
+        id: derive
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ref \"$REF\" is not a vX.Y.Z tag. Push a v-prefixed semver tag (e.g. v0.2.0), or dispatch with ref set to one. Branch and edge builds are not supported."
+            exit 1
+          fi
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test gate
+    # Fail fast on a malformed ref before spending a full test run.
+    needs: version
+    uses: ./.github/workflows/ci-test.yml
+
+  build:
+    name: Build ${{ matrix.image }} (${{ matrix.arch }})
+    # List version explicitly: the needs context only carries DIRECT
+    # dependencies, so its outputs are unreachable through test.
+    needs: [version, test]
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      # One native job per image per arch: amd64 on ubuntu-latest, arm64 on
+      # ubuntu-24.04-arm, both free and unlimited on public repos. NO QEMU:
+      # no emulation anywhere, each arch builds on its native runner.
+      fail-fast: false
+      matrix:
+        image: [backend, ui]
+        arch: [amd64, arm64]
+        include:
+          # Per-image: build context, GHCR repository name, and the ARGs each
+          # Dockerfile accepts (Task 4 contracts). Build-arg hygiene: public
+          # values only - ARG values land in image history and public
+          # workflow logs.
+          - image: backend
+            context: ./backend
+            image_name: finances-backend
+            build_args: |
+              APP_VERSION=${{ needs.version.outputs.version }}
+          - image: ui
+            context: ./frontend
+            image_name: finances-ui
+            build_args: |
+              VITE_APP_VERSION=${{ needs.version.outputs.version }}
+              VITE_API_URL=${{ vars.VITE_API_URL || 'https://finances.owlgarth.com/api' }}
+              VITE_DEMO_MODE=${{ vars.VITE_DEMO_MODE || 'false' }}
+          # Per-arch: native runner and platform string.
+          - arch: amd64
+            platform: linux/amd64
+            runs-on: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runs-on: ubuntu-24.04-arm
+    steps:
+      # Check out the derived ref explicitly: on workflow_dispatch the default
+      # checkout would be the branch the run was dispatched from, not the tag.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.ref }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Tags are written literally instead of via docker/metadata-action: the
+      # values are fully deterministic (vX.Y.Z plus arch suffix, no semver
+      # globbing), so metadata-action would only add OCI labels - not worth a
+      # fifth action in the chain. Revisit if labels are ever wanted.
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ghcr.io/owlgarth/${{ matrix.image_name }}:v${{ needs.version.outputs.version }}-${{ matrix.arch }}
+          build-args: ${{ matrix.build_args }}
+          # GitHub Actions cache caps at 10 GB per repo with LRU eviction -
+          # ample for these two images; fall back to a type=registry cache if
+          # it ever thrashes. Scope: cache keys are per-ref, so each tag build
+          # starts cold (expected for releases), and keys include the
+          # platform, so amd64 and arm64 cache independently.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Default provenance/attestations would turn each arch tag into an
+          # image index (oci manifest) rather than a plain manifest list,
+          # which confuses naive docker pull consumers and older tooling;
+          # there is no supply-chain requirement to offset that.
+          provenance: false
+
+  manifest:
+    name: Merge multi-arch manifests
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # imagetools create is a registry-side operation (no builder needed):
+      # it merges the two per-arch tags into the final vX.Y.Z tag and moves
+      # latest. Note: a dispatch rebuild of an OLDER tag re-points latest to
+      # that older version - accepted for this single-maintainer flow.
+      - name: Create vX.Y.Z and latest manifests
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          for image in finances-backend finances-ui; do
+            docker buildx imagetools create \
+              -t "ghcr.io/owlgarth/${image}:v${VERSION}" \
+              -t "ghcr.io/owlgarth/${image}:latest" \
+              "ghcr.io/owlgarth/${image}:v${VERSION}-amd64" \
+              "ghcr.io/owlgarth/${image}:v${VERSION}-arm64"
+          done
+
+  release:
+    name: GitHub Release
+    # Tag pushes only. github.event_name == 'push' is exactly equivalent to
+    # startsWith(github.ref, 'refs/tags/v') under these triggers, and states
+    # the intent directly: dispatch rebuilds skip the Release.
+    if: github.event_name == 'push'
+    needs: [version, manifest]
+    runs-on: ubuntu-latest
+    env:
+      # gh CLI reads GITHUB_TOKEN; git-cliff-action's installer reuses it for
+      # its GitHub API download (rate-limit headroom).
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      # Full history: git-cliff needs every commit since the previous tag.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Same cliff.toml as ./dev.sh release (Task 1). --latest renders only
+      # the section for this tag; --strip header drops the changelog header.
+      # The action writes the rendered notes to OUTPUT and also exposes them
+      # as the step output "content".
+      - name: Generate release notes
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          version: v2.13.1  # pin the git-cliff binary itself (default: latest)
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: release-notes.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      # gh is preinstalled on GitHub-hosted runners. The tag already exists
+      # (this job runs only on its push), so no --target is needed.
+      - name: Create GitHub Release
+        env:
+          TAG: v${{ needs.version.outputs.version }}
+        run: gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
