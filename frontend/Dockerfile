@@ -18,6 +18,11 @@ ENV VITE_API_URL=${VITE_API_URL}
 ARG VITE_DEMO_MODE
 ENV VITE_DEMO_MODE=${VITE_DEMO_MODE}
 
+# Public build metadata only: ARG values land in image history and public CI logs;
+# secrets never become ARGs - runtime env only.
+ARG VITE_APP_VERSION=dev
+ENV VITE_APP_VERSION=${VITE_APP_VERSION}
+
 # Build production bundle
 RUN npm run build
 

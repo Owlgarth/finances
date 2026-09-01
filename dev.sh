@@ -47,6 +47,11 @@ Backend
 Frontend
   npm <args>            npm in frontend/
 
+Release
+  release <X.Y.Z>       Tag a release: checks, changelog, commit, tag, push
+    [--dry-run]         Print the steps without executing anything
+    [--skip-tests]      Skip the local lint + test gate
+
 Backend and frontend commands run in their container (DEV_TARGET=docker, the
 default: nothing but Docker is needed on your machine) or on your machine with
 uv and npm (DEV_TARGET=host, faster). Set DEV_TARGET in .env, or per command:
@@ -219,6 +224,182 @@ start_frontend() {
     exec npm run dev -- --host --port "$UI_PORT"
 }
 
+# Fallback changelog section when git-cliff is not installed: prepend a
+# "## [X.Y.Z] - YYYY-MM-DD" header plus one bullet per commit since the last
+# v-tag (full history when there is none yet). Creates CHANGELOG.md with a
+# "# Changelog" header if the file does not exist.
+fallback_changelog() {
+    local version=$1 last_tag=$2
+    local range=HEAD
+    if [ -n "$last_tag" ]; then
+        range="$last_tag..HEAD"
+    fi
+    local tmp
+    tmp=$(mktemp)
+
+    {
+        echo "## [$version] - $(date +%Y-%m-%d)"
+        echo
+        git log --pretty=format:'- %s (%h)' "$range"
+        echo
+    } >"$tmp"
+
+    if [ -f CHANGELOG.md ]; then
+        cat "$tmp" CHANGELOG.md >CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+    else
+        {
+            echo "# Changelog"
+            echo
+            cat "$tmp"
+        } >CHANGELOG.md
+    fi
+    rm -f "$tmp"
+}
+
+# Tag a release from branch main: pre-flight checks, local lint + test gate,
+# VERSION, changelog, version sync, commit, annotated tag, push. Fail-closed:
+# any failed check dies before anything is written or tagged. --dry-run prints
+# every step without executing it; the git-state checks are only reported
+# there, so a dry run also works from a feature branch.
+release() {
+    local version='' dry_run=false skip_tests=false
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+        --dry-run) dry_run=true ;;
+        --skip-tests) skip_tests=true ;;
+        -*) die "usage: ./dev.sh release <X.Y.Z> [--dry-run] [--skip-tests]" ;;
+        *)
+            [ -z "$version" ] ||
+                die "usage: ./dev.sh release <X.Y.Z> [--dry-run] [--skip-tests]"
+            version=$arg
+            ;;
+        esac
+    done
+    [ -n "$version" ] || die "usage: ./dev.sh release <X.Y.Z> [--dry-run] [--skip-tests]"
+    [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+        die "Error: '$version' is not an X.Y.Z version (digits only, no pre-release suffix)."
+
+    local tag="v$version"
+    local branch
+    branch=$(git branch --show-current)
+    local last_tag
+    last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null) || last_tag=
+
+    echo "Releasing $version as $tag"
+    echo "  branch:    ${branch:-<detached>}"
+    echo "  last tag:  ${last_tag:-none (changelog covers full history)}"
+    if command -v git-cliff >/dev/null; then
+        echo "  changelog: git-cliff"
+    else
+        echo "  changelog: git log fallback (git-cliff not found)"
+    fi
+    if [ "$skip_tests" = true ]; then
+        echo "  test gate: skipped (--skip-tests)"
+    else
+        echo "  test gate: ./dev.sh lint + ./dev.sh test"
+    fi
+    if [ "$dry_run" = true ]; then
+        echo "  mode:      dry run - printing the steps, executing nothing"
+    fi
+    echo
+
+    # Pre-flight checks. Fail closed; a dry run only reports them so the
+    # whole step list still prints from any checkout state.
+    if [ "$dry_run" = true ]; then
+        [ "$branch" = main ] ||
+            echo "[dry-run] would fail: not on branch main (here: ${branch:-detached})"
+        [ -z "$(git status --porcelain)" ] ||
+            echo "[dry-run] would fail: working tree is not clean"
+        if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "[dry-run] would fail: tag $tag already exists"
+        fi
+    else
+        [ "$branch" = main ] ||
+            die "Error: releases are cut from branch main (here: ${branch:-detached})."
+        [ -z "$(git status --porcelain)" ] ||
+            die "Error: working tree is not clean - commit or stash first."
+        if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            die "Error: tag $tag already exists."
+        fi
+    fi
+
+    # Local gate before anything is written. lint runs ruff check --fix and
+    # ruff format, so it can dirty the tree again; those fixes are left for
+    # the author - only the release files are committed below.
+    if [ "$skip_tests" = true ]; then
+        echo "Skipping the lint + test gate (--skip-tests)."
+    elif [ "$dry_run" = true ]; then
+        echo "[dry-run] would run: ./dev.sh lint"
+        echo "[dry-run] would run: ./dev.sh test"
+    else
+        ./dev.sh lint
+        ./dev.sh test
+    fi
+
+    # VERSION, then a paranoia re-read: the file must say exactly X.Y.Z.
+    if [ "$dry_run" = true ]; then
+        echo "[dry-run] would write: VERSION ($version)"
+    else
+        printf '%s\n' "$version" >VERSION
+        [ "$(cat VERSION)" = "$version" ] ||
+            die "Error: VERSION does not read '$version' - nothing committed yet."
+    fi
+
+    # Changelog: git-cliff when installed, else the git log fallback.
+    if [ "$dry_run" = true ]; then
+        if command -v git-cliff >/dev/null; then
+            echo "[dry-run] would run: git cliff --tag $tag --unreleased --prepend CHANGELOG.md"
+        else
+            echo "[dry-run] would prepend: git log section to CHANGELOG.md (fallback)"
+        fi
+    elif command -v git-cliff >/dev/null; then
+        git cliff --tag "$tag" --unreleased --prepend CHANGELOG.md
+    else
+        echo "Note: git-cliff not found - using the git log fallback for the changelog."
+        fallback_changelog "$version" "$last_tag"
+    fi
+
+    # Version sync: nothing reads these two, but keep them from drifting.
+    # The 0,/re/ address touches only the first matching line of each file.
+    if [ "$dry_run" = true ]; then
+        echo "[dry-run] would sync: backend/pyproject.toml, frontend/package.json"
+    else
+        sed -i "0,/^version = \".*\"$/s//version = \"$version\"/" backend/pyproject.toml
+        sed -i "0,/^  \"version\": \".*\",$/s//  \"version\": \"$version\",/" frontend/package.json
+    fi
+
+    # Stage an explicit file list only (never -A), commit, tag, push.
+    local files=(VERSION CHANGELOG.md)
+    if [ "$dry_run" = true ]; then
+        echo "[dry-run] would stage: VERSION CHANGELOG.md"
+        echo "[dry-run] would stage: backend/pyproject.toml, frontend/package.json (when changed)"
+        echo "[dry-run] would commit: chore(release): $tag"
+        echo "[dry-run] would tag: $tag (annotated)"
+        echo "[dry-run] would push: origin main $tag"
+        echo "[dry-run] done - nothing was executed."
+        return 0
+    fi
+
+    # pyproject/package.json go into the commit only when the sync changed them.
+    git diff --quiet -- backend/pyproject.toml || files+=(backend/pyproject.toml)
+    git diff --quiet -- frontend/package.json || files+=(frontend/package.json)
+
+    git add "${files[@]}"
+    git commit -m "chore(release): $tag"
+
+    # Fail closed one last time: the tag must still be absent right before it
+    # is created (also checked before anything was written above).
+    if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+        die "Error: tag $tag exists after all - aborting before tagging (the commit is local: git reset --soft HEAD~1 undoes it)."
+    fi
+    git tag -a "$tag" -m "Release $version"
+    git push origin main "$tag"
+
+    echo "Released $tag - pushed main and the tag to origin."
+}
+
+
 cmd=${1-}
 [ -n "$cmd" ] || {
     usage
@@ -268,6 +449,9 @@ lint)
 npm)
     [ $# -gt 0 ] || die "usage: ./dev.sh npm <args>"
     frontend_run npm "$@"
+    ;;
+release)
+    release "$@"
     ;;
 help | -h | --help) usage ;;
 *)
