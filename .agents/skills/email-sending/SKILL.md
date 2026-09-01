@@ -67,7 +67,7 @@ subject='Password changed — Owlgarth Finances'
 
 ## Email Templates
 
-Each email has an HTML and plain text version in `backend/templates/email/`. HTML versions extend `email/base.html` (shared layout, inline CSS, max-width 600px); plain text versions are **standalone** — every `.txt` template inlines its own header (`———` rule) and "You're receiving this…" footer, none extend `base.txt`. Existing templates: verify_email, welcome, reset_password, password_changed, email_change_verify, email_change_notify, workspace_invitation_new, workspace_invitation_existing, member_removed, member_left, workspace_deleted, role_changed, account_deleted (each as `.html` / `.txt`).
+Each email has an HTML and plain text version in `backend/templates/email/`. HTML versions extend `email/base.html` (shared layout, inline CSS, max-width 600px). Plain text versions are **standalone** - every `.txt` template inlines its own header (a rule line of em dashes) and "You're receiving this…" footer; there is no `.txt` base template. Existing templates: verify_email, welcome, reset_password, password_changed, email_change_verify, email_change_notify, registration_attempt, twofa_admin_reset, workspace_invitation_new, workspace_invitation_existing, workspace_invitation_set_password, member_removed, member_left, workspace_deleted, role_changed, account_deleted (each as `.html` / `.txt`).
 
 **To add a new email template:**
 1. Create `email/my_email.html` extending `email/base.html` with `{% block content %}`, `{% block cta_url %}`, `{% block cta_text %}`
