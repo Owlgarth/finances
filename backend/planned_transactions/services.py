@@ -136,13 +136,18 @@ class PlannedTransactionService:
 
     @staticmethod
     def _do_create(user, workspace_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
-        """Build and persist the planned transaction — no idempotency logic.
+        """Build and persist the planned transaction (no idempotency logic).
 
         Runs inside the caller's atomic block when a key is given
-        (create_with_idempotency's SAVEPOINT); standalone otherwise. Do NOT add a
-        method-level @db_transaction.atomic — the done-branch dispatches its Celery
-        task after its own inner commit, and wrapping the whole method would enqueue
-        the message before the outer commit.
+        (create_with_idempotency's SAVEPOINT); standalone otherwise. Do NOT
+        add a method-level @db_transaction.atomic: create_with_idempotency
+        calls do_create inside its own SAVEPOINT and requires no outer
+        atomic here. The done branch records its row in its own SAVEPOINT
+        and defers the Celery dispatch to on_commit, so the message
+        publishes only when the OUTERMOST transaction commits
+        (idempotency-key path included). A savepoint release is not a
+        commit: a worker that beat the real commit would hit the task's
+        not-found branch and skip permanently (that branch never retries).
         """
         account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
         currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
@@ -163,8 +168,7 @@ class PlannedTransactionService:
                     created_by=user,
                     updated_by=user,
                 )
-            execute_planned_transaction.delay(planned.id)
-            planned.refresh_from_db()
+                db_transaction.on_commit(lambda: execute_planned_transaction.delay(planned.id))
             return planned
 
         return PlannedTransaction.objects.create(
