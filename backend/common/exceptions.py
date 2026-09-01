@@ -46,16 +46,6 @@ class ValidationError(ServiceError):
     default_message = gettext_lazy('Validation error')
 
 
-class CurrencyNotFoundInWorkspaceError(ValidationError):
-    """Currency symbol not found in the target workspace."""
-
-    def __init__(self, currency: str):
-        super().__init__(
-            gettext_lazy('Currency %(currency)s not found in workspace') % {'currency': currency},
-            code='currency_not_found',
-        )
-
-
 class PermissionDeniedError(ServiceError):
     """Caller lacks required role. Maps to HTTP 403."""
 

@@ -303,9 +303,6 @@ RATE_LIMIT_DATA_IMPORT = int(os.getenv('RATE_LIMIT_DATA_IMPORT', '3'))
 # Time window (seconds) for data-import rate limiting
 RATE_LIMIT_DATA_IMPORT_PERIOD = int(os.getenv('RATE_LIMIT_DATA_IMPORT_PERIOD', '3600'))
 
-# Max exchange shortcuts per workspace
-EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE = int(os.getenv('EXCHANGE_SHORTCUTS_MAX_PER_WORKSPACE', '5'))
-
 # Cache configuration (used for rate limiting)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 CACHES = {

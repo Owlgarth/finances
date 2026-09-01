@@ -116,11 +116,6 @@ msgstr "Помилка автентифікації"
 msgid "Validation error"
 msgstr "Помилка валідації"
 
-#: common/exceptions.py:54
-#, python-format
-msgid "Currency %(currency)s not found in workspace"
-msgstr "Валюту %(currency)s не знайдено в робочому просторі"
-
 #: common/exceptions.py:63
 msgid "Insufficient permissions"
 msgstr "Недостатньо прав"

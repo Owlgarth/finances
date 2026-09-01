@@ -7,13 +7,6 @@ from common.languages import LANGUAGE_CODES, NUMBER_FORMAT_CODES
 from users.models import FontChoices
 
 
-class UserBase(BaseModel):
-    """User base schema."""
-
-    email: str
-    full_name: str | None = None
-
-
 class UserOut(BaseModel):
     """User output schema."""
 

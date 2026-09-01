@@ -651,10 +651,11 @@ class TransactionService:
         This is the server-side twin of the "if blank or 'Receipt', fill from
         parsed merchant" rule that already lives in two client-side spots:
         `ExtractionReviewModal.merchantFillsDescription`
-        (frontend/src/components/transactions/ExtractionReviewModal.tsx, L53–59)
-        and `NewFromReceiptModal`, which seeds `description = 'Receipt'` while
-        the receipt-first flow is in progress. All three agree an intentional
-        description is never overwritten.
+        (frontend/src/components/transactions/ExtractionReviewModal.tsx, L53-56)
+        and `TransactionFormModal`'s receipt prefill, where the inline parse
+        (`parse.onSuccess`) fills only an empty description and the
+        receipt-first entry (`prefillReceipt`) seeds it at open time. All
+        three agree an intentional description is never overwritten.
 
         Rules (idempotent — a second call is a no-op):
         - Items are created only when the transaction currently has zero. Never clobbers user-entered rows.

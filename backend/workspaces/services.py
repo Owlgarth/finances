@@ -304,11 +304,6 @@ class WorkspaceMemberService:
         return workspace
 
     @staticmethod
-    def get_member(workspace_id: int, user_id: int) -> WorkspaceMember | None:
-        """Get a workspace member by user ID within a workspace."""
-        return WorkspaceMember.objects.filter(workspace_id=workspace_id, user_id=user_id).first()
-
-    @staticmethod
     def list_members(workspace_id: int) -> list[WorkspaceMemberOut]:
         """List all members of a workspace, ordered by role desc then email."""
         members = (

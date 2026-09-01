@@ -116,11 +116,6 @@ msgstr "Uwierzytelnianie nie powiodło się"
 msgid "Validation error"
 msgstr "Błąd walidacji"
 
-#: common/exceptions.py:54
-#, python-format
-msgid "Currency %(currency)s not found in workspace"
-msgstr "Nie znaleziono waluty %(currency)s w przestrzeni roboczej"
-
 #: common/exceptions.py:63
 msgid "Insufficient permissions"
 msgstr "Brak wystarczających uprawnień"
