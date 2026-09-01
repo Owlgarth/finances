@@ -3,5 +3,5 @@
   "extends": ["config:recommended", "docker:pinDigests"],
   "timezone": "Europe/Warsaw",
   "schedule": ["* 5-8 * * 1"],
-  "enabledManagers": ["dockerfile", "docker-compose", "npm", "pep621"]
+  "enabledManagers": ["dockerfile", "docker-compose", "github-actions", "npm", "pep621"]
 }
