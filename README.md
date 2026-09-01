@@ -35,6 +35,7 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
 - **Email Verification** - Verify your address after registration; email changes confirm via the new address and notify the old one
 - **GDPR** - Export/import, account deletion, and a legacy-import path for migrating older data
 - **Light & Dark Mode** - Theme toggle that follows the OS preference until you choose, with no flash on load
+- **Multilanguage UI** - English, Ukrainian, and Polish; per-user language and number-format preferences (dot or comma decimal separators), and backend error messages translated per request
 
 ## Quick Start
 
@@ -201,6 +202,7 @@ finances/
 | [Workflow](docs/workflow.md) | The end-to-end user flows: registration with its anti-enumeration behavior, accounts and Set-balance adjustments, transfers, budget cadences and periods (derived or custom), transactions with line items, the receipt-extraction review flow, planned transactions, members and invites, reports, and export/import. Answers "what actually happens, step by step, when a user does X?" |
 | [Permissions](docs/permissions.md) | The authorization model: the four-layer security diagram, the role hierarchy, complete per-feature permission matrices (owner/admin/member/viewer × action) across accounts, currencies, budgets, categories, transactions, receipts, transfers, planned transactions, members, and settings, plus the backend enforcement code (`WorkspaceJWTAuth`, `require_role`, `for_workspace`), the frontend visibility hooks, and the error codes. Answers "who is allowed to do what, and where is it enforced?" |
 | [Users & Roles](docs/users-and-roles.md) | The user model and the people around it: user fields, per-role capability, restriction, and use-case write-ups for owner, admin, member, and viewer, the membership rules, member-management operations (adding, role changes, removal, password resets, 2FA resets, leaving), the auth flow with email verification, 2FA, and refresh tokens, and multi-workspace scenarios. Answers "what does each role mean in practice, and how are members managed?" |
+| [i18n](docs/i18n.md) | The internationalization reference: the single language/number-format registry, per-user preferences and the switch UI, frontend catalogs and key conventions, the language lifecycle (create, edit, remove, end-to-end flow), the translation tooling (`i18n:check`, `lang:*`, `key:*`), and the backend gettext workflow behind translated API errors. Answers "how do languages work, and how do I add or change a translation?" |
 
 ## Development
 
