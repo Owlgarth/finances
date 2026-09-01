@@ -1,0 +1,127 @@
+# UNUSED PRODUCTION STUB - not wired to anything. It documents what a
+# single-server deployment of this stack would look like (strategy option D1
+# in .plans/STRATEGY-versioning-releases.md); TLS termination, routing,
+# backups and a deploy runbook are deliberately deferred until a server
+# exists.
+#
+#   - Our images come from GHCR at the tag in APP_VERSION (see .env): api,
+#     worker and beat share one finances-backend image via the anchor below
+#     (same one-tag discipline as the dev compose), ui runs finances-ui.
+#   - Third-party images carry the SAME name:tag@digest pins as the dev
+#     docker-compose.yml - copied from there, never re-resolved here.
+#     Renovate keeps both files in sync.
+#   - No bind mounts and no uvicorn reload flag: every service runs its image
+#     default command. The backend entrypoint migrates and seeds on boot
+#     (idempotent).
+#   - Only api and ui publish host ports: the ui image serves the SPA with no
+#     /api proxy, so the browser must reach the api directly - real TLS and
+#     domain routing arrive with the deferred reverse proxy.
+#   - Stub usage: cp .env.example .env, fill in real secrets, then from this
+#     directory: docker compose up -d
+
+x-backend: &backend
+  # One GHCR tag for api/worker/beat so they can never run different builds
+  # of the same image. No user: override - the image runs as its own appuser
+  # (dev's root override exists only for the host-owned bind mount).
+  # restart: unless-stopped is declared on each backend service, not here:
+  # compose passes x-* fields through to `config` output verbatim, and a
+  # policy on this block would render as an eighth restart that belongs to
+  # no service.
+  image: ghcr.io/owlgarth/finances-backend:${APP_VERSION}
+  env_file: .env
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    storage:
+      condition: service_healthy
+
+services:
+  db:
+    # Pinned reference copied verbatim from the dev docker-compose.yml.
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # rustfs runs as uid 10001 and cannot chown a fresh named volume itself.
+  # One-shot: no restart policy (compose defaults to "no") - it must run to
+  # completion once, and `storage` gates on that completion below.
+  storage-init:
+    image: busybox:1.37@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+    command: chown -R 10001:10001 /data
+    volumes:
+      - storage-data:/data
+
+  storage:
+    image: rustfs/rustfs:1.0.0-rc.4@sha256:a9fbb5e5bfce09ccd0869ac9a7b0e39191c6868d75ec4c5d08ebbd5475db5d6b
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_SERVER_URL: ${S3_EXTERNAL_URL}
+    volumes:
+      - storage-data:/data
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      retries: 10
+
+  # Image entrypoint migrates, seeds, creates buckets and collects static
+  # (idempotent); the default CMD runs uvicorn with no reload flag, so there
+  # is no command: override here.
+  api:
+    <<: *backend
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  worker:
+    <<: *backend
+    restart: unless-stopped
+    entrypoint: ["/app/celery-entrypoint.sh"]
+    command: ["celery", "-A", "config", "worker", "--loglevel=info"]
+
+  beat:
+    <<: *backend
+    restart: unless-stopped
+    entrypoint: ["/app/celery-entrypoint.sh"]
+    # Same command as dev; the schedule flag is harmless without a bind mount
+    # and keeps the celery commands identical across both compose files.
+    command: ["celery", "-A", "config", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+
+  # GHCR image built by CI with the VITE_* build args baked in; nginx serves
+  # the static SPA only. No env_file: nothing in this image reads runtime env.
+  ui:
+    image: ghcr.io/owlgarth/finances-ui:${APP_VERSION}
+    restart: unless-stopped
+    ports:
+      - "${UI_PORT:-80}:80"
+
+volumes:
+  db-data:
+  redis-data:
+  storage-data:
