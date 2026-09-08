@@ -91,11 +91,15 @@ jobs:
           # workflow logs.
           - image: backend
             context: ./backend
+            build_contexts: ""
             image_name: finances-backend
             build_args: |
               APP_VERSION=${{ needs.version.outputs.version }}
           - image: ui
             context: ./frontend
+            # Named build context for the language registry import (see
+            # frontend/Dockerfile); empty for the backend legs.
+            build_contexts: backend=./backend
             image_name: finances-ui
             build_args: |
               VITE_APP_VERSION=${{ needs.version.outputs.version }}
@@ -137,6 +141,9 @@ jobs:
           push: true
           tags: ghcr.io/owlgarth/${{ matrix.image_name }}:v${{ needs.version.outputs.version }}-${{ matrix.arch }}
           build-args: ${{ matrix.build_args }}
+          # Named build contexts (ui legs only): build-push-action skips the
+          # flag entirely on an empty input, so the backend legs are unaffected.
+          build-contexts: ${{ matrix.build_contexts }}
           # GitHub Actions cache caps at 10 GB per repo with LRU eviction -
           # ample for these two images; fall back to a type=registry cache if
           # it ever thrashes. Scope: cache keys are per-ref, so each tag build

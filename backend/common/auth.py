@@ -23,18 +23,18 @@ class JWTAuth(HttpBearer):
         """Authenticate request using JWT token."""
         try:
             payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-            token_type = payload.get('type')
-            if token_type in ('2fa_pending', 'refresh'):
-                return None
-            user_id = payload.get('user_id')
-            if user_id is None:
-                return None
-            user = User.objects.get(id=user_id)
-            if not user.is_active:
-                return None
-            return user
-        except (jwt.PyJWTError, User.DoesNotExist):
+        except jwt.PyJWTError:
             return None
+        token_type = payload.get('type')
+        if token_type in ('2fa_pending', 'refresh'):
+            return None
+        user_id = payload.get('user_id')
+        if user_id is None:
+            return None
+        user = User.objects.filter(id=user_id).first()
+        if user is None or not user.is_active:
+            return None
+        return user
 
 
 class WorkspaceJWTAuth(JWTAuth):
@@ -52,9 +52,8 @@ class WorkspaceJWTAuth(JWTAuth):
             return None
         if not user.current_workspace_id:
             raise HttpError(400, _('No active workspace. Please create or join a workspace.'))
-        try:
-            member = WorkspaceMember.objects.get(workspace_id=user.current_workspace_id, user=user)
-        except WorkspaceMember.DoesNotExist:
+        member = WorkspaceMember.objects.filter(workspace_id=user.current_workspace_id, user=user).first()
+        if member is None:
             raise HttpError(403, _('Not a member of this workspace'))
         user._workspace_member_role = member.role
         return user

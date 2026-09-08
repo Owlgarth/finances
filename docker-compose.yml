@@ -105,6 +105,13 @@ services:
   ui:
     build:
       context: ./frontend
+      # Named build context: the UI imports the language registry from
+      # backend/common/languages.json via a relative path that escapes
+      # frontend/ (one file, two consumers - see vite.config.ts
+      # server.fs.allow). The Dockerfile COPYs it from this context instead
+      # of widening the build context to the repo root.
+      additional_contexts:
+        backend: ./backend
       args:
         VITE_API_URL: ${VITE_API_URL}
         VITE_DEMO_MODE: ${VITE_DEMO_MODE}
@@ -121,6 +128,10 @@ services:
     env_file: .env
     volumes:
       - ./frontend:/app
+      # The UI imports backend/common/languages.json via a relative path that
+      # resolves outside /app (one file, two consumers) - mirror the host
+      # layout at the same path the ui build uses, read-only.
+      - ./backend:/backend:ro
     ports:
       - "${UI_PORT}:5173"
 
