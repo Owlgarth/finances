@@ -225,7 +225,7 @@ All endpoints require the `Authorization: Bearer <token>` header, except the pre
 | GET | `/api/legal/terms` | Get current Terms of Service |
 | GET | `/api/legal/privacy` | Get current Privacy Policy |
 
-Both endpoints live in the `core` app (`core/legal_api.py`); the database is the runtime source of truth (see Legal Documents under Setup).
+Both endpoints live in the `core` app (`core/legal_api.py`); the database is the runtime source of truth (see Legal Documents under Setup). When no active document is configured they return `503` `legal_documents_unavailable` - seed one with `python manage.py seed_legal_documents`.
 
 ### Workspaces
 
@@ -324,9 +324,9 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
 | GET | `/api/planned-transactions` | `status`, `account_id`, `currency_code[]`, `start_date`, `end_date`, `ordering`, `page`, `page_size` | List (paginated; `currency_code` filters by the planned transaction's own stored currency) |
-| GET | `/api/planned-transactions/totals` | `status`, `account_id`, `group_by` | Totals grouped by `currency` or `category` |
+| GET | `/api/planned-transactions/totals` | `status`, `account_id`, `start_date`, `end_date`, `category_id[]`, `budget_id[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `group_by` | Totals grouped by `currency` or `category` (`currency_code` filters by the planned transaction's own stored currency - unknown codes match nothing) |
 | GET | `/api/planned-transactions/export/` | `status`, `start_date`, `end_date` | JSON file export (honors only these filters) |
-| GET/POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Get / create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less) |
+| GET/POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Get / create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; a create/update with `status: 'done'` executes via a post-commit Celery task, so the response serializes `transaction_id: null` until the worker lands it - an `Idempotency-Key` replay returns the stored row) |
 | POST | `/api/planned-transactions/import` | - | Import planned transactions from a JSON file into an account (multipart upload, 5 MB max) |
 | POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction carrying the plan's account and own currency) |
 
@@ -362,7 +362,12 @@ transfers, planned transactions).
 `POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
 attachments travel as base64 and are recreated when object storage is configured.
 - **Conflict strategy**: `rename` (default) renames duplicate workspaces; `skip` skips them.
-- **Response**: counts of imported records plus any renamed workspaces.
+- **Response**: counts of imported records plus any renamed workspaces and per-row
+  `skipped.errors` entries.
+- **Malformed currency rows**: an enabled currency, account, budget currency, or
+  category budget row whose `code`/`currency_code` is missing or empty is skipped with
+  a per-row error in the response (the rest of the import proceeds) instead of failing
+  the whole import.
 
 ### Legacy Import (pre-redesign data)
 

@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions
@@ -97,7 +97,17 @@ Avoid `User.objects.get()` queries in test setup — the factory already returns
 
 ## Testing on_commit Callbacks
 
-Django's `TestCase` wraps each test in a transaction, so `on_commit` callbacks don't fire until the test transaction ends. Patch it to execute immediately:
+Django's `TestCase` wraps each test in a transaction, so `on_commit` callbacks never fire naturally inside a test. The default idiom is `captureOnCommitCallbacks`, which captures (and optionally runs) the registered callbacks without patching anything:
+
+```python
+with self.captureOnCommitCallbacks(execute=True) as callbacks:
+    result = PlannedTransactionService.create(...)  # registers on_commit inside its atomic
+self.assertEqual(len(callbacks), 1)  # asserted AFTER the block - see gotcha
+```
+
+**Django 6 gotcha:** the context manager snapshots `run_on_commit` on entry and populates the yielded list only at context EXIT - `len(callbacks)` read inside the `with` block is stale (usually 0); assert callback counts after the block, not inside it. Exemplar: `TestDoneCreateDispatchDeferredToCommit` in `planned_transactions/tests/test_planned_transactions.py`.
+
+**Capture instead of patching when the code under test actually calls `on_commit`.** Patching remains only for the narrow case where the callback must run inline in the middle of a flow (e.g. the registration email at `core/services.py`, pinned by `test_email_verification.py`):
 
 ```python
 from unittest.mock import patch
@@ -112,7 +122,9 @@ class TestMyFeature(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 ```
 
-Only patch `on_commit` for the specific tests that need it — never globally.
+Only patch `on_commit` for the specific tests that need it - never globally, and never on code that does not call `on_commit` at all: an inert patch passes trivially and proves nothing about the code under test (23 such patches were deleted in one audit-remediation sweep).
+
+**Pin the production contract, not the eager-mode artifact.** With dispatch deferred to commit, the synchronous response reflects pre-worker state (e.g. `transaction_id: null`) - under `ALWAYS_EAGER` plus an immediate-on_commit patch, old tests "saw" the task's row, an artifact no production path produces. Assert the null; when the worker's effect matters, capture with `execute=True` and assert after the block. Dispatch placement itself is in the `celery-tasks` skill.
 
 ## Testing Token Expiry
 
@@ -133,6 +145,8 @@ payload = {
 }
 expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 ```
+
+Assert the error `detail` message, not just the 401 status: adjacent auth branches (expired token vs invalid code) both return 401, and only the message pins which branch rejected. A mutation check - minting the same token with a future `exp` flips the test to the other branch's message - proves the discrimination.
 
 ## Mocking Time in TTL Tests
 
@@ -251,6 +265,10 @@ class TestTaskConfig(TestCase):
 ## Deleting a Workspace in Tests
 
 Direct `workspace.delete()` raises `ProtectedError` — accounts are PROTECT-referenced by transactions, transfers, and planned transactions. Do what production does (`UserService.delete_account`, `WorkspaceService.delete_workspace`): call `delete_workspace_financial_records(workspace_id)` first (deletion ordering is in the `data-deletion-gdpr` skill).
+
+## Dry-Run Harness: Destructive Services Against Real Dev Data
+
+To validate destructive or importing service code against real data (e.g. a user-reported malformed GDPR import file) without persisting anything, run the REAL service inside an outer `atomic()` that is always unwound by raising a marker exception at the end: the service's own `atomic()` becomes a savepoint, the marker exception rolls back everything including it, and a zero-persistence check afterward proves the unwind. Inspect intermediate state (verification-report counts, created rows) before raising the marker. The rollback unwinds only DB work - side effects outside the transaction (storage writes, emails, broker dispatches) are NOT undone; point those at throwaway targets or assert before unwinding. This is a manual-harness pattern for the dev database, not a pytest shape - `TestCase` already gives actual tests these semantics for free.
 
 ## New Optional Schema Field: Five-Test Shape
 
