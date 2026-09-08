@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, or the dev.sh release command.
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, or the dev.sh release command.
 ---
 
 # Docker & Infrastructure
@@ -20,6 +20,8 @@ S3_ENDPOINT_URL=http://storage:9000
 `docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift.
 
 Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. A port shift for a second checkout is a TRIPLE, not a one-variable edit: `VITE_API_URL`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` hardcode the API/UI origins and do NOT derive from `API_PORT`/`UI_PORT` - shifting only the port variables silently points the frontend at the other checkout's backend (or makes CORS reject it), which costs a debugging cycle before anyone suspects the env. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
+
+**The root `.env` is the container world.** Service-host lines (`POSTGRES_HOST=db`, `redis://redis:6379`) stay on compose service names: host-targeted runs get the published-port rewrite at runtime from `dev.sh` (`use_local_hosts`), never by editing the file - flipping them to `localhost` makes a port-shifted checkout silently use a sibling checkout's containers on the default ports, a cross-workspace leak rather than an error. For bare host commands (pytest outside `dev.sh`), `config/settings.py` runs `load_dotenv()` at import, which walks up from `backend/` and loads the ROOT `.env` - container-world values (`POSTGRES_HOST=db`, internal `POSTGRES_PORT=5432`) that host processes cannot reach or that point at a sibling's published default port. The sanctioned override is a gitignored `backend/.env` pinning the host-world values (the developer-`.env` pattern referenced in `config/test_settings.py`).
 
 ## Env De-duplication: Map-Form `x-*` Anchors
 
@@ -41,7 +43,7 @@ services:
 - Only merge where the shared vars genuinely match in kind — forcing an anchor onto a service that never had those vars injects them (and `environment:` wins over `env_file`, so it would also shadow `.env` values).
 - Map-form quoting: quote `true`/`false`/numbers to document intent, and `*`-valued keys MUST be quoted (`ALLOWED_HOSTS: '*'` — a bare `*` is the YAML alias indicator). Rule of thumb: quote any value that is a bool/null/number or starts with `*`/`&`/`!`/`|`/`>`/`{`/`[`.
 
-**Verification gate - `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk - the rendered `x-*` block itself - and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.) Two more edges for any count-based gate over rendered output: top-level `x-*` extension fields render verbatim in addition to every service that merges them, so anchor-block copies inflate counts (this is why `restart: unless-stopped` sits on `api`/`worker`/`beat` individually in `prod/` rather than the shared anchor - inside the anchor it renders an extra time and a 7-policy gate counts 8); and `config` renders interpolated secrets in cleartext, so before/after captures stay under /tmp/opencode, never in the repo.
+**Verification gate - `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk - the rendered `x-*` block itself - and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.) Two more edges for any count-based gate over rendered output: top-level `x-*` extension fields render verbatim in addition to every service that merges them, so anchor-block copies inflate counts (this is why `restart: unless-stopped` sits on `api`/`worker`/`beat` individually in `prod/` rather than the shared anchor - inside the anchor it renders an extra time and a 7-policy gate counts 8); and `config` renders interpolated secrets in cleartext, so before/after captures stay under /tmp/opencode, never in the repo. A third edge: profile-gated services (the `node` service sits behind profile `tools`) render ONLY when `--profile <name>` precedes the `config` subcommand - a default render silently omits them and the before/after diff gate goes blind to exactly those services (re-derive a lost baseline from git rather than re-capturing blind). Render baselines with every profile the diff is supposed to cover: `docker compose --profile tools config`.
 
 ## Third-Party Image Pins: Tag+Digest, Resolved at Edit Time
 
@@ -50,6 +52,26 @@ Third-party service images are pinned `tag@sha256:...`. Digests are moving targe
 When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs: 131 tags, all prerelease, pinned `1.0.0-rc.4`).
 
 `prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently; Renovate keeps both files in sync.
+
+## Out-of-Context Imports: Named Additional Build Contexts
+
+When source inside a build context imports a file that lives outside it (frontend files importing `backend/common/languages.json` - "one file, two consumers"), host dev and host-checkout CI both see the file (vite grants `server.fs.allow` to the repo root; CI builds on the full checkout), so the gap surfaces only in Docker builds: a TS2307 at image-build time, after review. Never fix it by widening the build context to the repo root (context bloat, needs a root `.dockerignore`) or by copying the file into the source tree (guaranteed drift - the registry is single-sourced per the i18n contract). Supply the file as a named additional build context, mirrored at the EXACT in-container path the unchanged relative imports resolve to:
+
+```yaml
+# docker-compose.yml - ui build (context: ./frontend, WORKDIR /app;
+# imports from /app/src/** resolve to /backend/common/languages.json)
+additional_contexts:
+  backend: ./backend
+```
+
+```dockerfile
+# frontend/Dockerfile
+COPY --from=backend common/languages.json /backend/common/languages.json
+```
+
+- release.yml (build-push-action): `build-contexts: backend=./backend` fed from a per-image `build_contexts` matrix field, empty string on legs that need none (the action skips the flag on empty input - see the `ci-releases` skill).
+- Runtime containers that bind-mount the source tree (the `node` tools service) need the same path as a read-only bind mount (`./backend:/backend:ro`) - imports resolve through the filesystem there, not through build contexts.
+- Verify the named context's source tree is not excluded by its `.dockerignore` (`backend/.dockerignore` must not exclude `common/`) before relying on the context.
 
 ## Dockerfile ARG Hygiene
 

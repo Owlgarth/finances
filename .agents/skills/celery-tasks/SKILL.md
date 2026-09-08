@@ -1,6 +1,6 @@
 ---
 name: celery-tasks
-description: Celery task conventions for Owlgarth Finances — task structure, retry semantics, idempotency guards, service-to-task dispatch, circular import avoidance. Use when creating or modifying Celery tasks (<app>/tasks.py) or wiring background jobs into services.
+description: Celery task conventions for Owlgarth Finances — task structure, retry semantics, idempotency guards, service-to-task dispatch (direct .delay() and on_commit deferral), circular import avoidance. Use when creating or modifying Celery tasks (<app>/tasks.py) or wiring background jobs into services.
 ---
 
 # Celery Task Conventions
@@ -42,6 +42,14 @@ class PlannedTransactionService:
         # ... validation, status update to 'done' ...
         execute_planned_transaction.delay(planned.id)
 ```
+
+**Defer dispatch when the task reads what the transaction writes.** `.delay()` inside an atomic publishes the message before the commit; a worker on its own connection that beats the commit hits the task's not-found branch, which returns silently (permanent failure, no retry) - a permanently, silently skipped message. When the task consumes rows the current transaction writes, register the dispatch inside `on_commit` INSIDE the atomic:
+
+```python
+db_transaction.on_commit(lambda: execute_planned_transaction.delay(planned.id))
+```
+
+Django 6 semantics (verified against the Django source, not docs): callbacks registered inside a savepoint are discarded on savepoint rollback and fire on the outermost commit - so the single inside-the-atomic placement is correct on the standalone path (the method's atomic is outermost) and on savepoint paths (under an idempotency wrapper's outer transaction, a race-loss rollback discards the dispatch together with the row it would have referenced). Inline `.delay()` remains correct for tasks that do not read the transaction's rows (e.g. email sends), but those sites silently depend on their enclosing atomic being outermost - a future caller wrapping the method in an outer transaction reintroduces the race; check for outer atomics whenever touching a dispatch site. The deferral also means the synchronous response honestly reflects pre-worker state (e.g. `transaction_id: null` until the worker runs) - never add a `refresh_from_db()` after the dispatch; it cannot observe post-commit task effects. Testing idiom: `captureOnCommitCallbacks` (see the `backend-testing` skill).
 
 **Service-to-task dispatch:** When a service method enqueues a task, keep the synchronous logic in a private `@staticmethod` (e.g., `_send_sync()`) and make the public method a thin dispatcher that calls `.delay()`:
 
