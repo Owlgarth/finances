@@ -2,8 +2,8 @@
 
 from django.conf import settings
 from django.template.loader import render_to_string
-from ninja.errors import HttpError
 
+from core.exceptions import LegalDocumentUnavailableError
 from core.models import LegalDocument
 
 
@@ -52,13 +52,9 @@ def render_from_template(template_name: str) -> dict:
 
 def _get_active(doc_type: str) -> dict:
     """Return active document from DB. Raises if none found."""
-    try:
-        doc = LegalDocument.objects.get(doc_type=doc_type, is_active=True)
-    except LegalDocument.DoesNotExist:
-        raise HttpError(
-            503,
-            'Legal documents are not configured. Run: python manage.py seed_legal_documents',
-        )
+    doc = LegalDocument.objects.filter(doc_type=doc_type, is_active=True).first()
+    if doc is None:
+        raise LegalDocumentUnavailableError()
     return {
         'version': doc.version,
         'effective_date': str(doc.effective_date),

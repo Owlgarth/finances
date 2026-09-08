@@ -2,6 +2,7 @@
 
 from datetime import date
 
+from django.core import mail
 from django.test import TestCase
 
 from accounts.factories import AccountFactory
@@ -390,6 +391,8 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceMemberAlreadyExistsError):
             WorkspaceMemberService.add_member(admin, workspace.id, Data())
 
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_add_member_limit_reached(self):
         """Test that adding member when at limit raises WorkspaceMemberLimitReachedError."""
         from django.conf import settings
@@ -412,6 +415,8 @@ class TestWorkspaceMemberService(TestCase):
 
         with self.assertRaises(WorkspaceMemberLimitReachedError):
             WorkspaceMemberService.add_member(admin, workspace.id, Data())
+
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_add_member_new_user_without_password(self):
         """New user without password: created with unusable password (set via
@@ -496,6 +501,8 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceOwnerCannotLeaveError):
             WorkspaceMemberService.leave(owner, workspace.id)
 
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_leave_auto_switches_workspace(self):
         """Test that leaving current workspace auto-switches to next available."""
         workspace = WorkspaceFactory()
@@ -530,6 +537,8 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceMemberCannotRemoveSelfError):
             WorkspaceMemberService.remove_member(admin, workspace.id, admin.id, 'admin')
 
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_remove_member_owner_blocked(self):
         """Test that removing owner raises WorkspaceOwnerRemoveError."""
         workspace = WorkspaceFactory()
@@ -540,6 +549,8 @@ class TestWorkspaceMemberService(TestCase):
 
         with self.assertRaises(WorkspaceOwnerRemoveError):
             WorkspaceMemberService.remove_member(admin, workspace.id, owner.id, 'admin')
+
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_update_role_success(self):
         """Test successfully updating a member's role."""
@@ -565,6 +576,8 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceMemberCannotChangeOwnRoleError):
             WorkspaceMemberService.update_role(admin, workspace.id, admin.id, 'member', 'admin')
 
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_update_role_owner_blocked(self):
         """Test that changing owner's role raises WorkspaceOwnerRoleChangeError."""
         workspace = WorkspaceFactory()
@@ -575,6 +588,8 @@ class TestWorkspaceMemberService(TestCase):
 
         with self.assertRaises(WorkspaceOwnerRoleChangeError):
             WorkspaceMemberService.update_role(admin, workspace.id, owner.id, 'admin', 'admin')
+
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_reset_password_success(self):
         """Test successfully resetting a member's password."""
@@ -599,6 +614,8 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(WorkspaceMemberCannotResetOwnPasswordError):
             WorkspaceMemberService.reset_password(admin, workspace.id, admin.id, 'newpass', 'admin')
 
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_reset_password_owner_blocked(self):
         """Test that resetting owner's password raises WorkspaceOwnerPasswordResetError."""
         workspace = WorkspaceFactory()
@@ -609,6 +626,8 @@ class TestWorkspaceMemberService(TestCase):
 
         with self.assertRaises(WorkspaceOwnerPasswordResetError):
             WorkspaceMemberService.reset_password(admin, workspace.id, owner.id, 'newpass', 'admin')
+
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_update_role_rejects_owner_role(self):
         """Test that update_role raises ValidationError when trying to assign owner role."""

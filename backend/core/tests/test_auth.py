@@ -1,8 +1,11 @@
 """Tests for authentication endpoints."""
 
+import datetime
 import time
+import uuid
 from unittest.mock import patch
 
+import jwt
 import pyotp
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -620,22 +623,25 @@ class TestLoginWith2FA(AuthTestCase):
         self.assertStatus(401)
 
     def test_verify_2fa_with_expired_temp_token(self):
-        self._register_with_2fa('expired2fa@example.com')
+        user, _secret = self._register_with_2fa('expired2fa@example.com')
 
-        data = self.post(
-            '/api/auth/login',
-            {'email': 'expired2fa@example.com', 'password': 'securepassword123'},
-        )
-        self.assertStatus(200)
-        temp_token = data['temp_token']
+        # PyJWT reads the clock inside jwt.decode, not time.time, so a time patch
+        # never exercises expiry - mint a 2fa_pending token with a past exp instead.
+        now = datetime.datetime.now(datetime.timezone.utc)
+        payload = {
+            'user_id': str(user.id),
+            'type': '2fa_pending',
+            'jti': str(uuid.uuid4()),
+            'iat': (now - datetime.timedelta(minutes=10)).timestamp(),
+            'exp': (now - datetime.timedelta(minutes=5)).timestamp(),
+        }
+        expired_temp_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
-        future_time = time.time() + 360
-        with patch('time.time', return_value=future_time):
-            self.post(
-                '/api/auth/verify-2fa',
-                {'temp_token': temp_token, 'code': '000000'},
-            )
+        self.post('/api/auth/verify-2fa', {'temp_token': expired_temp_token, 'code': '000000'})
         self.assertStatus(401)
+        # 'verification token' distinguishes the temp-token branch from the
+        # invalid-code branch's 'Invalid verification code' - same status, different cause.
+        self.assertIn('verification token', self.response.json()['detail'].lower())
 
     def test_verify_2fa_with_recovery_code(self):
         self.register_and_login('recovery2fa@example.com', 'securepassword123', 'Recovery 2FA')

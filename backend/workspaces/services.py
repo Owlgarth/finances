@@ -478,12 +478,10 @@ class WorkspaceMemberService:
                 % {'role': new_role, 'allowed': ', '.join(WorkspaceMemberService.ASSIGNABLE_ROLES)}
             )
 
-        workspace_name = Workspace.objects.get(id=workspace_id).name
-        target_user = User.objects.get(id=member_user_id)
-
         with db_transaction.atomic():
             member = (
                 WorkspaceMember.objects.select_for_update()
+                .select_related('workspace', 'user')
                 .filter(
                     workspace_id=workspace_id,
                     user_id=member_user_id,
@@ -493,6 +491,12 @@ class WorkspaceMemberService:
 
             if not member:
                 raise WorkspaceMemberNotFoundError()
+
+            # Both values derive from the locked member: a nonexistent
+            # workspace or user id matches no member row, so the 404 above
+            # covers them (no bare gets raising DoesNotExist -> 500).
+            workspace_name = member.workspace.name
+            target_user = member.user
 
             if member_user_id == user.id:
                 raise WorkspaceMemberCannotChangeOwnRoleError()

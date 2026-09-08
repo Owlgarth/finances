@@ -18,7 +18,7 @@ from budgeting.models import Budget, BudgetCurrency, CategoryBudget, Period
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from categories.models import Category
-from common.tests.mixins import AuthMixin
+from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.models import WorkspaceCurrency
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
@@ -172,6 +172,20 @@ class V3BudgetCurrencyImportTests(AuthMixin, TestCase):
         ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
         budget = Budget.objects.get(workspace=ws, name='Household')
         self.assertEqual(budget.currencies.count(), 0)
+
+    def test_falsy_code_entry_skips_with_error(self):
+        """A falsy currency_codes entry skips just that row, not the whole import."""
+        export = self._v3_with_budget(currency_codes=['PLN', None, 'USD'])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('budget currency missing code', result['skipped']['errors'][0])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        budget = Budget.objects.get(workspace=ws, name='Household')
+        # Valid codes import; the skip leaves a sparse position gap, not a renumber.
+        self.assertEqual(list(budget.currencies.values_list('position', 'currency__code')), [(0, 'PLN'), (2, 'USD')])
 
 
 class V3AccountLessImportTests(AuthMixin, TestCase):
@@ -328,6 +342,86 @@ class V3AccountLessImportTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_transactions'], 0)
         self.assertEqual(len(result['skipped']['errors']), 1)
         self.assertIn('missing currency_code', result['skipped']['errors'][0])
+
+
+class V3MalformedRowImportTests(AuthMixin, APIClientMixin, TestCase):
+    """Rows with a missing currency code skip with an error instead of 500ing.
+
+    A falsy code reaching _resolve_import_currency would attempt
+    Currency.objects.create(code=None) inside the import's atomic block -
+    an IntegrityError (endpoint 500) and a full rollback for one malformed row.
+    """
+
+    def _malformed_export(self):
+        return {
+            'export_version': '3.0',
+            'workspaces': [
+                {
+                    'workspace_name': 'Imported Workspace',
+                    'enabled_currencies': [
+                        {'code': 'PLN', 'name': 'Zloty', 'symbol': 'zł', 'decimals': 2},
+                        {'name': 'Ghost Currency'},
+                    ],
+                    'accounts': [
+                        {'name': 'Main', 'currency_code': 'PLN'},
+                        {'name': 'Broken Account'},
+                    ],
+                    'budgets': [
+                        {
+                            'name': 'Household',
+                            'categories': [{'name': 'Groceries'}],
+                            'periods': [
+                                {
+                                    'name': 'July 2026',
+                                    'start_date': '2026-07-01',
+                                    'end_date': '2026-07-31',
+                                    'category_budgets': [
+                                        {'category_name': 'Groceries', 'currency_code': 'PLN', 'amount': '800.00'},
+                                        {'category_name': 'Groceries', 'amount': '5.00'},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    'transactions': [
+                        {
+                            'date': '2026-07-05',
+                            'description': 'Salary',
+                            'amount': '100.00',
+                            'type': 'income',
+                            'account_name': 'Main',
+                            'currency_code': 'PLN',
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def test_malformed_rows_skip_instead_of_500(self):
+        result = self.post('/api/users/me/import', {'data': self._malformed_export()}, **self.auth_headers())
+        self.assertStatus(200)
+
+        errors = result['skipped']['errors']
+        self.assertEqual(len(errors), 3)
+        self.assertIn('enabled currency missing code', errors[0])
+        self.assertIn('account missing currency_code', errors[1])
+        self.assertIn('category budget missing currency_code', errors[2])
+        for error in errors:
+            self.assertIn('Imported Workspace', error)
+
+        # Counts exclude the skipped rows; the well-formed rows imported.
+        self.assertEqual(result['imported_workspaces'], 1)
+        self.assertEqual(result['imported_accounts'], 1)
+        self.assertEqual(result['imported_budgets'], 1)
+        self.assertEqual(result['imported_categories'], 1)
+        self.assertEqual(result['imported_transactions'], 1)
+
+        # Nothing rolled back: the good rows are in the DB, the bad ones are not.
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        self.assertTrue(Account.objects.filter(workspace=ws, name='Main').exists())
+        self.assertFalse(Account.objects.filter(workspace=ws, name='Broken Account').exists())
+        self.assertEqual(CategoryBudget.objects.filter(workspace=ws).count(), 1)
+        self.assertTrue(Transaction.objects.filter(workspace=ws, description='Salary').exists())
 
 
 class V3TransactionNoteImportTests(AuthMixin, TestCase):

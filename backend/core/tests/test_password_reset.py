@@ -1,10 +1,7 @@
 """Tests for password reset and password changed email flow."""
 
-from unittest.mock import patch
-
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
-from django.db import transaction
 from django.test import TestCase
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -15,13 +12,8 @@ from core.tests.base import AuthTestCase
 from workspaces.factories import WorkspaceMemberFactory
 
 
-def _immediate_on_commit(func, *args, **kwargs):
-    func()
-
-
 class TestForgotPassword(AuthTestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_forgot_password_sends_email(self, mock_on_commit):
+    def test_forgot_password_sends_email(self):
         self.create_user(email='forgot@example.com', password='testpass123')
 
         data = self.post('/api/auth/forgot-password', {'email': 'forgot@example.com'})
@@ -58,8 +50,7 @@ class TestResetPassword(AuthTestCase):
         token = default_token_generator.make_token(user)
         return {'uidb64': uidb64, 'token': token, 'new_password': new_password}
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_reset_password_success(self, mock_on_commit):
+    def test_reset_password_success(self):
         user = self.create_user(email='reset@example.com', password='oldpassword123')
         before = user.password_changed_at
         payload = self._generate_reset_payload(user)
@@ -114,8 +105,7 @@ class TestResetPassword(AuthTestCase):
 
 
 class TestPasswordChangedNotification(AuthTestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_change_password_sends_notification(self, mock_on_commit):
+    def test_change_password_sends_notification(self):
         token = self.register_and_login('selfchange@example.com', 'oldpassword123', 'Self Change')
 
         self.put(
@@ -154,13 +144,12 @@ class TestAdminResetPasswordNotification(AuthMixin, APIClientMixin, TestCase):
             role='member',
         )
 
-        with patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit):
-            self.put(
-                f'/api/workspaces/{self.workspace.id}/members/{member.id}/reset-password',
-                {'new_password': 'adminreset123'},
-                **self.auth_headers(),
-            )
-            self.assertStatus(200)
+        self.put(
+            f'/api/workspaces/{self.workspace.id}/members/{member.id}/reset-password',
+            {'new_password': 'adminreset123'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
 
         member.refresh_from_db()
         self.assertTrue(member.check_password('adminreset123'))

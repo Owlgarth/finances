@@ -786,16 +786,6 @@ class UserService:
         skipped: dict[str, list[str]] = {'workspaces': [], 'errors': []}
         renamed: dict[str, str] = {}
 
-        def _date(value):
-            if not value:
-                return None
-            try:
-                return datetime.strptime(value, '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                raise ValidationError(
-                    _('Invalid date in import data: %(value)r (expected YYYY-MM-DD)') % {'value': value}
-                )
-
         for ws_data in export_data.get('workspaces', []):
             original_name = ws_data.get('workspace_name')
             if workspace_filter and original_name not in workspace_filter:
@@ -817,9 +807,13 @@ class UserService:
             counts['imported_workspaces'] += 1
 
             for cur_data in ws_data.get('enabled_currencies', []):
+                code = cur_data.get('code')
+                if not code:
+                    skipped['errors'].append(_('%(name)s: enabled currency missing code') % {'name': original_name})
+                    continue
                 UserService._resolve_import_currency(
                     workspace,
-                    cur_data.get('code'),
+                    code,
                     name=cur_data.get('name'),
                     symbol=cur_data.get('symbol'),
                     decimals=cur_data.get('decimals', 2),
@@ -827,7 +821,11 @@ class UserService:
 
             account_map: dict[str, object] = {}
             for acc_data in ws_data.get('accounts', []):
-                currency = UserService._resolve_import_currency(workspace, acc_data.get('currency_code'))
+                currency_code = acc_data.get('currency_code')
+                if not currency_code:
+                    skipped['errors'].append(_('%(name)s: account missing currency_code') % {'name': original_name})
+                    continue
+                currency = UserService._resolve_import_currency(workspace, currency_code)
                 account = Account.objects.create(
                     workspace=workspace,
                     name=acc_data.get('name'),
@@ -855,7 +853,7 @@ class UserService:
                     display_order=budget_data.get('display_order', 0),
                     cadence=budget_data.get('cadence', 'monthly'),
                     cadence_weeks=budget_data.get('cadence_weeks'),
-                    cadence_anchor=_date(budget_data.get('cadence_anchor')),
+                    cadence_anchor=UserService._parse_import_date(budget_data.get('cadence_anchor')),
                     created_by=user,
                     updated_by=user,
                 )
@@ -863,6 +861,9 @@ class UserService:
                 codes = budget_data.get('currency_codes', [])
                 # Dedupe preserving first occurrence; list index becomes position.
                 for position, code in enumerate(list(dict.fromkeys(codes))):
+                    if not code:
+                        skipped['errors'].append(_('%(name)s: budget currency missing code') % {'name': original_name})
+                        continue
                     BudgetCurrency.objects.create(
                         budget=budget,
                         currency=UserService._resolve_import_currency(workspace, code),
@@ -887,8 +888,8 @@ class UserService:
                         workspace=workspace,
                         budget=budget,
                         name=period_data.get('name'),
-                        start_date=_date(period_data.get('start_date')),
-                        end_date=_date(period_data.get('end_date')),
+                        start_date=UserService._parse_import_date(period_data.get('start_date')),
+                        end_date=UserService._parse_import_date(period_data.get('end_date')),
                         is_custom=period_data.get('is_custom', False),
                         created_by=user,
                         updated_by=user,
@@ -897,11 +898,17 @@ class UserService:
                         category = category_map.get((budget.name, cb_data.get('category_name')))
                         if not category:
                             continue
+                        currency_code = cb_data.get('currency_code')
+                        if not currency_code:
+                            skipped['errors'].append(
+                                _('%(name)s: category budget missing currency_code') % {'name': original_name}
+                            )
+                            continue
                         CategoryBudget.objects.create(
                             workspace=workspace,
                             period=period,
                             category=category,
-                            currency=UserService._resolve_import_currency(workspace, cb_data.get('currency_code')),
+                            currency=UserService._resolve_import_currency(workspace, currency_code),
                             amount=cb_data.get('amount'),
                             created_by=user,
                             updated_by=user,
@@ -933,7 +940,7 @@ class UserService:
                     workspace=workspace,
                     account=account,
                     currency=currency,
-                    date=_date(tx_data.get('date')),
+                    date=UserService._parse_import_date(tx_data.get('date')),
                     description=tx_data.get('description'),
                     # v3 field; absent key (older v3 exports) imports None.
                     note=tx_data.get('note'),
@@ -975,7 +982,7 @@ class UserService:
                     to_account=to_account,
                     from_amount=tr_data.get('from_amount'),
                     to_amount=tr_data.get('to_amount'),
-                    date=_date(tr_data.get('date')),
+                    date=UserService._parse_import_date(tr_data.get('date')),
                     description=tr_data.get('description', ''),
                     created_by=user,
                     updated_by=user,
@@ -1007,8 +1014,8 @@ class UserService:
                     name=pt_data.get('name'),
                     amount=pt_data.get('amount'),
                     category=category,
-                    planned_date=_date(pt_data.get('planned_date')),
-                    payment_date=_date(pt_data.get('payment_date')),
+                    planned_date=UserService._parse_import_date(pt_data.get('planned_date')),
+                    payment_date=UserService._parse_import_date(pt_data.get('payment_date')),
                     status=pt_data.get('status', 'pending'),
                     created_by=user,
                     updated_by=user,
@@ -1020,6 +1027,17 @@ class UserService:
             user.save(update_fields=['current_workspace'])
 
         return {**counts, 'skipped': skipped, 'renamed': renamed}
+
+    @staticmethod
+    def _parse_import_date(value):
+        """Parse an exported date, or raise a 400 with context - a garbled
+        required date would otherwise surface as an opaque 500."""
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            raise ValidationError(_('Invalid date in import data: %(value)r (expected YYYY-MM-DD)') % {'value': value})
 
     @staticmethod
     def _resolve_import_currency(workspace, code: str, *, name=None, symbol=None, decimals=2):
