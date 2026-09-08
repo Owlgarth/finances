@@ -281,6 +281,27 @@ class TestPlannedTransactionTotals(PlannedTransactionTestCase):
         as_map = {t['currency']: t['total'] for t in data['totals']}
         self.assertEqual(as_map, {'PLN': '1350.00'})
 
+    def test_totals_filtered_by_currency(self):
+        # Unfiltered totals span both currencies (unchanged by the filter's arrival).
+        data = self.get('/api/planned-transactions/totals', **self.auth_headers())
+        as_map = {t['currency']: t['total'] for t in data['totals']}
+        self.assertEqual(as_map, {'PLN': '1350.00', 'USD': '30.00'})
+
+        # Filtered totals return only the filtered currency's sums...
+        data = self.get('/api/planned-transactions/totals?currency_code=USD', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['totals'], [{'group': 'USD', 'currency': 'USD', 'total': '30.00'}])
+
+        # ...and agree with the currency-filtered list (aggregation parity).
+        listing = self.get('/api/planned-transactions?currency_code=USD', **self.auth_headers())
+        listed_sum = sum(Decimal(item['amount']) for item in listing['items'])
+        self.assertEqual(listed_sum, Decimal('30.00'))
+
+        # Group totals respect the filter too, not just the currency strip.
+        data = self.get('/api/planned-transactions/totals?group_by=category&currency_code=USD', **self.auth_headers())
+        groups = {t['group']: t['total'] for t in data['totals']}
+        self.assertEqual(groups, {str(TotalsLabel.UNCATEGORIZED): '30.00'})
+
     def test_totals_filtered_by_search_and_amount(self):
         data = self.get('/api/planned-transactions/totals?search=rent&amount_gte=1000', **self.auth_headers())
         self.assertEqual(len(data['totals']), 1)
@@ -361,18 +382,25 @@ class TestCreatePlannedTransaction(PlannedTransactionTestCase):
     def test_create_with_status_done_creates_transaction(self):
         initial_count = Transaction.objects.count()
 
-        data = self.post(
-            '/api/planned-transactions',
-            self._payload(name='Paid Bill', amount='200.00', status='done'),
-            **self.auth_headers(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            data = self.post(
+                '/api/planned-transactions',
+                self._payload(name='Paid Bill', amount='200.00', status='done'),
+                **self.auth_headers(),
+            )
         self.assertStatus(201)
         self.assertEqual(data['status'], 'done')
         self.assertEqual(data['payment_date'], '2025-01-20')
-        self.assertIsNotNone(data['transaction_id'])
+        # The dispatch is deferred to on_commit, so the response is serialized
+        # before the task runs: transaction_id lands on the row only after the
+        # deferred dispatch executes (true in production too - the worker runs
+        # post-commit, asynchronously).
+        self.assertIsNone(data['transaction_id'])
+        planned = PlannedTransaction.objects.get(id=data['id'])
+        self.assertIsNotNone(planned.transaction_id)
         self.assertEqual(Transaction.objects.count(), initial_count + 1)
 
-        created = Transaction.objects.get(id=data['transaction_id'])
+        created = Transaction.objects.get(id=planned.transaction_id)
         self.assertEqual(created.account_id, self.account.id)
 
     def test_viewer_cannot_create(self):
@@ -929,14 +957,18 @@ class TestPlannedIdempotencyKey(PlannedTransactionTestCase):
         """Done-branch under a key: replay returns the original (and its executed
         transaction) without re-dispatching or duplicating."""
         headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'abc-123'}
-        first = self.post(
-            '/api/planned-transactions',
-            self._payload(name='Paid Bill', amount='200.00', status='done'),
-            **headers,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            first = self.post(
+                '/api/planned-transactions',
+                self._payload(name='Paid Bill', amount='200.00', status='done'),
+                **headers,
+            )
         self.assertStatus(201)
         self.assertEqual(first['status'], 'done')
-        self.assertIsNotNone(first['transaction_id'])
+        # Serialized pre-commit: the deferred dispatch has not run yet.
+        self.assertIsNone(first['transaction_id'])
+        planned = PlannedTransaction.objects.get(id=first['id'])
+        self.assertIsNotNone(planned.transaction_id)
         tx_count = Transaction.objects.count()
 
         second = self.post(
@@ -946,6 +978,9 @@ class TestPlannedIdempotencyKey(PlannedTransactionTestCase):
         )
         self.assertStatus(201)
         self.assertEqual(second['id'], first['id'])
+        # The replay re-fetches the row fresh, so the executed twin is visible
+        # without re-dispatching (the dedup early-return never reaches the
+        # done branch again).
         self.assertIsNotNone(second['transaction_id'])
         self.assertEqual(Transaction.objects.count(), tx_count)
 
@@ -1006,3 +1041,52 @@ class TestPlannedIdempotencyKey(PlannedTransactionTestCase):
 
         self.assertEqual(result.id, winner_planned.id)
         self.assertEqual(PlannedTransactionIdempotencyKey.objects.filter(key='race-key', user=self.user).count(), 1)
+
+
+class TestDoneCreateDispatchDeferredToCommit(PlannedTransactionTestCase):
+    """R-087 pin: the done-branch dispatch defers to on_commit, not savepoint release.
+
+    The production worker-vs-commit race is not directly testable under
+    CELERY_TASK_ALWAYS_EAGER (the eager task shares the test connection, so
+    it would always see the uncommitted row). Capturing the on_commit
+    callbacks pins the contract instead: exactly one dispatch is registered,
+    it does not run before commit, and it runs after (the execute=True
+    mirror below).
+    """
+
+    def test_done_create_with_key_does_not_dispatch_before_commit(self):
+        initial_count = Transaction.objects.count()
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'defer-key'}
+
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            data = self.post(
+                '/api/planned-transactions',
+                self._payload(name='Deferred Bill', amount='200.00', status='done'),
+                **headers,
+            )
+            self.assertStatus(201)
+            # Pre-commit: the eager task has NOT run - no Transaction row,
+            # no transaction_id. (The callbacks list is populated at context
+            # exit, so its count is asserted after the block below.)
+            self.assertEqual(Transaction.objects.count(), initial_count)
+            self.assertIsNone(PlannedTransaction.objects.get(id=data['id']).transaction_id)
+
+        # Exactly one deferred dispatch was registered; execute=False keeps it
+        # captured rather than run.
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(Transaction.objects.count(), initial_count)
+
+    def test_done_create_with_key_dispatches_after_commit(self):
+        initial_count = Transaction.objects.count()
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'defer-key'}
+
+        with self.captureOnCommitCallbacks(execute=True):
+            data = self.post(
+                '/api/planned-transactions',
+                self._payload(name='Deferred Bill', amount='200.00', status='done'),
+                **headers,
+            )
+
+        # Post-commit: the callback ran and the task executed.
+        self.assertEqual(Transaction.objects.count(), initial_count + 1)
+        self.assertIsNotNone(PlannedTransaction.objects.get(id=data['id']).transaction_id)
