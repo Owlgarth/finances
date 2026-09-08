@@ -110,7 +110,7 @@ When adding new fields to the v3 export format:
 
 **A nullable FK reference in an import row is a two-branch contract, not one.** `account = account_map.get(name) if name else None` imports the row account-less when the name is missing OR explicitly null (`.get()` returns `None` either way - the two shapes behave identically), while a NON-null unresolvable name still skips the row with an error - the file references an account the export lacks, a different failure class from a deliberate account-less row.
 
-**Guard malformed-row inputs BEFORE calling resolvers that write.** `_resolve_import_currency(workspace, None)` would attempt `Currency.objects.create(code=None)` inside the import's atomic block - a 500 and a full rollback for one malformed row. The skip-with-error guard mirrors the adjacent unknown-account branch; only hand-edited files can reach it (well-formed exports always carry the code), but the guard keeps one bad row from destroying the whole import.
+**Guard malformed-row inputs BEFORE calling resolvers that write.** `_resolve_import_currency(workspace, None)` would attempt `Currency.objects.create(code=None)` inside the import's atomic block - a 500 and a full rollback for one malformed row. The skip-with-error guard mirrors the adjacent unknown-account branch; only hand-edited files can reach it (well-formed exports always carry the code), but the guard keeps one bad row from destroying the whole import. Skip messages follow the report's uniform shape - `_('%(name)s: ...') % {'name': workspace_name}`, one interpolated value (the workspace name), entity type in the description - so every skip reason reads alike; new guards match it.
 
 ## Legal Documents
 

@@ -128,10 +128,13 @@ parsers that delegate to services. Apps with async work have a `tasks.py`.
 
 ### Async Task Flows
 
-**Planned transaction execution** - the service sets `status='done'` + `payment_date`,
-then dispatches `execute_planned_transaction.delay(id)`. The worker re-fetches with
-`select_for_update()`, guards idempotency via `transaction_id`, and creates the
-`Transaction` with the plan's account (possibly none) and the plan's own currency.
+**Planned transaction execution** - the service sets `status='done'` + `payment_date`
+and dispatches `execute_planned_transaction.delay(id)`; the create path defers the
+dispatch to `on_commit`, so the message publishes only after the outermost transaction
+commits (never at a savepoint release - a worker that beat the commit would find no row
+and skip permanently). The worker re-fetches with `select_for_update()`, guards
+idempotency via `transaction_id`, and creates the `Transaction` with the plan's account
+(possibly none) and the plan's own currency.
 
 **Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored

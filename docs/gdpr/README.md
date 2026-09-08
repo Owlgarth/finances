@@ -58,6 +58,9 @@ Users can restore data from a previously exported JSON file:
   which converts it to the account-based model and returns a per-account
   balance verification report
 - **Conflict handling:** Duplicate workspace names are renamed automatically (or skipped)
+- **Malformed currency rows:** An enabled currency, account, budget currency, or category
+  budget row whose `code`/`currency_code` is missing or empty is skipped with a per-row
+  error in `skipped.errors` - the rest of the import proceeds
 - **Response:** Returns counts of imported records and any skipped/renamed items
 
 ### Public-Facing Pages
