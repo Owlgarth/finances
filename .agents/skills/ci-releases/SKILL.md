@@ -30,6 +30,7 @@ A published release page is NOT proof. astral-sh/setup-uv ships exact tags (`v10
 - Release notes flow through the git-cliff action's `OUTPUT` env file into `gh release create --notes-file`; never pass multiline content through `${{ }}` interpolation.
 - `workflow_dispatch` rebuilds run the test gate but skip the GitHub Release: `if: github.event_name == 'push'`.
 - Concurrency group `inputs.ref || github.ref` serializes tag pushes and dispatches separately. A dispatch rebuild of an older tag moves `latest` backward - inherent to the tag scheme; keep the in-file comment.
+- `build-contexts:` comes from a per-image `build_contexts` matrix field - `backend=./backend` on the ui legs, `""` on the backend legs (build-push-action skips the flag on an empty input). The rule it serves - mirroring out-of-context imports via named additional contexts at the exact resolved path - lives in the `docker-infra` skill.
 
 ## Render-Test Binaries Pinned by Version
 
