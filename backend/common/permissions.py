@@ -13,11 +13,10 @@ def require_role(user, workspace_id: int, allowed_roles: list[str]) -> str:
     if cached_role is not None and user.current_workspace_id == workspace_id:
         role = cached_role
     else:
-        try:
-            member = WorkspaceMember.objects.get(workspace_id=workspace_id, user=user)
-            role = member.role
-        except WorkspaceMember.DoesNotExist:
+        member = WorkspaceMember.objects.filter(workspace_id=workspace_id, user=user).first()
+        if member is None:
             raise PermissionDeniedError('Not a member of this workspace')
+        role = member.role
     if role not in allowed_roles:
         raise PermissionDeniedError('Insufficient permissions')
     return role

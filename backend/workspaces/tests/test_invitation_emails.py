@@ -1,11 +1,9 @@
 """Tests for workspace invitation emails."""
 
 import re
-from unittest.mock import patch
 
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
-from django.db import transaction
 from django.test import TestCase
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -16,13 +14,8 @@ from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
 from workspaces.services import WorkspaceMemberService
 
 
-def _immediate_on_commit(func, *args, **kwargs):
-    func()
-
-
 class TestNewUserInvitationEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_add_new_user_sends_invitation_email(self, mock_on_commit):
+    def test_add_new_user_sends_invitation_email(self):
         workspace = WorkspaceFactory(name='Finance Team')
         admin = UserFactory(full_name='Admin User')
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
@@ -41,8 +34,7 @@ class TestNewUserInvitationEmail(TestCase):
         self.assertIn('invited', email.subject.lower())
         self.assertIn('Finance Team', email.subject)
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_invitation_email_contains_workspace_name(self, mock_on_commit):
+    def test_invitation_email_contains_workspace_name(self):
         workspace = WorkspaceFactory(name='Budget Masters')
         admin = UserFactory(full_name='Admin User')
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
@@ -59,8 +51,7 @@ class TestNewUserInvitationEmail(TestCase):
         self.assertIn('Budget Masters', email.subject)
         self.assertIn('Budget Masters', email.body)
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_invitation_email_does_not_contain_password(self, mock_on_commit):
+    def test_invitation_email_does_not_contain_password(self):
         workspace = WorkspaceFactory(name='Safe Workspace')
         admin = UserFactory(full_name='Admin User')
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
@@ -82,8 +73,7 @@ class TestNewUserInvitationEmail(TestCase):
 
 
 class TestExistingUserInvitationEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_add_existing_user_sends_invitation_email(self, mock_on_commit):
+    def test_add_existing_user_sends_invitation_email(self):
         workspace = WorkspaceFactory(name='Existing Team')
         admin = UserFactory(full_name='Admin User')
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
@@ -106,8 +96,7 @@ class TestExistingUserInvitationEmail(TestCase):
 
 
 class TestNewUserSetPasswordEmail(TestCase):
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_add_new_user_without_password_sends_set_password_email(self, mock_on_commit):
+    def test_add_new_user_without_password_sends_set_password_email(self):
         workspace = WorkspaceFactory(name='Set Password Team')
         admin = UserFactory(full_name='Admin User')
         WorkspaceMemberFactory(workspace=workspace, user=admin, role='admin')
@@ -134,8 +123,7 @@ class TestNewUserSetPasswordEmail(TestCase):
         self.assertEqual(urlsafe_base64_encode(force_bytes(new_user.pk)), match.group(1))
         self.assertTrue(default_token_generator.check_token(new_user, match.group(2)))
 
-    @patch.object(transaction, 'on_commit', side_effect=_immediate_on_commit)
-    def test_add_new_user_with_password_still_sends_plain_invitation(self, mock_on_commit):
+    def test_add_new_user_with_password_still_sends_plain_invitation(self):
         """The with-password branch keeps the classic invitation (no reset link)."""
         workspace = WorkspaceFactory(name='Classic Invite')
         admin = UserFactory(full_name='Admin User')

@@ -107,12 +107,17 @@ def planned_totals(
     end_date: date | None = Query(None),
     category_id: list[int] | None = Query(None),
     budget_id: list[int] | None = Query(None),
+    currency_code: list[str] | None = Query(None),
     search: str | None = Query(None),
     amount_gte: Decimal | None = Query(None),
     amount_lte: Decimal | None = Query(None),
     group_by: str = Query('currency', pattern=r'^(currency|category)$'),
 ):
-    """Get aggregated planned transaction totals grouped by currency or category."""
+    """Get aggregated planned transaction totals grouped by currency or category.
+
+    currency_code filters by the planned transaction's own stored currency;
+    unknown codes match nothing (filters are not resource lookups).
+    """
     workspace_id = request.auth.current_workspace_id
     return {
         'totals': PlannedTransactionService.totals(
@@ -123,6 +128,7 @@ def planned_totals(
             end_date,
             category_id=category_id,
             budget_id=budget_id,
+            currency_code=currency_code,
             search=search,
             amount_gte=amount_gte,
             amount_lte=amount_lte,

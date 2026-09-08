@@ -41,6 +41,7 @@ class AccountDeletionTests(AuthMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+        self.assertEqual(len(mail.outbox), 0)
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
 
     def test_delete_account_blocked_by_shared_workspace(self):
@@ -56,6 +57,7 @@ class AccountDeletionTests(AuthMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
 
     def test_delete_removes_membership_from_others_workspace(self):

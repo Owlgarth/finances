@@ -11,6 +11,12 @@ RUN npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
+# The UI imports the language registry from backend/common/languages.json
+# (one file, two consumers - see vite.config.ts server.fs.allow). The named
+# build context supplies it at the exact path the relative imports resolve
+# to from /app/src/**: /backend/common/languages.json.
+COPY --from=backend common/languages.json /backend/common/languages.json
+
 # Build args baked into the frontend bundle at build time
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
