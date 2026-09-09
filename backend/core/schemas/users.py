@@ -1,10 +1,6 @@
 """User-related schemas."""
 
-from django.utils.translation import gettext as _
-from pydantic import BaseModel, field_validator
-
-from common.languages import LANGUAGE_CODES, NUMBER_FORMAT_CODES
-from users.models import FontChoices
+from pydantic import BaseModel
 
 
 class UserOut(BaseModel):
@@ -36,39 +32,14 @@ class UserPreferencesOut(BaseModel):
 
 
 class UserPreferencesUpdate(BaseModel):
-    """User preferences update schema."""
+    """User preferences update schema.
+
+    Plain optional fields: semantic validation (registry membership, weekday
+    range) lives in UserService.update_preferences and raises a translated
+    400; Pydantic still rejects wrong-typed payloads with 422.
+    """
 
     calendar_start_day: int | None = None
     font_family: str | None = None
     language: str | None = None
     number_format: str | None = None
-
-    @field_validator('calendar_start_day')
-    @classmethod
-    def validate_calendar_start_day(cls, v: int | None) -> int | None:
-        if v is not None and (v < 1 or v > 7):
-            raise ValueError(_('calendar_start_day must be between 1 and 7'))
-        return v
-
-    @field_validator('font_family')
-    @classmethod
-    def validate_font_family(cls, v: str | None) -> str | None:
-        if v is not None:
-            valid_fonts = [choice[0] for choice in FontChoices.choices]
-            if v not in valid_fonts:
-                raise ValueError(_('font_family must be one of: %(fonts)s') % {'fonts': ', '.join(valid_fonts)})
-        return v
-
-    @field_validator('language')
-    @classmethod
-    def validate_language(cls, v: str | None) -> str | None:
-        if v is not None and v not in LANGUAGE_CODES:
-            raise ValueError(_('language must be one of: %(codes)s') % {'codes': ', '.join(LANGUAGE_CODES)})
-        return v
-
-    @field_validator('number_format')
-    @classmethod
-    def validate_number_format(cls, v: str | None) -> str | None:
-        if v is not None and v not in NUMBER_FORMAT_CODES:
-            raise ValueError(_('number_format must be one of: %(codes)s') % {'codes': ', '.join(NUMBER_FORMAT_CODES)})
-        return v

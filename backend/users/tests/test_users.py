@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 
 from core.tests.base import AuthTestCase
+from users.models import UserPreferences
 
 
 class TestUserUpdate(AuthTestCase):
@@ -151,18 +152,20 @@ class TestPreferences(AuthTestCase):
         self.assertEqual(data['number_format'], 'eu')
 
     def test_update_invalid_language_rejected(self):
-        """Language codes outside the registry are rejected with 422."""
+        """Language codes outside the registry are rejected with 400."""
         token = self.register_and_login('prefs_bad_lang@example.com', 'password123', 'Prefs Test')
 
-        self.patch('/api/users/me/preferences', {'language': 'xx'}, **self.auth_headers(token))
-        self.assertStatus(422)
+        data = self.patch('/api/users/me/preferences', {'language': 'xx'}, **self.auth_headers(token))
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'language must be one of: en, uk, pl')
 
     def test_update_invalid_number_format_rejected(self):
-        """Number format codes outside the registry are rejected with 422."""
+        """Number format codes outside the registry are rejected with 400."""
         token = self.register_and_login('prefs_bad_fmt@example.com', 'password123', 'Prefs Test')
 
-        self.patch('/api/users/me/preferences', {'number_format': 'xx'}, **self.auth_headers(token))
-        self.assertStatus(422)
+        data = self.patch('/api/users/me/preferences', {'number_format': 'xx'}, **self.auth_headers(token))
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'number_format must be one of: en, eu')
 
     def test_validation_is_registry_driven(self):
         """Every registry entry validates - the check is not a hardcoded 'en' allowlist."""
@@ -176,10 +179,67 @@ class TestPreferences(AuthTestCase):
         self.assertStatus(200)
         self.assertEqual(data['language'], 'pl')
 
+    def test_update_font_jetbrains_mono_accepted(self):
+        """The registry's second font is accepted and persisted.
+
+        Regression test for the original bug: the old model-level font
+        allowlist (deleted alongside this change) rejected jetbrains-mono
+        with 422.
+        """
+        token = self.register_and_login('prefs_font_jb@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch('/api/users/me/preferences', {'font_family': 'jetbrains-mono'}, **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['font_family'], 'jetbrains-mono')
+
+        data = self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['font_family'], 'jetbrains-mono')
+
+    def test_update_invalid_font_rejected(self):
+        """Fonts outside the registry ('inter' was valid under the old choices) are rejected with 400."""
+        token = self.register_and_login('prefs_bad_font@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch('/api/users/me/preferences', {'font_family': 'inter'}, **self.auth_headers(token))
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'font_family must be one of: geist, jetbrains-mono')
+
+    def test_update_invalid_calendar_start_day_rejected(self):
+        """calendar_start_day outside 1-7 is rejected with 400 by the service."""
+        token = self.register_and_login('prefs_bad_day@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token))
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'calendar_start_day must be between 1 and 7')
+
+    def test_update_wrong_type_still_422(self):
+        """Wrong-typed payloads remain a Pydantic 422.
+
+        Pins the semantic-vs-structural split: the service validates values,
+        the schema layer validates types and shape.
+        """
+        token = self.register_and_login('prefs_type@example.com', 'password123', 'Prefs Test')
+
+        self.patch('/api/users/me/preferences', {'calendar_start_day': 'abc'}, **self.auth_headers(token))
+        self.assertStatus(422)
+
+    def test_stale_font_value_self_heals(self):
+        """A font_family stored outside the registry (legacy 'inter') heals to the default on read."""
+        token = self.register_and_login('prefs_heal@example.com', 'password123', 'Prefs Test')
+
+        self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        user = get_user_model().objects.get(email='prefs_heal@example.com')
+        UserPreferences.objects.filter(user=user).update(font_family='inter')
+
+        data = self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['font_family'], 'geist')
+
 
 @unittest.skipUnless(shutil.which('msgfmt'), 'gettext not installed')
 class TestPreferencesMessageLocalization(AuthTestCase):
-    """Accept-Language selection for schema validator messages.
+    """Accept-Language selection for preference validation messages.
 
     Requires compiled catalogs: setUpClass compiles them via
     ``manage.py compilemessages`` (msgfmt must be on PATH - hence the class
@@ -199,11 +259,11 @@ class TestPreferencesMessageLocalization(AuthTestCase):
     def _patch_bad_calendar(self, accept_language: str | None):
         token = self.register_and_login('prefs_lang@example.com', 'password123', 'Prefs Test')
         kwargs = {'HTTP_ACCEPT_LANGUAGE': accept_language} if accept_language else {}
-        self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token), **kwargs)
-        self.assertStatus(422)
-        # Ninja's 422 detail is a list of error dicts; str() makes the
-        # assertion robust to that shape.
-        return str(self.response.json()['detail'])
+        data = self.patch('/api/users/me/preferences', {'calendar_start_day': 13}, **self.auth_headers(token), **kwargs)
+        self.assertStatus(400)
+        # The service raises ValidationError; the global handler in
+        # config/urls.py returns {'detail': <plain string>}.
+        return data['detail']
 
     def test_validator_message_polish(self):
         """The validator message renders in Polish under an Accept-Language: pl header."""

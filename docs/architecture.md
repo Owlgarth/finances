@@ -104,8 +104,10 @@ backend/
 ├── common/                 # Shared: JWT auth, permissions, storage, test mixins
 │   ├── services/base.py    # delete_workspace_financial_records (dependency-ordered)
 │   ├── idempotency.py      # Idempotency-Key create dedup (transactions + planned)
-│   └── languages.py +      # language/number-format registry (single source of truth,
-│       languages.json      #   read by backend validation and imported by the frontend)
+│   ├── languages.py +      # language/number-format registry (single source of truth,
+│   │   languages.json      #   read by backend validation and imported by the frontend)
+│   └── fonts.py +          # font registry (same pattern: single source of truth
+│       fonts.json          #   shared with the frontend)
 ├── users/                  # Custom user model (email auth), GDPR export/import, legacy import
 ├── workspaces/             # Multi-tenant workspaces, members, enabled currencies
 ├── currencies/             # Global ISO 4217 catalog + per-workspace enablement
