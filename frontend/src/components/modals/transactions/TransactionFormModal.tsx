@@ -470,7 +470,6 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               ref={fileRef}
               type="file"
               accept={ACCEPT}
-              capture="environment"
               onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
               className="hidden"
             />

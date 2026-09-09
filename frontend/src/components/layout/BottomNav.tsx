@@ -408,11 +408,11 @@ export default function BottomNav() {
       {langOpen && <LanguageModal onClose={() => setLangOpen(false)} />}
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
+      {/* No `capture` attribute: it makes mobile browsers open the camera directly instead of the source chooser - existing photos/files must stay pickable. */}
       <input
         ref={receiptFileRef}
         type="file"
         accept={ACCEPT}
-        capture="environment"
         onChange={handleReceiptFile}
         className="hidden"
       />
