@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { authApi } from '../api/client'
 import { useAuth } from './AuthContext'
 import type { UserPreferences } from '../types'
+import fontsRegistry from '../../../backend/common/fonts.json'
 
-const FONT_MAP: Record<string, string> = {
-  geist: "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  'jetbrains-mono': "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-}
+const FONT_STACKS: Record<string, string> = Object.fromEntries(
+  fontsRegistry.fonts.map((f) => [f.code, f.cssStack]),
+)
 
 interface UserPreferencesContextType {
   preferences: UserPreferences | null
@@ -29,10 +29,10 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   })
 
   const calendarStartDay = preferences?.calendar_start_day ?? 7
-  const fontFamily = preferences?.font_family ?? 'geist'
+  const fontFamily = preferences?.font_family ?? fontsRegistry.defaultFont
 
   useEffect(() => {
-    const fontStack = FONT_MAP[fontFamily] || FONT_MAP.geist
+    const fontStack = FONT_STACKS[fontFamily] || FONT_STACKS[fontsRegistry.defaultFont]
     document.documentElement.style.setProperty('--font-family', fontStack)
     document.body.style.fontFamily = fontStack
   }, [fontFamily])

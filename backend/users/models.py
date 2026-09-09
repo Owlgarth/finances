@@ -5,6 +5,8 @@ from django.db.models import IntegerChoices
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from common.fonts import DEFAULT_FONT
+
 
 class WeekdayChoices(IntegerChoices):
     MONDAY = 1, 'Monday'
@@ -84,14 +86,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
 
 
-class FontChoices(models.TextChoices):
-    GEIST = 'geist', 'Geist'
-    INTER = 'inter', 'Inter'
-    SYSTEM = 'system', 'System UI'
-    ROBOTO = 'roboto', 'Roboto'
-    LATO = 'lato', 'Lato'
-
-
 class UserPreferences(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
     calendar_start_day = models.IntegerField(
@@ -101,8 +95,7 @@ class UserPreferences(models.Model):
     )
     font_family = models.CharField(
         max_length=20,
-        choices=FontChoices,
-        default=FontChoices.GEIST,
+        default=DEFAULT_FONT,
         help_text='Font family for the user interface',
     )
     language = models.CharField(

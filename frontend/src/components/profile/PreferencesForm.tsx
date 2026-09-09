@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next'
 import type { UserPreferences } from '../../types'
 import Select from '../common/Select'
 import registry from '../../../../backend/common/languages.json'
+import fontsRegistry from '../../../../backend/common/fonts.json'
 
-// Font names are proper nouns - they stay untranslated in every UI language.
-const FONT_OPTIONS = [
-  { value: 'geist', label: 'Geist' },
-  { value: 'jetbrains-mono', label: 'JetBrains Mono' },
-]
+// Font options derive from the shared backend registry - the same source the
+// API validates font codes against. Font names are proper nouns - they stay
+// untranslated in every UI language.
+const FONT_OPTIONS = fontsRegistry.fonts.map((f) => ({ value: f.code, label: f.label }))
 
 // Registry-driven options are DATA, not translations: language labels are
 // each language's nativeName (every language names itself in its own script)
@@ -35,14 +35,18 @@ interface Props {
 export default function PreferencesForm({ preferences, onSubmit, isLoading }: Props) {
   const { t } = useTranslation('settings')
   const [calendarStartDay, setCalendarStartDay] = useState(7)
-  const [fontFamily, setFontFamily] = useState('geist')
+  const [fontFamily, setFontFamily] = useState(fontsRegistry.defaultFont)
   const [selectedLanguage, setSelectedLanguage] = useState(registry.defaultLanguage)
   const [numberFormat, setNumberFormat] = useState(registry.defaultNumberFormat)
 
   useEffect(() => {
     if (preferences) {
       setCalendarStartDay(preferences.calendar_start_day)
-      setFontFamily(preferences.font_family || 'geist')
+      setFontFamily(
+        fontsRegistry.fonts.some((f) => f.code === preferences.font_family)
+          ? preferences.font_family
+          : fontsRegistry.defaultFont,
+      )
       setSelectedLanguage(preferences.language || registry.defaultLanguage)
       setNumberFormat(preferences.number_format || registry.defaultNumberFormat)
     }
