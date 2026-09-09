@@ -262,7 +262,6 @@ export default function TransactionAttachments({ transaction }: Props) {
         ref={fileRef}
         type="file"
         accept={ACCEPT}
-        capture="environment"
         multiple
         onChange={(e) => handleFiles(e.target.files)}
         className="hidden"
