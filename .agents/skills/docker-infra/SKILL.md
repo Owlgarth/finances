@@ -55,7 +55,7 @@ When an image has no stable semver tags, pin the newest prerelease/RC tag whose 
 
 ## Out-of-Context Imports: Named Additional Build Contexts
 
-When source inside a build context imports a file that lives outside it (frontend files importing `backend/common/languages.json` - "one file, two consumers"), host dev and host-checkout CI both see the file (vite grants `server.fs.allow` to the repo root; CI builds on the full checkout), so the gap surfaces only in Docker builds: a TS2307 at image-build time, after review. Never fix it by widening the build context to the repo root (context bloat, needs a root `.dockerignore`) or by copying the file into the source tree (guaranteed drift - the registry is single-sourced per the i18n contract). Supply the file as a named additional build context, mirrored at the EXACT in-container path the unchanged relative imports resolve to:
+When source inside a build context imports a file that lives outside it (frontend files importing the shared `backend/common` registries - `languages.json`, `fonts.json`), host dev and host-checkout CI both see the file (vite grants `server.fs.allow` to the repo root; CI builds on the full checkout), so the gap surfaces only in Docker builds: a TS2307 at image-build time, after review. Never fix it by widening the build context to the repo root (context bloat, needs a root `.dockerignore`) or by copying the file into the source tree (guaranteed drift - the registry is single-sourced per the i18n contract). Supply the file as a named additional build context, mirrored at the EXACT in-container path the unchanged relative imports resolve to:
 
 ```yaml
 # docker-compose.yml - ui build (context: ./frontend, WORKDIR /app;

@@ -16,6 +16,8 @@ from django.utils.translation import gettext as _
 from accounts.models import Account
 from common.email import EmailService
 from common.exceptions import ValidationError
+from common.fonts import DEFAULT_FONT, FONT_CODES
+from common.languages import LANGUAGE_CODES, NUMBER_FORMAT_CODES
 from common.services.base import delete_workspace_financial_records
 from common.tokens import (
     generate_email_change_token,
@@ -40,7 +42,7 @@ from users.exceptions import (
     UserInvalidVerificationTokenError,
     UserSameEmailError,
 )
-from users.models import ConsentType, FontChoices, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
+from users.models import ConsentType, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
 from workspaces.models import Role, Workspace, WorkspaceMember
 
 
@@ -52,19 +54,36 @@ class UserService:
             user=user,
             defaults={
                 'calendar_start_day': WeekdayChoices.MONDAY,
-                'font_family': FontChoices.GEIST,
+                'font_family': DEFAULT_FONT,
                 'language': settings.DEFAULT_LANGUAGE,
                 'number_format': settings.DEFAULT_NUMBER_FORMAT,
             },
         )
-        if not preferences.font_family:
-            preferences.font_family = FontChoices.GEIST
+        if preferences.font_family not in FONT_CODES:
+            preferences.font_family = DEFAULT_FONT
             preferences.save(update_fields=['font_family'])
         return preferences
 
     @staticmethod
     def update_preferences(user: User, data: UserPreferencesUpdate) -> UserPreferences:
-        """Update user preferences with validation."""
+        """Update user preferences with validation.
+
+        Semantic validation lives here (not in the Pydantic schema) so all
+        four checks raise the same translated 400; wrong-typed payloads are
+        still rejected by the schema layer with 422. Validation runs BEFORE
+        get_or_create so a rejected request never creates a row.
+        """
+        if data.calendar_start_day is not None and data.calendar_start_day not in WeekdayChoices.values:
+            raise ValidationError(_('calendar_start_day must be between 1 and 7'))
+        if data.font_family is not None and data.font_family not in FONT_CODES:
+            raise ValidationError(_('font_family must be one of: %(fonts)s') % {'fonts': ', '.join(FONT_CODES)})
+        if data.language is not None and data.language not in LANGUAGE_CODES:
+            raise ValidationError(_('language must be one of: %(codes)s') % {'codes': ', '.join(LANGUAGE_CODES)})
+        if data.number_format is not None and data.number_format not in NUMBER_FORMAT_CODES:
+            raise ValidationError(
+                _('number_format must be one of: %(codes)s') % {'codes': ', '.join(NUMBER_FORMAT_CODES)}
+            )
+
         preferences = UserService.get_or_create_preferences(user)
 
         if data.calendar_start_day is not None:

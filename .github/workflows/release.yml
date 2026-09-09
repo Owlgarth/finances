@@ -97,7 +97,7 @@ jobs:
               APP_VERSION=${{ needs.version.outputs.version }}
           - image: ui
             context: ./frontend
-            # Named build context for the language registry import (see
+            # Named build context for the shared registry imports (see
             # frontend/Dockerfile); empty for the backend legs.
             build_contexts: backend=./backend
             image_name: finances-ui
