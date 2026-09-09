@@ -67,11 +67,14 @@ additional_contexts:
 ```dockerfile
 # frontend/Dockerfile
 COPY --from=backend common/languages.json /backend/common/languages.json
+COPY --from=backend common/fonts.json /backend/common/fonts.json
 ```
 
+- **One COPY line per imported file - enumerate, never widen.** Every out-of-context import gets its own `COPY --from=backend common/<name>.json` line at the exact in-container path the relative imports resolve to; a new registry crossing the boundary is one new COPY line, never a widened context and never a copy of the file into `frontend/`. The named context supplies the whole directory wholesale, so a missed line is invisible on the host (vite `server.fs.allow`, full-checkout CI) and surfaces only as a TS2307 at Docker image-build time, after review - any plan adding a cross-tree import must pair it with the COPY line in the same plan.
 - release.yml (build-push-action): `build-contexts: backend=./backend` fed from a per-image `build_contexts` matrix field, empty string on legs that need none (the action skips the flag on empty input - see the `ci-releases` skill).
 - Runtime containers that bind-mount the source tree (the `node` tools service) need the same path as a read-only bind mount (`./backend:/backend:ro`) - imports resolve through the filesystem there, not through build contexts.
 - Verify the named context's source tree is not excluded by its `.dockerignore` (`backend/.dockerignore` must not exclude `common/`) before relying on the context.
+- **Comment-accuracy riders ride the change.** Comments describing the cross-boundary set singularize it ("the shared registry", "one file, two consumers"); when the set grows, reword every one in the same commit - the Dockerfile block, the compose ui-build and node-mount comments, the release.yml matrix comment, `frontend/README.md` - gated by a grep for the singular phrasing reaching zero. A stale comment teaches the next reader a wrong inventory of what the mechanism supplies.
 
 ## Dockerfile ARG Hygiene
 

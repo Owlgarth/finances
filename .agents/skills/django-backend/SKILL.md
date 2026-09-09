@@ -1,6 +1,6 @@
 ---
 name: django-backend
-description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code - endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, translatable error messages (gettext, Accept-Language), concurrency patterns, and migration authoring.
+description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code - endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, translatable error messages (gettext, Accept-Language), concurrency patterns, migration authoring, and shared catalog registries (common/<name>.json shared with the frontend).
 ---
 
 # Django Backend Conventions
@@ -614,6 +614,14 @@ email_verified = getattr(user, 'email_verified', False)
 ## Model Field Defaults Must Match Service Defaults
 
 When a service overrides a model field default (e.g., creates with `WeekdayChoices.MONDAY`), the model field `default` must match. Otherwise direct creation paths (Django admin, factories, management commands) produce inconsistent data. Only the field `default` changes — no data migration needed.
+
+## Shared Catalog Registries
+
+A catalog that both sides of the stack consume (languages, fonts) lives as a shared JSON registry in `backend/common/`: `common/<name>.json` is the single source of truth (the frontend imports it cross-tree), and `common/<name>.py` is the backend's typed view - `REGISTRY_PATH` plus constants (`FONT_CODES`, `DEFAULT_FONT`) derived at import. No `settings.py` row and no env var: the JSON is the only default source. `DEFAULT_LANGUAGE` is the deliberate exception (deploy-time localization overrides are real); a new catalog arguing for an env var must say why it beats the registry default. The pattern exists because hardcoded copies of one list drift - the font list sat in four places (backend choices class, two frontend lookups, index.html webfont loads) before `fonts.json`.
+
+- **Model fields over registry values carry no `choices=`.** Drop the choices class and point the field `default` at the same registry constant the service uses - model default == service default by construction. A dynamic choices class built from the registry at import time was rejected because every registry edit churns a migration; that is why the language fields never had model choices. The autodetector emits a state-only `AlterField` (Django `choices` create no DB constraint) and serializes the default as the resolved literal (`default='geist'`, not the constant reference) - keep makemigrations output verbatim.
+- **Semantic-vs-structural validation split.** The Pydantic schema keeps only type/shape checks (Ninja's 422); value checks - registry membership, ranges - raise `common.exceptions.ValidationError` from the service so they ride the global handler as 400 with a translated detail. Move the WHOLE mistake class together: the rejected alternative was a font-only 400 while language/number_format stayed 422 on the same PATCH - one endpoint returning mixed codes for the same kind of mistake. Validate BEFORE `get_or_create` so a rejected request never creates a row, and preserve existing msgids byte-identical when moving a validator - the .po translations carry over with zero i18n churn. Tests pinning the old code flip from Ninja's 422 detail list to the handler's plain-string `{'detail': ...}`.
+- **Self-heal-on-read when a registry shrinks.** In the getter, `value not in REGISTRY_CODES` subsumes the old falsy check: rows stored under dropped entries heal to the registry default on read, no data migration. Safe only once no writer of invalid values survives - and verify the GDPR import never restores the field before skipping an import-side check.
 
 ## `update_fields` Must Include Fields Set by Model Overrides
 
