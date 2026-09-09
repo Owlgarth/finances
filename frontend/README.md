@@ -468,14 +468,15 @@ catalogs) is in [docs/i18n.md](../docs/i18n.md).
 ./dev.sh frontend   # Vite + hot reload on UI_PORT, VITE_* from .env
 ```
 
-The UI imports the language registry from `backend/common/languages.json` via a
-relative path that escapes `frontend/` (one file, two consumers - the same reason
-`vite.config.ts` lets the dev server serve from the repo root). The production image
-build therefore needs that file at its repo-relative path: compose passes it as a
-named build context (`additional_contexts: backend: ./backend`) and the Dockerfile
-copies it to `/backend/common/languages.json`. A hand-rolled `docker build` from
+The UI imports the shared registries from `backend/common/languages.json` and
+`backend/common/fonts.json` via relative paths that escape `frontend/` (the same
+reason `vite.config.ts` lets the dev server serve from the repo root). The
+production image build therefore needs those files at their repo-relative paths:
+compose passes the backend tree as a named build context
+(`additional_contexts: backend: ./backend`) and the Dockerfile copies each
+registry to `/backend/common/<name>.json`. A hand-rolled `docker build` from
 `frontend/` needs the same context (`--build-context backend=../backend`). The
-`node` tools container gets the file via a read-only `./backend:/backend` bind
+`node` tools container gets the files via a read-only `./backend:/backend` bind
 mount instead, so imports that escape `frontend/` resolve there too.
 
 ## Environment Variables

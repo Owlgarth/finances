@@ -84,9 +84,14 @@ def get_preferences(request):
     }
 
 
-@router.patch('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 401: DetailOut})
+@router.patch('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 400: DetailOut, 401: DetailOut})
 def update_preferences(request, data: UserPreferencesUpdate):
-    """Update current user's preferences."""
+    """Update current user's preferences.
+
+    Returns 400 with a translated detail when a provided value fails
+    semantic validation (registry membership or the calendar_start_day
+    range); wrong-typed payloads are rejected by the schema with 422.
+    """
     preferences = services.UserService.update_preferences(request.auth, data)
     return 200, {
         'calendar_start_day': preferences.calendar_start_day,

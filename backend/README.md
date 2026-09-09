@@ -54,6 +54,8 @@ Shared utilities used across the project:
   - `EmailService._send_sync()` - Synchronous email rendering and SMTP delivery
 - **`enums.py`**: `TotalsLabel` - shared labels for totals aggregation (the "Uncategorized" bucket)
 - **`exceptions.py`**: `ServiceError` base class and subclasses (`NotFoundError`, `AuthenticationError`, `ValidationError`, `PermissionDeniedError`); a global handler in `config/urls.py` maps them to HTTP responses automatically
+- **`fonts.py` + `fonts.json`**: font registry - `FONT_CODES` / `DEFAULT_FONT` loaded from `fonts.json` (single source of truth shared with the frontend)
+- **`languages.py` + `languages.json`**: language/number-format registry - `LANGUAGE_CODES` / `NUMBER_FORMAT_CODES` (single source of truth shared with the frontend; see docs/i18n.md)
 - **`idempotency.py`**: Stripe-style `Idempotency-Key` dedup for transaction and planned-transaction creates (24 h TTL, unique per key + user + workspace)
 - **`json_encoder.py`**: `GDPREncoder` - JSON encoder handling `Decimal`/`datetime`/`date` for GDPR exports
 - **`models.py`**: `WorkspaceScopedModel` - abstract base with a workspace FK, audit fields, and `for_workspace()` on the default manager
