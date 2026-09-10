@@ -378,9 +378,11 @@ class TestAuthLogin(AuthTestCase):
         self.assertStatus(401)
 
     def test_login_inactive_user(self):
-        """Test login with inactive user account."""
-        from django.contrib.auth import get_user_model
+        """Inactive account + correct password is indistinguishable from a wrong password.
 
+        Anti-enumeration: the 401 body must be byte-identical to the wrong-password
+        401 so the response cannot reveal that the account exists but is disabled.
+        """
         self.register_and_login('inactive_user@example.com', 'securepassword123', 'Inactive Test')
 
         user = get_user_model().objects.get(email='inactive_user@example.com')
@@ -391,10 +393,24 @@ class TestAuthLogin(AuthTestCase):
             '/api/auth/login',
             {
                 'email': 'inactive_user@example.com',
+                'password': 'wrongpassword',
+            },
+        )
+        self.assertStatus(401)
+        wrong_password_body = self.response.content
+        wrong_password_content_type = self.response['Content-Type']
+
+        self.post(
+            '/api/auth/login',
+            {
+                'email': 'inactive_user@example.com',
                 'password': 'securepassword123',
             },
         )
         self.assertStatus(401)
+        self.assertEqual(self.response.content, wrong_password_body)
+        self.assertEqual(self.response['Content-Type'], wrong_password_content_type)
+        self.assertIn('invalid', self.response.json()['detail'].lower())
 
     def test_login_rate_limited_per_account_across_ips(self):
         """11th login attempt for the same email is 429 even with a different IP per request.
