@@ -148,11 +148,11 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t('fields.from')}</label>
-            <Select value={fromId} onChange={setFromId} options={options} placeholder={t('fields.fromAccount')} aria-label={t('fields.fromAccount')} />
+            <Select value={fromId} onChange={setFromId} options={options} placeholder={t('fields.fromAccount')} aria-label={t('fields.fromAccount')} className="w-full" />
           </div>
           <div>
             <label className={labelClass}>{t('fields.to')}</label>
-            <Select value={toId} onChange={setToId} options={options} placeholder={t('fields.toAccount')} aria-label={t('fields.toAccount')} />
+            <Select value={toId} onChange={setToId} options={options} placeholder={t('fields.toAccount')} aria-label={t('fields.toAccount')} className="w-full" />
           </div>
         </div>
 

@@ -183,23 +183,23 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t('form.accountLabel')}</label>
-            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder={t('form.selectAccount')} aria-label={t('form.accountAria')} />
+            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder={t('form.selectAccount')} aria-label={t('form.accountAria')} className="w-full" />
           </div>
           <div>
             <label className={labelClass}>{t('form.currencyLabel')}</label>
-            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder={t('form.selectCurrency')} aria-label={t('form.currencyAria')} mono disabled={accountId !== null} />
+            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder={t('form.selectCurrency')} aria-label={t('form.currencyAria')} mono disabled={accountId !== null} className="w-full" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {budgets.length > 1 && (
             <div>
               <label className={labelClass}>{t('form.budgetLabel')}</label>
-              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
+              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} className="w-full" />
             </div>
           )}
           <div className={budgets.length > 1 ? '' : 'col-span-2'}>
             <label className={labelClass}>{t('form.categoryLabel')}</label>
-            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
+            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} className="w-full" />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-2 pb-4">

@@ -82,6 +82,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setFontFamily(v)}
           options={FONT_OPTIONS}
           aria-label={t('preferences.fontAria')}
+          className="w-full"
         />
       </div>
 
@@ -98,6 +99,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setCalendarStartDay(v)}
           options={weekdayOptions}
           aria-label={t('preferences.weekAria')}
+          className="w-full"
         />
       </div>
 
@@ -112,6 +114,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setSelectedLanguage(v)}
           options={LANGUAGE_OPTIONS}
           aria-label={t('preferences.languageAria')}
+          className="w-full"
         />
       </div>
 
@@ -126,6 +129,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setNumberFormat(v)}
           options={NUMBER_FORMAT_OPTIONS}
           aria-label={t('preferences.numberFormatAria')}
+          className="w-full"
         />
       </div>
 

@@ -289,7 +289,7 @@ export default function Transactions() {
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
             <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
             </FilterField>
           )}
           {multiCurrency && (
@@ -300,11 +300,12 @@ export default function Transactions() {
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
                 placeholder={t('filters.allCurrencies')}
                 aria-label={t('filters.byCurrencyAria')}
+                className="w-full"
               />
             </FilterField>
           )}
           <FilterField label={t('filters.type')}>
-            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} />
+            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} className="w-full" />
           </FilterField>
           <ListFilterFields />
         </FilterPanel>

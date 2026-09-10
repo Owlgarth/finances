@@ -213,6 +213,7 @@ export default function CurrenciesSettingsSection() {
               mono
               searchable
               disabled={enableMutation.isPending}
+              className="w-full"
             />
           </div>
         )}

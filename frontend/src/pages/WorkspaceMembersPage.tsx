@@ -627,6 +627,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
                 { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
               aria-label={t('addModal.roleAria')}
+              className="w-full"
             />
           </div>
 
@@ -688,6 +689,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
                 { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
               aria-label={t('editRoleModal.roleAria')}
+              className="w-full"
             />
           </div>
 

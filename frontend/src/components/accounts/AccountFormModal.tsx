@@ -108,6 +108,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
             onChange={(v) => setType(v)}
             options={TYPE_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
             aria-label={t('fields.typeAria')}
+            className="w-full"
           />
         </div>
 
@@ -122,6 +123,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
               aria-label={t('fields.currencyAria')}
               mono
               searchable
+              className="w-full"
             />
             {onManageCurrencies && (
               <div className="mt-1">

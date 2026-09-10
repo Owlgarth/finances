@@ -336,7 +336,7 @@ export default function Planned() {
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {accounts.length > 1 && (
             <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
             </FilterField>
           )}
           {multiCurrency && (
@@ -347,6 +347,7 @@ export default function Planned() {
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
                 placeholder={t('filters.allCurrencies')}
                 aria-label={t('filters.byCurrencyAria')}
+                className="w-full"
               />
             </FilterField>
           )}

@@ -166,6 +166,7 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
             onChange={setCadence}
             options={CADENCE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
             aria-label={t('createForm.cadenceLabel')}
+            className="w-full"
           />
         </div>
         {cadence === 'weeks' && (

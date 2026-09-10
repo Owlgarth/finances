@@ -874,6 +874,7 @@ export default function BudgetDetailPage() {
               .map((c) => ({ value: c.id, label: c.name }))}
             placeholder={t('detail.selectCategoryPlaceholder')}
             aria-label={t('detail.mergeSourceLabel')}
+            className="w-full"
           />
         </div>
         <div className="flex justify-end gap-2">

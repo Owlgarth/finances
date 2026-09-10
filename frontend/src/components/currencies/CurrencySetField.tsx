@@ -88,6 +88,7 @@ export default function CurrencySetField({
         options={currencyOptions}
         placeholder={resolvedPlaceholder}
         aria-label={t('currencySet.ariaLabel')}
+        className="w-full"
       />
       {/* Compact: the primary marker folds into the helper copy; the ordered
           list below is omitted. The label keeps its own casing - Slavic nouns

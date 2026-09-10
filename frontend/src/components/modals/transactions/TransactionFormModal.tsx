@@ -511,6 +511,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               }}
               options={typeOptions}
               aria-label={t('form.typeAria')}
+              className="w-full"
             />
           </div>
           <div>
@@ -622,6 +623,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               options={accountSelectOptions}
               placeholder={t('form.selectAccount')}
               aria-label={t('form.accountAria')}
+              className="w-full"
             />
           </div>
           <div>
@@ -634,6 +636,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               aria-label={t('form.currencyAria')}
               disabled={accountId !== null}
               mono
+              className="w-full"
             />
           </div>
         </div>
@@ -643,12 +646,12 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             {budgets.length > 1 && (
               <div>
                 <label className={labelClass}>{t('form.budgetLabel')}</label>
-                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
+                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} className="w-full" />
               </div>
             )}
             <div className={budgets.length > 1 ? '' : 'col-span-2'}>
               <label className={labelClass}>{t('form.categoryLabel')}</label>
-              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
+              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} className="w-full" />
             </div>
           </div>
         )}
@@ -667,7 +670,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <input type="text" inputMode="decimal" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
-                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono />
+                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono className="w-full" />
               </div>
             )}
           </div>

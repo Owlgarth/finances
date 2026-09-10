@@ -224,6 +224,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
                 .map((c) => ({ value: c.id, label: c.name }))}
               placeholder={t('manageCategories.selectCategoryPlaceholder')}
               aria-label={t('manageCategories.mergeTargetAria')}
+              className="w-full"
             />
           </div>
           <div className="flex justify-end gap-2">

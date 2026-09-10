@@ -31,6 +31,8 @@ export interface MultiSelectProps<T extends string | number> {
   disabled?: boolean
   /** Show an inline search input at the top of the panel (lists > 5 items). */
   searchable?: boolean
+  /** Width/layout pass-through - same contract as Select: `w-full` in form
+   *  grids or a pin; the trigger base carries no width. */
   className?: string
 }
 

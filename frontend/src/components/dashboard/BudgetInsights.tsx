@@ -468,6 +468,7 @@ export default function BudgetInsights() {
             options={budgets.map((b) => ({ value: b.id, label: b.name }))}
             placeholder={t('insights.selectBudget')}
             aria-label={t('insights.budgetAriaLabel')}
+            className="w-full"
           />
         </div>
         {showCurrencyControl &&
@@ -479,6 +480,7 @@ export default function BudgetInsights() {
                 options={activeCurrencies.map((c) => ({ value: c, label: c }))}
                 aria-label={t('insights.currencyAriaLabel')}
                 mono
+                className="w-full"
               />
             </div>
           ) : (

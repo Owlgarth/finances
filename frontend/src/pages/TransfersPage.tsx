@@ -127,6 +127,7 @@ export default function TransfersPage() {
             options={accountOptions}
             placeholder={t('filters.allAccounts')}
             aria-label={t('filters.filterByAccountAria')}
+            className="w-full"
           />
         </FilterField>
         <FilterField label={t('filters.dateLabel')} className="col-span-2">
