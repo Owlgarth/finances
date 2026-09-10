@@ -95,13 +95,6 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
-  // Identity latch: the open-effect applies prefillReceipt at most once per
-  // receipt OBJECT. A fresh parse mints a fresh object (BottomNav builds a new
-  // literal per onSuccess), so a second From-receipt flow still applies; the
-  // same reference re-observed by an effect re-run (a list-length dep change)
-  // never re-seeds. Read/written only inside the open-effect - touching
-  // ref.current during render is an error under react-hooks/refs.
-  const lastAppliedPrefillRef = useRef<{ file: File; parsed: ParsedReceipt } | null>(null)
   // The textarea this disclosure swaps in, plus a one-shot flag set in the
   // toggle's onClick and consumed by the effect below. The flag distinguishes
   // a user-initiated expansion (focus the textarea) from the open-effect's
@@ -134,6 +127,29 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   // once, at submit (rowsToItems, utils/transactionItems). Mirrors TransactionItemsEditor.
   const [pendingRows, setPendingRows] = useState<Row[]>([])
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
+  // Once-per-receipt latch (seenPrefill) for the prefill block in the
+  // session render-adjust: a fresh parse mints a fresh object (BottomNav
+  // builds a new literal per onSuccess), so a second From-receipt flow
+  // still applies; the same reference re-observed never re-seeds. State,
+  // not a ref: the seed runs during render and react-hooks/refs
+  // (error-level) forbids ref writes there.
+  const [seenPrefill, setSeenPrefill] = useState<{ file: File; parsed: ParsedReceipt } | null>(null)
+  // Session tracker for the render-adjust below: the open flip or a
+  // mid-open mode swap (footer Copy: transaction -> null, copyFrom -> t;
+  // same object, so the mode discriminator is load-bearing) starts a new
+  // seeding session. The sentinel initializer (closed, no mode, no source)
+  // can never match a real session, so the first open always seeds. List
+  // lengths and prefillReceipt are deliberately not session inputs: a
+  // refetch that changes a length must never re-seed (it would clear typed
+  // edits and remint the idempotency key mid-session), and a receipt
+  // landing while open must stay ignored.
+  const [session, setSession] = useState<{
+    open: boolean
+    mode: 'edit' | 'copy' | 'create' | 'none'
+    source: Transaction | null
+  }>({ open: false, mode: 'none', source: null })
+  // Reference-list lengths the create-mode seeding last saw.
+  const [seededLens, setSeededLens] = useState({ a: accounts.length, b: budgets.length, c: currencies.length })
   // Description autocomplete: keyboard highlight index into `suggestions`
   // (-1 = none) and the panel-open flag (follows focus/typing, closed on
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
@@ -202,19 +218,38 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  // Session-boundary external sync only - the render-adjust below owns all
+  // STATE seeding, so this effect sets no state. Reset the inline parse
+  // mutation (a closed mid-parse session must not leak isPending/error into
+  // the next open) and the file input's DOM value at every session boundary.
+  // Deliberately not run on mere list-length changes anymore: killing an
+  // in-flight parse because accounts refetched was a latent bug, not a
+  // feature.
   useEffect(() => {
     if (!open) return
+    parse.reset()
+    if (fileRef.current) fileRef.current.value = ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, transaction, copyFrom])
+
+  // Session render-adjust: a session boundary (the open flip, or a mid-open
+  // mode swap) seeds every field; React discards this render pass and
+  // re-runs the component with the seeded state before anything commits.
+  // Seeding runs during render, so this same pass must not consume the
+  // values it just queued.
+  const mode = transaction ? 'edit' : copyFrom ? 'copy' : 'create'
+  const source = transaction ?? copyFrom ?? null
+  const seeding = open !== session.open || session.mode !== mode || session.source !== source
+  if (seeding) setSession({ open, mode, source })
+  if (seeding && open) {
     // Clear any receipt-upload state from a previous session.
     setPendingFile(null)
     setPendingRows([])
-    parse.reset()
-    if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
     // Suggestion panel starts closed for every fresh open.
     setHighlighted(-1)
     setSuggestionsOpen(false)
     // Copy mode prefills like edit, except the date: always today (D4).
-    const source = transaction ?? copyFrom
     if (source) {
       setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
       setDescription(source.description)
@@ -263,9 +298,9 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // already-parsed receipt. Mirrors parse.onSuccess's seeding (above) but
       // runs at open time. Once-per-receipt: the parent sets prefillReceipt
       // BEFORE flipping open (BottomNav's parse.onSuccess does both in one
-      // handler), so this effect's open-flip run always sees the receipt, and
-      // the identity latch applies it at most once per receipt OBJECT.
-      // prefillReceipt is deliberately absent from the deps: a receipt
+      // handler), so the open-flip seeding pass always sees the receipt, and
+      // the seen-prefill state latch applies it at most once per receipt OBJECT.
+      // prefillReceipt is deliberately not a session input: a receipt
       // landing while the modal is already open (a slow parse racing a manual
       // New-transaction open) is ignored, not applied - applying it would
       // re-seed over in-progress edits and regenerate the idempotency key
@@ -273,8 +308,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // "Upload invoice/receipt" button below; do NOT remove that button.
       // Merchant fills description unconditionally here because the line
       // above just set it to '' (create-mode default is '').
-      if (prefillReceipt && prefillReceipt !== lastAppliedPrefillRef.current) {
-        lastAppliedPrefillRef.current = prefillReceipt
+      if (prefillReceipt && prefillReceipt !== seenPrefill) {
+        setSeenPrefill(prefillReceipt)
         const { file, parsed } = prefillReceipt
         setPendingFile(file)
         setPendingRows(itemsToRows(parsed.items))
@@ -308,8 +343,22 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId])
+  }
+
+  // Create-mode arrival adjust: apply the data-derived create defaults
+  // (single-account prefill, primary currency, default budget) when the
+  // reference lists' lengths change, only for fields still at their seed
+  // values - never clears typed edits, never remints the idempotency key.
+  if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
+    setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
+    if (open && !source) {
+      if (accountId === null) {
+        setAccountId(accounts.length === 1 ? accounts[0].id : null)
+        setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencyCode ?? currencies[0]?.code ?? null))
+      }
+      if (budgetId === null) setBudgetId(defaultBudgetId)
+    }
+  }
 
   // Disclosure expansion swaps the toggle button for the textarea (the
   // button unmounts, focus falls to <body>). Focus the freshly mounted

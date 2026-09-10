@@ -32,6 +32,7 @@ export function useExtractionPolling({
   const queryClient = useQueryClient()
   const [pendingId, setPendingId] = useState<number | null>(null)
   const [review, setReview] = useState<{ attachmentId: number; parsed: ParsedReceipt } | null>(null)
+  const [seenResult, setSeenResult] = useState<ParsedReceipt | null>(null)
   // Extraction runs update the list (status badges on the tiles), so the
   // extraction flow invalidates the list query itself; the attachment hooks
   // invalidate it for their own mutations.
@@ -56,19 +57,27 @@ export function useExtractionPolling({
       query.state.data?.status === 'pending' ? (extractionReachable ? 2000 : 30000) : false,
   })
 
+  // Terminal-state handling, lint-quiet: query data drives local state
+  // through the render-adjusts below, and only genuinely external calls
+  // (list invalidation, the failure toast) remain in the effect.
+  const doneResult = extraction?.status === 'done' ? extraction.result : null
+  if (doneResult && activePendingId !== null && doneResult !== seenResult) {
+    setSeenResult(doneResult)
+    setReview({ attachmentId: activePendingId, parsed: doneResult })
+  }
+  if ((extraction?.status === 'done' || extraction?.status === 'failed') && pendingId !== null) {
+    setPendingId(null)
+  }
+
+  // External side effects only - no setState, so set-state-in-effect stays
+  // quiet: when a job settles, refetch the attachment list so the tile
+  // status badges update; surface a failed job's error once.
   useEffect(() => {
-    if (!extraction || activePendingId === null) return
-    if (extraction.status === 'done' && extraction.result) {
-      setReview({ attachmentId: activePendingId, parsed: extraction.result })
-      setPendingId(null)
-      invalidate()
-    } else if (extraction.status === 'failed') {
-      toast.error(extraction.error || extractionFailedMessage)
-      setPendingId(null)
-      invalidate()
-    }
+    if (!extraction || extraction.status === 'pending') return
+    invalidate()
+    if (extraction.status === 'failed') toast.error(extraction.error || extractionFailedMessage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extraction, activePendingId])
+  }, [extraction])
 
   return { pendingId, setPendingId, review, setReview, invalidate }
 }
