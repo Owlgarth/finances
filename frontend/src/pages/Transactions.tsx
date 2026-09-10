@@ -12,7 +12,7 @@ import { formatAmount } from '../utils/format'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
-import { amountParam, createUpdateParams, intListParam, intParam } from '../utils/params'
+import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
@@ -191,6 +191,10 @@ export default function Transactions() {
     // flash on page/filter changes (v5 placeholderData pattern).
     placeholderData: keepPreviousData,
   })
+
+  // A stale ?page= beyond the (possibly shrunken) range resets to page 1 once
+  // the response lands; the backend serves the clamped page meanwhile.
+  useStalePageReset(page, data, updateParams)
 
   // Keyed INSIDE the ['transactions'] family so every existing invalidation of
   // that prefix (form modal, delete, extraction) refetches the strip too.
