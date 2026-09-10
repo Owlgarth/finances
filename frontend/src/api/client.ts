@@ -392,7 +392,7 @@ export interface PlannedInput {
 export const plannedTransactionsApi = {
   getAll: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
-  getTotals: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
+  getTotals: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
   /** Filtered JSON export (blob). Honors only status/start_date/end_date -
       the backend route accepts no other filter params. */

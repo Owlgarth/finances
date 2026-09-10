@@ -220,16 +220,17 @@ export default function Planned() {
 
   // Keyed INSIDE the ['planned'] family so every existing invalidation of that
   // prefix (form modal, execute, cancel, delete) refetches the strip too.
-  // Same dependency values as the list query minus page/pageSize/ordering.
-  // No currency_code here: the planned-totals route accepts none of the
-  // currency params the list route does.
+  // Same dependency values as the list query minus page/pageSize/ordering -
+  // currency_code included: the totals route accepts the same currency
+  // params the list route does.
   const { data: totalsData, isLoading: totalsIsLoading } = useQuery({
-    queryKey: ['planned', 'totals', statusFilter, search, accountFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['planned', 'totals', statusFilter, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       plannedTransactionsApi.getTotals({
         status: statusFilter === 'all' ? undefined : statusFilter,
         search: search || undefined,
         account_id: accountFilter.length ? accountFilter : undefined,
+        currency_code: currencyFilter.length ? currencyFilter : undefined,
         budget_id: budgetFilter.length ? budgetFilter : undefined,
         category_id: categoryFilter.length ? categoryFilter : undefined,
         amount_gte: amountParam(amountMin),
