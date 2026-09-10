@@ -125,17 +125,18 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
               searchable
               className="w-full"
             />
+            {/* Bridge link, aligned with CurrencySetField's exemplar:
+                touch-hit is safe on this standalone link - the adjacent-
+                button prohibition targets pairs whose hit areas overlap. */}
             {onManageCurrencies && (
-              <div className="mt-1">
-                <button
-                  type="button"
-                  onClick={onManageCurrencies}
-                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors"
-                >
-                  <Settings2 size={13} />
-                  {t('manageCurrencies')}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onManageCurrencies}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+              >
+                <Settings2 size={13} />
+                {t('manageCurrencies')}
+              </button>
             )}
           </div>
         )}
