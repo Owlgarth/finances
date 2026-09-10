@@ -76,6 +76,7 @@ export default function ResetAccountSection() {
           currencies={PRE_AUTH_CURRENCIES}
           primaryLabel={t('resetAccount.mainAccount')}
           placeholder={t('resetAccount.selectCurrencies')}
+          helperText={t('resetAccount.currencyHelper')}
         />
 
         <label className="flex items-start gap-2 text-sm text-text-muted cursor-pointer">

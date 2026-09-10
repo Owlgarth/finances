@@ -247,6 +247,7 @@ export default function Register() {
                 currencies={PRE_AUTH_CURRENCIES}
                 primaryLabel={t('registerForm.mainAccountLabel')}
                 placeholder={t('registerForm.selectCurrenciesPlaceholder')}
+                helperText={t('registerForm.currencyHelper')}
               />
 
               <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
