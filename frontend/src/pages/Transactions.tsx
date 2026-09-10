@@ -9,7 +9,7 @@ import type { Transaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
-import { triggerBrowserDownload } from '../utils/attachments'
+import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam } from '../utils/params'
@@ -126,23 +126,22 @@ export default function Transactions() {
   // The export endpoint honors ONLY the date range and a single type filter -
   // never imply the whole filter panel applies to the file.
   const handleExportView = async () => {
-    const toastId = toast.loading(t('preparingExport'))
     setIsExporting(true)
-    try {
-      const blob = await transactionsApi.exportView({
+    // runBlobExport never throws; it owns every export toast.
+    await runBlobExport(
+      () => transactionsApi.exportView({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         transaction_type: typeFilter.length === 1 ? typeFilter[0] : undefined,
-      })
-      const url = URL.createObjectURL(blob)
-      triggerBrowserDownload(url, `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
-      URL.revokeObjectURL(url)
-      toast.success(t('exportComplete'), { id: toastId })
-    } catch {
-      toast.error(t('exportFailed'), { id: toastId })
-    } finally {
-      setIsExporting(false)
-    }
+      }),
+      {
+        filename: `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`,
+        loadingMessage: t('preparingExport'),
+        successMessage: t('exportComplete'),
+        errorMessage: t('exportFailed'),
+      },
+    )
+    setIsExporting(false)
   }
 
   // Each facet counts once, however many values it holds.

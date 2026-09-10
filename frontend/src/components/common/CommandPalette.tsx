@@ -336,8 +336,7 @@ export default function CommandPalette() {
   const anySectionLoading =
     asyncEnabled && (accountsLoading || txSearch.isLoading || plannedSearch.isLoading)
 
-  // Data rows and footers navigate to the filtered list page, never an edit
-  // modal - a palette pick should land on something addressable.
+  // `go` only navigates - the to-target rationale lives in the items memo above.
   const go = (row: PaletteRow) => {
     setOpen(false)
     navigate(row.to)
