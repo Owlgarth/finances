@@ -10,6 +10,7 @@
     "defaultLabel": "Дії",
     "cancel": "Скасувати"
   },
+  "archivedBadge": "Архівовано",
   "filters": {
     "toggle": "Фільтри",
     "regionLabel": "Фільтри",

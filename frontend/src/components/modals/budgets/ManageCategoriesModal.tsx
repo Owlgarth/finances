@@ -12,6 +12,7 @@ import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import ActionSheet from '../../common/ActionSheet'
 import ConfirmDialog from '../../common/ConfirmDialog'
+import ArchivedBadge from '../../common/ArchivedBadge'
 import { controlHeightClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
 
 interface Props {
@@ -130,9 +131,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       </span>
       <span className="flex items-center gap-2 flex-shrink-0">
         {category.is_archived && (
-          <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">
-            {t('manageCategories.archived')}
-          </span>
+          <ArchivedBadge />
         )}
         {/* Hover actions are pointer-fine only - row tap opens the sheet on
             touch (invisible opacity-0 buttons would still intercept taps). */}

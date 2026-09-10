@@ -13,6 +13,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
+import ArchivedBadge from '../components/common/ArchivedBadge'
 import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
@@ -136,7 +137,7 @@ export default function AccountsPage() {
                     <Icon size={16} className="text-text-muted flex-shrink-0" />
                     <span className="text-sm font-medium text-text truncate">{account.name}</span>
                     {account.is_archived && (
-                      <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">{t('accountCard.archivedBadge')}</span>
+                      <ArchivedBadge />
                     )}
                   </div>
                   {multiCurrency && (
