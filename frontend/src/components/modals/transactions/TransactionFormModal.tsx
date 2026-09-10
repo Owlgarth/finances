@@ -35,9 +35,10 @@ interface Props {
   onCopy?: (transaction: Transaction) => void
   /** Receipt-first create entry (BottomNav "From receipt"): seeds amount/date/
       description + the editable items list + the pending attachment from an
-      *already-parsed* receipt. Set once by the parent on parse success and
-      cleared on close, so the reference is stable while open (no mid-edit
-      re-seed). Ignored unless create mode (no transaction/copyFrom). */
+      *already-parsed* receipt. Applied at most once per receipt object: the
+      parent sets it before flipping open and clears it on close, and a
+      receipt arriving while the modal is already open is ignored - it never
+      re-seeds mid-edit. Ignored unless create mode (no transaction/copyFrom). */
   prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
 }
 
@@ -94,6 +95,13 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
+  // Identity latch: the open-effect applies prefillReceipt at most once per
+  // receipt OBJECT. A fresh parse mints a fresh object (BottomNav builds a new
+  // literal per onSuccess), so a second From-receipt flow still applies; the
+  // same reference re-observed by an effect re-run (a list-length dep change)
+  // never re-seeds. Read/written only inside the open-effect - touching
+  // ref.current during render is an error under react-hooks/refs.
+  const lastAppliedPrefillRef = useRef<{ file: File; parsed: ParsedReceipt } | null>(null)
   // The textarea this disclosure swaps in, plus a one-shot flag set in the
   // toggle's onClick and consumed by the effect below. The flag distinguishes
   // a user-initiated expansion (focus the textarea) from the open-effect's
@@ -253,13 +261,20 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
 
       // Receipt-first entry (BottomNav "From receipt"): seed from an
       // already-parsed receipt. Mirrors parse.onSuccess's seeding (above) but
-      // runs at open time. prefillReceipt is set once by the parent on parse
-      // success and cleared on close, so it cannot re-seed mid-edit. Merchant
-      // fills description unconditionally here because the line above just set
-      // it to '' (create-mode default is ''). Do NOT
-      // touch the inline "Upload invoice/receipt" button below; it stays
-      // functional for an in-place re-scan after prefill.
-      if (prefillReceipt) {
+      // runs at open time. Once-per-receipt: the parent sets prefillReceipt
+      // BEFORE flipping open (BottomNav's parse.onSuccess does both in one
+      // handler), so this effect's open-flip run always sees the receipt, and
+      // the identity latch applies it at most once per receipt OBJECT.
+      // prefillReceipt is deliberately absent from the deps: a receipt
+      // landing while the modal is already open (a slow parse racing a manual
+      // New-transaction open) is ignored, not applied - applying it would
+      // re-seed over in-progress edits and regenerate the idempotency key
+      // minted above. The dropped receipt stays recoverable via the inline
+      // "Upload invoice/receipt" button below; do NOT remove that button.
+      // Merchant fills description unconditionally here because the line
+      // above just set it to '' (create-mode default is '').
+      if (prefillReceipt && prefillReceipt !== lastAppliedPrefillRef.current) {
+        lastAppliedPrefillRef.current = prefillReceipt
         const { file, parsed } = prefillReceipt
         setPendingFile(file)
         setPendingRows(itemsToRows(parsed.items))
@@ -294,7 +309,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId, prefillReceipt])
+  }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId])
 
   // Disclosure expansion swaps the toggle button for the textarea (the
   // button unmounts, focus falls to <body>). Focus the freshly mounted
