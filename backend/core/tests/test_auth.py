@@ -13,11 +13,33 @@ from django.core import mail
 from django.test import override_settings
 
 from common.auth import create_temp_token
+from core.api import _extract_2fa_user_key
+from core.schemas import Verify2FAIn
 from currencies.services import CurrencyCatalogService
 from users.two_factor import TwoFactorService
 from workspaces.models import Workspace
 
 from .base import AuthTestCase
+
+
+def _mint_temp_token_without_user_id(user_id_none: bool = False) -> str:
+    """Mint a correctly signed 2fa_pending token whose payload lacks a usable user_id.
+
+    decode_temp_token returns this payload - signature, type, and exp are all
+    valid - so the rate-limit extractor takes the decodable branch while
+    complete_2fa's user lookup fails: the exact shape that used to resolve to
+    the fixed 'unknown' bucket key.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    payload = {
+        'type': '2fa_pending',
+        'jti': str(uuid.uuid4()),
+        'iat': now.timestamp(),
+        'exp': (now + datetime.timedelta(minutes=5)).timestamp(),
+    }
+    if user_id_none:
+        payload['user_id'] = None
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 class TestAuthRegister(AuthTestCase):
@@ -766,6 +788,23 @@ class TestLoginWith2FA(AuthTestCase):
             )
             self.assertStatus(401)
 
+    def test_verify_2fa_user_id_less_tokens_do_not_share_user_bucket(self):
+        """A decodable 2fa_pending token without user_id gets a random key per
+        request, so replays never accumulate into a shared bucket (12 > limit
+        10, still no 429). Every attempt 401s: the first via complete_2fa's
+        user lookup, replays via the temp token's single-use guard."""
+        token = _mint_temp_token_without_user_id()
+
+        self.post('/api/auth/verify-2fa', {'temp_token': token, 'code': '000000'})
+        self.assertStatus(401)
+        # 'User not found' pins the user-lookup branch (core/services.py),
+        # not the invalid-code or invalid-token branch - same 401, different cause.
+        self.assertEqual(self.response.json()['detail'], 'User not found')
+
+        for _ in range(11):
+            self.post('/api/auth/verify-2fa', {'temp_token': token, 'code': '000000'})
+            self.assertStatus(401)
+
     def test_verify_2fa_succeeds_at_exact_per_user_limit(self):
         """9 wrong codes then the correct code on the 10th attempt still
         succeeds — the lockout must not lock out a legitimate user at the cap."""
@@ -821,6 +860,45 @@ class TestLoginWith2FA(AuthTestCase):
             {'temp_token': temp_token, 'code': code},
         )
         self.assertStatus(401)
+
+
+class TestExtract2FAUserKey(AuthTestCase):
+    """Unit tests for the verify-2fa rate-limit key extractor (_extract_2fa_user_key)."""
+
+    def test_extract_2fa_user_key_stable_for_valid_token(self):
+        user = self.create_user('extractor-valid@example.com')
+        data = Verify2FAIn(temp_token=create_temp_token(user), code='000000')
+
+        key1 = _extract_2fa_user_key(None, data)
+        key2 = _extract_2fa_user_key(None, data)
+
+        self.assertEqual(key1, str(user.id))
+        self.assertEqual(key1, key2)
+
+    def test_extract_2fa_user_key_random_for_missing_user_id(self):
+        """Same decodable token, two calls: distinct keys - a fresh bucket per
+        request, never the fixed 'unknown'."""
+        token = _mint_temp_token_without_user_id()
+
+        key1 = _extract_2fa_user_key(None, Verify2FAIn(temp_token=token, code='000000'))
+        key2 = _extract_2fa_user_key(None, Verify2FAIn(temp_token=token, code='000000'))
+
+        self.assertNotEqual(key1, key2)
+        self.assertNotEqual(key1, 'unknown')
+        self.assertNotEqual(key2, 'unknown')
+
+    def test_extract_2fa_user_key_random_for_none_user_id(self):
+        """A present-but-None user_id also fails closed - pins the truthiness
+        check (a 'user_id' in payload membership test would hand this token a
+        fixed key)."""
+        token = _mint_temp_token_without_user_id(user_id_none=True)
+
+        key1 = _extract_2fa_user_key(None, Verify2FAIn(temp_token=token, code='000000'))
+        key2 = _extract_2fa_user_key(None, Verify2FAIn(temp_token=token, code='000000'))
+
+        self.assertNotEqual(key1, key2)
+        self.assertNotEqual(key1, 'None')
+        self.assertNotEqual(key2, 'None')
 
 
 class TestRefreshToken(AuthTestCase):
