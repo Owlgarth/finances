@@ -140,7 +140,7 @@ export default function BudgetDetailPage() {
   // A_period) -> a transient red 404 in the network tab (the reset then
   // clears the id and the UI recovers, but the stray request is noise).
   // Gating on membership in allPeriods also keeps a garbage ?period= seed
-  // from hitting the server at all - the reconcile effect clears it locally.
+  // from hitting the server at all - the reconcile render-adjust clears it locally.
   // A derived const, not state: zero set-state-in-effect cost.
   const summaryPeriodId = allPeriods.some((p) => p.id === periodId) ? periodId : undefined
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -149,23 +149,27 @@ export default function BudgetDetailPage() {
     enabled: summaryPeriodId != null,
   })
 
-  // Default the selection and reconcile URL seeds. Declared AFTER the
-  // allPeriods memo (referencing allPeriods from the old position, above its
-  // declaration, is a TDZ ReferenceError in the deps array) and BEFORE the
-  // [budgetId] reset effect (so the reset effect's setPeriodId lands last on
-  // mount - a seeded param beats this effect's auto-pick when react-query
-  // cache makes currentPeriod available in the first commit).
-  useEffect(() => {
-    if (periodId === null && currentPeriod) setPeriodId(currentPeriod.id)
+  // Default the selection and reconcile URL seeds - a render-time adjust
+  // (guarded setState during render), not an effect: the branches settle
+  // BEFORE the commit instead of one render after it. Plain code, not a
+  // hook: it reads only values declared above (periodId, currentPeriod,
+  // currentPeriodKnown, allPeriods, periodsLoaded) and every branch
+  // invalidates its own guard on the immediate re-render, so it cannot
+  // loop. The [budgetId] reset effect below still runs its functional
+  // setPeriodId after this render, so a seeded ?period= still beats this
+  // auto-pick when react-query cache makes currentPeriod available in the
+  // first commit.
+  if (periodId === null && currentPeriod) {
+    setPeriodId(currentPeriod.id)
+  } else if (periodId === null && currentPeriodKnown) {
     // No materialized current period (custom cadence, or the current-period
     // query failed terminally): fall back to the period nearest today, so a
     // period is ALWAYS selected whenever one exists - an idle picker reads
     // as a dead page. Only a genuinely empty periods list leaves periodId
     // null (the empty-state copy covers it).
-    else if (periodId === null && currentPeriodKnown) {
-      const nearest = nearestPeriod(allPeriods)
-      if (nearest) setPeriodId(nearest.id)
-    }
+    const nearest = nearestPeriod(allPeriods)
+    if (nearest) setPeriodId(nearest.id)
+  } else if (periodId !== null && periodsLoaded && currentPeriodKnown && !allPeriods.some((p) => p.id === periodId)) {
     // Reconcile: a seeded ?period= that no authoritative list contains (typo,
     // stale bookmark, another budget's id) clears so the auto-pick branches
     // above take over. periodsLoaded + currentPeriodKnown gate the "the list
@@ -174,8 +178,8 @@ export default function BudgetDetailPage() {
     // list yet - clearing before currentPeriodKnown would transiently wipe a
     // valid seed while the two queries race. Never writes the URL
     // (user-initiated writes only).
-    else if (periodId !== null && periodsLoaded && currentPeriodKnown && !allPeriods.some((p) => p.id === periodId)) setPeriodId(null)
-  }, [currentPeriod, periodId, currentPeriodKnown, periodsLoaded, allPeriods])
+    setPeriodId(null)
+  }
 
   // URL write side - event handlers and mutation callbacks ONLY (picker
   // onChange, goToPeriod, deletePeriod). Functional setSearchParams preserves
@@ -263,7 +267,7 @@ export default function BudgetDetailPage() {
     mutationFn: (id: number) => budgetsApi.deletePeriod(budgetId, id),
     onSuccess: async (_result, deletedId) => {
       // Await the periods refetch BEFORE clearing the selection: the null-picker
-      // effect (above) picks periods[0] from whatever list it sees — picking
+      // render-adjust (above) picks from whatever list it sees — picking
       // from a stale list could re-select the just-deleted id (ghost periodId →
       // selectedPeriod null → dead page). After the await, the re-render reads
       // the fresh cache.

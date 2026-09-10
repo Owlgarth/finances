@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Trash2, TriangleAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -22,15 +22,27 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  useEffect(() => {
+  // Sync the editable name to the server's workspace (render-adjust):
+  // tracked against the previous {id, name} pair so the null -> object
+  // load, a workspace switch, or a server-side rename re-seeds the draft
+  // - mirroring the old effect's [workspace?.id, workspace?.name] deps.
+  // A same-value refetch (new identity, equal name) leaves an in-progress
+  // draft untouched, as before.
+  const [syncedWorkspace, setSyncedWorkspace] = useState({ id: workspace?.id, name: workspace?.name })
+  if (workspace?.id !== syncedWorkspace.id || workspace?.name !== syncedWorkspace.name) {
+    setSyncedWorkspace({ id: workspace?.id, name: workspace?.name })
     setNewName(workspace?.name || '')
-  }, [workspace?.id, workspace?.name])
+  }
 
-  useEffect(() => {
-    if (!isOpen) {
-      setShowDeleteConfirm(false)
-    }
-  }, [isOpen])
+  // Close path: every dismissal - Modal scrim/Escape/cancel, save
+  // success, delete success - funnels through here so the confirm state
+  // resets in the close event, not an effect. All parents close ONLY via
+  // the onClose they pass (Sidebar, BottomNav, BudgetsPage, AccountsPage),
+  // so no isOpen=false path bypasses this reset.
+  const handleClose = () => {
+    setShowDeleteConfirm(false)
+    onClose()
+  }
 
   const isOwner = userRole === 'owner'
   const canEditName = userRole === 'owner' || userRole === 'admin'
@@ -42,7 +54,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
     try {
       await updateWorkspace({ name: newName.trim() })
       toast.success(t('workspaceSettings.nameUpdated'))
-      onClose()
+      handleClose()
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('workspaceSettings.nameUpdateFailed')))
     } finally {
@@ -58,7 +70,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
       await deleteWorkspace(workspace.id)
       toast.success(t('workspaceSettings.deleted', { name: deletedName }))
       setShowDeleteConfirm(false)
-      onClose()
+      handleClose()
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('workspaceSettings.deleteFailed')))
     } finally {
@@ -69,7 +81,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   if (!workspace) return null
 
   return (
-    <Modal open={isOpen} onClose={onClose} title={t('workspaceSettings.title')} className="p-6 max-h-[85vh] overflow-y-auto">
+    <Modal open={isOpen} onClose={handleClose} title={t('workspaceSettings.title')} className="p-6 max-h-[85vh] overflow-y-auto">
       <div className="space-y-6">
               <div>
                 <label htmlFor="workspace-name" className="block text-sm font-medium text-text mb-1">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
@@ -334,12 +334,18 @@ export default function BudgetInsights() {
   const { data: budgets = [] } = useBudgets(false)
   const { data: currencies = [] } = useEnabledCurrencies()
 
-  const [budgetId, setBudgetId] = useState<number | null>(null)
-  useEffect(() => {
-    if (budgetId !== null && budgets.some((b) => b.id === budgetId)) return
-    const preferred = budgets.find((b) => b.id === workspace?.default_budget_id) ?? budgets[0]
-    setBudgetId(preferred?.id ?? null)
-  }, [budgets, workspace?.default_budget_id, budgetId])
+  // Derived-until-touched budget selection (same shape as the currency
+  // selection below): the view follows the derived default - the
+  // workspace's default budget, else the first budget - until the user
+  // picks one; a touched pick that leaves the list (budget deleted)
+  // falls back to the derived default deterministically.
+  const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null)
+  const [budgetTouched, setBudgetTouched] = useState(false)
+  const derivedBudgetId = budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? budgets[0]?.id ?? null
+  const budgetId =
+    budgetTouched && selectedBudgetId !== null && budgets.some((b) => b.id === selectedBudgetId)
+      ? selectedBudgetId
+      : derivedBudgetId
 
   const budget = budgets.find((b) => b.id === budgetId)
 
@@ -420,7 +426,8 @@ export default function BudgetInsights() {
   // a currency marks the selection touched so re-derivations stop
   // overwriting the user's choice.
   const selectBudget = (id: number) => {
-    setBudgetId(id)
+    setSelectedBudgetId(id)
+    setBudgetTouched(true)
     setSelectedCurrency(null)
     setCurrencyTouched(false)
   }
