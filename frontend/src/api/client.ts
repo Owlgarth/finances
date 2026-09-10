@@ -485,7 +485,7 @@ export const authApi = {
     api.post<TwoFARegenerateResponse>('/users/me/2fa/regenerate-codes', { password }).then(res => res.data),
 
   verifyEmail: (token: string) =>
-    api.post('/auth/verify-email', { token }),
+    api.post('/auth/verify-email', { token }, { headers: { Authorization: '' }, _skipAuthRefresh: true }),
 
   resendVerification: (email: string) =>
     api.post('/auth/resend-verification', { email }),
@@ -494,7 +494,7 @@ export const authApi = {
     api.post('/auth/request-email-change', { password, new_email: newEmail }),
 
   confirmEmailChange: (token: string) =>
-    api.post('/auth/confirm-email-change', { token }),
+    api.post('/auth/confirm-email-change', { token }, { headers: { Authorization: '' }, _skipAuthRefresh: true }),
 
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
