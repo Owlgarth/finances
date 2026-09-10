@@ -94,6 +94,14 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
+  // The textarea this disclosure swaps in, plus a one-shot flag set in the
+  // toggle's onClick and consumed by the effect below. The flag distinguishes
+  // a user-initiated expansion (focus the textarea) from the open-effect's
+  // pre-expanded edit/copy path (setNoteOpen(true) for a note-carrying
+  // source), which must leave the amount field's autoFocus in charge -
+  // same event-to-effect signaling shape as Register's failedSubmitRef.
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+  const noteOpenedByUserRef = useRef(false)
   const descListId = useId()
   const noteId = useId()
 
@@ -287,6 +295,21 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId, prefillReceipt])
+
+  // Disclosure expansion swaps the toggle button for the textarea (the
+  // button unmounts, focus falls to <body>). Focus the freshly mounted
+  // textarea so keyboard users land where the click put them - only on the
+  // user's own expansion, and only with a fine pointer: on touch,
+  // programmatic focus yanks the on-screen keyboard over the fresh field
+  // (same rationale as the isTouch comment above and the amount field's
+  // autoFocus={!isTouch}). Focus-only effect: no setState, so
+  // react-hooks/set-state-in-effect stays quiet (same shape as
+  // CommandPalette's input focus).
+  useEffect(() => {
+    if (!noteOpen || !noteOpenedByUserRef.current) return
+    noteOpenedByUserRef.current = false
+    if (!isTouch) noteRef.current?.focus()
+  }, [noteOpen, isTouch])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -590,6 +613,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           <div id={noteId} role="region" aria-label={t('form.noteAria')}>
             <label htmlFor="tx-note" className={labelClass}>{t('form.noteLabel')}</label>
             <textarea
+              ref={noteRef}
               id="tx-note"
               rows={3}
               /* Mirrors the backend note max_length: an over-long note is
@@ -603,7 +627,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         ) : (
           <button
             type="button"
-            onClick={() => setNoteOpen(true)}
+            onClick={() => { noteOpenedByUserRef.current = true; setNoteOpen(true) }}
             aria-expanded={noteOpen}
             aria-controls={noteId}
             className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors max-sm:min-h-[44px]"
