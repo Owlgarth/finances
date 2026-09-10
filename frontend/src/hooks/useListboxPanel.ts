@@ -66,6 +66,8 @@ export function useListboxPanel<T extends string | number>({
   onActivate,
 }: UseListboxPanelOptions<T>) {
   const [open, setOpen] = useState(false)
+  // Prev-value latch for the close-reset adjustment below (P3).
+  const [prevOpen, setPrevOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [searchQuery, setSearchQuery] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -113,13 +115,22 @@ export function useListboxPanel<T extends string | number>({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  // Reset transient panel state when the panel closes.
-  useEffect(() => {
+  // Reset transient panel state when the panel closes. Prev-value render
+  // adjust (P3), not a reset effect: `open` flips closed from five call sites
+  // across this hook and its callers (closePanel, Tab key, outside-click, the
+  // Select/MultiSelect trigger toggles via the returned setOpen), so an
+  // event-handler reset would have to cover every path and a future direct
+  // setOpen(false) would silently reintroduce the stale-search bug. The
+  // adjustment covers all close paths by construction; openPanel re-seeds the
+  // highlight on every open, so clearing to -1 here only drops the closed
+  // dropdown's ring.
+  if (prevOpen !== open) {
+    setPrevOpen(open)
     if (!open) {
       setSearchQuery('')
       setHighlightedIndex(-1)
     }
-  }, [open])
+  }
 
   // Sheet: bring the selected option into view on open (long lists -
   // currencies, categories). Covers the paths where the list node is

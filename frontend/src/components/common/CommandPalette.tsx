@@ -129,6 +129,9 @@ export default function CommandPalette() {
   const { isMobile } = useBreakpoint()
   const { workspace } = useWorkspace()
   const [open, setOpen] = useState(false)
+  // Prev-value latch for the close-reset adjustment below (P3): detects the
+  // open->closed transition during render, no effect needed.
+  const [prevOpen, setPrevOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
 
   // Keystrokes update the draft instantly (static page matching runs on it,
@@ -184,18 +187,6 @@ export default function CommandPalette() {
       window.removeEventListener(OPEN_EVENT, onOpenEvent)
     }
   }, [])
-
-  // Fresh query each open; also drops stale highlight. The committed value is
-  // cleared here too so a fast close/reopen (inside the debounce window)
-  // cannot flash the previous session's async sections. setQuery is the
-  // debounce hook's draft setter - stable like any useState setter.
-  useEffect(() => {
-    if (!open) {
-      setQuery('')
-      setDebouncedQuery('')
-      setHighlighted(0)
-    }
-  }, [open, setQuery])
 
   const entries = useMemo<PageEntry[]>(
     () => [
@@ -353,6 +344,25 @@ export default function CommandPalette() {
       e.preventDefault()
       const row = results[Math.min(highlighted, results.length - 1)]
       if (row) go(row)
+    }
+  }
+
+  // Fresh query each open; also drops stale highlight. The committed value is
+  // cleared on close too so a fast close/reopen (inside the debounce window)
+  // cannot flash the previous session's async sections. Prev-value render
+  // adjust (P3), not the old reset effect: open flips closed from paths no
+  // event handler here sees (the Cmd/Ctrl+K toggle lives in a mount-once
+  // listener with no current-open closure), and a key remount would destroy
+  // the always-mounted global listeners this singleton exists to hold.
+  // setQuery is the debounce hook's draft setter - stable like any useState
+  // setter; resetting the draft to '' cancels any in-flight commit timer via
+  // the hook's own effect cleanup, exactly as the old effect did.
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (!open) {
+      setQuery('')
+      setDebouncedQuery('')
+      setHighlighted(0)
     }
   }
 

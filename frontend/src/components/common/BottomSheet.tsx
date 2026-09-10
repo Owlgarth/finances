@@ -21,15 +21,26 @@ interface BottomSheetProps {
  */
 function useDelayedUnmount(open: boolean, exitMs: number): boolean {
   const [mounted, setMounted] = useState(open)
+  const [prevOpen, setPrevOpen] = useState(open)
 
+  // Close path (P5 - legit timer): hold `mounted` for `exitMs` after close so
+  // the slide-out animation can play, then drop it. The cleanup cancels the
+  // pending unmount when `open` flips back true mid-exit, so a fast reopen
+  // reuses the still-mounted sheet.
   useEffect(() => {
-    if (open) {
-      setMounted(true)
-      return
-    }
+    if (open) return
     const timer = setTimeout(() => setMounted(false), exitMs)
     return () => clearTimeout(timer)
   }, [open, exitMs])
+
+  // Open path (P3 - prev-value render adjust): mount during the render that
+  // observes the reopen, one commit earlier than the old post-commit effect,
+  // so the slide-in animation starts on the first frame. Idempotent under
+  // StrictMode's double render (second pass sees prevOpen === open).
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) setMounted(true)
+  }
 
   return mounted
 }
