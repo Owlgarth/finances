@@ -32,6 +32,9 @@ def paginate_queryset(
     Django's QuerySet slicing compiles into SQL LIMIT/OFFSET — it does NOT
     load all rows into Python and slice them in memory. This is the same
     pattern used by DRF's PageNumberPagination.
+
+    An out-of-range page serves the last valid page rather than an empty
+    one; an empty queryset reads as page 1.
     """
     if page_size not in ALLOWED_PAGE_SIZES:
         page_size = DEFAULT_PAGE_SIZE
@@ -40,6 +43,9 @@ def paginate_queryset(
 
     total = queryset.count()
     total_pages = max(1, ceil(total / page_size)) if total > 0 else 0
+    # A stale out-of-range page (rows deleted since, old bookmark) serves the
+    # last valid page instead of an empty one; an empty result reads as page 1.
+    page = min(page, max(total_pages, 1))
     offset = (page - 1) * page_size
     items = list(queryset[offset : offset + page_size])
 
