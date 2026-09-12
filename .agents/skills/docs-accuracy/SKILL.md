@@ -25,7 +25,7 @@ Components with zero imports, dead endpoints, and removed helpers are grep-gated
 
 - Run every done-criterion grep BEFORE editing: it catches occurrences the spec's line numbers missed, proves which sections are already clean, and separates real work from already-done work.
 - Done criteria are greps over the final file: required strings present, dead names to zero, em-dash count unchanged from baseline.
-- `grep -c` counts lines; when the criterion is "zero refs", count occurrences (`grep -o ... | wc -l`) - one line can carry two tokens of the dead name.
+- `grep -c` counts lines; when the criterion is "zero refs", count occurrences (`grep -o ... | wc -l`) - one line can carry two tokens of the dead name. The same line-vs-token split resolves pin discrepancies the other way: when a gate pins a token COUNT (`grep -c EMAIL_MODE` = 3), a paragraph carrying two tokens on one physical line legitimately soft-wraps to meet it (single newlines are still one Markdown paragraph, sentence count intact). Wrapping to satisfy a line-count gate is mechanical; rewording content to inflate a count is gaming - never edit meaning to satisfy a gate.
 - A grep gate tests contiguous text: if a gated phrase ("Start with sample data") lands split across a line break, re-wrap within the file's width (~78 chars) so the phrase is contiguous.
 - General grep-gate mechanics - gates count comment text, exact-case identifiers, spec-vs-measure disagreements, pre-existence proofs - live in frontend-react's "Grep/lint done-criteria gates" rule; same discipline, code side.
 
@@ -46,14 +46,17 @@ frontend/
 ```
 
 - A pinned tree comment that would run far past the tree's width (~115 chars against a ~50-char max) takes the spec's sanctioned short form; the detail moves to the prose/overview row.
+- Pinned line lengths get the same script verification, whatever the file type: an authored line whose width is pinned - an env-template section header (root `example.env` pads `# --- Title ` + dashes to exactly 80 chars, `prod/.env.example` to 84) or a column-aligned fence row - is generated and length-checked with a Python one-liner BEFORE it lands in the file, never authored by eye and checked later.
 
 ### Verbatim Transcription
 
 - When a plan pins doc content exactly, transcribe it character-for-character - including `×` (U+00D7) and `≠` (U+2260), which look like forbidden special chars but are NOT dashes; the ban covers U+2014/U+2013 only.
 - Spec-verbatim fragments stay byte-identical through paragraph rewrites: rebuild the surrounding prose, never re-type the pinned fragment. A balanced diff (equal insertions/deletions) proves nothing was reflowed.
+- When a spec's prose disagrees with its own fenced content or its gate commands, the fence/gate wins: prose said "15-line block" while the spec's own fence enumerated 16 - transcribe the fence verbatim (no gate counts lines). The fenced content is the pinned intent; the prose around it is only a description.
 
 ### Glyphs and Dashes
 
 - Pre-existing non-dash glyphs (`→`, `·`, `…`, box-drawing `│ ├ └`) are legitimate - preserve them; do not "clean them up" to ASCII.
 - An edited line that CARRIES a pre-existing dash re-emits it in its `+` twin, so `git diff -U0 | grep -P '^\+.*\x{2014}'` flags correct edits too - the authoritative gate is added=removed dash-line counts plus per-file dash-count equality before/after.
 - For `.md` files, `git diff --stat` insertions/deletions equality is the authoritative balance gate: `git diff | grep -cE "^[+-][^+-]"` undercounts markdown because changed list lines render as `--`/`+-` and fail the second-char guard (returned 24 vs 30 on one sweep).
+- Better than balancing glyph lines: anchor the edit so glyph-carrying lines never enter the diff at all. Anchor on a unique adjacent line pair instead of the glyph line itself, and keep edit-boundary lines byte-identical in oldString/newString so git renders them as context, not -/+ pairs - a prod env-template insertion anchored on the `EMAIL_HOST=`/`EMAIL_PORT=587` pair so an 84-char dash header never became a diff line, keeping the dash-count gate trivially clean.
