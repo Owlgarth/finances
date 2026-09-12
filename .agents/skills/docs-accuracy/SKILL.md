@@ -51,12 +51,13 @@ frontend/
 ### Verbatim Transcription
 
 - When a plan pins doc content exactly, transcribe it character-for-character - including `×` (U+00D7) and `≠` (U+2260), which look like forbidden special chars but are NOT dashes; the ban covers U+2014/U+2013 only.
+- When a doc's fenced block mirrors landed CODE (a design doc transcribing the real `@font-face` rules), transcribe mechanically: extract the block from the source file by line address (sed/awk), land it in the doc, and prove byte-identity with a diff - never hand-paste through an editor. In a file holding multiple fenced blocks, locate the target block by matched open/close pairs (stop at the FIRST closing fence after the opener), never first-open-to-last-close - that span swallows sibling blocks plus the prose between them as one "block".
 - Spec-verbatim fragments stay byte-identical through paragraph rewrites: rebuild the surrounding prose, never re-type the pinned fragment. A balanced diff (equal insertions/deletions) proves nothing was reflowed.
 - When a spec's prose disagrees with its own fenced content or its gate commands, the fence/gate wins: prose said "15-line block" while the spec's own fence enumerated 16 - transcribe the fence verbatim (no gate counts lines). The fenced content is the pinned intent; the prose around it is only a description.
 
 ### Glyphs and Dashes
 
 - Pre-existing non-dash glyphs (`→`, `·`, `…`, box-drawing `│ ├ └`) are legitimate - preserve them; do not "clean them up" to ASCII.
-- An edited line that CARRIES a pre-existing dash re-emits it in its `+` twin, so `git diff -U0 | grep -P '^\+.*\x{2014}'` flags correct edits too - the authoritative gate is added=removed dash-line counts plus per-file dash-count equality before/after.
+- An edited line that CARRIES a pre-existing dash re-emits it in its `+` twin, so `git diff -U0 | LC_ALL=C grep -P '^\+.*\xe2\x80\x94'` flags correct edits too - the authoritative gate is added=removed dash-line counts plus per-file dash-count equality before/after. (Byte form under `LC_ALL=C` - the `\x{2014}` codepoint spelling errors in the C locale; see the locale-pairing rule in frontend-react's "Grep/lint done-criteria gates".)
 - For `.md` files, `git diff --stat` insertions/deletions equality is the authoritative balance gate: `git diff | grep -cE "^[+-][^+-]"` undercounts markdown because changed list lines render as `--`/`+-` and fail the second-char guard (returned 24 vs 30 on one sweep).
 - Better than balancing glyph lines: anchor the edit so glyph-carrying lines never enter the diff at all. Anchor on a unique adjacent line pair instead of the glyph line itself, and keep edit-boundary lines byte-identical in oldString/newString so git renders them as context, not -/+ pairs - a prod env-template insertion anchored on the `EMAIL_HOST=`/`EMAIL_PORT=587` pair so an 84-char dash header never became a diff line, keeping the dash-count gate trivially clean.
