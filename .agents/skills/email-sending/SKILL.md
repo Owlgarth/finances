@@ -85,10 +85,19 @@ Each email has an HTML and plain text version in `backend/templates/email/`. HTM
 ## Environment Variables
 
 ```
+EMAIL_MODE                # 'console' / 'file' / 'smtp'; empty keeps legacy auto behavior
+EMAIL_FILE_PATH           # file-mode output dir (default backend/sent-emails/, gitignored)
 EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS
 DEFAULT_FROM_EMAIL
 FRONTEND_URL              # Used in email links
 TOKEN_MAX_AGE             # Verification token expiry in seconds (default: 7 days)
 ```
+
+`EMAIL_MODE` selects the backend: `console`, `file`, or `smtp` - empty keeps the
+legacy auto behavior (`EMAIL_HOST` set -> smtp, empty -> console), and an
+unrecognized value fails at startup with `ImproperlyConfigured`.
+`EMAIL_MODE=file` writes each email as a raw `.log` file (the full rendered
+message) under `EMAIL_FILE_PATH` (default `backend/sent-emails/`, gitignored) -
+the dev way to inspect fully rendered emails.
 
 In tests, `EMAIL_BACKEND` is `locmem` (via `config/test_settings.py`) — inspect sent emails with `mail.outbox`.

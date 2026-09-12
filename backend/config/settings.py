@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from corsheaders.defaults import default_headers
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from config.utils import get_int_env
@@ -344,11 +345,29 @@ PARSER_EXTRACT_RETRY_BACKOFF = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF', '60
 PARSER_EXTRACT_RETRY_BACKOFF_MAX = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF_MAX', '7200'))
 
 # Email configuration
-# In development, emails are printed to the console.
-# In production, set EMAIL_HOST (and optionally EMAIL_PORT, EMAIL_HOST_USER,
-# EMAIL_HOST_PASSWORD, EMAIL_USE_TLS) via environment variables.
+# EMAIL_MODE selects the email backend:
+#   'console' - print emails to stdout (zero-setup development default)
+#   'file'    - write each email as a raw .log file under EMAIL_FILE_PATH
+#               (default: backend/sent-emails/, created on first send)
+#   'smtp'    - real delivery; also requires EMAIL_HOST (and optionally
+#               EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS)
+# With EMAIL_MODE unset or empty, the legacy auto behavior applies:
+# EMAIL_HOST set means smtp; EMAIL_HOST empty means console.
+_email_mode = os.getenv('EMAIL_MODE', '').lower()
 _email_host = os.getenv('EMAIL_HOST', '')
-if _email_host:
+if not _email_mode:
+    _email_mode = 'smtp' if _email_host else 'console'
+
+if _email_mode == 'console':
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+elif _email_mode == 'file':
+    EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+    # The filebased backend creates the directory on first send; empty env
+    # falls back to the default directory.
+    EMAIL_FILE_PATH = os.getenv('EMAIL_FILE_PATH', '') or str(BASE_DIR / 'sent-emails')
+elif _email_mode == 'smtp':
+    if not _email_host:
+        raise ImproperlyConfigured('EMAIL_MODE=smtp requires EMAIL_HOST to be set')
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = _email_host
     EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
@@ -356,7 +375,9 @@ if _email_host:
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
     EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
 else:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    raise ImproperlyConfigured(
+        f'Invalid EMAIL_MODE {_email_mode!r}. Valid values: console, file, smtp, or leave unset.'
+    )
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@finances.owlgarth.com')
 
