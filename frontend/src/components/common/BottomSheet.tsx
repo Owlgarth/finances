@@ -21,7 +21,6 @@ interface BottomSheetProps {
  */
 function useDelayedUnmount(open: boolean, exitMs: number): boolean {
   const [mounted, setMounted] = useState(open)
-  const [prevOpen, setPrevOpen] = useState(open)
 
   // Close path (P5 - legit timer): hold `mounted` for `exitMs` after close so
   // the slide-out animation can play, then drop it. The cleanup cancels the
@@ -33,14 +32,17 @@ function useDelayedUnmount(open: boolean, exitMs: number): boolean {
     return () => clearTimeout(timer)
   }, [open, exitMs])
 
-  // Open path (P3 - prev-value render adjust): mount during the render that
-  // observes the reopen, one commit earlier than the old post-commit effect,
-  // so the slide-in animation starts on the first frame. Idempotent under
-  // StrictMode's double render (second pass sees prevOpen === open).
-  if (prevOpen !== open) {
-    setPrevOpen(open)
-    if (open) setMounted(true)
-  }
+  // Open path: self-healing mount. ANY render that observes open=true while
+  // unmounted remounts immediately - guarded on the desired-vs-actual state,
+  // so it is idempotent under re-render (StrictMode included) and, crucially,
+  // recoverable: a prev-open latch variant could deadlock permanently
+  // (prevOpen=true, mounted=false) when a parent's render-phase update
+  // re-rendered this subtree and the latch applied while the mount update
+  // was discarded - the latch then reports "already handled" on every
+  // subsequent render and the sheet can never appear. Actual-vs-desired
+  // guards cannot get stuck: the condition stays true until the state
+  // actually changes.
+  if (open && !mounted) setMounted(true)
 
   return mounted
 }
