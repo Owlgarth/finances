@@ -7,11 +7,23 @@
 
 ## 1. Fonts
 
-Always import both. No substitutes (no Inter, Roboto, Arial, system-ui).
+Always declare both. No substitutes (no Inter, Roboto, Arial, system-ui).
 
-```html
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+Both families are self-hosted: the woff2 files live in `frontend/public/fonts/`, declared by the `@font-face` block at the top of `frontend/src/index.css` - no fonts are fetched from a third-party CDN. One representative rule (the full set - one rule per family, weight, and subset - lives in `index.css`):
+
+```css
+/* latin */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/geist-2026-09-12-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 ```
+
+The declarations mirror the css2 response the previous CDN link served - same family names, weights, `unicode-range` splitting, and `font-display: swap` - so rendering and glyph coverage are unchanged; the subsets include latin-ext (Polish) and cyrillic (Ukrainian), covering every supported UI language. Filenames carry the fetch date (`geist-2026-09-12-latin.woff2`) so a future font swap changes the URL and cleanly busts nginx's 1-year immutable caching for `.woff2`. Both families are licensed SIL OFL 1.1; the license files ship alongside the fonts (`frontend/public/fonts/OFL-*.txt`).
 
 | Role | Font | Use |
 |---|---|---|
