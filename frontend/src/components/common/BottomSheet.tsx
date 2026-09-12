@@ -22,14 +22,27 @@ interface BottomSheetProps {
 function useDelayedUnmount(open: boolean, exitMs: number): boolean {
   const [mounted, setMounted] = useState(open)
 
+  // Close path (P5 - legit timer): hold `mounted` for `exitMs` after close so
+  // the slide-out animation can play, then drop it. The cleanup cancels the
+  // pending unmount when `open` flips back true mid-exit, so a fast reopen
+  // reuses the still-mounted sheet.
   useEffect(() => {
-    if (open) {
-      setMounted(true)
-      return
-    }
+    if (open) return
     const timer = setTimeout(() => setMounted(false), exitMs)
     return () => clearTimeout(timer)
   }, [open, exitMs])
+
+  // Open path: self-healing mount. ANY render that observes open=true while
+  // unmounted remounts immediately - guarded on the desired-vs-actual state,
+  // so it is idempotent under re-render (StrictMode included) and, crucially,
+  // recoverable: a prev-open latch variant could deadlock permanently
+  // (prevOpen=true, mounted=false) when a parent's render-phase update
+  // re-rendered this subtree and the latch applied while the mount update
+  // was discarded - the latch then reports "already handled" on every
+  // subsequent render and the sheet can never appear. Actual-vs-desired
+  // guards cannot get stuck: the condition stays true until the state
+  // actually changes.
+  if (open && !mounted) setMounted(true)
 
   return mounted
 }

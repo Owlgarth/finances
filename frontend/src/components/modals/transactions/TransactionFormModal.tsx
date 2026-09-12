@@ -35,9 +35,10 @@ interface Props {
   onCopy?: (transaction: Transaction) => void
   /** Receipt-first create entry (BottomNav "From receipt"): seeds amount/date/
       description + the editable items list + the pending attachment from an
-      *already-parsed* receipt. Set once by the parent on parse success and
-      cleared on close, so the reference is stable while open (no mid-edit
-      re-seed). Ignored unless create mode (no transaction/copyFrom). */
+      *already-parsed* receipt. Applied at most once per receipt object: the
+      parent sets it before flipping open and clears it on close, and a
+      receipt arriving while the modal is already open is ignored - it never
+      re-seeds mid-edit. Ignored unless create mode (no transaction/copyFrom). */
   prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
 }
 
@@ -94,6 +95,14 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
+  // The textarea this disclosure swaps in, plus a one-shot flag set in the
+  // toggle's onClick and consumed by the effect below. The flag distinguishes
+  // a user-initiated expansion (focus the textarea) from the open-effect's
+  // pre-expanded edit/copy path (setNoteOpen(true) for a note-carrying
+  // source), which must leave the amount field's autoFocus in charge -
+  // same event-to-effect signaling shape as Register's failedSubmitRef.
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+  const noteOpenedByUserRef = useRef(false)
   const descListId = useId()
   const noteId = useId()
 
@@ -118,6 +127,29 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   // once, at submit (rowsToItems, utils/transactionItems). Mirrors TransactionItemsEditor.
   const [pendingRows, setPendingRows] = useState<Row[]>([])
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
+  // Once-per-receipt latch (seenPrefill) for the prefill block in the
+  // session render-adjust: a fresh parse mints a fresh object (BottomNav
+  // builds a new literal per onSuccess), so a second From-receipt flow
+  // still applies; the same reference re-observed never re-seeds. State,
+  // not a ref: the seed runs during render and react-hooks/refs
+  // (error-level) forbids ref writes there.
+  const [seenPrefill, setSeenPrefill] = useState<{ file: File; parsed: ParsedReceipt } | null>(null)
+  // Session tracker for the render-adjust below: the open flip or a
+  // mid-open mode swap (footer Copy: transaction -> null, copyFrom -> t;
+  // same object, so the mode discriminator is load-bearing) starts a new
+  // seeding session. The sentinel initializer (closed, no mode, no source)
+  // can never match a real session, so the first open always seeds. List
+  // lengths and prefillReceipt are deliberately not session inputs: a
+  // refetch that changes a length must never re-seed (it would clear typed
+  // edits and remint the idempotency key mid-session), and a receipt
+  // landing while open must stay ignored.
+  const [session, setSession] = useState<{
+    open: boolean
+    mode: 'edit' | 'copy' | 'create' | 'none'
+    source: Transaction | null
+  }>({ open: false, mode: 'none', source: null })
+  // Reference-list lengths the create-mode seeding last saw.
+  const [seededLens, setSeededLens] = useState({ a: accounts.length, b: budgets.length, c: currencies.length })
   // Description autocomplete: keyboard highlight index into `suggestions`
   // (-1 = none) and the panel-open flag (follows focus/typing, closed on
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
@@ -186,19 +218,38 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  // Session-boundary external sync only - the render-adjust below owns all
+  // STATE seeding, so this effect sets no state. Reset the inline parse
+  // mutation (a closed mid-parse session must not leak isPending/error into
+  // the next open) and the file input's DOM value at every session boundary.
+  // Deliberately not run on mere list-length changes anymore: killing an
+  // in-flight parse because accounts refetched was a latent bug, not a
+  // feature.
   useEffect(() => {
     if (!open) return
+    parse.reset()
+    if (fileRef.current) fileRef.current.value = ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, transaction, copyFrom])
+
+  // Session render-adjust: a session boundary (the open flip, or a mid-open
+  // mode swap) seeds every field; React discards this render pass and
+  // re-runs the component with the seeded state before anything commits.
+  // Seeding runs during render, so this same pass must not consume the
+  // values it just queued.
+  const mode = transaction ? 'edit' : copyFrom ? 'copy' : 'create'
+  const source = transaction ?? copyFrom ?? null
+  const seeding = open !== session.open || session.mode !== mode || session.source !== source
+  if (seeding) setSession({ open, mode, source })
+  if (seeding && open) {
     // Clear any receipt-upload state from a previous session.
     setPendingFile(null)
     setPendingRows([])
-    parse.reset()
-    if (fileRef.current) fileRef.current.value = ''
     setDetailTab(null)
     // Suggestion panel starts closed for every fresh open.
     setHighlighted(-1)
     setSuggestionsOpen(false)
     // Copy mode prefills like edit, except the date: always today (D4).
-    const source = transaction ?? copyFrom
     if (source) {
       setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
       setDescription(source.description)
@@ -245,13 +296,20 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
 
       // Receipt-first entry (BottomNav "From receipt"): seed from an
       // already-parsed receipt. Mirrors parse.onSuccess's seeding (above) but
-      // runs at open time. prefillReceipt is set once by the parent on parse
-      // success and cleared on close, so it cannot re-seed mid-edit. Merchant
-      // fills description unconditionally here because the line above just set
-      // it to '' (create-mode default is ''). Do NOT
-      // touch the inline "Upload invoice/receipt" button below; it stays
-      // functional for an in-place re-scan after prefill.
-      if (prefillReceipt) {
+      // runs at open time. Once-per-receipt: the parent sets prefillReceipt
+      // BEFORE flipping open (BottomNav's parse.onSuccess does both in one
+      // handler), so the open-flip seeding pass always sees the receipt, and
+      // the seen-prefill state latch applies it at most once per receipt OBJECT.
+      // prefillReceipt is deliberately not a session input: a receipt
+      // landing while the modal is already open (a slow parse racing a manual
+      // New-transaction open) is ignored, not applied - applying it would
+      // re-seed over in-progress edits and regenerate the idempotency key
+      // minted above. The dropped receipt stays recoverable via the inline
+      // "Upload invoice/receipt" button below; do NOT remove that button.
+      // Merchant fills description unconditionally here because the line
+      // above just set it to '' (create-mode default is '').
+      if (prefillReceipt && prefillReceipt !== seenPrefill) {
+        setSeenPrefill(prefillReceipt)
         const { file, parsed } = prefillReceipt
         setPendingFile(file)
         setPendingRows(itemsToRows(parsed.items))
@@ -285,8 +343,37 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId, prefillReceipt])
+  }
+
+  // Create-mode arrival adjust: apply the data-derived create defaults
+  // (single-account prefill, primary currency, default budget) when the
+  // reference lists' lengths change, only for fields still at their seed
+  // values - never clears typed edits, never remints the idempotency key.
+  if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
+    setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
+    if (open && !source) {
+      if (accountId === null) {
+        setAccountId(accounts.length === 1 ? accounts[0].id : null)
+        setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencyCode ?? currencies[0]?.code ?? null))
+      }
+      if (budgetId === null) setBudgetId(defaultBudgetId)
+    }
+  }
+
+  // Disclosure expansion swaps the toggle button for the textarea (the
+  // button unmounts, focus falls to <body>). Focus the freshly mounted
+  // textarea so keyboard users land where the click put them - only on the
+  // user's own expansion, and only with a fine pointer: on touch,
+  // programmatic focus yanks the on-screen keyboard over the fresh field
+  // (same rationale as the isTouch comment above and the amount field's
+  // autoFocus={!isTouch}). Focus-only effect: no setState, so
+  // react-hooks/set-state-in-effect stays quiet (same shape as
+  // CommandPalette's input focus).
+  useEffect(() => {
+    if (!noteOpen || !noteOpenedByUserRef.current) return
+    noteOpenedByUserRef.current = false
+    if (!isTouch) noteRef.current?.focus()
+  }, [noteOpen, isTouch])
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -511,6 +598,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               }}
               options={typeOptions}
               aria-label={t('form.typeAria')}
+              className="w-full"
             />
           </div>
           <div>
@@ -589,6 +677,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           <div id={noteId} role="region" aria-label={t('form.noteAria')}>
             <label htmlFor="tx-note" className={labelClass}>{t('form.noteLabel')}</label>
             <textarea
+              ref={noteRef}
               id="tx-note"
               rows={3}
               /* Mirrors the backend note max_length: an over-long note is
@@ -602,7 +691,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         ) : (
           <button
             type="button"
-            onClick={() => setNoteOpen(true)}
+            onClick={() => { noteOpenedByUserRef.current = true; setNoteOpen(true) }}
             aria-expanded={noteOpen}
             aria-controls={noteId}
             className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors max-sm:min-h-[44px]"
@@ -622,6 +711,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               options={accountSelectOptions}
               placeholder={t('form.selectAccount')}
               aria-label={t('form.accountAria')}
+              className="w-full"
             />
           </div>
           <div>
@@ -634,6 +724,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
               aria-label={t('form.currencyAria')}
               disabled={accountId !== null}
               mono
+              className="w-full"
             />
           </div>
         </div>
@@ -643,12 +734,12 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             {budgets.length > 1 && (
               <div>
                 <label className={labelClass}>{t('form.budgetLabel')}</label>
-                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
+                <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgetOptions} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} className="w-full" />
               </div>
             )}
             <div className={budgets.length > 1 ? '' : 'col-span-2'}>
               <label className={labelClass}>{t('form.categoryLabel')}</label>
-              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
+              <Select value={categoryId} onChange={setCategoryId} options={categoryOptions} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} className="w-full" />
             </div>
           </div>
         )}
@@ -667,7 +758,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <input type="text" inputMode="decimal" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
-                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono />
+                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono className="w-full" />
               </div>
             )}
           </div>

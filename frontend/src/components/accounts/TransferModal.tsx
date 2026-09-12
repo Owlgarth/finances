@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +28,24 @@ function accountById(accounts: Account[], id: number | null): Account | undefine
   return accounts.find((a) => a.id === id)
 }
 
+/** Default from/to pair for a fresh create session: the last-used pair
+ * (when both ends still exist), else auto-fill when exactly two accounts. */
+function deriveDefaultPair(accounts: Account[]): { from: number | null; to: number | null } {
+  let from: number | null = null
+  let to: number | null = null
+  const stored = localStorage.getItem(LAST_PAIR_KEY)
+  if (stored) {
+    const [f, t] = stored.split(',').map(Number)
+    if (accounts.some((a) => a.id === f)) from = f
+    if (accounts.some((a) => a.id === t)) to = t
+  }
+  if (from === null && to === null && accounts.length === 2) {
+    from = accounts[0].id
+    to = accounts[1].id
+  }
+  return { from, to }
+}
+
 export default function TransferModal({ open, onClose, repeatFrom, editFrom }: Props) {
   const { t } = useTranslation('transfers')
   const { t: tCommon } = useTranslation('common')
@@ -43,9 +61,32 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
 
-  // Prefill: edit > repeat > last-used pair > auto-fill when exactly two accounts.
-  useEffect(() => {
-    if (!open) return
+  // Session tracker for the render-adjust below: the open flip, or a
+  // mid-open edit/repeat source swap, starts a new seeding session. The
+  // sentinel initializer (closed, no mode, no source) can never match a
+  // real session, so the first render of the mount-per-use edit modal
+  // still counts as a boundary and seeds. accounts.length is deliberately
+  // NOT a session input - a refetch that changes the list must never
+  // re-seed typed edits. Late-arriving accounts get their own guarded
+  // adjust below.
+  const [session, setSession] = useState<{
+    open: boolean
+    mode: 'edit' | 'repeat' | 'create' | 'none'
+    source: Transfer | null
+  }>({ open: false, mode: 'none', source: null })
+  // Length of the accounts list the default-branch pair seeding last saw.
+  const [seededAccountsLen, setSeededAccountsLen] = useState(accounts.length)
+
+  // Prefill render-adjust: edit > repeat > last-used pair > auto-fill when
+  // exactly two accounts. A session boundary seeds every field; React
+  // discards this render pass and re-runs the component with the seeded
+  // state before anything commits. Seeding runs during render, so this
+  // same pass must not consume the values it just queued.
+  const mode = editFrom ? 'edit' : repeatFrom ? 'repeat' : 'create'
+  const source = editFrom ?? repeatFrom ?? null
+  const seeding = open !== session.open || session.mode !== mode || session.source !== source
+  if (seeding) setSession({ open, mode, source })
+  if (seeding && open) {
     if (editFrom) {
       setFromId(editFrom.from_account_id)
       setToId(editFrom.to_account_id)
@@ -53,37 +94,37 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
       setToAmount(editFrom.to_amount)
       setDate(editFrom.date)
       setDescription(editFrom.description)
-      return
-    }
-    if (repeatFrom) {
+    } else if (repeatFrom) {
       setFromId(repeatFrom.from_account_id)
       setToId(repeatFrom.to_account_id)
       setDescription(repeatFrom.description)
       setFromAmount('')
       setToAmount('')
       setDate(new Date().toISOString().slice(0, 10))
-      return
+    } else {
+      const pair = deriveDefaultPair(accounts)
+      setFromId(pair.from)
+      setToId(pair.to)
+      setFromAmount('')
+      setToAmount('')
+      setDescription('')
+      setDate(new Date().toISOString().slice(0, 10))
     }
-    let nextFrom: number | null = null
-    let nextTo: number | null = null
-    const stored = localStorage.getItem(LAST_PAIR_KEY)
-    if (stored) {
-      const [f, t] = stored.split(',').map(Number)
-      if (accounts.some((a) => a.id === f)) nextFrom = f
-      if (accounts.some((a) => a.id === t)) nextTo = t
+  }
+
+  // Default-branch arrival adjust: when the accounts list length changes
+  // (first resolution, or a genuinely different list), re-derive the
+  // last-used pair / two-account auto-fill - but only for a create-mode
+  // session whose pair fields are still untouched, so a mid-edit refetch
+  // never clobbers a typed transfer.
+  if (accounts.length !== seededAccountsLen) {
+    setSeededAccountsLen(accounts.length)
+    if (open && !editFrom && !repeatFrom && fromId === null && toId === null) {
+      const pair = deriveDefaultPair(accounts)
+      setFromId(pair.from)
+      setToId(pair.to)
     }
-    if (nextFrom === null && nextTo === null && accounts.length === 2) {
-      nextFrom = accounts[0].id
-      nextTo = accounts[1].id
-    }
-    setFromId(nextFrom)
-    setToId(nextTo)
-    setFromAmount('')
-    setToAmount('')
-    setDescription('')
-    setDate(new Date().toISOString().slice(0, 10))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editFrom, repeatFrom, accounts.length])
+  }
 
   const fromAccount = accountById(accounts, fromId)
   const toAccount = accountById(accounts, toId)
@@ -148,11 +189,11 @@ export default function TransferModal({ open, onClose, repeatFrom, editFrom }: P
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t('fields.from')}</label>
-            <Select value={fromId} onChange={setFromId} options={options} placeholder={t('fields.fromAccount')} aria-label={t('fields.fromAccount')} />
+            <Select value={fromId} onChange={setFromId} options={options} placeholder={t('fields.fromAccount')} aria-label={t('fields.fromAccount')} className="w-full" />
           </div>
           <div>
             <label className={labelClass}>{t('fields.to')}</label>
-            <Select value={toId} onChange={setToId} options={options} placeholder={t('fields.toAccount')} aria-label={t('fields.toAccount')} />
+            <Select value={toId} onChange={setToId} options={options} placeholder={t('fields.toAccount')} aria-label={t('fields.toAccount')} className="w-full" />
           </div>
         </div>
 

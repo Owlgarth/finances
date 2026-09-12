@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UserPreferences } from '../../types'
 import Select from '../common/Select'
@@ -39,7 +39,14 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
   const [selectedLanguage, setSelectedLanguage] = useState(registry.defaultLanguage)
   const [numberFormat, setNumberFormat] = useState(registry.defaultNumberFormat)
 
-  useEffect(() => {
+  // Seed the editable fields from the loaded preferences (render-adjust):
+  // tracked against the previous preferences OBJECT so the initial
+  // null -> object load and any later identity change (post-save refetch)
+  // re-seed all four fields pre-commit - mirroring the old effect's
+  // [preferences] deps exactly.
+  const [prevPreferences, setPrevPreferences] = useState(preferences)
+  if (preferences !== prevPreferences) {
+    setPrevPreferences(preferences)
     if (preferences) {
       setCalendarStartDay(preferences.calendar_start_day)
       setFontFamily(
@@ -50,7 +57,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
       setSelectedLanguage(preferences.language || registry.defaultLanguage)
       setNumberFormat(preferences.number_format || registry.defaultNumberFormat)
     }
-  }, [preferences])
+  }
 
   const weekdayOptions = WEEKDAY_KEYS.map((d) => ({
     value: d,
@@ -82,6 +89,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setFontFamily(v)}
           options={FONT_OPTIONS}
           aria-label={t('preferences.fontAria')}
+          className="w-full"
         />
       </div>
 
@@ -98,6 +106,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setCalendarStartDay(v)}
           options={weekdayOptions}
           aria-label={t('preferences.weekAria')}
+          className="w-full"
         />
       </div>
 
@@ -112,6 +121,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setSelectedLanguage(v)}
           options={LANGUAGE_OPTIONS}
           aria-label={t('preferences.languageAria')}
+          className="w-full"
         />
       </div>
 
@@ -126,6 +136,7 @@ export default function PreferencesForm({ preferences, onSubmit, isLoading }: Pr
           onChange={(v) => setNumberFormat(v)}
           options={NUMBER_FORMAT_OPTIONS}
           aria-label={t('preferences.numberFormatAria')}
+          className="w-full"
         />
       </div>
 

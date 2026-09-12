@@ -6,6 +6,7 @@ import { authApi } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { getApiErrorMessage } from '../utils/errors'
+import { runBlobExport } from '../utils/blobExport'
 import EditProfileForm from '../components/profile/EditProfileForm'
 import ChangePasswordForm from '../components/profile/ChangePasswordForm'
 import PreferencesForm from '../components/profile/PreferencesForm'
@@ -33,22 +34,14 @@ export default function ProfilePage() {
 
   const handleExportData = async () => {
     setIsExporting(true)
-    try {
-      const blob = await authApi.exportData()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `owlgarth_finances_data_export_${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      toast.success(t('profilePage.exportSuccess'))
-    } catch {
-      toast.error(t('profilePage.exportFailed'))
-    } finally {
-      setIsExporting(false)
-    }
+    // No loadingMessage: this export shipped without a loading toast and
+    // keeps that behavior; runBlobExport never throws.
+    await runBlobExport(() => authApi.exportData(), {
+      filename: `owlgarth_finances_data_export_${new Date().toISOString().slice(0, 10)}.json`,
+      successMessage: t('profilePage.exportSuccess'),
+      errorMessage: t('profilePage.exportFailed'),
+    })
+    setIsExporting(false)
   }
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {

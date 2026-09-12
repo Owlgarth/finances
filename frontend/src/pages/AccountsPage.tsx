@@ -13,6 +13,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
+import ArchivedBadge from '../components/common/ArchivedBadge'
 import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
@@ -126,9 +127,9 @@ export default function AccountsPage() {
             return (
               <div
                 key={account.id}
-                {...(isTouch && canManageAccounts ? tappableProps(() => setCardAction(account)) : {})}
+                {...(isTouch ? tappableProps(() => setCardAction(account)) : {})}
                 className={`border border-border rounded-sm bg-surface p-4 ${
-                  isTouch && canManageAccounts ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                  isTouch ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -136,7 +137,7 @@ export default function AccountsPage() {
                     <Icon size={16} className="text-text-muted flex-shrink-0" />
                     <span className="text-sm font-medium text-text truncate">{account.name}</span>
                     {account.is_archived && (
-                      <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">{t('accountCard.archivedBadge')}</span>
+                      <ArchivedBadge />
                     )}
                   </div>
                   {multiCurrency && (
@@ -148,22 +149,28 @@ export default function AccountsPage() {
                 <div className="mt-3 font-mono text-xl text-text">
                   {formatAmount(balance)} {multiCurrency ? '' : account.currency_code}
                 </div>
-                {/* Inline links are pointer-fine only - card tap opens the sheet on touch. */}
-                {canManageAccounts && !isTouch && (
+                {/* Inline links are pointer-fine only - card tap opens the sheet on touch.
+                    View-transactions is a read-level right of every member; the mutation
+                    links stay manage-gated. */}
+                {!isTouch && (
                   <div className="mt-3 flex items-center gap-3 text-xs">
                     <button type="button" onClick={() => navigate(`/transactions?account=${account.id}`)} className="text-primary hover:text-primary-hover">{t('accountCard.viewTransactions')}</button>
-                    <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">{t('accountCard.setBalance')}</button>
-                    <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> {t('accountCard.edit')}</button>
-                    <button
-                      onClick={() => archiveMutation.mutate({ id: account.id, archived: !account.is_archived })}
-                      className="text-text-muted hover:text-text inline-flex items-center gap-1"
-                    >
-                      <Archive size={12} /> {account.is_archived ? t('accountCard.unarchive') : t('accountCard.archive')}
-                    </button>
-                    {account.is_archived && (
-                      <button onClick={() => setDeleting(account)} className="text-text-muted hover:text-negative inline-flex items-center gap-1">
-                        <Trash2 size={12} /> {t('accountCard.delete')}
-                      </button>
+                    {canManageAccounts && (
+                      <>
+                        <button onClick={() => setSetBalanceFor(account)} className="text-primary hover:text-primary-hover">{t('accountCard.setBalance')}</button>
+                        <button onClick={() => openEdit(account)} className="text-text-muted hover:text-text inline-flex items-center gap-1"><Pencil size={12} /> {t('accountCard.edit')}</button>
+                        <button
+                          onClick={() => archiveMutation.mutate({ id: account.id, archived: !account.is_archived })}
+                          className="text-text-muted hover:text-text inline-flex items-center gap-1"
+                        >
+                          <Archive size={12} /> {account.is_archived ? t('accountCard.unarchive') : t('accountCard.archive')}
+                        </button>
+                        {account.is_archived && (
+                          <button onClick={() => setDeleting(account)} className="text-text-muted hover:text-negative inline-flex items-center gap-1">
+                            <Trash2 size={12} /> {t('accountCard.delete')}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -226,16 +233,20 @@ export default function AccountsPage() {
         title={cardAction?.name}
         actions={[
           { label: t('accountCard.viewTransactions'), icon: Receipt, onSelect: () => cardAction && navigate(`/transactions?account=${cardAction.id}`) },
-          { label: t('accountCard.setBalance'), icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
-          { label: t('accountCard.edit'), icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
-          {
-            label: cardAction?.is_archived ? t('accountCard.unarchive') : t('accountCard.archive'),
-            icon: Archive,
-            onSelect: () =>
-              cardAction && archiveMutation.mutate({ id: cardAction.id, archived: !cardAction.is_archived }),
-          },
-          ...(cardAction?.is_archived
-            ? [{ label: t('accountCard.delete'), icon: Trash2, destructive: true, onSelect: () => cardAction && setDeleting(cardAction) }]
+          ...(canManageAccounts
+            ? [
+                { label: t('accountCard.setBalance'), icon: Coins, onSelect: () => cardAction && setSetBalanceFor(cardAction) },
+                { label: t('accountCard.edit'), icon: Pencil, onSelect: () => cardAction && openEdit(cardAction) },
+                {
+                  label: cardAction?.is_archived ? t('accountCard.unarchive') : t('accountCard.archive'),
+                  icon: Archive,
+                  onSelect: () =>
+                    cardAction && archiveMutation.mutate({ id: cardAction.id, archived: !cardAction.is_archived }),
+                },
+                ...(cardAction?.is_archived
+                  ? [{ label: t('accountCard.delete'), icon: Trash2, destructive: true, onSelect: () => cardAction && setDeleting(cardAction) }]
+                  : []),
+              ]
             : []),
         ]}
       />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Settings2 } from 'lucide-react'
@@ -45,18 +45,34 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
   const [openingBalance, setOpeningBalance] = useState(account?.opening_balance ?? '0')
   const [isDefault, setIsDefault] = useState(account?.is_default_for_currency ?? false)
 
-  // Permanently mounted (AccountsPage renders us unconditionally, no `key`),
-  // so the useState initializers above ran once at page load - with `account`
-  // undefined. Re-seed from the prop on every open (TransferModal-style), or
-  // Edit opens a blank form that saves `opening_balance: '0'`.
-  useEffect(() => {
-    if (!open) return
+  // Session tracker for the render-adjust below: the open flip, or a
+  // mid-open account swap, starts a new seeding session. The sentinel
+  // initializer (closed, no source) can never match a real session, so the
+  // first open always seeds. Needed because this modal is permanently
+  // mounted (AccountsPage renders it unconditionally, no key): the useState
+  // initializers above ran once at page load - with account undefined - so
+  // without a re-seed on every open, Edit opens a blank form that saves
+  // opening_balance: '0'.
+  const [session, setSession] = useState<{
+    open: boolean
+    mode: 'edit' | 'create' | 'none'
+    source: Account | null
+  }>({ open: false, mode: 'none', source: null })
+
+  // Re-seed every field from the prop at each session boundary. React
+  // discards this render pass and re-runs the component with the seeded
+  // state before anything commits.
+  const mode = account ? 'edit' : 'create'
+  const source = account ?? null
+  const seeding = open !== session.open || session.mode !== mode || session.source !== source
+  if (seeding) setSession({ open, mode, source })
+  if (seeding && open) {
     setName(account?.name ?? '')
     setType(account?.type ?? 'bank')
     setCurrencyCode(account?.currency_code ?? null)
     setOpeningBalance(account?.opening_balance ?? '0')
     setIsDefault(account?.is_default_for_currency ?? false)
-  }, [open, account])
+  }
 
   const mutation = useMutation({
     mutationFn: (normOpeningBalance: string) => {
@@ -108,6 +124,7 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
             onChange={(v) => setType(v)}
             options={TYPE_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
             aria-label={t('fields.typeAria')}
+            className="w-full"
           />
         </div>
 
@@ -122,18 +139,20 @@ export default function AccountFormModal({ open, onClose, account, onManageCurre
               aria-label={t('fields.currencyAria')}
               mono
               searchable
+              className="w-full"
             />
+            {/* Bridge link, aligned with CurrencySetField's exemplar:
+                touch-hit is safe on this standalone link - the adjacent-
+                button prohibition targets pairs whose hit areas overlap. */}
             {onManageCurrencies && (
-              <div className="mt-1">
-                <button
-                  type="button"
-                  onClick={onManageCurrencies}
-                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors"
-                >
-                  <Settings2 size={13} />
-                  {t('manageCurrencies')}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onManageCurrencies}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+              >
+                <Settings2 size={13} />
+                {t('manageCurrencies')}
+              </button>
             )}
           </div>
         )}

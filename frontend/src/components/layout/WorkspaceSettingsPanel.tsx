@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Trash2, TriangleAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { getApiErrorMessage } from '../../utils/errors'
 import Modal from '../common/Modal'
 import CurrenciesSettingsSection from '../currencies/CurrenciesSettingsSection'
+import { inputClass, primaryButtonClass } from '../common/formStyles'
 
 interface WorkspaceSettingsPanelProps {
   isOpen: boolean
@@ -22,15 +23,27 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  useEffect(() => {
+  // Sync the editable name to the server's workspace (render-adjust):
+  // tracked against the previous {id, name} pair so the null -> object
+  // load, a workspace switch, or a server-side rename re-seeds the draft
+  // - mirroring the old effect's [workspace?.id, workspace?.name] deps.
+  // A same-value refetch (new identity, equal name) leaves an in-progress
+  // draft untouched, as before.
+  const [syncedWorkspace, setSyncedWorkspace] = useState({ id: workspace?.id, name: workspace?.name })
+  if (workspace?.id !== syncedWorkspace.id || workspace?.name !== syncedWorkspace.name) {
+    setSyncedWorkspace({ id: workspace?.id, name: workspace?.name })
     setNewName(workspace?.name || '')
-  }, [workspace?.id, workspace?.name])
+  }
 
-  useEffect(() => {
-    if (!isOpen) {
-      setShowDeleteConfirm(false)
-    }
-  }, [isOpen])
+  // Close path: every dismissal - Modal scrim/Escape/cancel, save
+  // success, delete success - funnels through here so the confirm state
+  // resets in the close event, not an effect. All parents close ONLY via
+  // the onClose they pass (Sidebar, BottomNav, BudgetsPage, AccountsPage),
+  // so no isOpen=false path bypasses this reset.
+  const handleClose = () => {
+    setShowDeleteConfirm(false)
+    onClose()
+  }
 
   const isOwner = userRole === 'owner'
   const canEditName = userRole === 'owner' || userRole === 'admin'
@@ -42,7 +55,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
     try {
       await updateWorkspace({ name: newName.trim() })
       toast.success(t('workspaceSettings.nameUpdated'))
-      onClose()
+      handleClose()
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('workspaceSettings.nameUpdateFailed')))
     } finally {
@@ -58,7 +71,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
       await deleteWorkspace(workspace.id)
       toast.success(t('workspaceSettings.deleted', { name: deletedName }))
       setShowDeleteConfirm(false)
-      onClose()
+      handleClose()
     } catch (error) {
       toast.error(getApiErrorMessage(error, t('workspaceSettings.deleteFailed')))
     } finally {
@@ -69,7 +82,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
   if (!workspace) return null
 
   return (
-    <Modal open={isOpen} onClose={onClose} title={t('workspaceSettings.title')} className="p-6 max-h-[85vh] overflow-y-auto">
+    <Modal open={isOpen} onClose={handleClose} title={t('workspaceSettings.title')} className="p-6 max-h-[85vh] overflow-y-auto">
       <div className="space-y-6">
               <div>
                 <label htmlFor="workspace-name" className="block text-sm font-medium text-text mb-1">
@@ -83,13 +96,13 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                     onChange={(e) => setNewName(e.target.value)}
                     disabled={!canEditName}
                     maxLength={100}
-                    className="flex-1 block w-full rounded-none border border-border px-3 py-2 text-sm disabled:bg-surface-muted disabled:cursor-not-allowed"
+                    className={`flex-1 ${inputClass} disabled:cursor-not-allowed`}
                   />
                   {canEditName && (
                     <button
                       onClick={handleSaveName}
                       disabled={isSaving || !newName.trim() || newName === workspace?.name}
-                      className="px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonClass}
                     >
                       {isSaving ? t('workspaceSettings.saving') : t('workspaceSettings.save')}
                     </button>

@@ -1,5 +1,6 @@
 """Tests for email verification and welcome email flow."""
 
+import re
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -7,7 +8,7 @@ from django.core import mail
 from django.db import transaction
 from django.test import override_settings
 
-from common.tokens import generate_verification_token
+from common.tokens import generate_verification_token, verify_verification_token
 from core.tests.base import AuthTestCase
 
 User = get_user_model()
@@ -72,6 +73,12 @@ class TestResendVerification(AuthTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['resend@example.com'])
         self.assertIn('Verify your email', mail.outbox[0].subject)
+
+        # The plain-text link must stay unescaped so it is copy-pastable
+        match = re.search(r'/verify-email\?token=([^\s]+)', mail.outbox[0].body)
+        self.assertIsNotNone(match)
+        self.assertNotIn('&amp;', mail.outbox[0].body)
+        self.assertEqual(verify_verification_token(match.group(1)), user.id)
 
     def test_resend_verification_returns_same_message_for_unknown_email(self):
         data = self.post('/api/auth/resend-verification', {'email': 'nonexistent@example.com'})

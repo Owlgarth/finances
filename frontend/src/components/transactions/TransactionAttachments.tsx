@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Upload, Trash2, FileText, X, Sparkles, Loader2, RotateCw, CloudOff, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
-import type { ParsedReceipt, Transaction, TransactionAttachment } from '../../types'
+import type { Transaction, TransactionAttachment } from '../../types'
 import {
-  transactionAttachmentsKey,
   useAttachmentBlob,
   useAttachmentDownload,
   useDeleteAttachment,
@@ -14,6 +13,7 @@ import {
   useUploadAttachment,
 } from '../../hooks/useAttachments'
 import { useExtractionConfig } from '../../hooks/useDomain'
+import { useExtractionPolling } from '../../hooks/useExtractionPolling'
 import { useOverlay } from '../../hooks/useOverlay'
 import { secondaryButtonClass } from '../common/formStyles'
 import { isImage, triggerBrowserDownload } from '../../utils/attachments'
@@ -112,7 +112,6 @@ function AttachmentMedia({
 
 export default function TransactionAttachments({ transaction }: Props) {
   const { t } = useTranslation('transactions')
-  const queryClient = useQueryClient()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
   // The lightbox reuses the thumbnail's cached object URL (passed from the
@@ -122,58 +121,25 @@ export default function TransactionAttachments({ transaction }: Props) {
   // Without this, Escape inside TransactionFormModal closed the form modal
   // underneath because the lightbox never joined the overlay stack.
   const lightboxRef = useOverlay(preview !== null, () => setPreview(null))
-  const [pendingId, setPendingId] = useState<number | null>(null)
-  const [review, setReview] = useState<{ attachmentId: number; parsed: ParsedReceipt } | null>(null)
 
   const { data: attachments = [], isLoading } = useTransactionAttachments(transaction.id)
-  // Extraction runs update the list (status badges on the tiles), so the
-  // extraction flow invalidates the list query itself; the attachment hooks
-  // invalidate it for their own mutations.
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: transactionAttachmentsKey(transaction.id) })
 
   const upload = useUploadAttachment(transaction.id)
   const remove = useDeleteAttachment(transaction.id)
   const downloadFile = useAttachmentDownload(transaction.id)
+
+  const { pendingId, setPendingId, review, setReview, invalidate } = useExtractionPolling({
+    transactionId: transaction.id,
+    attachments,
+    extractionReachable,
+    extractionFailedMessage: t('attachments.extractionFailed'),
+  })
 
   const startExtraction = useMutation({
     mutationFn: (attachmentId: number) => transactionsApi.extractAttachment(transaction.id, attachmentId),
     onSuccess: (_res, attachmentId) => { setPendingId(attachmentId); invalidate() },
     onError: (error) => toast.error(getApiErrorMessage(error, t('attachments.startExtractionFailed'))),
   })
-
-  // Poll the extraction state while a job is pending. While the scanner is
-  // offline the job can sit queued for hours (the worker retries with backoff),
-  // so poll far more slowly rather than hammering the API every 2s.
-  // A reload mid-extraction leaves the attachment server-side 'pending' with no
-  // local pendingId — nothing would poll and the badge (isExtracting) would be
-  // stuck forever. Derive the polled id so server-side pending resumes polling
-  // (derived, NOT adopted via effect-setState — keeps the set-state-in-effect
-  // lint clean). Local pendingId wins while set (covers the click → onSuccess
-  // gap).
-  const serverPendingId = attachments.find((a) => a.extraction_status === 'pending')?.id ?? null
-  const activePendingId = pendingId ?? serverPendingId
-
-  const { data: extraction } = useQuery({
-    queryKey: ['extraction', transaction.id, activePendingId],
-    queryFn: () => transactionsApi.getExtraction(transaction.id, activePendingId!),
-    enabled: activePendingId !== null,
-    refetchInterval: (query) =>
-      query.state.data?.status === 'pending' ? (extractionReachable ? 2000 : 30000) : false,
-  })
-
-  useEffect(() => {
-    if (!extraction || activePendingId === null) return
-    if (extraction.status === 'done' && extraction.result) {
-      setReview({ attachmentId: activePendingId, parsed: extraction.result })
-      setPendingId(null)
-      invalidate()
-    } else if (extraction.status === 'failed') {
-      toast.error(extraction.error || t('attachments.extractionFailed'))
-      setPendingId(null)
-      invalidate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extraction, activePendingId])
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return
