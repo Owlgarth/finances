@@ -273,6 +273,7 @@ do not change to 404.
 | `RATE_LIMIT_*` | Rate-limit thresholds/windows (per-IP and per-account) |
 | `USE_S3_STORAGE`, `S3_*` | Object storage for attachments and static files; browser-facing URLs follow `S3_EXTERNAL_URL` |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
+| `EMAIL_MODE`, `EMAIL_FILE_PATH` | Email backend: `console`, `file`, or `smtp` - empty = legacy auto (`EMAIL_HOST` set -> smtp, else console); `file` writes one .log file per email under `EMAIL_FILE_PATH` (default `backend/sent-emails/`, gitignored) |
 | `DEMO_MODE` | Disable registration when true |
 | `DEFAULT_LANGUAGE`, `DEFAULT_NUMBER_FORMAT` | Default UI language / number-format style for new users (registry-validated; see [i18n.md](i18n.md)) |
 

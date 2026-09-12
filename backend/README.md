@@ -51,7 +51,7 @@ Shared utilities used across the project:
 - **`crypto.py`**: `encrypt_secret()` / `decrypt_secret()` - Fernet encryption for 2FA secrets (`TWO_FACTOR_ENCRYPTION_KEY`, with a legacy `SECRET_KEY`-derived fallback)
 - **`email.py`**: Email sending via Celery
   - `EmailService.send_email()` - Dispatches email to Celery task (with sync fallback)
-  - `EmailService._send_sync()` - Synchronous email rendering and SMTP delivery
+  - `EmailService._send_sync()` - Synchronous email rendering and delivery via the configured `EMAIL_MODE` backend
 - **`enums.py`**: `TotalsLabel` - shared labels for totals aggregation (the "Uncategorized" bucket)
 - **`exceptions.py`**: `ServiceError` base class and subclasses (`NotFoundError`, `AuthenticationError`, `ValidationError`, `PermissionDeniedError`); a global handler in `config/urls.py` maps them to HTTP responses automatically
 - **`fonts.py` + `fonts.json`**: font registry - `FONT_CODES` / `DEFAULT_FONT` loaded from `fonts.json` (single source of truth shared with the frontend)
@@ -466,6 +466,13 @@ Default UI language settings (optional; values are validated against the registr
 ```bash
 DEFAULT_LANGUAGE=en       # UI language for new users
 DEFAULT_NUMBER_FORMAT=en  # number/date formatting style for new users (en or eu separators)
+```
+
+Email delivery (optional; `EMAIL_MODE` selects the backend and an unrecognized value fails at startup):
+```bash
+EMAIL_MODE=       # 'console', 'file', or 'smtp'; empty = legacy auto (EMAIL_HOST set -> smtp, else console)
+EMAIL_FILE_PATH=  # 'file'-mode output dir (default backend/sent-emails/, gitignored; one .log file per email)
+EMAIL_HOST=       # SMTP server for smtp mode (plus EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS)
 ```
 
 Legal document operator settings (optional, customize for your deployment):
