@@ -117,19 +117,33 @@ export function useListboxPanel<T extends string | number>({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  // Reset transient panel state when the panel closes. Actual-vs-desired
-  // render adjust, not a reset effect and not a prev-open latch: `open`
-  // flips closed from five call sites across this hook and its callers
-  // (closePanel, Tab key, outside-click, the Select/MultiSelect trigger
-  // toggles via the returned setOpen), so an event-handler reset would have
-  // to cover every path and a future direct setOpen(false) would silently
-  // reintroduce the stale-search bug. A latch form could apply the latch
-  // while its companion updates get discarded when a parent's render-phase
-  // update re-renders this subtree (the BottomSheet deadlock class); the
+  // Reset transient panel state when the panel closes. Three cooperating
+  // layers: openPanel re-seeds the search and highlight at the open edge,
+  // closePanel clears both at its close edge (deterministic, but they only
+  // cover the paths that route through those handlers), and this
+  // actual-vs-desired render adjust is the safety net for every other close
+  // path - Tab key, outside-click, the Select/MultiSelect trigger toggles
+  // via the returned setOpen, and any future direct setOpen(false). The
+  // handler layers exist because the adjust is render-conditional: it only
+  // retries on a render that commits while open=false, so a close/reopen
+  // sequence with no committing open=false render between them (the
+  // nested-sheet case: a searchable Select's sheet opened inside a form
+  // modal's own mobile sheet, where a stale typed search was observed
+  // surviving a scrim-tap close and reopen) would leak the search into the
+  // reopened panel. The edge seeding removes that dependence: every open
+  // starts clean regardless of what the previous session left. Not a
+  // reset effect and not a prev-open latch: `open` flips closed from five
+  // call sites across this hook and its callers (closePanel, Tab key,
+  // outside-click, the Select/MultiSelect trigger toggles via the returned
+  // setOpen), so handler seeding alone cannot cover every path and a future
+  // direct setOpen(false) would silently reintroduce the stale-search bug
+  // without this adjust. A latch form could apply the latch while its
+  // companion updates get discarded when a parent's render-phase update
+  // re-renders this subtree (the BottomSheet deadlock class); the
   // actual-vs-desired guard stays truthy until the state really changes,
   // so a dropped update is retried on the next render. openPanel re-seeds
-  // the highlight on every open, so clearing to -1 here only drops the
-  // closed dropdown's ring.
+  // the highlight on every open, so clearing to -1 in closePanel and here
+  // only drops the closed dropdown's ring.
   if (!open && (searchQuery !== '' || highlightedIndex !== -1)) {
     setSearchQuery('')
     setHighlightedIndex(-1)
@@ -148,11 +162,14 @@ export function useListboxPanel<T extends string | number>({
 
   function openPanel() {
     setOpen(true)
+    setSearchQuery('')
     setHighlightedIndex(initialHighlightIndex)
   }
 
   function closePanel(returnFocus: boolean) {
     setOpen(false)
+    setSearchQuery('')
+    setHighlightedIndex(-1)
     if (returnFocus) triggerRef.current?.focus()
   }
 
