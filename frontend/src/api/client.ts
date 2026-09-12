@@ -392,7 +392,7 @@ export interface PlannedInput {
 export const plannedTransactionsApi = {
   getAll: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
-  getTotals: (params?: { status?: string; account_id?: number[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
+  getTotals: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
   /** Filtered JSON export (blob). Honors only status/start_date/end_date -
       the backend route accepts no other filter params. */
@@ -485,7 +485,7 @@ export const authApi = {
     api.post<TwoFARegenerateResponse>('/users/me/2fa/regenerate-codes', { password }).then(res => res.data),
 
   verifyEmail: (token: string) =>
-    api.post('/auth/verify-email', { token }),
+    api.post('/auth/verify-email', { token }, { headers: { Authorization: '' }, _skipAuthRefresh: true }),
 
   resendVerification: (email: string) =>
     api.post('/auth/resend-verification', { email }),
@@ -494,7 +494,7 @@ export const authApi = {
     api.post('/auth/request-email-change', { password, new_email: newEmail }),
 
   confirmEmailChange: (token: string) =>
-    api.post('/auth/confirm-email-change', { token }),
+    api.post('/auth/confirm-email-change', { token }, { headers: { Authorization: '' }, _skipAuthRefresh: true }),
 
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),

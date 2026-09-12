@@ -54,6 +54,13 @@ export default function WorkspaceMembersPage() {
 
   const { canManageMembers, canResetPasswordFor, canEditMember } = usePermissions()
 
+  // Resetting a member's 2FA follows the same permission rules as resetting
+  // their password (docs/users-and-roles.md, 2FA Reset: same hierarchy, no
+  // self, no owner). Role-based only: the members API returns WorkspaceMember
+  // with no 2FA-enabled flag, so "member has 2FA enabled" cannot gate the
+  // action client-side; the backend enforces it.
+  const canReset2FAFor = canResetPasswordFor
+
   const addMutation = useMutation({
     mutationFn: (data: AddMemberRequest) => workspaceMembersApi.add(workspaceId!, data),
     onSuccess: () => {
@@ -245,7 +252,6 @@ export default function WorkspaceMembersPage() {
                   member={member}
                   isCurrentUser={member.user_id === user?.id}
                   canResetPassword={canResetPasswordFor(member)}
-                  canReset2FA={canResetPasswordFor(member)}
                   onEditRole={() => setEditingMember(member)}
                   onRemove={() => setRemovingMember(member)}
                   onResetPassword={() => setResetPasswordMember(member)}
@@ -271,7 +277,7 @@ export default function WorkspaceMembersPage() {
                 ...(canResetPasswordFor(actionMember)
                   ? [{ label: t('sheet.resetPassword'), icon: KeyRound, onSelect: () => setResetPasswordMember(actionMember) }]
                   : []),
-                ...(canResetPasswordFor(actionMember)
+                ...(canReset2FAFor(actionMember)
                   ? [{ label: t('sheet.reset2fa'), icon: ShieldOff, onSelect: () => setResetting2FA(actionMember) }]
                   : []),
                 ...(canEditMember(actionMember)
@@ -436,17 +442,21 @@ interface MemberRowProps {
   member: WorkspaceMember
   isCurrentUser: boolean
   canResetPassword: boolean
-  canReset2FA: boolean
   onEditRole: () => void
   onRemove: () => void
   onResetPassword: () => void
   onReset2FA: () => void
 }
 
-function MemberRow({ member, isCurrentUser, canResetPassword, canReset2FA, onEditRole, onRemove, onResetPassword, onReset2FA }: MemberRowProps) {
+function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemove, onResetPassword, onReset2FA }: MemberRowProps) {
   const { t } = useTranslation('members')
   const { canManageMembers, canEditMember } = usePermissions()
   const canEditThisMember = canEditMember(member)
+  // Same derivation as the page-level canReset2FAFor, mirroring
+  // canResetPasswordFor in hooks/usePermissions.ts: role-based only,
+  // because WorkspaceMember carries no 2FA-enabled flag.
+  const canReset2FAFor = canEditMember
+  const canReset2FA = canReset2FAFor(member)
   const showActions = canEditThisMember || canResetPassword || canReset2FA
 
   return (
@@ -617,6 +627,7 @@ function AddMemberModal({ onClose, onSubmit, isSubmitting }: AddMemberModalProps
                 { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
               aria-label={t('addModal.roleAria')}
+              className="w-full"
             />
           </div>
 
@@ -678,6 +689,7 @@ function EditRoleModal({ member, onClose, onSubmit, isSubmitting }: EditRoleModa
                 { value: 'admin', label: t('addModal.roleAdmin') },
               ]}
               aria-label={t('editRoleModal.roleAria')}
+              className="w-full"
             />
           </div>
 

@@ -7,7 +7,6 @@
   "emptyState": "Рахунків ще немає.",
   "showArchivedLabel": "Показувати архівовані рахунки",
   "accountCard": {
-    "archivedBadge": "Архівовано",
     "viewTransactions": "Переглянути операції",
     "setBalance": "Встановити баланс…",
     "edit": "Редагувати",

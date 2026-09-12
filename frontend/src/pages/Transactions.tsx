@@ -9,10 +9,10 @@ import type { Transaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
-import { triggerBrowserDownload } from '../utils/attachments'
+import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
-import { amountParam, createUpdateParams, intListParam, intParam } from '../utils/params'
+import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
@@ -126,23 +126,22 @@ export default function Transactions() {
   // The export endpoint honors ONLY the date range and a single type filter -
   // never imply the whole filter panel applies to the file.
   const handleExportView = async () => {
-    const toastId = toast.loading(t('preparingExport'))
     setIsExporting(true)
-    try {
-      const blob = await transactionsApi.exportView({
+    // runBlobExport never throws; it owns every export toast.
+    await runBlobExport(
+      () => transactionsApi.exportView({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         transaction_type: typeFilter.length === 1 ? typeFilter[0] : undefined,
-      })
-      const url = URL.createObjectURL(blob)
-      triggerBrowserDownload(url, `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
-      URL.revokeObjectURL(url)
-      toast.success(t('exportComplete'), { id: toastId })
-    } catch {
-      toast.error(t('exportFailed'), { id: toastId })
-    } finally {
-      setIsExporting(false)
-    }
+      }),
+      {
+        filename: `transactions_${dateFrom || 'all'}_${dateTo || 'all'}.json`,
+        loadingMessage: t('preparingExport'),
+        successMessage: t('exportComplete'),
+        errorMessage: t('exportFailed'),
+      },
+    )
+    setIsExporting(false)
   }
 
   // Each facet counts once, however many values it holds.
@@ -192,6 +191,10 @@ export default function Transactions() {
     // flash on page/filter changes (v5 placeholderData pattern).
     placeholderData: keepPreviousData,
   })
+
+  // A stale ?page= beyond the (possibly shrunken) range resets to page 1 once
+  // the response lands; the backend serves the clamped page meanwhile.
+  useStalePageReset(page, data, updateParams)
 
   // Keyed INSIDE the ['transactions'] family so every existing invalidation of
   // that prefix (form modal, delete, extraction) refetches the strip too.
@@ -286,7 +289,7 @@ export default function Transactions() {
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
             <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
             </FilterField>
           )}
           {multiCurrency && (
@@ -297,11 +300,12 @@ export default function Transactions() {
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
                 placeholder={t('filters.allCurrencies')}
                 aria-label={t('filters.byCurrencyAria')}
+                className="w-full"
               />
             </FilterField>
           )}
           <FilterField label={t('filters.type')}>
-            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} />
+            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} className="w-full" />
           </FilterField>
           <ListFilterFields />
         </FilterPanel>

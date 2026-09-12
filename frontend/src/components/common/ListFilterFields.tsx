@@ -115,12 +115,12 @@ export default function ListFilterFields({ dateLabel }: Props) {
     <>
       {budgets.length > 0 && (
         <FilterField label={t('listFilters.budget')}>
-          <MultiSelect values={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder={t('listFilters.allBudgets')} aria-label={t('listFilters.byBudgetAria')} />
+          <MultiSelect values={budgetFilter} onChange={setBudgetFilter} options={budgetOptions} placeholder={t('listFilters.allBudgets')} aria-label={t('listFilters.byBudgetAria')} className="w-full" />
         </FilterField>
       )}
       {categories.length > 0 && (
         <FilterField label={t('listFilters.category')}>
-          <MultiSelect values={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder={t('listFilters.allCategories')} aria-label={t('listFilters.byCategoryAria')} searchable />
+          <MultiSelect values={categoryFilter} onChange={(v) => updateParams({ category: v })} options={categoryOptions} placeholder={t('listFilters.allCategories')} aria-label={t('listFilters.byCategoryAria')} searchable className="w-full" />
         </FilterField>
       )}
       <FilterField label={t('listFilters.amount')}>
