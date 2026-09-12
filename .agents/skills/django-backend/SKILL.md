@@ -638,6 +638,14 @@ When adding a field to such an override, grep `update_fields=` across the app in
 
 Read `django.conf.settings` values inside the function body, not at module import. Import-time reads freeze the value for the process lifetime and make `override_settings` useless in tests — call-time reads are why `override_settings(TRUSTED_PROXY_COUNT=...)` and `override_settings(TWO_FACTOR_ENCRYPTION_KEY=...)` work. The deliberate exception is decorator configuration (e.g. `rate_limit(...)` captures `settings.RATE_LIMIT_*` at decoration time); the test consequence — those limits are only testable at their defaults — is in the `backend-testing` skill.
 
+## Env-Mode Dispatch in settings.py
+
+When `config/settings.py` selects between implementations via an env var (`EMAIL_MODE`: console/file/smtp), use a validated closed-set mode variable - never let arbitrary values flow into branch logic. Exemplar: the email block in `config/settings.py`, tested by `core/tests/test_settings_email.py`.
+
+- **Lowercase before validating** (`os.getenv('EMAIL_MODE', '').lower()`) so `SMTP`/`File` are accepted, and treat unset/empty as the legacy auto behavior (`EMAIL_HOST` set means smtp, empty means console) - empty equals the pre-mode-var behavior, so no existing deployment changes on upgrade.
+- **Fail loud at boot.** Every other value - including whitespace-only - raises `ImproperlyConfigured` at startup, naming the env var and listing the valid values. A silent fallback masks misconfiguration, and naming the var is what makes the failure assertable on stderr by the subprocess probe tests (see the `backend-testing` skill's probe section).
+- **Sub-settings live inside their branch only.** `EMAIL_FILE_PATH` is assigned in file mode alone (undefined elsewhere), the SMTP `EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_USE_TLS` cluster in smtp mode alone. A sub-setting assigned outside its branch leaks a half-configured mode into every other branch.
+
 ## Error Handling
 
 - **Domain Exceptions**: Services raise domain exceptions inheriting from `ServiceError` (in `common/exceptions.py`)
