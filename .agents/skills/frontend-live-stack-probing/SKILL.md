@@ -25,6 +25,8 @@ same session - in PR #81 it paid for itself twice.
 - Registration requires the CURRENT legal acceptance versions - fetch them from `/api/legal/*`
   and send them with the register call, or registration fails. (`DEMO_MODE=true` on the
   backend disables registration entirely with a 403.)
+- Currency codes in seed payloads must be UPPERCASE ISO (backend pattern `^[A-Z]{3,8}$`), and
+  `GET /api/currencies` is auth-gated - fetch the catalog only after authenticating.
 - Fast path when a token already exists: seed `localStorage` directly (`owlgarth_token`,
   `owlgarth_refresh_token` - see Token Storage in `frontend-react`) instead of driving the
   login form.
@@ -78,6 +80,13 @@ same session - in PR #81 it paid for itself twice.
   a `retry: false` query only shows its failure mode under induced failure - the dead
   period-picker on budget open passed every naive probe and surfaced only when
   `GET /api/budgets/{id}/periods/current` was blocked.
+- Real-hardware dynamics: headless emulation has no soft keyboard, so visualViewport/OSK
+  behavior (an on-screen keyboard re-render racing a tap, click suppression on
+  element-move) is out of emulation reach. A clean headless non-repro of a mobile-only bug
+  is evidence the trigger needs real hardware, not evidence of absence - and when a mandated
+  live diagnosis refutes its pre-registered hypotheses, record each refutation with its log
+  signatures (which handlers ran, what committed), never silently claim a reproduction the
+  logs do not show, and route acceptance to an explicit on-device manual gate riding the PR.
 
 ## Trust the driver less than the product
 
@@ -89,5 +98,9 @@ same session - in PR #81 it paid for itself twice.
   the container and can click THROUGH to whatever sits underneath the intended option -
   coordinates and scroll state are the driver's, not the page's truth. Prefer a DOM
   `el.click()` dispatch (no coordinate dependency) for listbox options inside scrollables.
+- That `el.click()` dispatch fires NO `mousedown` - a mousedown-driven close path (the
+  listbox outside-click close listens for `mousedown`) can never be exercised by it; driving
+  an outside-click close needs real mouse events (`page.mouse`), inheriting the
+  coordinate/scroll caveats above.
 - Media features are emulator settings, not CSS edits: reduced motion goes through
   Playwright's `page.emulateMedia({ reducedMotion: 'reduce' })` / CDP media emulation.
