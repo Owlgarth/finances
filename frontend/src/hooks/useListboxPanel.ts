@@ -83,14 +83,17 @@ export function useListboxPanel<T extends string | number>({
     openRef.current = open
   }, [open])
 
-  // Sheet list attach/detach signal. This callback is the fresh-open
-  // notification: it fires exactly when the sheet list node exists,
-  // independent of BottomSheet's mount timing. The scroll effect below
-  // covers the already-attached paths (reopen inside BottomSheet's 80ms
-  // exit window, desktop->mobile resize while open) where no ref callback
-  // fires. Identity must stay stable ([] deps): an unstable callback makes
-  // React detach/reattach the ref on every render, which would re-scroll
-  // on every search keystroke while the sheet is open.
+  // Sheet list attach/detach signal. Dual-path scroll delivery with the
+  // [open, isMobile] effect below: refs attach BEFORE effects, so on a
+  // fresh open this callback runs while openRef.current is still false
+  // (the sync effect above has not run yet) and skips - the scroll
+  // effect, declared after the openRef sync, delivers the fresh-open
+  // scroll. The callback's scroll branch covers node attaches outside an
+  // open transition (a remount of the sheet list while open stays true)
+  // and fires as the detach signal on unmount. Identity must stay stable
+  // ([] deps): an unstable callback makes React detach/reattach the ref
+  // on every render, which would re-scroll on every search keystroke
+  // while the sheet is open.
   const attachSheetList = useCallback((node: HTMLDivElement | null) => {
     sheetListRef.current = node
     if (node && openRef.current) scrollSelectedIntoView(node)
