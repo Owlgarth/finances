@@ -233,6 +233,7 @@
     "passwordLabel": "Potwierdź swoje hasło",
     "passwordPlaceholder": "Wprowadź swoje hasło",
     "currencyRequired": "Wybierz co najmniej jedną walutę",
+    "currencyHelper": "Pierwsza waluta staje się walutą konta głównego.",
     "submitting": "Resetowanie...",
     "submit": "Zresetuj dane konta",
     "success": "Konto zresetowano - „{{name}}” jest gotowy.",
@@ -319,7 +320,6 @@
     "automaticPlaceholder": "Automatycznie",
     "manageCurrencies": "Zarządzaj walutami...",
     "manageCurrenciesAria": "Zarządzaj walutami...",
-    "firstShown": "Najpierw pokazywana jest: {{label}}.",
     "budgetHelper": "Pierwsza waluta jest domyślnie pokazywana w tabeli budżetu."
   }
 }

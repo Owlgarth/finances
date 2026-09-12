@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
@@ -169,12 +169,18 @@ export default function BottomNav() {
 
   // Close the More sheet when navigation happens from inside it; the create
   // and language modals follow suit so no modal outlives the page it was
-  // opened on.
-  useEffect(() => {
+  // opened on. Prev-pathname render adjust (P3): NavLink taps and browser
+  // back/forward change location.pathname with no event handler this
+  // component sees, so there is no P4 seam. The latch initializes to the
+  // current pathname, so unlike the old effect it does not fire on mount -
+  // where all three flags are already false (the old mount-run was a no-op).
+  const [prevPathname, setPrevPathname] = useState(location.pathname)
+  if (prevPathname !== location.pathname) {
+    setPrevPathname(location.pathname)
     setMoreOpen(false)
     setCreateWorkspaceOpen(false)
     setLangOpen(false)
-  }, [location.pathname])
+  }
 
   const quickAddActions: ActionSheetAction[] = [
     { label: t('quickAdd.newTransaction'), icon: Receipt, onSelect: () => setTransactionOpen(true) },

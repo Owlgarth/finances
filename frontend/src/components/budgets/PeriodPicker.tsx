@@ -404,7 +404,9 @@ export default function PeriodPicker({
         }
         onClick={() => (open ? setOpen(false) : openPanel())}
         onKeyDown={handleTriggerKeyDown}
-        className={listboxTriggerBaseClass}
+        // The base carries no width (caller-owned contract, listboxParts); this
+        // trigger fills its host's sizing wrapper (w-56 desktop, flex-1 mobile).
+        className={listboxTriggerBaseClass + ' w-full'}
       >
         <span className={value == null ? 'truncate text-text-muted' : 'truncate'}>
           {selectedPeriod ? selectedPeriod.name : t('periodPicker.placeholder')}

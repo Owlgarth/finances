@@ -69,5 +69,25 @@ export default {
     // Touch-target floor keys on pointer coarseness, not viewport width:
     // tablets and landscape phones above `sm` are still touch devices.
     plugin(({ addVariant }) => addVariant('pointer-coarse', '@media (pointer: coarse)')),
+
+    // Hides the scrollbar while keeping the element scrollable. MUST be
+    // registered here, NOT as a plain `.scrollbar-none` class in index.css:
+    // only plugin-registered utilities compose with variants in Tailwind v3
+    // (`max-sm:scrollbar-none`, `pointer-coarse:scrollbar-none`), while plain
+    // @layer-utilities classes like `.touch-hit` are variant-inert. The
+    // property pair mirrors the global scrollbar block in index.css (§9):
+    // standard `scrollbar-width` (Firefox, Chrome 121+) plus the WebKit
+    // pseudo-element. No `-ms-overflow-style`: the codebase ships no -ms-
+    // prefixes anywhere.
+    plugin(({ addUtilities }) =>
+      addUtilities({
+        '.scrollbar-none': {
+          'scrollbar-width': 'none',
+          '&::-webkit-scrollbar': {
+            display: 'none',
+          },
+        },
+      })
+    ),
   ],
 }

@@ -3,7 +3,6 @@
   "budgetFallback": "Budżet",
   "newBudget": "Nowy budżet",
   "noBudgetsYet": "Brak budżetów.",
-  "archived": "Zarchiwizowane",
   "showArchived": "Pokaż zarchiwizowane budżety",
   "cadence": {
     "monthly": "Co miesiąc",
@@ -151,7 +150,6 @@
     "archivedSection": "Zarchiwizowane",
     "archivedSectionAria": "Zarchiwizowane kategorie",
     "noCategories": "Brak kategorii.",
-    "archived": "Zarchiwizowane",
     "unarchive": "Przywróć",
     "archive": "Zarchiwizuj",
     "unarchiveAria": "Przywróć {{name}}",

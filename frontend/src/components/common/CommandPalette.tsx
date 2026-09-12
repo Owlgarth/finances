@@ -185,18 +185,6 @@ export default function CommandPalette() {
     }
   }, [])
 
-  // Fresh query each open; also drops stale highlight. The committed value is
-  // cleared here too so a fast close/reopen (inside the debounce window)
-  // cannot flash the previous session's async sections. setQuery is the
-  // debounce hook's draft setter - stable like any useState setter.
-  useEffect(() => {
-    if (!open) {
-      setQuery('')
-      setDebouncedQuery('')
-      setHighlighted(0)
-    }
-  }, [open, setQuery])
-
   const entries = useMemo<PageEntry[]>(
     () => [
       ...STATIC_PAGES.map((p) => ({
@@ -336,8 +324,7 @@ export default function CommandPalette() {
   const anySectionLoading =
     asyncEnabled && (accountsLoading || txSearch.isLoading || plannedSearch.isLoading)
 
-  // Data rows and footers navigate to the filtered list page, never an edit
-  // modal - a palette pick should land on something addressable.
+  // `go` only navigates - the to-target rationale lives in the items memo above.
   const go = (row: PaletteRow) => {
     setOpen(false)
     navigate(row.to)
@@ -355,6 +342,27 @@ export default function CommandPalette() {
       const row = results[Math.min(highlighted, results.length - 1)]
       if (row) go(row)
     }
+  }
+
+  // Fresh query each open; also drops stale highlight. The committed value is
+  // cleared on close too so a fast close/reopen (inside the debounce window)
+  // cannot flash the previous session's async sections. Actual-vs-desired
+  // render adjust, not the old reset effect and not a prev-open latch: open
+  // flips closed from paths no event handler here sees (the Cmd/Ctrl+K
+  // toggle lives in a mount-once listener with no current-open closure),
+  // and a key remount would destroy the always-mounted global listeners
+  // this singleton exists to hold. A latch form could apply the latch while
+  // its companion updates get discarded when a parent's render-phase update
+  // re-renders this subtree (the BottomSheet deadlock class); this guard
+  // stays truthy until the state really changes, so a dropped update is
+  // retried on the next render. setQuery is the debounce hook's draft
+  // setter - stable like any useState setter; resetting the draft to ''
+  // cancels any in-flight commit timer via the hook's own effect cleanup,
+  // exactly as the old effect did.
+  if (!open && (query !== '' || debouncedQuery !== '' || highlighted !== 0)) {
+    setQuery('')
+    setDebouncedQuery('')
+    setHighlighted(0)
   }
 
   if (!workspace) return null

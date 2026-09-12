@@ -24,13 +24,12 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'react-refresh/only-export-components': 'off',
-      // eslint-plugin-react-hooks v7 added this React-Compiler-era rule. 19 pre-existing
-      // set-state-in-effect violations across the codebase are tracked in the backlog
-      // (Option A cleanup), plus 1 exhaustive-deps warning (AuthContext's
-      // checkConsentStatus) in the same backlog - 20 warnings total. Kept as 'warn' so
-      // the debt stays visible without failing lint; flip to 'off' for silent output,
-      // or remove this line once the cleanup task lands.
-      'react-hooks/set-state-in-effect': 'warn',
+      // react-hooks v7's React-Compiler-era rule, kept explicitly at 'error' (the
+      // recommended-latest preset default). The 16 pre-existing violations were
+      // cleared by the 2026-09 react-hooks cleanup; set-state-in-effect and
+      // exhaustive-deps both sit at 0 findings, so any new synchronous setState
+      // inside an effect fails lint instead of accruing silent debt.
+      'react-hooks/set-state-in-effect': 'error',
       // i18next/no-literal-string flags UI-facing string literals: JSX text and the
       // placeholder/title/alt/aria-label attributes. It is the guard against NEW
       // hardcoded English; t('key') calls (and template literals routed through t())
