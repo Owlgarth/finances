@@ -586,6 +586,6 @@ import { Plus, Pencil, Trash2, X, ChevronDown } from 'lucide-react'
 <Plus size={14} />
 ```
 
-### External Fonts
+### Fonts
 
-Geist (sans) and JetBrains Mono (monospace) loaded from Google Fonts. No icon fonts.
+Geist (sans) and JetBrains Mono (monospace) are self-hosted: the woff2 files live in `public/fonts/`, declared by the `@font-face` block at the top of `src/index.css`, and served same-origin from `/fonts/` (nginx, 1-year immutable cache). No icon fonts.
