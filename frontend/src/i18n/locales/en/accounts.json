@@ -7,7 +7,6 @@
   "emptyState": "No accounts yet.",
   "showArchivedLabel": "Show archived accounts",
   "accountCard": {
-    "archivedBadge": "Archived",
     "viewTransactions": "View transactions",
     "setBalance": "Set balance\u2026",
     "edit": "Edit",

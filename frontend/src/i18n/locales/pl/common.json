@@ -10,6 +10,7 @@
     "defaultLabel": "Akcje",
     "cancel": "Anuluj"
   },
+  "archivedBadge": "Zarchiwizowane",
   "filters": {
     "toggle": "Filtry",
     "regionLabel": "Filtry",

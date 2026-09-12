@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 /** Structural option shape shared by Select and MultiSelect. */
 export interface ListboxOption<T extends string | number> {
@@ -37,6 +37,20 @@ function matchesQuery<T extends string | number>(opt: ListboxOption<T>, query: s
 const TYPE_AHEAD_RESET_MS = 500
 
 /**
+ * Center the selected sheet option in its scroll container. Shared by the
+ * [open, isMobile] effect (list node already attached) and the attach
+ * callback (list freshly mounted). DOM-only and idempotent: a double fire
+ * lands on the same scrollTop. The scroll-into-view call is safe here even
+ * though the desktop popover rule bans it (manual scrollTop math, PeriodPicker's
+ * desktop effect): a sheet row's only scrollable ancestor while open is the
+ * sheet panel itself, because useOverlay holds the body scroll lock from
+ * the open commit onward - before the list ever attaches.
+ */
+function scrollSelectedIntoView(list: HTMLDivElement) {
+  list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'center' })
+}
+
+/**
  * Open/highlight/search/type-ahead state machine shared by Select and
  * MultiSelect. Owns the open flag, the highlight ring, the search query and
  * filtering, outside-click close, reset-on-close, mobile scroll-into-view,
@@ -59,6 +73,32 @@ export function useListboxPanel<T extends string | number>({
   const sheetListRef = useRef<HTMLDivElement>(null)
   const typeAheadRef = useRef<{ buffer: string; t: number }>({ buffer: '', t: 0 })
 
+  // Latest-ref mirror of `open` for the attach callback below. Render-time
+  // ref writes are illegal (react-hooks/refs), so a ref-write-only effect
+  // keeps it current; that effect runs on the open commit, which is BEFORE
+  // the later commit where the sheet list attaches, so the callback always
+  // reads fresh state (same idiom as the skill's latest-ref rule).
+  const openRef = useRef(open)
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
+
+  // Sheet list attach/detach signal. Dual-path scroll delivery with the
+  // [open, isMobile] effect below: refs attach BEFORE effects, so on a
+  // fresh open this callback runs while openRef.current is still false
+  // (the sync effect above has not run yet) and skips - the scroll
+  // effect, declared after the openRef sync, delivers the fresh-open
+  // scroll. The callback's scroll branch covers node attaches outside an
+  // open transition (a remount of the sheet list while open stays true)
+  // and fires as the detach signal on unmount. Identity must stay stable
+  // ([] deps): an unstable callback makes React detach/reattach the ref
+  // on every render, which would re-scroll on every search keystroke
+  // while the sheet is open.
+  const attachSheetList = useCallback((node: HTMLDivElement | null) => {
+    sheetListRef.current = node
+    if (node && openRef.current) scrollSelectedIntoView(node)
+  }, [])
+
   const baseId = useId()
   const optionId = (i: number) => `${baseId}-opt-${i}`
 
@@ -77,20 +117,33 @@ export function useListboxPanel<T extends string | number>({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  // Reset transient panel state when the panel closes.
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery('')
-      setHighlightedIndex(-1)
-    }
-  }, [open])
+  // Reset transient panel state when the panel closes. Actual-vs-desired
+  // render adjust, not a reset effect and not a prev-open latch: `open`
+  // flips closed from five call sites across this hook and its callers
+  // (closePanel, Tab key, outside-click, the Select/MultiSelect trigger
+  // toggles via the returned setOpen), so an event-handler reset would have
+  // to cover every path and a future direct setOpen(false) would silently
+  // reintroduce the stale-search bug. A latch form could apply the latch
+  // while its companion updates get discarded when a parent's render-phase
+  // update re-renders this subtree (the BottomSheet deadlock class); the
+  // actual-vs-desired guard stays truthy until the state really changes,
+  // so a dropped update is retried on the next render. openPanel re-seeds
+  // the highlight on every open, so clearing to -1 here only drops the
+  // closed dropdown's ring.
+  if (!open && (searchQuery !== '' || highlightedIndex !== -1)) {
+    setSearchQuery('')
+    setHighlightedIndex(-1)
+  }
 
-  // Sheet: bring the selected option into view on open (long lists — currencies, categories).
+  // Sheet: bring the selected option into view on open (long lists -
+  // currencies, categories). Covers the paths where the list node is
+  // already attached: reopening within BottomSheet's 80ms exit window (the
+  // node never detached, so the attach callback does not fire) and a
+  // desktop->mobile resize while open. The fresh-open path (list mounts one
+  // commit after `open`) is owned by the attach callback above.
   useEffect(() => {
     if (!open || !isMobile) return
-    sheetListRef.current
-      ?.querySelector('[aria-selected="true"]')
-      ?.scrollIntoView({ block: 'center' })
+    if (sheetListRef.current) scrollSelectedIntoView(sheetListRef.current)
   }, [open, isMobile])
 
   function openPanel() {
@@ -205,7 +258,9 @@ export function useListboxPanel<T extends string | number>({
     filteredOptions,
     wrapperRef,
     triggerRef,
-    sheetListRef,
+    // Callback ref (not the RefObject) so consumers' `ref={sheetListRef}`
+    // sites need no changes AND fresh-mount scroll works; see the attach callback.
+    sheetListRef: attachSheetList,
     optionId,
     openPanel,
     closePanel,

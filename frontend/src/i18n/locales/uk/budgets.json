@@ -3,7 +3,6 @@
   "budgetFallback": "Бюджет",
   "newBudget": "Новий бюджет",
   "noBudgetsYet": "Бюджетів ще немає.",
-  "archived": "В архіві",
   "showArchived": "Показувати бюджети в архіві",
   "cadence": {
     "monthly": "Щомісячно",
@@ -151,7 +150,6 @@
     "archivedSection": "В архіві",
     "archivedSectionAria": "Категорії в архіві",
     "noCategories": "Категорій ще немає.",
-    "archived": "В архіві",
     "unarchive": "Розархівувати",
     "archive": "Архівувати",
     "unarchiveAria": "Розархівувати {{name}}",

@@ -1,5 +1,7 @@
 """Tests for password reset and password changed email flow."""
 
+import re
+
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.test import TestCase
@@ -14,7 +16,7 @@ from workspaces.factories import WorkspaceMemberFactory
 
 class TestForgotPassword(AuthTestCase):
     def test_forgot_password_sends_email(self):
-        self.create_user(email='forgot@example.com', password='testpass123')
+        user = self.create_user(email='forgot@example.com', password='testpass123')
 
         data = self.post('/api/auth/forgot-password', {'email': 'forgot@example.com'})
         self.assertStatus(200)
@@ -22,6 +24,15 @@ class TestForgotPassword(AuthTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['forgot@example.com'])
         self.assertIn('Reset your password', mail.outbox[0].subject)
+
+        # The plain-text link must be copy-pastable: a raw & between query
+        # params, never an autoescaped &amp;. Mirrors the set-password email
+        # test in workspaces/tests/test_invitation_emails.py.
+        match = re.search(r'/reset-password\?uid=([^&\s]+)&token=([^\s]+)', mail.outbox[0].body)
+        self.assertIsNotNone(match)
+        self.assertNotIn('&amp;', mail.outbox[0].body)
+        self.assertEqual(urlsafe_base64_encode(force_bytes(user.pk)), match.group(1))
+        self.assertTrue(default_token_generator.check_token(user, match.group(2)))
 
     def test_forgot_password_unknown_email_returns_200(self):
         data = self.post('/api/auth/forgot-password', {'email': 'nonexistent@example.com'})

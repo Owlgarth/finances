@@ -489,7 +489,8 @@ class TestWorkspaceMemberService(TestCase):
 
         result = WorkspaceMemberService.leave(member, workspace.id)
 
-        self.assertEqual(result['message'], 'Successfully left workspace')
+        # Locale-independent: 'message' is gettext-translated at call time
+        self.assertEqual(set(result), {'message'})
         self.assertFalse(WorkspaceMember.objects.filter(workspace=workspace, user=member).exists())
 
     def test_leave_owner_blocked(self):
@@ -601,7 +602,10 @@ class TestWorkspaceMemberService(TestCase):
 
         result = WorkspaceMemberService.reset_password(owner, workspace.id, member.id, 'newpassword123', 'owner')
 
-        self.assertEqual(result['message'], 'Password reset successfully')
+        # Locale-independent: 'message' is gettext-translated at call time
+        self.assertEqual(set(result), {'message', 'user_id', 'email'})
+        self.assertEqual(result['user_id'], member.id)
+        self.assertEqual(result['email'], member.email)
         member.refresh_from_db()
         self.assertTrue(member.check_password('newpassword123'))
 
@@ -640,8 +644,10 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(ValidationError) as context:
             WorkspaceMemberService.update_role(owner, workspace.id, member.id, 'owner', 'owner')
 
+        # Locale-independent: 'owner' is the interpolated %(role)s value,
+        # present in every translation; http_status pins the error class
         self.assertIn('owner', str(context.exception.message))
-        self.assertIn('Cannot assign role', str(context.exception.message))
+        self.assertEqual(context.exception.http_status, 400)
 
     def test_update_role_rejects_invalid_role_string(self):
         """Test that update_role raises ValidationError for invalid role strings."""
@@ -654,5 +660,7 @@ class TestWorkspaceMemberService(TestCase):
         with self.assertRaises(ValidationError) as context:
             WorkspaceMemberService.update_role(owner, workspace.id, member.id, 'superadmin', 'owner')
 
+        # Locale-independent: 'superadmin' is the interpolated %(role)s value,
+        # present in every translation; http_status pins the error class
         self.assertIn('superadmin', str(context.exception.message))
-        self.assertIn('Cannot assign role', str(context.exception.message))
+        self.assertEqual(context.exception.http_status, 400)

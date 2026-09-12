@@ -219,6 +219,7 @@
     "passwordLabel": "Confirm your password",
     "passwordPlaceholder": "Enter your password",
     "currencyRequired": "Select at least one currency",
+    "currencyHelper": "The first currency becomes your main account currency.",
     "submitting": "Resetting…",
     "submit": "Reset Account Data",
     "success": "Account reset \u2014 \"{{name}}\" is ready.",
@@ -305,7 +306,6 @@
     "automaticPlaceholder": "Automatic",
     "manageCurrencies": "Manage currencies...",
     "manageCurrenciesAria": "Manage currencies...",
-    "firstShown": "First {{label}} is shown first.",
     "budgetHelper": "The first currency is shown by default in the budget table."
   }
 }

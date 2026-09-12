@@ -47,7 +47,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   return (
     <>
       <aside
-        className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-200 z-50
+        className={`flex flex-col h-full bg-surface border-r border-border transition-all duration-200 z-sidebar
           ${collapsed ? 'w-14' : 'w-60'}`}
       >
         {/* Logo + collapse toggle */}

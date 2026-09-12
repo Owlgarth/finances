@@ -107,7 +107,8 @@ class AuthService:
         """Authenticate a user and issue tokens, or a 2FA temp token.
 
         Returns:
-            (401, {'detail': ...}) for missing user / wrong password / inactive account.
+            (401, {'detail': ...}) for missing user / wrong password / inactive account -
+                all three return the identical generic detail (anti-enumeration).
             (200, LoginOut(requires_2fa=True, temp_token=...)) when 2FA is enabled.
             (200, LoginOut(access_token=..., refresh_token=...)) on success.
         """
@@ -120,7 +121,11 @@ class AuthService:
         if not user.check_password(data.password):
             return 401, {'detail': _('Invalid email or password')}
         if not user.is_active:
-            return 401, {'detail': _('User account is disabled')}
+            # Anti-enumeration: a disabled account must be indistinguishable from a
+            # wrong-password login, so this reuses the generic detail instead of a
+            # distinct "disabled" message. Stays after the password check and before
+            # the 2FA branch so 2FA-enabled disabled accounts cannot diverge either.
+            return 401, {'detail': _('Invalid email or password')}
 
         if UserTwoFactor.objects.filter(user=user, is_enabled=True).exists():
             return 200, LoginOut(requires_2fa=True, temp_token=create_temp_token(user))

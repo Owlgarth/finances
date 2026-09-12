@@ -10,6 +10,7 @@
     "defaultLabel": "Actions",
     "cancel": "Cancel"
   },
+  "archivedBadge": "Archived",
   "filters": {
     "toggle": "Filters",
     "regionLabel": "Filters",

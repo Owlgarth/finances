@@ -87,12 +87,16 @@ def _extract_2fa_user_key(request, data: Verify2FAIn = None, **kwargs):
     """Extract a per-user rate-limit key from the temp token.
 
     For valid tokens, returns the user_id so attempts are bucketed per user.
-    For invalid tokens, returns a random UUID per request to avoid a shared bucket —
-    a fixed key like 'invalid' would let an attacker exhaust it from a shared IP,
-    blocking legitimate 2FA verification for other users on that IP.
+    For invalid tokens - and decodable tokens with no usable user_id (absent,
+    None, or empty) - returns a random UUID per request to avoid a shared
+    bucket: a fixed fallback key would let an attacker exhaust it, and the
+    account-keyed bucket has no IP component, blocking legitimate 2FA
+    verification for other users.
     """
     payload = decode_temp_token(data.temp_token)
-    return str(payload.get('user_id', 'unknown')) if payload else str(uuid.uuid4())
+    if payload and payload.get('user_id'):
+        return str(payload['user_id'])
+    return str(uuid.uuid4())
 
 
 @router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut, 429: DetailOut})

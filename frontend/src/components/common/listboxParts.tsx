@@ -6,8 +6,15 @@ import { controlHeightClass } from './formStyles'
 // Shared listbox trigger styling for Select and MultiSelect (§4 form controls),
 // in the spirit of formStyles.ts: the base is identical; Select appends its
 // mono/error variants and the caller's className, MultiSelect only the className.
+// The base deliberately carries NO width class: width is the caller's. In the
+// compiled sheet Tailwind emits the full-width utility AFTER every numeric
+// .w-NN (width-scale order; verified via rule offsets in dist/assets/*.css),
+// so a full-width base out-cascaded any pinned caller width on the same
+// trigger and the pass-through contract was inert. Callers pass full width
+// for form-grid triggers (the common case) or a pin (w-20, w-32, w-48...) -
+// exactly one width class.
 export const listboxTriggerBaseClass =
-  'w-full flex items-center justify-between ' +
+  'flex items-center justify-between ' +
   'bg-surface border border-border rounded-none px-2 py-1.5 ' +
   `${controlHeightClass} ` +
   'text-xs text-text text-left ' +

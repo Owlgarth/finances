@@ -1,11 +1,16 @@
 """Tests for email change flow."""
 
+import re
+
+from django.contrib.auth import get_user_model
 from django.core import mail
 
 from common.auth import create_access_token
 from common.tests.factories import UserFactory
-from common.tokens import generate_email_change_token
+from common.tokens import generate_email_change_token, verify_email_change_token
 from core.tests.base import AuthTestCase
+
+User = get_user_model()
 
 
 class TestRequestEmailChange(AuthTestCase):
@@ -23,6 +28,15 @@ class TestRequestEmailChange(AuthTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['newemail@example.com'])
         self.assertIn('Confirm your new email', mail.outbox[0].subject)
+
+        # The plain-text link must stay unescaped so it is copy-pastable
+        match = re.search(r'/confirm-email-change\?token=([^\s]+)', mail.outbox[0].body)
+        self.assertIsNotNone(match)
+        self.assertNotIn('&amp;', mail.outbox[0].body)
+        verified = verify_email_change_token(match.group(1))
+        self.assertIsNotNone(verified)
+        user = User.objects.get(email='change@example.com')
+        self.assertEqual(verified, (user.id, 'newemail@example.com'))
 
     def test_request_email_change_wrong_password(self):
         token = self.register_and_login('wrongpw@example.com', 'testpass123', 'Wrong PW')

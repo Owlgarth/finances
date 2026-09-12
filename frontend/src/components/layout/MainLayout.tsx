@@ -65,18 +65,28 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
+      // Tablet mounts collapsed, mirroring the old mount-time auto-collapse
+      // effect; the stored preference is a desktop concern. Safe to read
+      // isTablet here: useBreakpoint is accurate on first render (lazy
+      // matchMedia initializer in useMediaQuery).
+      if (isTablet) return true
       const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
       return stored === 'true'
     }
     return false
   })
 
-  // Auto-collapse on tablet
-  useEffect(() => {
-    if (isTablet) {
-      setCollapsed(true)
-    }
-  }, [isTablet])
+  // Auto-collapse when the viewport crosses INTO the tablet tier. Prev-tier
+  // render adjust (P3): the initializer above owns the mount case (the latch
+  // initializes equal to isTablet, so nothing fires on mount), and crossing
+  // OUT of tablet deliberately does nothing - a manual un-collapse on tablet
+  // must survive the resize to desktop, mirroring the old effect's
+  // `if (isTablet)` guard. A later desktop->tablet crossing collapses again.
+  const [prevIsTablet, setPrevIsTablet] = useState(isTablet)
+  if (prevIsTablet !== isTablet) {
+    setPrevIsTablet(isTablet)
+    if (isTablet) setCollapsed(true)
+  }
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {

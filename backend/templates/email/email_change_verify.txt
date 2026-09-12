@@ -7,7 +7,8 @@ Hi {{ user_name }},
 Please confirm that {{ new_email }} is your new email address.
 
 Confirm Email Change
-{{ confirm_url }}
+{# The query string must stay unescaped so the raw URL is copy-pastable from plain-text clients #}
+{% autoescape off %}{{ confirm_url }}{% endautoescape %}
 
 ——————————————————————————————————
 You're receiving this because you have an Owlgarth Finances account.

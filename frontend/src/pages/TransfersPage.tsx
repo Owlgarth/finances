@@ -11,7 +11,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
-import { createUpdateParams, intParam } from '../utils/params'
+import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
@@ -58,6 +58,10 @@ export default function TransfersPage() {
     // flash on page/filter changes (v5 placeholderData pattern).
     placeholderData: keepPreviousData,
   })
+
+  // A stale ?page= beyond the (possibly shrunken) range resets to page 1 once
+  // the response lands; the backend serves the clamped page meanwhile.
+  useStalePageReset(page, data, updateParams)
 
   const [transferOpen, setTransferOpen] = useState(false)
   const [repeatTransfer, setRepeatTransfer] = useState<Transfer | null>(null)
@@ -123,6 +127,7 @@ export default function TransfersPage() {
             options={accountOptions}
             placeholder={t('filters.allAccounts')}
             aria-label={t('filters.filterByAccountAria')}
+            className="w-full"
           />
         </FilterField>
         <FilterField label={t('filters.dateLabel')} className="col-span-2">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -66,10 +66,29 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
   const [plannedDate, setPlannedDate] = useState(new Date().toISOString().slice(0, 10))
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    // Copy mode prefills like edit, except the date: always today (D4).
-    const source = planned ?? copyFrom
+  // Session tracker for the render-adjust below: the open flip or a
+  // mid-open mode swap (the footer Copy button: planned -> null,
+  // copyFrom -> p) starts a new seeding session. The mode discriminator is
+  // load-bearing: openCopy passes the SAME entity object, so source
+  // identity alone cannot distinguish edit from copy. The sentinel
+  // initializer (closed, no mode, no source) can never match a real
+  // session, so the first open always seeds. List lengths are deliberately
+  // not session inputs - no re-seed on refetch length changes;
+  // late-arriving reference data gets its own guarded adjust below.
+  const [session, setSession] = useState<{
+    open: boolean
+    mode: 'edit' | 'copy' | 'create' | 'none'
+    source: PlannedTransaction | null
+  }>({ open: false, mode: 'none', source: null })
+  // Reference-list lengths the create-mode seeding last saw.
+  const [seededLens, setSeededLens] = useState({ a: accounts.length, b: budgets.length, c: currencies.length })
+
+  const mode = planned ? 'edit' : copyFrom ? 'copy' : 'create'
+  const source = planned ?? copyFrom ?? null
+  const seeding = open !== session.open || session.mode !== mode || session.source !== source
+  if (seeding) setSession({ open, mode, source })
+  // Copy mode prefills like edit, except the date: always today (D4).
+  if (seeding && open) {
     if (source) {
       setName(source.name)
       setAmount(source.amount)
@@ -103,8 +122,22 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       // returns the original 201 instead of a duplicate.
       setIdempotencyKey(crypto.randomUUID())
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planned, copyFrom, accounts.length, budgets.length, currencies.length, defaultBudgetId])
+  }
+
+  // Create-mode arrival adjust: apply the data-derived create defaults
+  // (single-account prefill, primary currency, default budget) when the
+  // reference lists' lengths change, only for fields still at their seed
+  // values - a mid-edit refetch never clears typed values.
+  if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
+    setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
+    if (open && !source) {
+      if (accountId === null) {
+        setAccountId(accounts.length === 1 ? accounts[0].id : null)
+        setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencyCode ?? currencies[0]?.code ?? null))
+      }
+      if (budgetId === null) setBudgetId(defaultBudgetId)
+    }
+  }
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', budgetId],
@@ -183,23 +216,23 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t('form.accountLabel')}</label>
-            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder={t('form.selectAccount')} aria-label={t('form.accountAria')} />
+            <Select value={accountId ?? NO_ACCOUNT} onChange={handleAccountChange} options={accountOptions} placeholder={t('form.selectAccount')} aria-label={t('form.accountAria')} className="w-full" />
           </div>
           <div>
             <label className={labelClass}>{t('form.currencyLabel')}</label>
-            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder={t('form.selectCurrency')} aria-label={t('form.currencyAria')} mono disabled={accountId !== null} />
+            <Select value={currencyCode} onChange={setCurrencyCode} options={currencyOptions} placeholder={t('form.selectCurrency')} aria-label={t('form.currencyAria')} mono disabled={accountId !== null} className="w-full" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {budgets.length > 1 && (
             <div>
               <label className={labelClass}>{t('form.budgetLabel')}</label>
-              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} />
+              <Select value={budgetId} onChange={(v) => { setBudgetId(v); setCategoryId(null) }} options={budgets.map((b) => ({ value: b.id, label: b.name }))} placeholder={t('form.budgetPlaceholder')} aria-label={t('form.budgetAria')} className="w-full" />
             </div>
           )}
           <div className={budgets.length > 1 ? '' : 'col-span-2'}>
             <label className={labelClass}>{t('form.categoryLabel')}</label>
-            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} />
+            <Select value={categoryId} onChange={setCategoryId} options={categories.map((c) => ({ value: c.id, label: c.name }))} placeholder={t('form.uncategorized')} aria-label={t('form.categoryAria')} disabled={!budgetId} className="w-full" />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-2 pb-4">
