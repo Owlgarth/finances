@@ -82,6 +82,8 @@ Each email has an HTML and plain text version in `backend/templates/email/`. HTM
 {% autoescape off %}{{ reset_url }}{% endautoescape %}
 ```
 
+One autoescape defect is a CENSUS trigger, not a one-file fix: audit every `.txt` template for query-string URLs and wrap each (the wrapper comment is byte-identical everywhere - copy it, never retype it); bare-origin `{{ frontend_url }}` renders and no-URL templates stay untouched, and HTML counterparts are deliberately NOT wrapped (`href="...&amp;..."` is valid HTML there). Pin the fix test-side with a trio: a body regex whose capture class cannot cross an escaped `&` (`r'/reset-password\?uid=([^&\s]+)&token=([^\s]+)'` - a greedy `(.+)` would match straight through `&amp;` and silently un-pin the regression), an `assertNotIn('&amp;', body)`, and a token roundtrip (`check_token` / `verify_verification_token`) proving the captured link is consumable. Exemplars: `test_password_reset.py` / `test_email_verification.py` / `test_email_change.py`, mirroring `workspaces/tests/test_invitation_emails.py`.
+
 ## Environment Variables
 
 ```

@@ -182,6 +182,7 @@ page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
 - **Derive the cap from the source of truth** (`max(ALLOWED_PAGE_SIZES)`), never hardcode `le=100`. `paginate_queryset` silently coerces any size outside `ALLOWED_PAGE_SIZES` to its default; deriving `MAX_PAGE_SIZE` keeps the explicit 422 and the silent coercion in lockstep if the allowed set ever changes.
 - **The cap must not fall below the frontend's maximum.** `ALLOWED_PAGE_SIZES` (backend) and `PAGE_SIZE_OPTIONS` (frontend `utils/pageSize.ts`) duplicate the same list with no cross-reference; the frontend persists the user's choice in localStorage and sends it as `page_size` on every list request. A backend cap below the frontend max 422s real users' stored preference on their main pages — a functional regression dressed as a security fix. Lowering the cap or shrinking the allowed set requires a coordinated frontend change (drop the option from `PAGE_SIZE_OPTIONS` + migrate stored prefs) in the same PR.
 - Pin the contract with one boundary test per app: `page_size=1000` → 422, `page_size=0` → 422, and `page_size=<frontend max>` → 200 — the last assertion makes a future cap-lower fail loudly in tests instead of silently breaking the UI.
+- **Stale `?page=N` clamps server-side in the shared helper, never 404s or endpoint caps.** `page = min(page, max(total_pages, 1))` after `total_pages` is computed in `core/schemas/pagination.py` - a client holding a stale bookmark (rows deleted, page_size grew) gets the last valid page WITH its items instead of an empty list whose meta lies (`page=3, total=20, total_pages=1` is indistinguishable from a genuinely empty list for the frontend, which gates pagination UI on `total`). An empty queryset reads as page 1 via the `max(..., 1)` floor. Do not add an `le=` bound or a 404 on `page` at the endpoint - that reintroduces the stale-bookmark failure the clamp exists to absorb; the endpoint keeps `page: int = Query(1, ge=1)` and the helper absorbs the rest.
 
 ### Byte-Streaming Download Endpoints
 
@@ -637,6 +638,14 @@ When adding a field to such an override, grep `update_fields=` across the app in
 ## Read Settings at Call Time
 
 Read `django.conf.settings` values inside the function body, not at module import. Import-time reads freeze the value for the process lifetime and make `override_settings` useless in tests — call-time reads are why `override_settings(TRUSTED_PROXY_COUNT=...)` and `override_settings(TWO_FACTOR_ENCRYPTION_KEY=...)` work. The deliberate exception is decorator configuration (e.g. `rate_limit(...)` captures `settings.RATE_LIMIT_*` at decoration time); the test consequence — those limits are only testable at their defaults — is in the `backend-testing` skill.
+
+## Env-Mode Dispatch in settings.py
+
+When `config/settings.py` selects between implementations via an env var (`EMAIL_MODE`: console/file/smtp), use a validated closed-set mode variable - never let arbitrary values flow into branch logic. Exemplar: the email block in `config/settings.py`, tested by `core/tests/test_settings_email.py`.
+
+- **Lowercase before validating** (`os.getenv('EMAIL_MODE', '').lower()`) so `SMTP`/`File` are accepted, and treat unset/empty as the legacy auto behavior (`EMAIL_HOST` set means smtp, empty means console) - empty equals the pre-mode-var behavior, so no existing deployment changes on upgrade.
+- **Fail loud at boot.** Every other value - including whitespace-only - raises `ImproperlyConfigured` at startup, naming the env var and listing the valid values. A silent fallback masks misconfiguration, and naming the var is what makes the failure assertable on stderr by the subprocess probe tests (see the `backend-testing` skill's probe section).
+- **Sub-settings live inside their branch only.** `EMAIL_FILE_PATH` is assigned in file mode alone (undefined elsewhere), the SMTP `EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_USE_TLS` cluster in smtp mode alone. A sub-setting assigned outside its branch leaks a half-configured mode into every other branch.
 
 ## Error Handling
 
