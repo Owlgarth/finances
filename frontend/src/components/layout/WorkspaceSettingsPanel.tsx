@@ -7,7 +7,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { getApiErrorMessage } from '../../utils/errors'
 import Modal from '../common/Modal'
 import CurrenciesSettingsSection from '../currencies/CurrenciesSettingsSection'
-import { inputClass } from '../common/formStyles'
+import { inputClass, primaryButtonClass } from '../common/formStyles'
 
 interface WorkspaceSettingsPanelProps {
   isOpen: boolean
@@ -102,7 +102,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                     <button
                       onClick={handleSaveName}
                       disabled={isSaving || !newName.trim() || newName === workspace?.name}
-                      className="px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonClass}
                     >
                       {isSaving ? t('workspaceSettings.saving') : t('workspaceSettings.save')}
                     </button>

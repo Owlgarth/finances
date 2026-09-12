@@ -66,8 +66,6 @@ export function useListboxPanel<T extends string | number>({
   onActivate,
 }: UseListboxPanelOptions<T>) {
   const [open, setOpen] = useState(false)
-  // Prev-value latch for the close-reset adjustment below (P3).
-  const [prevOpen, setPrevOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [searchQuery, setSearchQuery] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -85,13 +83,14 @@ export function useListboxPanel<T extends string | number>({
     openRef.current = open
   }, [open])
 
-  // Sheet list attach/detach signal. BottomSheet stays unmounted until its
-  // useDelayedUnmount effect flips mounted one commit AFTER `open` flips
-  // true, so the effect below runs too early on a fresh open and its
-  // [open, isMobile] deps never change again - this callback is the only
-  // notification for that path. Identity must stay stable ([] deps): an
-  // unstable callback makes React detach/reattach the ref on every render,
-  // which would re-scroll on every search keystroke while the sheet is open.
+  // Sheet list attach/detach signal. This callback is the fresh-open
+  // notification: it fires exactly when the sheet list node exists,
+  // independent of BottomSheet's mount timing. The scroll effect below
+  // covers the already-attached paths (reopen inside BottomSheet's 80ms
+  // exit window, desktop->mobile resize while open) where no ref callback
+  // fires. Identity must stay stable ([] deps): an unstable callback makes
+  // React detach/reattach the ref on every render, which would re-scroll
+  // on every search keystroke while the sheet is open.
   const attachSheetList = useCallback((node: HTMLDivElement | null) => {
     sheetListRef.current = node
     if (node && openRef.current) scrollSelectedIntoView(node)
@@ -115,21 +114,22 @@ export function useListboxPanel<T extends string | number>({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  // Reset transient panel state when the panel closes. Prev-value render
-  // adjust (P3), not a reset effect: `open` flips closed from five call sites
-  // across this hook and its callers (closePanel, Tab key, outside-click, the
-  // Select/MultiSelect trigger toggles via the returned setOpen), so an
-  // event-handler reset would have to cover every path and a future direct
-  // setOpen(false) would silently reintroduce the stale-search bug. The
-  // adjustment covers all close paths by construction; openPanel re-seeds the
-  // highlight on every open, so clearing to -1 here only drops the closed
-  // dropdown's ring.
-  if (prevOpen !== open) {
-    setPrevOpen(open)
-    if (!open) {
-      setSearchQuery('')
-      setHighlightedIndex(-1)
-    }
+  // Reset transient panel state when the panel closes. Actual-vs-desired
+  // render adjust, not a reset effect and not a prev-open latch: `open`
+  // flips closed from five call sites across this hook and its callers
+  // (closePanel, Tab key, outside-click, the Select/MultiSelect trigger
+  // toggles via the returned setOpen), so an event-handler reset would have
+  // to cover every path and a future direct setOpen(false) would silently
+  // reintroduce the stale-search bug. A latch form could apply the latch
+  // while its companion updates get discarded when a parent's render-phase
+  // update re-renders this subtree (the BottomSheet deadlock class); the
+  // actual-vs-desired guard stays truthy until the state really changes,
+  // so a dropped update is retried on the next render. openPanel re-seeds
+  // the highlight on every open, so clearing to -1 here only drops the
+  // closed dropdown's ring.
+  if (!open && (searchQuery !== '' || highlightedIndex !== -1)) {
+    setSearchQuery('')
+    setHighlightedIndex(-1)
   }
 
   // Sheet: bring the selected option into view on open (long lists -
