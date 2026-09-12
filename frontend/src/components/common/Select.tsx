@@ -39,7 +39,9 @@ export interface SelectProps<T extends string | number> {
   searchable?: boolean
   /** Error message. Applies the §4 error treatment to the trigger + renders the message below. */
   error?: string
-  /** Width/layout pass-through (e.g. `w-24`). Do NOT use to override tokens. */
+  /** Width/layout pass-through. The base carries no width: pass `w-full` for
+   *  form-grid triggers or a pin (`w-24`) - the trigger then carries exactly
+   *  one width class, so pins apply. Do NOT use to override tokens. */
   className?: string
 }
 

@@ -6,6 +6,7 @@ import { Archive, CalendarRange, Pencil, Plus, PieChart, Trash2 } from 'lucide-r
 import { useTranslation } from 'react-i18next'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import ArchivedBadge from '../components/common/ArchivedBadge'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import CurrencySetField from '../components/currencies/CurrencySetField'
 import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
@@ -165,6 +166,7 @@ function CreateBudgetModal({ open, onClose, onManageCurrencies }: { open: boolea
             onChange={setCadence}
             options={CADENCE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
             aria-label={t('createForm.cadenceLabel')}
+            className="w-full"
           />
         </div>
         {cadence === 'weeks' && (
@@ -359,7 +361,7 @@ export default function BudgetsPage() {
                     muted (badge chip identical to AccountsPage's). */}
                 <span className={`text-sm font-medium truncate ${b.is_active ? 'text-text' : 'text-text-muted'}`}>{b.name}</span>
                 {!b.is_active && (
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1.5 py-0.5">{t('archived')}</span>
+                  <ArchivedBadge />
                 )}
                 {/* Adjacent icon buttons: real padded hit areas instead of
                     the shared hit-area utility, whose expanded areas would

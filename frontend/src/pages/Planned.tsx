@@ -9,10 +9,10 @@ import type { PlannedTransaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
-import { triggerBrowserDownload } from '../utils/attachments'
+import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
-import { amountParam, createUpdateParams, intListParam, intParam } from '../utils/params'
+import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
@@ -154,23 +154,22 @@ export default function Planned() {
   // The export endpoint honors ONLY the status and date-range filters - never
   // imply the whole filter panel applies to the file.
   const handleExportView = async () => {
-    const toastId = toast.loading(t('preparingExport'))
     setIsExporting(true)
-    try {
-      const blob = await plannedTransactionsApi.exportView({
+    // runBlobExport never throws; it owns every export toast.
+    await runBlobExport(
+      () => plannedTransactionsApi.exportView({
         status: statusFilter === 'all' ? undefined : statusFilter,
         start_date: dateFrom || undefined,
         end_date: dateTo || undefined,
-      })
-      const url = URL.createObjectURL(blob)
-      triggerBrowserDownload(url, `planned_${dateFrom || 'all'}_${dateTo || 'all'}.json`)
-      URL.revokeObjectURL(url)
-      toast.success(t('exportComplete'), { id: toastId })
-    } catch {
-      toast.error(t('exportFailed'), { id: toastId })
-    } finally {
-      setIsExporting(false)
-    }
+      }),
+      {
+        filename: `planned_${dateFrom || 'all'}_${dateTo || 'all'}.json`,
+        loadingMessage: t('preparingExport'),
+        successMessage: t('exportComplete'),
+        errorMessage: t('exportFailed'),
+      },
+    )
+    setIsExporting(false)
   }
 
   // Each facet counts once, however many values it holds.
@@ -212,20 +211,26 @@ export default function Planned() {
     // flash on page/filter changes (v5 placeholderData pattern).
     placeholderData: keepPreviousData,
   })
+
+  // A stale ?page= beyond the (possibly shrunken) range resets to page 1 once
+  // the response lands; the backend serves the clamped page meanwhile.
+  useStalePageReset(page, data, updateParams)
+
   const items = data?.items ?? []
 
   // Keyed INSIDE the ['planned'] family so every existing invalidation of that
   // prefix (form modal, execute, cancel, delete) refetches the strip too.
-  // Same dependency values as the list query minus page/pageSize/ordering.
-  // No currency_code here: the planned-totals route accepts none of the
-  // currency params the list route does.
+  // Same dependency values as the list query minus page/pageSize/ordering -
+  // currency_code included: the totals route accepts the same currency
+  // params the list route does.
   const { data: totalsData, isLoading: totalsIsLoading } = useQuery({
-    queryKey: ['planned', 'totals', statusFilter, search, accountFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
+    queryKey: ['planned', 'totals', statusFilter, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
       plannedTransactionsApi.getTotals({
         status: statusFilter === 'all' ? undefined : statusFilter,
         search: search || undefined,
         account_id: accountFilter.length ? accountFilter : undefined,
+        currency_code: currencyFilter.length ? currencyFilter : undefined,
         budget_id: budgetFilter.length ? budgetFilter : undefined,
         category_id: categoryFilter.length ? categoryFilter : undefined,
         amount_gte: amountParam(amountMin),
@@ -332,7 +337,7 @@ export default function Planned() {
         <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
           {accounts.length > 1 && (
             <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} />
+              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
             </FilterField>
           )}
           {multiCurrency && (
@@ -343,6 +348,7 @@ export default function Planned() {
                 options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
                 placeholder={t('filters.allCurrencies')}
                 aria-label={t('filters.byCurrencyAria')}
+                className="w-full"
               />
             </FilterField>
           )}

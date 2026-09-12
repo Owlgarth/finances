@@ -7,7 +7,6 @@
   "emptyState": "Nie masz jeszcze kont.",
   "showArchivedLabel": "Pokaż zarchiwizowane konta",
   "accountCard": {
-    "archivedBadge": "Zarchiwizowane",
     "viewTransactions": "Zobacz transakcje",
     "setBalance": "Ustaw saldo…",
     "edit": "Edytuj",
