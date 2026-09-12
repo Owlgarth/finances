@@ -7,6 +7,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { getApiErrorMessage } from '../../utils/errors'
 import Modal from '../common/Modal'
 import CurrenciesSettingsSection from '../currencies/CurrenciesSettingsSection'
+import { inputClass } from '../common/formStyles'
 
 interface WorkspaceSettingsPanelProps {
   isOpen: boolean
@@ -95,7 +96,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                     onChange={(e) => setNewName(e.target.value)}
                     disabled={!canEditName}
                     maxLength={100}
-                    className="flex-1 block w-full rounded-none border border-border px-3 py-2 text-sm disabled:bg-surface-muted disabled:cursor-not-allowed"
+                    className={`flex-1 ${inputClass} disabled:cursor-not-allowed`}
                   />
                   {canEditName && (
                     <button
