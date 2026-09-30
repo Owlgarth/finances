@@ -19,7 +19,8 @@
     "profileUpdated": "Profil zaktualizowano pomyślnie!",
     "profileUpdateFailed": "Nie udało się zaktualizować profilu",
     "prefsUpdated": "Preferencje zapisano pomyślnie!",
-    "prefsUpdateFailed": "Nie udało się zapisać preferencji"
+    "prefsUpdateFailed": "Nie udało się zapisać preferencji",
+    "version": "Wersja {{version}}"
   },
   "importSection": {
     "title": "Importuj swoje dane",

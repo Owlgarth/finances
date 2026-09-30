@@ -104,6 +104,7 @@ Every endpoint must verify resources belong to the user's workspace. Four securi
 - `docs/permissions.md`, `docs/users-and-roles.md`: roles and access
 - `docs/workflow.md`: development workflow
 - `docs/parser-contract.md`: receipt parser HTTP contract (external service)
+- `docs/self-hosting.md`: running published release images (the prod/ compose)
 - `design/`: design tokens, components, patterns, responsive rules
 
 ## Detailed Conventions (Skills)
