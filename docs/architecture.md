@@ -283,6 +283,7 @@ do not change to 404.
 |----------|---------|
 | `VITE_API_URL` | Backend API base URL |
 | `VITE_DEMO_MODE` | Hide registration link when true |
+| `VITE_APP_VERSION` | App version shown in Settings (baked at image build time) |
 
 ## Deployment
 

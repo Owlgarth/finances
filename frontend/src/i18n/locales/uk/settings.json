@@ -19,7 +19,8 @@
     "profileUpdated": "Профіль успішно оновлено!",
     "profileUpdateFailed": "Не вдалося оновити профіль",
     "prefsUpdated": "Налаштування успішно збережено!",
-    "prefsUpdateFailed": "Не вдалося зберегти налаштування"
+    "prefsUpdateFailed": "Не вдалося зберегти налаштування",
+    "version": "Версія {{version}}"
   },
   "importSection": {
     "title": "Імпорт ваших даних",
