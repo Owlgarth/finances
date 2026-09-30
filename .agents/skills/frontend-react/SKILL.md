@@ -12,6 +12,7 @@ The frontend uses an "Architectural Ledger" design system via CSS custom propert
 - **Color tokens:** `primary`, `primary-hover`, `background`, `surface`, `surface-hover`, `surface-muted`, `border`, `border-focus`, `text`, `text-muted`, `positive`, `positive-bg`, `negative`, `negative-bg`, `warning`, `warning-bg`, `scrim` (overlay backdrop — `bg-scrim` in `Modal`/`BottomSheet` overlays)
 - **Border radii:** `rounded-sm` (4px) — containers, buttons; `rounded-none` (0px) — inputs, table cells
 - **Fonts:** `font-sans` — Geist (body/UI); `font-mono` — JetBrains Mono (code, numbers)
+- **Muted metadata stamps:** page furniture in a metadata register (a version line, a period range under a card) uses the tokens.md Metadata row combo `font-mono text-[11px]` + `text-text-muted` - the row's `font-normal` is the default weight, omitted as in the `PeriodCard` exemplar. Not `text-sm` Geist + muted: that is the interactive caption/empty-state register, and reaching for it drifts metadata styling off the design system.
 - **Icons:** `lucide-react` only. No Material Symbols or other icon fonts.
 - **Focus ring:** `:focus-visible` uses `var(--color-border-focus)`. No shadow variables — avoid `box-shadow` utilities for elevation.
 - **Full-bleed focus rings draw inside:** a positive `focus-visible:outline-offset-2` draws the outline OUTSIDE the element edge, so on a `w-full h-full` button inside an `overflow-hidden` wrapper (media tiles) it clips invisible on three of four sides - use `focus-visible:-outline-offset-2` (inset ring) there, and the standard positive offset on contained buttons. Exemplar: the attachment tiles in `transactions/TransactionAttachments.tsx`.
@@ -751,11 +752,15 @@ const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace
 
 **Singletons shared between `main.tsx` and contexts live in their own module** (`api/queryClient.ts`), never exported from `main.tsx` — importing app code from the entry file creates a circular import the moment that module imports anything from the app.
 
+## Build-Arg Env Values
+
+`import.meta.env.VITE_*` values are baked at image build time and are UNSET in local dev and dev compose builds (no build args are passed), so every consumption site is a module-scope read with an inline `||` fallback: `import.meta.env.VITE_API_URL || 'http://localhost:8000/api'` (`client.ts`), `import.meta.env.VITE_APP_VERSION || 'dev'` (`ProfilePage.tsx`). Without the fallback a non-release build renders `undefined` (or a broken base URL) where release builds render the baked value.
+
 ## Naming Conventions
 
 - **Components**: PascalCase (`BudgetTable`, `TransactionList`)
 - **Functions**: camelCase (`handleSubmit`, `fetchData`)
-- **Constants**: camelCase for objects, UPPER_SNAKE for primitives
+- **Constants**: camelCase for objects and module-scope DERIVED values, UPPER_SNAKE for authored literal sentinels - `savedToken`/`savedLanguage` (client.ts) and `appVersion` (ProfilePage) are camelCase derivations even though primitive, while `TOKEN_KEY`/`NO_ACCOUNT` are UPPER_SNAKE: the UPPER name is the grep target for an authored literal, and a derived value has no literal to find.
 - **Types/Interfaces**: PascalCase (`User`, `Transaction`, `Props`)
 - **Event handlers**: `handle` prefix (`handleSubmit`, `handleClick`)
 - **Comments**: plain-language rationale only - never planning artifacts ("(R1)", "patterns.md SS3", task ids, "(plan decision N)", "(SKILL §section)"). Review-round and spec references are meaningless outside the session that wrote them, and the citation forms rot mechanically: "(plan decision N)" points into `.plans/`, which is pruned post-merge, and "(SKILL §...)" section numbering reshapes on every skill promotion - both targets disappear while the code stays. A comment must state the WHY so a reader with no access to the plan can act on it.
