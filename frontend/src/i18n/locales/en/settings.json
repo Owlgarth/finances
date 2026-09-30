@@ -17,7 +17,8 @@
     "profileUpdated": "Profile updated successfully!",
     "profileUpdateFailed": "Failed to update profile",
     "prefsUpdated": "Preferences updated successfully!",
-    "prefsUpdateFailed": "Failed to update preferences"
+    "prefsUpdateFailed": "Failed to update preferences",
+    "version": "Version {{version}}"
   },
   "importSection": {
     "title": "Import Your Data",

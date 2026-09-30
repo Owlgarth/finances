@@ -20,6 +20,8 @@ import type { ImportResult } from '../types'
 
 type Tab = 'profile' | 'password' | 'security' | 'preferences' | 'account'
 
+const appVersion = import.meta.env.VITE_APP_VERSION || 'dev'
+
 export default function ProfilePage() {
   const { t } = useTranslation('settings')
   const { user, updateUser } = useAuth()
@@ -268,6 +270,10 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      <p className="mt-4 font-mono text-[11px] text-text-muted">
+        {t('profilePage.version', { version: appVersion })}
+      </p>
     </div>
   )
 }
