@@ -91,7 +91,7 @@ and a 404 catch-all.
 | `/planned` | Planned | Planned transactions; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view") |
 | `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
-| `/settings` | ProfilePage | Profile, preferences, data export/import |
+| `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
 | `*` | NotFoundPage | 404 catch-all for unknown paths |
 
 ## Components
