@@ -1,8 +1,7 @@
-# UNUSED PRODUCTION STUB - not wired to anything. It documents what a
-# single-server deployment of this stack would look like (strategy option D1
-# in .plans/STRATEGY-versioning-releases.md); TLS termination, routing,
-# backups and a deploy runbook are deliberately deferred until a server
-# exists.
+# Production deployment: single-server compose running the published GHCR
+# release images. TLS termination, domain routing, backups and a deploy
+# runbook are deliberately deferred; docs/self-hosting.md is the full guide
+# (configuration, backups, upgrades, and the deferred reverse-proxy story).
 #
 #   - Our images come from GHCR at the tag in APP_VERSION (see .env): api,
 #     worker and beat share one finances-backend image via the anchor below
@@ -16,7 +15,7 @@
 #   - Only api and ui publish host ports: the ui image serves the SPA with no
 #     /api proxy, so the browser must reach the api directly - real TLS and
 #     domain routing arrive with the deferred reverse proxy.
-#   - Stub usage: cp .env.example .env, fill in real secrets, then from this
+#   - Usage: cp .env.example .env, fill in real secrets, then from this
 #     directory: docker compose up -d
 
 x-backend: &backend

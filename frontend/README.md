@@ -486,6 +486,7 @@ mount instead, so imports that escape `frontend/` resolve there too.
 | `VITE_API_URL` | Backend API base URL | `http://localhost:8000/api` |
 | `VITE_DEMO_MODE` | Disable registration (optional) | `false` |
 | `VITE_PORT` | Dev server port (optional) | `5173` (Vite default) |
+| `VITE_APP_VERSION` | App version shown in Settings (baked at image build time) | `dev` |
 
 ## Development Notes
 
