@@ -112,11 +112,18 @@ services:
     # and keeps the celery commands identical across both compose files.
     command: ["celery", "-A", "config", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
 
-  # GHCR image built by CI with the VITE_* build args baked in; nginx serves
-  # the static SPA only. No env_file: nothing in this image reads runtime env.
+  # GHCR image built by CI; nginx serves the static SPA only. Deploy-time
+  # config: the entrypoint generates /config.js from API_URL/DEMO_MODE at
+  # container start, so pointing the SPA at your own api is a .env edit plus
+  # a container recreate - no image rebuild. environment: is an explicit map,
+  # not env_file: the ui gets only its two knobs, never the whole .env with
+  # its secrets.
   ui:
     image: ghcr.io/owlgarth/finances-ui:${APP_VERSION}
     restart: unless-stopped
+    environment:
+      API_URL: ${API_URL:-}
+      DEMO_MODE: ${DEMO_MODE:-false}
     ports:
       - "${UI_PORT:-80}:80"
 

@@ -112,9 +112,13 @@ services:
       # repo root.
       additional_contexts:
         backend: ./backend
-      args:
-        VITE_API_URL: ${VITE_API_URL}
-        VITE_DEMO_MODE: ${VITE_DEMO_MODE}
+    # Runtime config, not build args: the image entrypoint generates
+    # /config.js from these at container start - nothing is baked into the
+    # bundle anymore. The root .env's VITE_* knobs stay the single dev
+    # source, interpolated into the runtime names here.
+    environment:
+      API_URL: ${VITE_API_URL:-}
+      DEMO_MODE: ${VITE_DEMO_MODE:-false}
     ports:
       - "${UI_PORT}:80"
 
