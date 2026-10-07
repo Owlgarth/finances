@@ -1656,6 +1656,39 @@ class TestExportImport(TransactionTestCase):
         self.assertEqual(len(rows), 1)
         self.assertIsNone(rows[0]['note'])
 
+    def test_export_includes_auto_adjustment_as_plain_row(self):
+        """In-app spreadsheet keeps auto-created adjustments: they are real
+        balance movements on real accounts, so excluding them would break
+        reconciliation against in-app balances. (The GDPR round-trip is the
+        only consumer that must skip them - it does so in users/services.py.)"""
+        usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        cash_usd = AccountFactory(workspace=self.workspace, name='Cash USD', currency=usd)
+        source = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Converted payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('200.00'),
+            original_currency=usd,
+        )
+        TransactionFactory(
+            account=cash_usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Auto adjustment',
+            amount=Decimal('-200.00'),
+            type='adjustment',
+            source_transaction=source,
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row['description'] for row in rows}, {'Converted payment', 'Auto adjustment'})
+
     def test_import_applies_note(self):
         rows = [
             {
