@@ -752,9 +752,9 @@ const { workspace, workspaces, switchWorkspace, createWorkspace, deleteWorkspace
 
 **Singletons shared between `main.tsx` and contexts live in their own module** (`api/queryClient.ts`), never exported from `main.tsx` — importing app code from the entry file creates a circular import the moment that module imports anything from the app.
 
-## Build-Arg Env Values
+## Runtime Config and Build-Arg Env Values
 
-`import.meta.env.VITE_*` values are baked at image build time and are UNSET in local dev and dev compose builds (no build args are passed), so every consumption site is a module-scope read with an inline `||` fallback: `import.meta.env.VITE_API_URL || 'http://localhost:8000/api'` (`client.ts`), `import.meta.env.VITE_APP_VERSION || 'dev'` (`ProfilePage.tsx`). Without the fallback a non-release build renders `undefined` (or a broken base URL) where release builds render the baked value.
+Deploy-time values (API URL, demo mode) are runtime config, not build args: the ui container's entrypoint writes `/config.js` (`window.__APP_CONFIG__ = {"apiUrl":...,"demoMode":...}`) from its `API_URL`/`DEMO_MODE` env at startup, `index.html` loads it before the bundle, and every consumer reads it through the helpers in `src/runtimeConfig.ts` - never `window.__APP_CONFIG__` ad hoc. Precedence at each read: `window.__APP_CONFIG__` -> `import.meta.env.VITE_*` -> hard-coded default (`http://localhost:8000/api` / `false`). The Vite arm is host-dev only (`dev.sh` sources the root `.env`, so its `VITE_API_URL`/`VITE_DEMO_MODE` reach the process env) - `/config.js` 404s on the Vite dev server, which is expected, and the chain falls through. `VITE_APP_VERSION` is the one remaining baked build arg (release.yml passes exactly it): module-scope read with an inline `||` fallback (`import.meta.env.VITE_APP_VERSION || 'dev'`, `ProfilePage.tsx`) - local dev and dev compose builds pass no build args, and without the fallback a non-release build renders `undefined`.
 
 ## Naming Conventions
 
