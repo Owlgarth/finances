@@ -14,6 +14,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Owlgarth" />
+    <!-- Runtime config: the deployed ui container generates /config.js from
+         the API_URL / DEMO_MODE env vars at startup, assigning
+         window.__APP_CONFIG__ before the bundle loads. The file is absent on
+         the Vite dev server - that 404 is expected, and reads fall back to
+         Vite env vars and hard-coded defaults. -->
+    <script src="/config.js"></script>
     <script>
       // Prevent flash of wrong theme — runs before React hydration.
       // owlgarth_theme: 'light' | 'dark' | null (null = default light; OS preference ignored)
