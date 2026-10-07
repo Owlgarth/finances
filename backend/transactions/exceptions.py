@@ -52,6 +52,16 @@ class TransactionOriginalCurrencyError(ValidationError):
         super().__init__(message)
 
 
+class TransactionOriginalAccountError(ValidationError):
+    default_message = gettext_lazy('Original-currency account not found, archived, or not in this workspace')
+    default_code = 'original_account_invalid'
+
+
+class TransactionOriginalAccountCurrencyError(ValidationError):
+    default_message = gettext_lazy('Original-currency account must hold the facet currency')
+    default_code = 'original_account_currency_mismatch'
+
+
 class TransactionBulkAccountError(ValidationError):
     default_message = gettext_lazy('All transactions and the target account must belong to the workspace')
     default_code = 'bulk_account_invalid'
