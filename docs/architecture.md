@@ -281,8 +281,10 @@ do not change to 404.
 
 | Variable | Purpose |
 |----------|---------|
-| `VITE_API_URL` | Backend API base URL |
-| `VITE_DEMO_MODE` | Hide registration link when true |
+| `API_URL` | Backend API base URL (runtime: the `ui` container writes it into `/config.js` at startup) |
+| `DEMO_MODE` | Hide the registration link when true (the same variable the backend reads) |
+| `VITE_API_URL` | Backend API base URL for the host Vite dev server only (root `.env`) |
+| `VITE_DEMO_MODE` | Hide the registration link on the host Vite dev server only (root `.env`) |
 | `VITE_APP_VERSION` | App version shown in Settings (baked at image build time) |
 
 ## Deployment

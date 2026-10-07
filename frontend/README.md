@@ -465,7 +465,8 @@ catalogs) is in [docs/i18n.md](../docs/i18n.md).
 ### Docker
 
 ```bash
-# The `ui` service is the nginx production build (VITE_* baked in at build time).
+# The `ui` service is the nginx production build. The API URL is runtime
+# config (API_URL -> /config.js); only VITE_APP_VERSION is baked at build time.
 # For frontend work run the dev server on the host instead:
 ./dev.sh frontend   # Vite + hot reload on UI_PORT, VITE_* from .env
 ```
@@ -485,8 +486,10 @@ mount instead, so imports that escape `frontend/` resolve there too.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_URL` | Backend API base URL | `http://localhost:8000/api` |
-| `VITE_DEMO_MODE` | Disable registration (optional) | `false` |
+| `API_URL` | Backend API base URL in Docker: the `ui` container writes it into `/config.js` at startup | `http://localhost:8000/api` |
+| `DEMO_MODE` | Disable registration (optional; the same variable the backend reads) | `false` |
+| `VITE_API_URL` | Backend API base URL for the host Vite dev server only (root `.env`) | `http://localhost:8000/api` |
+| `VITE_DEMO_MODE` | Disable registration on the host Vite dev server (optional) | `false` |
 | `VITE_PORT` | Dev server port (optional) | `5173` (Vite default) |
 | `VITE_APP_VERSION` | App version shown in Settings (baked at image build time) | `dev` |
 

@@ -30,6 +30,7 @@ git clone https://github.com/Owlgarth/finances.git
 cd finances/prod
 cp .env.example .env   # .env is gitignored (*.env); real secrets live here
 # edit .env: replace every change-me-* secret, pin APP_VERSION to a published tag
+# also set API_URL if you browse from another machine (see below)
 docker compose up -d
 docker compose ps      # 7 long-running services; storage-init chowns once and exits 0
 ```
@@ -64,6 +65,10 @@ example in emails) are placeholders for the project's own domain. They must
 match where browsers actually reach your deployment - a mismatch surfaces as
 CORS errors or rejected requests, not as a clear configuration warning.
 
+`API_URL` is the browser-facing half of the same rule: the URL the SPA
+calls. It must be one the browser can actually reach - see
+[The ui image and API_URL](#the-ui-image-and-api_url).
+
 ### Email
 
 Leave `EMAIL_HOST` empty and the backend prints emails to the `api` container
@@ -84,41 +89,27 @@ and terms of service; see [GDPR Compliance](../README.md#gdpr-compliance).
 database/Redis/storage values point at compose service names and need no
 changes.
 
-## The ui image and VITE_API_URL
+## The ui image and API_URL
 
-`VITE_API_URL` is a build-time value: CI bakes it into the JavaScript bundle
-when the `finances-ui` image is built. Published images are built with the
-default `https://finances.owlgarth.com/api` (a repository variable can
-override it at build time; see [Releasing](workflow.md#releasing)). Setting it
-in `prod/.env` changes nothing - the `ui` service has no `env_file`; nothing
-in that image reads runtime environment.
+The SPA needs to know where the API is. At startup the `ui` container
+generates `/config.js` from the `API_URL` and `DEMO_MODE` values in `.env`;
+the app reads that file before the bundle loads. To change either value:
+edit `.env`, then `docker compose up -d` (or `docker compose up -d ui`) -
+compose recreates the container and the new values apply on the next page
+load. The published image is domain-agnostic; a different URL is never a
+reason to rebuild it.
 
-If your API is not reachable at the URL baked into the image, the SPA silently
-calls the wrong backend - check the browser's network tab before suspecting
-your `ALLOWED_HOSTS` or CORS setup.
+When `API_URL` is unset it defaults to `http://localhost:8000/api`, which
+only works while the browser runs on the same machine as the server. A
+browser anywhere else - on your LAN, behind your reverse proxy - needs
+`API_URL` set to a URL it can actually reach, for example
+`http://192.168.1.10:8000/api` or the public HTTPS URL a proxy fronts.
 
-For a different API URL, build your own ui image via
-`prod/docker-compose.override.yml` (compose loads it automatically):
-
-```yaml
-services:
-  ui:
-    image: my-finances-ui   # local tag, replaces the GHCR image for this service
-    build:
-      context: ../frontend
-      additional_contexts:
-        backend: ../backend  # the build imports shared registries from backend/
-      args:
-        VITE_API_URL: https://finances.example.com/api
-        VITE_DEMO_MODE: "false"
-        VITE_APP_VERSION: "0.1.0"
-```
-
-then `docker compose up -d --build`.
-
-These are the same three build args the release pipeline passes; build args
-are public metadata (they land in image history), so URLs and flags only -
-never secrets.
+If your API is not reachable at the URL in `API_URL`, the SPA silently calls
+the wrong backend - check the browser's network tab before suspecting your
+`ALLOWED_HOSTS` or CORS setup. `CORS_ALLOWED_ORIGINS` and `ALLOWED_HOSTS`
+must still match the real origin (see [Origins that must match the real
+deployment](#origins-that-must-match-the-real-deployment)).
 
 ## The browser reaches the API directly
 
@@ -205,9 +196,8 @@ browser calls it directly - there is no `/api` proxy to collapse the two onto
 one host), and the `storage` container (so `S3_EXTERNAL_URL` resolves in
 browsers). With the proxy in place, set `ALLOWED_HOSTS`,
 `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL` and `S3_EXTERNAL_URL` to the real
-public URLs, and build your own ui image if the public API URL differs from
-the baked `VITE_API_URL` (see
-[The ui image and VITE_API_URL](#the-ui-image-and-vite_api_url)). Behind a
+public URLs, and set `API_URL` to the public API URL (see
+[The ui image and API_URL](#the-ui-image-and-api_url)). Behind a
 proxy, the backend's client-IP parsing expects `TRUSTED_PROXY_COUNT`
 (documented in the environment table in
 [Architecture](architecture.md#environment-configuration)); it is not in
