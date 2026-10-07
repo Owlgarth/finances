@@ -32,6 +32,8 @@ from transactions.exceptions import (
     TransactionCurrencyRequiredError,
     TransactionImportError,
     TransactionNotFoundError,
+    TransactionOriginalAccountCurrencyError,
+    TransactionOriginalAccountError,
     TransactionOriginalCurrencyError,
 )
 from transactions.models import Transaction, TransactionIdempotencyKey, TransactionItem
@@ -127,6 +129,28 @@ class TransactionService:
         return facet
 
     @staticmethod
+    def _resolve_original_account(
+        workspace_id: int, original_currency: Currency | None, account_id: int | None
+    ) -> Account | None:
+        """Resolve the facet's account; account_id None means an informational-only facet.
+
+        The account must be active, in this workspace, and hold exactly the
+        facet's currency (compared by CODE: the facet may resolve to the
+        global catalog row while the account holds a workspace-custom row of
+        the same code - FK ids would falsely mismatch). A direct
+        workspace-scoped lookup rather than AccountService.get so the
+        not-found and archived cases raise the SAME domain error.
+        """
+        if account_id is None:
+            return None
+        account = Account.objects.for_workspace(workspace_id).select_related('currency').filter(id=account_id).first()
+        if not account or account.is_archived:
+            raise TransactionOriginalAccountError()
+        if account.currency.code != original_currency.code:
+            raise TransactionOriginalAccountCurrencyError()
+        return account
+
+    @staticmethod
     def _touch_period(user, category: Category | None, target_date) -> None:
         """Lazily materialize the period the transaction lands in (category set only)."""
         if category:
@@ -196,6 +220,7 @@ class TransactionService:
         """Get a transaction and verify it belongs to the workspace."""
         trans = (
             Transaction.objects.select_related('currency', 'account__currency', 'category', 'original_currency')
+            .prefetch_related('generated_adjustments')
             .for_workspace(workspace_id)
             .filter(id=transaction_id)
             .first()
@@ -236,7 +261,9 @@ class TransactionService:
             amount_lte=amount_lte,
         )
 
-        queryset = queryset.select_related('currency', 'account__currency', 'category', 'original_currency')
+        queryset = queryset.select_related(
+            'currency', 'account__currency', 'category', 'original_currency'
+        ).prefetch_related('generated_adjustments')
 
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
@@ -443,6 +470,44 @@ class TransactionService:
         )
 
     @staticmethod
+    def _create_auto_adjustment(user, trans: Transaction, account: Account | None) -> None:
+        """Book the facet's original-currency leg as an adjustment on `account`.
+
+        No-op when `account` is None - the informational-only facet is a
+        first-class state; the server never infers an account. Builds the
+        row directly instead of recursing into `create`: the adjustment
+        invariants (account set, no category, signed non-zero amount) hold
+        by construction from the already-validated source transaction.
+        The stored description is generated via gettext in the request
+        locale - a deliberate exception to the persisted-data firewall
+        (the user explicitly asked for an explanatory stored description).
+
+        Runs inside the caller's atomic block, like `_do_create` - no
+        @db_transaction.atomic here.
+        """
+        if account is None:
+            return
+        sign = -1 if trans.type == 'expense' else 1
+        Transaction.objects.create(
+            workspace_id=trans.workspace_id,
+            account=account,
+            currency=account.currency,
+            date=trans.date,
+            description=_('Adjustment for "%(description)s" (paid in %(original)s, recorded in %(recorded)s)')
+            % {
+                'description': trans.description,
+                'original': trans.original_currency.code,
+                'recorded': trans.currency.code,
+            },
+            category=None,
+            amount=sign * trans.original_amount,
+            type='adjustment',
+            created_by=user,
+            updated_by=user,
+            source_transaction=trans,
+        )
+
+    @staticmethod
     def _do_create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
         """Build and persist the Transaction (and inline items) — no idempotency logic.
 
@@ -457,6 +522,9 @@ class TransactionService:
         category = TransactionService._validate_category(data.category_id, workspace_id)
         original_currency = TransactionService._resolve_original_currency(
             workspace_id, currency, data.original_currency_code
+        )
+        original_account = TransactionService._resolve_original_account(
+            workspace_id, original_currency, data.original_account_id
         )
 
         trans = Transaction.objects.create(
@@ -476,6 +544,7 @@ class TransactionService:
         )
         if data.items:
             TransactionItem.objects.bulk_create(TransactionService._build_items_from_schema(trans, data.items))
+        TransactionService._create_auto_adjustment(user, trans, original_account)
         TransactionService._touch_period(user, category, data.date)
         return trans
 
