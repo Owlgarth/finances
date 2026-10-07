@@ -483,6 +483,169 @@ class V3TransactionNoteImportTests(AuthMixin, TestCase):
         self.assertIsNone(tx.note)
 
 
+class V3FacetAdjustmentImportTests(AuthMixin, TestCase):
+    """Linked auto-adjustments round-trip: the export skips the derived row, the
+    import regenerates it via the create-path helper. Additive field with a
+    safe default - no export_version bump (same contract as the note)."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _imported_workspace(self):
+        """The one workspace the import created besides AuthMixin's."""
+        return Workspace.objects.filter(owner=self.user).exclude(id=self.workspace.id).get()
+
+    def _linked_pair(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        cash_pln = AccountFactory(workspace=self.workspace, name='Cash PLN', currency=pln)
+        card_usd = AccountFactory(workspace=self.workspace, name='Card USD', currency=usd)
+        source = TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Converted card payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('200.00'),
+            original_currency=pln,
+        )
+        TransactionFactory(
+            account=cash_pln,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Auto adjustment',
+            amount=Decimal('-200.00'),
+            type='adjustment',
+            source_transaction=source,
+        )
+        return cash_pln, card_usd
+
+    def _exported_source(self, export_data):
+        return next(
+            t for t in export_data['workspaces'][0]['transactions'] if t['description'] == 'Converted card payment'
+        )
+
+    def test_pair_round_trips_with_link_and_balances(self):
+        from accounts.services import AccountService
+
+        cash_pln, card_usd = self._linked_pair()
+        TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            description='Plain expense',
+            amount=Decimal('10.00'),
+            type='expense',
+        )
+        cash_balance = AccountService.balance(cash_pln)
+        card_balance = AccountService.balance(card_usd)
+
+        export_data = UserService.export_all_data(self.user)
+        # Derived adjustment is NOT serialized; source carries the facet account.
+        rows = export_data['workspaces'][0]['transactions']
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(self._exported_source(export_data)['original_account_name'], 'Cash PLN')
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+        self.assertEqual(result['imported_transactions'], 2)
+        self.assertEqual(result['skipped']['errors'], [])
+
+        ws = self._imported_workspace()
+        new_source = Transaction.objects.get(workspace=ws, description='Converted card payment')
+        adjustment = Transaction.objects.get(workspace=ws, type='adjustment')
+        self.assertEqual(adjustment.source_transaction_id, new_source.id)
+        self.assertEqual(adjustment.account.name, 'Cash PLN')
+        self.assertEqual(adjustment.amount, Decimal('-200.00'))
+        self.assertEqual(adjustment.date, new_source.date)
+        # Balance parity: the regenerated pair reproduces both account balances.
+        self.assertEqual(AccountService.balance(Account.objects.get(workspace=ws, name='Cash PLN')), cash_balance)
+        self.assertEqual(AccountService.balance(Account.objects.get(workspace=ws, name='Card USD')), card_balance)
+
+    def test_informational_facet_stays_informational(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        card_usd = AccountFactory(workspace=self.workspace, currency=usd)
+        TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            description='Info facet',
+            amount=Decimal('10.00'),
+            type='expense',
+            original_amount=Decimal('40.00'),
+            original_currency=pln,
+        )
+
+        export_data = UserService.export_all_data(self.user)
+        self.assertIsNone(self._exported_source_like(export_data, 'Info facet')['original_account_name'])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = self._imported_workspace()
+        self.assertFalse(Transaction.objects.filter(workspace=ws, type='adjustment').exists())
+        source = Transaction.objects.get(workspace=ws, description='Info facet')
+        self.assertEqual(source.original_amount, Decimal('40.00'))
+
+    def _exported_source_like(self, export_data, description):
+        return next(t for t in export_data['workspaces'][0]['transactions'] if t['description'] == description)
+
+    def test_legacy_export_without_original_account_name_key(self):
+        """A v3 export from before the field existed still imports: facet lands,
+        no adjustment, no crash (old-reader/old-writer backward compat)."""
+        self._linked_pair()
+
+        export_data = UserService.export_all_data(self.user)
+        for tx in export_data['workspaces'][0]['transactions']:
+            tx.pop('original_account_name', None)
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = self._imported_workspace()
+        source = Transaction.objects.get(workspace=ws, description='Converted card payment')
+        self.assertEqual(source.original_amount, Decimal('200.00'))
+        self.assertEqual(source.original_currency.code, 'PLN')
+        self.assertFalse(Transaction.objects.filter(workspace=ws, type='adjustment').exists())
+
+    def test_unresolvable_facet_account_records_error_and_imports_source(self):
+        self._linked_pair()
+
+        export_data = UserService.export_all_data(self.user)
+        self._exported_source(export_data)['original_account_name'] = 'Ghost Account'
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertTrue(result['skipped']['errors'])
+        ws = self._imported_workspace()
+        source = Transaction.objects.get(workspace=ws, description='Converted card payment')
+        self.assertEqual(source.original_amount, Decimal('200.00'))
+        self.assertFalse(Transaction.objects.filter(workspace=ws, type='adjustment').exists())
+
+    def test_facet_account_currency_mismatch_records_error(self):
+        """Hand-edited file only: a resolvable name on the wrong-currency
+        account imports the facet informational and reports the mismatch."""
+        self._linked_pair()
+
+        export_data = UserService.export_all_data(self.user)
+        self._exported_source(export_data)['original_account_name'] = 'Card USD'  # USD, facet is PLN
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertTrue(result['skipped']['errors'])
+        ws = self._imported_workspace()
+        self.assertFalse(Transaction.objects.filter(workspace=ws, type='adjustment').exists())
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 
@@ -741,3 +904,53 @@ class AccountDeletionOrphanTests(AuthMixin, TestCase):
         from currencies.models import Currency
 
         self.assertFalse(Currency.objects.filter(workspace_id=ws_id).exists())
+
+    def _source_and_adjustment_rows(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        cash_pln = AccountFactory(workspace=self.workspace, currency=pln)
+        card_usd = AccountFactory(workspace=self.workspace, currency=usd)
+        source = TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('200.00'),
+            original_currency=pln,
+        )
+        TransactionFactory(
+            account=cash_pln,
+            workspace=self.workspace,
+            amount=Decimal('-200.00'),
+            type='adjustment',
+            source_transaction=source,
+        )
+
+    def test_delete_account_with_source_and_adjustment_rows(self):
+        """The self-referential CASCADE inside the transactions table (linked
+        auto-adjustments) adds no orphan class to account deletion."""
+        self._source_and_adjustment_rows()
+
+        ws_id = self.workspace.id
+        UserService.delete_account(self.user, self.user_password)
+
+        self.assertFalse(Workspace.objects.filter(id=ws_id).exists())
+        self.assertFalse(Transaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())
+
+    def test_delete_workspace_financial_records_with_linked_adjustments(self):
+        """Direct pin on the bulk delete: mixed source + generated rows in one
+        table delete cleanly (the ordering invariant the workspace-delete and
+        reset flows rely on - pinned per the data-deletion skill even though
+        this task changes no production deletion code)."""
+        self._source_and_adjustment_rows()
+
+        from common.services.base import delete_workspace_financial_records
+
+        ws_id = self.workspace.id
+        delete_workspace_financial_records(ws_id)
+
+        self.assertFalse(Transaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())

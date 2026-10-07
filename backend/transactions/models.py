@@ -129,13 +129,16 @@ class Transaction(WorkspaceScopedModel):
     def original_account_id(self) -> int | None:
         """Account of this facet's auto-generated adjustment (None = informational-only).
 
-        Reads `account_id` off the cached adjustment row, so a
-        `prefetch_related('generated_adjustments')` on the queryset serves
-        list views without N+1; unprefetched single-row fetches cost one
-        query. Never infers an account - None is a first-class stored state.
+        Reads `account_id` off the cached adjustment row via the cache-safe
+        all() + index pattern, so a `prefetch_related('generated_adjustments')`
+        on the queryset serves list views without N+1; unprefetched single-row
+        fetches cost one query. Do NOT switch to .first() - on an unordered
+        queryset it re-orders by pk, bypasses the prefetch cache, and emits a
+        query per row. Never infers an account - None is a first-class stored
+        state.
         """
-        adjustment = self.generated_adjustments.first()
-        return adjustment.account_id if adjustment else None
+        adjustments = self.generated_adjustments.all()
+        return adjustments[0].account_id if adjustments else None
 
     def __str__(self):
         return f'{self.date} - {self.description} ({self.amount} {self.currency.code})'

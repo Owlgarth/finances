@@ -14,6 +14,7 @@ from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
 from transactions.factories import TransactionFactory
 from users.models import UserConsent
+from users.services import UserService
 
 User = get_user_model()
 
@@ -184,3 +185,65 @@ class DataExportTests(AuthMixin, TestCase):
         # 4th request should be rate limited
         response = self.client.get('/api/users/me/export', **self.auth_headers())
         self.assertEqual(response.status_code, 429)
+
+
+class FacetAdjustmentExportTests(AuthMixin, TestCase):
+    """Derived auto-adjustments never serialize; the source row names the account."""
+
+    def _linked_pair(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        cash_pln = AccountFactory(workspace=self.workspace, name='Cash PLN', currency=pln)
+        card_usd = AccountFactory(workspace=self.workspace, name='Card USD', currency=usd)
+        source = TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            description='Converted card payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('200.00'),
+            original_currency=pln,
+        )
+        TransactionFactory(
+            account=cash_pln,
+            workspace=self.workspace,
+            description='Auto adjustment',
+            amount=Decimal('-200.00'),
+            type='adjustment',
+            source_transaction=source,
+        )
+
+    def test_export_excludes_derived_adjustment_and_names_facet_account(self):
+        self._linked_pair()
+
+        data = UserService.export_all_data(self.user)
+
+        rows = data['workspaces'][0]['transactions']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['description'], 'Converted card payment')
+        self.assertEqual(rows[0]['original_account_name'], 'Cash PLN')
+        self.assertNotIn('source_transaction', rows[0])
+
+    def test_export_informational_facet_emits_null_original_account_name(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        card_usd = AccountFactory(workspace=self.workspace, currency=usd)
+        TransactionFactory(
+            account=card_usd,
+            workspace=self.workspace,
+            description='Plain facet',
+            amount=Decimal('10.00'),
+            type='expense',
+            original_amount=Decimal('40.00'),
+            original_currency=pln,
+        )
+
+        data = UserService.export_all_data(self.user)
+
+        rows = data['workspaces'][0]['transactions']
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]['original_account_name'])
