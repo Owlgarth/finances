@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
+import { getRuntimeDemoMode } from '../runtimeConfig';
 
 export default function Login() {
   const { t } = useTranslation('auth');
@@ -134,7 +135,7 @@ export default function Login() {
               </button>
             </div>
 
-            {import.meta.env.VITE_DEMO_MODE !== 'true' && (
+            {!getRuntimeDemoMode() && (
               <div className="text-center">
                 <Link
                   to="/register"

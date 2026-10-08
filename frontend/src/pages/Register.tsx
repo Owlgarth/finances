@@ -7,6 +7,7 @@ import { legalApi } from '../api/client';
 import { authInputClass } from '../components/common/formStyles';
 import CurrencySetField from '../components/currencies/CurrencySetField';
 import { useAuth } from '../contexts/AuthContext';
+import { getRuntimeDemoMode } from '../runtimeConfig';
 import { PRE_AUTH_CURRENCIES } from '../utils/currencies';
 
 export default function Register() {
@@ -90,7 +91,7 @@ export default function Register() {
     }
   }, [isSubmitting]);
 
-  if (import.meta.env.VITE_DEMO_MODE === 'true') {
+  if (getRuntimeDemoMode()) {
     return <Navigate to="/login" replace />;
   }
 
