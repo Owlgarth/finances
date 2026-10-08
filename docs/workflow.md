@@ -224,11 +224,9 @@ installed, the changelog falls back to a plain `git log` section. Install
 git-cliff v2.13.1 to `~/.local/bin` only if you want the grouped
 `CHANGELOG.md` sections from local runs.
 
-**One-time GitHub setup.** Set the `VITE_API_URL` repository variable
-(Settings > Secrets and variables > Actions > Variables); release images fall
-back to `https://finances.owlgarth.com/api` when it is unset. After the first
-successful release, flip both GHCR packages (`finances-backend`,
-`finances-ui`) to public - packages pushed by a workflow default to private.
-And install the Renovate app on the org: `renovate.json` schedules weekly
-update PRs for the Docker images (digest-pinned in the compose files), GitHub
-Actions, npm, and Python dependencies.
+**One-time GitHub setup.** After the first successful release, flip both
+GHCR packages (`finances-backend`, `finances-ui`) to public - packages
+pushed by a workflow default to private. And install the Renovate app on
+the org: `renovate.json` schedules weekly update PRs for the Docker images
+(digest-pinned in the compose files), GitHub Actions, npm, and Python
+dependencies.

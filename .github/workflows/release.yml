@@ -7,12 +7,7 @@
 #     demand; rebuilds images and manifests but skips the GitHub Release job)
 #
 # One-time manual steps (cannot be automated from inside the workflow):
-#   1. Set the repository variable VITE_API_URL (repo Settings > Secrets and
-#      variables > Actions > Variables tab). It is baked into the ui image at
-#      build time. If unset, the build falls back to
-#      https://finances.owlgarth.com/api. VITE_DEMO_MODE is optional too and
-#      defaults to false.
-#   2. After the first successful push, flip both GHCR packages to public:
+#   1. After the first successful push, flip both GHCR packages to public:
 #      profile > Packages > finances-backend / finances-ui > Package settings
 #      > Danger Zone > Change visibility > Public. Packages pushed by a
 #      workflow default to private.
@@ -103,8 +98,6 @@ jobs:
             image_name: finances-ui
             build_args: |
               VITE_APP_VERSION=${{ needs.version.outputs.version }}
-              VITE_API_URL=${{ vars.VITE_API_URL || 'https://finances.owlgarth.com/api' }}
-              VITE_DEMO_MODE=${{ vars.VITE_DEMO_MODE || 'false' }}
           # Per-arch: native runner and platform string.
           - arch: amd64
             platform: linux/amd64
