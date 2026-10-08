@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { AxiosError } from 'axios';
+import { getRuntimeApiUrl } from '../runtimeConfig';
 import type {
   User, Token, LoginRequest, RegisterRequest, Workspace, WorkspaceMember, AddMemberRequest,
   AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus,
@@ -34,7 +35,10 @@ export type PlannedTransactionOrdering =
   | '-account__name' | 'account__name' | '-currency__code' | 'currency__code';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  // Deployed images override the API URL via /config.js (see
+  // runtimeConfig.ts); the Vite env var only reaches host dev builds
+  // (it is baked at build time); localhost is the last resort.
+  baseURL: getRuntimeApiUrl() || import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
   withCredentials: true,
   paramsSerializer: {
     indexes: null, // This removes the brackets from array parameters
