@@ -99,11 +99,12 @@ compose recreates the container and the new values apply on the next page
 load. The published image is domain-agnostic; a different URL is never a
 reason to rebuild it.
 
-When `API_URL` is unset it defaults to `http://localhost:8000/api`, which
-only works while the browser runs on the same machine as the server. A
-browser anywhere else - on your LAN, behind your reverse proxy - needs
-`API_URL` set to a URL it can actually reach, for example
-`http://192.168.1.10:8000/api` or the public HTTPS URL a proxy fronts.
+When `API_URL` is unset it defaults to `http://localhost:<API_PORT>/api`
+(`http://localhost:8000/api` with the default port), which only works while
+the browser runs on the same machine as the server. A browser anywhere else -
+on your LAN, behind your reverse proxy - needs `API_URL` set to a URL it can
+actually reach, for example `http://192.168.1.10:8000/api` or the public HTTPS
+URL a proxy fronts.
 
 If your API is not reachable at the URL in `API_URL`, the SPA silently calls
 the wrong backend - check the browser's network tab before suspecting your

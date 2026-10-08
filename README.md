@@ -123,11 +123,11 @@ Behavior:
 - **Backend** (`DEMO_MODE=true`): `POST /api/auth/register` returns
   `403 "Registration is disabled in demo mode"`. Takes effect after a backend
   restart.
-- **Frontend** (`DEMO_MODE` in Docker, `VITE_DEMO_MODE=true` on the host dev
-  server): `/register` redirects to `/login`, and the login page hides its
-  register link. In Docker the ui container reads `DEMO_MODE` at runtime -
-  `docker compose up -d` applies a flip; on the host dev server a restart
-  applies it.
+- **Frontend** (`VITE_DEMO_MODE=true` in the root `.env`; a `prod/` deployment
+  uses the backend's own `DEMO_MODE`): `/register` redirects to `/login`, and
+  the login page hides its register link. The ui container reads the value at
+  runtime - `docker compose up -d` applies a flip; the Vite dev server needs a
+  restart.
 
 ## Tech Stack
 
@@ -200,7 +200,7 @@ finances/
 | Document | Description |
 |----------|-------------|
 | **[Backend README](backend/README.md)** | Reference for the Django API: a purpose table for every Django app, the shared `common/` module (JWT auth, email, storage), a complete endpoint reference covering every route with its method and purpose, the JWT token lifecycle including refresh and 2FA temp tokens, the service-layer convention, testing instructions, and the environment variables. Answers "which API endpoints exist, and how do I call or test them?" |
-| **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the complete pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars including the build-time `VITE_*` flags. Answers "where does a piece of the UI live, and how is it wired?" |
+| **[Frontend README](frontend/README.md)** | Reference for the React app: the tech-stack table, a map of `src/` (components, contexts, hooks, pages), the complete pages-and-routes table, context and hook APIs (`AuthContext`, `useDomain`, `usePermissions`), the typed API client modules, the design-system tokens, and the env vars: the `ui` container's runtime `API_URL`/`DEMO_MODE` plus the `VITE_*` dev-server and build values. Answers "where does a piece of the UI live, and how is it wired?" |
 | [Architecture](docs/architecture.md) | The system-level design: a component diagram, the account-based data model with its key-principles table (balances are computed and never stored, periods derive from a budget's cadence or are custom-defined, transfers replace the old exchanges, the original-amount facet, adjustments), directory maps for both sides, the async Celery flows, the four auth layers with rate limiting, env configuration, and deployment topology. Answers "how is the system designed, and why?" |
 | [Parser Contract](docs/parser-contract.md) | The public HTTP contract a receipt-extraction service implements: auth, the `/health` and `/parse` endpoints, the versioned result JSON (line items, totals, currency, confidence), upload and page limits, and error semantics, plus the backend client's timeout and retry knobs. Answers "how do I implement or plug in my own receipt parser?" |
 | [Workflow](docs/workflow.md) | The end-to-end user flows: registration with its anti-enumeration behavior, accounts and Set-balance adjustments, transfers, budget cadences and periods (derived or custom), transactions with line items, the receipt-extraction review flow, planned transactions, members and invites, reports, and export/import, plus the release process: the `./dev.sh release` command and the CI pipelines behind it. Answers "what actually happens, step by step, when a user does X - and how a release ships?" |

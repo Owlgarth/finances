@@ -32,11 +32,13 @@ export const getRuntimeApiUrl = (): string | undefined =>
  *  real value, so a runtime "false" must not fall through to the env
  *  var the way an absent URL does, and any non-empty string (including
  *  "false") is truthy - a || chain would be wrong. Call sites get a
- *  plain boolean. */
+ *  plain boolean. The Vite arm compares case-insensitively, like the
+ *  backend's DEMO_MODE read and the container hook (which normalizes
+ *  the runtime value to lowercase). */
 export const getRuntimeDemoMode = (): boolean => {
   const runtimeDemoMode = window.__APP_CONFIG__?.demoMode;
   if (runtimeDemoMode !== undefined) {
     return runtimeDemoMode === 'true';
   }
-  return import.meta.env.VITE_DEMO_MODE === 'true';
+  return import.meta.env.VITE_DEMO_MODE?.toLowerCase() === 'true';
 };

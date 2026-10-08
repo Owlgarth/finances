@@ -117,12 +117,13 @@ services:
   # container start, so pointing the SPA at your own api is a .env edit plus
   # a container recreate - no image rebuild. environment: is an explicit map,
   # not env_file: the ui gets only its two knobs, never the whole .env with
-  # its secrets.
+  # its secrets. An empty API_URL follows API_PORT, so shifting the published
+  # api port alone keeps a same-machine browser on the right backend.
   ui:
     image: ghcr.io/owlgarth/finances-ui:${APP_VERSION}
     restart: unless-stopped
     environment:
-      API_URL: ${API_URL:-}
+      API_URL: ${API_URL:-http://localhost:${API_PORT:-8000}/api}
       DEMO_MODE: ${DEMO_MODE:-false}
     ports:
       - "${UI_PORT:-80}:80"

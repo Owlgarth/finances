@@ -10,10 +10,17 @@ set -e
 : "${DEMO_MODE:=false}"
 
 # Closed set, mirroring the EMAIL_MODE startup check in backend settings.
-if [ "$DEMO_MODE" != "true" ] && [ "$DEMO_MODE" != "false" ]; then
-    echo "Error: DEMO_MODE must be 'true' or 'false', got: '${DEMO_MODE}'" >&2
-    exit 1
-fi
+# Case-insensitive like the backend's own read (DEMO_MODE.lower() == 'true'):
+# prod/.env feeds one DEMO_MODE to both, so a "True" the backend accepts must
+# not crash-loop the ui. Normalized, so config.js always carries lowercase.
+case "$DEMO_MODE" in
+    [Tt][Rr][Uu][Ee]) DEMO_MODE=true ;;
+    [Ff][Aa][Ll][Ss][Ee]) DEMO_MODE=false ;;
+    *)
+        echo "Error: DEMO_MODE must be 'true' or 'false' (any case), got: '${DEMO_MODE}'" >&2
+        exit 1
+        ;;
+esac
 
 # Reject JSON/JS breakout characters: both values are interpolated into a
 # JavaScript string literal below, so " \ ` < could escape it.

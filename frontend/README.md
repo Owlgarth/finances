@@ -487,9 +487,9 @@ mount instead, so imports that escape `frontend/` resolve there too.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `API_URL` | Backend API base URL in Docker: the `ui` container writes it into `/config.js` at startup | `http://localhost:8000/api` |
-| `DEMO_MODE` | Disable registration (optional; the same variable the backend reads) | `false` |
-| `VITE_API_URL` | Backend API base URL for the host Vite dev server only (root `.env`) | `http://localhost:8000/api` |
-| `VITE_DEMO_MODE` | Disable registration on the host Vite dev server (optional) | `false` |
+| `DEMO_MODE` | Disable registration in Docker (optional; in `prod/` the same variable the backend reads) | `false` |
+| `VITE_API_URL` | Backend API base URL for the Vite dev server (root `.env`); the dev compose also maps it into the `ui` container's `API_URL` | `http://localhost:8000/api` |
+| `VITE_DEMO_MODE` | Disable registration on the Vite dev server (optional; root `.env`); the dev compose also maps it into the `ui` container's `DEMO_MODE` | `false` |
 | `VITE_PORT` | Dev server port (optional) | `5173` (Vite default) |
 | `VITE_APP_VERSION` | App version shown in Settings (baked at image build time) | `dev` |
 
