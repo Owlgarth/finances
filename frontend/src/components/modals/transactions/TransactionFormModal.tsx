@@ -54,6 +54,11 @@ const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
  * null-valued option, and 0 can never collide with a real account id. */
 const NO_ACCOUNT = 0
 
+/** Sentinel Select value for "no auto-adjustment" - the facet stays
+ *  informational-only. Same trick as NO_ACCOUNT: the shared Select cannot
+ *  hold a null-valued option, and 0 can never collide with a real id. */
+const NO_ADJUSTMENT = 0
+
 /** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
 const itemsToRows = (items: TransactionItemInput[]): Row[] =>
   items.map((i) => ({
@@ -120,6 +125,9 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const [otherCurrency, setOtherCurrency] = useState(false)
   const [originalAmount, setOriginalAmount] = useState('')
   const [originalCurrencyCode, setOriginalCurrencyCode] = useState<string | null>(null)
+  // The facet's linked-adjustment account; null = the NO_ADJUSTMENT sentinel
+  // (informational-only facet, no auto-adjustment booked).
+  const [originalAccountId, setOriginalAccountId] = useState<number | null>(null)
   const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   // Rows are the editing source of truth in create mode (nameless rows, '' qty
@@ -263,6 +271,18 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(!!source.original_currency_code)
       setOriginalAmount(source.original_amount ?? '')
       setOriginalCurrencyCode(source.original_currency_code)
+      // Facet account round-trip. A stored null (informational-only facet,
+      // including every row saved before facet accounts existed) stays null
+      // in both modes - auto-picking here would book an adjustment on an
+      // unrelated save. Edit echoes the stored id verbatim, like account_id:
+      // the backend keeps an archived adjustment account. Copy is a create,
+      // which rejects archived accounts, so an archived source account falls
+      // back to the default-for-currency pick.
+      setOriginalAccountId(
+        transaction || source.original_account_id == null || accounts.some((a) => a.id === source.original_account_id)
+          ? source.original_account_id
+          : pickAccountForCurrency(accounts, source.original_currency_code),
+      )
       // Uncategorized source → fall back to the create-mode default budget so the
       // Category select is immediately usable (it is disabled while budgetId is
       // null, and the Budget select below only renders for multi-budget
@@ -289,6 +309,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(false)
       setOriginalAmount('')
       setOriginalCurrencyCode(null)
+      setOriginalAccountId(null)
       // Fresh key per open in create mode. Persists across mutation retries
       // within this open session — that's what makes a double-click or a
       // network-blip replay return the original 201 instead of a duplicate.
@@ -421,6 +442,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         category_id: type === 'adjustment' ? null : categoryId,
         original_amount: otherCurrency ? amounts.originalAmount : null,
         original_currency_code: otherCurrency ? originalCurrencyCode : null,
+        // Always sent, even as null: update is full-replace - null means the
+        // informational-only facet (and deletes any linked adjustment), a
+        // real id auto-creates/updates the adjustment on that account.
+        original_account_id: otherCurrency ? originalAccountId : null,
       }
       if (isEdit) {
         const trans = await transactionsApi.update(transaction.id, payload)
@@ -495,6 +520,17 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     () => currencies.filter((c) => c.code !== currencyCode).map((c) => ({ value: c.code, label: c.code })),
     [currencies, currencyCode],
   )
+  // Sentinel FIRST, then the accounts holding the facet currency (the only
+  // legal adjustment targets). Plain names - every option shares one
+  // currency, so a code suffix would be noise. Archived accounts are not
+  // offered (an edited row's archived account shows the placeholder, like
+  // the account select); an empty list leaves the sentinel alone.
+  const adjustmentAccountOptions = [
+    { value: NO_ADJUSTMENT, label: t('form.noAdjustment') },
+    ...accounts
+      .filter((a) => originalCurrencyCode != null && a.currency_code.toUpperCase() === originalCurrencyCode.toUpperCase())
+      .map((a) => ({ value: a.id, label: a.name })),
+  ]
 
   /** Picking a real account locks the currency to the account's (changing the
       currency means changing the account). Re-selecting the sentinel clears the
@@ -507,6 +543,19 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     setAccountId(value)
     const next = accounts.find((a) => a.id === value)
     if (next) setCurrencyCode(next.currency_code)
+  }
+
+  /** Switching the facet currency re-picks its account (per-currency default
+      first, else the first by ordering, else none - informational-only): a
+      previous pick cannot survive the switch, it holds the old currency. */
+  const handleOriginalCurrencyChange = (code: string) => {
+    setOriginalCurrencyCode(code)
+    setOriginalAccountId(pickAccountForCurrency(accounts, code))
+  }
+
+  /** The sentinel maps back to null - the informational-only facet. */
+  const handleAdjustmentAccountChange = (value: number) => {
+    setOriginalAccountId(value === NO_ADJUSTMENT ? null : value)
   }
 
   /** Combobox keyboard semantics for the description field (mirrors
@@ -758,7 +807,18 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             {otherCurrency && (
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <input type="text" inputMode="decimal" value={originalAmount} onChange={(e) => setOriginalAmount(e.target.value)} placeholder={t('form.originalAmountPlaceholder')} className={inputClass} />
-                <Select value={originalCurrencyCode} onChange={setOriginalCurrencyCode} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono className="w-full" />
+                <Select value={originalCurrencyCode} onChange={handleOriginalCurrencyChange} options={otherCurrencyOptions} placeholder={t('form.currencyPlaceholder')} aria-label={t('form.originalCurrencyAria')} mono className="w-full" />
+                <div className="col-span-2">
+                  <label className={labelClass}>{t('form.adjustmentAccountLabel')}</label>
+                  <Select
+                    value={originalAccountId ?? NO_ADJUSTMENT}
+                    onChange={handleAdjustmentAccountChange}
+                    options={adjustmentAccountOptions}
+                    placeholder={t('form.selectAccount')}
+                    aria-label={t('form.adjustmentAccountAria')}
+                    className="w-full"
+                  />
+                </div>
               </div>
             )}
           </div>

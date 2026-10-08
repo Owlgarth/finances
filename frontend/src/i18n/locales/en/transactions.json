@@ -60,6 +60,8 @@
   "emptyFiltered": "No transactions match your search or filters.",
   "empty": "No transactions yet.",
   "adjBadge": "Adj",
+  "autoBadge": "auto",
+  "autoBadgeTitle": "Managed by its source transaction",
   "noAccount": "No account",
   "rowActions": {
     "edit": "Edit",
@@ -100,6 +102,9 @@
     "otherCurrency": "Paid in another currency?",
     "originalAmountPlaceholder": "Original amount",
     "originalCurrencyAria": "Original currency",
+    "adjustmentAccountLabel": "Adjustment account (optional)",
+    "adjustmentAccountAria": "Adjustment account",
+    "noAdjustment": "No adjustment (informational only)",
     "copy": "Copy",
     "delete": "Delete",
     "cancel": "Cancel",

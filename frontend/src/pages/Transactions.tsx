@@ -330,53 +330,64 @@ export default function Transactions() {
         </p>
       ) : (
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-          {items.map((tx) => (
-            <div
-              key={tx.id}
-              {...(isTouch && canWrite ? tappableProps(() => openEdit(tx)) : {})}
-              className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
-                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-text truncate">{tx.description}</span>
-                  {tx.type === 'adjustment' && (
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
-                  )}
+          {items.map((tx) => {
+            // Auto-created facet adjustments are managed by their source
+            // transaction: no edit/copy/delete affordances, no tap-to-edit.
+            const auto = tx.source_transaction_id != null
+            return (
+              <div
+                key={tx.id}
+                {...(!auto && isTouch && canWrite ? tappableProps(() => openEdit(tx)) : {})}
+                className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
+                  !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-text truncate">{tx.description}</span>
+                    {tx.type === 'adjustment' && (
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
+                    )}
+                    {auto && (
+                      <span title={t('autoBadgeTitle')} className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1">{t('autoBadge')}</span>
+                    )}
+                  </div>
+                  {/* Single truncating string — a flex row here would wrap on long
+                      category/account names and grow the row past spec height. */}
+                  <div className="text-[10px] font-mono text-text-muted truncate">
+                    {[tx.date, tx.category_name, showAccountColumn || !tx.account_name ? tx.account_name ?? t('noAccount') : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
                 </div>
-                {/* Single truncating string — a flex row here would wrap on long
-                    category/account names and grow the row past spec height. */}
-                <div className="text-[10px] font-mono text-text-muted truncate">
-                  {[tx.date, tx.category_name, showAccountColumn || !tx.account_name ? tx.account_name ?? t('noAccount') : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0 pl-3">
-                <div className="text-right">
-                  <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[tx.type]}`}>
-                    {tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}
-                    {formatAmount(tx.amount)} {multiCurrency ? tx.currency_code : ''}
-                  </span>
-                  {tx.original_amount && tx.original_currency_code && (
-                    <div className="text-[10px] font-mono text-text-muted">
-                      {formatAmount(tx.original_amount)} {tx.original_currency_code}
+                <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                  <div className="text-right">
+                    <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[tx.type]}`}>
+                      {tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}
+                      {formatAmount(tx.amount)} {multiCurrency ? tx.currency_code : ''}
+                    </span>
+                    {tx.original_amount && tx.original_currency_code && (
+                      <div className="text-[10px] font-mono text-text-muted">
+                        {formatAmount(tx.original_amount)} {tx.original_currency_code}
+                      </div>
+                    )}
+                  </div>
+                  {/* Hover reveals are pointer-fine only — on touch they'd be
+                      invisible tap targets; the row tap opens the sheet instead.
+                      Auto rows keep the block as an `invisible` spacer (no
+                      hover, no focus, no clicks) so their amount stays aligned
+                      with the editable rows' amounts. */}
+                  {canWrite && !isTouch && (
+                    <div className={`flex items-center gap-1 ${auto ? 'invisible' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+                      <button onClick={() => openEdit(tx)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                      <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                      <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                     </div>
                   )}
                 </div>
-                {/* Hover reveals are pointer-fine only — on touch they'd be
-                    invisible tap targets; the row tap opens the sheet instead. */}
-                {canWrite && !isTouch && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(tx)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                    <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

@@ -233,9 +233,12 @@ def update_transaction(request: HttpRequest, transaction_id: int, data: Transact
     return TransactionService.update(user, workspace_id, transaction_id, data)
 
 
-@router.delete('/{transaction_id}', response={204: None, 404: DetailOut}, auth=WorkspaceJWTAuth())
+@router.delete('/{transaction_id}', response={204: None, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def delete_transaction(request: HttpRequest, transaction_id: int):
-    """Delete a transaction (requires write access)."""
+    """Delete a transaction (requires write access).
+
+    Auto-generated adjustments (400) must be deleted through their source.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
