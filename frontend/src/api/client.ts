@@ -292,6 +292,11 @@ export interface TransactionInput {
   category_id?: number | null;
   original_amount?: string | null;
   original_currency_code?: string | null;
+  /** Always send the key, even as null (full-replace PUT): null = the
+      informational-only facet and deletes any linked adjustment on update;
+      a valid id auto-creates/updates a linked adjustment on that account
+      (must be an active account holding the facet currency). */
+  original_account_id?: number | null;
   items?: TransactionItemInput[];
 }
 

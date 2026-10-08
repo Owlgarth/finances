@@ -25,13 +25,17 @@ from transactions.exceptions import (
     TransactionAdjustmentAccountError,
     TransactionAdjustmentCategoryError,
     TransactionAmountInvalidError,
+    TransactionAutoManagedError,
     TransactionBulkAccountError,
     TransactionBulkCurrencyError,
+    TransactionBulkManagedError,
     TransactionCategoryNotFoundError,
     TransactionCurrencyMismatchError,
     TransactionCurrencyRequiredError,
     TransactionImportError,
     TransactionNotFoundError,
+    TransactionOriginalAccountCurrencyError,
+    TransactionOriginalAccountError,
     TransactionOriginalCurrencyError,
 )
 from transactions.models import Transaction, TransactionIdempotencyKey, TransactionItem
@@ -127,6 +131,31 @@ class TransactionService:
         return facet
 
     @staticmethod
+    def _resolve_original_account(
+        workspace_id: int, original_currency: Currency | None, account_id: int | None, allow_archived: bool = False
+    ) -> Account | None:
+        """Resolve the facet's account; account_id None means an informational-only facet.
+
+        The account must be active, in this workspace, and hold exactly the
+        facet's currency (compared by CODE: the facet may resolve to the
+        global catalog row while the account holds a workspace-custom row of
+        the same code - FK ids would falsely mismatch). A direct
+        workspace-scoped lookup rather than AccountService.get so the
+        not-found and archived cases raise the SAME domain error.
+        allow_archived permits editing a transaction whose facet account was
+        archived after the fact - retargeting to an archived facet account is
+        rejected by the caller comparing account ids (update path).
+        """
+        if account_id is None:
+            return None
+        account = Account.objects.for_workspace(workspace_id).select_related('currency').filter(id=account_id).first()
+        if not account or (account.is_archived and not allow_archived):
+            raise TransactionOriginalAccountError()
+        if account.currency.code != original_currency.code:
+            raise TransactionOriginalAccountCurrencyError()
+        return account
+
+    @staticmethod
     def _touch_period(user, category: Category | None, target_date) -> None:
         """Lazily materialize the period the transaction lands in (category set only)."""
         if category:
@@ -196,6 +225,7 @@ class TransactionService:
         """Get a transaction and verify it belongs to the workspace."""
         trans = (
             Transaction.objects.select_related('currency', 'account__currency', 'category', 'original_currency')
+            .prefetch_related('generated_adjustments')
             .for_workspace(workspace_id)
             .filter(id=transaction_id)
             .first()
@@ -236,7 +266,9 @@ class TransactionService:
             amount_lte=amount_lte,
         )
 
-        queryset = queryset.select_related('currency', 'account__currency', 'category', 'original_currency')
+        queryset = queryset.select_related(
+            'currency', 'account__currency', 'category', 'original_currency'
+        ).prefetch_related('generated_adjustments')
 
         sort_order = ordering or '-date'
         queryset = queryset.order_by(sort_order, '-created_at')
@@ -443,6 +475,74 @@ class TransactionService:
         )
 
     @staticmethod
+    def _auto_adjustment_description(trans: Transaction) -> str:
+        """Deterministic stored description for a linked auto-adjustment (request locale).
+
+        The ONE derivation path for the stored description - the create and
+        update paths both format through it, so an adjustment's description
+        never depends on which lifecycle step wrote it.
+        """
+        return _('Adjustment for "%(description)s" (paid in %(original)s, recorded in %(recorded)s)') % {
+            'description': trans.description,
+            'original': trans.original_currency.code,
+            'recorded': trans.currency.code,
+        }
+
+    @staticmethod
+    def _create_auto_adjustment(user, trans: Transaction, account: Account | None) -> Transaction | None:
+        """Book the facet's original-currency leg as an adjustment on `account`.
+
+        No-op (None) when `account` is None - the informational-only facet is
+        a first-class state; the server never infers an account. Builds the
+        row directly instead of recursing into `create`: the adjustment
+        invariants (account set, no category, signed non-zero amount) hold
+        by construction from the already-validated source transaction.
+        The stored description is generated via gettext in the request
+        locale - a deliberate exception to the persisted-data firewall
+        (the user explicitly asked for an explanatory stored description).
+
+        Runs inside the caller's atomic block, like `_do_create` - no
+        @db_transaction.atomic here. Returns the created adjustment.
+        """
+        if account is None:
+            return None
+        sign = -1 if trans.type == 'expense' else 1
+        return Transaction.objects.create(
+            workspace_id=trans.workspace_id,
+            account=account,
+            currency=account.currency,
+            date=trans.date,
+            description=TransactionService._auto_adjustment_description(trans),
+            category=None,
+            amount=sign * trans.original_amount,
+            type='adjustment',
+            created_by=user,
+            updated_by=user,
+            source_transaction=trans,
+        )
+
+    @staticmethod
+    def _upsert_auto_adjustment(user, trans: Transaction, account: Account, linked: Transaction | None) -> Transaction:
+        """Update-or-create the linked adjustment so it mirrors the edited source.
+
+        The sign follows the NEW type (-original_amount for expense,
+        +original_amount for income); the description is regenerated through
+        the same helper the create path uses, so one format exists everywhere.
+        Runs inside `update`'s atomic block, like `_create_auto_adjustment`
+        - no @db_transaction.atomic here.
+        """
+        if linked is None:
+            return TransactionService._create_auto_adjustment(user, trans, account)
+        linked.account = account
+        linked.currency = account.currency
+        linked.amount = -trans.original_amount if trans.type == 'expense' else trans.original_amount
+        linked.date = trans.date
+        linked.description = TransactionService._auto_adjustment_description(trans)
+        linked.updated_by = user
+        linked.save()
+        return linked
+
+    @staticmethod
     def _do_create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
         """Build and persist the Transaction (and inline items) — no idempotency logic.
 
@@ -457,6 +557,9 @@ class TransactionService:
         category = TransactionService._validate_category(data.category_id, workspace_id)
         original_currency = TransactionService._resolve_original_currency(
             workspace_id, currency, data.original_currency_code
+        )
+        original_account = TransactionService._resolve_original_account(
+            workspace_id, original_currency, data.original_account_id
         )
 
         trans = Transaction.objects.create(
@@ -476,6 +579,7 @@ class TransactionService:
         )
         if data.items:
             TransactionItem.objects.bulk_create(TransactionService._build_items_from_schema(trans, data.items))
+        TransactionService._create_auto_adjustment(user, trans, original_account)
         TransactionService._touch_period(user, category, data.date)
         return trans
 
@@ -521,8 +625,14 @@ class TransactionService:
         must then carry currency_code). Editing a transaction whose account
         was archived since is allowed, but retargeting to a DIFFERENT archived
         account is rejected; keeping the same archived account is fine.
+
+        Auto-managed adjustments (source_transaction set) are rejected - the
+        linked adjustment is synced from its SOURCE here: facet + account
+        present upserts it; facet cleared or account nulled deletes it.
         """
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
+        if trans.source_transaction_id is not None:
+            raise TransactionAutoManagedError()
 
         account = TransactionService._resolve_account(workspace_id, data.account_id, allow_archived=True)
         if account is not None and account.id != trans.account_id and account.is_archived:
@@ -533,6 +643,18 @@ class TransactionService:
         original_currency = TransactionService._resolve_original_currency(
             workspace_id, currency, data.original_currency_code
         )
+
+        linked = trans.generated_adjustments.first()
+        original_account = None
+        if original_currency is not None and data.original_account_id is not None:
+            original_account = TransactionService._resolve_original_account(
+                workspace_id, original_currency, data.original_account_id, allow_archived=True
+            )
+            # Same archived-facet-account rule as the transaction's own account
+            # above: keeping the linked adjustment's archived account is fine,
+            # retargeting to a different archived one is rejected.
+            if original_account.is_archived and (linked is None or linked.account_id != original_account.id):
+                raise TransactionOriginalAccountError()
 
         trans.account = account
         trans.currency = currency
@@ -547,16 +669,32 @@ class TransactionService:
         trans.updated_by = user
         trans.save()
 
+        if original_currency is not None and original_account is not None:
+            TransactionService._upsert_auto_adjustment(user, trans, original_account, linked)
+        elif linked is not None:
+            linked.delete()
+        # The sync block rewrote rows behind the prefetch cache get_transaction
+        # served `linked` from; drop it so the serialized original_account_id
+        # reflects the post-sync state, not the pre-sync one.
+        getattr(trans, '_prefetched_objects_cache', {}).pop('generated_adjustments', None)
+
         TransactionService._touch_period(user, category, data.date)
         return trans
 
     @staticmethod
     @db_transaction.atomic
     def delete(workspace_id: int, transaction_id: int) -> None:
-        """Delete a transaction. Balances are computed, so nothing else to revert."""
+        """Delete a transaction. Balances are computed, so nothing else to revert.
+
+        Auto-managed adjustments are rejected here; deleting a SOURCE removes
+        its linked adjustment via the DB CASCADE on source_transaction (pinned
+        by test).
+        """
         from transactions.attachments import AttachmentService
 
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
+        if trans.source_transaction_id is not None:
+            raise TransactionAutoManagedError()
         AttachmentService.delete_storage_for_transactions(Transaction.objects.filter(id=trans.id))
         trans.delete()
 
@@ -706,6 +844,8 @@ class TransactionService:
         owned = Transaction.objects.for_workspace(workspace_id).filter(id__in=transaction_ids)
         if owned.count() != len(set(transaction_ids)):
             raise TransactionBulkAccountError()
+        if owned.filter(source_transaction__isnull=False).exists():
+            raise TransactionBulkManagedError()
         if owned.exclude(currency=account.currency).exists():
             raise TransactionBulkCurrencyError()
 

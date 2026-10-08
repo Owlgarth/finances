@@ -613,6 +613,400 @@ class TestOriginalFacet(TransactionTestCase):
         self.assertEqual(data['original_currency_code'], 'USD')
 
 
+class TestFacetAutoAdjustment(TransactionTestCase):
+    """Facet + original_account_id books the original-currency leg as a linked adjustment."""
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
+        self.usd = usd
+        self.usd_account = AccountFactory(workspace=self.workspace, name='Dollars', currency=usd)
+
+    def _facet_payload(self, **overrides):
+        payload = self._payload(
+            original_amount='12.99',
+            original_currency_code='USD',
+            original_account_id=self.usd_account.id,
+        )
+        payload.update(overrides)
+        return payload
+
+    def test_expense_facet_creates_negative_adjustment(self):
+        data = self.post('/api/transactions', self._facet_payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['original_account_id'], self.usd_account.id)
+        self.assertIsNone(data['source_transaction_id'])
+
+        adj = Transaction.objects.get(type='adjustment', source_transaction_id=data['id'])
+        self.assertEqual(adj.account_id, self.usd_account.id)
+        self.assertEqual(adj.currency.code, 'USD')
+        self.assertEqual(adj.amount, Decimal('-12.99'))
+        self.assertEqual(adj.date, date(2026, 7, 15))
+        self.assertIsNone(adj.category_id)
+        self.assertEqual(adj.created_by, self.user)
+        self.assertEqual(adj.updated_by, self.user)
+        self.assertIn('Test expense', adj.description)
+
+    def test_income_facet_creates_positive_adjustment(self):
+        data = self.post('/api/transactions', self._facet_payload(type='income', amount='50.00'), **self.auth_headers())
+        self.assertStatus(201)
+        adj = Transaction.objects.get(type='adjustment', source_transaction_id=data['id'])
+        self.assertEqual(adj.amount, Decimal('12.99'))
+
+    def test_facet_without_account_is_informational_only(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(original_amount='12.99', original_currency_code='USD'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        self.assertIsNone(data['original_account_id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_unknown_facet_account_returns_400(self):
+        self.post('/api/transactions', self._facet_payload(original_account_id=99999), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_foreign_workspace_facet_account_returns_400(self):
+        foreign = AccountFactory()  # own workspace; factory mints its own
+        self.post('/api/transactions', self._facet_payload(original_account_id=foreign.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_archived_facet_account_returns_400(self):
+        archived = AccountFactory(workspace=self.workspace, name='Old Dollars', currency=self.usd, is_archived=True)
+        self.post('/api/transactions', self._facet_payload(original_account_id=archived.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_facet_account_currency_mismatch_returns_400(self):
+        # self.account holds PLN while the facet currency is USD
+        self.post('/api/transactions', self._facet_payload(original_account_id=self.account.id), **self.auth_headers())
+        self.assertStatus(400)
+
+    def test_facet_on_adjustment_returns_422(self):
+        self.post(
+            '/api/transactions',
+            self._facet_payload(type='adjustment', amount='-12.99'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(422)
+
+    def test_original_account_id_without_facet_pair_returns_422(self):
+        self.post(
+            '/api/transactions',
+            self._payload(original_account_id=self.usd_account.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(422)
+
+    def test_idempotent_replay_does_not_duplicate_adjustment(self):
+        headers = {**self.auth_headers(), 'HTTP_IDEMPOTENCY_KEY': 'facet-key'}
+        first = self.post('/api/transactions', self._facet_payload(), **headers)
+        self.assertStatus(201)
+        second = self.post('/api/transactions', self._facet_payload(), **headers)
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 2)  # source + exactly one adjustment
+
+    def test_facet_account_balance_reflects_adjustment(self):
+        self.post('/api/transactions', self._facet_payload(), **self.auth_headers())
+        self.assertStatus(201)
+        balance = self.get(f'/api/accounts/{self.usd_account.id}/balance', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(balance['balance'], '-12.99')  # opening 0.00 + adjustment -12.99
+
+    def test_adjustment_detail_links_its_source(self):
+        data = self.post('/api/transactions', self._facet_payload(), **self.auth_headers())
+        self.assertStatus(201)
+        adj_id = Transaction.objects.get(type='adjustment', source_transaction_id=data['id']).id
+        detail = self.get(f'/api/transactions/{adj_id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(detail['source_transaction_id'], data['id'])
+        self.assertIsNone(detail['original_account_id'])
+
+
+class TestAutoAdjustmentLifecycle(TransactionTestCase):
+    """Task 2: the linked adjustment follows the source through edit/delete; managed rows are locked."""
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        self.cash_eur = AccountFactory(
+            workspace=self.workspace,
+            name='Cash EUR',
+            currency=Currency.objects.get(code='EUR', workspace=None),
+            opening_balance=Decimal('50.00'),
+        )
+
+    def _create_faceted(self):
+        """POST a PLN expense with an EUR facet tied to the EUR account; returns the created source."""
+        data = self.post(
+            '/api/transactions',
+            self._payload(original_amount='12.99', original_currency_code='EUR', original_account_id=self.cash_eur.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        return data
+
+    def _linked(self, source_id):
+        return Transaction.objects.filter(source_transaction_id=source_id).first()
+
+    def test_update_syncs_adjustment_amount_and_sign(self):
+        created = self._create_faceted()
+        adj = self._linked(created['id'])
+        self.assertEqual(adj.amount, Decimal('-12.99'))  # expense -> -original_amount
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                type='income',
+                amount='60.00',
+                original_amount='10.00',
+                original_currency_code='EUR',
+                original_account_id=self.cash_eur.id,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        adj.refresh_from_db()
+        self.assertEqual(adj.amount, Decimal('10.00'))  # NEW type income -> +original_amount
+        self.assertEqual(adj.id, self._linked(created['id']).id)  # in-place update, not delete+create
+
+    def test_update_moves_adjustment_account(self):
+        created = self._create_faceted()
+        eur_second = AccountFactory(workspace=self.workspace, name='Second EUR', currency=self.cash_eur.currency)
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                original_amount='12.99',
+                original_currency_code='EUR',
+                original_account_id=eur_second.id,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        adj = self._linked(created['id'])
+        self.assertEqual(adj.account_id, eur_second.id)
+        self.assertEqual(adj.currency.code, 'EUR')
+
+    def test_update_date_follows_source(self):
+        created = self._create_faceted()
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                date='2026-08-01',
+                original_amount='12.99',
+                original_currency_code='EUR',
+                original_account_id=self.cash_eur.id,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(self._linked(created['id']).date.isoformat(), '2026-08-01')
+
+    def test_update_regenerates_description_via_shared_helper(self):
+        created = self._create_faceted()
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                description='Renamed',
+                original_amount='12.99',
+                original_currency_code='EUR',
+                original_account_id=self.cash_eur.id,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        adj = self._linked(created['id'])
+        source = Transaction.objects.get(id=created['id'])
+        # Locale-independent: the stored description IS the helper's output - one
+        # derivation path for create and update (backend-testing skill rule).
+        self.assertEqual(adj.description, TransactionService._auto_adjustment_description(source))
+        self.assertIn('Renamed', adj.description)
+
+    def test_update_unchecking_facet_deletes_adjustment(self):
+        created = self._create_faceted()
+        self.assertIsNotNone(self._linked(created['id']))
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(original_amount=None, original_currency_code=None, original_account_id=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(data['original_amount'])
+        self.assertIsNone(self._linked(created['id']))
+
+    def test_update_facet_without_account_becomes_informational(self):
+        created = self._create_faceted()
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(original_amount='12.99', original_currency_code='EUR', original_account_id=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['original_currency_code'], 'EUR')  # facet kept...
+        self.assertIsNone(self._linked(created['id']))  # ...but adjustment deleted
+
+    def test_re_put_same_payload_leaves_exactly_one_adjustment(self):
+        created = self._create_faceted()
+        payload = self._payload(
+            original_amount='12.99',
+            original_currency_code='EUR',
+            original_account_id=self.cash_eur.id,
+        )
+        self.put(f'/api/transactions/{created["id"]}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.put(f'/api/transactions/{created["id"]}', payload, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(
+            Transaction.objects.filter(source_transaction_id=created['id']).count(),
+            1,
+        )
+
+    def test_update_facet_recheck_after_clear_recreates_adjustment(self):
+        created = self._create_faceted()
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(original_amount=None, original_currency_code=None, original_account_id=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertIsNone(self._linked(created['id']))
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(
+                original_amount='15.00',
+                original_currency_code='EUR',
+                original_account_id=self.cash_eur.id,
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        adj = self._linked(created['id'])
+        self.assertIsNotNone(adj)
+        self.assertEqual(adj.amount, Decimal('-15.00'))
+
+    def test_update_legacy_facet_row_adding_account_creates_adjustment(self):
+        """Pre-feature facet rows (informational) gain their adjustment on first edit - no backfill."""
+        eur = Currency.objects.get(code='EUR', workspace=None)
+        legacy = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            original_amount=Decimal('12.99'),
+            original_currency=eur,
+        )
+        self.assertIsNone(self._linked(legacy.id))
+
+        self.put(
+            f'/api/transactions/{legacy.id}',
+            self._payload(original_amount='12.99', original_currency_code='EUR', original_account_id=self.cash_eur.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        adj = self._linked(legacy.id)
+        self.assertIsNotNone(adj)
+        self.assertEqual(adj.amount, Decimal('-12.99'))
+
+    def test_update_managed_row_returns_400(self):
+        created = self._create_faceted()
+        adj = self._linked(created['id'])
+        data = self.put(f'/api/transactions/{adj.id}', self._payload(), **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(
+            str(data['detail']),
+            'This adjustment is managed by its transaction; edit the transaction instead',
+        )
+
+    def test_delete_managed_row_returns_400(self):
+        created = self._create_faceted()
+        adj = self._linked(created['id'])
+        self.delete(f'/api/transactions/{adj.id}', **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(
+            str(self.response.json()['detail']),
+            'This adjustment is managed by its transaction; edit the transaction instead',
+        )
+        self.assertTrue(Transaction.objects.filter(id=adj.id).exists())  # nothing deleted
+        self.assertTrue(Transaction.objects.filter(id=created['id']).exists())
+
+    def test_delete_source_cascades_linked_adjustment(self):
+        """CASCADE pin (data-deletion-gdpr skill): deleting the source removes exactly the linked adjustment."""
+        created = self._create_faceted()
+        other = TransactionFactory(account=self.account, workspace=self.workspace)
+        adj = self._linked(created['id'])
+        self.assertEqual(AccountService.balance(self.cash_eur), Decimal('50.00') - Decimal('12.99'))
+
+        self.delete(f'/api/transactions/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        self.assertFalse(Transaction.objects.filter(id=created['id']).exists())
+        self.assertFalse(Transaction.objects.filter(id=adj.id).exists())
+        self.assertTrue(Transaction.objects.filter(id=other.id).exists())  # nothing else removed
+        self.assertEqual(AccountService.balance(self.cash_eur), Decimal('50.00'))  # balance restored
+
+    def test_bulk_set_account_with_managed_row_returns_400(self):
+        created = self._create_faceted()
+        adj = self._linked(created['id'])
+        eur_target = AccountFactory(
+            workspace=self.workspace,
+            name='EUR target',
+            currency=self.cash_eur.currency,
+        )  # EUR target isolates the managed guard from the currency guard
+
+        self.post(
+            '/api/transactions/bulk-account',
+            {'transaction_ids': [adj.id], 'account_id': eur_target.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(
+            str(self.response.json()['detail']),
+            'Selected transactions include auto-generated adjustments; move the source transaction instead',
+        )
+        adj.refresh_from_db()
+        self.assertEqual(adj.account_id, self.cash_eur.id)  # all-or-nothing: nothing moved
+
+    def test_update_same_archived_facet_account_allowed(self):
+        created = self._create_faceted()
+        self.cash_eur.is_archived = True
+        self.cash_eur.save(update_fields=['is_archived'])
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(original_amount='12.99', original_currency_code='EUR', original_account_id=self.cash_eur.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(self._linked(created['id']).account_id, self.cash_eur.id)
+
+    def test_update_retarget_to_other_archived_facet_account_returns_400(self):
+        created = self._create_faceted()
+        eur_archived = AccountFactory(
+            workspace=self.workspace,
+            name='Old EUR',
+            currency=self.cash_eur.currency,
+            is_archived=True,
+        )
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(original_amount='12.99', original_currency_code='EUR', original_account_id=eur_archived.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(self._linked(created['id']).account_id, self.cash_eur.id)  # untouched
+
+    def test_copying_faceted_source_gets_own_adjustment(self):
+        """Copy = a fresh POST through the create path -> its own adjustment (no special code)."""
+        self._create_faceted()
+        second = self._create_faceted()
+        self.assertEqual(Transaction.objects.filter(source_transaction_id=second['id']).count(), 1)
+        self.assertEqual(
+            Transaction.objects.filter(source_transaction__isnull=False, workspace=self.workspace).count(),
+            2,
+        )
+
+
 class TestDerivedPeriods(TransactionTestCase):
     def test_create_with_category_materializes_period(self):
         self.assertEqual(Period.objects.filter(budget=self.budget).count(), 0)
@@ -1261,6 +1655,39 @@ class TestExportImport(TransactionTestCase):
         rows = json.loads(response.content)
         self.assertEqual(len(rows), 1)
         self.assertIsNone(rows[0]['note'])
+
+    def test_export_includes_auto_adjustment_as_plain_row(self):
+        """In-app spreadsheet keeps auto-created adjustments: they are real
+        balance movements on real accounts, so excluding them would break
+        reconciliation against in-app balances. (The GDPR round-trip is the
+        only consumer that must skip them - it does so in users/services.py.)"""
+        usd = CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        cash_usd = AccountFactory(workspace=self.workspace, name='Cash USD', currency=usd)
+        source = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Converted payment',
+            amount=Decimal('51.20'),
+            type='expense',
+            original_amount=Decimal('200.00'),
+            original_currency=usd,
+        )
+        TransactionFactory(
+            account=cash_usd,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Auto adjustment',
+            amount=Decimal('-200.00'),
+            type='adjustment',
+            source_transaction=source,
+        )
+
+        response = self.client.get('/api/transactions/export/', **self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row['description'] for row in rows}, {'Converted payment', 'Auto adjustment'})
 
     def test_import_applies_note(self):
         rows = [
