@@ -19,13 +19,6 @@ COPY . .
 COPY --from=backend common/languages.json /backend/common/languages.json
 COPY --from=backend common/fonts.json /backend/common/fonts.json
 
-# Build args baked into the frontend bundle at build time
-ARG VITE_API_URL
-ENV VITE_API_URL=${VITE_API_URL}
-
-ARG VITE_DEMO_MODE
-ENV VITE_DEMO_MODE=${VITE_DEMO_MODE}
-
 # Public build metadata only: ARG values land in image history and public CI logs;
 # secrets never become ARGs - runtime env only.
 ARG VITE_APP_VERSION=dev
@@ -42,6 +35,15 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Deploy-time configuration: nginx's stock docker-entrypoint.sh runs
+# executable *.sh hooks in /docker-entrypoint.d/ before starting nginx.
+# The hook writes config.js from the API_URL/DEMO_MODE env vars, so a
+# self-hoster points the SPA at their own API without rebuilding the image.
+COPY docker-entrypoint.d/30-app-config.sh /docker-entrypoint.d/30-app-config.sh
+# The stock entrypoint skips non-executable .sh files; chmod here because
+# the git exec bit is not guaranteed to survive every checkout.
+RUN chmod +x /docker-entrypoint.d/30-app-config.sh
 
 EXPOSE 80
 

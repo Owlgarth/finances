@@ -39,9 +39,11 @@ same session - in PR #81 it paid for itself twice.
 
 - Another checkout may already hold the default ports - `docker ps` first, shift
   `API_PORT`/`UI_PORT` rather than stopping someone's containers.
-- The shift is a triple: `VITE_API_URL`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` do NOT
-  derive from `API_PORT`/`UI_PORT` (rule detail in `docker-infra`). Missing one silently
-  splits frontend/backend across checkouts - confirm the UI actually reaches YOUR api before
+- The shift is a triple: `VITE_API_URL` (root `.env`; the ui container gets it as runtime
+  `API_URL`, written into `/config.js` at startup - a change is a ui recreate, not a
+  rebuild), `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` do NOT derive from
+  `API_PORT`/`UI_PORT` (rule detail in `docker-infra`). Missing one silently splits
+  frontend/backend across checkouts - confirm the UI actually reaches YOUR api before
   debugging the product.
 
 ## Budget the fallback before assembling
