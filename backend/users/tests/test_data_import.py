@@ -565,6 +565,25 @@ class V3FacetAdjustmentImportTests(AuthMixin, TestCase):
         self.assertEqual(AccountService.balance(Account.objects.get(workspace=ws, name='Cash PLN')), cash_balance)
         self.assertEqual(AccountService.balance(Account.objects.get(workspace=ws, name='Card USD')), card_balance)
 
+    def test_pair_round_trips_through_json_file(self):
+        """The real download/upload path: GDPREncoder writes Decimals as strings,
+        so the importer hands the adjustment helper a raw "200.00" - the signed
+        amount must still come out as Decimal('-200.00') for an expense."""
+        import json
+
+        from common.json_encoder import GDPREncoder
+
+        self._linked_pair()
+        export_data = json.loads(json.dumps(UserService.export_all_data(self.user), cls=GDPREncoder))
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = self._imported_workspace()
+        adjustment = Transaction.objects.get(workspace=ws, type='adjustment')
+        self.assertEqual(adjustment.amount, Decimal('-200.00'))
+        self.assertEqual(adjustment.source_transaction.description, 'Converted card payment')
+
     def test_informational_facet_stays_informational(self):
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')

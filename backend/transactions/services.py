@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction as db_transaction
-from django.db.models import Count, F, Sum, Value
+from django.db.models import Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -489,6 +489,18 @@ class TransactionService:
         }
 
     @staticmethod
+    def _auto_adjustment_amount(trans: Transaction) -> Decimal:
+        """Signed adjustment amount: -original_amount for expense, +original_amount for income.
+
+        The ONE sign derivation for the create and update paths. Coerces via
+        str() because the GDPR importer hands over a freshly created instance
+        whose original_amount still holds the raw JSON string ("200.00") -
+        multiplying that string by -1 yields '' instead of a negative amount.
+        """
+        amount = Decimal(str(trans.original_amount))
+        return -amount if trans.type == 'expense' else amount
+
+    @staticmethod
     def _create_auto_adjustment(user, trans: Transaction, account: Account | None) -> Transaction | None:
         """Book the facet's original-currency leg as an adjustment on `account`.
 
@@ -506,7 +518,6 @@ class TransactionService:
         """
         if account is None:
             return None
-        sign = -1 if trans.type == 'expense' else 1
         return Transaction.objects.create(
             workspace_id=trans.workspace_id,
             account=account,
@@ -514,7 +525,7 @@ class TransactionService:
             date=trans.date,
             description=TransactionService._auto_adjustment_description(trans),
             category=None,
-            amount=sign * trans.original_amount,
+            amount=TransactionService._auto_adjustment_amount(trans),
             type='adjustment',
             created_by=user,
             updated_by=user,
@@ -525,9 +536,9 @@ class TransactionService:
     def _upsert_auto_adjustment(user, trans: Transaction, account: Account, linked: Transaction | None) -> Transaction:
         """Update-or-create the linked adjustment so it mirrors the edited source.
 
-        The sign follows the NEW type (-original_amount for expense,
-        +original_amount for income); the description is regenerated through
-        the same helper the create path uses, so one format exists everywhere.
+        The sign follows the NEW type; amount and description are derived
+        through the same helpers the create path uses, so one format exists
+        everywhere.
         Runs inside `update`'s atomic block, like `_create_auto_adjustment`
         - no @db_transaction.atomic here.
         """
@@ -535,7 +546,7 @@ class TransactionService:
             return TransactionService._create_auto_adjustment(user, trans, account)
         linked.account = account
         linked.currency = account.currency
-        linked.amount = -trans.original_amount if trans.type == 'expense' else trans.original_amount
+        linked.amount = TransactionService._auto_adjustment_amount(trans)
         linked.date = trans.date
         linked.description = TransactionService._auto_adjustment_description(trans)
         linked.updated_by = user
@@ -630,6 +641,8 @@ class TransactionService:
         linked adjustment is synced from its SOURCE here: facet + account
         present upserts it; facet cleared or account nulled deletes it.
         """
+        from transactions.attachments import AttachmentService
+
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
         if trans.source_transaction_id is not None:
             raise TransactionAutoManagedError()
@@ -672,6 +685,7 @@ class TransactionService:
         if original_currency is not None and original_account is not None:
             TransactionService._upsert_auto_adjustment(user, trans, original_account, linked)
         elif linked is not None:
+            AttachmentService.delete_storage_for_transactions(Transaction.objects.filter(id=linked.id))
             linked.delete()
         # The sync block rewrote rows behind the prefetch cache get_transaction
         # served `linked` from; drop it so the serialized original_account_id
@@ -688,14 +702,17 @@ class TransactionService:
 
         Auto-managed adjustments are rejected here; deleting a SOURCE removes
         its linked adjustment via the DB CASCADE on source_transaction (pinned
-        by test).
+        by test). The storage sweep covers that adjustment too - attachments
+        cascade with it, their stored objects do not.
         """
         from transactions.attachments import AttachmentService
 
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
         if trans.source_transaction_id is not None:
             raise TransactionAutoManagedError()
-        AttachmentService.delete_storage_for_transactions(Transaction.objects.filter(id=trans.id))
+        AttachmentService.delete_storage_for_transactions(
+            Transaction.objects.filter(Q(id=trans.id) | Q(source_transaction_id=trans.id))
+        )
         trans.delete()
 
     @staticmethod

@@ -1006,6 +1006,54 @@ class TestAutoAdjustmentLifecycle(TransactionTestCase):
             2,
         )
 
+    def test_second_adjustment_for_same_source_violates_constraint(self):
+        """At most one generated adjustment per source - original_account_id and the export read [0]."""
+        from django.db import IntegrityError
+        from django.db import transaction as db_transaction
+
+        created = self._create_faceted()
+        with self.assertRaises(IntegrityError), db_transaction.atomic():
+            TransactionFactory(
+                account=self.cash_eur,
+                workspace=self.workspace,
+                type='adjustment',
+                amount=Decimal('-1.00'),
+                source_transaction_id=created['id'],
+            )
+
+    def _attach_to(self, trans):
+        return TransactionAttachment.objects.create(
+            transaction=trans,
+            file_key=f'attachments/{self.workspace.id}/{trans.id}/receipt.jpg',
+            filename='receipt.jpg',
+            content_type='image/jpeg',
+            size=9,
+        )
+
+    @mock.patch('transactions.attachments.StorageService')
+    def test_delete_source_cleans_linked_adjustment_storage(self, storage):
+        """The CASCADE removes the adjustment's attachment rows; the sweep must cover their objects."""
+        storage._is_enabled.return_value = True
+        created = self._create_faceted()
+        attachment = self._attach_to(self._linked(created['id']))
+
+        self.delete(f'/api/transactions/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        storage.delete_file.assert_called_once()
+        self.assertEqual(storage.delete_file.call_args[0][1], attachment.file_key)
+
+    @mock.patch('transactions.attachments.StorageService')
+    def test_update_dropping_adjustment_cleans_its_storage(self, storage):
+        storage._is_enabled.return_value = True
+        created = self._create_faceted()
+        attachment = self._attach_to(self._linked(created['id']))
+
+        self.put(f'/api/transactions/{created["id"]}', self._payload(), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertIsNone(self._linked(created['id']))
+        storage.delete_file.assert_called_once()
+        self.assertEqual(storage.delete_file.call_args[0][1], attachment.file_key)
+
 
 class TestDerivedPeriods(TransactionTestCase):
     def test_create_with_category_materializes_period(self):

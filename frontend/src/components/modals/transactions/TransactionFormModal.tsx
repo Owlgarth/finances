@@ -271,12 +271,15 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       setOtherCurrency(!!source.original_currency_code)
       setOriginalAmount(source.original_amount ?? '')
       setOriginalCurrencyCode(source.original_currency_code)
-      // Facet account round-trip: the stored id only when it still resolves
-      // to a live account (archived/deleted-since accounts are absent from
-      // the active-only list); otherwise the default-for-currency pick,
-      // which is null when no account holds the facet currency.
+      // Facet account round-trip. A stored null (informational-only facet,
+      // including every row saved before facet accounts existed) stays null
+      // in both modes - auto-picking here would book an adjustment on an
+      // unrelated save. Edit echoes the stored id verbatim, like account_id:
+      // the backend keeps an archived adjustment account. Copy is a create,
+      // which rejects archived accounts, so an archived source account falls
+      // back to the default-for-currency pick.
       setOriginalAccountId(
-        source.original_account_id != null && accounts.some((a) => a.id === source.original_account_id)
+        transaction || source.original_account_id == null || accounts.some((a) => a.id === source.original_account_id)
           ? source.original_account_id
           : pickAccountForCurrency(accounts, source.original_currency_code),
       )
@@ -520,7 +523,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   // Sentinel FIRST, then the accounts holding the facet currency (the only
   // legal adjustment targets). Plain names - every option shares one
   // currency, so a code suffix would be noise. Archived accounts are not
-  // offered; an empty list leaves the sentinel alone.
+  // offered (an edited row's archived account shows the placeholder, like
+  // the account select); an empty list leaves the sentinel alone.
   const adjustmentAccountOptions = [
     { value: NO_ADJUSTMENT, label: t('form.noAdjustment') },
     ...accounts
@@ -810,6 +814,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
                     value={originalAccountId ?? NO_ADJUSTMENT}
                     onChange={handleAdjustmentAccountChange}
                     options={adjustmentAccountOptions}
+                    placeholder={t('form.selectAccount')}
                     aria-label={t('form.adjustmentAccountAria')}
                     className="w-full"
                   />

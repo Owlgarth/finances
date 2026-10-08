@@ -76,15 +76,19 @@ class Transaction(WorkspaceScopedModel):
         'currencies.Currency', on_delete=models.PROTECT, null=True, blank=True, related_name='+'
     )
     # Auto-generated adjustment (type='adjustment') booking the original-
-    # currency leg on the facet's account; written only by the create path
-    # when the facet carries an account. CASCADE: deleting the source
-    # removes its generated adjustment with it.
+    # currency leg on the facet's account; written only through
+    # TransactionService's auto-adjustment helpers (create, update sync, GDPR
+    # import) when the facet carries an account. At most one per source
+    # (one_adjustment_per_source). CASCADE: deleting the source removes its
+    # generated adjustment with it.
     source_transaction = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name='generated_adjustments',
+        # The one_adjustment_per_source unique index serves the lookups.
+        db_index=False,
     )
 
     class Meta:
@@ -103,6 +107,9 @@ class Transaction(WorkspaceScopedModel):
                 ),
                 name='original_facet_both_or_neither',
             ),
+            # original_account_id and the GDPR export read generated_adjustments[0];
+            # NULLs stay distinct, so non-generated rows are unaffected.
+            models.UniqueConstraint(fields=['source_transaction'], name='one_adjustment_per_source'),
         ]
 
     @property

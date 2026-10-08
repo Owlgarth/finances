@@ -373,9 +373,12 @@ export default function Transactions() {
                     )}
                   </div>
                   {/* Hover reveals are pointer-fine only — on touch they'd be
-                      invisible tap targets; the row tap opens the sheet instead. */}
-                  {!auto && canWrite && !isTouch && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      invisible tap targets; the row tap opens the sheet instead.
+                      Auto rows keep the block as an `invisible` spacer (no
+                      hover, no focus, no clicks) so their amount stays aligned
+                      with the editable rows' amounts. */}
+                  {canWrite && !isTouch && (
+                    <div className={`flex items-center gap-1 ${auto ? 'invisible' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
                       <button onClick={() => openEdit(tx)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                       <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
                       <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
