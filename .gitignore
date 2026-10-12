@@ -45,3 +45,5 @@ node_modules/
 dist/
 build/
 *.log
+.opencode/
+opencode.json.bak
