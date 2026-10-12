@@ -1,3 +1,8 @@
+## [0.2.0] - 2026-10-12
+
+- chore: ignore opencode workspace files (.opencode/, opencode.json.bak) (891d0d7)
+- feat: auto-created linked adjustment for transactions paid in another currency (rebased + review fixes) (#139) (0fef739)
+- Make UI API URL runtime-configurable instead of build-time (#138) (b5d77bc)
 # Changelog
 
 ## [0.1.0] - 2026-09-30
