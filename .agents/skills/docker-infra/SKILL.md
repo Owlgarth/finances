@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, or the dev.sh release command.
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, the dev.sh release command, or bumping the project version (the uv.lock refresh).
 ---
 
 # Docker & Infrastructure
@@ -93,7 +93,12 @@ It `source`s `.env`, so **values containing spaces must be quoted there** — co
 
 ### The `release` command
 
-`./dev.sh release 0.1.0` (bare version; the script adds the `v`) is a fail-closed, ordered pipeline: git-state checks → test gate → VERSION bump → changelog → remote sync → stage → commit → tag → push. Preserve the ordering and its irreversibility guards: VERSION is re-read after write, tag absence is re-verified immediately before `git tag`, and staging is always an explicit literal file list. Git-state checks (branch, clean tree) are fatal in real runs but report-only under `--dry-run` so a dry run works from any checkout; the local gate invokes `./dev.sh lint` / `./dev.sh test` as child processes rather than refactoring the case arms.
+`./dev.sh release 0.1.0` (bare version; the script adds the `v`) is a fail-closed, ordered pipeline: git-state checks → test gate → VERSION bump → changelog → version sync (the pyproject/package.json sed) → uv lock refresh → stage → commit → tag → push. Preserve the ordering and its irreversibility guards: VERSION is re-read after write, tag absence is re-verified immediately before `git tag`, and staging is always an explicit literal file list (VERSION + CHANGELOG.md unconditionally; pyproject/package.json/uv.lock only when `git diff --quiet -- <path>` reports them changed, so a no-op release stays clean). Git-state checks (branch, clean tree) are fatal in real runs but report-only under `--dry-run` so a dry run works from any checkout; the local gate invokes `./dev.sh lint` / `./dev.sh test` as child processes rather than refactoring the case arms.
+
+**A version bump must regenerate `backend/uv.lock` in the same step.** uv.lock pins the project's own version (`[[package]] name = "api"`), so the sed alone leaves `uv sync --locked` in the backend image build failing on the tag - the v0.2.0 incident; v0.1.0 had survived only because its bump was a no-op. The refresh sits after the version sync and before staging, so the release commit carries version + lock together and, under `set -euo pipefail`, a failed refresh aborts with nothing staged. `frontend/package-lock.json` is the tolerating consumer (embeds `0.0.0`, never synced, `npm ci` accepts the mismatch) - leave it alone, no symmetric npm fix exists.
+
+- Lock interop is host-writes/container-consumes: a lock refreshed by host uv 0.11.28 was accepted by the image-pinned uv 0.12.8 as a no-op resolve. Re-check that pair if either side is upgraded - a lockfile `revision` bump could break it.
+- When simulating a bump to exercise the pipeline, the version string must be valid PEP 440: uv rejects labels like `0.3.0-test` (exit 2, nothing written to the lock).
 
 ### DEV_TARGET: container or host
 
@@ -102,6 +107,8 @@ It `source`s `.env`, so **values containing spaces must be quoted there** — co
 `in_service` execs into the service when it is up and uses `docker compose run --rm --entrypoint ''` otherwise (the image entrypoint would migrate and collectstatic). Both pass `--user "$(id -u):$(id -g)" -e HOME=/tmp`: **without the uid mapping every file the command writes into the bind mount — new migrations, `.pytest_cache`, `.ruff_cache` — lands root-owned in the checkout**, and without `HOME` uv/npm fail trying to write `/.cache`.
 
 Backend commands resolve through `/venv/bin/<tool>` (`UV_PROJECT_ENVIRONMENT`), not `uv run`, which would try to sync the environment it cannot write.
+
+uv subcommands are a third route and never go through `backend_run`: its host arm would run `uv run <cmd>` (wrong subcommand - it syncs the venv first) and its docker arm execs `/venv/bin/uv`, which does not exist (uv lives at `/bin/uv` in the image). Route them by tool availability, not DEV_TARGET: `command -v uv` succeeds → host `(cd backend && uv <cmd>)`, else `in_service api uv <cmd>` - the dev compose bind-mounts the source and `in_service`'s uid mapping keeps the container-side write host-owned. `uv lock` needs no `use_local_hosts` (it touches no services), and the one uncovered combination, no host uv AND no Docker, cannot run `dev.sh` at all.
 
 The `node` service (profile `tools`) exists only for this: `node:22-slim` with `./frontend` bind-mounted. Debian-based like the builder stage, so the `node_modules` it writes stays usable if the host also runs npm — an alpine/musl image would install incompatible esbuild binaries.
 
