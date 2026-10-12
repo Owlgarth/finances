@@ -62,6 +62,8 @@
   "emptyFiltered": "Жодна транзакція не відповідає пошуку чи фільтрам.",
   "empty": "Транзакцій ще немає.",
   "adjBadge": "Кор",
+  "autoBadge": "авто",
+  "autoBadgeTitle": "Керується своєю транзакцією-джерелом",
   "noAccount": "Без рахунку",
   "rowActions": {
     "edit": "Редагувати",
@@ -102,6 +104,9 @@
     "otherCurrency": "Оплата в іншій валюті?",
     "originalAmountPlaceholder": "Початкова сума",
     "originalCurrencyAria": "Початкова валюта",
+    "adjustmentAccountLabel": "Рахунок коригування (необов'язово)",
+    "adjustmentAccountAria": "Рахунок коригування",
+    "noAdjustment": "Без коригування (лише інформація)",
     "copy": "Копіювати",
     "delete": "Видалити",
     "cancel": "Скасувати",

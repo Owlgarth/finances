@@ -80,7 +80,8 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
             date: transaction.date,
             description: parsed.merchant!,
             // Echoed unchanged: update is full-replace - an absent
-            // key would silently clear a stored note.
+            // key would silently clear a stored note / drop the linked
+            // facet adjustment.
             note: transaction.note,
             type: transaction.type,
             amount: transaction.amount,
@@ -89,6 +90,7 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
             category_id: transaction.category_id,
             original_amount: transaction.original_amount,
             original_currency_code: transaction.original_currency_code,
+            original_account_id: transaction.original_account_id,
           })
         } catch {
           // Swallowed deliberately — see comment above.
