@@ -257,7 +257,7 @@ fallback_changelog() {
 }
 
 # Tag a release from branch main: pre-flight checks, local lint + test gate,
-# VERSION, changelog, version sync, commit, annotated tag, push. Fail-closed:
+# VERSION, changelog, version sync + uv.lock refresh, commit, annotated tag, push. Fail-closed:
 # any failed check dies before anything is written or tagged. --dry-run prints
 # every step without executing it; the git-state checks are only reported
 # there, so a dry run also works from a feature branch.
@@ -360,8 +360,10 @@ release() {
         fallback_changelog "$version" "$last_tag"
     fi
 
-    # Version sync: nothing reads these two, but keep them from drifting.
-    # The 0,/re/ address touches only the first matching line of each file.
+    # Version sync: pyproject's version is load-bearing - uv.lock pins it and
+    # `uv sync --locked` in the image build enforces the match (see the lock
+    # refresh below); package.json's is drift-prevention only. The 0,/re/
+    # address touches only the first matching line of each file.
     if [ "$dry_run" = true ]; then
         echo "[dry-run] would sync: backend/pyproject.toml, frontend/package.json"
     else
@@ -369,11 +371,23 @@ release() {
         sed -i "0,/^  \"version\": \".*\",$/s//  \"version\": \"$version\",/" frontend/package.json
     fi
 
+    # Lock refresh: uv.lock pins the project's own version too, so the bump
+    # above leaves `uv sync --locked` (backend image build) failing on the tag
+    # unless the lock is regenerated. Host uv when installed; the api container
+    # otherwise (uv at /bin/uv in the image, source bind-mounted).
+    if [ "$dry_run" = true ]; then
+        echo "[dry-run] would run: uv lock (backend/)"
+    elif command -v uv >/dev/null; then
+        (cd backend && uv lock)
+    else
+        in_service api uv lock
+    fi
+
     # Stage an explicit file list only (never -A), commit, tag, push.
     local files=(VERSION CHANGELOG.md)
     if [ "$dry_run" = true ]; then
         echo "[dry-run] would stage: VERSION CHANGELOG.md"
-        echo "[dry-run] would stage: backend/pyproject.toml, frontend/package.json (when changed)"
+        echo "[dry-run] would stage: backend/pyproject.toml, frontend/package.json, backend/uv.lock (when changed)"
         echo "[dry-run] would commit: chore(release): $tag"
         echo "[dry-run] would tag: $tag (annotated)"
         echo "[dry-run] would push: origin main $tag"
@@ -381,9 +395,10 @@ release() {
         return 0
     fi
 
-    # pyproject/package.json go into the commit only when the sync changed them.
+    # pyproject/package.json/uv.lock go into the commit only when changed.
     git diff --quiet -- backend/pyproject.toml || files+=(backend/pyproject.toml)
     git diff --quiet -- frontend/package.json || files+=(frontend/package.json)
+    git diff --quiet -- backend/uv.lock || files+=(backend/uv.lock)
 
     git add "${files[@]}"
     git commit -m "chore(release): $tag"
