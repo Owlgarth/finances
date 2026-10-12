@@ -197,8 +197,10 @@ The command then:
 - **Local gate** - runs `./dev.sh lint` and `./dev.sh test`. The gate is on by
   default; `--skip-tests` opts out - CI re-runs the tests as the authoritative
   gate.
-- **Version files** - writes the version into `VERSION` and syncs it into
-  `backend/pyproject.toml` and `frontend/package.json`.
+- **Version files** - writes the version into `VERSION`, syncs it into
+  `backend/pyproject.toml` and `frontend/package.json`, and refreshes
+  `backend/uv.lock` - the lock pins the project's own version, so without the
+  refresh `uv sync --locked` in the backend image build fails on the tag.
 - **Changelog** - prepends a section to `CHANGELOG.md` (the file is created by
   the first release): git-cliff groups conventional commits under Features /
   Bug Fixes / Documentation / Miscellaneous headings per `cliff.toml`; without
