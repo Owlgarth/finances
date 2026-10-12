@@ -93,6 +93,11 @@ export interface Transaction {
   type: TransactionType;
   original_amount: string | null;
   original_currency_code: string | null;
+  /** Non-null on auto-created facet adjustments: the row is managed by its
+   *  source transaction and rejects direct edits (affordances hidden in the UI). */
+  source_transaction_id: number | null;
+  /** Account of this facet's linked auto-adjustment (null = informational-only). */
+  original_account_id: number | null;
   created_at: string;
   updated_at: string | null;
 }

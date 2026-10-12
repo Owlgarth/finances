@@ -46,7 +46,8 @@ Workspace (top-level container)
 ├── Account                  (cash / bank / other; holds money in one currency)
 │     ├── Transaction        (income / expense / adjustment; optional category; optionally on this
 │     │     │                  account - every transaction stores its own currency, so account-less
-│     │     │                  rows hang directly off the workspace)
+│     │     │                  rows hang directly off the workspace; a faceted payment may carry a
+│     │     │                  linked auto-adjustment via a nullable self-FK)
 │     │     ├── TransactionItem        (ordered receipt line items - informational)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
@@ -70,8 +71,8 @@ Workspace (top-level container)
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
-| **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); informational, excluded from aggregates, and must differ from the transaction's own currency. |
-| **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. |
+| **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); it must differ from the transaction's own currency, and the facet amount itself is informational and excluded from aggregates. When an original-currency account is selected, an auto-created linked adjustment records the movement on that account; the managed adjustment row is editable only via its source transaction. |
+| **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. A faceted payment auto-creates one (nullable `source_transaction` self-FK on Transaction); these rows are managed by their source and cannot be edited or deleted directly. |
 | **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
 
 ### Multi-Workspace Support

@@ -41,6 +41,7 @@ class TransactionCreate(BaseModel):
     category_id: Optional[int] = None
     original_amount: Optional[Decimal] = Field(None, gt=0)
     original_currency_code: Optional[str] = Field(None, pattern=r'^[A-Z]{3,8}$')
+    original_account_id: Optional[int] = None
     items: list['TransactionItemIn'] = Field(default_factory=list, max_length=200)
 
     @field_validator('description')
@@ -54,6 +55,10 @@ class TransactionCreate(BaseModel):
     def original_facet_both_or_neither(self):
         if (self.original_amount is None) != (self.original_currency_code is None):
             raise ValueError(_('original_amount and original_currency_code must both be set or both be omitted'))
+        if self.original_account_id is not None and self.original_amount is None:
+            raise ValueError(_('original_account_id requires original_amount and original_currency_code'))
+        if self.original_amount is not None and self.type == 'adjustment':
+            raise ValueError(_('Adjustments cannot carry an original-currency facet'))
         return self
 
 
@@ -108,6 +113,8 @@ class TransactionOut(BaseModel):
     type: str
     original_amount: Optional[Decimal] = None
     original_currency_code: Optional[str] = None
+    source_transaction_id: Optional[int] = None
+    original_account_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
