@@ -62,6 +62,8 @@
   "emptyFiltered": "Żadna transakcja nie pasuje do wyszukiwania ani filtrów.",
   "empty": "Brak transakcji.",
   "adjBadge": "Kor",
+  "autoBadge": "auto",
+  "autoBadgeTitle": "Zarządzane przez transakcję źródłową",
   "noAccount": "Bez konta",
   "rowActions": {
     "edit": "Edytuj",
@@ -102,6 +104,9 @@
     "otherCurrency": "Zapłacono w innej walucie?",
     "originalAmountPlaceholder": "Oryginalna kwota",
     "originalCurrencyAria": "Oryginalna waluta",
+    "adjustmentAccountLabel": "Konto korekty (opcjonalnie)",
+    "adjustmentAccountAria": "Konto korekty",
+    "noAdjustment": "Bez korekty (tylko informacja)",
     "copy": "Kopiuj",
     "delete": "Usuń",
     "cancel": "Anuluj",

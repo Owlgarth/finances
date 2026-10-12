@@ -52,6 +52,21 @@ class TransactionOriginalCurrencyError(ValidationError):
         super().__init__(message)
 
 
+class TransactionOriginalAccountError(ValidationError):
+    default_message = gettext_lazy('Original-currency account not found, archived, or not in this workspace')
+    default_code = 'original_account_invalid'
+
+
+class TransactionOriginalAccountCurrencyError(ValidationError):
+    default_message = gettext_lazy('Original-currency account must hold the facet currency')
+    default_code = 'original_account_currency_mismatch'
+
+
+class TransactionAutoManagedError(ValidationError):
+    default_message = gettext_lazy('This adjustment is managed by its transaction; edit the transaction instead')
+    default_code = 'transaction_auto_managed'
+
+
 class TransactionBulkAccountError(ValidationError):
     default_message = gettext_lazy('All transactions and the target account must belong to the workspace')
     default_code = 'bulk_account_invalid'
@@ -60,6 +75,13 @@ class TransactionBulkAccountError(ValidationError):
 class TransactionBulkCurrencyError(ValidationError):
     default_message = gettext_lazy('Target account currency must match the currency of every moved transaction')
     default_code = 'bulk_currency_mismatch'
+
+
+class TransactionBulkManagedError(ValidationError):
+    default_message = gettext_lazy(
+        'Selected transactions include auto-generated adjustments; move the source transaction instead'
+    )
+    default_code = 'bulk_auto_managed'
 
 
 class TransactionImportError(ValidationError):
