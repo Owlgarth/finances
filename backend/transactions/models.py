@@ -15,8 +15,11 @@ class Transaction(WorkspaceScopedModel):
     exchanged while traveling; a closed account's past).
 
     The original amount/currency facet records what was paid at the point of
-    sale (converted card payments): informational only, excluded from every
-    aggregate, and required to differ from the transaction's own currency.
+    sale (converted card payments): excluded from every aggregate and required
+    to differ from the transaction's own currency. It is informational only
+    unless an account in the facet currency was chosen, in which case the
+    create path also books a linked adjustment (source_transaction) on that
+    account for the original-currency leg.
     Period membership is derived from category budget + date, never stored.
 
     `note` is free-text user remarks - informational like `description`.
@@ -72,6 +75,21 @@ class Transaction(WorkspaceScopedModel):
     original_currency = models.ForeignKey(
         'currencies.Currency', on_delete=models.PROTECT, null=True, blank=True, related_name='+'
     )
+    # Auto-generated adjustment (type='adjustment') booking the original-
+    # currency leg on the facet's account; written only through
+    # TransactionService's auto-adjustment helpers (create, update sync, GDPR
+    # import) when the facet carries an account. At most one per source
+    # (one_adjustment_per_source). CASCADE: deleting the source removes its
+    # generated adjustment with it.
+    source_transaction = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='generated_adjustments',
+        # The one_adjustment_per_source unique index serves the lookups.
+        db_index=False,
+    )
 
     class Meta:
         db_table = 'transactions'
@@ -89,6 +107,9 @@ class Transaction(WorkspaceScopedModel):
                 ),
                 name='original_facet_both_or_neither',
             ),
+            # original_account_id and the GDPR export read generated_adjustments[0];
+            # NULLs stay distinct, so non-generated rows are unaffected.
+            models.UniqueConstraint(fields=['source_transaction'], name='one_adjustment_per_source'),
         ]
 
     @property
@@ -110,6 +131,21 @@ class Transaction(WorkspaceScopedModel):
     @property
     def original_currency_code(self) -> str | None:
         return self.original_currency.code if self.original_currency else None
+
+    @property
+    def original_account_id(self) -> int | None:
+        """Account of this facet's auto-generated adjustment (None = informational-only).
+
+        Reads `account_id` off the cached adjustment row via the cache-safe
+        all() + index pattern, so a `prefetch_related('generated_adjustments')`
+        on the queryset serves list views without N+1; unprefetched single-row
+        fetches cost one query. Do NOT switch to .first() - on an unordered
+        queryset it re-orders by pk, bypasses the prefetch cache, and emits a
+        query per row. Never infers an account - None is a first-class stored
+        state.
+        """
+        adjustments = self.generated_adjustments.all()
+        return adjustments[0].account_id if adjustments else None
 
     def __str__(self):
         return f'{self.date} - {self.description} ({self.amount} {self.currency.code})'

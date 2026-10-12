@@ -1,4 +1,6 @@
 {
   "uk": [],
-  "pl": []
+  "pl": [
+    "transactions.autoBadge"
+  ]
 }
