@@ -323,8 +323,19 @@ export const transactionsApi = {
 
   listItems: (transactionId: number): Promise<TransactionItemsResponse> =>
     api.get<TransactionItemsResponse>(`/transactions/${transactionId}/items`).then(res => res.data),
-  replaceItems: (transactionId: number, items: TransactionItemInput[]): Promise<TransactionItemsResponse> =>
-    api.put<TransactionItemsResponse>(`/transactions/${transactionId}/items`, { items }).then(res => res.data),
+  /** Omitted remainder parameters leave the stored remainder row's category
+   *  and name unchanged; only send a key when the user actually set it. */
+  replaceItems: (
+    transactionId: number,
+    items: TransactionItemInput[],
+    remainderCategoryId?: number | null,
+    remainderName?: string | null,
+  ): Promise<TransactionItemsResponse> =>
+    api.put<TransactionItemsResponse>(`/transactions/${transactionId}/items`, {
+      items,
+      ...(remainderCategoryId !== undefined ? { remainder_category_id: remainderCategoryId } : {}),
+      ...(remainderName !== undefined ? { remainder_name: remainderName } : {}),
+    }).then(res => res.data),
 
   listAttachments: (transactionId: number): Promise<TransactionAttachment[]> =>
     api.get<TransactionAttachment[]>(`/transactions/${transactionId}/attachments`).then(res => res.data),
