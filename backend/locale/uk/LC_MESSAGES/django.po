@@ -356,6 +356,19 @@ msgid "Transaction not found"
 msgstr "Транзакцію не знайдено"
 
 #: transactions/exceptions.py:19
+msgid "Items can only carry categories when the transaction has a category"
+msgstr "Позиції можуть мати категорії, лише якщо транзакція має категорію"
+
+#: transactions/exceptions.py:24
+msgid "Item categories must belong to the same budget as the transaction category"
+msgstr "Категорії позицій мають належати до того самого бюджету, що й категорія транзакції"
+
+#: transactions/exceptions.py:33
+#, python-format
+msgid "Items total %(items)s exceeds the transaction amount %(amount)s"
+msgstr "Загальна сума позицій %(items)s перевищує суму транзакції %(amount)s"
+
+#: transactions/exceptions.py:19
 msgid "Account is archived and cannot receive new transactions"
 msgstr "Рахунок архівовано, він не може отримувати нові транзакції"
 

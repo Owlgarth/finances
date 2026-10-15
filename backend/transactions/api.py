@@ -263,7 +263,13 @@ def replace_transaction_items(request: HttpRequest, transaction_id: int, data: T
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return TransactionService.replace_items(workspace_id, transaction_id, data.items)
+    return TransactionService.replace_items(
+        workspace_id,
+        transaction_id,
+        data.items,
+        remainder_category_id=data.remainder_category_id,
+        remainder_name=data.remainder_name,
+    )
 
 
 @router.get(

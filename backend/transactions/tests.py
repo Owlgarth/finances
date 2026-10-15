@@ -152,24 +152,33 @@ class TestCreateTransactionWithItems(TransactionTestCase):
         self.assertStatus(201)
         items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual([i['name'] for i in items_data['items']], ['Bread', 'Milk', 'Cheese'])
-        self.assertEqual([i['position'] for i in items_data['items']], [0, 1, 2])
-        self.assertEqual(items_data['items_total'], '23.97')
+        # 23.97 of user rows + a 26.03 remainder that sits last and covers the amount.
+        self.assertEqual([i['name'] for i in items_data['items']], ['Bread', 'Milk', 'Cheese', ''])
+        self.assertEqual([i['position'] for i in items_data['items']], [0, 1, 2, 3])
+        self.assertEqual([i['is_remainder'] for i in items_data['items']], [False, False, False, True])
+        self.assertEqual(items_data['items_total'], '50.00')
 
-    def test_create_without_items_is_backward_compatible(self):
-        """Regression for planned_transactions/tasks.py: it constructs TransactionCreate without items=."""
+    def test_create_without_items_creates_amount_sized_remainder(self):
+        """Regression for planned_transactions/tasks.py: it constructs TransactionCreate
+        without items= - the transaction still gets full coverage via a remainder row."""
         data = self.post('/api/transactions', self._payload(), **self.auth_headers())
         self.assertStatus(201)
         items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
-        self.assertEqual(items_data['items'], [])
-        self.assertEqual(TransactionItem.objects.filter(transaction_id=data['id']).count(), 0)
+        self.assertEqual(len(items_data['items']), 1)
+        remainder = items_data['items'][0]
+        self.assertTrue(remainder['is_remainder'])
+        self.assertEqual(remainder['line_total'], '50.00')
+        self.assertEqual(remainder['name'], '')
+        self.assertEqual(remainder['position'], 0)
+        self.assertIsNone(remainder['category_id'])
+        self.assertEqual(items_data['items_total'], '50.00')
 
-    def test_create_with_empty_items_list_is_noop(self):
+    def test_create_with_empty_items_list_covers_amount(self):
         data = self.post('/api/transactions', self._payload(items=[]), **self.auth_headers())
         self.assertStatus(201)
         items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
-        self.assertEqual(items_data['items'], [])
-        self.assertEqual(TransactionItem.objects.filter(transaction_id=data['id']).count(), 0)
+        self.assertEqual(len(items_data['items']), 1)  # the remainder alone
+        self.assertTrue(items_data['items'][0]['is_remainder'])
 
     def test_create_items_exceeding_max_length_rejected(self):
         too_many = [{'name': f'Item {i}', 'line_total': '1.00'} for i in range(201)]
@@ -177,19 +186,17 @@ class TestCreateTransactionWithItems(TransactionTestCase):
         self.assertStatus(422)  # Pydantic max_length=200
 
     def test_create_with_items_does_not_change_amount_or_balance(self):
-        """Items are informational — the transaction's amount stays authoritative (invariant from
-        TestTransactionItems.test_items_do_not_change_amount_or_balance)."""
+        """Over-sum items are rejected with 400 (D4); amount and balance are the hard gate."""
         balance_before = AccountService.balance(self.account)
         data = self.post(
             '/api/transactions',
             self._payload(amount='50.00', items=[{'name': 'X', 'line_total': '999.99'}]),
             **self.auth_headers(),
         )
-        self.assertStatus(201)
-        trans = Transaction.objects.get(id=data['id'])
-        self.assertEqual(trans.amount, Decimal('50.00'))  # not 999.99
-        # opening_balance 100.00 − expense 50.00
-        self.assertEqual(AccountService.balance(self.account), balance_before - Decimal('50.00'))
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'items_over_sum')
+        self.assertFalse(Transaction.objects.filter(id=data.get('id')).exists())
+        self.assertEqual(AccountService.balance(self.account), balance_before)
 
 
 class TestIdempotencyKey(TransactionTestCase):
@@ -1899,8 +1906,14 @@ class TestTransactionItems(TransactionTestCase):
             **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual([i['name'] for i in data['items']], ['B'])
-        self.assertEqual(TransactionItem.objects.filter(transaction=self.trans).count(), 1)
+        # User rows + the auto-created remainder (23.97 - 2.00).
+        self.assertEqual([i['name'] for i in data['items']], ['B', ''])
+        self.assertEqual(
+            list(TransactionItem.objects.filter(transaction=self.trans).values_list('is_remainder', flat=True)),
+            [False, True],
+        )
+        remainder = TransactionItem.objects.get(transaction=self.trans, is_remainder=True)
+        self.assertEqual(remainder.line_total, Decimal('21.97'))
 
     def test_items_total_falls_back_to_quantity_times_unit_price(self):
         data = self.put(
@@ -1909,11 +1922,17 @@ class TestTransactionItems(TransactionTestCase):
             **self.auth_headers(),
         )
         self.assertStatus(200)
-        self.assertEqual(data['items_total'], '7.81')
+        # 0.782 x 9.99 = 7.81 feeds the remainder: 23.97 - 7.81 = 16.16.
+        self.assertEqual(data['items_total'], '23.97')
+        remainder = next(i for i in data['items'] if i['is_remainder'])
+        self.assertEqual(remainder['line_total'], '16.16')
 
     def test_items_do_not_change_amount_or_balance(self):
+        """Over-sum replace is the hard 400 gate (D4); amount/balance never follow items."""
         balance_before = AccountService.balance(self.account)
-        self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '999.99'}]}, **self.auth_headers())
+        data = self.put(self._items_url(), {'items': [{'name': 'X', 'line_total': '999.99'}]}, **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'items_over_sum')
         self.trans.refresh_from_db()
         self.assertEqual(self.trans.amount, Decimal('23.97'))
         self.assertEqual(AccountService.balance(self.account), balance_before)
@@ -2466,7 +2485,7 @@ class TestAutoFillFromExtraction(TransactionTestCase):
         self.assertTrue(created)
         self.assertEqual(
             list(self.trans.items.values_list('name', flat=True)),
-            ['Bread', 'Butter'],
+            ['Bread', 'Butter', ''],
         )
         self.trans.refresh_from_db()
         self.assertEqual(self.trans.description, 'Lidl')
@@ -2513,12 +2532,13 @@ class TestAutoFillFromExtraction(TransactionTestCase):
         self.assertTrue(created)
         self.assertEqual(
             list(self.trans.items.values_list('name', flat=True)),
-            ['Bread', 'Butter'],
+            ['Bread', 'Butter', ''],
         )
-        # Positions are dense across the surviving rows (Bad is dropped, Butter is position 1).
+        # Positions are dense across the surviving rows (Bad is dropped, Butter
+        # is position 1; the remainder lands after the last user row).
         self.assertEqual(
             list(self.trans.items.values_list('position', flat=True)),
-            [0, 1],
+            [0, 1, 2],
         )
 
     def test_result_still_stored_on_attachment(self):
@@ -2547,20 +2567,331 @@ class TestAutoFillFromExtraction(TransactionTestCase):
         self.assertEqual(attachment.extraction_result['total'], '20.47')
         # And the transaction was auto-filled as a side effect of the task.
         self.trans.refresh_from_db()
-        self.assertEqual(self.trans.items.count(), 2)
+        self.assertEqual(self.trans.items.count(), 3)  # two parsed rows + the remainder
         self.assertEqual(self.trans.description, 'Lidl')
 
     def test_idempotent_second_call_is_noop_on_items(self):
         TransactionService.auto_fill_from_extraction(self.trans, self._result())
-        self.assertEqual(self.trans.items.count(), 2)
+        self.assertEqual(self.trans.items.count(), 3)
 
         created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
 
         self.assertFalse(created)
-        self.assertEqual(self.trans.items.count(), 2)
+        self.assertEqual(self.trans.items.count(), 3)
 
     def test_missing_transaction_does_not_raise(self):
         self.trans.delete()
         # A deleted transaction should not blow up the task — the method just returns False.
         created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
         self.assertFalse(created)
+
+    def test_auto_fill_shrinks_remainder_to_uncovered_amount(self):
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertTrue(created)
+        remainder = self.trans.items.get(is_remainder=True)
+        self.assertEqual(remainder.line_total, Decimal('79.53'))  # 100.00 - 20.47
+
+    def test_auto_fill_over_sum_keeps_parsed_rows_and_drops_remainder(self):
+        """D8: parsed rows always survive; no 400 from the task context."""
+        self.trans.amount = Decimal('10.00')
+        self.trans.save(update_fields=['amount'])
+
+        created = TransactionService.auto_fill_from_extraction(self.trans, self._result())
+
+        self.assertTrue(created)
+        self.assertEqual(
+            list(self.trans.items.values_list('name', flat=True)),
+            ['Bread', 'Butter'],
+        )
+        self.assertFalse(self.trans.items.filter(is_remainder=True).exists())
+
+
+class TestItemCategoryValidation(TransactionTestCase):
+    """D5/D6 write-path gates: item categories are same-budget-only, NULL tx category forbids them."""
+
+    def _items(self, **overrides):
+        item = {'name': 'Bread', 'quantity': '1', 'unit_price': '4.99', 'line_total': '4.99'}
+        item.update(overrides)
+        return [item]
+
+    def test_item_category_same_budget_round_trips(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
+        self.assertEqual(items_data['items'][0]['category_id'], self.groceries.id)
+        self.assertEqual(items_data['items'][0]['category_name'], 'Groceries')
+
+    def test_item_category_without_tx_category_returns_400(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_without_transaction')
+
+    def test_item_category_cross_budget_returns_400(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        foreign = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Foreign')
+        data = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=foreign.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_budget_mismatch')
+
+    def test_item_category_archived_returns_400(self):
+        self.groceries.is_archived = True
+        self.groceries.save(update_fields=['is_archived'])
+        data = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'category_not_found')
+
+    def test_update_tx_category_cross_budget_with_explicit_items_returns_400(self):
+        """D6: moving the tx category across budgets is blocked while items carry
+        explicit categories in the old budget."""
+        other_budget = BudgetFactory(workspace=self.workspace)
+        other_cat = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Elsewhere')
+        created = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(category_id=other_cat.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_budget_mismatch')
+
+    def test_update_tx_category_cleared_with_explicit_items_returns_400(self):
+        created = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(category_id=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_without_transaction')
+
+    def test_update_tx_category_within_same_budget_keeps_item_categories(self):
+        produce = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Produce')
+        created = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=self._items(category_id=self.groceries.id)),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(category_id=produce.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['category_id'], produce.id)
+        # Explicit item category is untouched (D3: only NULL items follow the tx).
+        items_data = self.get(f'/api/transactions/{created["id"]}/items', **self.auth_headers())
+        self.assertEqual(items_data['items'][0]['category_id'], self.groceries.id)
+
+
+class TestCoverageInvariant(TransactionTestCase):
+    """The materialized remainder: items always sum to the transaction amount (D1-D8)."""
+
+    def test_update_amount_growth_resizes_remainder(self):
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        trans_id = created['id']
+        self.assertEqual(TransactionItem.objects.get(transaction_id=trans_id).line_total, Decimal('50.00'))
+
+        self.put(f'/api/transactions/{trans_id}', self._payload(amount='60.00'), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(TransactionItem.objects.get(transaction_id=trans_id).line_total, Decimal('60.00'))
+
+    def test_update_amount_shrink_resizes_remainder(self):
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        trans_id = created['id']
+
+        self.put(f'/api/transactions/{trans_id}', self._payload(amount='30.00'), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(TransactionItem.objects.get(transaction_id=trans_id).line_total, Decimal('30.00'))
+
+    def test_update_amount_below_user_items_returns_400(self):
+        """D4 on the update path: stored items over-sum the new amount."""
+        created = self.post(
+            '/api/transactions',
+            self._payload(category_id=self.groceries.id, items=[{'name': 'Bread', 'line_total': '30.00'}]),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        trans_id = created['id']
+        # Remainder is 20.00 at this point (50.00 - 30.00).
+
+        data = self.put(f'/api/transactions/{trans_id}', self._payload(amount='20.00'), **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'items_over_sum')
+        # Atomic: nothing moved.
+        trans = Transaction.objects.get(id=trans_id)
+        self.assertEqual(trans.amount, Decimal('50.00'))
+        self.assertEqual(
+            list(TransactionItem.objects.filter(transaction_id=trans_id).values_list('line_total', flat=True)),
+            [Decimal('30.00'), Decimal('20.00')],
+        )
+
+    def test_update_amount_to_exact_cover_deletes_remainder(self):
+        created = self.post(
+            '/api/transactions',
+            self._payload(items=[{'name': 'Bread', 'line_total': '30.00'}]),
+            **self.auth_headers(),
+        )
+        trans_id = created['id']
+
+        self.put(f'/api/transactions/{trans_id}', self._payload(amount='30.00'), **self.auth_headers())
+        self.assertStatus(200)
+        rows = TransactionItem.objects.filter(transaction_id=trans_id)
+        self.assertEqual(rows.count(), 1)
+        self.assertFalse(rows.first().is_remainder)
+
+    def test_remainder_recategorization_via_replace(self):
+        """D7: remainder_category_id + remainder_name are the client-controlled remainder fields.
+
+        The transaction carries a category: D5 limits remainder recategorization
+        to the transaction category's budget, so the positive case needs one
+        (an uncategorized tx is pinned to 400 by the sibling test below).
+        """
+        created = self.post('/api/transactions', self._payload(category_id=self.groceries.id), **self.auth_headers())
+        produce = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Produce')
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}/items',
+            {
+                'items': [{'name': 'Bread', 'line_total': '10.00'}],
+                'remainder_category_id': produce.id,
+                'remainder_name': 'Household rest',
+            },
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        remainder = next(i for i in data['items'] if i['is_remainder'])
+        self.assertEqual(remainder['category_id'], produce.id)
+        self.assertEqual(remainder['category_name'], 'Produce')
+        self.assertEqual(remainder['name'], 'Household rest')
+        self.assertEqual(remainder['line_total'], '40.00')
+
+    def test_remainder_recategorization_cross_budget_returns_400(self):
+        created = self.post('/api/transactions', self._payload(category_id=self.groceries.id), **self.auth_headers())
+        other_budget = BudgetFactory(workspace=self.workspace)
+        foreign = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Foreign')
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}/items',
+            {'items': [], 'remainder_category_id': foreign.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_budget_mismatch')
+
+    def test_remainder_recategorization_without_tx_category_returns_400(self):
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}/items',
+            {'items': [], 'remainder_category_id': self.groceries.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'item_category_without_transaction')
+
+    def test_remainder_recategorization_ignored_at_exact_cover(self):
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+
+        data = self.put(
+            f'/api/transactions/{created["id"]}/items',
+            {'items': [{'name': 'Everything', 'line_total': '50.00'}], 'remainder_category_id': self.groceries.id},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(len(data['items']), 1)  # exact cover: no remainder row to recategorize
+        self.assertFalse(data['items'][0]['is_remainder'])
+
+    def test_adjustment_never_gets_a_remainder(self):
+        data = self.post(
+            '/api/transactions',
+            self._payload(type='adjustment', amount='-20.00', items=[{'name': 'Note row', 'line_total': '5.00'}]),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        items_data = self.get(f'/api/transactions/{data["id"]}/items', **self.auth_headers())
+        self.assertEqual(len(items_data['items']), 1)  # the user row, informational, no remainder
+        self.assertFalse(items_data['items'][0]['is_remainder'])
+
+    def test_update_type_flip_to_adjustment_deletes_remainder(self):
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=created['id']).count(), 1)
+
+        self.put(
+            f'/api/transactions/{created["id"]}',
+            self._payload(type='adjustment', amount='-20.00'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(TransactionItem.objects.filter(transaction_id=created['id']).count(), 0)
+
+    def test_auto_fill_guard_counts_user_rows_not_remainder(self):
+        """A transaction with ONLY a remainder row still receives parsed rows."""
+        created = self.post('/api/transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        trans = Transaction.objects.get(id=created['id'])
+        self.assertEqual(trans.items.count(), 1)  # remainder only
+
+        result = {
+            'merchant': 'Lidl',
+            'items': [
+                {'name': 'Bread', 'quantity': '1', 'unit_price': '4.49', 'line_total': '4.49'},
+                {'name': 'Butter', 'quantity': '2', 'unit_price': '7.99', 'line_total': '15.98'},
+            ],
+        }
+        created_items = TransactionService.auto_fill_from_extraction(trans, result)
+
+        self.assertTrue(created_items)
+        self.assertEqual(
+            list(trans.items.values_list('name', flat=True)),
+            ['Bread', 'Butter', ''],
+        )
+        self.assertEqual(trans.items.get(is_remainder=True).line_total, Decimal('29.53'))  # 50.00 - 20.47
+
+    def test_import_creates_remainder_rows(self):
+        rows = [
+            {'date': '2026-07-01', 'description': 'Imported A', 'amount': '10.00', 'type': 'expense'},
+            {'date': '2026-07-02', 'description': 'Imported B', 'amount': '20.00', 'type': 'income'},
+        ]
+        upload = SimpleUploadedFile('rows.json', json.dumps(rows).encode(), content_type='application/json')
+        response = self.client.post(
+            '/api/transactions/import', {'account_id': self.account.id, 'file': upload}, **self.auth_headers()
+        )
+        self.assertEqual(response.status_code, 201)
+
+        for description, amount in (('Imported A', Decimal('10.00')), ('Imported B', Decimal('20.00'))):
+            trans = Transaction.objects.get(description=description)
+            remainder = trans.items.get()
+            self.assertTrue(remainder.is_remainder)
+            self.assertEqual(remainder.line_total, amount)

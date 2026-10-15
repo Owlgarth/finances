@@ -156,12 +156,21 @@ class FrequentDescriptionsResponse(BaseModel):
 
 
 class TransactionItemIn(BaseModel):
-    """One line item in a replace-all items request. Order in the list is the stored order."""
+    """One line item in a replace-all items request. Order in the list is the stored order.
+
+    category_id is optional (NULL = inherit the transaction's category).
+    Validated in the service: must be non-archived, in-workspace, and in the
+    same budget as the transaction's category.
+
+    The remainder row is server-owned: clients never send it. Its category is
+    controlled only via TransactionItemsReplace.remainder_category_id.
+    """
 
     name: str = Field(..., max_length=300)
     quantity: Decimal = Field(Decimal('1'), gt=0)
     unit_price: Optional[Decimal] = Field(None, ge=0)
     line_total: Optional[Decimal] = Field(None, ge=0)
+    category_id: Optional[int] = None
 
     @field_validator('name')
     @classmethod
@@ -172,9 +181,20 @@ class TransactionItemIn(BaseModel):
 
 
 class TransactionItemsReplace(BaseModel):
-    """Full ordered item list for a transaction (add/edit/reorder/delete in one call)."""
+    """Full ordered item list for a transaction (add/edit/reorder/delete in one call).
+
+    remainder_category_id / remainder_name optionally recategorize and rename
+    the server-owned remainder row. The category is validated like any item
+    category (same budget as the transaction's category). Omitted/None leaves
+    the corresponding remainder attribute unchanged; the row keeps inheriting
+    the transaction category and its stored name. Both are silently ignored
+    when no remainder row results (items exactly cover the amount) - the
+    system owns the row's existence and size.
+    """
 
     items: list[TransactionItemIn] = Field(..., max_length=200)
+    remainder_category_id: Optional[int] = None
+    remainder_name: Optional[str] = Field(None, max_length=300)
 
 
 class TransactionItemOut(BaseModel):
@@ -188,10 +208,16 @@ class TransactionItemOut(BaseModel):
     quantity: Decimal
     unit_price: Optional[Decimal]
     line_total: Optional[Decimal]
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    is_remainder: bool = False
 
 
 class TransactionItemsOut(BaseModel):
-    """Item list plus the sum the UI compares against the transaction amount."""
+    """Item list plus the sum of all rows (remainder included) - after
+    normalization this equals the transaction amount; the pre-save mismatch
+    hint stays a client-side computation over the rows being edited.
+    """
 
     items: list[TransactionItemOut]
     items_total: Decimal

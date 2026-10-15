@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction as db_transaction
-from django.db.models import Count, F, Q, Sum, Value
+from django.db.models import Count, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -33,6 +33,9 @@ from transactions.exceptions import (
     TransactionCurrencyMismatchError,
     TransactionCurrencyRequiredError,
     TransactionImportError,
+    TransactionItemCategoryBudgetError,
+    TransactionItemCategoryWithoutTransactionError,
+    TransactionItemsOverSumError,
     TransactionNotFoundError,
     TransactionOriginalAccountCurrencyError,
     TransactionOriginalAccountError,
@@ -88,6 +91,30 @@ class TransactionService:
         if not category or category.is_archived:
             raise TransactionCategoryNotFoundError()
         return category
+
+    @staticmethod
+    def _validate_item_categories(workspace_id: int, tx_category: Category | None, category_ids) -> None:
+        """D5/D6: explicit item categories need a transaction category in the same budget.
+
+        category_ids may be any iterable (schema field values or a values_list
+        queryset); falsy entries (None ids = inherit) are skipped. Raises
+        TransactionItemCategoryWithoutTransactionError when the transaction has
+        no category, TransactionCategoryNotFoundError for unknown/archived/
+        foreign-workspace ids, and TransactionItemCategoryBudgetError when any
+        category lives outside the transaction category's budget.
+        """
+        category_ids = [cid for cid in category_ids if cid]
+        if not category_ids:
+            return
+        if tx_category is None:
+            raise TransactionItemCategoryWithoutTransactionError()
+        rows = {row.id: row for row in Category.objects.for_workspace(workspace_id).filter(id__in=category_ids)}
+        for cid in category_ids:
+            row = rows.get(cid)
+            if row is None or row.is_archived:
+                raise TransactionCategoryNotFoundError()
+            if row.budget_id != tx_category.budget_id:
+                raise TransactionItemCategoryBudgetError()
 
     @staticmethod
     def _validate_type_amount(
@@ -431,10 +458,12 @@ class TransactionService:
 
     @staticmethod
     def _build_items_from_schema(trans: Transaction, items_in: list) -> list[TransactionItem]:
-        """Convert TransactionItemIn schemas into unsaved TransactionItem instances.
+        """Convert TransactionItemIn schemas (category_id included) into unsaved items.
 
         Position is assigned in list order via enumerate, matching replace_items.
-        Unlike _build_items_from_parsed, no defensive parsing is needed —
+        Item category_ids pass through unvalidated here - the callers run
+        _validate_item_categories BEFORE any write. Unlike
+        _build_items_from_parsed, no defensive parsing is needed -
         Pydantic has already validated every field by the time we get here,
         so input order maps 1:1 to stored positions and no rows are dropped.
 
@@ -449,6 +478,7 @@ class TransactionService:
                 quantity=item.quantity,
                 unit_price=item.unit_price,
                 line_total=item.line_total,
+                category_id=item.category_id,
             )
             for position, item in enumerate(items_in)
         ]
@@ -566,6 +596,7 @@ class TransactionService:
         TransactionService._validate_type_amount(data.type, data.amount, data.category_id, data.account_id)
         currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
         category = TransactionService._validate_category(data.category_id, workspace_id)
+        TransactionService._validate_item_categories(workspace_id, category, [item.category_id for item in data.items])
         original_currency = TransactionService._resolve_original_currency(
             workspace_id, currency, data.original_currency_code
         )
@@ -590,6 +621,7 @@ class TransactionService:
         )
         if data.items:
             TransactionItem.objects.bulk_create(TransactionService._build_items_from_schema(trans, data.items))
+        TransactionService._normalize_coverage(trans)
         TransactionService._create_auto_adjustment(user, trans, original_account)
         TransactionService._touch_period(user, category, data.date)
         return trans
@@ -653,6 +685,12 @@ class TransactionService:
         TransactionService._validate_type_amount(data.type, data.amount, data.category_id, data.account_id)
         currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
         category = TransactionService._validate_category(data.category_id, workspace_id)
+        # D6: validated against the incoming category BEFORE any write - stored
+        # items still hold their pre-update explicit categories at this point.
+        # A NULL incoming category forbids stored explicit item categories (D5).
+        TransactionService._validate_item_categories(
+            workspace_id, category, trans.items.exclude(category=None).values_list('category_id', flat=True)
+        )
         original_currency = TransactionService._resolve_original_currency(
             workspace_id, currency, data.original_currency_code
         )
@@ -680,6 +718,10 @@ class TransactionService:
         trans.original_amount = data.original_amount
         trans.original_currency = original_currency
         trans.updated_by = user
+        # Resizes/deletes the remainder against the NEW amount before any row
+        # is saved: the over-sum 400 fires before a single write, and the item
+        # writes here plus trans.save() below stay one atomic unit.
+        TransactionService._normalize_coverage(trans)
         trans.save()
 
         if original_currency is not None and original_account is not None:
@@ -717,7 +759,13 @@ class TransactionService:
 
     @staticmethod
     def list_items(workspace_id: int, transaction_id: int) -> dict:
-        """Return a transaction's ordered items and their sum (for the UI mismatch hint)."""
+        """Return a transaction's ordered items and their sum.
+
+        The list includes the server-owned remainder row; after normalization
+        the sum equals the transaction amount for every covered transaction.
+        The pre-save mismatch hint stays a client-side computation over the
+        rows being edited.
+        """
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
         items = list(trans.items.all())
         return {
@@ -727,21 +775,54 @@ class TransactionService:
 
     @staticmethod
     @db_transaction.atomic
-    def replace_items(workspace_id: int, transaction_id: int, items_in: list) -> dict:
-        """Replace the full ordered item list (add/edit/reorder/delete atomically)."""
+    def replace_items(
+        workspace_id: int,
+        transaction_id: int,
+        items_in: list,
+        remainder_category_id: int | None = None,
+        remainder_name: str | None = None,
+    ) -> dict:
+        """Replace the full ordered item list (add/edit/reorder/delete atomically).
+
+        The remainder row is server-owned: clients send only user rows, plus
+        the optional remainder_category_id / remainder_name to recategorize
+        and rename the remainder. Item-category validation runs BEFORE the
+        delete (a bad payload must not wipe items); the remainder category is
+        validated after _normalize_coverage, only when a remainder row
+        actually results - at exact cover both remainder fields are silently
+        ignored (the system owns the row's existence) and the atomic block
+        still rolls a rejected payload back untouched. Over-sum raises (D4).
+        remainder_name None leaves the stored name; a provided value (may be
+        empty string) is stripped and written - the UI renders the translated
+        label for empty names.
+        """
         trans = TransactionService.get_transaction(transaction_id, workspace_id)
-        trans.items.all().delete()
-        items = TransactionItem.objects.bulk_create(
-            TransactionItem(
-                transaction=trans,
-                position=position,
-                name=item.name,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
-                line_total=item.line_total,
-            )
-            for position, item in enumerate(items_in)
+        TransactionService._validate_item_categories(
+            workspace_id, trans.category, [item.category_id for item in items_in]
         )
+        if remainder_name is not None:
+            remainder_name = remainder_name.strip()
+        trans.items.all().delete()
+        TransactionItem.objects.bulk_create(TransactionService._build_items_from_schema(trans, items_in))
+        TransactionService._normalize_coverage(trans)
+        remainder = trans.items.filter(is_remainder=True).first()
+        if remainder is not None and (remainder_category_id is not None or remainder_name is not None):
+            update_fields = []
+            if remainder_category_id is not None:
+                if trans.category is None:
+                    raise TransactionItemCategoryWithoutTransactionError()
+                remainder_category = TransactionService._validate_category(remainder_category_id, workspace_id)
+                if remainder_category.budget_id != trans.category.budget_id:
+                    raise TransactionItemCategoryBudgetError()
+                remainder.category_id = remainder_category_id
+                update_fields.append('category')
+            if remainder_name is not None:
+                remainder.name = remainder_name
+                update_fields.append('name')
+            remainder.save(update_fields=update_fields)
+        # Re-query deliberately: the response must include the freshly created
+        # remainder row, which the bulk_create return value does not contain.
+        items = list(trans.items.all())
         return {
             'items': items,
             'items_total': TransactionService._items_total(items),
@@ -757,6 +838,53 @@ class TransactionService:
             elif item.unit_price is not None:
                 total += item.quantity * item.unit_price
         return total.quantize(Decimal('0.01'))
+
+    @staticmethod
+    def _normalize_coverage(trans: Transaction, strict: bool = True) -> None:
+        """Enforce the coverage invariant: items sum to the transaction amount.
+
+        remainder = amount - sum(non-remainder rows' effective totals, where
+        effective total = line_total, falling back to quantity x unit_price -
+        mirroring _items_total). Positive: upsert the server-owned remainder
+        row (name '', quantity 1, unit_price None, category NULL = inherit,
+        positioned after all existing rows). <= 0: delete the remainder row.
+
+        strict=True (user write paths) raises TransactionItemsOverSumError when
+        user rows alone exceed the amount. strict=False (auto-fill) keeps
+        parsed rows and drops the remainder instead.
+
+        Adjustments never carry coverage (no category allowed, nothing to
+        attribute): remainder rows are deleted and none is created.
+
+        Runs inside the caller's atomic block - no @db_transaction.atomic here.
+        """
+        if trans.type == 'adjustment':
+            trans.items.filter(is_remainder=True).delete()
+            return
+        user_rows = list(trans.items.filter(is_remainder=False))
+        user_total = TransactionService._items_total(user_rows)
+        remainder = trans.amount - user_total
+        if remainder < 0 and strict:
+            raise TransactionItemsOverSumError(user_total, trans.amount)
+        row = trans.items.filter(is_remainder=True).first()
+        if remainder <= 0:
+            if row is not None:
+                row.delete()
+            return
+        if row is None:
+            max_pos = trans.items.aggregate(max_pos=Max('position'))['max_pos']
+            row = TransactionItem.objects.create(
+                transaction=trans,
+                position=(max_pos + 1) if max_pos is not None else 0,
+                name='',
+                quantity=Decimal('1'),
+                unit_price=None,
+                line_total=remainder,
+                is_remainder=True,
+            )
+        else:
+            row.line_total = remainder
+            row.save(update_fields=['line_total'])
 
     @staticmethod
     def _build_items_from_parsed(trans: Transaction, items: list) -> list[TransactionItem]:
@@ -813,7 +941,8 @@ class TransactionService:
         three agree an intentional description is never overwritten.
 
         Rules (idempotent — a second call is a no-op):
-        - Items are created only when the transaction currently has zero. Never clobbers user-entered rows.
+        - Items are created only when the transaction currently has zero USER
+          (non-remainder) items. Never clobbers user-entered rows.
         - Decimal strings from the parser are converted defensively; malformed rows are skipped, never raised on.
         - The description is set from `result['merchant']` only when the current
           description (stripped) is `''` or `'Receipt'`, and the merchant is truthy.
@@ -828,10 +957,20 @@ class TransactionService:
             return False
 
         created_items = False
-        if not trans.items.exists():
+        if not trans.items.filter(is_remainder=False).exists():
             built = TransactionService._build_items_from_parsed(trans, result.get('items') or [])
             if built:
+                # Drop the server-owned remainder first: it occupies position 0
+                # on a fresh service-created transaction, and parsed rows must
+                # start at position 0. The guard already established no user
+                # rows exist, so nothing of the user's is deleted; coverage
+                # normalization below re-materializes the remainder at the end.
+                trans.items.filter(is_remainder=True).delete()
                 TransactionItem.objects.bulk_create(built)
+                # Lenient: parsed rows are always kept; at over-sum the
+                # remainder shrinks to <= 0 and is deleted - the client's
+                # mismatch hint communicates the over-sum instead of a 400.
+                TransactionService._normalize_coverage(trans, strict=False)
                 created_items = True
 
         merchant = result.get('merchant')
@@ -945,4 +1084,8 @@ class TransactionService:
             )
 
         Transaction.objects.bulk_create(new_transactions)
+        # Imported rows carry no items; give each an amount-sized remainder so
+        # the coverage invariant holds from the moment they exist.
+        for trans in new_transactions:
+            TransactionService._normalize_coverage(trans)
         return len(new_transactions)

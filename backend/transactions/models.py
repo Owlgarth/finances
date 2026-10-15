@@ -253,6 +253,10 @@ class TransactionItem(models.Model):
             models.Index(fields=['category']),
         ]
 
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
     def __str__(self):
         return f'{self.name} x{self.quantity}'
 

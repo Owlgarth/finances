@@ -356,6 +356,19 @@ msgid "Transaction not found"
 msgstr "Nie znaleziono transakcji"
 
 #: transactions/exceptions.py:19
+msgid "Items can only carry categories when the transaction has a category"
+msgstr "Pozycje mogą mieć kategorie tylko wtedy, gdy transakcja ma kategorię"
+
+#: transactions/exceptions.py:24
+msgid "Item categories must belong to the same budget as the transaction category"
+msgstr "Kategorie pozycji muszą należeć do tego samego budżetu co kategoria transakcji"
+
+#: transactions/exceptions.py:33
+#, python-format
+msgid "Items total %(items)s exceeds the transaction amount %(amount)s"
+msgstr "Suma pozycji %(items)s przekracza kwotę transakcji %(amount)s"
+
+#: transactions/exceptions.py:19
 msgid "Account is archived and cannot receive new transactions"
 msgstr "Rachunek jest zarchiwizowany i nie może otrzymywać nowych transakcji"
 
