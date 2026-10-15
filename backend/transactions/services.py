@@ -230,6 +230,12 @@ class TransactionService:
         currency_code filters by the transaction's stored own currency;
         account-less rows match their own currency, and the original-amount
         facet never matches.
+        category_id and budget_id OR-match: a transaction is included when
+        its own category matches OR any item's explicit category matches
+        (NULL item categories inherit the transaction's category, which the
+        transaction arm already covers). The item join can duplicate a
+        multi-item transaction, so both filters apply .distinct() - callers
+        that paginate or count keep one row per transaction.
         """
         queryset = Transaction.objects.for_workspace(workspace_id)
 
@@ -240,9 +246,20 @@ class TransactionService:
         if account_id:
             queryset = queryset.filter(account_id__in=account_id)
         if category_id:
-            queryset = queryset.filter(category_id__in=category_id)
+            # D9: a transaction matches when its own category OR any item's
+            # explicit category is in the list. Items with NULL categories
+            # COALESCE to the transaction's category at read time, so the
+            # first arm already covers inherited matches - only explicit
+            # item categories need the second arm. The item join duplicates
+            # multi-item transactions; .distinct() restores one row per
+            # transaction (list pagination counts on it).
+            queryset = queryset.filter(
+                Q(category_id__in=category_id) | Q(items__category_id__in=category_id)
+            ).distinct()
         if budget_id:
-            queryset = queryset.filter(category__budget_id__in=budget_id)
+            queryset = queryset.filter(
+                Q(category__budget_id__in=budget_id) | Q(items__category__budget_id__in=budget_id)
+            ).distinct()
         if transaction_type:
             queryset = queryset.filter(type__in=transaction_type)
         if currency_code:
@@ -255,6 +272,34 @@ class TransactionService:
             queryset = queryset.filter(amount__lte=amount_lte)
 
         return queryset
+
+    @staticmethod
+    def effective_category_items(transactions_queryset):
+        """Annotated item rows for category aggregation over `transactions_queryset`.
+
+        THE shared read-side helper for item-based category attribution (the
+        coverage invariant makes a managed transaction's items sum to its
+        amount). Effective category = Coalesce(item.category,
+        transaction.category) - NULL item categories inherit the
+        transaction's; effective total = Coalesce(line_total,
+        quantity * unit_price, 0), mirroring `_items_total`. The
+        `transaction__in` lookup compiles to a subquery, so item rows are
+        neither duplicated nor narrowed by the transaction side's own filter
+        joins (no join-reuse hazard).
+
+        Returns a lazy, chainable queryset: callers append their own grouping
+        tail (the totals/totals_combined category branches here).
+        ReportService.actuals_by_category shares the same EFFECTIVE_* module
+        constants but keeps its direct transaction__ filters - chaining it
+        onto this subquery would change its query shape for no behavioral
+        gain (see its docstring).
+        """
+        return TransactionItem.objects.filter(transaction__in=transactions_queryset).annotate(
+            currency_code=F('transaction__currency__code'),
+            effective_category_id=EFFECTIVE_CATEGORY_ID,
+            effective_category_name=EFFECTIVE_CATEGORY_NAME,
+            effective_total=EFFECTIVE_TOTAL,
+        )
 
     @staticmethod
     def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
@@ -336,6 +381,11 @@ class TransactionService:
         """Aggregated totals grouped by (type, currency) or (category, currency).
 
         Adjustments are excluded — they affect balances, never income/expense reporting.
+        The category branch aggregates the transactions' ITEM rows by
+        effective category (Coalesce(item.category, transaction.category))
+        and effective total (Coalesce(line_total, quantity * unit_price, 0))
+        - see `effective_category_items`. The type branch keeps summing
+        whole transaction amounts.
         """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
@@ -353,12 +403,12 @@ class TransactionService:
 
         if group_by == 'category':
             rows = (
-                queryset.annotate(
-                    currency_code=F('currency__code'),
-                    grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
+                TransactionService.effective_category_items(queryset)
+                .annotate(
+                    grouped_category_name=Coalesce('effective_category_name', Value(str(TotalsLabel.UNCATEGORIZED))),
                 )
                 .values('grouped_category_name', 'currency_code')
-                .annotate(total=Sum('amount'))
+                .annotate(total=Sum('effective_total'))
                 .order_by('grouped_category_name', 'currency_code')
             )
             return [
@@ -388,9 +438,11 @@ class TransactionService:
         amount_gte: Decimal | None = None,
         amount_lte: Decimal | None = None,
     ) -> dict:
-        """Get both type and category totals in a single DB query.
+        """Get both type and category totals (two queries).
 
         Returns {'by_type': [...], 'by_category': [...]}. Adjustments excluded.
+        Type totals sum whole transaction amounts; category totals aggregate
+        item rows by effective category (see `effective_category_items`).
         """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
@@ -406,17 +458,27 @@ class TransactionService:
             amount_lte=amount_lte,
         ).exclude(type='adjustment')
 
-        rows = queryset.annotate(
-            currency_code=F('currency__code'),
-            grouped_category_name=Coalesce('category__name', Value(str(TotalsLabel.UNCATEGORIZED))),
-        ).values_list('type', 'grouped_category_name', 'currency_code', 'amount')
+        type_rows = queryset.annotate(currency_code=F('currency__code')).values_list('type', 'currency_code', 'amount')
 
         type_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-        cat_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-
-        for trans_type, category, curr, amount in rows:
+        for trans_type, curr, amount in type_rows:
             type_map[trans_type][curr] += amount
-            cat_map[category][curr] += amount
+
+        item_rows = (
+            TransactionService.effective_category_items(queryset)
+            .annotate(
+                grouped_category_name=Coalesce('effective_category_name', Value(str(TotalsLabel.UNCATEGORIZED))),
+            )
+            # order_by() clears TransactionItem.Meta.ordering ('position',
+            # 'id'); left in place it would enter the GROUP BY and split
+            # every item into its own row (see actuals_by_category).
+            .order_by()
+            .values('grouped_category_name', 'currency_code')
+            .annotate(total=Sum('effective_total'))
+        )
+        cat_map: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+        for row in item_rows:
+            cat_map[row['grouped_category_name']][row['currency_code']] += row['total']
 
         by_type = [
             {'group': t, 'currency': c, 'total': total}

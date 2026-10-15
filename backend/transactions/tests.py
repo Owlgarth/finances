@@ -19,6 +19,7 @@ from budgeting.models import Cadence, Period
 from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from common.auth import create_access_token
+from common.enums import TotalsLabel
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.models import Currency
@@ -1296,7 +1297,26 @@ class TestFiltersAndTotals(TransactionTestCase):
 
     def test_totals_category_branch_groups_account_less_by_own_currency(self):
         usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
-        TransactionFactory(
+        pln_groceries = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Groceries run',
+            category=self.groceries,
+            amount=Decimal('40.00'),
+            type='expense',
+        )
+        TransactionItemFactory(
+            transaction=pln_groceries,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('40.00'),
+            category=None,
+            is_remainder=True,
+        )
+        account_less = TransactionFactory(
             account=None,
             currency=usd,
             workspace=self.workspace,
@@ -1306,11 +1326,20 @@ class TestFiltersAndTotals(TransactionTestCase):
             amount=Decimal('12.00'),
             type='expense',
         )
+        TransactionItemFactory(
+            transaction=account_less,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('12.00'),
+            category=None,
+            is_remainder=True,
+        )
 
         totals = self.get('/api/transactions/totals?group_by=category', **self.auth_headers())['totals']
         as_map = {(t['group'], t['currency']): t['total'] for t in totals}
-        self.assertEqual(as_map[('Groceries', 'PLN')], '40.00')
-        self.assertEqual(as_map[('Groceries', 'USD')], '12.00')
+        self.assertEqual(as_map, {('Groceries', 'PLN'): '40.00', ('Groceries', 'USD'): '12.00'})
 
     def test_totals_filtered_by_multiple_accounts(self):
         totals = self.get(
@@ -1352,7 +1381,7 @@ class TestFiltersAndTotals(TransactionTestCase):
 
     def test_totals_combined_currency_filter(self):
         eur = CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
-        TransactionFactory(
+        cash_tip = TransactionFactory(
             account=None,
             currency=eur,
             workspace=self.workspace,
@@ -1360,6 +1389,16 @@ class TestFiltersAndTotals(TransactionTestCase):
             description='Cash tip',
             amount=Decimal('25.00'),
             type='expense',
+        )
+        TransactionItemFactory(
+            transaction=cash_tip,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('25.00'),
+            category=None,
+            is_remainder=True,
         )
 
         data = self.get('/api/transactions/totals?group_by=type,category&currency_code=EUR', **self.auth_headers())
@@ -1396,6 +1435,291 @@ class TestFiltersAndTotals(TransactionTestCase):
     def test_ordering_by_account_currency_rejected(self):
         self.get('/api/transactions?ordering=account__currency__code', **self.auth_headers())
         self.assertStatus(422)
+
+
+class TestItemCategoryTotalsAndFilters(TransactionTestCase):
+    """Item-based category attribution (post coverage-invariant).
+
+    Totals group by effective category over item rows; category_id/budget_id
+    list filters OR-match item categories with distinct pagination (D9).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.household = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Household')
+
+    def _mixed_tx(self, **overrides):
+        """Expense of 100.00 categorized Groceries (the default): 60.00
+        explicit Household item + 40.00 remainder item inheriting the
+        transaction's category. `category` may be overridden (e.g. None)
+        for read-side states the write paths would reject."""
+        overrides.setdefault('category', self.groceries)
+        tx = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 16),
+            description='Grocery run',
+            amount=Decimal('100.00'),
+            type='expense',
+            **overrides,
+        )
+        TransactionItemFactory(
+            transaction=tx,
+            position=0,
+            name='Detergent',
+            quantity=Decimal('1'),
+            unit_price=Decimal('60.00'),
+            line_total=Decimal('60.00'),
+            category=self.household,
+        )
+        TransactionItemFactory(
+            transaction=tx,
+            position=1,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('40.00'),
+            category=None,
+            is_remainder=True,
+        )
+        return tx
+
+    def test_totals_category_groups_by_effective_category(self):
+        self._mixed_tx()
+
+        totals = self.get('/api/transactions/totals?group_by=category', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {('Household', 'PLN'): '60.00', ('Groceries', 'PLN'): '40.00'})
+
+    def test_totals_category_uncategorized_label_preserved(self):
+        cash = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 17),
+            description='Cash expense',
+            category=None,
+            amount=Decimal('50.00'),
+            type='expense',
+        )
+        TransactionItemFactory(
+            transaction=cash,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('50.00'),
+            category=None,
+            is_remainder=True,
+        )
+
+        totals = self.get('/api/transactions/totals?group_by=category', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {(str(TotalsLabel.UNCATEGORIZED), 'PLN'): '50.00'})
+
+    def test_totals_category_excludes_adjustments(self):
+        self._mixed_tx()
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 18),
+            description='Reconcile',
+            amount=Decimal('-15.00'),
+            type='adjustment',
+        )
+
+        totals = self.get('/api/transactions/totals?group_by=category', **self.auth_headers())['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        self.assertEqual(as_map, {('Household', 'PLN'): '60.00', ('Groceries', 'PLN'): '40.00'})
+
+    def test_totals_category_filter_selects_transactions_attributes_items(self):
+        self._mixed_tx()
+
+        totals = self.get(
+            f'/api/transactions/totals?group_by=category&category_id={self.household.id}', **self.auth_headers()
+        )['totals']
+        as_map = {(t['group'], t['currency']): t['total'] for t in totals}
+        # Selection is whole-transaction (the item arm matches the mixed tx);
+        # attribution stays per item, so BOTH categories of that tx appear.
+        self.assertEqual(as_map, {('Household', 'PLN'): '60.00', ('Groceries', 'PLN'): '40.00'})
+
+    def test_totals_combined_type_from_amounts_category_from_items(self):
+        self._mixed_tx()
+        salary = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 19),
+            description='Salary',
+            category=None,
+            amount=Decimal('500.00'),
+            type='income',
+        )
+        TransactionItemFactory(
+            transaction=salary,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('500.00'),
+            category=None,
+            is_remainder=True,
+        )
+
+        data = self.get('/api/transactions/totals?group_by=type,category', **self.auth_headers())
+        by_type = {(t['group'], t['currency']): t['total'] for t in data['by_type']}
+        by_category = {(t['group'], t['currency']): t['total'] for t in data['by_category']}
+        # Type grouping stays on whole transaction amounts...
+        self.assertEqual(by_type, {('expense', 'PLN'): '100.00', ('income', 'PLN'): '500.00'})
+        # ...category grouping moves to item effective totals.
+        self.assertEqual(
+            by_category,
+            {('Household', 'PLN'): '60.00', ('Groceries', 'PLN'): '40.00', ('Uncategorized', 'PLN'): '500.00'},
+        )
+
+    def test_filter_by_category_matches_item_category(self):
+        tx = self._mixed_tx()
+
+        data = self.get(f'/api/transactions?category_id={self.household.id}', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['total'], 1)
+        self.assertEqual([t['id'] for t in data['items']], [tx.id])
+
+    def test_filter_by_category_distinct_no_duplicates_in_pagination(self):
+        tx = self._mixed_tx()
+        # Both arms match tx2 (category AND two explicit items) - three joined
+        # rows collapse to one after distinct.
+        tx2 = TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 20),
+            description='Bulk run',
+            category=self.household,
+            amount=Decimal('100.00'),
+            type='expense',
+        )
+        TransactionItemFactory(
+            transaction=tx2,
+            position=0,
+            name='Soap',
+            quantity=Decimal('1'),
+            unit_price=Decimal('30.00'),
+            line_total=Decimal('30.00'),
+            category=self.household,
+        )
+        TransactionItemFactory(
+            transaction=tx2,
+            position=1,
+            name='Sponges',
+            quantity=Decimal('1'),
+            unit_price=Decimal('20.00'),
+            line_total=Decimal('20.00'),
+            category=self.household,
+        )
+        TransactionItemFactory(
+            transaction=tx2,
+            position=2,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('50.00'),
+            category=None,
+            is_remainder=True,
+        )
+        # Control: categorized transaction whose items all inherit - no match.
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 21),
+            description='Plain groceries',
+            category=self.groceries,
+            amount=Decimal('70.00'),
+            type='expense',
+        )
+
+        data = self.get(f'/api/transactions?category_id={self.household.id}&page_size=10', **self.auth_headers())
+        self.assertEqual(data['total'], 2)
+        ids = [t['id'] for t in data['items']]
+        self.assertEqual(sorted(ids), sorted([tx.id, tx2.id]))
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(data['total_pages'], 1)
+
+        # Page-boundary count: one row per transaction even across pages.
+        # (page_size=1 is not an ALLOWED_PAGE_SIZE - paginate_queryset would
+        # silently coerce it to the default - so the boundary is crossed at
+        # the minimum allowed size, 10, with 9 more item-duplicated rows.)
+        for i in range(9):
+            extra = TransactionFactory(
+                account=self.account,
+                workspace=self.workspace,
+                date=date(2026, 7, 23),
+                description=f'Bulk run {i}',
+                category=self.household,
+                amount=Decimal('10.00'),
+                type='expense',
+            )
+            TransactionItemFactory(
+                transaction=extra,
+                position=0,
+                name='Soap',
+                quantity=Decimal('1'),
+                unit_price=Decimal('10.00'),
+                line_total=Decimal('10.00'),
+                category=self.household,
+            )
+
+        page1 = self.get(f'/api/transactions?category_id={self.household.id}&page_size=10', **self.auth_headers())
+        self.assertEqual(page1['total'], 11)
+        self.assertEqual(page1['total_pages'], 2)
+        self.assertEqual(len(page1['items']), 10)
+
+        page2 = self.get(
+            f'/api/transactions?category_id={self.household.id}&page_size=10&page=2', **self.auth_headers()
+        )
+        self.assertEqual(page2['total'], 11)
+        across_pages = [t['id'] for t in page1['items']] + [t['id'] for t in page2['items']]
+        self.assertEqual(len(across_pages), 11)
+        self.assertEqual(len(across_pages), len(set(across_pages)))
+
+    def test_filter_by_budget_matches_items_when_transaction_category_cleared(self):
+        # The SET_NULL aftermath of a category delete: tx.category is NULL but
+        # explicit item categories still attribute the transaction to the budget.
+        tx = self._mixed_tx(category=None)
+        Transaction.objects.filter(id=tx.id).update(category=None)
+
+        data = self.get(f'/api/transactions?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertEqual(data['total'], 1)
+        self.assertEqual([t['id'] for t in data['items']], [tx.id])
+
+    def test_category_and_budget_filters_intersect(self):
+        self._mixed_tx()
+        other_budget = BudgetFactory(workspace=self.workspace)
+        other_cat = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Other')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            date=date(2026, 7, 22),
+            description='Other budget expense',
+            category=other_cat,
+            amount=Decimal('10.00'),
+            type='expense',
+        )
+
+        # A single OR-chain would union these filters and return the mixed tx;
+        # correct semantics AND them: nothing matches both.
+        data = self.get(
+            f'/api/transactions?category_id={self.household.id}&budget_id={other_budget.id}', **self.auth_headers()
+        )
+        self.assertEqual(data['total'], 0)
+
+        data = self.get(
+            f'/api/transactions?category_id={self.household.id}&budget_id={self.budget.id}', **self.auth_headers()
+        )
+        self.assertEqual(data['total'], 1)
+
+    def test_ordering_with_item_category_filter(self):
+        # SELECT DISTINCT + ORDER BY a related column must compile, not 500.
+        self._mixed_tx()
+        self.get(f'/api/transactions?category_id={self.household.id}&ordering=category__name', **self.auth_headers())
+        self.assertStatus(200)
 
 
 class TestBulkSetAccount(TransactionTestCase):
