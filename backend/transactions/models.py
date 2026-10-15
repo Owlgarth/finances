@@ -196,11 +196,26 @@ class TransactionAttachment(models.Model):
 
 
 class TransactionItem(models.Model):
-    """An ordered receipt line item attached to a transaction.
+    """An ordered line item attached to a transaction.
 
-    Items are informational only — the transaction's `amount` stays the
-    source of truth. Aggregates never read items; the API returns their sum
-    so the UI can hint at mismatches without blocking anything.
+    Items carry category spending: every non-adjustment transaction's
+    items sum to its `amount` (the coverage invariant), so category
+    aggregates read items, not the transaction row. A system-managed
+    remainder row (`is_remainder=True`) absorbs `amount` minus the sum of
+    user items; the service layer owns its existence, size, and position.
+    Remainder rows are written as name='', quantity=1, unit_price=None,
+    line_total=<remainder>.
+
+    `category` NULL means "follow the transaction's category": the
+    effective category is Coalesce(item.category, transaction.category)
+    at read time. An explicitly-set category must belong to the
+    transaction category's budget (a write-path validation, not a DB
+    constraint); deleting that category SET_NULLs the items back to
+    inherit, mirroring Transaction.category.
+
+    Effective item total is line_total, else quantity × unit_price, else
+    0 (see TransactionService._items_total). The transaction's `amount`
+    stays the stored truth for balances, which never read items.
     """
 
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='items')
@@ -210,11 +225,33 @@ class TransactionItem(models.Model):
     quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     unit_price = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     line_total = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    # Explicit per-item category; NULL = inherit the transaction's
+    # category (read-side Coalesce). SET_NULL mirrors Transaction.category:
+    # a deleted category drops items back to inherit. The same-budget rule
+    # (SESSION_CONTEXT D5) is service-validated on write, never a DB
+    # invariant. db_index=False because the explicit Meta index below
+    # serves category lookups (merge updates + aggregation) - a plain FK
+    # index here would duplicate it physically.
+    category = models.ForeignKey(
+        'categories.Category',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transaction_items',
+        db_index=False,
+    )
+    # System-managed remainder row absorbing `amount - sum(user items)`.
+    # Written only by the coverage normalization (service layer) and the
+    # backfill migration; not user-deletable or directly resizable.
+    is_remainder = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'transaction_items'
         ordering = ['position', 'id']
-        indexes = [models.Index(fields=['transaction', 'position'])]
+        indexes = [
+            models.Index(fields=['transaction', 'position']),
+            models.Index(fields=['category']),
+        ]
 
     def __str__(self):
         return f'{self.name} x{self.quantity}'
