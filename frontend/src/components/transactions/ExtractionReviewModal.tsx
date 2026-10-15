@@ -62,11 +62,15 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
       let items = rowsToItems(normalizedRows)
       if (mode === 'append') {
         const existing = await transactionsApi.listItems(transaction.id)
-        const current: TransactionItemInput[] = existing.items.map((i) => ({
+        // Filter out the system remainder row the items response carries: the
+        // replace endpoint re-creates it via coverage normalization, so
+        // re-sending it as a user row would double-count the uncovered amount.
+        const current: TransactionItemInput[] = existing.items.filter((i) => !i.is_remainder).map((i) => ({
           name: i.name,
           quantity: i.quantity,
           unit_price: i.unit_price,
           line_total: i.line_total,
+          category_id: i.category_id,
         }))
         items = [...current, ...items]
       }
