@@ -44,6 +44,15 @@ from transactions.exceptions import (
 from transactions.models import Transaction, TransactionIdempotencyKey, TransactionItem
 from transactions.schemas import TransactionCreate, TransactionImport
 
+# Effective-value read-side math for TransactionItem aggregates, shared by
+# budget actuals (reports) and totals-by-category (totals/totals_combined):
+# an item's effective category is its own when set, else its transaction's
+# (NULL = inherit); its effective total is line_total, else quantity x
+# unit_price, else 0 - mirroring TransactionService._items_total.
+EFFECTIVE_CATEGORY_ID = Coalesce(F('category_id'), F('transaction__category_id'))
+EFFECTIVE_CATEGORY_NAME = Coalesce(F('category__name'), F('transaction__category__name'))
+EFFECTIVE_TOTAL = Coalesce(F('line_total'), F('quantity') * F('unit_price'), Value(Decimal('0')))
+
 
 class TransactionService:
     @staticmethod
@@ -420,6 +429,39 @@ class TransactionService:
             for c, total in sorted(cat_map[cat].items())
         ]
         return {'by_type': by_type, 'by_category': by_category}
+
+    @staticmethod
+    def actuals_by_category(workspace_id: int, budget_id: int, date_from, date_to) -> list[dict]:
+        """Budget actuals aggregated from transaction items, not whole rows.
+
+        Returns rows of {'effective_category_id', 'effective_category_name',
+        'currency_code', 'total'}: expense items dated within [date_from,
+        date_to] whose effective category (own when set, else the
+        transaction's) belongs to `budget_id`. Explicit item categories in
+        another budget are attributed to that budget, never this one. Totals
+        are unquantized sums of effective totals; callers quantize.
+        """
+        return list(
+            TransactionItem.objects.filter(
+                transaction__workspace_id=workspace_id,
+                transaction__type='expense',
+                transaction__date__gte=date_from,
+                transaction__date__lte=date_to,
+            )
+            .filter(
+                Q(category__budget_id=budget_id) | Q(category__isnull=True, transaction__category__budget_id=budget_id)
+            )
+            .annotate(
+                effective_category_id=EFFECTIVE_CATEGORY_ID,
+                effective_category_name=EFFECTIVE_CATEGORY_NAME,
+                currency_code=F('transaction__currency__code'),
+            )
+            # order_by() clears Meta.ordering ('position', 'id'); left in
+            # place it would enter the GROUP BY and split every row apart.
+            .order_by()
+            .values('effective_category_id', 'effective_category_name', 'currency_code')
+            .annotate(total=Sum(EFFECTIVE_TOTAL))
+        )
 
     @staticmethod
     def frequent_descriptions(
