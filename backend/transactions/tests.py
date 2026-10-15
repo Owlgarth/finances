@@ -2189,7 +2189,8 @@ class TestDerivedPeriodServiceLevel(TestCase):
 
 
 class TestTransactionItems(TransactionTestCase):
-    """Line items: informational, ordered, replace-all semantics."""
+    """Line items: ordered, replace-all semantics; coverage normalization
+    appends the system remainder so items always sum to the amount."""
 
     def setUp(self):
         super().setUp()
