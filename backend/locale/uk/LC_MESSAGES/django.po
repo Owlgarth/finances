@@ -594,6 +594,11 @@ msgstr "%(name)s: транзакція посилається на невідо�
 msgid "%(name)s: account-less transaction missing currency_code"
 msgstr "%(name)s: транзакція без рахунку не містить currency_code"
 
+#: users/services.py:1022
+#, python-format
+msgid "%(name)s: transaction item references unknown category"
+msgstr "%(name)s: позиція транзакції посилається на невідому категорію"
+
 #: users/services.py:969
 #, python-format
 msgid "%(name)s: transfer references unknown account"
