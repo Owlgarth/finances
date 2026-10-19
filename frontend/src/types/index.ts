@@ -109,6 +109,13 @@ export interface TransactionItem {
   quantity: string;
   unit_price: string | null;
   line_total: string | null;
+  /** Explicit category; null = inherit the transaction's category. */
+  category_id: number | null;
+  category_name: string | null;
+  /** True on the system-managed coverage row that absorbs the transaction
+   *  amount minus the user rows. The UI never creates, deletes, or resizes
+   *  it - only its category and name are user-editable. */
+  is_remainder: boolean;
 }
 
 export interface TransactionItemInput {
@@ -116,8 +123,18 @@ export interface TransactionItemInput {
   quantity?: string;
   unit_price?: string | null;
   line_total?: string | null;
+  /** Explicit category (must share the transaction category's budget);
+   *  null or omitted = inherit the transaction's category. */
+  category_id?: number | null;
 }
 
+/**
+ * Item list plus the sum the UI compares against the transaction amount.
+ * Managed (non-adjustment) transactions include one system-managed remainder
+ * row (`is_remainder: true`) that completes the coverage sum; consumers that
+ * render editable user rows filter it out, and `items_total` covers every
+ * row including it.
+ */
 export interface TransactionItemsResponse {
   items: TransactionItem[];
   items_total: string;

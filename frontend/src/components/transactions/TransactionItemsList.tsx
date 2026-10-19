@@ -5,6 +5,7 @@ import { useIsTouch } from '../../hooks/useBreakpoint'
 import { parseAmountNumber } from '../../utils/amountInput'
 import { formatAmount } from '../../utils/format'
 import { inputClass, labelClass } from '../common/formStyles'
+import Select, { type SelectOption } from '../common/Select'
 
 export interface Row {
   /** Stable per-row identity — survives reorders. key={index} made focus and
@@ -15,6 +16,12 @@ export interface Row {
   quantity: string
   unit_price: string
   line_total: string
+  /** Explicit per-item category override; null or absent = inherit the
+   *  transaction's category (the backend COALESCEs on read). Optional so
+   *  row factories that do not model categories yet (parsed-receipt fill,
+   *  the editor's toRow) still compile while those surfaces land category
+   *  seeding. */
+  categoryId?: number | null
 }
 
 interface Props {
@@ -22,9 +29,29 @@ interface Props {
   onChange: (rows: Row[]) => void
   amount: string
   currencyCode?: string | null
+  /** Budget categories of the transaction's category (parent-owned query);
+   *  the per-item Select's option list. Defaults empty until the parent
+   *  wires it. */
+  categoryOptions?: SelectOption<number>[]
+  /** The transaction's own category id; null disables the per-item selects -
+   *  items may only carry categories from the tx category's budget, and
+   *  with no tx category there is no such budget. */
+  transactionCategoryId?: number | null
+  /** Remainder contract (parent-owned state). The remainder card renders
+   *  only when BOTH change handlers are provided (or remainderReadOnly is
+   *  set), a named user row exists, and the derived remainder is positive. */
+  remainderCategoryId?: number | null
+  onRemainderCategoryIdChange?: (categoryId: number | null) => void
+  remainderName?: string
+  onRemainderNameChange?: (name: string) => void
+  /** Display-only remainder variant (create mode): renders the card - chip,
+   *  derived amount, hint - WITHOUT the name input and category Select.
+   *  Create payloads carry no remainder fields, so those controls would be
+   *  dead inputs. */
+  remainderReadOnly?: boolean
 }
 
-const emptyRow = (): Row => ({ id: crypto.randomUUID(), name: '', quantity: '1', unit_price: '', line_total: '' })
+const emptyRow = (): Row => ({ id: crypto.randomUUID(), name: '', quantity: '1', unit_price: '', line_total: '', categoryId: null })
 
 /** Sum of line totals, falling back to quantity × unit price — mirrors the backend. */
 function computeTotal(rows: Row[]): number {
@@ -52,12 +79,29 @@ const cardShell = (isOpen: boolean): string =>
 const actionBtn =
   'inline-flex items-center justify-center p-1.5 text-text-muted max-sm:min-h-[44px] max-sm:min-w-[44px]'
 
-export default function TransactionItemsList({ rows, onChange, amount, currencyCode }: Props) {
+/** Sentinel Select value for "inherit the transaction category" - the shared
+ *  Select cannot hold a null-valued option, and 0 can never collide with a
+ *  real category id (same trick as NO_ACCOUNT in TransactionFormModal). */
+const INHERIT_CATEGORY = 0
+
+export default function TransactionItemsList({
+  rows,
+  onChange,
+  amount,
+  currencyCode,
+  categoryOptions = [],
+  transactionCategoryId = null,
+  remainderCategoryId = null,
+  onRemainderCategoryIdChange,
+  remainderName = '',
+  onRemainderNameChange,
+  remainderReadOnly = false,
+}: Props) {
   const { t } = useTranslation('transactions')
   const isTouch = useIsTouch()
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   // Set only on Add; cleared the first time the new card's Name input receives focus.
-  // Drives desktop-only autofocus without any useEffect (see onFocus below).
+  // Drives desktop-only autofocus through pure event wiring (see onFocus below).
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null)
 
   const updateRow = (index: number, patch: Partial<Row>) =>
@@ -100,6 +144,26 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
     setJustAddedIndex(rows.length)
   }
 
+  // The Inherit option's label interpolates the tx category's name, looked up
+  // from the option list (item categories share the tx category's budget, so
+  // the tx category is normally a member). Labels are plain strings at every
+  // call site (budget categories render c.name); the typeof guard keeps the
+  // t() interpolation type-honest. An archived tx category drops out of the
+  // option list and falls back to the shared "Uncategorized" label.
+  const categoryNameById = (id: number | null | undefined): string | null => {
+    if (id == null) return null
+    const label = categoryOptions.find((o) => o.value === id)?.label
+    return typeof label === 'string' ? label : null
+  }
+  const txCategoryName = categoryNameById(transactionCategoryId)
+  const itemCategoryOptions: SelectOption<number>[] = [
+    {
+      value: INHERIT_CATEGORY,
+      label: t('items.inheritOption', { category: txCategoryName ?? t('form.uncategorized') }),
+    },
+    ...categoryOptions,
+  ]
+
   const itemsTotal = computeTotal(rows)
   const parsedAmount = parseAmountNumber(amount)
   // Suppress the mismatch warning when amount is empty or unparseable — the
@@ -107,6 +171,16 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
   const hasAmount = amount !== '' && parsedAmount !== null
   const absAmount = hasAmount ? Math.abs(parsedAmount) : 0
   const mismatch = hasAmount && rows.some((r) => r.name.trim()) && Math.abs(itemsTotal - absAmount) > 0.01
+  // The remainder amount is ALWAYS derived in render, never state: the server
+  // owns the remainder row's size, the UI previews it live. Over-sum (or an
+  // empty/unparseable amount) drives this to <= 0.01 and hides the card while
+  // the mismatch warning above still communicates the gap.
+  const remainder = absAmount - itemsTotal
+  const showRemainder =
+    (remainderReadOnly || (onRemainderCategoryIdChange != null && onRemainderNameChange != null)) &&
+    hasAmount &&
+    rows.some((r) => r.name.trim()) &&
+    remainder > 0.01
 
   return (
     <div className="space-y-2">
@@ -129,8 +203,17 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
               ? formatAmount(qtyNum * unitNum)
               : '—'
 
+        // Effective category for the collapsed subline: the row's explicit
+        // override, else the transaction's category.
+        const effectiveCategoryName = categoryNameById(row.categoryId ?? transactionCategoryId)
+
         const formId = `item-${index}-form`
         const nameId = `item-${index}-name`
+        // DOM-id template, not UI text - the lint rule's documented
+        // false-positive floor already covers this id shape (the two lines
+        // above); suppressed inline so the floor count stays put.
+        // eslint-disable-next-line i18next/no-literal-string
+        const categorySelectId = `item-${index}-category`
 
         return (
           <div key={row.id} className={cardShell(isOpen)}>
@@ -151,6 +234,7 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                 <div className="text-[10px] font-mono text-text-muted truncate">
                   {row.quantity}
                   {row.unit_price ? ` × ${row.unit_price}` : ''}
+                  {effectiveCategoryName ? ` · ${effectiveCategoryName}` : ''}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -175,12 +259,26 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
                     // Desktop-only autofocus on Add. `autoFocus` is mount-only — it fires when
                     // the new card's form mounts on Add. The onFocus self-clear means re-opening
                     // a previously-added card (which remounts the form) does NOT re-steal focus,
-                    // so "only the Add path focuses" holds. No useEffect → no setState-in-effect.
+                    // so "only the Add path focuses" holds. No effects machinery -
+                    // focus is pure event wiring.
                     autoFocus={autoFocusName && !isTouch}
                     onFocus={() => {
                       if (justAddedIndex === index) setJustAddedIndex(null)
                     }}
                     className={`${inputClass} max-sm:min-h-[44px]`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor={categorySelectId}>{t('items.categoryLabel')}</label>
+                  <Select
+                    id={categorySelectId}
+                    value={row.categoryId ?? INHERIT_CATEGORY}
+                    onChange={(v) => updateRow(index, { categoryId: v === INHERIT_CATEGORY ? null : v })}
+                    options={itemCategoryOptions}
+                    placeholder={t('items.categoryPlaceholder')}
+                    disabled={transactionCategoryId == null}
+                    searchable
+                    className="w-full"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -248,6 +346,62 @@ export default function TransactionItemsList({ rows, onChange, amount, currencyC
           </div>
         )
       })}
+
+      {showRemainder && (
+        <div
+          role="group"
+          aria-label={t('items.remainderAria')}
+          className="bg-background border border-border rounded-sm p-3 space-y-2"
+        >
+          {/* Header row: system chip + derived amount. The card is NOT an
+              accordion: no toggle, no move/delete/reorder - the system owns
+              the remainder's existence and size; only its category and name
+              are user-editable. */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text-muted select-none">
+              {t('items.remainderLabel')}
+            </span>
+            <span className="font-mono text-xs text-text-muted whitespace-nowrap">
+              {currencyCode ? `${formatAmount(remainder)} ${currencyCode}` : formatAmount(remainder)}
+            </span>
+          </div>
+          {/* Editable controls - hidden in the remainderReadOnly variant
+              (create mode): create payloads carry no remainder fields, so
+              the inputs would be dead. Chip + amount + hint still show. */}
+          {!remainderReadOnly && (
+            <>
+              <div>
+                <label className={labelClass} htmlFor="remainder-name">{t('items.remainderNameLabel')}</label>
+                <input
+                  id="remainder-name"
+                  value={remainderName}
+                  onChange={(e) => onRemainderNameChange?.(e.target.value)}
+                  placeholder={t('items.remainderNamePlaceholder')}
+                  /* Mirrors the backend remainder_name max_length (300): an
+                     over-long name is stopped at input, not rejected 422 on
+                     save. */
+                  maxLength={300}
+                  className={`${inputClass} max-sm:min-h-[44px]`}
+                />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="remainder-category">{t('items.categoryLabel')}</label>
+                <Select
+                  id="remainder-category"
+                  value={remainderCategoryId ?? INHERIT_CATEGORY}
+                  onChange={(v) => onRemainderCategoryIdChange?.(v === INHERIT_CATEGORY ? null : v)}
+                  options={itemCategoryOptions}
+                  placeholder={t('items.categoryPlaceholder')}
+                  disabled={transactionCategoryId == null}
+                  searchable
+                  className="w-full"
+                />
+              </div>
+            </>
+          )}
+          <p className="text-[11px] text-text-muted">{t('items.remainderHint')}</p>
+        </div>
+      )}
 
       {/* Footer — unchanged: Add-item button + items-total + mismatch warning. */}
       <div className="flex items-center justify-between">

@@ -8,7 +8,7 @@ from django.db.models import Sum
 from accounts.services import AccountService
 from budgeting.models import CategoryBudget
 from budgeting.services import BudgetService, PeriodService
-from transactions.models import Transaction
+from transactions.services import TransactionService
 
 
 class ReportService:
@@ -17,9 +17,11 @@ class ReportService:
         """Planned vs actual per category for a budget's period.
 
         Planned amounts come from CategoryBudget rows; actuals are the sums of
-        expense transactions per category by the transaction's own currency
-        within the period's date range (account-less transactions count).
-        Adjustments and income never count as actuals.
+        transaction items per effective category (an item's own category when
+        set, else the transaction's) by the transaction's own currency within
+        the period's date range - see TransactionService.actuals_by_category
+        (account-less transactions count). Adjustments and income never count
+        as actuals.
         """
         budget = BudgetService.get(budget_id, workspace_id)
         period = PeriodService._get_period(workspace_id, budget_id, period_id)
@@ -30,21 +32,10 @@ class ReportService:
         }
         category_names = {cb.category_id: cb.category.name for cb in planned_rows}
 
-        actual_rows = (
-            Transaction.objects.for_workspace(workspace_id)
-            .filter(
-                category__budget_id=budget_id,
-                type='expense',
-                date__gte=period.start_date,
-                date__lte=period.end_date,
-            )
-            .values('category_id', 'category__name', 'currency__code')
-            .annotate(total=Sum('amount'))
-        )
         actual_map: dict[tuple[int, str], Decimal] = {}
-        for row in actual_rows:
-            actual_map[(row['category_id'], row['currency__code'])] = row['total']
-            category_names.setdefault(row['category_id'], row['category__name'])
+        for row in TransactionService.actuals_by_category(workspace_id, budget_id, period.start_date, period.end_date):
+            actual_map[(row['effective_category_id'], row['currency_code'])] = row['total']
+            category_names.setdefault(row['effective_category_id'], row['effective_category_name'])
 
         cents = Decimal('0.01')
         items = []
@@ -90,9 +81,9 @@ class ReportService:
         """Planned vs actual totals per currency for the budget's most recent periods.
 
         Returns up to `limit` existing periods, oldest first — never materializes
-        new ones. Same actual semantics as the summary: expense transactions of
-        the budget's categories within each period's date range, grouped by the
-        transaction's own currency (account-less transactions count).
+        new ones. Same actual semantics as the summary: expense items of the
+        budget's effective categories within each period's date range, grouped
+        by the transaction's own currency (account-less transactions count).
         """
         budget = BudgetService.get(budget_id, workspace_id)
         recent = list(budget.periods.order_by('-start_date')[:limit])
@@ -110,18 +101,11 @@ class ReportService:
         cents = Decimal('0.01')
         periods = []
         for period in recent:
-            actual_rows = (
-                Transaction.objects.for_workspace(workspace_id)
-                .filter(
-                    category__budget_id=budget_id,
-                    type='expense',
-                    date__gte=period.start_date,
-                    date__lte=period.end_date,
-                )
-                .values('currency__code')
-                .annotate(total=Sum('amount'))
-            )
-            actual_map = {row['currency__code']: row['total'] for row in actual_rows}
+            actual_map: dict[str, Decimal] = defaultdict(Decimal)
+            for row in TransactionService.actuals_by_category(
+                workspace_id, budget_id, period.start_date, period.end_date
+            ):
+                actual_map[row['currency_code']] += row['total']
 
             totals = {}
             for code in sorted({c for (pid, c) in planned_map if pid == period.id} | set(actual_map)):

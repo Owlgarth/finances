@@ -19,6 +19,7 @@ from categories.models import Category
 from currencies.services import CurrencyCatalogService
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
+from transactions.services import TransactionService
 from transfers.models import Transfer
 
 STARTER_CATEGORIES = [
@@ -142,7 +143,7 @@ def _create_demo_transactions(
     ]
 
     for trans_date, description, cat_name, amount, trans_type in rows:
-        Transaction.objects.create(
+        trans = Transaction.objects.create(
             workspace_id=workspace_id,
             account=main_account,
             currency=main_account.currency,
@@ -153,6 +154,9 @@ def _create_demo_transactions(
             type=trans_type,
             created_by_id=user_id,
         )
+        # Direct creation bypasses the services; normalize so demo rows carry
+        # the coverage invariant like every service-written transaction.
+        TransactionService._normalize_coverage(trans)
 
 
 def _create_demo_transfers(

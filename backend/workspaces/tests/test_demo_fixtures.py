@@ -163,6 +163,19 @@ class TestDemoFixtures(TestCase):
         self.assertIsNotNone(previous)
         self.assertIsNotNone(current)
 
+    def test_every_demo_transaction_is_coverage_consistent(self):
+        """Demo rows are service-normalized: each carries exactly one remainder
+        row whose line_total equals the transaction amount."""
+        from transactions.models import TransactionItem
+
+        for trans in Transaction.objects.for_workspace(self.workspace.id):
+            self.assertEqual(trans.items.count(), 1)
+            remainder = trans.items.get()
+            self.assertIsInstance(remainder, TransactionItem)
+            self.assertTrue(remainder.is_remainder)
+            self.assertEqual(remainder.line_total, trans.amount)
+            self.assertEqual(remainder.name, '')
+
     def test_category_budget_estimates_for_both_periods(self):
         general = Budget.objects.get(workspace=self.workspace, name='General')
         main = Account.objects.get(workspace=self.workspace, name='Main')

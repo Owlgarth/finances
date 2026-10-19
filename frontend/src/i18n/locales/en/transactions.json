@@ -141,6 +141,14 @@
     "deleteAria": "Delete item",
     "addItem": "Add item",
     "itemsTotal": "Items: {{total}}",
+    "categoryLabel": "Category",
+    "categoryPlaceholder": "Select category",
+    "inheritOption": "Inherit ({{category}})",
+    "remainderLabel": "Remainder",
+    "remainderAria": "Remainder details",
+    "remainderNameLabel": "Name",
+    "remainderNamePlaceholder": "Remaining amount",
+    "remainderHint": "Auto-calculated from the transaction amount.",
     "mismatch": "Items total ({{items}}) doesn\u2019t match the transaction amount ({{amount}})."
   },
   "editor": {
