@@ -32,7 +32,7 @@ backend/
 | `accounts` | Money-holding accounts (cash/bank/other); balances computed from transactions ± transfers |
 | `budgeting` | `Budget` (plan + cadence), `BudgetCurrency` (ordered per-budget currency set), derived `Period`, `CategoryBudget` (planned amount per period) |
 | `categories` | Persistent, budget-scoped categories |
-| `transactions` | Income/expense/adjustment records; `TransactionItem` (receipt lines); `TransactionAttachment` (+ receipt extraction) |
+| `transactions` | Income/expense/adjustment records; `TransactionItem` (line items carrying category spending); `TransactionAttachment` (+ receipt extraction) |
 | `transfers` | Money moved between accounts, incl. cross-currency with implied rate |
 | `planned_transactions` | Scheduled transactions with status tracking (pending/done/cancelled) |
 | `reports` | Budget summary (planned vs actual) and current balances (per account + per currency) |
@@ -299,14 +299,14 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the transaction's stored own currency - account-less rows match their own - never the original-amount facet) |
-| GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` |
+| GET | `/api/transactions` | `date_from`, `date_to`, `account_id`, `category_id[]`, `budget_id`, `transaction_type[]`, `currency_code[]`, `search`, `amount_gte`, `amount_lte`, `ordering`, `page`, `page_size` | List transactions (paginated; `currency_code` filters by the transaction's stored own currency - account-less rows match their own - never the original-amount facet; `category_id`/`budget_id` OR-match the transaction's own category or any item's explicit category) |
+| GET | `/api/transactions/totals` | same filters + `group_by` | Totals grouped by `type`, `category`, or `type,category` (`category` totals aggregate items by effective category) |
 | GET | `/api/transactions/export/` | `date_from`, `date_to`, `transaction_type` | JSON file export (honors only these filters - a single type at most) |
 | GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Get / create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; adjustments always require an account; optional `note` - free text, full-replace: an absent or null note clears) |
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
 | POST | `/api/transactions/import` | - | Import transactions from a JSON file into an account (multipart upload, 5 MB max) |
 | GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
-| GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items |
+| GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items (the replace body optionally carries `remainder_category_id` / `remainder_name` for the remainder row; omitted leaves it unchanged, an empty name resets it) |
 | GET/POST/DELETE | `/api/transactions/{id}/attachments[/{aid}]` | - | List (metadata only) / upload / delete receipt attachments |
 | GET | `/api/transactions/{id}/attachments/{aid}/download` | - | Download an attachment's stored file (any member role - bytes streamed via the API; 404 `file_missing` if the stored object is gone, 503 if storage is off) |
 | GET | `/api/transactions/extraction/config` | - | Whether receipt extraction is configured |
@@ -348,7 +348,7 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
-| GET | `/api/reports/budget-summary` | `budget_id`, `period_id` | Planned vs actual per category |
+| GET | `/api/reports/budget-summary` | `budget_id`, `period_id` | Planned vs actual per category (actuals aggregate items by effective category) |
 | GET | `/api/reports/budget-history` | `budget_id`, `limit` | Planned vs actual totals per currency for the budget's most recent periods (oldest first; `limit` 1-24, default 6) |
 | GET | `/api/reports/current-balances` | `include_archived` | Balances per account + per-currency totals |
 
@@ -378,7 +378,9 @@ attachments travel as base64 and are recreated when object storage is configured
 symbol→ISO currencies, one `Main <CODE>` account per currency (opening balance
 solved so computed balances match), exchanges→transfers with linked-transaction
 dedup, and a per-workspace **verification report** (computed vs expected balances,
-deduped transactions, warnings).
+deduped transactions, warnings). Restored transactions also get their coverage
+items: normalization materializes the amount-sized remainder row every
+service-written transaction gets, so item-based category aggregates count them.
 
 ## Testing
 
