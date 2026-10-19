@@ -1,3 +1,9 @@
+## [0.3.0] - 2026-10-19
+
+- docs: per-item-categories follow-up (docs + skills) (#143) (6300737)
+- feat: per-item categories and budget spending from items (#142) (59ea767)
+- docs: sync coding summaries to skills (#141) (9219e54)
+- fix: task 1 - dev.sh release lock refresh + docs/workflow.md rider (#140) (21d1a33)
 ## [0.2.0] - 2026-10-12
 
 - chore: ignore opencode workspace files (.opencode/, opencode.json.bak) (891d0d7)
