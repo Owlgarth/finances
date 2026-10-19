@@ -26,6 +26,7 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
 
 - **Accounts with computed balances** - Cash, bank, and other accounts; every balance is derived from opening balance + transactions ± transfers, never stored
 - **Budgets & periods** - Budgets plan money with a cadence (monthly / every-N-weeks / custom); periods materialize on demand, or are user-defined date ranges for the custom cadence; per-category planned-vs-actual
+- **Per-item categories** - Line items can carry their own category (unset inherits the transaction's), so one purchase can split across budget categories; budget spending counts items by effective category, with a system-managed remainder covering the uncovered amount
 - **Transfers** - Move money between accounts, including cross-currency with an implied rate
 - **Multi-Currency Support** - A global ISO 4217 catalog; each workspace enables a reorderable subset (first = primary, chosen as a set at registration), budgets carry an ordered currency set (first = default view), and transactions can be recorded without an account in their own currency
 - **Receipts** - Attach receipt images/PDFs; optionally extract line items and totals via a configurable model, then review and confirm
