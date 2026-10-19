@@ -14,7 +14,8 @@ from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
-from transactions.factories import TransactionFactory
+from reports.services import ReportService
+from transactions.factories import TransactionFactory, TransactionItemFactory
 
 
 class TestCategoriesAPI(AuthMixin, APIClientMixin, TestCase):
@@ -141,6 +142,32 @@ class TestCategoryMergeAPI(AuthMixin, APIClientMixin, TestCase):
         self.assertEqual(moved_planned.category_id, self.target.id)
         self.assertFalse(Category.objects.filter(id=self.source.id).exists())
 
+    def test_merge_moves_item_categories(self):
+        account = AccountFactory(workspace=self.workspace)
+        moved_txn = TransactionFactory(account=account, workspace=self.workspace, category=self.source)
+        moved_item = TransactionItemFactory(transaction=moved_txn, category=self.source, line_total=Decimal('40.00'))
+        moved_remainder = TransactionItemFactory(
+            transaction=moved_txn, category=self.source, is_remainder=True, line_total=Decimal('30.00')
+        )
+        kept_item = TransactionItemFactory(transaction=moved_txn, category=self.target, line_total=Decimal('20.00'))
+        inherited_item = TransactionItemFactory(transaction=moved_txn, category=None, line_total=Decimal('10.00'))
+
+        data = self._merge(self.target.id, self.source.id)
+        self.assertStatus(200)
+        self.assertEqual(data['id'], self.target.id)
+
+        moved_item.refresh_from_db()
+        moved_remainder.refresh_from_db()
+        kept_item.refresh_from_db()
+        inherited_item.refresh_from_db()
+        # Source-pointing items (user rows and remainder rows alike) follow the
+        # merge; already-target and inherit (NULL) rows are untouched.
+        self.assertEqual(moved_item.category_id, self.target.id)
+        self.assertEqual(moved_remainder.category_id, self.target.id)
+        self.assertEqual(kept_item.category_id, self.target.id)
+        self.assertIsNone(inherited_item.category_id)
+        self.assertFalse(Category.objects.filter(id=self.source.id).exists())
+
     def test_merge_sums_planned_amounts_and_moves_unconflicted_ones(self):
         CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
         currency = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
@@ -193,6 +220,51 @@ class TestCategoryMergeAPI(AuthMixin, APIClientMixin, TestCase):
     def test_merge_nonexistent_source_returns_404(self):
         self._merge(self.target.id, 999999)
         self.assertStatus(404)
+
+
+class TestCategoryDeleteItemInheritance(AuthMixin, APIClientMixin, TestCase):
+    """Deleting a category SET_NULLs item categories - NULL means inherit (D3)."""
+
+    def setUp(self):
+        super().setUp()
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.food = CategoryFactory(budget=self.budget, name='Food')
+        self.household = CategoryFactory(budget=self.budget, name='Household')
+        self.period = PeriodService.get_or_create_for_date(self.user, self.budget, date(2026, 6, 15))
+
+    def test_deleted_category_items_fall_back_to_inherit(self):
+        account = AccountFactory(workspace=self.workspace)
+        trans = TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            category=self.food,
+            amount=Decimal('100.00'),
+            date=date(2026, 6, 15),
+        )
+        # Explicit item category, same budget as the transaction's (D5).
+        item = TransactionItemFactory(transaction=trans, category=self.household, line_total=Decimal('100.00'))
+
+        self.delete(f'/api/budgets/{self.budget.id}/categories/{self.household.id}', **self.auth_headers())
+        self.assertStatus(204)
+
+        # FK SET_NULL: the explicit item category is gone, so the item inherits
+        # the transaction's category (NULL = inherit, D3). The transaction
+        # itself keeps its own category.
+        item.refresh_from_db()
+        trans.refresh_from_db()
+        self.assertIsNone(item.category_id)
+        self.assertEqual(trans.category_id, self.food.id)
+
+        # Effective category = Coalesce(item.category, tx.category) -> Food, so
+        # the item's total still attributes to Food in budget actuals. This is
+        # deliberately implementation-agnostic: before Task 4 the summary sums
+        # transaction rows via tx.category (Food, 100.00); after Task 4 it sums
+        # items via the Coalesce (same result, because the item carries the
+        # full transaction amount).
+        summary = ReportService.get_budget_summary(self.workspace.id, self.budget.id, self.period.id)
+        food_rows = [row for row in summary['items'] if row['category_id'] == self.food.id]
+        self.assertEqual(len(food_rows), 1)
+        self.assertEqual(food_rows[0]['actual'], Decimal('100.00'))
 
 
 class TestWorkspaceCategoriesAPI(AuthMixin, APIClientMixin, TestCase):

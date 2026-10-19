@@ -729,6 +729,17 @@ class UserService:
                             'quantity': item.quantity,
                             'unit_price': item.unit_price,
                             'line_total': item.line_total,
+                            # v3 additive keys (no version bump - same contract
+                            # as note/original_account_name): the category
+                            # travels as a name resolved against the
+                            # transaction's budget on import (ids are not
+                            # portable across instances); the flag preserves
+                            # the user-editable remainder row (D7 name +
+                            # category). Older readers ignore both keys; the
+                            # importer .get()s them for pre-item-category
+                            # exports.
+                            'category_name': item.category.name if item.category else None,
+                            'is_remainder': item.is_remainder,
                         }
                         for item in t.items.all()
                     ],
@@ -740,7 +751,7 @@ class UserService:
                 # standalone rows would break the round-trip.
                 .filter(source_transaction__isnull=True)
                 .select_related('account', 'currency', 'category__budget', 'original_currency')
-                .prefetch_related('items', 'attachments', 'generated_adjustments__account')
+                .prefetch_related('items__category', 'attachments', 'generated_adjustments__account')
             ],
             'transfers': [
                 {
@@ -988,17 +999,55 @@ class UserService:
                     created_by=user,
                     updated_by=user,
                 )
-                TransactionItem.objects.bulk_create(
-                    TransactionItem(
-                        transaction=trans,
-                        position=position,
-                        name=item_data.get('name'),
-                        quantity=item_data.get('quantity') or 1,
-                        unit_price=item_data.get('unit_price'),
-                        line_total=item_data.get('line_total'),
+                # Item categories resolve by name within the transaction's
+                # resolved budget only (D5: same budget as the tx category; a
+                # NULL tx category leaves every item NULL-inherit). Resolution
+                # goes through the same category_map the tx row used; the map
+                # key's budget segment comes from the resolved category's own
+                # budget instance (cached on the created row - no extra query).
+                # A non-null name that fails to resolve (hand-edited file,
+                # cross-budget name) self-heals to NULL-inherit with a skip
+                # error - the row still imports, mirroring the unknown-account
+                # branch above. Remainder rows resolve identically (D7:
+                # recategorizable within the same rule).
+                item_budget_name = category.budget.name if category else None
+                imported_items = []
+                for position, item_data in enumerate(tx_data.get('items') or []):
+                    item_category = None
+                    item_category_name = item_data.get('category_name')
+                    if item_category_name and item_budget_name:
+                        item_category = category_map.get((item_budget_name, item_category_name))
+                        if not item_category:
+                            skipped['errors'].append(
+                                _('%(name)s: transaction item references unknown category') % {'name': original_name}
+                            )
+                    imported_items.append(
+                        TransactionItem(
+                            transaction=trans,
+                            position=position,
+                            name=item_data.get('name'),
+                            quantity=item_data.get('quantity') or 1,
+                            unit_price=item_data.get('unit_price'),
+                            line_total=item_data.get('line_total'),
+                            # v3 additive keys; absent keys (older v3 exports)
+                            # import None / False -> inherit, user row.
+                            category=item_category,
+                            is_remainder=item_data.get('is_remainder', False),
+                        )
                     )
-                    for position, item_data in enumerate(tx_data.get('items') or [])
-                )
+                TransactionItem.objects.bulk_create(imported_items)
+                # Coverage invariant (single writer helper from the write-path
+                # task): recreates the top-up remainder for older exports that
+                # predate remainder rows, resizes or drops it around the
+                # imported ones (system owns size - D7), and no-ops
+                # adjustments (they never carry items). JSON-round-tripped
+                # exports carry the amount as a string, and the in-memory
+                # instance keeps the raw value (Django coerces only on the DB
+                # round-trip) while the helper does Decimal arithmetic - so
+                # reload the row first; a freshly created instance holds no
+                # unsaved state.
+                trans.refresh_from_db()
+                TransactionService._normalize_coverage(trans)
                 AttachmentService.import_for_transaction(user, trans, tx_data.get('attachments'))
                 # v3 additive field (absent key -> None on older v3 exports).
                 # A resolvable, currency-matching facet account regenerates the

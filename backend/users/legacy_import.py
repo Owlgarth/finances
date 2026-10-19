@@ -32,6 +32,7 @@ from common.exceptions import ValidationError
 from currencies.models import Currency, WorkspaceCurrency
 from planned_transactions.models import PlannedTransaction
 from transactions.models import Transaction
+from transactions.services import TransactionService
 from transfers.models import Transfer
 from workspaces.models import Role, Workspace, WorkspaceMember
 
@@ -491,7 +492,7 @@ class LegacyImportService:
                     category = LegacyImportService._get_category(
                         user, workspace, budget, tx.get('category_name'), category_map, counts
                     )
-                    Transaction.objects.create(
+                    trans = Transaction.objects.create(
                         workspace=workspace,
                         account=account,
                         currency=account.currency,
@@ -503,6 +504,17 @@ class LegacyImportService:
                         created_by=user,
                         updated_by=user,
                     )
+                    # Coverage invariant through the single writer helper:
+                    # legacy exports carry no items, so normalization
+                    # materializes the amount-sized remainder row every
+                    # service-written transaction gets (items-based
+                    # aggregates count only item rows). Adjustments -
+                    # exported as-is or flipped from negative amounts above
+                    # - no-op here: they never carry coverage. Unlike the
+                    # v3 importer, no refresh_from_db is needed: _dec built
+                    # a Decimal amount, so the in-memory instance already
+                    # holds the typed value the helper's arithmetic reads.
+                    TransactionService._normalize_coverage(trans)
                     counts['transactions'] += 1
 
                 for pt in period_data.get('planned_transactions', []):

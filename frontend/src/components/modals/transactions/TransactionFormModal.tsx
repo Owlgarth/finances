@@ -59,7 +59,9 @@ const NO_ACCOUNT = 0
  *  hold a null-valued option, and 0 can never collide with a real id. */
 const NO_ADJUSTMENT = 0
 
-/** TransactionItemInput[] (API payload shape) → Row[] (table editing shape). */
+/** TransactionItemInput[] (API payload shape) → Row[] (table editing shape).
+ *  Parsed and prefilled sources carry no category, so every seeded row
+ *  inherits the transaction's (categoryId null = inherit). */
 const itemsToRows = (items: TransactionItemInput[]): Row[] =>
   items.map((i) => ({
     id: crypto.randomUUID(),
@@ -67,6 +69,7 @@ const itemsToRows = (items: TransactionItemInput[]): Row[] =>
     quantity: i.quantity ?? '1',
     unit_price: i.unit_price ?? '',
     line_total: i.line_total ?? '',
+    categoryId: null,
   }))
 
 /** Pick the account id whose currency matches `currencyCode`, preferring the
@@ -456,8 +459,12 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       // Inline the items on the create call and send the idempotency key as
       // a header. This is the atomic
       // tx + items commit — once it returns, the data is durable.
+      // Adjustments carry no items: the list is hidden for them, so rows parked
+      // in state (a receipt parse before a type switch) must not ride along
+      // invisibly on the payload. An empty list matches the schema's omitted
+      // default exactly.
       const trans = await transactionsApi.create(
-        { ...payload, items: rowsToItems(pendingRows) },
+        { ...payload, items: type === 'adjustment' ? [] : rowsToItems(pendingRows) },
         { idempotencyKey: idempotencyKey ?? undefined },
       )
       // Attachment upload is best-effort: the tx and its items are already
@@ -825,12 +832,19 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
         )}
 
         {/* Editable line items — create mode only. Edit mode has its own items tab below. */}
-        {!isEdit && (
+        {/* Adjustments never get coverage items: no category is allowed on them, so
+            per-item categories and the remainder preview do not apply. Rows stay in
+            state across a type switch (an accidental adjustment toggle must not wipe
+            typed items); the payload gate below keeps them off the wire. */}
+        {!isEdit && type !== 'adjustment' && (
           <TransactionItemsList
             rows={pendingRows}
             onChange={setPendingRows}
             amount={amount}
             currencyCode={currencyCode}
+            categoryOptions={categoryOptions}
+            transactionCategoryId={categoryId}
+            remainderReadOnly
           />
         )}
 

@@ -143,6 +143,14 @@
     "deleteAria": "Видалити позицію",
     "addItem": "Додати позицію",
     "itemsTotal": "Позиції: {{total}}",
+    "categoryLabel": "Категорія",
+    "categoryPlaceholder": "Виберіть категорію",
+    "inheritOption": "Унаслідувати ({{category}})",
+    "remainderLabel": "Залишок",
+    "remainderAria": "Деталі залишку",
+    "remainderNameLabel": "Назва",
+    "remainderNamePlaceholder": "Залишкова сума",
+    "remainderHint": "Обчислюється автоматично з суми транзакції.",
     "mismatch": "Сума позицій ({{items}}) не збігається з сумою транзакції ({{amount}})."
   },
   "editor": {

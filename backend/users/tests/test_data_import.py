@@ -665,6 +665,171 @@ class V3FacetAdjustmentImportTests(AuthMixin, TestCase):
         self.assertFalse(Transaction.objects.filter(workspace=ws, type='adjustment').exists())
 
 
+class V3ItemCategoryImportTests(AuthMixin, TestCase):
+    """Item categories + remainder rows round-trip; additive keys are optional.
+
+    No export_version bump: category_name/is_remainder are additive with safe
+    defaults - older v3 exports import with category None (inherit) and no
+    remainder rows, and per-transaction coverage normalization tops the items
+    up to the transaction amount (same contract family as the note field).
+    """
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _imported_workspace(self):
+        """The one workspace the import created besides AuthMixin's."""
+        return Workspace.objects.filter(owner=self.user).exclude(id=self.workspace.id).get()
+
+    def _categorized_workspace(self):
+        """One tx: two explicitly categorized items + a remainder row."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace)
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        food = CategoryFactory(budget=budget, workspace=self.workspace, name='Food')
+        home = CategoryFactory(budget=budget, workspace=self.workspace, name='Home')
+        shop = TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            description='Weekly shop',
+            category=food,
+            amount=Decimal('20.00'),
+            type='expense',
+        )
+        TransactionItemFactory(transaction=shop, position=0, name='Bread', line_total=Decimal('3.00'), category=food)
+        TransactionItemFactory(
+            transaction=shop, position=1, name='Detergent', line_total=Decimal('5.00'), category=home
+        )
+        TransactionItemFactory(
+            transaction=shop,
+            position=2,
+            name='Rest',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('12.00'),
+            category=None,
+            is_remainder=True,
+        )
+        return budget
+
+    def _exported_shop(self, export_data, description='Weekly shop'):
+        return next(t for t in export_data['workspaces'][0]['transactions'] if t['description'] == description)
+
+    def test_item_categories_and_remainder_round_trip(self):
+        self._categorized_workspace()
+
+        export_data = UserService.export_all_data(self.user)
+        self.assertEqual(
+            [(i['category_name'], i['is_remainder']) for i in self._exported_shop(export_data)['items']],
+            [('Food', False), ('Home', False), (None, True)],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = self._imported_workspace()
+        new_food = Category.objects.get(workspace=ws, name='Food')
+        new_home = Category.objects.get(workspace=ws, name='Home')
+        shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
+        # Categories resolved by name against the NEW workspace's categories.
+        items = list(shop.items.order_by('position', 'id'))
+        self.assertEqual(
+            [(i.name, i.category_id) for i in items[:2]], [('Bread', new_food.id), ('Detergent', new_home.id)]
+        )
+        # The remainder row round-trips as a remainder with its name and size.
+        remainder = items[2]
+        self.assertTrue(remainder.is_remainder)
+        self.assertEqual(remainder.name, 'Rest')
+        self.assertIsNone(remainder.category_id)
+        self.assertEqual(remainder.line_total, Decimal('12.00'))
+        # Coverage invariant: exactly one remainder, items sum to the amount.
+        self.assertEqual(shop.items.filter(is_remainder=True).count(), 1)
+        self.assertEqual(sum(i.line_total for i in items), Decimal('20.00'))
+
+    def test_legacy_export_without_item_category_keys(self):
+        """A v3 export from before item categories existed still imports:
+        categories land None (inherit) and normalization tops the item set
+        up to coverage with a fresh remainder row."""
+        self._categorized_workspace()
+
+        export_data = UserService.export_all_data(self.user)
+        exported_items = self._exported_shop(export_data)['items']
+        # A pre-item-category export predates remainder rows entirely - drop
+        # the remainder from the export, then strip the additive keys.
+        exported_items[:] = [i for i in exported_items if not i['is_remainder']]
+        for item in exported_items:
+            item.pop('category_name', None)
+            item.pop('is_remainder', None)
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = self._imported_workspace()
+        shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
+        self.assertEqual(shop.items.filter(is_remainder=False).count(), 2)
+        self.assertTrue(all(i.category_id is None for i in shop.items.all()))
+        # 20.00 - 3.00 - 5.00: the top-up remainder fills the gap.
+        remainder = shop.items.get(is_remainder=True)
+        self.assertEqual(remainder.line_total, Decimal('12.00'))
+
+    def test_unresolvable_item_category_self_heals_to_inherit(self):
+        """Hand-edited files only: an unknown category name imports the item
+        NULL-inherit and records one skip error - the tx still imports."""
+        self._categorized_workspace()
+
+        export_data = UserService.export_all_data(self.user)
+        self._exported_shop(export_data)['items'][1]['category_name'] = 'Ghost Category'
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown category', result['skipped']['errors'][0])
+        ws = self._imported_workspace()
+        shop = Transaction.objects.get(workspace=ws, description='Weekly shop')
+        detergent = shop.items.get(name='Detergent')
+        self.assertIsNone(detergent.category_id)
+        # Coverage still holds with the self-healed row.
+        self.assertEqual(sum(i.line_total for i in shop.items.all()), Decimal('20.00'))
+
+    def test_cross_budget_item_category_self_heals_to_inherit(self):
+        """A category name that exists only in a DIFFERENT budget of the same
+        export does not resolve: resolution is scoped to the tx's own budget
+        (D5), so the item imports NULL-inherit with a skip error."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace)
+        household = BudgetFactory(workspace=self.workspace, name='Household')
+        food = CategoryFactory(budget=household, workspace=self.workspace, name='Food')
+        trips = BudgetFactory(workspace=self.workspace, name='Trips')
+        CategoryFactory(budget=trips, workspace=self.workspace, name='Fuel')
+        shop = TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Mixed shop',
+            category=food,
+            amount=Decimal('10.00'),
+            type='expense',
+        )
+        TransactionItemFactory(transaction=shop, position=0, name='Bread', line_total=Decimal('10.00'), category=food)
+        # Hand-edit: claim the other budget's category.
+        export_data = UserService.export_all_data(self.user)
+        self._exported_shop(export_data, 'Mixed shop')['items'][0]['category_name'] = 'Fuel'
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export_data))
+
+        self.assertEqual(result['imported_transactions'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown category', result['skipped']['errors'][0])
+        ws = self._imported_workspace()
+        shop = Transaction.objects.get(workspace=ws, description='Mixed shop')
+        self.assertIsNone(shop.items.get(name='Bread').category_id)
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 
@@ -834,11 +999,15 @@ class V3RoundTripTests(AuthMixin, TestCase):
         self.assertIsNone(gift.account)
         self.assertEqual(gift.currency.code, 'PLN')
 
-        # Line items restored in order
-        items = list(shop.items.all())
+        # Line items restored in order; the source fixtures predate remainder
+        # rows, so import-time normalization tops the item set up to coverage
+        # (120.00 - 4.99 - 7.81) with a fresh remainder row.
+        items = list(shop.items.filter(is_remainder=False))
         self.assertEqual([i.name for i in items], ['Bread', 'Tomatoes'])
         self.assertEqual(items[1].quantity, Decimal('0.782'))
         self.assertEqual(items[1].line_total, Decimal('7.81'))
+        remainder = shop.items.get(is_remainder=True)
+        self.assertEqual(remainder.line_total, Decimal('107.20'))
 
         # Balances reproduced exactly
         new_checking = Account.objects.get(workspace=ws, name='Checking')

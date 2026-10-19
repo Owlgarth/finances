@@ -143,6 +143,14 @@
     "deleteAria": "Usuń pozycję",
     "addItem": "Dodaj pozycję",
     "itemsTotal": "Pozycje: {{total}}",
+    "categoryLabel": "Kategoria",
+    "categoryPlaceholder": "Wybierz kategorię",
+    "inheritOption": "Dziedzicz ({{category}})",
+    "remainderLabel": "Reszta",
+    "remainderAria": "Szczegóły reszty",
+    "remainderNameLabel": "Nazwa",
+    "remainderNamePlaceholder": "Pozostała kwota",
+    "remainderHint": "Obliczana automatycznie z kwoty transakcji.",
     "mismatch": "Suma pozycji ({{items}}) nie zgadza się z kwotą transakcji ({{amount}})."
   },
   "editor": {
