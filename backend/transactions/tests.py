@@ -1,11 +1,13 @@
 """Tests for account-based transactions (B5 semantics)."""
 
+import importlib
 import json
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
 import requests
+from django.apps import apps
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -3220,3 +3222,156 @@ class TestCoverageInvariant(TransactionTestCase):
             remainder = trans.items.get()
             self.assertTrue(remainder.is_remainder)
             self.assertEqual(remainder.line_total, amount)
+
+
+class TestCoverageRepairMigration(TransactionTestCase):
+    """Direct-call test for the 0012 coverage repair data pass (PR #142).
+
+    The migration function only uses apps.get_model, so calling it with
+    django.apps.apps and schema_editor=None exercises the real models
+    while bypassing the migration recorder - the fresh-DB pytest run
+    already exercises the migration graph itself on empty data.
+    """
+
+    repair = importlib.import_module('transactions.migrations.0012_transactionitem_coverage_repair')
+
+    def _items_snapshot(self):
+        return list(
+            TransactionItem.objects.order_by('id').values_list(
+                'id',
+                'transaction_id',
+                'position',
+                'name',
+                'quantity',
+                'unit_price',
+                'line_total',
+                'is_remainder',
+            )
+        )
+
+    def test_repairs_missing_stale_and_surplus_coverage(self):
+        """Rows the one-time 0011 backfill never saw, plus a surplus remainder."""
+        # (a) item-less expense: gains a full-amount remainder.
+        itemless = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('80.00'), type='expense'
+        )
+        # (b) under-summed expense: gains amount - user_sum.
+        under = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('50.00'), type='expense'
+        )
+        TransactionItemFactory(transaction=under, position=0, name='Bread', line_total=Decimal('10.00'))
+        TransactionItemFactory(transaction=under, position=1, name='Butter', line_total=Decimal('20.00'))
+        # (c) exact-cover expense: nothing to repair.
+        exact = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('30.00'), type='expense'
+        )
+        TransactionItemFactory(transaction=exact, position=0, name='All', line_total=Decimal('30.00'))
+        # (d) over-sum expense without a remainder: deliberately untouched (D4).
+        over = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('20.00'), type='expense'
+        )
+        over_row = TransactionItemFactory(transaction=over, position=0, name='Too much', line_total=Decimal('30.00'))
+        # (e) adjustment: never carries coverage.
+        adjustment = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('-20.00'), type='adjustment'
+        )
+        adj_row = TransactionItemFactory(transaction=adjustment, position=0, name='Note', line_total=Decimal('5.00'))
+        # (f) stale-sized remainder (hand-edited line_total): resized, position kept.
+        stale = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('60.00'), type='expense'
+        )
+        TransactionItemFactory(transaction=stale, position=0, name='Bread', line_total=Decimal('10.00'))
+        stale_remainder = TransactionItemFactory(
+            transaction=stale,
+            position=1,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('99.99'),
+            is_remainder=True,
+        )
+        # (g) surplus remainder on an over-summed row: deleted.
+        surplus = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('30.00'), type='expense'
+        )
+        TransactionItemFactory(transaction=surplus, position=0, name='Bread', line_total=Decimal('40.00'))
+        TransactionItemFactory(
+            transaction=surplus,
+            position=1,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('5.00'),
+            is_remainder=True,
+        )
+
+        self.repair.repair_coverage_items(apps, None)
+
+        # (a) one remainder covering the whole amount, in the 0011 row shape.
+        row = TransactionItem.objects.get(transaction=itemless, is_remainder=True)
+        self.assertEqual(row.line_total, Decimal('80.00'))
+        self.assertEqual(row.name, '')
+        self.assertEqual(row.quantity, Decimal('1'))
+        self.assertIsNone(row.unit_price)
+        self.assertIsNone(row.category)
+        self.assertEqual(row.position, 0)
+
+        # (b) remainder = 50.00 - 30.00, positioned after the user rows.
+        row = TransactionItem.objects.get(transaction=under, is_remainder=True)
+        self.assertEqual(row.line_total, Decimal('20.00'))
+        self.assertEqual(row.position, 2)
+
+        # (c) exact cover: no remainder appeared.
+        self.assertEqual(TransactionItem.objects.filter(transaction=exact).count(), 1)
+        self.assertFalse(TransactionItem.objects.get(transaction=exact).is_remainder)
+
+        # (d) over-sum without a remainder: untouched.
+        self.assertEqual(TransactionItem.objects.filter(transaction=over).count(), 1)
+        over_row.refresh_from_db()
+        self.assertEqual(over_row.line_total, Decimal('30.00'))
+        self.assertFalse(over_row.is_remainder)
+
+        # (e) adjustment: untouched.
+        self.assertEqual(TransactionItem.objects.filter(transaction=adjustment).count(), 1)
+        adj_row.refresh_from_db()
+        self.assertEqual(adj_row.line_total, Decimal('5.00'))
+
+        # (f) resized to 60.00 - 10.00 on the same row, position kept.
+        stale_remainder.refresh_from_db()
+        self.assertEqual(stale_remainder.line_total, Decimal('50.00'))
+        self.assertEqual(stale_remainder.position, 1)
+        self.assertEqual(TransactionItem.objects.filter(transaction=stale).count(), 2)
+
+        # (g) surplus remainder deleted, user row intact.
+        remaining = TransactionItem.objects.filter(transaction=surplus)
+        self.assertEqual(remaining.count(), 1)
+        self.assertEqual(remaining.get().name, 'Bread')
+
+    def test_second_run_is_a_no_op(self):
+        """Idempotence: a repaired database passes through unchanged."""
+        itemless = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('40.00'), type='expense'
+        )
+        stale = TransactionFactory(
+            account=self.account, workspace=self.workspace, amount=Decimal('60.00'), type='expense'
+        )
+        TransactionItemFactory(transaction=stale, position=0, name='Bread', line_total=Decimal('10.00'))
+        TransactionItemFactory(
+            transaction=stale,
+            position=1,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('1.00'),
+            is_remainder=True,
+        )
+
+        self.repair.repair_coverage_items(apps, None)
+        self.assertEqual(TransactionItem.objects.get(transaction=itemless).line_total, Decimal('40.00'))
+        self.assertEqual(TransactionItem.objects.get(transaction=stale, is_remainder=True).line_total, Decimal('50.00'))
+        before = self._items_snapshot()
+
+        self.repair.repair_coverage_items(apps, None)
+
+        self.assertEqual(TransactionItem.objects.count(), len(before))
+        self.assertEqual(self._items_snapshot(), before)
