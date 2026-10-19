@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services, direct-call data-migration tests). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions
@@ -239,6 +239,14 @@ with mock.patch.object(
 
 When a private helper's signature changes, grep its test doubles in the same task — `side_effect=fake` stubs must widen with the real method's parameters.
 
+## Testing Data-Migration Functions (Direct Call)
+
+A `RunPython` function is testable by calling it directly against seeded rows - `func(django.apps.apps, schema_editor=None)` - which bypasses the migration recorder BY DESIGN: the test proves the function's effect on rows, not Django's migration-state machinery. The migration module loads via `importlib.import_module` because the file name (`0012_transactionitem_coverage_repair`) starts with a digit and is not a valid identifier.
+
+- Pass the real `django.apps.apps`; `schema_editor=None` is safe whenever the function only uses `apps.get_model` (data migrations do).
+- Pin idempotence with a snapshot equality: `values_list` over the pk plus every mutated-relevant field, run the function a SECOND time, compare - a repair migration that re-creates rows on a second pass fails here, not in production.
+- Seed every branch the migration distinguishes (create/resize/delete/no-op cases), including the rows the original backfill never saw, and count-pin fixtures before looping row assertions so a fixture change fails loudly instead of the loop passing vacuously.
+
 ## Testing Celery Tasks
 
 Test settings use `CELERY_TASK_ALWAYS_EAGER=True`, so `.delay()` executes synchronously — no worker needed. Call tasks directly (`execute_planned_transaction(planned_id)`) instead of via `.delay()` for clearer error messages. After dispatching a task in a test, call `instance.refresh_from_db()` to pick up changes the synchronous task made.
@@ -281,7 +289,7 @@ Cover a newly added optional schema field with one test class: (1) positive case
 
 ## Behavior Changes Rewrite Their Tests
 
-When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior.
+When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior. Where the invariant survives the change, keep the old test's NAME (the rewrite then reads as a strengthening in the diff); rename only when the old contract is gone.
 
 **The rewrite census greps the FIELD NAME across ALL apps' test files**, not just the owning app's tests - a payload-field rename (`currency_code` → `currency_codes` on register/account-reset) also lives in `currencies/tests.py`'s registration test, and Pydantic's `extra='ignore'` silently drops the stale key from the payload (no 422), so the failure surfaces only as a downstream order assertion, far from the change that caused it. Behavior changes rewrite their tests WHEREVER the tests pin them.
 

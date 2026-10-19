@@ -28,6 +28,8 @@ Make the restoration structural, not transcriptional: after a tool run, revert t
 
 A content edit - one new key across locales, a translation fix - is a content-anchored hand edit, never an `i18n:extract`/`key:rm` run. All three tools reserialize every catalog they touch (key sort + de-escaping, see docs/i18n.md), so a one-key change dirties whole files and buys the full restore-then-reapply cycle above for nothing; the machinery is for changes that genuinely need a tool (structural key sweeps, language lifecycle). When a hand edit itself adds or removes escape-carrying values, fence the escape inventory before/after with the case-insensitive grep above.
 
+Placement keeps insertion-only diffs satisfiable: a hand edit under a no-deletion diff gate inserts the new key BEFORE the section's comma-less final key, never after it - appending after the last key forces a trailing comma onto that line, producing a `-` line the gate rejects, and key order within a section is semantically irrelevant anyway.
+
 ## Key Removal Gates
 
 - `key:rm` refuses while `key:find` still sees references; `--force` is only sane when the remaining hits are dead comments. Never force past a live reference - delete the referencing code (the dead component) in the same change.
