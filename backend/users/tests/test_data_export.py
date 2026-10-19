@@ -9,10 +9,11 @@ from django.test import TestCase
 from accounts.factories import AccountFactory
 from budgeting.factories import BudgetFactory
 from budgeting.models import BudgetCurrency
+from categories.factories import CategoryFactory
 from common.tests.mixins import AuthMixin
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
-from transactions.factories import TransactionFactory
+from transactions.factories import TransactionFactory, TransactionItemFactory
 from users.models import UserConsent
 from users.services import UserService
 
@@ -247,3 +248,68 @@ class FacetAdjustmentExportTests(AuthMixin, TestCase):
         rows = data['workspaces'][0]['transactions']
         self.assertEqual(len(rows), 1)
         self.assertIsNone(rows[0]['original_account_name'])
+
+
+class ItemCategoryExportTests(AuthMixin, TestCase):
+    """Item categories and the remainder flag serialize into the v3 export."""
+
+    def test_export_contains_item_categories_and_remainder_flag(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace)
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        food = CategoryFactory(budget=budget, workspace=self.workspace, name='Food')
+        home = CategoryFactory(budget=budget, workspace=self.workspace, name='Home')
+        shop = TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Weekly shop',
+            category=food,
+            amount=Decimal('20.00'),
+            type='expense',
+        )
+        TransactionItemFactory(transaction=shop, position=0, name='Bread', line_total=Decimal('3.00'), category=food)
+        TransactionItemFactory(
+            transaction=shop, position=1, name='Detergent', line_total=Decimal('5.00'), category=home
+        )
+        TransactionItemFactory(
+            transaction=shop,
+            position=2,
+            name='Rest',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('12.00'),
+            category=None,
+            is_remainder=True,
+        )
+
+        data = UserService.export_all_data(self.user)
+
+        exported_tx = next(t for t in data['workspaces'][0]['transactions'] if t['description'] == 'Weekly shop')
+        self.assertEqual(
+            [(i['name'], i['category_name'], i['is_remainder']) for i in exported_tx['items']],
+            [('Bread', 'Food', False), ('Detergent', 'Home', False), ('Rest', None, True)],
+        )
+
+    def test_export_item_keys_stay_additive(self):
+        """The item dict keeps the four legacy keys so older readers (and the
+        pre-change key set) stay stable - additive contract, no version bump."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace)
+        shop = TransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            description='Plain shop',
+            amount=Decimal('10.00'),
+            type='expense',
+        )
+        TransactionItemFactory(transaction=shop, position=0, name='Bread', line_total=Decimal('10.00'))
+
+        data = UserService.export_all_data(self.user)
+
+        exported_tx = next(t for t in data['workspaces'][0]['transactions'] if t['description'] == 'Plain shop')
+        self.assertEqual(
+            set(exported_tx['items'][0]),
+            {'name', 'quantity', 'unit_price', 'line_total', 'category_name', 'is_remainder'},
+        )
+        self.assertIsNone(exported_tx['items'][0]['category_name'])
+        self.assertFalse(exported_tx['items'][0]['is_remainder'])

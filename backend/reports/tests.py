@@ -12,7 +12,24 @@ from budgeting.services import PeriodService
 from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
-from transactions.factories import TransactionFactory
+from transactions.factories import TransactionFactory, TransactionItemFactory
+
+
+def _covered_transaction(**kwargs):
+    """TransactionFactory wrapper giving non-adjustment rows a full-coverage
+    remainder item, so item-based aggregates see the transaction's amount."""
+    tx = TransactionFactory(**kwargs)
+    if tx.type != 'adjustment':
+        TransactionItemFactory(
+            transaction=tx,
+            position=0,
+            name='',
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=tx.amount,
+            is_remainder=True,
+        )
+    return tx
 
 
 class ReportsTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -55,7 +72,7 @@ class TestBudgetSummary(ReportsTestCase):
         )
 
     def test_budget_summary_planned_vs_actual(self):
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             date=date(2026, 7, 5),
@@ -63,7 +80,7 @@ class TestBudgetSummary(ReportsTestCase):
             amount=Decimal('250.00'),
             type='expense',
         )
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             date=date(2026, 7, 10),
@@ -91,7 +108,7 @@ class TestBudgetSummary(ReportsTestCase):
 
     def test_budget_summary_counts_account_less_actuals_by_own_currency(self):
         usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
-        TransactionFactory(
+        _covered_transaction(
             account=None,
             currency=usd,
             workspace=self.workspace,
@@ -113,7 +130,7 @@ class TestBudgetSummary(ReportsTestCase):
         self.assertEqual(data['totals']['PLN']['planned'], '1500.00')
 
     def test_budget_summary_excludes_adjustments_and_income(self):
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             date=date(2026, 7, 5),
@@ -138,13 +155,135 @@ class TestBudgetSummary(ReportsTestCase):
         self.assertEqual(by_category['Groceries']['actual'], '100.00')
 
     def test_budget_summary_actual_outside_period_ignored(self):
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             date=date(2026, 8, 5),  # next month
             category=self.groceries,
             amount=Decimal('999.00'),
             type='expense',
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        by_category = {item['category_name']: item for item in data['items']}
+        self.assertEqual(by_category['Groceries']['actual'], '0.00')
+
+    def test_budget_summary_splits_transaction_items_across_categories(self):
+        tx = TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            category=self.groceries,
+            amount=Decimal('100.00'),
+            type='expense',
+        )
+        # Remainder carries the uncovered 30.00 and inherits groceries.
+        TransactionItemFactory(
+            transaction=tx,
+            position=0,
+            name='',
+            is_remainder=True,
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('30.00'),
+        )
+        # Inherited item, no line_total: effective total = quantity x unit_price.
+        TransactionItemFactory(
+            transaction=tx,
+            position=1,
+            name='Apples',
+            quantity=Decimal('2'),
+            unit_price=Decimal('20.00'),
+            line_total=None,
+        )
+        # Explicit per-item category in the same budget.
+        TransactionItemFactory(
+            transaction=tx,
+            position=2,
+            name='Bus ticket',
+            line_total=Decimal('30.00'),
+            category=self.transport,
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        by_category = {item['category_name']: item for item in data['items']}
+        # 40.00 inherited apples + 30.00 remainder under groceries; 30.00 explicit transport.
+        self.assertEqual(by_category['Groceries']['actual'], '70.00')
+        self.assertEqual(by_category['Groceries']['remaining'], '930.00')
+        self.assertEqual(by_category['Transport']['actual'], '30.00')
+        self.assertEqual(data['totals']['PLN']['actual'], '100.00')
+
+    def test_budget_summary_excludes_cross_budget_explicit_items(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        rent = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Rent')
+        other_period = PeriodService.get_or_create_for_date(self.user, other_budget, date(2026, 7, 15))
+        # Read-side fixture only: the write paths reject cross-budget item
+        # categories (D5/D6); the aggregation must still attribute by the
+        # item's own category, never the transaction's.
+        tx = TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 5),
+            category=self.groceries,
+            amount=Decimal('100.00'),
+            type='expense',
+        )
+        TransactionItemFactory(
+            transaction=tx,
+            position=0,
+            name='',
+            is_remainder=True,
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('75.00'),
+        )
+        TransactionItemFactory(
+            transaction=tx,
+            position=1,
+            name='Rent share',
+            line_total=Decimal('25.00'),
+            category=rent,
+        )
+
+        data = self.get(
+            f'/api/reports/budget-summary?budget_id={self.budget.id}&period_id={self.period.id}',
+            **self.auth_headers(),
+        )
+        by_category = {item['category_name']: item for item in data['items']}
+        self.assertEqual(by_category['Groceries']['actual'], '75.00')
+        self.assertNotIn('Rent', by_category)
+
+        other = self.get(
+            f'/api/reports/budget-summary?budget_id={other_budget.id}&period_id={other_period.id}',
+            **self.auth_headers(),
+        )
+        other_by = {item['category_name']: item for item in other['items']}
+        self.assertEqual(other_by['Rent']['actual'], '25.00')
+
+    def test_budget_summary_excludes_income_items(self):
+        income = TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 6),
+            category=self.groceries,
+            amount=Decimal('500.00'),
+            type='income',
+        )
+        TransactionItemFactory(
+            transaction=income,
+            position=0,
+            name='',
+            is_remainder=True,
+            quantity=Decimal('1'),
+            unit_price=None,
+            line_total=Decimal('500.00'),
         )
 
         data = self.get(
@@ -227,7 +366,7 @@ class TestBudgetHistory(ReportsTestCase):
                 amount=Decimal(amount),
                 created_by=self.user,
             )
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             category=self.groceries,
@@ -235,7 +374,7 @@ class TestBudgetHistory(ReportsTestCase):
             amount=Decimal('850.00'),
             type='expense',
         )
-        TransactionFactory(
+        _covered_transaction(
             account=self.checking,
             workspace=self.workspace,
             category=self.groceries,
@@ -285,7 +424,7 @@ class TestBudgetHistory(ReportsTestCase):
 
     def test_history_counts_account_less_actuals_by_own_currency(self):
         usd = CurrencyCatalogService.get_enabled(self.workspace.id, 'USD')
-        TransactionFactory(
+        _covered_transaction(
             account=None,
             currency=usd,
             workspace=self.workspace,
@@ -300,3 +439,30 @@ class TestBudgetHistory(ReportsTestCase):
         july = data['periods'][-1]
         self.assertEqual(july['totals']['USD'], {'planned': '0.00', 'actual': '40.00'})
         self.assertEqual(july['totals']['PLN']['actual'], '300.00')
+
+    def test_history_actuals_sum_item_effective_totals_not_amounts(self):
+        # Legacy under-summed row (no remainder): item sums diverge from the
+        # stored amount and the difference is accepted (D8 tolerance).
+        legacy = TransactionFactory(
+            account=self.checking,
+            workspace=self.workspace,
+            date=date(2026, 7, 20),
+            category=self.groceries,
+            amount=Decimal('400.00'),
+            type='expense',
+        )
+        TransactionItemFactory(transaction=legacy, position=0, name='Apples', line_total=Decimal('150.00'))
+        TransactionItemFactory(
+            transaction=legacy,
+            position=1,
+            name='Bus ticket',
+            line_total=Decimal('100.00'),
+            category=self.transport,
+        )
+
+        data = self.get(f'/api/reports/budget-history?budget_id={self.budget.id}', **self.auth_headers())
+        self.assertStatus(200)
+        july = data['periods'][-1]
+        # setUp's fully covered 300.00 + this row's item sum 250.00; the 400.00
+        # transaction amount itself is never read.
+        self.assertEqual(july['totals']['PLN']['actual'], '550.00')
