@@ -15,6 +15,26 @@ class TransactionCategoryNotFoundError(ValidationError):
     default_code = 'category_not_found'
 
 
+class TransactionItemCategoryWithoutTransactionError(ValidationError):
+    default_message = gettext_lazy('Items can only carry categories when the transaction has a category')
+    default_code = 'item_category_without_transaction'
+
+
+class TransactionItemCategoryBudgetError(ValidationError):
+    default_message = gettext_lazy('Item categories must belong to the same budget as the transaction category')
+    default_code = 'item_category_budget_mismatch'
+
+
+class TransactionItemsOverSumError(ValidationError):
+    default_code = 'items_over_sum'
+
+    def __init__(self, items_total, amount):
+        super().__init__(
+            gettext_lazy('Items total %(items)s exceeds the transaction amount %(amount)s')
+            % {'items': items_total, 'amount': amount}
+        )
+
+
 class TransactionAccountArchivedError(ValidationError):
     default_message = gettext_lazy('Account is archived and cannot receive new transactions')
     default_code = 'account_archived'

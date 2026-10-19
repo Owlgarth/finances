@@ -48,7 +48,10 @@ Workspace (top-level container)
 │     │     │                  account - every transaction stores its own currency, so account-less
 │     │     │                  rows hang directly off the workspace; a faceted payment may carry a
 │     │     │                  linked auto-adjustment via a nullable self-FK)
-│     │     ├── TransactionItem        (ordered receipt line items - informational)
+│     │     ├── TransactionItem        (ordered line items carrying category spending:
+│     │     │     │                      a NULL category inherits the transaction's, and
+│     │     │     │                      a system-managed remainder row keeps the items
+│     │     │     │                      summing to the amount)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
 │     └── PlannedTransaction (scheduled future transaction, optionally on this
@@ -71,6 +74,7 @@ Workspace (top-level container)
 | **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
+| **Category attribution** | Items carry category spending: each `TransactionItem` may carry a category, and a NULL item category inherits the transaction's (the effective category, resolved at read time), so category aggregates read items, not the transaction row. Explicit item categories must belong to the transaction category's budget. A system-managed `is_remainder` row absorbs `amount` minus the sum of user items, so every non-adjustment transaction's items sum to its amount (the coverage invariant); adjustments never carry coverage (no remainder row). The transaction's `amount` stays the stored truth for balances, which never read items; budget actuals and totals-by-category aggregate items by effective category, and the transaction list's category/budget filters match the transaction's own category or any item's explicit category. |
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); it must differ from the transaction's own currency, and the facet amount itself is informational and excluded from aggregates. When an original-currency account is selected, an auto-created linked adjustment records the movement on that account; the managed adjustment row is editable only via its source transaction. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. A faceted payment auto-creates one (nullable `source_transaction` self-FK on Transaction); these rows are managed by their source and cannot be edited or deleted directly. |
 | **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
@@ -239,7 +243,7 @@ const { data } = useQuery({
 | `budgeting_budget` / `_period` / `_categorybudget` / `budget_currencies` | Budgets, periods (cadence-derived or custom), planned amounts, per-budget currency sets |
 | `categories_category` | Budget-scoped categories |
 | `transactions_transaction` | Income / expense / adjustment records |
-| `transaction_items` | Ordered receipt line items |
+| `transaction_items` | Line items: per-item category attribution (nullable category + system-managed remainder rows) |
 | `transaction_attachments` | Receipt file metadata + extraction state |
 | `transfers_transfer` | Money moved between accounts |
 | `planned_transactions_plannedtransaction` | Scheduled transactions |

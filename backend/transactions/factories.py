@@ -36,3 +36,9 @@ class TransactionItemFactory(DjangoModelFactory):
     quantity = Decimal('1')
     unit_price = Decimal('10.00')
     line_total = Decimal('10.00')
+    # NULL category = inherit the transaction's category (read-side Coalesce).
+    category = None
+    # Factory rows are user rows by default; the service layer (later
+    # tasks) creates remainder rows via coverage normalization. Tests that
+    # need one pass is_remainder=True explicitly.
+    is_remainder = False

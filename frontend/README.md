@@ -201,7 +201,11 @@ optional free-text note behind an "Add note" disclosure that opens pre-expanded
 when the edited transaction carries one), `TransactionItemsEditor` (loads a saved transaction's items and persists edits
 through the list), `TransactionItemsList` (the editable rows grid both the
 editor and the create modal render - name/quantity/unit price/line total with
-add/remove/reorder, stable per-row identity, touch-aware),
+add/remove/reorder, a per-item category select (unset inherits the
+transaction's category; the select is disabled until the transaction has one),
+and the remainder card for the uncovered amount (editable name/category in the
+edit tab, a display-only preview in create mode), stable per-row identity,
+touch-aware),
 `TransactionAttachments` (upload + view/download, extraction),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
 own-currency pairing; account-less plans default to the workspace primary).
