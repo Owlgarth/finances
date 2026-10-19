@@ -200,6 +200,21 @@ class TestLegacyImportService(AuthMixin, TestCase):
         self.assertIsNotNone(salary.category)
         self.assertEqual(salary.category.name, 'Salary')
 
+    def test_restored_transactions_carry_coverage_remainder(self):
+        """Legacy restores re-enter the coverage invariant: items-based
+        aggregates count only item rows, so every restored non-adjustment
+        transaction must carry exactly one amount-sized remainder row."""
+        LegacyImportService.import_legacy(self.user, _legacy_v2_export())
+        ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
+
+        # Salary + Groceries; the linked exchange pair is deduped into a transfer.
+        restored = Transaction.objects.filter(workspace=ws).exclude(type='adjustment')
+        self.assertEqual(restored.count(), 2)
+        for trans in restored:
+            self.assertEqual(trans.items.count(), 1)  # no user rows in v1/v2 exports
+            remainder = trans.items.get(is_remainder=True)
+            self.assertEqual(remainder.line_total, trans.amount)
+
     def test_report_includes_created_budgets(self):
         report = LegacyImportService.import_legacy(self.user, _legacy_v2_export())
         ws = Workspace.objects.get(owner=self.user, name='Legacy Workspace')
@@ -642,6 +657,10 @@ class TestLegacyImportService(AuthMixin, TestCase):
         groceries = Transaction.objects.get(workspace=ws, description='Groceries')
         self.assertEqual(groceries.type, 'adjustment')
         self.assertEqual(groceries.amount, Decimal('300.00'))
+        # The in-loop normalization call no-ops on adjustments: never a
+        # remainder row, even though the row was restored as income/expense
+        # data before the flip.
+        self.assertEqual(groceries.items.count(), 0)
         wr = report['workspaces'][0]
         self.assertTrue(any('negative expense' in w for w in wr['warnings']), wr['warnings'])
         self.assertTrue(all(row['matches'] for row in wr['balances']), wr['balances'])
@@ -666,6 +685,9 @@ class TestLegacyImportService(AuthMixin, TestCase):
         self.assertEqual(Transfer.objects.filter(workspace=ws).count(), 0)
         adjustment = Transaction.objects.get(workspace=ws, type='adjustment')
         self.assertEqual(adjustment.amount, Decimal('-20.00'))
+        # The exchange-delta create path never normalizes: adjustments
+        # carry no coverage rows.
+        self.assertEqual(adjustment.items.count(), 0)
         warnings = report['workspaces'][0]['warnings']
         self.assertTrue(any('transfer skipped' in w for w in warnings), warnings)
 
