@@ -8,7 +8,7 @@ from categories.exceptions import CategoryDuplicateNameError, CategoryMergeSelfE
 from categories.models import Category
 from categories.schemas import CategoryArchive, CategoryCreate, CategoryMerge, CategoryUpdate
 from planned_transactions.models import PlannedTransaction
-from transactions.models import Transaction
+from transactions.models import Transaction, TransactionItem
 
 
 class CategoryService:
@@ -98,9 +98,10 @@ class CategoryService:
     def merge(user, workspace_id: int, budget_id: int, category_id: int, data: CategoryMerge) -> Category:
         """Merge another category of the same budget into this one.
 
-        Transactions, planned transactions, and planned amounts move to the
-        target category; planned amounts for the same period and currency are
-        summed. The source category is deleted afterwards.
+        Transactions, planned transactions, transaction items, and planned
+        amounts move to the target category; planned amounts for the same
+        period and currency are summed. The source category is deleted
+        afterwards.
         """
         target = CategoryService.get(category_id, workspace_id)
         if target.budget_id != budget_id:
@@ -123,6 +124,7 @@ class CategoryService:
 
         Transaction.objects.filter(category=source).update(category=target)
         PlannedTransaction.objects.filter(category=source).update(category=target)
+        TransactionItem.objects.filter(category=source).update(category=target)
 
         target_amounts = {(cb.period_id, cb.currency_id): cb for cb in CategoryBudget.objects.filter(category=target)}
         for cb in CategoryBudget.objects.filter(category=source):
@@ -146,6 +148,9 @@ class CategoryService:
     @db_transaction.atomic
     def delete(workspace_id: int, budget_id: int, category_id: int) -> None:
         """Delete a category. Transaction FKs are SET_NULL, so this uncategorizes records.
+
+        Item FKs are SET_NULL too - a deleted item category falls back to
+        inheriting the transaction's category (NULL = inherit).
 
         B5: the budget-deletion prompt flow (delete-or-uncategorize transactions)
         arrives when transactions live on accounts.

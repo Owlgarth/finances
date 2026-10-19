@@ -64,6 +64,11 @@ def list_transactions(
     currency_code filters by the transaction's stored own currency, never
     the original-amount facet; account-less transactions match their own
     currency; unknown codes match nothing (filters are not resource lookups).
+
+    category_id and budget_id OR-match: a transaction is included when its
+    own category matches OR any item's explicit category matches (NULL item
+    categories inherit the transaction's category, which the transaction arm
+    already covers).
     """
     workspace_id = request.auth.current_workspace_id
     return TransactionService.list(
@@ -104,6 +109,11 @@ def get_transaction_totals(
     currency_code filters by the transaction's stored own currency, never
     the original-amount facet; account-less transactions match their own
     currency; unknown codes match nothing (filters are not resource lookups).
+
+    category_id and budget_id OR-match: a transaction is included when its
+    own category matches OR any item's explicit category matches (NULL item
+    categories inherit the transaction's category, which the transaction arm
+    already covers).
     """
     workspace_id = request.auth.current_workspace_id
     common_kwargs = dict(
@@ -263,7 +273,13 @@ def replace_transaction_items(request: HttpRequest, transaction_id: int, data: T
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return TransactionService.replace_items(workspace_id, transaction_id, data.items)
+    return TransactionService.replace_items(
+        workspace_id,
+        transaction_id,
+        data.items,
+        remainder_category_id=data.remainder_category_id,
+        remainder_name=data.remainder_name,
+    )
 
 
 @router.get(

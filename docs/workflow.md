@@ -103,8 +103,11 @@ transfer. Transfers replace the old currency-exchange records.
   matching each transaction's stored own currency, hidden in single-currency
   workspaces); bulk account reassignment is available.
 - **Line items** and **receipt attachments** are managed from the Items/Receipts tabs
-  on an existing transaction. Items are informational (a mismatch hint appears when
-  their sum differs from the amount); the transaction amount stays authoritative.
+  on an existing transaction. Items carry per-item categories (an unset category
+  inherits the transaction's), and a system-managed remainder row keeps them
+  summing to the transaction amount, which stays the stored truth for balances.
+  A mismatch hint appears while editing when the items' sum differs from the
+  amount; saving an over-sum item list is rejected.
 - Attached receipts are served through the authenticated API, never direct storage
   links: image receipts open in a lightbox with a download button; PDFs and HEICs
   download on click.
