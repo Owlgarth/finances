@@ -65,6 +65,45 @@
     "confirm": "Скасувати план"
   },
   "recurring": {
+    "tabPlanned": "Планові",
+    "tabRecurring": "Регулярні",
+    "viewAria": "Переключити між плановими та регулярними",
+    "newRecurring": "Нова регулярна",
+    "empty": "Регулярних правил ще немає.",
+    "activeChip": "Активна",
+    "pausedChip": "Призупинена",
+    "badge": "Регулярна",
+    "makeRecurring": "Зробити регулярною",
+    "rowActions": {
+      "edit": "Редагувати",
+      "pause": "Призупинити",
+      "resume": "Відновити",
+      "delete": "Видалити"
+    },
+    "pausedToast": "Правило призупинено",
+    "resumedToast": "Правило відновлено",
+    "updateFailed": "Не вдалося оновити правило",
+    "deleted": "Регулярне правило видалено",
+    "deleteFailed": "Не вдалося видалити регулярне правило",
+    "deleteDialog": {
+      "title": "Видалити регулярне правило",
+      "message": "Видалити «{{name}}»?",
+      "deletePending": "Видалити також її {{count}} очікувані плановані транзакції"
+    },
+    "schedule": {
+      "daily_one": "Щодня",
+      "daily_few": "Кожні {{count}} дні",
+      "daily_many": "Кожні {{count}} днів",
+      "daily_other": "Кожні {{count}} днів",
+      "weekly_one": "Щотижня",
+      "weekly_few": "Кожні {{count}} тижні",
+      "weekly_many": "Кожних {{count}} тижнів",
+      "weekly_other": "Кожних {{count}} тижнів",
+      "monthly_one": "Щомісяця, {{day}} числа",
+      "monthly_few": "Кожні {{count}} місяці, {{day}} числа",
+      "monthly_many": "Кожних {{count}} місяців, {{day}} числа",
+      "monthly_other": "Кожних {{count}} місяців, {{day}} числа"
+    },
     "form": {
       "newTitle": "Нове правило повторення",
       "editTitle": "Редагувати правило повторення",

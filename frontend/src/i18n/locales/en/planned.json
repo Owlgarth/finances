@@ -63,6 +63,39 @@
     "confirm": "Cancel plan"
   },
   "recurring": {
+    "tabPlanned": "Planned",
+    "tabRecurring": "Recurring",
+    "viewAria": "Switch between planned and recurring",
+    "newRecurring": "New recurring",
+    "empty": "No recurring rules yet.",
+    "activeChip": "Active",
+    "pausedChip": "Paused",
+    "badge": "Recurring",
+    "makeRecurring": "Make recurring",
+    "rowActions": {
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete"
+    },
+    "pausedToast": "Rule paused",
+    "resumedToast": "Rule resumed",
+    "updateFailed": "Failed to update the rule",
+    "deleted": "Recurring rule deleted",
+    "deleteFailed": "Failed to delete the recurring rule",
+    "deleteDialog": {
+      "title": "Delete recurring rule",
+      "message": "Delete \"{{name}}\"?",
+      "deletePending": "Also delete its {{count}} pending planned transactions"
+    },
+    "schedule": {
+      "daily_one": "Every day",
+      "daily_other": "Every {{count}} days",
+      "weekly_one": "Every week",
+      "weekly_other": "Every {{count}} weeks",
+      "monthly_one": "Every month on day {{day}}",
+      "monthly_other": "Every {{count}} months on day {{day}}"
+    },
     "form": {
       "newTitle": "New recurring rule",
       "editTitle": "Edit recurring rule",

@@ -65,6 +65,45 @@
     "confirm": "Anuluj plan"
   },
   "recurring": {
+    "tabPlanned": "Planowane",
+    "tabRecurring": "Cykliczne",
+    "viewAria": "Przełącz między zaplanowanymi i cyklicznymi",
+    "newRecurring": "Nowa cykliczna",
+    "empty": "Brak reguł cyklicznych.",
+    "activeChip": "Aktywna",
+    "pausedChip": "Wstrzymana",
+    "badge": "Cykliczna",
+    "makeRecurring": "Uczyń cykliczną",
+    "rowActions": {
+      "edit": "Edytuj",
+      "pause": "Wstrzymaj",
+      "resume": "Wznów",
+      "delete": "Usuń"
+    },
+    "pausedToast": "Reguła wstrzymana",
+    "resumedToast": "Reguła wznowiona",
+    "updateFailed": "Nie udało się zaktualizować reguły",
+    "deleted": "Regułę cykliczną usunięto",
+    "deleteFailed": "Nie udało się usunąć reguły cyklicznej",
+    "deleteDialog": {
+      "title": "Usuń regułę cykliczną",
+      "message": "Usunąć „{{name}}”?",
+      "deletePending": "Usuń także jej {{count}} oczekujące planowane transakcje"
+    },
+    "schedule": {
+      "daily_one": "Codziennie",
+      "daily_few": "Co {{count}} dni",
+      "daily_many": "Co {{count}} dni",
+      "daily_other": "Co {{count}} dnia",
+      "weekly_one": "Co tydzień",
+      "weekly_few": "Co {{count}} tygodnie",
+      "weekly_many": "Co {{count}} tygodni",
+      "weekly_other": "Co {{count}} tygodnia",
+      "monthly_one": "Co miesiąc, {{day}} dnia",
+      "monthly_few": "Co {{count}} miesiące, {{day}} dnia",
+      "monthly_many": "Co {{count}} miesięcy, {{day}} dnia",
+      "monthly_other": "Co {{count}} miesiąca, {{day}} dnia"
+    },
     "form": {
       "newTitle": "Nowa reguła cykliczna",
       "editTitle": "Edytuj regułę cykliczną",
