@@ -16,6 +16,7 @@ import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { normalizeAmountInput } from '../../../utils/amountInput'
+import { NO_ACCOUNT } from '../../../utils/accountSelect'
 import { rowsToItems } from '../../../utils/transactionItems'
 import { listboxPanelClass } from '../../common/listboxParts'
 import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
@@ -49,10 +50,6 @@ const TYPE_OPTIONS = [
 ] as const
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
-
-/** Sentinel Select value for "no account" - the shared Select cannot hold a
- * null-valued option, and 0 can never collide with a real account id. */
-const NO_ACCOUNT = 0
 
 /** Sentinel Select value for "no auto-adjustment" - the facet stays
  *  informational-only. Same trick as NO_ACCOUNT: the shared Select cannot

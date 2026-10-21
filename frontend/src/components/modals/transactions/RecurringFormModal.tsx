@@ -14,14 +14,8 @@ import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { normalizeAmountInput } from '../../../utils/amountInput'
+import { NO_ACCOUNT, resolveAccountId } from '../../../utils/accountSelect'
 import { destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
-
-// Sentinel for the deliberate account-less state. Select's value contract is
-// string | number (it cannot hold null options), so the null account rides a
-// numeric sentinel instead; account ids are positive, so 0 never collides.
-// Third copy of this recipe (PlannedFormModal, TransactionFormModal) - the
-// next consumer extracts it into a shared module.
-const NO_ACCOUNT = 0
 
 // Wire enums never translate; labels resolve through t() in the component
 // (the STATUS_OPTIONS pattern in Planned.tsx). Static labelKeys so key:find
@@ -186,7 +180,7 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
   // backend rejects a mismatch); picking "No account" keeps the current
   // currency - the typed amount is already in it.
   const handleAccountChange = (value: number) => {
-    const id = value === NO_ACCOUNT ? null : value
+    const id = resolveAccountId(value)
     setAccountId(id)
     if (id !== null) {
       const picked = accounts.find((a) => a.id === id)
