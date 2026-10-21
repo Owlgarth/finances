@@ -176,6 +176,38 @@ class RecurringTransaction(WorkspaceScopedModel):
             ),
         ]
 
+    @property
+    def account_name(self) -> str | None:
+        return self.account.name if self.account else None
+
+    @property
+    def currency_code(self) -> str:
+        return self.currency.code
+
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
+    @property
+    def next_occurrence_date(self) -> date | None:
+        """Next unmaterialized occurrence, or None when paused, ended, or exhausted.
+
+        The candidate is the first occurrence strictly after the
+        last_generated_date pointer once anything has been generated, else
+        the grammar's first occurrence on/after start_date - the same
+        derivation the generator starts its catch-up loop from. Paused
+        rules report None (a paused rule has no upcoming occurrence).
+        """
+        if not self.is_active:
+            return None
+        if self.last_generated_date is not None:
+            candidate = self.next_occurrence_on_or_after(self.last_generated_date + timedelta(days=1))
+        else:
+            candidate = self.next_occurrence_on_or_after(self.start_date)
+        if self.end_date is not None and candidate > self.end_date:
+            return None
+        return candidate
+
     def _step(self, occurrence: date) -> date:
         """Return the occurrence strictly after `occurrence` (pure date math).
 

@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import transaction as db_transaction
-from django.db.models import F, Sum, Value
+from django.db.models import Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -27,9 +27,14 @@ from planned_transactions.exceptions import (
     PlannedTransactionCurrencyRequiredError,
     PlannedTransactionImportError,
     PlannedTransactionNotFoundError,
+    RecurringTransactionAdoptAlreadyLinkedError,
+    RecurringTransactionAdoptNotAllowedError,
+    RecurringTransactionAdoptNotPendingError,
+    RecurringTransactionEndDateError,
+    RecurringTransactionNotFoundError,
 )
-from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey
-from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport
+from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey, RecurringTransaction
+from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, RecurringTransactionCreate
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
 
@@ -468,3 +473,177 @@ class PlannedTransactionService:
 
         PlannedTransaction.objects.bulk_create(new_transactions)
         return len(new_transactions)
+
+
+class RecurringTransactionService:
+    @staticmethod
+    def _validate_end_date(start_date: date, end_date: date | None) -> None:
+        """Raise when end_date precedes start_date.
+
+        The model carries a CheckConstraint for the same rule; this guard
+        turns the violation into a clean 400 instead of an IntegrityError
+        (500). Applied identically on create and update.
+        """
+        if end_date is not None and end_date < start_date:
+            raise RecurringTransactionEndDateError()
+
+    @staticmethod
+    def _get_adoptable_planned(workspace_id: int, planned_id: int) -> PlannedTransaction:
+        """Fetch and lock a planned row eligible for adoption.
+
+        Raises planned's own NotFoundError when the row does not exist in
+        this workspace (identical semantics - reuse, not a duplicate
+        class), AdoptNotPending when it is done/cancelled, and
+        AdoptAlreadyLinked when another rule already owns it. Runs inside
+        the caller's atomic block (select_for_update requires it); the
+        get()-inside-try form is the sanctioned lock+query-in-one-call
+        pattern.
+        """
+        try:
+            planned = PlannedTransaction.objects.select_for_update().for_workspace(workspace_id).get(id=planned_id)
+        except PlannedTransaction.DoesNotExist:
+            raise PlannedTransactionNotFoundError()
+        if planned.status != 'pending':
+            raise RecurringTransactionAdoptNotPendingError()
+        if planned.recurring_id is not None:
+            raise RecurringTransactionAdoptAlreadyLinkedError()
+        return planned
+
+    @staticmethod
+    def list(workspace_id: int, include_inactive: bool = True) -> list[RecurringTransaction]:
+        """List a workspace's recurring rules, paused ones included by default.
+
+        Deliberate divergence from BudgetService.list (inactive only on
+        request): a paused rule must stay visible so the UI can surface it
+        with a paused chip and a resume action - hiding it by default
+        would strand the rule. pending_planned_count is a queryset
+        annotation (not a model field) powering the delete dialog's
+        "also delete N pending planned transactions" label.
+        """
+        queryset = (
+            RecurringTransaction.objects.for_workspace(workspace_id)
+            .select_related('account', 'category', 'currency')
+            .annotate(
+                pending_planned_count=Count('planned_transactions', filter=Q(planned_transactions__status='pending'))
+            )
+            .order_by('name', 'id')
+        )
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+        return list(queryset)
+
+    @staticmethod
+    def get_recurring(rule_id: int, workspace_id: int) -> RecurringTransaction:
+        """Get a recurring rule and verify it belongs to the workspace.
+
+        Fetches through the same annotated queryset as list() so both
+        endpoints serialize pending_planned_count identically.
+        """
+        rule = (
+            RecurringTransaction.objects.select_related('account', 'category', 'currency')
+            .annotate(
+                pending_planned_count=Count('planned_transactions', filter=Q(planned_transactions__status='pending'))
+            )
+            .for_workspace(workspace_id)
+            .filter(id=rule_id)
+            .first()
+        )
+        if not rule:
+            raise RecurringTransactionNotFoundError()
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def create(user, workspace_id: int, data: RecurringTransactionCreate) -> RecurringTransaction:
+        """Create a recurring rule.
+
+        adopt_planned_id links an existing pending planned row as the
+        rule's first occurrence ("make recurring" conversion): the row's
+        recurring FK is set and the rule's last_generated_date pointer
+        advances to the row's planned_date, so generation (task 3) starts
+        strictly after it and never materializes a duplicate. The adopt
+        fetch runs BEFORE the rule create so the pointer rides the single
+        INSERT (no second save). Sync-generation of the first rows is
+        task 3's addition - this method creates the rule only.
+        """
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
+        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+        RecurringTransactionService._validate_end_date(data.start_date, data.end_date)
+
+        planned = None
+        if data.adopt_planned_id is not None:
+            planned = RecurringTransactionService._get_adoptable_planned(workspace_id, data.adopt_planned_id)
+
+        rule = RecurringTransaction.objects.create(
+            workspace_id=workspace_id,
+            account=account,
+            currency=currency,
+            category_id=data.category_id,
+            name=data.name,
+            amount=data.amount,
+            interval_kind=data.interval_kind,
+            interval_count=data.interval_count,
+            start_date=data.start_date,
+            lead_days=data.lead_days,
+            end_date=data.end_date,
+            is_active=data.is_active,
+            last_generated_date=planned.planned_date if planned is not None else None,
+            created_by=user,
+            updated_by=user,
+        )
+
+        if planned is not None:
+            planned.recurring = rule
+            planned.updated_by = user
+            planned.save(update_fields=['recurring', 'updated_by', 'updated_at'])
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def update(user, workspace_id: int, rule_id: int, data: RecurringTransactionCreate) -> RecurringTransaction:
+        """Full-replace update of a rule; is_active rides the payload.
+
+        Pause/resume is a plain update (is_active in the PUT body), not a
+        dedicated endpoint. Edits are future-only: already-materialized
+        planned rows are never rewritten here, and the last_generated_date
+        pointer is untouched so generation never re-emits past
+        occurrences. adopt_planned_id is create-only and rejected here.
+        """
+        rule = RecurringTransactionService.get_recurring(rule_id, workspace_id)
+        if data.adopt_planned_id is not None:
+            raise RecurringTransactionAdoptNotAllowedError()
+
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
+        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+        RecurringTransactionService._validate_end_date(data.start_date, data.end_date)
+
+        rule.account = account
+        rule.currency = currency
+        rule.category_id = data.category_id
+        rule.name = data.name
+        rule.amount = data.amount
+        rule.interval_kind = data.interval_kind
+        rule.interval_count = data.interval_count
+        rule.start_date = data.start_date
+        rule.lead_days = data.lead_days
+        rule.end_date = data.end_date
+        rule.is_active = data.is_active
+        rule.updated_by = user
+        rule.save()
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def delete(workspace_id: int, rule_id: int, delete_pending: bool = False) -> None:
+        """Delete a rule; with delete_pending, its pending materialized rows too.
+
+        Done and cancelled rows always survive - they are history. All
+        survivors keep existing once the rule is gone: the recurring FK's
+        on_delete is SET_NULL (task 1), so they simply lose the link.
+        """
+        rule = RecurringTransactionService.get_recurring(rule_id, workspace_id)
+        if delete_pending:
+            rule.planned_transactions.filter(status='pending').delete()
+        rule.delete()
