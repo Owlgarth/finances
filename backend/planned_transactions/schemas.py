@@ -74,7 +74,11 @@ class CategoryOut(BaseModel):
 
 
 class PlannedTransactionOut(BaseModel):
-    """Schema for planned transaction response."""
+    """Schema for planned transaction response.
+
+    recurring_id is set when the row was materialized by (or adopted into) a
+    recurring rule - the frontend recurring badge keys on it.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -91,6 +95,7 @@ class PlannedTransactionOut(BaseModel):
     payment_date: Optional[date]
     status: str
     transaction_id: Optional[int]
+    recurring_id: Optional[int] = None
     created_by: UserIdOut = None
     updated_by: UserIdOut = None
     created_at: datetime
