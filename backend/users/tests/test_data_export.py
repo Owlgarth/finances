@@ -1,6 +1,7 @@
 """Tests for GDPR data export (Right to Access & Portability)."""
 
 import json
+from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -12,7 +13,7 @@ from budgeting.models import BudgetCurrency
 from categories.factories import CategoryFactory
 from common.tests.mixins import AuthMixin
 from currencies.services import CurrencyCatalogService
-from planned_transactions.factories import PlannedTransactionFactory
+from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from users.models import UserConsent
 from users.services import UserService
@@ -313,3 +314,54 @@ class ItemCategoryExportTests(AuthMixin, TestCase):
         )
         self.assertIsNone(exported_tx['items'][0]['category_name'])
         self.assertFalse(exported_tx['items'][0]['is_remainder'])
+
+
+class RecurringExportTests(AuthMixin, TestCase):
+    """Recurring rules serialize into the v3 export with their pointer."""
+
+    def test_export_contains_recurring_rules_with_last_generated_date(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        pln = CurrencyCatalogService.get_enabled(self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace, name='Cash')
+        RecurringTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Rent',
+            amount=Decimal('1200.00'),
+            interval_kind='monthly',
+            interval_count=1,
+            start_date=date(2026, 1, 5),
+            lead_days=4,
+            end_date=None,
+            is_active=True,
+            last_generated_date=date(2026, 10, 5),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        RecurringTransactionFactory(
+            account=None,
+            currency=pln,
+            workspace=self.workspace,
+            name='Accountless rule',
+            amount=Decimal('10.00'),
+            last_generated_date=None,
+        )
+
+        data = UserService.export_all_data(self.user)
+
+        rules = data['workspaces'][0]['recurring_transactions']
+        rent = next(r for r in rules if r['name'] == 'Rent')
+        self.assertEqual(rent['account_name'], 'Cash')
+        self.assertEqual(rent['currency_code'], account.currency.code)
+        self.assertEqual(rent['interval_kind'], 'monthly')
+        self.assertEqual(rent['interval_count'], 1)
+        self.assertEqual(rent['start_date'], '2026-01-05')
+        self.assertEqual(rent['lead_days'], 4)
+        self.assertIsNone(rent['end_date'])
+        self.assertTrue(rent['is_active'])
+        self.assertEqual(rent['last_generated_date'], '2026-10-05')
+        accountless = next(r for r in rules if r['name'] == 'Accountless rule')
+        self.assertIsNone(accountless['account_name'])
+        self.assertEqual(accountless['currency_code'], 'PLN')
+        self.assertIsNone(accountless['last_generated_date'])

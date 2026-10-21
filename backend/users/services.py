@@ -27,7 +27,7 @@ from common.tokens import (
 )
 from core.legal import get_privacy, get_terms
 from core.schemas import UserPreferencesUpdate, UserUpdate
-from planned_transactions.models import PlannedTransaction
+from planned_transactions.models import PlannedTransaction, RecurringTransaction
 from transactions.attachments import AttachmentService
 from transactions.models import Transaction, TransactionItem
 from transfers.models import Transfer
@@ -556,7 +556,7 @@ class UserService:
         - For each workspace the user belongs to:
           - Workspace name, user's role, join date
           - All budget accounts with their periods
-          - All transactions, planned transactions, currency exchanges, budgets, balances
+          - All transactions, planned transactions, recurring rules, currency exchanges, budgets, balances
 
         The output is designed to be serialized as JSON and downloaded as a file.
         All Decimal values are converted to strings, all datetimes to ISO format.
@@ -784,6 +784,36 @@ class UserService:
                     'account', 'category__budget', 'currency'
                 )
             ],
+            # v3 additive section (no export_version bump): older readers
+            # ignore the key; the importer .get()s it with [] for
+            # pre-recurring exports. Reference style matches the planned
+            # section (names, not ids - ids are not portable across
+            # instances).
+            'recurring_transactions': [
+                {
+                    'name': rt.name,
+                    'amount': rt.amount,
+                    'account_name': rt.account_name or None,
+                    'currency_code': rt.currency_code,
+                    'budget_name': rt.category.budget.name if rt.category else None,
+                    'category_name': rt.category_name,
+                    'interval_kind': rt.interval_kind,
+                    'interval_count': rt.interval_count,
+                    'start_date': rt.start_date.isoformat(),
+                    'lead_days': rt.lead_days,
+                    'end_date': rt.end_date.isoformat() if rt.end_date else None,
+                    'is_active': rt.is_active,
+                    # CRITICAL to round-trip: the last_generated_date
+                    # occurrence pointer. The materialization window rule
+                    # treats a NULL pointer as "never generated", so a
+                    # restored rule without it re-materializes occurrences
+                    # the source system already generated.
+                    'last_generated_date': rt.last_generated_date.isoformat() if rt.last_generated_date else None,
+                }
+                for rt in RecurringTransaction.objects.for_workspace(ws.id).select_related(
+                    'account', 'category__budget', 'currency'
+                )
+            ],
         }
 
     @staticmethod
@@ -793,14 +823,14 @@ class UserService:
 
         Rebuilds the full account/budgeting hierarchy: enabled currencies,
         accounts, budgets, categories, periods, category budgets, transactions
-        (with their category + original facet), transfers, and planned
-        transactions. Only v3 exports are accepted; v1/v2 files go through the
+        (with their category + original facet), transfers, planned
+        transactions, and recurring rules. Only v3 exports are accepted; v1/v2 files go through the
         dedicated legacy import endpoint.
         """
         from accounts.models import Account, AccountType
         from budgeting.models import Budget, BudgetCurrency, CategoryBudget, Period
         from categories.models import Category
-        from planned_transactions.models import PlannedTransaction
+        from planned_transactions.models import PlannedTransaction, RecurringIntervalKind, RecurringTransaction
         from transactions.models import Transaction
         from transactions.services import TransactionService
         from transfers.models import Transfer
@@ -827,6 +857,7 @@ class UserService:
             'imported_transactions': 0,
             'imported_transfers': 0,
             'imported_planned_transactions': 0,
+            'imported_recurring_transactions': 0,
         }
         skipped: dict[str, list[str]] = {'workspaces': [], 'errors': []}
         renamed: dict[str, str] = {}
@@ -1126,6 +1157,82 @@ class UserService:
                     updated_by=user,
                 )
                 counts['imported_planned_transactions'] += 1
+
+            # v3 additive section: older v3 files lack the key entirely, so the
+            # top-level read uses .get([]) and every field reads through .get()
+            # with the model default - never data['field'] (KeyError on older
+            # exports). Tolerant shapes mirror the planned-rows loop above.
+            for rt_data in ws_data.get('recurring_transactions', []):
+                # Guard malformed grammar BEFORE the resolvers that write: a
+                # missing start_date would IntegrityError (500 + full rollback
+                # for one row), and an unknown interval_kind would import a
+                # rule the generator silently steps as monthly. Only
+                # hand-edited files can reach these (well-formed exports
+                # always carry both).
+                if not rt_data.get('start_date'):
+                    skipped['errors'].append(
+                        _('%(name)s: recurring transaction missing start_date') % {'name': original_name}
+                    )
+                    continue
+                if rt_data.get('interval_kind', 'monthly') not in RecurringIntervalKind.values:
+                    skipped['errors'].append(
+                        _('%(name)s: recurring transaction has invalid interval_kind') % {'name': original_name}
+                    )
+                    continue
+                account_name = rt_data.get('account_name')
+                # Two-branch contract, same as planned rows: null/missing
+                # account_name = account-less rule with its own currency; a
+                # non-null unresolvable name = skip+error (the file references
+                # an account the export lacks).
+                account = account_map.get(account_name) if account_name else None
+                if account_name and not account:
+                    skipped['errors'].append(
+                        _('%(name)s: recurring transaction references unknown account') % {'name': original_name}
+                    )
+                    continue
+                currency_code = rt_data.get('currency_code')
+                if not account and not currency_code:
+                    skipped['errors'].append(
+                        _('%(name)s: account-less recurring transaction missing currency_code')
+                        % {'name': original_name}
+                    )
+                    continue
+                currency = (
+                    account.currency if account else UserService._resolve_import_currency(workspace, currency_code)
+                )
+                # Unresolvable category imports category-less (the create-path
+                # degradation), mirroring the planned rows - no skip here.
+                category = category_map.get((rt_data.get('budget_name'), rt_data.get('category_name')))
+                RecurringTransaction.objects.create(
+                    workspace=workspace,
+                    account=account,
+                    currency=currency,
+                    category=category,
+                    name=rt_data.get('name'),
+                    amount=rt_data.get('amount'),
+                    interval_kind=rt_data.get('interval_kind', 'monthly'),
+                    interval_count=rt_data.get('interval_count', 1),
+                    start_date=UserService._parse_import_date(rt_data.get('start_date')),
+                    lead_days=rt_data.get('lead_days', 4),
+                    end_date=UserService._parse_import_date(rt_data.get('end_date')),
+                    is_active=rt_data.get('is_active', True),
+                    # Pointer preserved verbatim - the materialization engine
+                    # skips occurrences D <= last_generated_date, so a restored
+                    # rule never re-materializes what the source system
+                    # already generated (its materialized rows import above as
+                    # plain planned rows and would otherwise get duplicates).
+                    last_generated_date=UserService._parse_import_date(rt_data.get('last_generated_date')),
+                    created_by=user,
+                    updated_by=user,
+                )
+                # Deliberately NOT relinking materialized planned rows to the
+                # restored rule: the planned section carries no rule link, so
+                # restored rows import as ordinary one-shot plans and lose
+                # their recurring badge. Accepted trade-off: relinking would
+                # need a rule-identity match the export format does not
+                # carry, and the partial unique constraint plus the preserved
+                # pointer keep future generation correct without it.
+                counts['imported_recurring_transactions'] += 1
 
         if counts['imported_workspaces'] > 0:
             user.current_workspace = Workspace.objects.filter(owner=user).order_by('-id').first()
