@@ -64,6 +64,30 @@
     "message": "Позначити «{{name}}» як скасовану? Рядок залишається у списку, але його більше не можна виконати.",
     "confirm": "Скасувати план"
   },
+  "recurring": {
+    "form": {
+      "newTitle": "Нове правило повторення",
+      "editTitle": "Редагувати правило повторення",
+      "fromPlannedTitle": "Зробити повторюваною",
+      "startDateLabel": "Дата початку",
+      "intervalCountLabel": "Кожні",
+      "intervalKindLabel": "Інтервал",
+      "intervalKindAria": "Одиниця інтервалу",
+      "intervalDaily": "Дні",
+      "intervalWeekly": "Тижні",
+      "intervalMonthly": "Місяці",
+      "leadDaysLabel": "Дні випередження",
+      "endDateLabel": "Дата завершення",
+      "endDatePlaceholder": "Необов'язково",
+      "clearEndDate": "Очистити дату завершення",
+      "monthlyClamp": "У місяцях, у яких менше ніж {{day}} днів, використовується останній день місяця.",
+      "adoptLabel": "Використати цю заплановану транзакцію як перше повторення",
+      "activeLabel": "Активна",
+      "added": "Правило повторення створено",
+      "intervalCountInvalid": "Інтервал має бути цілим числом від 1 до 365",
+      "leadDaysInvalid": "Дні випередження мають бути цілим числом від 0 до 31"
+    }
+  },
   "form": {
     "editTitle": "Редагувати заплановану",
     "newTitle": "Нова запланована транзакція",

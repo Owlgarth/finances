@@ -62,6 +62,30 @@
     "message": "Mark \"{{name}}\" as cancelled? The row stays in the list but can no longer be executed.",
     "confirm": "Cancel plan"
   },
+  "recurring": {
+    "form": {
+      "newTitle": "New recurring rule",
+      "editTitle": "Edit recurring rule",
+      "fromPlannedTitle": "Make recurring",
+      "startDateLabel": "Start date",
+      "intervalCountLabel": "Every",
+      "intervalKindLabel": "Interval",
+      "intervalKindAria": "Interval unit",
+      "intervalDaily": "Days",
+      "intervalWeekly": "Weeks",
+      "intervalMonthly": "Months",
+      "leadDaysLabel": "Lead days",
+      "endDateLabel": "End date",
+      "endDatePlaceholder": "Optional",
+      "clearEndDate": "Clear end date",
+      "monthlyClamp": "In months with fewer than {{day}} days, the last day of the month is used.",
+      "adoptLabel": "Use this planned transaction as the first occurrence",
+      "activeLabel": "Active",
+      "added": "Recurring rule created",
+      "intervalCountInvalid": "Interval must be a whole number between 1 and 365",
+      "leadDaysInvalid": "Lead days must be a whole number between 0 and 31"
+    }
+  },
   "form": {
     "editTitle": "Edit planned",
     "newTitle": "New planned transaction",
