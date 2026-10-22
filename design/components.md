@@ -321,6 +321,51 @@ Small icon-only buttons for table row actions, toolbar controls, and inline acti
 | Spacing | `4px` (`mb-1`) above input |
 | Required indicator | `*` in `text-negative` color, placed after label text |
 
+### Info Hint (`common/InfoHint.tsx`)
+
+Inline "?" hint icon placed after a form label, showing a short bubble of explanatory prose - the interactive counterpart to the passive hover tooltip in `patterns.md` §7. Props: `text` (plain prose only - the bubble renders no markup) and an optional `ariaLabel` for the button (defaults to `text`).
+
+```html
+<!-- Usage: inside the label, after the text (and any required *) -->
+<label class="block text-[11px] font-medium uppercase tracking-wider text-text-muted mb-1">
+  Lead days <InfoHint text="The planned transaction appears this many days before its due date. 0 means it appears on the due date itself." />
+</label>
+
+<!-- Rendered structure -->
+<span class="relative inline-flex">
+  <button type="button" aria-expanded="false" aria-describedby="{hintId}"
+          class="inline-flex items-center justify-center p-1 -my-1 pointer-coarse:p-2 pointer-coarse:-my-2
+                 rounded-none text-text-muted hover:text-text transition-colors touch-hit
+                 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus">
+    <HelpCircle size={13} strokeWidth={1.5} aria-hidden="true" />
+  </button>
+  <span role="tooltip" id="{hintId}"
+        class="absolute left-0 top-full mt-1 z-tooltip w-max max-w-[240px] bg-text text-surface
+               rounded-sm px-2 py-1.5 text-[11px] font-normal leading-relaxed
+               transition-opacity duration-100 pointer-events-none opacity-0">
+    The planned transaction appears this many days before its due date. 0 means it appears on the due date itself.
+    <span aria-hidden="true"
+          class="absolute -top-1 left-2 border-l-[4px] border-r-[4px] border-b-[4px]
+                 border-l-transparent border-r-transparent border-b-text"></span>
+  </span>
+</span>
+```
+
+| Property | Value |
+|---|---|
+| Icon | Lucide `HelpCircle`, 13px, 1.5px stroke, `text-text-muted hover:text-text` |
+| Layout invariant | The button's negative vertical margins (`-my-1`; `pointer-coarse:-my-2`) cancel its padding's share of the layout height, so its margin box stays 13px - the icon's size - on every device and never exceeds the label's line box. **A hint must never grow its label row**, or its input drops below its neighbor's |
+| Hover | Hover-capable devices only. The mouse handlers are gated in JS on the `(hover: hover)` media query (not CSS `group-hover`), so a touch tap's sticky synthetic hover can never wedge the bubble open on touch - hybrid devices (touchscreen laptops) are both, and gating on pointer coarseness would break them |
+| Click / tap | Click pins the bubble open (toggle); on touch the same tap toggles it. `touch-hit` expands the tap area 8px per side (the `responsive.md` recipe) without changing the visual size |
+| Keyboard | `:focus-visible` shows the bubble; pointer taps never match it, so a tap-focus never stacks a focus bubble on the click toggle |
+| Single open | Only one hint may be pinned at a time - pinning one closes whichever hint another instance had pinned |
+| Escape | Capture-phase listener with `stopPropagation`: the first Escape closes only the hint (the enclosing modal's bubble-phase listener never sees it); the next Escape closes the modal |
+| Outside tap | A `pointerdown` outside the wrapper closes the pinned hint - touch's dismissal path |
+| Pin guard | On pin, the bubble runs `scrollIntoView({ block: 'nearest' })` to scroll the minimum needed to stay visible inside a capped scroll container (the mobile bottom sheet) instead of clipping |
+| Bubble | Inverted per `patterns.md` §7: `bg-text text-surface`, `z-tooltip`, `rounded-sm px-2 py-1.5`, `max-w-[240px]` (`w-max` below that), Geist 11px `leading-relaxed` - prose styling, not the §7 tooltip's mono label |
+| Bubble mounting | Always mounted, toggled with opacity (never `display`), so `aria-describedby` resolves and screen readers announce the hint together with the button; `pointer-events-none` lets taps pass through to the input beneath |
+| Arrow | 4px CSS border triangle (`border-b-text`), 8px in from the bubble's left edge |
+
 ### Error State
 
 ```html
