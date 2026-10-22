@@ -31,6 +31,7 @@
     "transfer": "Переказ",
     "fromReceipt": "З чека",
     "scanningOffline": "Сканування недоступне",
+    "recurringRule": "Регулярне правило",
     "plannedTransaction": "Запланована операція"
   },
   "receiptReading": "Читаємо чек…",
