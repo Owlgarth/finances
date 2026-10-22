@@ -468,6 +468,7 @@ Never use arbitrary `z-index` values — always reference this scale.
 ## 7. Tooltips
 
 Small floating labels on hover/focus. Used for collapsed sidebar icons, icon-only buttons, truncated text.
+For explanatory prose next to a form label - an interactive hint the user clicks or taps to toggle - use the InfoHint component instead (`components.md` §4, Form Inputs).
 
 ### Structure
 

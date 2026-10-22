@@ -35,7 +35,8 @@ Two role groups drive enforcement:
 - **`ADMIN_ROLES`** (owner, admin) - structural resources: accounts, budgets,
   periods, and enabled currencies.
 - **`WRITE_ROLES`** (owner, admin, member) - day-to-day records: transactions,
-  transfers, categories, planned transactions, category budget amounts, receipts.
+  transfers, categories, planned transactions, recurring rules, category budget
+  amounts, receipts.
 
 ### Account Management (`ADMIN_ROLES`)
 
@@ -98,12 +99,14 @@ Two role groups drive enforcement:
 | View transfers | ✓ | ✓ | ✓ | ✓ |
 | Create / edit / delete transfer | ✓ | ✓ | ✓ | ✗ |
 
-### Planned Transaction Management (`WRITE_ROLES`)
+### Planned & Recurring Management (`WRITE_ROLES`)
 
 | Action | Owner | Admin | Member | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
 | View planned | ✓ | ✓ | ✓ | ✓ |
 | Create / edit / delete / execute planned | ✓ | ✓ | ✓ | ✗ |
+| View recurring rules | ✓ | ✓ | ✓ | ✓ |
+| Create / edit / delete recurring rule | ✓ | ✓ | ✓ | ✗ |
 
 ### Workspace Member Management
 

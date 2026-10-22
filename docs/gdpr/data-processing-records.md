@@ -34,7 +34,7 @@
 | Purpose | Personal finance tracking and budgeting |
 | Legal Basis | Consent (Art. 6(1)(a)) - performance of service agreed to at registration |
 | Categories of Data Subjects | Registered users |
-| Categories of Personal Data | Accounts, transactions (incl. line items), transfers, budgets, categories, planned transactions, receipt attachments (images/PDFs), workspace memberships |
+| Categories of Personal Data | Accounts, transactions (incl. line items), transfers, budgets, categories, planned transactions, recurring rules, receipt attachments (images/PDFs), workspace memberships |
 | Recipients | Workspace members. If the operator configures optional receipt extraction, uploaded receipt images are sent to the configured extraction service (self-hosted or a third-party model provider) solely to extract text. |
 | Transfers to Third Countries | None by default. Depends on the operator's chosen receipt-extraction provider, if any (see privacy policy §7). |
 | Retention Period | Until account or workspace deletion |
