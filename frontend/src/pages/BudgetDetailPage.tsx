@@ -52,6 +52,13 @@ function loadStoredCurrencyView(budgetId: number): string | null {
   }
 }
 
+/** Currency-strip chip number classes: mono figure, active-currency
+ *  emphasis, summary-refetch shimmer. A module-level helper so the class
+ *  fragments are built outside JSX expression containers (styling, never
+ *  UI text). */
+const stripNumberClass = (isActive: boolean, summaryLoading: boolean): string =>
+  `font-mono text-xs font-medium tabular-nums${isActive ? ' text-text' : ''}${summaryLoading ? ' animate-pulse' : ''}`
+
 export default function BudgetDetailPage() {
   const { t } = useTranslation('budgets')
   const { t: tCommon } = useTranslation('common')
@@ -500,7 +507,7 @@ export default function BudgetDetailPage() {
         const isActive = code === activeCurrency
         // Display-only ratio math (the meter fill); never persisted.
         const spendPct = planned > 0 ? (actual / planned) * 100 : 0
-        const numberClass = `font-mono text-xs font-medium tabular-nums${isActive ? ' text-text' : ''}${summaryLoading ? ' animate-pulse' : ''}`
+        const numberClass = stripNumberClass(isActive, summaryLoading)
         return (
           <button
             key={code}

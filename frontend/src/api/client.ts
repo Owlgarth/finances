@@ -8,6 +8,7 @@ import type {
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
   Cadence, Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
+  RecurringTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
   TransactionAttachment, ExtractionConfig, ExtractionResult, ParsedReceipt,
 } from '../types';
@@ -427,6 +428,38 @@ export const plannedTransactionsApi = {
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),
   execute: (id: number, paymentDate: string): Promise<PlannedTransaction> =>
     api.post<PlannedTransaction>(`/planned-transactions/${id}/execute`, null, { params: { payment_date: paymentDate } }).then(res => res.data),
+};
+
+// ============= Recurring Transactions API =============
+export interface RecurringInput {
+  name: string;
+  amount: string;
+  account_id?: number | null;
+  currency_code?: string | null;
+  category_id?: number | null;
+  interval_kind: 'daily' | 'weekly' | 'monthly';
+  /** Full-replace PUT: always send - an omitted key resets to the backend default (1). */
+  interval_count?: number;
+  start_date: string;
+  /** Full-replace PUT: always send - an omitted key resets to the backend default (4). */
+  lead_days?: number;
+  /** Cleared as null under the full-replace PUT, never omitted (a blank string would 422). */
+  end_date?: string | null;
+  /** Create-only ("make recurring" adoption of a pending planned row); the backend rejects it on update. */
+  adopt_planned_id?: number | null;
+  /** Full-replace PUT: always send - an omitted key re-activates a paused rule (backend default true). */
+  is_active?: boolean;
+}
+
+export const recurringTransactionsApi = {
+  getAll: (includeInactive = false): Promise<RecurringTransaction[]> =>
+    api.get<RecurringTransaction[]>('/recurring-transactions', { params: { include_inactive: includeInactive } }).then(res => res.data),
+  create: (data: RecurringInput): Promise<RecurringTransaction> =>
+    api.post<RecurringTransaction>('/recurring-transactions', data).then(res => res.data),
+  update: (id: number, data: RecurringInput): Promise<RecurringTransaction> =>
+    api.put<RecurringTransaction>(`/recurring-transactions/${id}`, data).then(res => res.data),
+  delete: (id: number, deletePending = false): Promise<void> =>
+    api.delete(`/recurring-transactions/${id}`, { params: { delete_pending: deletePending } }).then(() => undefined),
 };
 
 // ============= Auth API =============

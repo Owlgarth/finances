@@ -21,8 +21,8 @@ from categories.models import Category
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.models import WorkspaceCurrency
 from currencies.services import CurrencyCatalogService
-from planned_transactions.factories import PlannedTransactionFactory
-from planned_transactions.models import PlannedTransaction
+from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
+from planned_transactions.models import PlannedTransaction, RecurringTransaction
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
@@ -830,6 +830,120 @@ class V3ItemCategoryImportTests(AuthMixin, TestCase):
         self.assertIsNone(shop.items.get(name='Bread').category_id)
 
 
+class V3RecurringImportTests(AuthMixin, TestCase):
+    """Recurring rules round-trip; the occurrence pointer survives restore."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _v3(self, **ws_extra):
+        ws = {'workspace_name': 'Imported Workspace', 'enabled_currencies': [], 'accounts': [], 'budgets': []}
+        ws.update(ws_extra)
+        return {'export_version': '3.0', 'workspaces': [ws]}
+
+    def test_recurring_round_trip_preserves_last_generated_date(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace, name='Cash')
+        RecurringTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Rent',
+            interval_kind='monthly',
+            start_date=date(2026, 1, 5),
+            last_generated_date=date(2026, 10, 5),
+        )
+
+        export = UserService.export_all_data(self.user)
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        restored = (
+            RecurringTransaction.objects.filter(name='Rent', workspace__owner=self.user)
+            .exclude(workspace=self.workspace)
+            .get()
+        )
+        # The pointer survives verbatim: next_occurrence_date lands strictly
+        # after it, so the restored rule never re-generates a past occurrence.
+        self.assertEqual(restored.last_generated_date, date(2026, 10, 5))
+        self.assertEqual(restored.next_occurrence_date, date(2026, 11, 5))
+        self.assertEqual(restored.account.name, 'Cash')
+        self.assertTrue(restored.is_active)
+
+    def test_legacy_export_without_recurring_section_imports_clean(self):
+        """Older v3 files (pre-recurring) lack the key entirely - no errors, no rules."""
+        export = self._v3(
+            accounts=[{'name': 'Main', 'currency_code': 'PLN'}],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 0)
+        self.assertEqual(result['skipped']['errors'], [])
+        self.assertEqual(RecurringTransaction.objects.filter(workspace__owner=self.user).count(), 0)
+
+    def test_account_less_recurring_rule_imports_account_less(self):
+        export = self._v3(
+            recurring_transactions=[
+                {
+                    'name': 'Tip rule',
+                    'amount': '5.00',
+                    'account_name': None,
+                    'currency_code': 'PLN',
+                    'budget_name': None,
+                    'category_name': None,
+                    'interval_kind': 'weekly',
+                    'interval_count': 2,
+                    'start_date': '2026-10-01',
+                    'lead_days': 7,
+                    'end_date': None,
+                    'is_active': False,
+                    'last_generated_date': None,
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 1)
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        rule = RecurringTransaction.objects.get(workspace=ws, name='Tip rule')
+        self.assertIsNone(rule.account)
+        self.assertEqual(rule.currency.code, 'PLN')
+        self.assertEqual(rule.interval_kind, 'weekly')
+        self.assertEqual(rule.interval_count, 2)
+        self.assertEqual(rule.lead_days, 7)
+        self.assertFalse(rule.is_active)
+        self.assertIsNone(rule.last_generated_date)
+
+    def test_unknown_account_name_skips_with_error(self):
+        export = self._v3(
+            recurring_transactions=[
+                {
+                    'name': 'Ghost rule',
+                    'amount': '1.00',
+                    'account_name': 'Nope',
+                    'currency_code': 'PLN',
+                    'interval_kind': 'monthly',
+                    'interval_count': 1,
+                    'start_date': '2026-01-05',
+                    'lead_days': 4,
+                    'is_active': True,
+                    'last_generated_date': None,
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown account', result['skipped']['errors'][0])
+
+
 class V3RoundTripTests(AuthMixin, TestCase):
     """Export → wipe → import reproduces the full hierarchy and balances."""
 
@@ -1141,4 +1255,35 @@ class AccountDeletionOrphanTests(AuthMixin, TestCase):
         delete_workspace_financial_records(ws_id)
 
         self.assertFalse(Transaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())
+
+    def test_delete_workspace_financial_records_with_recurring_rules(self):
+        """A rule + a materialized row + the PROTECT-referenced account clear in
+        one helper call (ordering invariant: rules delete after planned rows and
+        before category budgets/accounts - pinned per the data-deletion skill so
+        the NEXT FK change stays provable)."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace, name='Cash')
+        rule = RecurringTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Rent',
+            last_generated_date=date(2026, 10, 5),
+        )
+        PlannedTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Rent occurrence',
+            recurring=rule,
+        )
+
+        from common.services.base import delete_workspace_financial_records
+
+        ws_id = self.workspace.id
+        delete_workspace_financial_records(ws_id)
+
+        self.assertFalse(RecurringTransaction.objects.filter(workspace_id=ws_id).exists())
+        self.assertFalse(PlannedTransaction.objects.filter(workspace_id=ws_id).exists())
         self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())
