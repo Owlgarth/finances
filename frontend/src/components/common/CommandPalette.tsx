@@ -95,6 +95,14 @@ const PALETTE_GROUP_KEYS = {
   Planned: 'palette.groupPlanned',
 } as const
 
+// Results-row classes per viewport (mobile sheet rows vs desktop dialog
+// rows). Module level so the class strings sit outside JSX expression
+// containers - they are styling, never UI text.
+const mobileRowClass =
+  'w-full min-h-[44px] px-3 flex items-center gap-3 text-sm text-text transition-colors active:bg-surface-hover'
+const desktopRowClass =
+  'w-full h-8 px-3 flex items-center gap-2.5 text-xs text-text transition-colors hover:bg-surface-hover'
+
 interface PaletteRow {
   kind: 'row'
   key: string
@@ -443,7 +451,7 @@ export default function CommandPalette() {
       <BottomSheet open={open} onClose={() => setOpen(false)} aria-label={t('palette.searchLabel')}>
         <div className="sticky top-4 z-10 bg-surface">{input}</div>
         <div className="pb-2 pt-1">
-          {list('w-full min-h-[44px] px-3 flex items-center gap-3 text-sm text-text transition-colors active:bg-surface-hover')}
+          {list(mobileRowClass)}
         </div>
       </BottomSheet>
     )
@@ -466,7 +474,7 @@ export default function CommandPalette() {
         >
           {input}
           <div className="max-h-[320px] overflow-y-auto py-1">
-            {list('w-full h-8 px-3 flex items-center gap-2.5 text-xs text-text transition-colors hover:bg-surface-hover')}
+            {list(desktopRowClass)}
           </div>
           <div className="px-3 py-1.5 border-t border-border text-[10px] font-mono text-text-muted flex items-center gap-3">
             <span>{t('palette.hintNavigate')}</span>

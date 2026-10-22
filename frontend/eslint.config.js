@@ -33,20 +33,14 @@ export default defineConfig([
       // i18next/no-literal-string flags UI-facing string literals: JSX text and the
       // placeholder/title/alt/aria-label attributes. It is the guard against NEW
       // hardcoded English; t('key') calls (and template literals routed through t())
-      // are the sanctioned escape. The migration streams have landed, so the rule
-      // now sits at its documented false-positive floor of 12 warnings, none of
-      // them UI text:
-      //   - className strings and class fragments built inside JSX expression
-      //     containers (CommandPalette list(...) rows, BudgetDetailPage
-      //     numberClass template)
-      //   - DOM-id templates (TransactionItemsList item-{index}-form/name)
-      //   - internal key arrays whose rendered labels already go through t()
-      //     (BudgetInsights ['planned','actual'], TransactionFormModal
-      //     ['items','receipts'])
-      //   - a semantic enum default (SegmentedControl opt.tone ?? 'primary')
-      // Excluding these by word pattern would also silence the same words in
-      // genuine UI positions, so they stay as the documented floor. Never add a
-      // new warning.
+      // are the sanctioned escape. The rule sits at ZERO warnings: the historical
+      // false-positive floor (class strings, DOM-id templates, internal key
+      // arrays, and enum defaults built inside JSX expression containers) was
+      // eliminated by hoisting those literals to module scope, so any warning
+      // now is a regression. Fix new findings the same way - hoist the literal
+      // out of the JSX container or route rendered text through t() - never by
+      // widening words.exclude, which would also silence the same words in
+      // genuine UI positions.
       'i18next/no-literal-string': ['warn', {
         framework: 'react',
         mode: 'jsx-only',

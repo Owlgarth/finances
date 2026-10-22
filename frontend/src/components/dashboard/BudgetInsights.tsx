@@ -19,6 +19,10 @@ const SERIES = {
   actual: 'var(--chart-series-2)',
 } as const
 
+/* Legend series in display order; internal keys - the labels resolve
+   through t() and the swatch color through SERIES[s]. */
+const LEGEND_SERIES = ['planned', 'actual'] as const
+
 /* Compact axis numbers per numberStyle. 'fr-FR' supplies the eu shape:
    NBSP grouping + ',' decimal + neutral Latin compact suffixes (k, M),
    independent of the UI language (number format is its own preference). */
@@ -66,7 +70,7 @@ function Legend() {
   const { t } = useTranslation('numbers')
   return (
     <div className="flex items-center gap-3">
-      {(['planned', 'actual'] as const).map((s) => (
+      {LEGEND_SERIES.map((s) => (
         <span key={s} className="flex items-center gap-1.5 text-[10px] text-text-muted capitalize">
           <span className="inline-block w-2.5 h-2.5 rounded-[2px]" style={{ background: SERIES[s] }} />
           {s === 'planned' ? t('insights.seriesPlanned') : t('insights.seriesActual')}

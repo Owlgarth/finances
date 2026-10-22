@@ -16,6 +16,7 @@ import { useIsTouch } from '../../../hooks/useBreakpoint'
 import { useWorkspace } from '../../../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../../../utils/errors'
 import { normalizeAmountInput } from '../../../utils/amountInput'
+import { NO_ACCOUNT } from '../../../utils/accountSelect'
 import { rowsToItems } from '../../../utils/transactionItems'
 import { listboxPanelClass } from '../../common/listboxParts'
 import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
@@ -48,11 +49,11 @@ const TYPE_OPTIONS = [
   { value: 'adjustment', labelKey: 'type.adjustment' },
 ] as const
 
-const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
+/** Edit-mode detail tabs below the form. Internal keys only - the button
+ *  labels resolve through t(). */
+const DETAIL_TABS = ['items', 'receipts'] as const
 
-/** Sentinel Select value for "no account" - the shared Select cannot hold a
- * null-valued option, and 0 can never collide with a real account id. */
-const NO_ACCOUNT = 0
+const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
 /** Sentinel Select value for "no auto-adjustment" - the facet stays
  *  informational-only. Same trick as NO_ACCOUNT: the shared Select cannot
@@ -876,7 +877,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       {isEdit && transaction && (
         <div className="mt-6 pt-4 border-t border-border">
           <div className="flex items-center gap-1 mb-3">
-            {(['items', 'receipts'] as const).map((tab) => (
+            {DETAIL_TABS.map((tab) => (
               <button
                 key={tab}
                 type="button"

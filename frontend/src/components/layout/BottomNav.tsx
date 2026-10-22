@@ -15,6 +15,7 @@ import {
   PieChart,
   Plus,
   Receipt,
+  Repeat,
   RotateCw,
   ScanLine,
   Search,
@@ -47,6 +48,7 @@ import ThemeToggleRow from './ThemeToggleRow'
 import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
+import RecurringFormModal from '../modals/transactions/RecurringFormModal'
 import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
 import registry from '../../../../backend/common/languages.json'
@@ -132,6 +134,7 @@ export default function BottomNav() {
   // so the reference is stable while the modal is open — no mid-edit re-seed.
   const [prefillReceipt, setPrefillReceipt] = useState<{ file: File; parsed: ParsedReceipt } | null>(null)
   const [plannedOpen, setPlannedOpen] = useState(false)
+  const [recurringOpen, setRecurringOpen] = useState(false)
 
   // Always-mounted hidden file input. Its .click() is called synchronously
   // inside the "From receipt" ActionSheet onSelect (the user-gesture handler)
@@ -195,6 +198,7 @@ export default function BottomNav() {
         ]
       : []),
     { label: t('quickAdd.plannedTransaction'), icon: Calendar, onSelect: () => setPlannedOpen(true) },
+    { label: t('quickAdd.recurringRule'), icon: Repeat, onSelect: () => setRecurringOpen(true) },
   ]
 
   const moreActive = MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to))
@@ -403,6 +407,7 @@ export default function BottomNav() {
       />
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} />
       <PlannedFormModal open={plannedOpen} onClose={() => setPlannedOpen(false)} />
+      <RecurringFormModal open={recurringOpen} onClose={() => setRecurringOpen(false)} />
       {/* Create-workspace modal (mount-per-use): the More sheet's trigger row
           closes the sheet first, so this is the only overlay layer while open. */}
       {createWorkspaceOpen && (

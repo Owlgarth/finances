@@ -1,6 +1,6 @@
 ---
-version: "2.1"
-effective_date: "2026-08-24"
+version: "2.2"
+effective_date: "2026-10-21"
 ---
 
 ## 1. Introduction
@@ -22,7 +22,7 @@ By registering for Owlgarth Finances, you agree to the collection and use of inf
 - Accounts and their balances
 - Transactions (income, expense, and balance adjustments) and their line items
 - Transfers between your accounts
-- Budgets, categories, and planned transactions
+- Budgets, categories, planned transactions, and recurring transaction rules
 
 **Receipt attachments:**
 

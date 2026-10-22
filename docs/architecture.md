@@ -10,7 +10,9 @@ Full-stack web application with:
 - **Backend**: Django 6 + Django Ninja REST API
 - **Database**: PostgreSQL 17
 - **Authentication**: JWT (JSON Web Tokens)
-- **Task Queue**: Celery with Redis broker (planned-transaction execution, receipt extraction)
+- **Task Queue**: Celery with Redis broker (planned-transaction execution, recurring-rule
+  materialization, receipt extraction) + a daily beat schedule (nightly recurring
+  materialization at 00:05 UTC)
 - **Object storage**: S3-compatible (private media bucket for receipt attachments)
 - **Receipt parser** (optional): an external, pluggable service implementing `docs/parser-contract.md`
 
@@ -54,9 +56,14 @@ Workspace (top-level container)
 │     │     │     │                      summing to the amount)
 │     │     └── TransactionAttachment  (receipt image/PDF in private storage)
 │     ├── Transfer           (money moved between two accounts; replaces exchanges)
-│     └── PlannedTransaction (scheduled future transaction, optionally on this
+│     ├── PlannedTransaction (scheduled future transaction, optionally on this
 │                               account - stores its own currency, equal to the
-│                               account's whenever one is set)
+│                               account's whenever one is set; rows materialized
+│                               by a recurring rule link back to it via a
+│                               nullable FK)
+│     └── RecurringTransaction (recurrence rule that materializes planned
+│                               transactions ahead of their due date; optionally
+│                               on this account)
 │
 └── Budget                   (a plan with a cadence)
       ├── BudgetCurrency     (the budget's ordered currency set; first = default view)
@@ -124,8 +131,9 @@ backend/
 │   ├── attachments.py      # AttachmentService (storage + extraction state)
 │   └── parser_client.py    # HTTP client for the optional receipt parser
 ├── transfers/              # Transfers between accounts
-├── planned_transactions/   # Scheduled transactions
-│   └── tasks.py            # Celery task: execute_planned_transaction
+├── planned_transactions/   # Scheduled + recurring transactions
+│   └── tasks.py            # Celery tasks: execute_planned_transaction,
+│                           #   generate_recurring_transactions (daily beat)
 ├── reports/                # budget-summary, budget-history (planned vs actual), current-balances
 └── locale/                 # gettext catalogs (uk/pl) for translated API error messages
 ```
@@ -142,6 +150,18 @@ commits (never at a savepoint release - a worker that beat the commit would find
 and skip permanently). The worker re-fetches with `select_for_update()`, guards
 idempotency via `transaction_id`, and creates the `Transaction` with the plan's account
 (possibly none) and the plan's own currency.
+
+**Recurring-rule materialization** - the daily beat entry `generate-recurring-transactions`
+(crontab `minute=5, hour=0` UTC - the codebase's first periodic task) runs
+`generate_recurring_transactions`, which delegates to
+`RecurringTransactionService.generate_due`: every active rule in every workspace
+materializes its due occurrences as pending `PlannedTransaction` rows via
+`PlannedTransactionService.create_from_recurring`. An occurrence materializes once its
+lead window opens (`today >= D - lead_days`); a catch-up loop recovers missed days, and
+the per-rule `last_generated_date` pointer plus a partial unique constraint on
+`(recurring, planned_date)` keep an occurrence from generating twice. Creating (or
+adopting a planned row into) a rule also generates inline, so the first due row appears
+without waiting for the nightly run.
 
 **Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored
@@ -246,7 +266,8 @@ const { data } = useQuery({
 | `transaction_items` | Line items: per-item category attribution (nullable category + system-managed remainder rows) |
 | `transaction_attachments` | Receipt file metadata + extraction state |
 | `transfers_transfer` | Money moved between accounts |
-| `planned_transactions_plannedtransaction` | Scheduled transactions |
+| `planned_transactions` | Scheduled transactions |
+| `recurring_transactions` | Recurrence rules that materialize planned transactions |
 
 ### Workspace-Scoped Queries
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from django.db import IntegrityError
 from django.db import transaction as db_transaction
-from django.db.models import F, Sum, Value
+from django.db.models import Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -27,9 +28,14 @@ from planned_transactions.exceptions import (
     PlannedTransactionCurrencyRequiredError,
     PlannedTransactionImportError,
     PlannedTransactionNotFoundError,
+    RecurringTransactionAdoptAlreadyLinkedError,
+    RecurringTransactionAdoptNotAllowedError,
+    RecurringTransactionAdoptNotPendingError,
+    RecurringTransactionEndDateError,
+    RecurringTransactionNotFoundError,
 )
-from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey
-from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport
+from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey, RecurringTransaction
+from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, RecurringTransactionCreate
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
 
@@ -323,6 +329,43 @@ class PlannedTransactionService:
         )
 
     @staticmethod
+    def create_from_recurring(rule: RecurringTransaction, occurrence: date) -> PlannedTransaction | None:
+        """Materialize one occurrence of a recurring rule as a pending planned transaction.
+
+        THE single creation path for generated rows (case file 2026-05-21: Celery
+        tasks never create DB records directly) - the nightly beat task and the
+        sync-generate on rule create both reach this method through
+        RecurringTransactionService's materialization helpers.
+
+        Copies name/amount/account/currency/category from the rule as stored. The
+        archived-account and category validations deliberately do NOT re-run: the
+        rule was validated at create time, and a rule whose account got archived
+        later still generates - the row is a plan, execution validates.
+
+        Returns None when a concurrent generator already created this occurrence
+        (IntegrityError on the partial unique constraint (recurring,
+        planned_date)): the caller still advances its last_generated_date pointer,
+        which is what makes the race loss self-healing.
+        """
+        try:
+            with db_transaction.atomic():  # SAVEPOINT - IntegrityError must not poison the caller's transaction
+                return PlannedTransaction.objects.create(
+                    workspace_id=rule.workspace_id,
+                    account_id=rule.account_id,
+                    currency_id=rule.currency_id,
+                    name=rule.name,
+                    amount=rule.amount,
+                    category_id=rule.category_id,
+                    planned_date=occurrence,
+                    status='pending',
+                    recurring=rule,
+                    created_by=rule.created_by,
+                    updated_by=rule.created_by,
+                )
+        except IntegrityError:
+            return None
+
+    @staticmethod
     def update(user, workspace_id: int, planned_id: int, data: PlannedTransactionCreate) -> PlannedTransaction:
         """Update a planned transaction.
 
@@ -468,3 +511,271 @@ class PlannedTransactionService:
 
         PlannedTransaction.objects.bulk_create(new_transactions)
         return len(new_transactions)
+
+
+class RecurringTransactionService:
+    @staticmethod
+    def _validate_end_date(start_date: date, end_date: date | None) -> None:
+        """Raise when end_date precedes start_date.
+
+        The model carries a CheckConstraint for the same rule; this guard
+        turns the violation into a clean 400 instead of an IntegrityError
+        (500). Applied identically on create and update.
+        """
+        if end_date is not None and end_date < start_date:
+            raise RecurringTransactionEndDateError()
+
+    @staticmethod
+    def _get_adoptable_planned(workspace_id: int, planned_id: int) -> PlannedTransaction:
+        """Fetch and lock a planned row eligible for adoption.
+
+        Raises planned's own NotFoundError when the row does not exist in
+        this workspace (identical semantics - reuse, not a duplicate
+        class), AdoptNotPending when it is done/cancelled, and
+        AdoptAlreadyLinked when another rule already owns it. Runs inside
+        the caller's atomic block (select_for_update requires it); the
+        get()-inside-try form is the sanctioned lock+query-in-one-call
+        pattern.
+        """
+        try:
+            planned = PlannedTransaction.objects.select_for_update().for_workspace(workspace_id).get(id=planned_id)
+        except PlannedTransaction.DoesNotExist:
+            raise PlannedTransactionNotFoundError()
+        if planned.status != 'pending':
+            raise RecurringTransactionAdoptNotPendingError()
+        if planned.recurring_id is not None:
+            raise RecurringTransactionAdoptAlreadyLinkedError()
+        return planned
+
+    @staticmethod
+    def _generate_for_rule(rule: RecurringTransaction, today: date) -> int:
+        """Run the catch-up materialization loop for ONE rule; return rows created.
+
+        Opens its own atomic and re-fetches the rule with select_for_update so
+        last_generated_date is read under the lock (double idempotency guard:
+        generate_due's is_active scan is the fast path; this is the locked
+        re-check). A rule deleted or paused between scan and lock returns 0.
+
+        Materialization window rule (plan decision 7) - occurrence D generates
+        iff ALL hold:
+          - D > last_generated_date (candidates step strictly past the pointer;
+            a defensive break if the stepper ever fails to advance),
+          - D >= rule.created_at.date() (never backfill occurrences predating
+            the rule itself; a violation SKIPS forward - it does NOT break,
+            because the pointer only advances on generation and a fixed seed
+            would deadlock rules created with a past start_date),
+          - today >= D - lead_days (the lead window opened; monotone in D, so a
+            not-yet-open window BREAKS the loop - later occurrences open later),
+          - end_date is None OR D <= end_date (monotone in D, BREAKS).
+
+        The pointer advances on every generated OR race-lost occurrence, which is
+        what makes repeated runs idempotent (run twice = same rows).
+        """
+        with db_transaction.atomic():
+            locked = RecurringTransaction.objects.select_for_update().filter(id=rule.id).first()
+            if locked is None or not locked.is_active:
+                return 0
+
+            created = 0
+            search_from = (
+                locked.last_generated_date + timedelta(days=1)
+                if locked.last_generated_date is not None
+                else max(locked.start_date, locked.created_at.date())
+            )
+            while True:
+                occurrence = locked.next_occurrence_on_or_after(search_from)
+                if locked.last_generated_date is not None and occurrence <= locked.last_generated_date:
+                    break  # defensive: the stepper must advance past the pointer
+                if locked.end_date is not None and occurrence > locked.end_date:
+                    break  # rule is finished
+                if occurrence < locked.created_at.date():
+                    # Occurrence predates the rule: never generate, skip forward.
+                    # Only reachable when the pointer predates created_at (adopt
+                    # mechanic, GDPR import restore) - the never-generated seed
+                    # already starts at max(start_date, created_at.date()).
+                    search_from = occurrence + timedelta(days=1)
+                    continue
+                if today < occurrence - timedelta(days=locked.lead_days):
+                    break  # lead window not open yet; later occurrences open later still
+                if PlannedTransactionService.create_from_recurring(locked, occurrence) is not None:
+                    created += 1
+                # Advance on generation AND on race loss (create_from_recurring
+                # returned None): the constraint only fires when another
+                # generator already created this occurrence, so it is handled.
+                locked.last_generated_date = occurrence
+                locked.save(update_fields=['last_generated_date', 'updated_at'])
+                search_from = occurrence + timedelta(days=1)
+            return created
+
+    @staticmethod
+    def list(workspace_id: int, include_inactive: bool = True) -> list[RecurringTransaction]:
+        """List a workspace's recurring rules, paused ones included by default.
+
+        Deliberate divergence from BudgetService.list (inactive only on
+        request): a paused rule must stay visible so the UI can surface it
+        with a paused chip and a resume action - hiding it by default
+        would strand the rule. pending_planned_count is a queryset
+        annotation (not a model field) powering the delete dialog's
+        "also delete N pending planned transactions" label.
+        """
+        queryset = (
+            RecurringTransaction.objects.for_workspace(workspace_id)
+            .select_related('account', 'category', 'currency')
+            .annotate(
+                pending_planned_count=Count('planned_transactions', filter=Q(planned_transactions__status='pending'))
+            )
+            .order_by('name', 'id')
+        )
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
+        return list(queryset)
+
+    @staticmethod
+    def get_recurring(rule_id: int, workspace_id: int) -> RecurringTransaction:
+        """Get a recurring rule and verify it belongs to the workspace.
+
+        Fetches through the same annotated queryset as list() so both
+        endpoints serialize pending_planned_count identically.
+        """
+        rule = (
+            RecurringTransaction.objects.select_related('account', 'category', 'currency')
+            .annotate(
+                pending_planned_count=Count('planned_transactions', filter=Q(planned_transactions__status='pending'))
+            )
+            .for_workspace(workspace_id)
+            .filter(id=rule_id)
+            .first()
+        )
+        if not rule:
+            raise RecurringTransactionNotFoundError()
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def create(user, workspace_id: int, data: RecurringTransactionCreate) -> RecurringTransaction:
+        """Create a recurring rule.
+
+        adopt_planned_id links an existing pending planned row as the
+        rule's first occurrence ("make recurring" conversion): the row's
+        recurring FK is set and the rule's last_generated_date pointer
+        advances to the row's planned_date, so generation starts strictly
+        after it and never materializes a duplicate. The adopt fetch runs
+        BEFORE the rule create so the pointer rides the single INSERT (no
+        second save). Sync-generation then materializes the first due
+        occurrence(s) inline before the rule is returned.
+        """
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
+        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+        RecurringTransactionService._validate_end_date(data.start_date, data.end_date)
+
+        planned = None
+        if data.adopt_planned_id is not None:
+            planned = RecurringTransactionService._get_adoptable_planned(workspace_id, data.adopt_planned_id)
+
+        rule = RecurringTransaction.objects.create(
+            workspace_id=workspace_id,
+            account=account,
+            currency=currency,
+            category_id=data.category_id,
+            name=data.name,
+            amount=data.amount,
+            interval_kind=data.interval_kind,
+            interval_count=data.interval_count,
+            start_date=data.start_date,
+            lead_days=data.lead_days,
+            end_date=data.end_date,
+            is_active=data.is_active,
+            last_generated_date=planned.planned_date if planned is not None else None,
+            created_by=user,
+            updated_by=user,
+        )
+
+        if planned is not None:
+            planned.recurring = rule
+            planned.updated_by = user
+            planned.save(update_fields=['recurring', 'updated_by', 'updated_at'])
+
+        # Sync-generate (plan decision 8): materialize the first due
+        # occurrence now instead of waiting for the nightly beat, so the row
+        # is visible the moment the create response returns. Runs inline in
+        # the SAME transaction (same DB connection): it reads the rule this
+        # transaction wrote, and nothing here dispatches to Celery (generated
+        # rows are pending, and pending rows never enqueue
+        # execute_planned_transaction) - so no on_commit deferral applies.
+        RecurringTransactionService._generate_for_rule(rule, timezone.now().date())
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def update(user, workspace_id: int, rule_id: int, data: RecurringTransactionCreate) -> RecurringTransaction:
+        """Full-replace update of a rule; is_active rides the payload.
+
+        Pause/resume is a plain update (is_active in the PUT body), not a
+        dedicated endpoint. Edits are future-only: already-materialized
+        planned rows are never rewritten here, and the last_generated_date
+        pointer is untouched so generation never re-emits past
+        occurrences. adopt_planned_id is create-only and rejected here.
+        """
+        rule = RecurringTransactionService.get_recurring(rule_id, workspace_id)
+        if data.adopt_planned_id is not None:
+            raise RecurringTransactionAdoptNotAllowedError()
+
+        account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
+        currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
+        PlannedTransactionService._validate_category(data.category_id, workspace_id)
+        RecurringTransactionService._validate_end_date(data.start_date, data.end_date)
+
+        rule.account = account
+        rule.currency = currency
+        rule.category_id = data.category_id
+        rule.name = data.name
+        rule.amount = data.amount
+        rule.interval_kind = data.interval_kind
+        rule.interval_count = data.interval_count
+        rule.start_date = data.start_date
+        rule.lead_days = data.lead_days
+        rule.end_date = data.end_date
+        rule.is_active = data.is_active
+        rule.updated_by = user
+        rule.save()
+        return rule
+
+    @staticmethod
+    @db_transaction.atomic
+    def delete(workspace_id: int, rule_id: int, delete_pending: bool = False) -> None:
+        """Delete a rule; with delete_pending, its pending materialized rows too.
+
+        Done and cancelled rows always survive - they are history. All
+        survivors keep existing once the rule is gone: the recurring FK's
+        on_delete is SET_NULL (task 1), so they simply lose the link.
+        """
+        rule = RecurringTransactionService.get_recurring(rule_id, workspace_id)
+        if delete_pending:
+            rule.planned_transactions.filter(status='pending').delete()
+        rule.delete()
+
+    @staticmethod
+    def generate_due(today: date | None = None) -> int:
+        """Generate every due occurrence for every active rule in EVERY workspace.
+
+        The one RecurringTransactionService method that deliberately crosses
+        workspaces (no for_workspace): it runs from the daily Celery beat task -
+        a system schedule, not a user request - so the is_active filter IS the
+        scope. No API endpoint exposes it (Task 4 wires CRUD only).
+
+        Each rule materializes in its own transaction (see _generate_for_rule),
+        so a failure on one rule leaves earlier rules' rows and pointers
+        committed; the task's autoretry re-runs the whole pass and every
+        already-generated rule is a no-op thanks to the pointer. Safe to run any
+        number of times, from beat, manually, or concurrently with itself (the
+        partial unique constraint is the hard duplicate guard).
+
+        Returns the number of planned transactions created.
+        """
+        if today is None:
+            today = timezone.now().date()
+        created = 0
+        for rule in RecurringTransaction.objects.filter(is_active=True):
+            created += RecurringTransactionService._generate_for_rule(rule, today)
+        return created

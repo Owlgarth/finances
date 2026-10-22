@@ -225,6 +225,30 @@ export interface PlannedTransaction {
   payment_date: string | null;
   status: 'pending' | 'done' | 'cancelled';
   transaction_id: number | null;
+  recurring_id: number | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface RecurringTransaction {
+  id: number;
+  workspace_id: number;
+  account_id: number | null;
+  account_name: string | null;
+  currency_code: string;
+  name: string;
+  amount: string;
+  category_id: number | null;
+  category: { id: number; budget_id: number; name: string } | null;
+  interval_kind: 'daily' | 'weekly' | 'monthly';
+  interval_count: number;
+  start_date: string;
+  lead_days: number;
+  end_date: string | null;
+  is_active: boolean;
+  last_generated_date: string | null;
+  next_occurrence_date: string | null;
+  pending_planned_count: number;
   created_at: string;
   updated_at: string | null;
 }
