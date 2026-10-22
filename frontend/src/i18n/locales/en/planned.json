@@ -39,6 +39,10 @@
   "emptyFiltered": "No planned transactions match your search or filters.",
   "empty": "No planned transactions.",
   "emptyWithStatus": "No {{status}} planned transactions.",
+  "emptyMonth": {
+    "message": "Nothing planned for this month.",
+    "showAll": "Show all dates"
+  },
   "noAccount": "No account",
   "rowActions": {
     "execute": "Execute",
@@ -123,6 +127,11 @@
       "activeHint": "Pause the rule without deleting it: history is kept and no new planned transactions are generated until it is switched back on.",
       "leadDaysInvalid": "Lead days must be a whole number between 0 and 31"
     }
+  },
+  "monthNav": {
+    "groupAria": "Month",
+    "prevAria": "Previous month",
+    "nextAria": "Next month"
   },
   "form": {
     "editTitle": "Edit planned",

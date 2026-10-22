@@ -5,8 +5,9 @@ interface Props {
   /** Decorative icon above the heading (design/patterns.md §2: Lucide,
       48px, strokeWidth 1.5, text-text-muted/30 — style set by the caller). */
   icon?: ReactNode
-  /** Semibold heading above the message (design/patterns.md §2). */
-  heading?: string
+  /** Semibold heading above the message (design/patterns.md §2); ReactNode -
+      the planned month-empty state feeds it a styled span. */
+  heading?: ReactNode
   action?: {
     label: string
     onClick: () => void

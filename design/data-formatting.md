@@ -37,6 +37,7 @@
 | Table cells | ISO `YYYY-MM-DD` | `2026-02-16` | JetBrains Mono |
 | Page header breadcrumb | Short month + full year | `Feb 2026` | JetBrains Mono |
 | Context selector (period) | Short month + full year | `Feb 2026` | JetBrains Mono |
+| Month label (stepper, month empty state) | Full month + year | `October 2026` | JetBrains Mono |
 | Timestamp (last calculated) | Date + time, 12h | `3/23/2026, 11:14 AM` | JetBrains Mono |
 
 ---

@@ -184,3 +184,31 @@ export function formatPeriodRange(
     : (withYears ? 'MMM d y' : 'MMM d')
   return `${format(parseISO(startIso), pattern, { locale: dateLocale })} - ${format(parseISO(endIso), pattern, { locale: dateLocale })}`
 }
+
+/**
+ * Full month name + year for a date inside the month being labeled
+ * ("October 2026" / "październik 2026" / "жовтень 2026"): the Planned
+ * month stepper display, and any other month-scoped caption. Any day of
+ * the month yields the same label - pass whichever bound is in hand.
+ *
+ * Month names come from the configured date-fns locale (the same
+ * unconditional `{ locale }` wiring formatPeriodRange uses, so the label
+ * tracks the UI language; LanguageContext applies it on language
+ * changes). Month names NEVER go in the i18n catalogs - the locale owns
+ * them. numberStyle deliberately has no effect: this is a label, not a
+ * data range, so there are no separators to restyle.
+ *
+ * Worked examples (docblock examples are the contract - the frontend
+ * has no test runner, so they are the review reference; keep them in
+ * sync if the format ever changes):
+ *   enUS locale (default): formatMonthYear('2026-10-01') === 'October 2026'
+ *   pl locale:             formatMonthYear('2026-10-17') === 'październik 2026'
+ *   uk locale:             formatMonthYear('2026-10-31') === 'жовтень 2026'
+ *   year boundary:         formatMonthYear('2027-01-01') === 'January 2027'
+ *
+ * parseISO reads date-only strings as local time - no UTC-midnight day
+ * shift in negative-offset zones (see formatPeriodName's note).
+ */
+export function formatMonthYear(isoDate: string): string {
+  return format(parseISO(isoDate), 'MMMM y', { locale: formattingConfig.dateLocale })
+}
