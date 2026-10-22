@@ -2,6 +2,10 @@ import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 
 export type SegmentTone = 'primary' | 'positive'
 
+/** Active-state tone for options that do not set one (SegmentOption.tone's
+ *  documented default). Authored literal, hence module-level UPPER_SNAKE. */
+const DEFAULT_TONE: SegmentTone = 'primary'
+
 export interface SegmentOption<T extends string | number> {
   value: T
   label: ReactNode
@@ -82,7 +86,7 @@ export default function SegmentedControl<T extends string | number>({
     >
       {options.map((opt, i) => {
         const selected = opt.value === value
-        const tone = opt.tone ?? 'primary'
+        const tone = opt.tone ?? DEFAULT_TONE
         return (
           <button
             key={String(opt.value)}

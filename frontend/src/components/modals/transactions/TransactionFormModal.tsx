@@ -49,6 +49,10 @@ const TYPE_OPTIONS = [
   { value: 'adjustment', labelKey: 'type.adjustment' },
 ] as const
 
+/** Edit-mode detail tabs below the form. Internal keys only - the button
+ *  labels resolve through t(). */
+const DETAIL_TABS = ['items', 'receipts'] as const
+
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
 /** Sentinel Select value for "no auto-adjustment" - the facet stays
@@ -873,7 +877,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
       {isEdit && transaction && (
         <div className="mt-6 pt-4 border-t border-border">
           <div className="flex items-center gap-1 mb-3">
-            {(['items', 'receipts'] as const).map((tab) => (
+            {DETAIL_TABS.map((tab) => (
               <button
                 key={tab}
                 type="button"
