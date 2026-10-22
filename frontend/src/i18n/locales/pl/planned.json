@@ -41,6 +41,10 @@
   "emptyFiltered": "Żadna planowana transakcja nie pasuje do wyszukiwania ani filtrów.",
   "empty": "Brak planowanych transakcji.",
   "emptyWithStatus": "Brak planowanych transakcji ze statusem „{{status}}”.",
+  "emptyMonth": {
+    "message": "Na ten miesiąc nic nie zaplanowano.",
+    "showAll": "Pokaż wszystkie daty"
+  },
   "noAccount": "Bez konta",
   "rowActions": {
     "execute": "Zrealizuj",
@@ -131,6 +135,11 @@
       "activeHint": "Wstrzymuje regułę bez jej usuwania: historia jest zachowana, a nowe planowane transakcje nie są generowane, dopóki reguła nie zostanie ponownie włączona.",
       "leadDaysInvalid": "Dni wyprzedzenia muszą być liczbą całkowitą od 0 do 31"
     }
+  },
+  "monthNav": {
+    "groupAria": "Miesiąc",
+    "prevAria": "Poprzedni miesiąc",
+    "nextAria": "Następny miesiąc"
   },
   "form": {
     "editTitle": "Edytuj planowaną",
