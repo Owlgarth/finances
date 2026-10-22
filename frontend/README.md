@@ -32,7 +32,7 @@ frontend/
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
-│   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
+│   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, RecurringFormModal
 │   │   └── profile/          # Settings/profile sections
@@ -59,7 +59,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (12), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date month math for the from/to list-filter params: whole-month ranges, calendar-month detection, adjacent-month shift), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── .i18rc                   # i18next-parser config (i18n:extract; locales list)
 ├── package.json
@@ -88,7 +88,7 @@ and a 404 catch-all.
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target) |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download |
-| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view" - planned view only) |
+| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), explicit or deep-linked date params always win, partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view" - planned view only) |
 | `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -142,7 +142,9 @@ input for the min/max amount filters), `Skeleton` (wireframe loading bars -
 chip next to workspace rows in the selector dropdown and the mobile More sheet),
 `ListFilterFields` (the
 shared Transactions/Planned filter panel, with date-preset chips: This month /
-Last month / Last 30 days / This year), `ListTotalsStrip` (presentational totals
+Last month / Last 30 days / This year / All time - the last clears both date
+params and is active whenever neither is set, so it lights up on Transactions'
+date-less first load), `ListTotalsStrip` (presentational totals
 strip for the list pages - the owning page runs the query and passes the results),
 `InfoHint` (inline "?" hint icon after form labels - the bubble shows on hover on
 hover-capable devices and pins on click/tap elsewhere; negative vertical margins
@@ -215,7 +217,11 @@ own-currency pairing; account-less plans default to the workspace primary),
 `RecurringFormModal` (recurring-rule create/edit - interval kind/count, start
 date with lead days, optional end date, active toggle, `InfoHint` field hints;
 "Make recurring" prefills it from a pending planned row and adopts that row as
-the rule's first occurrence instead of duplicating it).
+the rule's first occurrence instead of duplicating it), `PlannedMonthStepper`
+(presentational month stepper for the Planned page - prev/next chevrons around
+a `formatMonthYear` month label; mounted only when the planned view's effective
+date range spans exactly one calendar month, custom/partial ranges and All
+time hide the row).
 
 ## Contexts
 

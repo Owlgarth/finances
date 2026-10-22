@@ -137,6 +137,16 @@ a real transaction carrying the plan's account and currency (via a Celery task,
 idempotent) and marks the planned item done. The list shares the Transactions
 search/filters pattern, including the own-currency filter (URL-synced).
 
+Entering the planned view defaults the date range to the current calendar
+month: the default is materialized into the URL as `from`/`to` (replace, no
+history entry) so the focused view is shareable, and a month stepper above the
+status control hops to adjacent months. Explicit or deep-linked date params
+always win (partial ranges pass through untouched), and clearing both params
+(the **All time** preset chip) is an explicit all-time view that never
+re-defaults within the session. An empty focused month with no other filters
+shows a month-aware empty state whose **Show all dates** action clears the
+range.
+
 The page's **Planned | Recurring** view switch (URL-synced via `?view=`) toggles
 between the scheduled list and the workspace's recurring rules, which materialize
 pending planned transactions ahead of their due date (a nightly task; creating a
