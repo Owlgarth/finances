@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -18,7 +18,9 @@ same session - in PR #81 it paid for itself twice.
   the point of `-core`); Playwright reaches system Chrome via `channel: 'chrome'` or an
   explicit `executablePath`.
 - The probe is a throwaway script, not test infra: seed, assert, screenshot, exit. Nothing
-  lands in `frontend/src/`.
+  lands in `frontend/src/`. The harness shell is zsh: a lowercase `path` loop variable
+  clobbers `$PATH` (zsh ties the array to the env var), so name shell loop variables
+  anything else.
 
 ## Authenticate and seed through the API, never the UI
 
@@ -34,6 +36,8 @@ same session - in PR #81 it paid for itself twice.
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
 - Clean up with `DELETE /api/users/me` - removes the seeded user and its workspace data.
+  The call requires a `{ password }` body carrying the seeded user's password; an empty
+  body 422s (the first teardown attempt fails exactly this way).
 
 ## The stack: check ports before you build on it
 
@@ -82,6 +86,14 @@ same session - in PR #81 it paid for itself twice.
   a `retry: false` query only shows its failure mode under induced failure - the dead
   period-picker on budget open passed every naive probe and surfaced only when
   `GET /api/budgets/{id}/periods/current` was blocked.
+- Served-code staleness in long-lived dev containers: a dev container that outlives the
+  implementer's edits can serve a stale Vite transform - the module-graph cache frozen at a
+  mid-edit intermediate save (bind-mount HMR missing the final write) - so the page renders
+  HEAD-minus-the-feature while the URL/state machinery around it works, and the served
+  sourcemap's line numbers match the older revision. Before trusting any "missing UI"
+  verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
+  the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
+  invalidates the cache. Exemplar: PR #146's first stepper probe.
 - Real-hardware dynamics: headless emulation has no soft keyboard, so visualViewport/OSK
   behavior (an on-screen keyboard re-render racing a tap, click suppression on
   element-move) is out of emulation reach. A clean headless non-repro of a mobile-only bug
