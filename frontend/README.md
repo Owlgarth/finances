@@ -34,7 +34,7 @@ frontend/
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
-│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal
+│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, RecurringFormModal
 │   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
 │   │   ├── AuthContext.tsx          # Authentication + consent state
@@ -88,7 +88,7 @@ and a 404 catch-all.
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target) |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download |
-| `/planned` | Planned | Planned transactions; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view") |
+| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view" - planned view only) |
 | `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -102,9 +102,10 @@ workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`),
 `BottomNav` (mobile shell: bottom bar with Home/Txns/Budgets/More tabs around a
 center quick-add FAB - the FAB hides for viewers/workspace-less users but the
 slot stays so tabs don't shift; the FAB's ActionSheet offers new transaction,
-transfer, from-receipt (parse then seed the form) and planned; the More sheet
-carries the overflow destinations (Accounts, Planned, Members, Settings), search,
-logout, workspace switcher + create/settings, the theme row and the zoom toggle),
+transfer, from-receipt (parse then seed the form), planned and recurring rule;
+the More sheet carries the overflow destinations (Accounts, Planned, Members,
+Settings), search, logout, workspace switcher + create/settings, the theme row
+and the zoom toggle),
 `UserMenu`, `WorkspaceSelector`, `ThemeToggleRow` (dark-mode toggle row shared by
 the desktop UserMenu dropdown and the mobile More sheet), `LanguageModal`
 (mount-per-use language picker - one card per registry language with the active
@@ -143,7 +144,9 @@ chip next to workspace rows in the selector dropdown and the mobile More sheet),
 shared Transactions/Planned filter panel, with date-preset chips: This month /
 Last month / Last 30 days / This year), `ListTotalsStrip` (presentational totals
 strip for the list pages - the owning page runs the query and passes the results),
-and `formStyles.ts` (the input/label/button
+`InfoHint` (inline "?" hint icon after form labels - the bubble shows on hover on
+hover-capable devices and pins on click/tap elsewhere; negative vertical margins
+keep it from ever growing its label row), and `formStyles.ts` (the input/label/button
 class constants - the redesign's form primitives). `DatePicker` (react-day-picker) and
 `LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`,
 alongside `ProtectedRoute` (the auth gate: loading splash while auth resolves,
@@ -208,7 +211,11 @@ edit tab, a display-only preview in create mode), stable per-row identity,
 touch-aware),
 `TransactionAttachments` (upload + view/download, extraction),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
-own-currency pairing; account-less plans default to the workspace primary).
+own-currency pairing; account-less plans default to the workspace primary),
+`RecurringFormModal` (recurring-rule create/edit - interval kind/count, start
+date with lead days, optional end date, active toggle, `InfoHint` field hints;
+"Make recurring" prefills it from a pending planned row and adopts that row as
+the rule's first occurrence instead of duplicating it).
 
 ## Contexts
 
@@ -335,6 +342,7 @@ const api = axios.create({
 | `transactionsApi` | Transactions (filters, totals, bulk-account, filtered JSON export, frequent descriptions), line items, attachments, extraction, receipt parse |
 | `transfersApi` | Transfers between accounts |
 | `plannedTransactionsApi` | Planned with execute, totals by `currency`/`category`, filtered JSON export |
+| `recurringTransactionsApi` | Recurring rules - list (incl. paused), create (optionally adopting a pending planned row), update, delete (optionally its pending planned rows) |
 | `reportsApi` | Budget summary (planned vs actual), current balances |
 
 ### Token Management

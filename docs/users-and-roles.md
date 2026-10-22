@@ -61,7 +61,7 @@ Standard access for daily budget operations.
 - Create and manage categories and set category budget amounts
 - Record and manage transactions (incl. line items and receipt attachments)
 - Record transfers between accounts
-- Manage and execute planned transactions
+- Manage and execute planned transactions and recurring rules
 - View all workspace data
 
 **Restrictions:**
