@@ -13,11 +13,12 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
-import { isCalendarMonth, monthRange } from '../utils/dates'
+import { isCalendarMonth, monthRange, shiftMonth } from '../utils/dates'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
+import PlannedMonthStepper from '../components/transactions/PlannedMonthStepper'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
@@ -286,6 +287,18 @@ export default function Planned() {
   const clearFilters = () =>
     updateParams({ account: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
 
+  // Month stepper: step to the adjacent calendar month. The target computes
+  // from exactMonth (the range on screen), NEVER from "today" - December
+  // 2026's next is January 2027. shiftMonth's monthRange core rolls
+  // out-of-range months by construction (Date math), so no boundary
+  // branching. No special page clearing: createUpdateParams deletes 'page'
+  // on any patch that does not set it, and useStalePageReset reconciles a
+  // now-out-of-range page.
+  const handleMonthShift = (delta: number) => {
+    if (!exactMonth) return
+    updateParams(shiftMonth(exactMonth, delta))
+  }
+
   const { data, isLoading } = useQuery({
     queryKey: ['planned', statusFilter, page, pageSize, ordering, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
@@ -462,6 +475,16 @@ export default function Planned() {
           aria-label={t('recurring.viewAria')}
         />
       </div>
+
+      {/* Month window above the status control (scope nesting: view picks
+          the surface, month scopes the dataset, status narrows within).
+          Rendered only when the effective range is an exact calendar month:
+          custom/partial ranges and All time hide the whole row. The label
+          null check narrows the string prop; it is non-null exactly when
+          exactMonth is. */}
+      {view === 'planned' && exactMonth && monthLabel !== null && (
+        <PlannedMonthStepper label={monthLabel} onShift={handleMonthShift} />
+      )}
 
       {view === 'planned' && (
         <div className="mb-3">
