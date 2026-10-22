@@ -30,7 +30,7 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
 - **Transfers** - Move money between accounts, including cross-currency with an implied rate
 - **Multi-Currency Support** - A global ISO 4217 catalog; each workspace enables a reorderable subset (first = primary, chosen as a set at registration), budgets carry an ordered currency set (first = default view), and transactions can be recorded without an account in their own currency
 - **Receipts** - Attach receipt images/PDFs; optionally extract line items and totals via a configurable model, then review and confirm
-- **Planned Transactions** - Schedule and execute future transactions, optionally on an account and always in their own currency; recurring rules materialize planned transactions automatically ahead of their due date
+- **Planned Transactions** - Schedule and execute future transactions, optionally on an account and always in their own currency; recurring rules materialize planned transactions automatically ahead of their due date; the planned view opens focused on the current calendar month, browsable with a month stepper
 - **Role-Based Access Control** - Owner, Admin, Member, and Viewer roles; members join via email invites
 - **Two-Factor Authentication** - TOTP authenticator apps, single-use recovery codes, and admin-initiated 2FA resets
 - **Email Verification** - Verify your address after registration; email changes confirm via the new address and notify the old one
