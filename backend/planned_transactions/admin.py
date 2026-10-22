@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from planned_transactions.models import PlannedTransaction
+from planned_transactions.models import PlannedTransaction, RecurringTransaction
 
 
 @admin.register(PlannedTransaction)
@@ -11,6 +11,27 @@ class PlannedTransactionAdmin(admin.ModelAdmin):
 
     list_display = ('name', 'account', 'amount', 'status', 'planned_date', 'created_at')
     list_filter = ('status', 'planned_date', 'created_at')
+    search_fields = ('name', 'category__name', 'account__name')
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'created_at'
+
+
+@admin.register(RecurringTransaction)
+class RecurringTransactionAdmin(admin.ModelAdmin):
+    """Admin interface for RecurringTransaction model."""
+
+    list_display = (
+        'name',
+        'account',
+        'amount',
+        'interval_kind',
+        'interval_count',
+        'start_date',
+        'is_active',
+        'last_generated_date',
+        'created_at',
+    )
+    list_filter = ('interval_kind', 'is_active', 'created_at')
     search_fields = ('name', 'category__name', 'account__name')
     readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'created_at'
