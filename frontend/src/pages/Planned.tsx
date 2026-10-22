@@ -1,24 +1,26 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
-import { formatAmount } from '../utils/format'
+import { formatAmount, formatMonthYear } from '../utils/format'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { isCalendarMonth, monthRange } from '../utils/dates'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
 import MultiSelect from '../components/common/MultiSelect'
@@ -164,8 +166,32 @@ export default function Planned() {
     .filter((c) => enabledCodes.has(c))
   const amountMin = searchParams.get('amount_min') ?? ''
   const amountMax = searchParams.get('amount_max') ?? ''
-  const dateFrom = searchParams.get('from') ?? ''
-  const dateTo = searchParams.get('to') ?? ''
+  const rawFrom = searchParams.get('from')
+  const rawTo = searchParams.get('to')
+  // Default month: the planned view focuses the current calendar month on a
+  // fresh visit. All reads below (list, totals, export, filter count) use
+  // the EFFECTIVE range: explicit params win; both absent falls back to the
+  // session default; a PARTIAL range (one bound) passes through as-is - the
+  // missing bound is never auto-filled. ListFilterFields keeps reading the
+  // RAW params (self-contained contract): before materialization the panel
+  // is closed so no mismatch is visible, after it raw == effective.
+  // Session default, restoredSearch pattern: the lazy initializer reads the
+  // URL exactly once - a mount WITH any date param (full or partial deep
+  // link) never defaults. Consumed - never re-applies - once any date param
+  // has been present, so after materialization (or a deep link) clearing
+  // the params means the user's explicit All time, not a re-default.
+  const [dateDefault, setDateDefault] = useState(() =>
+    rawFrom === null && rawTo === null ? monthRange(new Date().getFullYear(), new Date().getMonth()) : null,
+  )
+  // Derived-until-touched consume (render-adjust on LOCAL state - the
+  // sanctioned shape; never an effect, never router state). The set lands
+  // on null which disproves its own guard, so the adjust terminates by
+  // construction; it is a fall-through, keeping every hook below
+  // unconditional, and on the pass where it fires the params already win
+  // the derivations, so no query key churns.
+  if (dateDefault && (rawFrom !== null || rawTo !== null)) setDateDefault(null)
+  const dateFrom = rawFrom ?? dateDefault?.from ?? ''
+  const dateTo = rawTo ?? dateDefault?.to ?? ''
   const page = intParam(searchParams, 'page') ?? 1
   // Garbage ?ordering= values read as unset (status-filter idiom): the Select
   // shows the default placeholder and the request sends nothing.
@@ -176,6 +202,21 @@ export default function Planned() {
   const [isExporting, setIsExporting] = useState(false)
 
   const updateParams = createUpdateParams(setSearchParams)
+
+  // One-shot month materialization (useStalePageReset shape: the URL write
+  // goes through the closure-wrapped updateParams, never setSearchParams
+  // directly - the shipped precedent for a no-event URL write from an
+  // effect; a render-adjust must not write router state). Fires only while
+  // the session default is live: entering the planned view with no date
+  // param writes the current month into the URL (replace, no history
+  // entry; createUpdateParams also drops ?page). The consume adjust above
+  // then kills the default, so All time / Clear filters / deep links never
+  // re-default within a session; a fresh mount re-initializes (accepted).
+  // view in the deps: a recurring -> planned tab switch materializes too.
+  useEffect(() => {
+    if (view !== 'planned' || !dateDefault || rawFrom !== null || rawTo !== null) return
+    updateParams({ from: dateDefault.from, to: dateDefault.to })
+  }, [view, dateDefault, rawFrom, rawTo, updateParams])
 
   // Any manual search interaction drops the restored hint and remembers the
   // new term; clearing the box stores '' so the old term can never re-apply.
@@ -220,8 +261,26 @@ export default function Planned() {
     Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
 
-  // Deep links with filters land with the panel already open.
-  const [filtersOpen, setFiltersOpen] = useState(activeFilterCount > 0)
+  // Exact-calendar-month detection on the EFFECTIVE range: truthy only when
+  // from/to are a calendar month's first and last day. The month label and
+  // the month-aware empty state below key off it.
+  const exactMonth = isCalendarMonth(dateFrom, dateTo)
+  const monthLabel = exactMonth ? formatMonthYear(dateFrom) : null
+  // The date facet is the ONLY filter and it is an exact month - ANY month,
+  // the default or one the user arrived at: the generic "filtered" empty
+  // message would be misleading, the empty state gets the month treatment.
+  const onlyMonthRange = activeFilterCount === 1 && !!exactMonth
+
+  // Deep links with filters land with the panel already open - except a
+  // range equal to the default month (fresh visit pre-materialization, or
+  // a deep link to exactly the current month): that IS the default view,
+  // badge 1, panel closed. Any other range - partial, custom, a different
+  // exact month - still auto-opens. First render only (useState
+  // initializer): the later materialization write cannot flip it.
+  const defRange = monthRange(new Date().getFullYear(), new Date().getMonth())
+  const [filtersOpen, setFiltersOpen] = useState(
+    activeFilterCount > 0 && !(activeFilterCount === 1 && dateFrom === defRange.from && dateTo === defRange.to),
+  )
   const filterPanelId = useId()
 
   const clearFilters = () =>
@@ -473,13 +532,20 @@ export default function Planned() {
         isLoading ? (
           <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
         ) : items.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            {search || activeFilterCount > 0
-              ? t('emptyFiltered')
-              : statusFilter === 'all'
-                ? t('empty')
-                : t('emptyWithStatus', { status: statusLabel(statusFilter) })}
-          </p>
+          search || (activeFilterCount > 0 && !onlyMonthRange) ? (
+            <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
+          ) : statusFilter !== 'all' ? (
+            <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
+          ) : exactMonth ? (
+            <EmptyState
+              icon={<CalendarClock size={48} strokeWidth={1.5} className="text-text-muted/30" />}
+              heading={<span className="font-mono">{monthLabel}</span>}
+              message={t('emptyMonth.message')}
+              action={{ label: t('emptyMonth.showAll'), onClick: () => updateParams({ from: null, to: null }) }}
+            />
+          ) : (
+            <p className="text-sm text-text-muted">{t('empty')}</p>
+          )
         ) : (
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {items.map((p) => (

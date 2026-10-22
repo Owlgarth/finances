@@ -39,6 +39,10 @@
   "emptyFiltered": "No planned transactions match your search or filters.",
   "empty": "No planned transactions.",
   "emptyWithStatus": "No {{status}} planned transactions.",
+  "emptyMonth": {
+    "message": "Nothing planned for this month.",
+    "showAll": "Show all dates"
+  },
   "noAccount": "No account",
   "rowActions": {
     "execute": "Execute",

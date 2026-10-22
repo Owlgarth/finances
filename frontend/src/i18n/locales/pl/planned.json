@@ -41,6 +41,10 @@
   "emptyFiltered": "Żadna planowana transakcja nie pasuje do wyszukiwania ani filtrów.",
   "empty": "Brak planowanych transakcji.",
   "emptyWithStatus": "Brak planowanych transakcji ze statusem „{{status}}”.",
+  "emptyMonth": {
+    "message": "Na ten miesiąc nic nie zaplanowano.",
+    "showAll": "Pokaż wszystkie daty"
+  },
   "noAccount": "Bez konta",
   "rowActions": {
     "execute": "Zrealizuj",
