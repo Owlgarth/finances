@@ -86,7 +86,10 @@ export default function InfoHint({ text, ariaLabel }: InfoHintProps) {
           if (e.currentTarget.matches(':focus-visible')) setKeyboardFocus(true)
         }}
         onBlur={() => setKeyboardFocus(false)}
-        className="inline-flex items-center justify-center p-1 pointer-coarse:p-2 rounded-none text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+        // Negative vertical margins cancel the padding's share of the layout
+        // height so the icon fits inside the label's line box: a hint must
+        // never grow its label row, or its input drops below its neighbor's.
+        className="inline-flex items-center justify-center p-1 -my-1 pointer-coarse:p-2 pointer-coarse:-my-2 rounded-none text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
       >
         <HelpCircle size={13} strokeWidth={1.5} aria-hidden="true" />
       </button>
