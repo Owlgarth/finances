@@ -31,6 +31,7 @@
     "transfer": "Przelew",
     "fromReceipt": "Z paragonu",
     "scanningOffline": "Skanowanie niedostępne",
+    "recurringRule": "Reguła cykliczna",
     "plannedTransaction": "Zaplanowana transakcja"
   },
   "receiptReading": "Czytanie paragonu…",

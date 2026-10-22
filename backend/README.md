@@ -17,7 +17,7 @@ backend/
 ├── categories/             # Budget-scoped categories
 ├── transactions/           # Transactions, line items, attachments, extraction
 ├── transfers/              # Transfers between accounts
-├── planned_transactions/   # Scheduled transactions
+├── planned_transactions/   # Scheduled + recurring transactions
 └── reports/                # Budget summaries and current balances
 ```
 
@@ -34,7 +34,7 @@ backend/
 | `categories` | Persistent, budget-scoped categories |
 | `transactions` | Income/expense/adjustment records; `TransactionItem` (line items carrying category spending); `TransactionAttachment` (+ receipt extraction) |
 | `transfers` | Money moved between accounts, incl. cross-currency with implied rate |
-| `planned_transactions` | Scheduled transactions with status tracking (pending/done/cancelled) |
+| `planned_transactions` | Scheduled transactions with status tracking (pending/done/cancelled); `RecurringTransaction` rules that materialize planned rows ahead of their due date |
 | `reports` | Budget summary (planned vs actual) and current balances (per account + per currency) |
 
 ## Common Module (`common/`)
@@ -87,7 +87,7 @@ Endpoints should not contain database operations beyond workspace validation. Al
 
 Apps with service files: `accounts`, `budgeting`, `categories`, `transactions`, `transfers`, `planned_transactions`, `currencies`, `reports`, `workspaces`.
 
-Apps with Celery tasks: `common` (`send_email_task`), `transactions` (`extract_attachment`), `planned_transactions` (`execute_planned_transaction`) - consistent with `docs/architecture.md`. Services dispatch tasks via `task.delay()` directly - no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
+Apps with Celery tasks: `common` (`send_email_task`), `transactions` (`extract_attachment`), `planned_transactions` (`execute_planned_transaction`, `generate_recurring_transactions`) - consistent with `docs/architecture.md`. `generate_recurring_transactions` is the codebase's first periodic task: `CELERY_BEAT_SCHEDULE` runs it nightly (crontab `minute=5, hour=0`, `CELERY_TIMEZONE='UTC'`) to materialize due recurring rules; creating a rule also generates its first due row inline. Services dispatch tasks via `task.delay()` directly - no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
 
 ## JWT Authentication
 
@@ -332,6 +332,21 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | POST | `/api/planned-transactions/import` | - | Import planned transactions from a JSON file into an account (multipart upload, 5 MB max) |
 | POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction carrying the plan's account and own currency) |
 
+### Recurring Transactions (write / member+)
+
+Rules materialize pending planned transactions ahead of their due date (per-rule
+`lead_days` lead window); a daily materialization task (the nightly beat) generates
+due occurrences, and creating a rule - or adopting a planned row into one - also
+generates the first due row inline.
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|--------------|-------------|
+| GET | `/api/recurring-transactions` | `include_inactive` | List rules (non-paginated; active only by default, `include_inactive=true` also returns paused) |
+| POST | `/api/recurring-transactions` | - | Create (the first due occurrence materializes immediately; `adopt_planned_id` in the payload adopts an existing pending planned transaction as the first occurrence instead of duplicating it) |
+| GET | `/api/recurring-transactions/{id}` | - | Get a rule (schedule grammar: `interval_kind` x `interval_count` anchored at `start_date`, optional `end_date`, `lead_days` lead window, `is_active` pause flag) |
+| PUT | `/api/recurring-transactions/{id}` | - | Update (full-replace; `is_active` rides the payload - omitted it re-activates a paused rule, `false` pauses; edits are future-only, already-materialized pending rows untouched) |
+| DELETE | `/api/recurring-transactions/{id}` | `delete_pending` | Delete (`delete_pending=true` also deletes the rule's linked pending planned rows; done/cancelled rows always survive) |
+
 ### Column Sorting (`ordering`)
 
 Transaction and planned-transaction list endpoints accept an optional `ordering`
@@ -359,7 +374,7 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 `GET /api/users/me/export` produces a **v3.0** JSON export of all the user's
 workspaces (accounts, budgets with their ordered currency sets, periods,
 categories, category budgets, transactions with line items + attachments,
-transfers, planned transactions).
+transfers, planned transactions, recurring transaction rules).
 
 `POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
 attachments travel as base64 and are recreated when object storage is configured.
