@@ -79,9 +79,19 @@ const cardShell = (isOpen: boolean): string =>
 const actionBtn =
   'inline-flex items-center justify-center p-1.5 text-text-muted max-sm:min-h-[44px] max-sm:min-w-[44px]'
 
+/** DOM ids wiring one item row's expandable region and inputs together
+ *  (the aria-controls / htmlFor / id triplets). Internal identifiers,
+ *  never UI text; built at module scope so no string literal rides inside
+ *  the JSX map callback. */
+const itemDomIds = (index: number) => ({
+  formId: `item-${index}-form`,
+  nameId: `item-${index}-name`,
+  categorySelectId: `item-${index}-category`,
+})
+
 /** Sentinel Select value for "inherit the transaction category" - the shared
  *  Select cannot hold a null-valued option, and 0 can never collide with a
- *  real category id (same trick as NO_ACCOUNT in TransactionFormModal). */
+ *  real category id (same trick as NO_ACCOUNT in utils/accountSelect). */
 const INHERIT_CATEGORY = 0
 
 export default function TransactionItemsList({
@@ -207,13 +217,7 @@ export default function TransactionItemsList({
         // override, else the transaction's category.
         const effectiveCategoryName = categoryNameById(row.categoryId ?? transactionCategoryId)
 
-        const formId = `item-${index}-form`
-        const nameId = `item-${index}-name`
-        // DOM-id template, not UI text - the lint rule's documented
-        // false-positive floor already covers this id shape (the two lines
-        // above); suppressed inline so the floor count stays put.
-        // eslint-disable-next-line i18next/no-literal-string
-        const categorySelectId = `item-${index}-category`
+        const { formId, nameId, categorySelectId } = itemDomIds(index)
 
         return (
           <div key={row.id} className={cardShell(isOpen)}>

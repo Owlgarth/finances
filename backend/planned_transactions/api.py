@@ -19,11 +19,14 @@ from planned_transactions.schemas import (
     PlannedTransactionCreate,
     PlannedTransactionOut,
     PlannedTransactionTotalsResponse,
+    RecurringTransactionCreate,
+    RecurringTransactionOut,
 )
-from planned_transactions.services import PlannedTransactionService
+from planned_transactions.services import PlannedTransactionService, RecurringTransactionService
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Planned Transactions'])
+recurring_router = Router(tags=['Recurring Transactions'])
 
 ORDERING_PATTERN = r'^(-?(name|amount|status|planned_date|category__name|account__name|currency__code))$'
 
@@ -231,3 +234,79 @@ def execute_planned(
 
     planned = PlannedTransactionService.execute(user, workspace_id, planned_id, payment_date)
     return planned
+
+
+# =============================================================================
+# Recurring Transaction Endpoints
+# =============================================================================
+
+
+@recurring_router.get('', response=list[RecurringTransactionOut], auth=WorkspaceJWTAuth())
+def list_recurring(request: HttpRequest, include_inactive: bool = Query(False)):
+    """List recurring transaction rules of the current workspace (non-paginated).
+
+    Active rules only by default; include_inactive=true also returns paused rules.
+    """
+    workspace_id = request.auth.current_workspace_id
+    return RecurringTransactionService.list(workspace_id, include_inactive)
+
+
+@recurring_router.post(
+    '',
+    response={201: RecurringTransactionOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def create_recurring(request: HttpRequest, data: RecurringTransactionCreate):
+    """Create a recurring transaction rule (requires write access).
+
+    The first due occurrence materializes immediately (sync-generate). With
+    adopt_planned_id in the payload, the referenced pending planned transaction
+    is adopted as the first occurrence instead of duplicated.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return 201, RecurringTransactionService.create(user, workspace_id, data)
+
+
+@recurring_router.get(
+    '/{recurring_id}', response={200: RecurringTransactionOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
+)
+def get_recurring(request: HttpRequest, recurring_id: int):
+    """Get a specific recurring transaction rule by ID."""
+    workspace_id = request.auth.current_workspace_id
+    return RecurringTransactionService.get_recurring(recurring_id, workspace_id)
+
+
+@recurring_router.put(
+    '/{recurring_id}',
+    response={200: RecurringTransactionOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def update_recurring(request: HttpRequest, recurring_id: int, data: RecurringTransactionCreate):
+    """Update (full-replace) a recurring transaction rule (requires write access).
+
+    is_active is part of the replace payload: omitted it defaults to True (a
+    PUT that leaves it out re-activates a paused rule), send false to pause.
+    Edits are future-only - already-materialized pending rows are untouched.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return RecurringTransactionService.update(user, workspace_id, recurring_id, data)
+
+
+@recurring_router.delete(
+    '/{recurring_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth()
+)
+def delete_recurring(request: HttpRequest, recurring_id: int, delete_pending: bool = Query(False)):
+    """Delete a recurring transaction rule (requires write access).
+
+    delete_pending=true also deletes the rule's linked PENDING planned
+    transactions; done/cancelled rows always survive.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    RecurringTransactionService.delete(workspace_id, recurring_id, delete_pending=delete_pending)
+    return 204, None

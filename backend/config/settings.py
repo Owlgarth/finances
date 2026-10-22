@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from celery.schedules import crontab
 from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
@@ -322,6 +323,20 @@ CELERY_RESULT_SERIALIZER = 'json'
 # Run tasks synchronously in the calling process (no worker needed).
 # Useful for local debugging. Set to 'true' via env var to enable.
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
+# Beat and workers must evaluate crontab schedules on the same clock: UTC,
+# matching TIME_ZONE / USE_TZ above.
+CELERY_TIMEZONE = 'UTC'
+# The codebase's first periodic task: nightly materialization of recurring
+# rules into planned transactions. 00:05 (not 00:00) keeps it off the exact
+# hour boundary. The beat container (docker-compose `beat` service) already
+# runs `celery -A config beat --schedule=/tmp/celerybeat-schedule`; this
+# setting is what gives it something to schedule.
+CELERY_BEAT_SCHEDULE = {
+    'generate-recurring-transactions': {
+        'task': 'planned_transactions.tasks.generate_recurring_transactions',
+        'schedule': crontab(minute=5, hour=0),
+    },
+}
 
 # Receipt parser service (optional). When PARSER_URL is empty, extraction is
 # disabled everywhere: the API reports it off and the UI hides every affordance.

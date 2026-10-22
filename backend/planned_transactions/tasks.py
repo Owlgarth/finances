@@ -4,6 +4,7 @@ import logging
 
 from celery import shared_task
 from django.db import transaction as db_transaction
+from django.utils import timezone
 
 from planned_transactions.models import PlannedTransaction
 from transactions.schemas import TransactionCreate
@@ -72,3 +73,22 @@ def execute_planned_transaction(self, planned_id: int) -> None:
         transaction_obj.id,
         planned_id,
     )
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3, retry_backoff=True)
+def generate_recurring_transactions(self) -> int:
+    """Materialize due planned transactions for every active recurring rule (all workspaces).
+
+    Transport layer only: all DB work delegates to
+    RecurringTransactionService.generate_due - tasks never create records
+    directly (case file 2026-05-21). The service is idempotent (pointer +
+    partial unique constraint on (recurring, planned_date)), so an autoretry
+    after a partial pass re-processes rules as no-ops.
+    """
+    # Function-body import (the celery-tasks skill's circular-import
+    # exception): planned_transactions.services already imports this module
+    # at module level (execute_planned_transaction, services.py line ~33), so
+    # a module-level import here would raise ImportError mid-cycle.
+    from planned_transactions.services import RecurringTransactionService
+
+    return RecurringTransactionService.generate_due(timezone.now().date())

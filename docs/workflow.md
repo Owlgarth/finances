@@ -137,6 +137,13 @@ a real transaction carrying the plan's account and currency (via a Celery task,
 idempotent) and marks the planned item done. The list shares the Transactions
 search/filters pattern, including the own-currency filter (URL-synced).
 
+The page's **Planned | Recurring** view switch (URL-synced via `?view=`) toggles
+between the scheduled list and the workspace's recurring rules, which materialize
+pending planned transactions ahead of their due date (a nightly task; creating a
+rule generates its first due row immediately). A pending planned row can be made
+recurring: **Make recurring** adopts the existing row as the rule's first
+occurrence instead of duplicating it.
+
 ## Currencies
 
 - **Enablement**: each workspace enables a subset of the global ISO 4217 catalog.

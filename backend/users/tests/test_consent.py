@@ -18,7 +18,7 @@ class ConsentTests(AuthMixin, TestCase):
                 'password': 'testpass123',
                 'workspace_name': 'Test',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.1',
+                'accepted_privacy_version': '2.2',
             },
             content_type='application/json',
         )
@@ -84,7 +84,7 @@ class ConsentTests(AuthMixin, TestCase):
     def test_consent_status_up_to_date(self):
         """GET /me/consent-status returns needs_reconsent=False when consents are current."""
         UserConsent.objects.create(user=self.user, consent_type='terms_of_service', version='2.1')
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.2')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
@@ -96,7 +96,7 @@ class ConsentTests(AuthMixin, TestCase):
     def test_consent_status_outdated(self):
         """GET /me/consent-status returns needs_reconsent=True when consent version is old."""
         UserConsent.objects.create(user=self.user, consent_type='terms_of_service', version='0.9')
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.2')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
@@ -157,7 +157,7 @@ class ConsentTests(AuthMixin, TestCase):
         # Manually set granted_at so newer is definitely later
         UserConsent.objects.filter(id=newer.id).update(granted_at=now + timedelta(seconds=1))
 
-        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.1')
+        UserConsent.objects.create(user=self.user, consent_type='privacy_policy', version='2.2')
 
         response = self.client.get('/api/users/me/consent-status', **self.auth_headers())
         self.assertEqual(response.status_code, 200)
