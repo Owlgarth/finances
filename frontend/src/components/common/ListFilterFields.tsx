@@ -1,27 +1,12 @@
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useBudgets, useWorkspaceCategories } from '../../hooks/useDomain'
+import { monthRange, toIsoDate } from '../../utils/dates'
 import { createUpdateParams, intListParam } from '../../utils/params'
 import AmountInput from './AmountInput'
 import { FilterField } from './FilterBar'
 import MultiSelect from './MultiSelect'
 import { controlHeightClass, inputClass } from './formStyles'
-
-/** Local calendar date as YYYY-MM-DD. Never toISOString() - it renders the
-    UTC day, which can sit a day off either end of a local-date range. */
-function toIsoDate(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day}`
-}
-
-/** First-to-last day of a month; out-of-range months roll over (Date math). */
-function monthRange(year: number, month: number): { from: string; to: string } {
-  return {
-    from: toIsoDate(new Date(year, month, 1)),
-    to: toIsoDate(new Date(year, month + 1, 0)),
-  }
-}
 
 // Ranges span the WHOLE period (month/year ends included): future dates inside
 // the period matter for the Planned list, and post-dated transactions are not
@@ -59,6 +44,10 @@ const DATE_PRESETS = [
       return { from: `${year}-01-01`, to: `${year}-12-31` }
     },
   },
+  // All time: no range() - clicking clears both bounds ({from: null, to:
+  // null} deletes the params via ParamPatch). LAST position: the row
+  // reads narrow -> broad.
+  { labelKey: 'listFilters.presetAllTime', allTime: true },
 ] as const
 
 /**
@@ -133,16 +122,25 @@ export default function ListFilterFields({ dateLabel }: Props) {
       <FilterField label={dateLabel ?? t('listFilters.dateLabel')} className="col-span-2">
         <div className="flex flex-wrap gap-1.5 mb-2">
           {DATE_PRESETS.map((preset) => {
-            const { from, to } = preset.range()
-            // Active only on an EXACT match: any manually edited bound leaves
-            // every chip off by construction.
-            const active = dateFrom === from && dateTo === to
+            // All time has no range() - clicking it clears both bounds,
+            // and it is active only when NEITHER date param is set. On
+            // Transactions (no date default) it therefore renders active
+            // on first load: a truthful display of that page's default
+            // state, not a bug to fix.
+            const range = 'allTime' in preset ? null : preset.range()
+            // Range presets are active only on an EXACT match: any manually
+            // edited bound leaves every chip off by construction.
+            const active = range
+              ? dateFrom === range.from && dateTo === range.to
+              : dateFrom === '' && dateTo === ''
             return (
               <button
                 key={preset.labelKey}
                 type="button"
                 aria-pressed={active}
-                onClick={() => updateParams({ from, to })}
+                onClick={() =>
+                  updateParams(range ? { from: range.from, to: range.to } : { from: null, to: null })
+                }
                 className={`text-xs border rounded-sm px-2 py-1 ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ${
                   active ? 'border-border-focus bg-surface-hover text-text' : 'border-border text-text-muted'
                 }`}
