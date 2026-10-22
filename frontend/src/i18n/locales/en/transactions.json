@@ -50,6 +50,7 @@
     "presetThisMonth": "This month",
     "presetLastMonth": "Last month",
     "presetLast30": "Last 30 days",
+    "presetAllTime": "All time",
     "presetThisYear": "This year"
   },
   "totals": {
