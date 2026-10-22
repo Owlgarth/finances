@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Trash2, X } from 'lucide-react'
+import InfoHint from '../../common/InfoHint'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import Switch from '../../common/Switch'
@@ -260,7 +261,10 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
             <input id="recurring-amount" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>{t('recurring.form.startDateLabel')}</label>
+            <div className="flex items-center gap-1">
+              <label className={labelClass}>{t('recurring.form.startDateLabel')}</label>
+              <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.startDateLabel') })} text={t('recurring.form.startDateHint')} />
+            </div>
             <DatePicker value={startDate} onChange={setStartDate} />
           </div>
         </div>
@@ -288,7 +292,10 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="recurring-interval-count" className={labelClass}>{t('recurring.form.intervalCountLabel')}</label>
+            <div className="flex items-center gap-1">
+              <label htmlFor="recurring-interval-count" className={labelClass}>{t('recurring.form.intervalCountLabel')}</label>
+              <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.intervalCountLabel') })} text={t('recurring.form.intervalHint')} />
+            </div>
             <input id="recurring-interval-count" type="text" inputMode="numeric" value={intervalCount} onChange={(e) => setIntervalCount(e.target.value)} className={inputClass} />
           </div>
           <div>
@@ -298,7 +305,10 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label htmlFor="recurring-lead-days" className={labelClass}>{t('recurring.form.leadDaysLabel')}</label>
+            <div className="flex items-center gap-1">
+              <label htmlFor="recurring-lead-days" className={labelClass}>{t('recurring.form.leadDaysLabel')}</label>
+              <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.leadDaysLabel') })} text={t('recurring.form.leadDaysHint')} />
+            </div>
             <input id="recurring-lead-days" type="text" inputMode="numeric" value={leadDays} onChange={(e) => setLeadDays(e.target.value)} className={inputClass} />
           </div>
           <div>
@@ -326,10 +336,13 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
           <p className="text-[11px] text-text-muted">{t('recurring.form.monthlyClamp', { day: dayOfMonth(startDate) })}</p>
         )}
         {isEdit && (
-          <label className="inline-flex items-center gap-3 text-xs text-text cursor-pointer">
-            <Switch checked={isActive} onChange={setIsActive} aria-label={t('recurring.form.activeLabel')} />
-            {t('recurring.form.activeLabel')}
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-3 text-xs text-text cursor-pointer">
+              <Switch checked={isActive} onChange={setIsActive} aria-label={t('recurring.form.activeLabel')} />
+              {t('recurring.form.activeLabel')}
+            </label>
+            <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.activeLabel') })} text={t('recurring.form.activeHint')} />
+          </div>
         )}
         {mode === 'from-planned' && (
           <label className="inline-flex items-center gap-3 text-xs text-text cursor-pointer">

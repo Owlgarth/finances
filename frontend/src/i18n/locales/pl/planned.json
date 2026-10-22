@@ -124,6 +124,11 @@
       "activeLabel": "Aktywna",
       "added": "Utworzono regułę cykliczną",
       "intervalCountInvalid": "Interwał musi być liczbą całkowitą od 1 do 365",
+      "hintAria": "Pomoc: {{field}}",
+      "startDateHint": "Pierwsze wystąpienie reguły. W regułach miesięcznych liczy się dzień miesiąca, a w krótszych miesiącach używany jest ostatni dzień.",
+      "intervalHint": "Reguła powtarza się co N dni, tygodni lub miesięcy, licząc od daty rozpoczęcia.",
+      "leadDaysHint": "Planowana transakcja pojawia się o wskazaną liczbę dni przed datą wykonania. Wartość 0 oznacza, że pojawia się w dniu wykonania.",
+      "activeHint": "Wstrzymuje regułę bez jej usuwania: historia jest zachowana, a nowe planowane transakcje nie są generowane, dopóki reguła nie zostanie ponownie włączona.",
       "leadDaysInvalid": "Dni wyprzedzenia muszą być liczbą całkowitą od 0 do 31"
     }
   },
