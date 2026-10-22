@@ -230,7 +230,8 @@ frontend/src/
 ├── utils/                  # format, errors, pageSize, params, transactionItems,
 │                           #   attachments, currencies, tappable, zoomLock,
 │                           #   amountInput (both decimal separators, normalized
-│                           #   per the active number style at submit)
+│                           #   per the active number style at submit), dates
+│                           #   (local-date month math)
 └── types/index.ts          # TypeScript interfaces
 ```
 
