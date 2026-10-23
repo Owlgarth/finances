@@ -156,12 +156,17 @@ idempotency via `transaction_id`, and creates the `Transaction` with the plan's 
 `generate_recurring_transactions`, which delegates to
 `RecurringTransactionService.generate_due`: every active rule in every workspace
 materializes its due occurrences as pending `PlannedTransaction` rows via
-`PlannedTransactionService.create_from_recurring`. An occurrence materializes once its
-lead window opens (`today >= D - lead_days`); a catch-up loop recovers missed days, and
-the per-rule `last_generated_date` pointer plus a partial unique constraint on
-`(recurring, planned_date)` keep an occurrence from generating twice. Creating (or
-adopting a planned row into) a rule also generates inline, so the first due row appears
-without waiting for the nightly run.
+`PlannedTransactionService.create_from_recurring`. Each rule keeps an upfront window
+of `upfront_count` (1-24, default 1) pending rows with `planned_date > today`
+materialized: the nightly run tops the window back up whenever rows leave it -
+an occurrence coming due, paid early, or cancelled - while occurrences already
+due (`planned_date <= today`) still generate, so missed days are recovered. A
+rule flagged `materialize_all` (which requires `end_date`) instead generates
+every occurrence up to its `end_date` at once (capped at 500 occurrences). The
+per-rule `last_generated_date` pointer plus a partial unique constraint on
+`(recurring, planned_date)` keep an occurrence from generating twice. Creating,
+updating, or adopting a planned row into a rule also generates inline, so the
+window fills without waiting for the nightly run.
 
 **Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored

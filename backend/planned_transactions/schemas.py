@@ -127,7 +127,12 @@ class RecurringTransactionCreate(BaseModel):
     update. is_active rides the payload on create and update alike, so
     pause/resume is a plain full-replace PUT, not a dedicated endpoint
     (an omitted is_active stores the default True - full-replace
-    semantics, same as every other absent field).
+    semantics, same as every other absent field). upfront_count and
+    materialize_all extend the materialization policy (upfront_count
+    occurrences exist immediately; materialize_all puts every occurrence
+    through end_date there at once and requires an end_date) and ride the
+    same full-replace PUT payload -
+    the frontend always sends them; an omitted field stores the default.
     """
 
     name: str = Field(..., max_length=200)
@@ -138,7 +143,8 @@ class RecurringTransactionCreate(BaseModel):
     interval_kind: str = Field(..., pattern=r'^(daily|weekly|monthly)$')
     interval_count: int = Field(1, ge=1)
     start_date: date
-    lead_days: int = Field(4, ge=0, le=31)
+    upfront_count: int = Field(1, ge=1, le=24)
+    materialize_all: bool = False
     end_date: Optional[date] = None
     adopt_planned_id: Optional[int] = None
     is_active: bool = True
@@ -168,7 +174,8 @@ class RecurringTransactionOut(BaseModel):
     interval_kind: str
     interval_count: int
     start_date: date
-    lead_days: int
+    upfront_count: int
+    materialize_all: bool
     end_date: Optional[date] = None
     is_active: bool
     last_generated_date: Optional[date] = None

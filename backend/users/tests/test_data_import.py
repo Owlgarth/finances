@@ -23,6 +23,7 @@ from currencies.models import WorkspaceCurrency
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
 from planned_transactions.models import PlannedTransaction, RecurringTransaction
+from planned_transactions.services import RecurringTransactionService
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
@@ -853,6 +854,7 @@ class V3RecurringImportTests(AuthMixin, TestCase):
             name='Rent',
             interval_kind='monthly',
             start_date=date(2026, 1, 5),
+            upfront_count=3,
             last_generated_date=date(2026, 10, 5),
         )
 
@@ -872,6 +874,8 @@ class V3RecurringImportTests(AuthMixin, TestCase):
         self.assertEqual(restored.next_occurrence_date, date(2026, 11, 5))
         self.assertEqual(restored.account.name, 'Cash')
         self.assertTrue(restored.is_active)
+        self.assertEqual(restored.upfront_count, 3)
+        self.assertFalse(restored.materialize_all)
 
     def test_legacy_export_without_recurring_section_imports_clean(self):
         """Older v3 files (pre-recurring) lack the key entirely - no errors, no rules."""
@@ -898,7 +902,7 @@ class V3RecurringImportTests(AuthMixin, TestCase):
                     'interval_kind': 'weekly',
                     'interval_count': 2,
                     'start_date': '2026-10-01',
-                    'lead_days': 7,
+                    'upfront_count': 2,
                     'end_date': None,
                     'is_active': False,
                     'last_generated_date': None,
@@ -915,9 +919,10 @@ class V3RecurringImportTests(AuthMixin, TestCase):
         self.assertEqual(rule.currency.code, 'PLN')
         self.assertEqual(rule.interval_kind, 'weekly')
         self.assertEqual(rule.interval_count, 2)
-        self.assertEqual(rule.lead_days, 7)
         self.assertFalse(rule.is_active)
         self.assertIsNone(rule.last_generated_date)
+        self.assertEqual(rule.upfront_count, 2)
+        self.assertFalse(rule.materialize_all)
 
     def test_unknown_account_name_skips_with_error(self):
         export = self._v3(
@@ -930,7 +935,6 @@ class V3RecurringImportTests(AuthMixin, TestCase):
                     'interval_kind': 'monthly',
                     'interval_count': 1,
                     'start_date': '2026-01-05',
-                    'lead_days': 4,
                     'is_active': True,
                     'last_generated_date': None,
                 }
@@ -942,6 +946,113 @@ class V3RecurringImportTests(AuthMixin, TestCase):
         self.assertEqual(result['imported_recurring_transactions'], 0)
         self.assertEqual(len(result['skipped']['errors']), 1)
         self.assertIn('unknown account', result['skipped']['errors'][0])
+
+    def test_legacy_export_without_upfront_fields_imports_defaults(self):
+        """Pre-change v3 files carry lead_days and lack both new keys - the
+        legacy key is ignored (the field is gone) and the new fields land on
+        the model defaults."""
+        export = self._v3(
+            recurring_transactions=[
+                {
+                    'name': 'Old rule',
+                    'amount': '5.00',
+                    'account_name': None,
+                    'currency_code': 'PLN',
+                    'budget_name': None,
+                    'category_name': None,
+                    'interval_kind': 'monthly',
+                    'interval_count': 1,
+                    'start_date': '2026-01-05',
+                    'lead_days': 4,
+                    'end_date': None,
+                    'is_active': True,
+                    'last_generated_date': None,
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        rule = RecurringTransaction.objects.get(workspace__owner=self.user, name='Old rule')
+        self.assertEqual(rule.upfront_count, 1)
+        self.assertFalse(rule.materialize_all)
+
+    def test_materialize_all_without_end_date_coerces_to_false(self):
+        """A hand-edited materialize_all=true with no end_date would
+        IntegrityError the whole atomic import (the
+        recurring_materialize_all_requires_end check) - the flag degrades to
+        False instead of skipping the rule (category-resolution precedent)."""
+        export = self._v3(
+            recurring_transactions=[
+                {
+                    'name': 'Hand edited',
+                    'amount': '5.00',
+                    'account_name': None,
+                    'currency_code': 'PLN',
+                    'interval_kind': 'monthly',
+                    'interval_count': 1,
+                    'start_date': '2026-01-05',
+                    'upfront_count': 2,
+                    'materialize_all': True,
+                    'end_date': None,
+                    'is_active': True,
+                    'last_generated_date': None,
+                }
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        rule = RecurringTransaction.objects.get(workspace__owner=self.user, name='Hand edited')
+        self.assertFalse(rule.materialize_all)
+        self.assertEqual(rule.upfront_count, 2)
+
+    def test_materialize_all_rule_round_trip_generates_nothing(self):
+        """A materialize_all rule whose pointer covers every occurrence up to
+        end_date restores WITHOUT generating: the importer uses plain
+        objects.create (never the service create), so restored rules never
+        re-materialize what the source system generated."""
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace, name='Cash')
+        RecurringTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Gym',
+            interval_kind='monthly',
+            start_date=date(2026, 1, 5),
+            upfront_count=1,
+            materialize_all=True,
+            end_date=date(2026, 6, 5),
+            last_generated_date=date(2026, 6, 5),
+        )
+
+        export = UserService.export_all_data(self.user)
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_recurring_transactions'], 1)
+        self.assertEqual(result['skipped']['errors'], [])
+        restored = (
+            RecurringTransaction.objects.filter(name='Gym', workspace__owner=self.user)
+            .exclude(workspace=self.workspace)
+            .get()
+        )
+        self.assertTrue(restored.materialize_all)
+        self.assertEqual(restored.end_date, date(2026, 6, 5))
+        self.assertEqual(restored.last_generated_date, date(2026, 6, 5))
+        # Import generated nothing on its own (no planned rows anywhere).
+        self.assertEqual(PlannedTransaction.objects.count(), 0)
+        # The pointer holds, mirroring the round-trip pointer test above:
+        # the next occurrence would fall past end_date...
+        self.assertIsNone(restored.next_occurrence_date)
+        # ...and an explicit-clock pass over every rule (source and restored -
+        # both exhausted) creates nothing further.
+        self.assertEqual(RecurringTransactionService.generate_due(today=date(2026, 12, 31)), 0)
+        self.assertEqual(PlannedTransaction.objects.count(), 0)
 
 
 class V3RoundTripTests(AuthMixin, TestCase):
