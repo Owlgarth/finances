@@ -898,7 +898,6 @@ class V3RecurringImportTests(AuthMixin, TestCase):
                     'interval_kind': 'weekly',
                     'interval_count': 2,
                     'start_date': '2026-10-01',
-                    'lead_days': 7,
                     'end_date': None,
                     'is_active': False,
                     'last_generated_date': None,
@@ -915,7 +914,6 @@ class V3RecurringImportTests(AuthMixin, TestCase):
         self.assertEqual(rule.currency.code, 'PLN')
         self.assertEqual(rule.interval_kind, 'weekly')
         self.assertEqual(rule.interval_count, 2)
-        self.assertEqual(rule.lead_days, 7)
         self.assertFalse(rule.is_active)
         self.assertIsNone(rule.last_generated_date)
 
@@ -930,7 +928,6 @@ class V3RecurringImportTests(AuthMixin, TestCase):
                     'interval_kind': 'monthly',
                     'interval_count': 1,
                     'start_date': '2026-01-05',
-                    'lead_days': 4,
                     'is_active': True,
                     'last_generated_date': None,
                 }

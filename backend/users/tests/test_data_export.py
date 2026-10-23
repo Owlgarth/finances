@@ -332,7 +332,6 @@ class RecurringExportTests(AuthMixin, TestCase):
             interval_kind='monthly',
             interval_count=1,
             start_date=date(2026, 1, 5),
-            lead_days=4,
             end_date=None,
             is_active=True,
             last_generated_date=date(2026, 10, 5),
@@ -357,7 +356,6 @@ class RecurringExportTests(AuthMixin, TestCase):
         self.assertEqual(rent['interval_kind'], 'monthly')
         self.assertEqual(rent['interval_count'], 1)
         self.assertEqual(rent['start_date'], '2026-01-05')
-        self.assertEqual(rent['lead_days'], 4)
         self.assertIsNone(rent['end_date'])
         self.assertTrue(rent['is_active'])
         self.assertEqual(rent['last_generated_date'], '2026-10-05')

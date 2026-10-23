@@ -800,7 +800,6 @@ class UserService:
                     'interval_kind': rt.interval_kind,
                     'interval_count': rt.interval_count,
                     'start_date': rt.start_date.isoformat(),
-                    'lead_days': rt.lead_days,
                     'end_date': rt.end_date.isoformat() if rt.end_date else None,
                     'is_active': rt.is_active,
                     # CRITICAL to round-trip: the last_generated_date
@@ -1213,7 +1212,6 @@ class UserService:
                     interval_kind=rt_data.get('interval_kind', 'monthly'),
                     interval_count=rt_data.get('interval_count', 1),
                     start_date=UserService._parse_import_date(rt_data.get('start_date')),
-                    lead_days=rt_data.get('lead_days', 4),
                     end_date=UserService._parse_import_date(rt_data.get('end_date')),
                     is_active=rt_data.get('is_active', True),
                     # Pointer preserved verbatim - the materialization engine

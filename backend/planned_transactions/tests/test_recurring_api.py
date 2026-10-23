@@ -24,10 +24,8 @@ from workspaces.models import WorkspaceMember
 class RecurringApiTestCase(AuthMixin, APIClientMixin, TestCase):
     """Base: one PLN account + one USD account + categories + one active rule.
 
-    The base rule's start_date is 60 days in the future so NO occurrence is
-    due: API requests against it never trigger materialization side effects
-    unless a test explicitly opts in. Tests needing due occurrences pass
-    start_date=timezone.now().date() and lead_days=0.
+    The base rule starts 60 days out, so no API request against it generates
+    rows (list/get/delete never generate; create/update generate inline).
     """
 
     def setUp(self):
@@ -50,7 +48,6 @@ class RecurringApiTestCase(AuthMixin, APIClientMixin, TestCase):
             interval_kind='monthly',
             interval_count=1,
             start_date=self.today + timedelta(days=60),
-            lead_days=4,
             is_active=True,
             created_by=self.user,
             updated_by=self.user,
@@ -63,11 +60,10 @@ class RecurringApiTestCase(AuthMixin, APIClientMixin, TestCase):
             'account_id': self.account.id,
             'interval_kind': 'monthly',
             'interval_count': 1,
-            # Future start_date: the create's sync-generate finds no open
-            # lead window, so ordinary create tests have zero row side
-            # effects regardless of runtime date.
+            # Future start_date: the create's sync-generate fills only the
+            # default 1-row window (one planned row at the start date),
+            # regardless of runtime date.
             'start_date': (self.today + timedelta(days=30)).isoformat(),
-            'lead_days': 4,
         }
         payload.update(overrides)
         return payload
@@ -152,19 +148,21 @@ class TestCreateRecurring(RecurringApiTestCase):
         """Plan decision 8 through the API: a due rule materializes its first occurrence inline."""
         data = self.post(
             '/api/recurring-transactions',
-            self._payload(start_date=self.today.isoformat(), lead_days=0),
+            self._payload(start_date=self.today.isoformat()),
             **self.auth_headers(),
         )
         self.assertStatus(201)
-        self.assertEqual(PlannedTransaction.objects.filter(recurring_id=data['id']).count(), 1)
-        row = PlannedTransaction.objects.get(recurring_id=data['id'])
+        self.assertEqual(PlannedTransaction.objects.filter(recurring_id=data['id']).count(), 2)
+        row = PlannedTransaction.objects.get(recurring_id=data['id'], planned_date=self.today)
         self.assertEqual(row.status, 'pending')
-        self.assertEqual(row.planned_date, self.today)
-        # The pointer advanced in the DB; the response serializes the
-        # in-memory instance created before the generator's locked re-fetch
-        # wrote the pointer, so it honestly reports the pre-write state.
+        # Window row (N=1 default): next month's occurrence, generated in the
+        # same transaction. The pointer advanced in the DB; the response
+        # serializes the in-memory instance created before the generator's
+        # locked re-fetch wrote the pointer, so it honestly reports the
+        # pre-write state.
+        second = PlannedTransaction.objects.get(recurring_id=data['id'], planned_date__gt=self.today)
         rule = RecurringTransaction.objects.get(id=data['id'])
-        self.assertEqual(rule.last_generated_date, self.today)
+        self.assertEqual(rule.last_generated_date, second.planned_date)
         self.assertIsNone(data['last_generated_date'])
 
     def test_create_accountless_without_currency_returns_400(self):
@@ -216,10 +214,6 @@ class TestCreateRecurring(RecurringApiTestCase):
     def test_create_interval_count_below_1_returns_422(self):
         # Pydantic ge=1 fires before the service runs.
         self.post('/api/recurring-transactions', self._payload(interval_count=0), **self.auth_headers())
-        self.assertStatus(422)
-
-    def test_create_lead_days_above_31_returns_422(self):
-        self.post('/api/recurring-transactions', self._payload(lead_days=32), **self.auth_headers())
         self.assertStatus(422)
 
     def test_create_invalid_interval_kind_returns_422(self):
@@ -421,9 +415,9 @@ class TestPlannedListRecurringId(RecurringApiTestCase):
 class TestGenerateRecurringTaskDirect(RecurringApiTestCase):
     def setUp(self):
         super().setUp()
-        # Due NOW: first occurrence is today, lead window open (lead_days=0).
-        # Factory creation does NOT sync-generate (that hook lives in the
-        # service create path), so the rows appear only when the task runs.
+        # Due NOW: daily rule starting today. Factory creation does NOT
+        # sync-generate (that hook lives in the service create path), so the
+        # rows appear only when the task runs.
         self.due = RecurringTransactionFactory(
             workspace=self.workspace,
             account=self.account,
@@ -431,40 +425,45 @@ class TestGenerateRecurringTaskDirect(RecurringApiTestCase):
             interval_kind='daily',
             interval_count=1,
             start_date=self.today,
-            lead_days=0,
         )
 
     def test_task_generates_due_occurrence_and_returns_count(self):
         created = generate_recurring_transactions()
-        self.assertEqual(created, 1)
-        row = PlannedTransaction.objects.get(recurring=self.due)
+        # Due rule: today's catch-up row + tomorrow's window row (N=1);
+        # base setUp rule: its 1-row window (first occurrence 60 days out).
+        self.assertEqual(created, 3)
+        dates = list(
+            PlannedTransaction.objects.filter(recurring=self.due)
+            .order_by('planned_date')
+            .values_list('planned_date', flat=True)
+        )
+        self.assertEqual(dates, [self.today, self.today + timedelta(days=1)])
+        row = PlannedTransaction.objects.get(recurring=self.due, planned_date=self.today)
         self.assertEqual(row.status, 'pending')
-        self.assertEqual(row.planned_date, self.today)
         self.assertEqual(row.account_id, self.account.id)
         self.due.refresh_from_db()
-        self.assertEqual(self.due.last_generated_date, self.today)
+        self.assertEqual(self.due.last_generated_date, self.today + timedelta(days=1))
 
     def test_task_second_run_is_noop(self):
         generate_recurring_transactions()
         created = generate_recurring_transactions()
         self.assertEqual(created, 0)
-        self.assertEqual(PlannedTransaction.objects.filter(recurring=self.due).count(), 1)
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=self.due).count(), 2)
 
     def test_task_skips_paused_rules(self):
         self.due.is_active = False
         self.due.save()
         created = generate_recurring_transactions()
-        self.assertEqual(created, 0)
+        self.assertEqual(created, 1)  # only the base rule's window row; the paused rule generates nothing
         self.assertFalse(PlannedTransaction.objects.filter(recurring=self.due).exists())
 
     def test_task_spans_all_workspaces(self):
         # The factory's own account derives its own workspace: the beat task
         # is a system schedule with no workspace scope.
-        foreign_due = RecurringTransactionFactory(
-            name='Foreign due', interval_kind='daily', start_date=self.today, lead_days=0
-        )
+        foreign_due = RecurringTransactionFactory(name='Foreign due', interval_kind='daily', start_date=self.today)
         created = generate_recurring_transactions()
-        self.assertEqual(created, 2)
+        # 2 due + 2 foreign (daily from today) + 1 base-rule window row (60 days out).
+        self.assertEqual(created, 5)
         self.assertTrue(PlannedTransaction.objects.filter(recurring=foreign_due).exists())
 
 
@@ -490,9 +489,9 @@ class TestGenerateRecurringTaskDispatch(RecurringApiTestCase):
     def test_delay_runs_eagerly_under_always_eager(self):
         result = generate_recurring_transactions.delay()
         self.assertTrue(result.successful())
-        # Base rule not due (first occurrence 60 days out, 4-day lead);
+        # Base rule fills its 1-row window (first occurrence 60 days out);
         # EagerResult carries the task's return value.
-        self.assertEqual(result.result, 0)
+        self.assertEqual(result.result, 1)
 
 
 class TestGenerateRecurringBeatConfig(TestCase):

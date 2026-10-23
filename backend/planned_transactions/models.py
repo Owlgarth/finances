@@ -112,14 +112,11 @@ class RecurringTransaction(WorkspaceScopedModel):
     """Recurring payment rule that materializes into PlannedTransaction rows.
 
     Standalone schedule grammar (no budget-cadence linkage): interval_kind x
-    interval_count anchored at start_date, optional end_date, per-rule lead
-    window (occurrence D materializes when today >= D - lead_days), and an
-    is_active pause flag. upfront_count and materialize_all extend the
-    materialization policy: how many occurrences exist upfront (1 = the
-    lead-window behavior) and whether every occurrence through end_date
-    materializes at once (materialize_all requires an end_date, enforced by
-    check constraint). The day-of-month for monthly rules is derived from
-    start_date.day and clamped in short months (Jan 31 -> Feb 28/29 -> Mar
+    interval_count anchored at start_date, optional end_date, an upfront
+    materialization window (upfront_count pending rows kept ahead of today;
+    materialize_all with end_date materializes every remaining occurrence),
+    and an is_active pause flag. The day-of-month for monthly rules is derived
+    from start_date.day and clamped in short months (Jan 31 -> Feb 28/29 -> Mar
     31). Materialized rows link back via PlannedTransaction.recurring;
     last_generated_date is the occurrence pointer guaranteeing an occurrence
     never generates twice; the schedule itself is derived by
@@ -164,7 +161,6 @@ class RecurringTransaction(WorkspaceScopedModel):
     )
     interval_count = models.PositiveSmallIntegerField(default=1)
     start_date = models.DateField()
-    lead_days = models.PositiveSmallIntegerField(default=4)
     upfront_count = models.PositiveSmallIntegerField(default=1)
     materialize_all = models.BooleanField(default=False)
     end_date = models.DateField(null=True, blank=True)
@@ -175,7 +171,6 @@ class RecurringTransaction(WorkspaceScopedModel):
         db_table = 'recurring_transactions'
         constraints = [
             models.CheckConstraint(condition=Q(interval_count__gte=1), name='recurring_interval_count_gte_1'),
-            models.CheckConstraint(condition=Q(lead_days__gte=0, lead_days__lte=31), name='recurring_lead_days_range'),
             models.CheckConstraint(
                 condition=Q(end_date__isnull=True) | Q(end_date__gte=F('start_date')),
                 name='recurring_end_gte_start',
