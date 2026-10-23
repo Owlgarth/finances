@@ -441,8 +441,10 @@ export interface RecurringInput {
   /** Full-replace PUT: always send - an omitted key resets to the backend default (1). */
   interval_count?: number;
   start_date: string;
-  /** Full-replace PUT: always send - an omitted key resets to the backend default (4). */
-  lead_days?: number;
+  /** Full-replace PUT: always send - an omitted key resets to the backend default (1). */
+  upfront_count?: number;
+  /** Full-replace PUT: always send - an omitted key resets to the backend default (false). Requires an end date (backend 400s materialize_all=true without one); the form resets it when the end date is cleared. */
+  materialize_all?: boolean;
   /** Cleared as null under the full-replace PUT, never omitted (a blank string would 422). */
   end_date?: string | null;
   /** Create-only ("make recurring" adoption of a pending planned row); the backend rejects it on update. */

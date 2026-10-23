@@ -800,7 +800,14 @@ class UserService:
                     'interval_kind': rt.interval_kind,
                     'interval_count': rt.interval_count,
                     'start_date': rt.start_date.isoformat(),
-                    'lead_days': rt.lead_days,
+                    # Field swap, still no export_version bump (additive
+                    # semantics in both directions): old importers reading
+                    # this file default the dropped lead_days key through
+                    # their .get('lead_days', 4); the new importer defaults
+                    # missing upfront_count/materialize_all on pre-change
+                    # files the same way.
+                    'upfront_count': rt.upfront_count,
+                    'materialize_all': rt.materialize_all,
                     'end_date': rt.end_date.isoformat() if rt.end_date else None,
                     'is_active': rt.is_active,
                     # CRITICAL to round-trip: the last_generated_date
@@ -1213,7 +1220,17 @@ class UserService:
                     interval_kind=rt_data.get('interval_kind', 'monthly'),
                     interval_count=rt_data.get('interval_count', 1),
                     start_date=UserService._parse_import_date(rt_data.get('start_date')),
-                    lead_days=rt_data.get('lead_days', 4),
+                    # Pre-change v3 files carry lead_days (ignored - the field
+                    # is gone) and lack both new keys, so the .get() defaults
+                    # mirror the model defaults (1 / False).
+                    upfront_count=rt_data.get('upfront_count', 1),
+                    # Degradation, not skip (the category-resolution precedent
+                    # two lines up): a hand-edited materialize_all=true with a
+                    # missing end_date would violate the
+                    # recurring_materialize_all_requires_end check inside this
+                    # atomic block and roll back the WHOLE import, so the flag
+                    # coerces to False and the rule still restores.
+                    materialize_all=rt_data.get('materialize_all', False) and rt_data.get('end_date') is not None,
                     end_date=UserService._parse_import_date(rt_data.get('end_date')),
                     is_active=rt_data.get('is_active', True),
                     # Pointer preserved verbatim - the materialization engine

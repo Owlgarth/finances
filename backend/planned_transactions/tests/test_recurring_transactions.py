@@ -2,7 +2,10 @@
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from unittest import mock
 
+from django.db import IntegrityError
+from django.db import transaction as db_transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -21,6 +24,8 @@ from planned_transactions.exceptions import (
     RecurringTransactionAdoptNotAllowedError,
     RecurringTransactionAdoptNotPendingError,
     RecurringTransactionEndDateError,
+    RecurringTransactionMaterializeAllLimitError,
+    RecurringTransactionMaterializeAllWithoutEndDateError,
 )
 from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
 from planned_transactions.models import PlannedTransaction, RecurringTransaction
@@ -53,8 +58,9 @@ class RecurringRuleTestCase(AuthMixin, TestCase):
 
     def _payload(self, **overrides) -> RecurringTransactionCreate:
         """Build the create/update schema; start_date defaults to a far-future date so the
-        sync-generate at the end of service create() is inert (lead window closed) unless a
-        test deliberately overrides it."""
+        sync-generate at the end of service create() materializes exactly one row (the
+        default N=1 window's first occurrence, at 2027-06-01) unless a test deliberately
+        overrides it."""
         payload = {
             'name': 'Rent rule',
             'amount': Decimal('1200.00'),
@@ -62,7 +68,6 @@ class RecurringRuleTestCase(AuthMixin, TestCase):
             'interval_kind': 'monthly',
             'interval_count': 1,
             'start_date': date(2027, 6, 1),
-            'lead_days': 4,
         }
         payload.update(overrides)
         return RecurringTransactionCreate(**payload)
@@ -207,7 +212,9 @@ class TestCreateRuleValidation(RecurringRuleTestCase):
         )
         self.assertIsNone(rule.account)
         self.assertEqual(rule.currency.code, 'USD')
-        self.assertIsNone(rule.last_generated_date)  # default 2027 start: sync-generate inert
+        self.assertIsNone(rule.last_generated_date)  # pre-generation wire shape (no re-fetch)
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2027, 6, 1))  # default 2027 start: window 1 filled
 
     def test_unknown_category_rejected(self):
         with self.assertRaises(PlannedTransactionCategoryNotFoundError):
@@ -355,12 +362,14 @@ class TestAdoptPlannedTransaction(RecurringRuleTestCase):
 
 
 class TestCreateSyncGeneratesFirstOccurrence(RecurringRuleTestCase):
-    """create() materializes the first due occurrence inline (plan decision 8).
+    """create() materializes inline (plan decision 8): catch-up plus window fill.
 
     Dates are clock-RELATIVE so the real timezone.now().date() inside
-    create() is deterministic. lead_days=0 keeps the run at exactly one
-    row: the seed is created_at.date() = today, today's own window is
-    open (today >= today - 0), and tomorrow's is closed.
+    create() is deterministic. With the default N=1 the run is exactly two
+    rows: today's due occurrence (catch-up, unconditional) plus tomorrow's
+    window row - "the next row appears on the previous occurrence's due
+    date". A due row NEVER counts toward the window (only planned_date >
+    today does).
     """
 
     def test_first_due_occurrence_materializes_inline(self):
@@ -371,20 +380,48 @@ class TestCreateSyncGeneratesFirstOccurrence(RecurringRuleTestCase):
             data=self._payload(
                 interval_kind='daily',
                 interval_count=1,
-                lead_days=0,
                 start_date=today - timedelta(days=10),
             ),
         )
-        row = PlannedTransaction.objects.get(recurring=rule)
-        self.assertEqual(row.planned_date, today)  # seed = created_at.date() = today
+        dates = list(
+            PlannedTransaction.objects.filter(recurring=rule)
+            .order_by('planned_date')
+            .values_list('planned_date', flat=True)
+        )
+        self.assertEqual(dates, [today, today + timedelta(days=1)])
+        row = PlannedTransaction.objects.get(recurring=rule, planned_date=today)
         self.assertEqual(row.status, 'pending')
         self.assertEqual(row.name, rule.name)
         self.assertEqual(row.amount, rule.amount)
         self.assertEqual(row.account_id, rule.account_id)
         self.assertEqual(row.currency_id, rule.currency_id)
         self.assertEqual(row.created_by, rule.created_by)
+        # Wire fact: the response instance is pre-generation (no re-fetch).
+        self.assertIsNone(rule.last_generated_date)
         rule.refresh_from_db()
-        self.assertEqual(rule.last_generated_date, today)
+        self.assertEqual(rule.last_generated_date, today + timedelta(days=1))
+
+    def test_create_fills_window_to_upfront_count_inline(self):
+        first = timezone.now().date() + timedelta(days=10)
+        rule = RecurringTransactionService.create(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            data=self._payload(
+                interval_kind='daily',
+                interval_count=1,
+                start_date=first,
+                upfront_count=3,
+            ),
+        )
+        dates = list(
+            PlannedTransaction.objects.filter(recurring=rule)
+            .order_by('planned_date')
+            .values_list('planned_date', flat=True)
+        )
+        self.assertEqual(dates, [first, first + timedelta(days=1), first + timedelta(days=2)])
+        self.assertIsNone(rule.last_generated_date)  # pre-generation wire shape
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, first + timedelta(days=2))
 
     def test_rule_created_paused_generates_nothing(self):
         today = timezone.now().date()
@@ -394,7 +431,6 @@ class TestCreateSyncGeneratesFirstOccurrence(RecurringRuleTestCase):
             data=self._payload(
                 interval_kind='daily',
                 interval_count=1,
-                lead_days=0,
                 start_date=today - timedelta(days=10),
                 is_active=False,
             ),
@@ -405,109 +441,167 @@ class TestCreateSyncGeneratesFirstOccurrence(RecurringRuleTestCase):
 
 
 class TestGenerateDue(RecurringRuleTestCase):
-    """The pointer-based catch-up materialization engine (generate_due / _generate_for_rule).
+    """The window materialization engine (generate_due / _generate_for_rule).
 
     Rules come from the factory (never the service - no accidental
     sync-generate path), created_at is pinned via queryset update, and every
-    run passes an explicit today.
+    run passes an explicit today. The invariant under test: after a run, a
+    non-materialize_all rule holds exactly upfront_count PENDING rows with
+    planned_date > today (plus every already-due row, caught up).
     """
 
-    def test_lead_window_opens_exactly_on_due_minus_lead_days(self):
-        rule = self._rule(interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 5), lead_days=4)
-        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
-        created = RecurringTransactionService.generate_due(today=date(2026, 1, 1))
-        self.assertEqual(created, 1)  # window opens ON D - lead_days (>=, not >)
-        self.assertTrue(PlannedTransaction.objects.filter(recurring=rule, planned_date=date(2026, 1, 5)).exists())
-
-    def test_lead_window_closed_one_day_early_generates_nothing(self):
-        rule = self._rule(interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 5), lead_days=4)
-        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
-        created = RecurringTransactionService.generate_due(today=date(2025, 12, 31))
-        self.assertEqual(created, 0)
-        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 0)
-        rule.refresh_from_db()
-        self.assertIsNone(rule.last_generated_date)
-
-    def test_run_twice_creates_no_duplicates(self):
-        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 1, 1), lead_days=0)
-        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
-        self.assertEqual(RecurringTransactionService.generate_due(today=date(2026, 1, 5)), 5)
-        self.assertEqual(RecurringTransactionService.generate_due(today=date(2026, 1, 5)), 0)
-        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 5)
-        rule.refresh_from_db()
-        self.assertEqual(rule.last_generated_date, date(2026, 1, 5))
-
-    def test_catch_up_after_downtime_generates_all_passed_occurrences(self):
-        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 1, 1), lead_days=0)
-        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
-        created = RecurringTransactionService.generate_due(today=date(2026, 1, 5))
-        self.assertEqual(created, 5)
+    def test_first_run_fills_window_to_upfront_count(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 1, 15, 12, 0)))
+        created = RecurringTransactionService.generate_due(today=date(2026, 1, 20))
+        self.assertEqual(created, 3)
         dates = list(
             PlannedTransaction.objects.filter(recurring=rule)
             .order_by('planned_date')
             .values_list('planned_date', flat=True)
         )
-        self.assertEqual(dates, [date(2026, 1, day) for day in range(1, 6)])  # no gaps
+        self.assertEqual(dates, [date(2026, 2, 1), date(2026, 2, 2), date(2026, 2, 3)])
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 3))
+
+    def test_deadline_day_tops_up_window(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 1, 15, 12, 0)))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # Feb 1-3
+        # Feb 1 comes due: it no longer counts (> today fails), the window
+        # has room again, and Feb 4 appears - always 3 pending future rows.
+        created = RecurringTransactionService.generate_due(today=date(2026, 2, 1))
+        self.assertEqual(created, 1)
+        dates = list(
+            PlannedTransaction.objects.filter(recurring=rule)
+            .order_by('planned_date')
+            .values_list('planned_date', flat=True)
+        )
+        self.assertEqual(dates, [date(2026, 2, d) for d in range(1, 5)])
+
+    def test_early_paid_row_frees_its_window_slot(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 1, 15, 12, 0)))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # Feb 1-3
+        # Paid early: the row is done, no longer pending - only PENDING rows
+        # hold window slots, so the next occurrence tops the window up.
+        PlannedTransaction.objects.filter(recurring=rule, planned_date=date(2026, 2, 2)).update(status='done')
+        created = RecurringTransactionService.generate_due(today=date(2026, 1, 20))
+        self.assertEqual(created, 1)
+        pending = set(
+            PlannedTransaction.objects.filter(recurring=rule, status='pending').values_list('planned_date', flat=True)
+        )
+        self.assertEqual(pending, {date(2026, 2, 1), date(2026, 2, 3), date(2026, 2, 4)})
+
+    def test_cancelled_future_row_frees_its_window_slot(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 1, 15, 12, 0)))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # Feb 1-3
+        PlannedTransaction.objects.filter(recurring=rule, planned_date=date(2026, 2, 3)).update(status='cancelled')
+        created = RecurringTransactionService.generate_due(today=date(2026, 1, 20))
+        self.assertEqual(created, 1)
+        pending = set(
+            PlannedTransaction.objects.filter(recurring=rule, status='pending').values_list('planned_date', flat=True)
+        )
+        self.assertEqual(pending, {date(2026, 2, 1), date(2026, 2, 2), date(2026, 2, 4)})
+
+    def test_full_window_generates_nothing(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 1, 15, 12, 0)))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # window full: Feb 1-3
+        created = RecurringTransactionService.generate_due(today=date(2026, 1, 21))
+        self.assertEqual(created, 0)
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 3)
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 3))  # pointer unmoved
+
+    def test_run_twice_same_day_creates_no_duplicates(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 1, 1), upfront_count=2)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
+        # Jan 1-5 are due (catch-up) and Jan 6-7 fill the window of 2.
+        self.assertEqual(RecurringTransactionService.generate_due(today=date(2026, 1, 5)), 7)
+        self.assertEqual(RecurringTransactionService.generate_due(today=date(2026, 1, 5)), 0)
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 7)
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 1, 7))
+
+    def test_catch_up_after_downtime_generates_all_passed_occurrences(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 1, 1), upfront_count=2)
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
+        created = RecurringTransactionService.generate_due(today=date(2026, 1, 5))
+        self.assertEqual(created, 7)  # 5 due rows + 2 window rows
+        dates = list(
+            PlannedTransaction.objects.filter(recurring=rule)
+            .order_by('planned_date')
+            .values_list('planned_date', flat=True)
+        )
+        self.assertEqual(dates, [date(2026, 1, d) for d in range(1, 8)])  # no gaps
 
     def test_never_backfills_before_created_at(self):
-        rule = self._rule(interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 31), lead_days=0)
+        rule = self._rule(interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 31))
         self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 6, 15, 12, 0)))
         created = RecurringTransactionService.generate_due(today=date(2026, 10, 21))
-        self.assertEqual(created, 4)
-        rows = PlannedTransaction.objects.filter(recurring=rule)
+        # Jun-Sep 30 are due catch-up rows; Oct 31 fills the default 1-row
+        # window even though the old lead window would have kept it closed.
+        self.assertEqual(created, 5)
         self.assertEqual(
-            list(rows.order_by('planned_date').values_list('planned_date', flat=True)),
-            [date(2026, 6, 30), date(2026, 7, 31), date(2026, 8, 31), date(2026, 9, 30)],
-        )  # Oct 31's window is closed at Oct 21
-        self.assertEqual(rows.order_by('planned_date').first().planned_date, date(2026, 6, 30))
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 6, 30), date(2026, 7, 31), date(2026, 8, 31), date(2026, 9, 30), date(2026, 10, 31)],
+        )
         # Seed bound: max(start, created_at.date()) = 2026-06-15, so Jan-May never generate.
-        self.assertFalse(rows.filter(planned_date__lt=date(2026, 6, 1)).exists())
+        self.assertFalse(PlannedTransaction.objects.filter(recurring=rule, planned_date__lt=date(2026, 6, 1)).exists())
 
     def test_pointer_predating_created_at_skips_forward(self):
         rule = self._rule(
             interval_kind='monthly',
             interval_count=1,
             start_date=date(2026, 1, 31),
-            lead_days=0,
             last_generated_date=date(2026, 3, 31),  # adopt/GDPR-restore style pointer
         )
         self._freeze_created_at(rule, timezone.make_aware(datetime(2026, 6, 15, 12, 0)))
         created = RecurringTransactionService.generate_due(today=date(2026, 8, 10))
         # April 30 and May 31 predate created_at, so the loop SKIPS (no break, no rows)...
-        self.assertEqual(created, 2)  # ...and generates 2026-06-30 + 2026-07-31 only
-        dates = list(
-            PlannedTransaction.objects.filter(recurring=rule)
-            .order_by('planned_date')
-            .values_list('planned_date', flat=True)
+        # ...Jun 30 and Jul 31 are due catch-up rows, and Aug 31 fills the window.
+        self.assertEqual(created, 3)
+        self.assertEqual(
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 6, 30), date(2026, 7, 31), date(2026, 8, 31)],
         )
-        self.assertEqual(dates, [date(2026, 6, 30), date(2026, 7, 31)])  # Aug 31's window closed
         rule.refresh_from_db()
-        self.assertEqual(rule.last_generated_date, date(2026, 7, 31))
+        self.assertEqual(rule.last_generated_date, date(2026, 8, 31))
 
-    def test_end_date_stops_generation(self):
+    def test_end_date_stops_generation_before_window_fills(self):
         rule = self._rule(
             interval_kind='monthly',
             interval_count=1,
             start_date=date(2026, 1, 31),
             end_date=date(2026, 3, 31),
-            lead_days=0,
+            upfront_count=5,  # window wider than the rule's whole life
         )
         self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
         created = RecurringTransactionService.generate_due(today=date(2026, 12, 31))
         self.assertEqual(created, 3)  # D == end_date generates; D > end breaks
-        dates = list(
-            PlannedTransaction.objects.filter(recurring=rule)
-            .order_by('planned_date')
-            .values_list('planned_date', flat=True)
+        self.assertEqual(
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31)],
         )
-        self.assertEqual(dates, [date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31)])
         rule.refresh_from_db()
         self.assertEqual(rule.last_generated_date, date(2026, 3, 31))
 
     def test_paused_rule_skipped(self):
-        rule = self._rule(
-            interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 31), lead_days=0, is_active=False
-        )
+        rule = self._rule(interval_kind='monthly', interval_count=1, start_date=date(2026, 1, 31), is_active=False)
         self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
         created = RecurringTransactionService.generate_due(today=date(2026, 6, 30))
         self.assertEqual(created, 0)
@@ -515,18 +609,18 @@ class TestGenerateDue(RecurringRuleTestCase):
         rule.refresh_from_db()
         self.assertIsNone(rule.last_generated_date)  # the is_active scan never reaches the lock
 
-    def test_integrity_error_race_advances_pointer_without_duplicate(self):
+    def test_race_loss_on_due_occurrence_advances_pointer_without_duplicate(self):
         rule = self._rule(
             interval_kind='monthly',
             interval_count=1,
             start_date=date(2026, 1, 31),
-            lead_days=0,
             last_generated_date=date(2026, 1, 31),
         )
         self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
-        # The race winner: another generator already created the 2026-02-28 occurrence.
-        # It lives in the test's outer transaction, so it survives the savepoint rollback
-        # that create_from_recurring's IntegrityError triggers.
+        # The race winner: another generator already created the 2026-02-28
+        # occurrence. It lives in the test's outer transaction, so it survives
+        # the savepoint rollback that create_from_recurring's IntegrityError
+        # triggers. Feb 28 <= today, so the loss consumes no window slot.
         PlannedTransactionFactory(
             workspace=self.workspace,
             account=self.account,
@@ -537,15 +631,254 @@ class TestGenerateDue(RecurringRuleTestCase):
             recurring=rule,
         )
         created = RecurringTransactionService.generate_due(today=date(2026, 4, 10))
-        self.assertEqual(created, 1)  # only Mar 31 counts; Feb 28 was a race loss (None)
-        dates = list(
-            PlannedTransaction.objects.filter(recurring=rule)
-            .order_by('planned_date')
-            .values_list('planned_date', flat=True)
+        # Feb 28 lost the race (None); Mar 31 catches up; Apr 30 fills window 1.
+        self.assertEqual(created, 2)
+        self.assertEqual(
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30)],  # no duplicate
         )
-        self.assertEqual(dates, [date(2026, 2, 28), date(2026, 3, 31)])  # no duplicate
         rule.refresh_from_db()
-        self.assertEqual(rule.last_generated_date, date(2026, 3, 31))  # pointer advanced past the loss
+        self.assertEqual(rule.last_generated_date, date(2026, 4, 30))  # pointer advanced past the loss
+
+    def test_race_loss_on_future_occurrence_consumes_window_slot(self):
+        rule = self._rule(
+            interval_kind='monthly',
+            interval_count=1,
+            start_date=date(2026, 1, 31),
+            upfront_count=2,
+            last_generated_date=date(2026, 1, 31),
+        )
+        self._freeze_created_at(rule, timezone.make_aware(datetime(2025, 12, 1, 12, 0)))
+        # A FUTURE winner: pending Feb 28 > today, so future_pending starts
+        # at 1 of the 2 allowed slots.
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=self.account,
+            name='Race winner',
+            amount=Decimal('100.00'),
+            planned_date=date(2026, 2, 28),
+            status='pending',
+            recurring=rule,
+        )
+        created = RecurringTransactionService.generate_due(today=date(2026, 2, 10))
+        # Feb 28 loses the race but the row exists either way: the slot is
+        # consumed (future_pending -> 2) and the window is full - Mar 31
+        # never generates.
+        self.assertEqual(created, 0)
+        self.assertEqual(
+            list(PlannedTransaction.objects.filter(recurring=rule).values_list('planned_date', flat=True)),
+            [date(2026, 2, 28)],  # no duplicate, no top-up
+        )
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 28))  # pointer advanced past the loss
+
+
+class TestMaterializeAllValidation(RecurringRuleTestCase):
+    """The materialize_all guards fire before any INSERT/save (task 1 exceptions)."""
+
+    def test_create_materialize_all_without_end_date_rejected(self):
+        with self.assertRaises(RecurringTransactionMaterializeAllWithoutEndDateError):
+            RecurringTransactionService.create(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                data=self._payload(materialize_all=True),
+            )
+        self.assertEqual(RecurringTransaction.objects.count(), 0)
+
+    def test_update_materialize_all_without_end_date_rejected(self):
+        rule = self._rule()
+        with self.assertRaises(RecurringTransactionMaterializeAllWithoutEndDateError):
+            RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(materialize_all=True),
+            )
+        rule.refresh_from_db()
+        self.assertFalse(rule.materialize_all)  # rejected before any mutation
+
+    def test_create_materialize_all_over_cap_rejected(self):
+        # Daily 2027-01-01 through 2028-12-31 = 731 occurrences > 500.
+        with self.assertRaises(RecurringTransactionMaterializeAllLimitError):
+            RecurringTransactionService.create(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                data=self._payload(
+                    interval_kind='daily',
+                    interval_count=1,
+                    start_date=date(2027, 1, 1),
+                    end_date=date(2028, 12, 31),
+                    materialize_all=True,
+                ),
+            )
+        self.assertEqual(RecurringTransaction.objects.count(), 0)
+
+    def test_update_materialize_all_over_cap_rejected(self):
+        rule = self._rule()
+        with self.assertRaises(RecurringTransactionMaterializeAllLimitError):
+            RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(
+                    interval_kind='daily',
+                    interval_count=1,
+                    start_date=date(2027, 1, 1),
+                    end_date=date(2028, 12, 31),
+                    materialize_all=True,
+                ),
+            )
+        rule.refresh_from_db()
+        self.assertFalse(rule.materialize_all)
+
+    def test_create_materialize_all_within_cap_generates_everything(self):
+        rule = RecurringTransactionService.create(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            data=self._payload(
+                interval_kind='daily',
+                interval_count=1,
+                start_date=date(2027, 1, 1),
+                end_date=date(2027, 1, 5),
+                materialize_all=True,
+            ),
+        )
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2027, 1, 5))  # everything to end_date
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 5)
+
+    def test_upfront_count_bounds_enforced_by_db_constraint(self):
+        # The schema (Field ge=1 le=24) is the API guard; the model check
+        # constraint recurring_upfront_count_range is the DB-level one.
+        for bad in (0, 25):
+            with self.assertRaises(IntegrityError):
+                with db_transaction.atomic():
+                    self._rule(upfront_count=bad)
+        self.assertEqual(RecurringTransaction.objects.count(), 0)
+
+
+class TestUpdateSyncGenerates(RecurringRuleTestCase):
+    """update() re-runs generation after the save (the same call create makes).
+
+    The wire response stays PRE-generation (pointer as of the save) - the
+    generator ran on its own locked re-fetch and no re-fetch is added.
+    """
+
+    @staticmethod
+    def _frozen_now(year, month, day):
+        return timezone.make_aware(datetime(year, month, day, 9, 0))
+
+    def test_raising_upfront_count_fills_window_to_new_n(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=1)
+        self._freeze_created_at(rule, self._frozen_now(2026, 1, 15))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # window 1: Feb 1
+        with mock.patch('django.utils.timezone.now', return_value=self._frozen_now(2026, 1, 21)):
+            updated = RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(
+                    interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=3
+                ),
+            )
+        self.assertEqual(updated.last_generated_date, date(2026, 2, 1))  # pre-generation wire shape
+        rule.refresh_from_db()
+        self.assertEqual(rule.upfront_count, 3)
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 3))
+        self.assertEqual(
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 2, 1), date(2026, 2, 2), date(2026, 2, 3)],
+        )
+
+    def test_toggling_materialize_all_generates_all_remaining(self):
+        rule = self._rule(
+            interval_kind='daily',
+            interval_count=1,
+            start_date=date(2026, 2, 1),
+            upfront_count=2,
+            end_date=date(2026, 2, 5),
+        )
+        self._freeze_created_at(rule, self._frozen_now(2026, 1, 15))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # window 2: Feb 1-2
+        with mock.patch('django.utils.timezone.now', return_value=self._frozen_now(2026, 1, 21)):
+            RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(
+                    interval_kind='daily',
+                    interval_count=1,
+                    start_date=date(2026, 2, 1),
+                    end_date=date(2026, 2, 5),
+                    upfront_count=2,
+                    materialize_all=True,
+                ),
+            )
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 5))
+        self.assertEqual(
+            list(
+                PlannedTransaction.objects.filter(recurring=rule)
+                .order_by('planned_date')
+                .values_list('planned_date', flat=True)
+            ),
+            [date(2026, 2, d) for d in range(1, 6)],  # everything to end_date
+        )
+
+    def test_extending_end_date_tops_up_materialize_all(self):
+        rule = self._rule(
+            interval_kind='daily',
+            interval_count=1,
+            start_date=date(2026, 2, 1),
+            materialize_all=True,
+            end_date=date(2026, 2, 3),
+        )
+        self._freeze_created_at(rule, self._frozen_now(2026, 1, 15))
+        RecurringTransactionService.generate_due(today=date(2026, 1, 20))  # all 3: Feb 1-3
+        with mock.patch('django.utils.timezone.now', return_value=self._frozen_now(2026, 1, 21)):
+            RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(
+                    interval_kind='daily',
+                    interval_count=1,
+                    start_date=date(2026, 2, 1),
+                    end_date=date(2026, 2, 5),
+                    materialize_all=True,
+                ),
+            )
+        rule.refresh_from_db()
+        self.assertEqual(rule.last_generated_date, date(2026, 2, 5))
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 5)
+
+    def test_update_saving_paused_rule_generates_nothing(self):
+        rule = self._rule(interval_kind='daily', interval_count=1, start_date=date(2026, 2, 1), upfront_count=2)
+        self._freeze_created_at(rule, self._frozen_now(2026, 1, 15))
+        with mock.patch('django.utils.timezone.now', return_value=self._frozen_now(2026, 1, 21)):
+            RecurringTransactionService.update(
+                user=self.user,
+                workspace_id=self.workspace.id,
+                rule_id=rule.id,
+                data=self._payload(
+                    interval_kind='daily',
+                    interval_count=1,
+                    start_date=date(2026, 2, 1),
+                    upfront_count=2,
+                    is_active=False,
+                ),
+            )
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=rule).count(), 0)
+        rule.refresh_from_db()
+        self.assertIsNone(rule.last_generated_date)  # locked is_active guard
 
 
 class TestDeleteRule(RecurringRuleTestCase):

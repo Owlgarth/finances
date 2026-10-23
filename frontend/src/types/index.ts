@@ -243,7 +243,8 @@ export interface RecurringTransaction {
   interval_kind: 'daily' | 'weekly' | 'monthly';
   interval_count: number;
   start_date: string;
-  lead_days: number;
+  upfront_count: number;
+  materialize_all: boolean;
   end_date: string | null;
   is_active: boolean;
   last_generated_date: string | null;

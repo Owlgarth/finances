@@ -119,10 +119,11 @@
       "intervalDaily": "Dni",
       "intervalWeekly": "Tygodnie",
       "intervalMonthly": "Miesiące",
-      "leadDaysLabel": "Dni wyprzedzenia",
+      "upfrontCountLabel": "Planowanie z wyprzedzeniem",
       "endDateLabel": "Data końcowa",
       "endDatePlaceholder": "Opcjonalnie",
       "clearEndDate": "Wyczyść datę końcową",
+      "materializeAllLabel": "Utwórz wszystkie do daty końcowej",
       "monthlyClamp": "W miesiącach mających mniej niż {{day}} dni używany jest ostatni dzień miesiąca.",
       "adoptLabel": "Użyj tej planowanej transakcji jako pierwszego wystąpienia",
       "activeLabel": "Aktywna",
@@ -131,9 +132,10 @@
       "hintAria": "Pomoc: {{field}}",
       "startDateHint": "Pierwsze wystąpienie reguły. W regułach miesięcznych liczy się dzień miesiąca, a w krótszych miesiącach używany jest ostatni dzień.",
       "intervalHint": "Reguła powtarza się co N dni, tygodni lub miesięcy, licząc od daty rozpoczęcia.",
-      "leadDaysHint": "Planowana transakcja pojawia się o wskazaną liczbę dni przed datą wykonania. Wartość 0 oznacza, że pojawia się w dniu wykonania.",
+      "upfrontCountHint": "Ile nadchodzących planowanych transakcji ta reguła utrzymuje utworzonych naraz. Gdy nadejdzie termin najwcześniejszej z nich, tworzona jest następna.",
       "activeHint": "Wstrzymuje regułę bez jej usuwania: historia jest zachowana, a nowe planowane transakcje nie są generowane, dopóki reguła nie zostanie ponownie włączona.",
-      "leadDaysInvalid": "Dni wyprzedzenia muszą być liczbą całkowitą od 0 do 31"
+      "upfrontCountInvalid": "Planowanie z wyprzedzeniem musi być liczbą całkowitą od 1 do 24",
+      "materializeAllHint": "Tworzy od razu wszystkie wystąpienia między datą rozpoczęcia a datą końcową, zamiast po jednym, gdy zbliża się ich termin."
     }
   },
   "monthNav": {
