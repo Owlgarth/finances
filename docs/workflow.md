@@ -139,10 +139,11 @@ search/filters pattern, including the own-currency filter (URL-synced).
 
 The page's **Planned | Recurring** view switch (URL-synced via `?view=`) toggles
 between the scheduled list and the workspace's recurring rules, which materialize
-pending planned transactions ahead of their due date (a nightly task; creating a
-rule generates its first due row immediately). A pending planned row can be made
-recurring: **Make recurring** adopts the existing row as the rule's first
-occurrence instead of duplicating it.
+pending planned transactions ahead of their due date (a nightly task; creating or
+editing a rule immediately generates its planned transactions up to the rule's
+upfront window, or through its `end_date` when `materialize_all` is set). A
+pending planned row can be made recurring: **Make recurring** adopts the existing
+row as the rule's first occurrence instead of duplicating it.
 
 ## Currencies
 

@@ -343,7 +343,7 @@ generates inline.
 | Method | Endpoint | Query Params | Description |
 |--------|----------|--------------|-------------|
 | GET | `/api/recurring-transactions` | `include_inactive` | List rules (non-paginated; active only by default, `include_inactive=true` also returns paused) |
-| POST | `/api/recurring-transactions` | - | Create (the first due occurrence materializes immediately; `adopt_planned_id` in the payload adopts an existing pending planned transaction as the first occurrence instead of duplicating it) |
+| POST | `/api/recurring-transactions` | - | Create (the window materializes immediately; `adopt_planned_id` in the payload adopts an existing pending planned transaction as the first occurrence instead of duplicating it) |
 | GET | `/api/recurring-transactions/{id}` | - | Get a rule (schedule grammar: `interval_kind` x `interval_count` anchored at `start_date`, optional `end_date`, `upfront_count` materialization window + `materialize_all`, `is_active` pause flag) |
 | PUT | `/api/recurring-transactions/{id}` | - | Update (full-replace; `is_active` rides the payload - omitted it re-activates a paused rule, `false` pauses; edits are future-only, already-materialized pending rows untouched) |
 | DELETE | `/api/recurring-transactions/{id}` | `delete_pending` | Delete (`delete_pending=true` also deletes the rule's linked pending planned rows; done/cancelled rows always survive) |
