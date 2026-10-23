@@ -1,3 +1,11 @@
+## [0.4.0] - 2026-10-23
+
+- docs: promote recurring upfront-window patterns into skills (#149) (a267512)
+- feat: recurring rules upfront window (remove lead days, add plan-ahead count + create-all-until-end-date) (#148) (eafbae5)
+- docs: planned-month-default follow-up (#147) (75389f5)
+- feat: planned transactions default month filter (#146) (6b9a082)
+- docs: recurring-payments follow-up (docs + skills) (#145) (f31fd5a)
+- feat: recurring payments (RecurringTransaction rules materializing planned transactions) (#144) (07f3216)
 ## [0.3.0] - 2026-10-19
 
 - docs: per-item-categories follow-up (docs + skills) (#143) (6300737)
