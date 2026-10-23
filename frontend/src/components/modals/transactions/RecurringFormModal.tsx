@@ -68,10 +68,14 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
   // Grammar numerics ride as text state (inputMode=numeric inputs); parsed
   // and validated at submit, exactly like the amount field.
   const [intervalCount, setIntervalCount] = useState('1')
+  const [upfrontCount, setUpfrontCount] = useState('1')
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
-  const [leadDays, setLeadDays] = useState('4')
   // '' = no end date (submits null).
   const [endDate, setEndDate] = useState('')
+  // Materialize-all exists only while an end date is set: the Switch row
+  // renders conditionally and both clear paths reset it, so true can never
+  // submit without an end date (the backend 400s that combination).
+  const [materializeAll, setMaterializeAll] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [adopt, setAdopt] = useState(false)
 
@@ -108,7 +112,10 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
       setIntervalKind(recurring.interval_kind)
       setIntervalCount(String(recurring.interval_count))
       setStartDate(recurring.start_date)
-      setLeadDays(String(recurring.lead_days))
+      setUpfrontCount(String(recurring.upfront_count))
+      // The backend 400s materialize_all=true without an end date, so a
+      // stored rule never carries the pair - the guard is defensive only.
+      setMaterializeAll(recurring.materialize_all && !!recurring.end_date)
       setEndDate(recurring.end_date ?? '')
       setIsActive(recurring.is_active)
       setAdopt(false)
@@ -125,7 +132,8 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
       setIntervalKind('monthly')
       setIntervalCount('1')
       setStartDate(fromPlanned.planned_date)
-      setLeadDays('4')
+      setUpfrontCount('1')
+      setMaterializeAll(false)
       setEndDate('')
       setIsActive(true)
       setAdopt(true)
@@ -142,7 +150,8 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
       setIntervalKind('monthly')
       setIntervalCount('1')
       setStartDate(new Date().toISOString().slice(0, 10))
-      setLeadDays('4')
+      setUpfrontCount('1')
+      setMaterializeAll(false)
       setEndDate('')
       setIsActive(true)
       setAdopt(false)
@@ -216,9 +225,9 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
     const intervalCountNum = Number(intervalCount)
     if (!Number.isInteger(intervalCountNum) || intervalCountNum < 1 || intervalCountNum > 365)
       return toast.error(t('recurring.form.intervalCountInvalid'))
-    const leadDaysNum = Number(leadDays)
-    if (!Number.isInteger(leadDaysNum) || leadDaysNum < 0 || leadDaysNum > 31)
-      return toast.error(t('recurring.form.leadDaysInvalid'))
+    const upfrontCountNum = Number(upfrontCount)
+    if (!Number.isInteger(upfrontCountNum) || upfrontCountNum < 1 || upfrontCountNum > 24)
+      return toast.error(t('recurring.form.upfrontCountInvalid'))
     mutation.mutate({
       name: name.trim(),
       amount: normAmount,
@@ -228,7 +237,10 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
       interval_kind: intervalKind,
       interval_count: intervalCountNum,
       start_date: startDate,
-      lead_days: leadDaysNum,
+      upfront_count: upfrontCountNum,
+      // Always sent, never omitted (full-replace PUT); guaranteed false
+      // whenever endDate is blank - the end-date clear paths reset it.
+      materialize_all: materializeAll,
       // null when cleared, never omitted: the full-replace PUT resets an
       // absent key (RecurringInput doc contract).
       end_date: endDate || null,
@@ -306,23 +318,27 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="flex items-center gap-1">
-              <label htmlFor="recurring-lead-days" className={labelClass}>{t('recurring.form.leadDaysLabel')}</label>
-              <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.leadDaysLabel') })} text={t('recurring.form.leadDaysHint')} />
+              <label htmlFor="recurring-upfront-count" className={labelClass}>{t('recurring.form.upfrontCountLabel')}</label>
+              <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.upfrontCountLabel') })} text={t('recurring.form.upfrontCountHint')} />
             </div>
-            <input id="recurring-lead-days" type="text" inputMode="numeric" value={leadDays} onChange={(e) => setLeadDays(e.target.value)} className={inputClass} />
+            <input id="recurring-upfront-count" type="text" inputMode="numeric" value={upfrontCount} onChange={(e) => setUpfrontCount(e.target.value)} disabled={materializeAll} className={inputClass} />
           </div>
           <div>
             <label className={labelClass}>{t('recurring.form.endDateLabel')}</label>
             <div className="flex items-center gap-1">
               <div className="flex-1 min-w-0">
-                <DatePicker value={endDate} onChange={setEndDate} placeholder={t('recurring.form.endDatePlaceholder')} />
+                {/* Defensive '' reset: only the X button produces '' today;
+                    any future DatePicker clear path must not leave
+                    materialize_all=true without an end date. */}
+                <DatePicker value={endDate} onChange={(v) => { setEndDate(v); if (v === '') setMaterializeAll(false) }} placeholder={t('recurring.form.endDatePlaceholder')} />
               </div>
               {/* DatePicker has no clear of its own; the X resets to the
-                  no-end-date state ('' submits null). */}
+                  no-end-date state ('' submits null) and drops
+                  materialize-all with it. */}
               {endDate !== '' && (
                 <button
                   type="button"
-                  onClick={() => setEndDate('')}
+                  onClick={() => { setEndDate(''); setMaterializeAll(false) }}
                   aria-label={t('recurring.form.clearEndDate')}
                   className="p-1 text-text-muted hover:text-text transition-colors"
                 >
@@ -332,6 +348,15 @@ export default function RecurringFormModal({ open, onClose, recurring, fromPlann
             </div>
           </div>
         </div>
+        {endDate !== '' && (
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-3 text-xs text-text cursor-pointer">
+              <Switch checked={materializeAll} onChange={setMaterializeAll} aria-label={t('recurring.form.materializeAllLabel')} />
+              {t('recurring.form.materializeAllLabel')}
+            </label>
+            <InfoHint ariaLabel={t('recurring.form.hintAria', { field: t('recurring.form.materializeAllLabel') })} text={t('recurring.form.materializeAllHint')} />
+          </div>
+        )}
         {intervalKind === 'monthly' && dayOfMonth(startDate) > 28 && (
           <p className="text-[11px] text-text-muted">{t('recurring.form.monthlyClamp', { day: dayOfMonth(startDate) })}</p>
         )}

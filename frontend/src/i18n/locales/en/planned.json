@@ -111,10 +111,11 @@
       "intervalDaily": "Days",
       "intervalWeekly": "Weeks",
       "intervalMonthly": "Months",
-      "leadDaysLabel": "Lead days",
+      "upfrontCountLabel": "Plan ahead",
       "endDateLabel": "End date",
       "endDatePlaceholder": "Optional",
       "clearEndDate": "Clear end date",
+      "materializeAllLabel": "Create all until end date",
       "monthlyClamp": "In months with fewer than {{day}} days, the last day of the month is used.",
       "adoptLabel": "Use this planned transaction as the first occurrence",
       "activeLabel": "Active",
@@ -123,9 +124,10 @@
       "hintAria": "About {{field}}",
       "startDateHint": "First occurrence of the rule. For monthly rules the day of the month is the anchor - shorter months clamp to their last day.",
       "intervalHint": "The rule repeats every N days, weeks or months, counting from the start date.",
-      "leadDaysHint": "The planned transaction appears this many days before its due date. 0 means it appears on the due date itself.",
+      "upfrontCountHint": "How many upcoming planned transactions this rule keeps created at once. When the earliest one comes due, the next one is created.",
       "activeHint": "Pause the rule without deleting it: history is kept and no new planned transactions are generated until it is switched back on.",
-      "leadDaysInvalid": "Lead days must be a whole number between 0 and 31"
+      "upfrontCountInvalid": "Plan ahead must be a whole number between 1 and 24",
+      "materializeAllHint": "Create every occurrence between the start and end date immediately, instead of one at a time as each comes due."
     }
   },
   "monthNav": {

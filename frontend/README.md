@@ -215,7 +215,8 @@ touch-aware),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
 own-currency pairing; account-less plans default to the workspace primary),
 `RecurringFormModal` (recurring-rule create/edit - interval kind/count, start
-date with lead days, optional end date, active toggle, `InfoHint` field hints;
+date, plan-ahead count, optional end date with create-all-until-end-date
+switch, active toggle, `InfoHint` field hints;
 "Make recurring" prefills it from a pending planned row and adopts that row as
 the rule's first occurrence instead of duplicating it), `PlannedMonthStepper`
 (presentational month stepper for the Planned page - prev/next chevrons around
