@@ -58,6 +58,8 @@ class RecurringTransactionFactory(DjangoModelFactory):
     interval_count = 1
     start_date = date(2026, 1, 31)
     lead_days = 4
+    upfront_count = 1
+    materialize_all = False
     end_date = None
     is_active = True
     last_generated_date = None

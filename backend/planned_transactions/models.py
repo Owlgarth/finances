@@ -114,7 +114,11 @@ class RecurringTransaction(WorkspaceScopedModel):
     Standalone schedule grammar (no budget-cadence linkage): interval_kind x
     interval_count anchored at start_date, optional end_date, per-rule lead
     window (occurrence D materializes when today >= D - lead_days), and an
-    is_active pause flag. The day-of-month for monthly rules is derived from
+    is_active pause flag. upfront_count and materialize_all extend the
+    materialization policy: how many occurrences exist upfront (1 = the
+    lead-window behavior) and whether every occurrence through end_date
+    materializes at once (materialize_all requires an end_date, enforced by
+    check constraint). The day-of-month for monthly rules is derived from
     start_date.day and clamped in short months (Jan 31 -> Feb 28/29 -> Mar
     31). Materialized rows link back via PlannedTransaction.recurring;
     last_generated_date is the occurrence pointer guaranteeing an occurrence
@@ -161,6 +165,8 @@ class RecurringTransaction(WorkspaceScopedModel):
     interval_count = models.PositiveSmallIntegerField(default=1)
     start_date = models.DateField()
     lead_days = models.PositiveSmallIntegerField(default=4)
+    upfront_count = models.PositiveSmallIntegerField(default=1)
+    materialize_all = models.BooleanField(default=False)
     end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     last_generated_date = models.DateField(null=True, blank=True)
@@ -173,6 +179,13 @@ class RecurringTransaction(WorkspaceScopedModel):
             models.CheckConstraint(
                 condition=Q(end_date__isnull=True) | Q(end_date__gte=F('start_date')),
                 name='recurring_end_gte_start',
+            ),
+            models.CheckConstraint(
+                condition=Q(upfront_count__gte=1, upfront_count__lte=24), name='recurring_upfront_count_range'
+            ),
+            models.CheckConstraint(
+                condition=Q(materialize_all=False) | Q(end_date__isnull=False),
+                name='recurring_materialize_all_requires_end',
             ),
         ]
 
