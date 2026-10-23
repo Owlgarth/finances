@@ -259,9 +259,11 @@ def list_recurring(request: HttpRequest, include_inactive: bool = Query(False)):
 def create_recurring(request: HttpRequest, data: RecurringTransactionCreate):
     """Create a recurring transaction rule (requires write access).
 
-    The first due occurrence materializes immediately (sync-generate). With
-    adopt_planned_id in the payload, the referenced pending planned transaction
-    is adopted as the first occurrence instead of duplicated.
+    The first upfront_count occurrences materialize immediately
+    (sync-generate); with materialize_all, every occurrence up to end_date
+    materializes instead. With adopt_planned_id in the payload, the
+    referenced pending planned transaction is adopted as the first
+    occurrence instead of duplicated.
     """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
@@ -289,6 +291,9 @@ def update_recurring(request: HttpRequest, recurring_id: int, data: RecurringTra
     is_active is part of the replace payload: omitted it defaults to True (a
     PUT that leaves it out re-activates a paused rule), send false to pause.
     Edits are future-only - already-materialized pending rows are untouched.
+    The update also sync-generates like create: the upfront window fills
+    to upfront_count immediately, and materialize_all materializes new
+    occurrences up to end_date.
     """
     user = request.auth
     workspace_id = request.auth.current_workspace_id

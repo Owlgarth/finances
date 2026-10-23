@@ -332,7 +332,7 @@ class RecurringExportTests(AuthMixin, TestCase):
             interval_kind='monthly',
             interval_count=1,
             start_date=date(2026, 1, 5),
-            lead_days=4,
+            upfront_count=3,
             end_date=None,
             is_active=True,
             last_generated_date=date(2026, 10, 5),
@@ -347,6 +347,24 @@ class RecurringExportTests(AuthMixin, TestCase):
             amount=Decimal('10.00'),
             last_generated_date=None,
         )
+        # materialize_all requires end_date at the DB level, so the pair
+        # travels together here and in every import test below.
+        RecurringTransactionFactory(
+            account=account,
+            workspace=self.workspace,
+            currency=account.currency,
+            name='Home wifi',
+            amount=Decimal('60.00'),
+            interval_kind='monthly',
+            interval_count=1,
+            start_date=date(2026, 1, 5),
+            upfront_count=1,
+            materialize_all=True,
+            end_date=date(2026, 12, 5),
+            last_generated_date=date(2026, 12, 5),
+            created_by=self.user,
+            updated_by=self.user,
+        )
 
         data = UserService.export_all_data(self.user)
 
@@ -357,11 +375,22 @@ class RecurringExportTests(AuthMixin, TestCase):
         self.assertEqual(rent['interval_kind'], 'monthly')
         self.assertEqual(rent['interval_count'], 1)
         self.assertEqual(rent['start_date'], '2026-01-05')
-        self.assertEqual(rent['lead_days'], 4)
+        self.assertEqual(rent['upfront_count'], 3)
+        self.assertFalse(rent['materialize_all'])
         self.assertIsNone(rent['end_date'])
         self.assertTrue(rent['is_active'])
         self.assertEqual(rent['last_generated_date'], '2026-10-05')
+        wifi = next(r for r in rules if r['name'] == 'Home wifi')
+        self.assertTrue(wifi['materialize_all'])
+        self.assertEqual(wifi['upfront_count'], 1)
+        self.assertEqual(wifi['end_date'], '2026-12-05')
+        self.assertEqual(wifi['last_generated_date'], '2026-12-05')
         accountless = next(r for r in rules if r['name'] == 'Accountless rule')
         self.assertIsNone(accountless['account_name'])
         self.assertEqual(accountless['currency_code'], 'PLN')
         self.assertIsNone(accountless['last_generated_date'])
+        self.assertEqual(accountless['upfront_count'], 1)
+        self.assertFalse(accountless['materialize_all'])
+        # The swapped-out key is gone: the no-version-bump contract relies on
+        # old readers defaulting it, so nothing may resurrect it.
+        self.assertNotIn('lead_days', rent)
