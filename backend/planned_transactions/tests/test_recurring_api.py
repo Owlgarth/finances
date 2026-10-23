@@ -14,6 +14,7 @@ from budgeting.factories import BudgetFactory
 from categories.factories import CategoryFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
 from currencies.services import CurrencyCatalogService
+from planned_transactions.exceptions import RecurringTransactionMaterializeAllWithoutEndDateError
 from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
 from planned_transactions.models import PlannedTransaction, RecurringTransaction
 from planned_transactions.services import RecurringTransactionService
@@ -24,8 +25,12 @@ from workspaces.models import WorkspaceMember
 class RecurringApiTestCase(AuthMixin, APIClientMixin, TestCase):
     """Base: one PLN account + one USD account + categories + one active rule.
 
-    The base rule starts 60 days out, so no API request against it generates
-    rows (list/get/delete never generate; create/update generate inline).
+    The base rule's start_date is 60 days in the future and the rule is
+    factory-created, so it starts with ZERO materialized rows (factories
+    never sync-generate - that hook lives in the service create/update
+    paths). API creates and updates against future-dated payloads
+    sync-generate exactly the upfront window, keeping row counts
+    deterministic against timezone.now() at any runtime date.
     """
 
     def setUp(self):
@@ -60,10 +65,13 @@ class RecurringApiTestCase(AuthMixin, APIClientMixin, TestCase):
             'account_id': self.account.id,
             'interval_kind': 'monthly',
             'interval_count': 1,
-            # Future start_date: the create's sync-generate fills only the
-            # default 1-row window (one planned row at the start date),
-            # regardless of runtime date.
+            # Future start_date + default upfront_count=1: the create's
+            # sync-generate materializes exactly ONE pending row (the
+            # rule's first occurrence at start_date) regardless of the
+            # runtime date.
             'start_date': (self.today + timedelta(days=30)).isoformat(),
+            'upfront_count': 1,
+            'materialize_all': False,
         }
         payload.update(overrides)
         return payload
@@ -119,6 +127,9 @@ class TestListRecurring(RecurringApiTestCase):
         # start_date itself), serialized as an ISO date string.
         self.assertEqual(rent_rule['next_occurrence_date'], (self.today + timedelta(days=60)).isoformat())
         self.assertIsNone(rent_rule['last_generated_date'])
+        self.assertEqual(rent_rule['upfront_count'], 1)
+        self.assertFalse(rent_rule['materialize_all'])
+        self.assertNotIn('lead_days', rent_rule)
 
     def test_viewer_can_list(self):
         WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
@@ -135,6 +146,9 @@ class TestCreateRecurring(RecurringApiTestCase):
         self.assertEqual(data['currency_code'], 'PLN')
         self.assertTrue(data['is_active'])
         self.assertEqual(data['interval_kind'], 'monthly')
+        self.assertEqual(data['upfront_count'], 1)
+        self.assertFalse(data['materialize_all'])
+        self.assertNotIn('lead_days', data)
 
     def test_create_accountless_with_currency_returns_201(self):
         payload = self._payload(currency_code='PLN')
@@ -145,25 +159,64 @@ class TestCreateRecurring(RecurringApiTestCase):
         self.assertEqual(data['currency_code'], 'PLN')
 
     def test_create_materializes_first_occurrence_sync(self):
-        """Plan decision 8 through the API: a due rule materializes its first occurrence inline."""
+        """Default upfront_count=1: the rule's first occurrence materializes inline."""
+        data = self.post('/api/recurring-transactions', self._payload(), **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(PlannedTransaction.objects.filter(recurring_id=data['id']).count(), 1)
+        row = PlannedTransaction.objects.get(recurring_id=data['id'])
+        self.assertEqual(row.status, 'pending')
+        self.assertEqual(row.planned_date, self.today + timedelta(days=30))
+        # The pointer advanced in the DB; the response serializes the
+        # in-memory instance created before the generator's locked re-fetch
+        # wrote the pointer, so it honestly reports the pre-write state
+        # (known wire fact, backlog 2026-10-21 - do not "fix").
+        rule = RecurringTransaction.objects.get(id=data['id'])
+        self.assertEqual(rule.last_generated_date, self.today + timedelta(days=30))
+        self.assertIsNone(data['last_generated_date'])
+        self.assertEqual(data['pending_planned_count'], 0)
+
+    def test_create_upfront_count_three_materializes_three_pending_rows(self):
+        # Daily grammar keeps the expected dates pure timedelta math.
         data = self.post(
             '/api/recurring-transactions',
-            self._payload(start_date=self.today.isoformat()),
+            self._payload(interval_kind='daily', upfront_count=3),
             **self.auth_headers(),
         )
         self.assertStatus(201)
-        self.assertEqual(PlannedTransaction.objects.filter(recurring_id=data['id']).count(), 2)
-        row = PlannedTransaction.objects.get(recurring_id=data['id'], planned_date=self.today)
-        self.assertEqual(row.status, 'pending')
-        # Window row (N=1 default): next month's occurrence, generated in the
-        # same transaction. The pointer advanced in the DB; the response
-        # serializes the in-memory instance created before the generator's
-        # locked re-fetch wrote the pointer, so it honestly reports the
-        # pre-write state.
-        second = PlannedTransaction.objects.get(recurring_id=data['id'], planned_date__gt=self.today)
+        rows = PlannedTransaction.objects.filter(recurring_id=data['id'])
+        self.assertEqual(rows.count(), 3)
+        self.assertEqual(
+            {r.planned_date for r in rows},
+            {self.today + timedelta(days=k) for k in (30, 31, 32)},
+        )
+        self.assertTrue(all(r.status == 'pending' for r in rows))
+
+    def test_create_materialize_all_generates_all_occurrences_to_end_date(self):
+        # Daily rule, bounded end 5 days after start: all 6 occurrences
+        # start..end materialize; the upfront window cap is ignored.
+        data = self.post(
+            '/api/recurring-transactions',
+            self._payload(
+                interval_kind='daily',
+                materialize_all=True,
+                end_date=(self.today + timedelta(days=35)).isoformat(),
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        self.assertTrue(data['materialize_all'])
+        rows = PlannedTransaction.objects.filter(recurring_id=data['id'])
+        self.assertEqual(rows.count(), 6)
+        self.assertEqual(
+            {r.planned_date for r in rows},
+            {self.today + timedelta(days=k) for k in range(30, 36)},
+        )
+        # Same pre-generation wire fact as the default-window create above,
+        # under materialize_all.
         rule = RecurringTransaction.objects.get(id=data['id'])
-        self.assertEqual(rule.last_generated_date, second.planned_date)
+        self.assertEqual(rule.last_generated_date, self.today + timedelta(days=35))
         self.assertIsNone(data['last_generated_date'])
+        self.assertEqual(data['pending_planned_count'], 0)
 
     def test_create_accountless_without_currency_returns_400(self):
         payload = self._payload()
@@ -211,9 +264,44 @@ class TestCreateRecurring(RecurringApiTestCase):
         self.assertStatus(400)
         self.assertEqual(data['code'], 'invalid_date_range')
 
+    def test_create_materialize_all_without_end_date_returns_400(self):
+        # Service-level validation: pydantic cannot catch the cross-field rule.
+        data = self.post('/api/recurring-transactions', self._payload(materialize_all=True), **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'materialize_all_requires_end')
+        # Validation fired before the rule INSERT: nothing persisted.
+        self.assertEqual(RecurringTransaction.objects.count(), 1)  # only the base rule
+        self.assertFalse(PlannedTransaction.objects.exists())
+
+    def test_create_materialize_all_over_500_occurrences_returns_400(self):
+        # Daily rule, multi-year end: start today+30 to end today+600 is 571
+        # occurrences > MAX_MATERIALIZE_OCCURRENCES (500).
+        data = self.post(
+            '/api/recurring-transactions',
+            self._payload(
+                interval_kind='daily',
+                materialize_all=True,
+                end_date=(self.today + timedelta(days=600)).isoformat(),
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['code'], 'materialize_all_limit')
+        self.assertFalse(PlannedTransaction.objects.exists())
+
     def test_create_interval_count_below_1_returns_422(self):
         # Pydantic ge=1 fires before the service runs.
         self.post('/api/recurring-transactions', self._payload(interval_count=0), **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_create_upfront_count_above_24_returns_422(self):
+        # Pydantic le=24 fires before the service runs.
+        self.post('/api/recurring-transactions', self._payload(upfront_count=25), **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_create_upfront_count_below_1_returns_422(self):
+        # Pydantic ge=1, mirroring the interval_count bound above.
+        self.post('/api/recurring-transactions', self._payload(upfront_count=0), **self.auth_headers())
         self.assertStatus(422)
 
     def test_create_invalid_interval_kind_returns_422(self):
@@ -296,6 +384,70 @@ class TestUpdateRecurring(RecurringApiTestCase):
         )
         self.assertStatus(400)
         self.assertEqual(data['code'], 'invalid_date_range')
+
+    def test_update_materialize_all_true_sync_generates_to_end_date(self):
+        # Base rule is factory-created (pointer None, zero rows); one
+        # full-replace PUT toggles materialize_all on with a bounded end.
+        data = self.put(
+            f'/api/recurring-transactions/{self.rule.id}',
+            self._payload(
+                interval_kind='daily',
+                materialize_all=True,
+                end_date=(self.today + timedelta(days=35)).isoformat(),
+            ),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertTrue(data['materialize_all'])
+        rows = PlannedTransaction.objects.filter(recurring=self.rule)
+        self.assertEqual(rows.count(), 6)
+        self.assertEqual(
+            {r.planned_date for r in rows},
+            {self.today + timedelta(days=k) for k in range(30, 36)},
+        )
+        # Pre-generation wire fact on the update path too: the instance
+        # serialized was annotated/fetched before sync-generation ran.
+        self.rule.refresh_from_db()
+        self.assertEqual(self.rule.last_generated_date, self.today + timedelta(days=35))
+        self.assertIsNone(data['last_generated_date'])
+        self.assertEqual(data['pending_planned_count'], 0)
+
+    def test_update_extending_end_date_tops_up_new_occurrences_sync(self):
+        # Only occurrences PAST the pointer materialize on the second PUT
+        # (pointer idempotency through the API).
+        first = self._payload(
+            interval_kind='daily', materialize_all=True, end_date=(self.today + timedelta(days=32)).isoformat()
+        )
+        self.put(f'/api/recurring-transactions/{self.rule.id}', first, **self.auth_headers())
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=self.rule).count(), 3)  # +30..+32
+
+        second = self._payload(
+            interval_kind='daily', materialize_all=True, end_date=(self.today + timedelta(days=34)).isoformat()
+        )
+        self.put(f'/api/recurring-transactions/{self.rule.id}', second, **self.auth_headers())
+        self.assertStatus(200)
+        rows = PlannedTransaction.objects.filter(recurring=self.rule)
+        self.assertEqual(rows.count(), 5)  # +33, +34 appeared; +30..+32 not regenerated
+        self.assertEqual(
+            {r.planned_date for r in rows},
+            {self.today + timedelta(days=k) for k in range(30, 35)},
+        )
+
+    def test_update_materialize_all_without_end_date_returns_400(self):
+        # The update-side twin of the create-side 400: update runs the same
+        # _validate_materialize_all guard, and the full-replace PUT is the
+        # only path that can flip a stored rule into the illegal pair.
+        data = self.put(
+            f'/api/recurring-transactions/{self.rule.id}',
+            self._payload(materialize_all=True, end_date=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], str(RecurringTransactionMaterializeAllWithoutEndDateError()))
+        # The stored rule is unchanged - no partial write, no generation.
+        self.rule.refresh_from_db()
+        self.assertFalse(self.rule.materialize_all)
+        self.assertEqual(PlannedTransaction.objects.filter(recurring=self.rule).count(), 0)
 
     def test_viewer_cannot_update_returns_403(self):
         WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
