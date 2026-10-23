@@ -32,12 +32,20 @@ from planned_transactions.exceptions import (
     RecurringTransactionAdoptNotAllowedError,
     RecurringTransactionAdoptNotPendingError,
     RecurringTransactionEndDateError,
+    RecurringTransactionMaterializeAllLimitError,
+    RecurringTransactionMaterializeAllWithoutEndDateError,
     RecurringTransactionNotFoundError,
 )
 from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey, RecurringTransaction
 from planned_transactions.schemas import PlannedTransactionCreate, PlannedTransactionImport, RecurringTransactionCreate
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
+
+# Upper bound on how many remaining occurrences a materialize_all rule may
+# have between its generation seed and end_date. _validate_materialize_all
+# counts them and rejects the rule past this cap, so one generate run can
+# never materialize an unbounded number of rows.
+MAX_MATERIALIZE_OCCURRENCES = 500
 
 
 class PlannedTransactionService:
@@ -548,28 +556,103 @@ class RecurringTransactionService:
         return planned
 
     @staticmethod
+    def _validate_materialize_all(
+        interval_kind: str,
+        interval_count: int,
+        start_date: date,
+        end_date: date | None,
+        materialize_all: bool,
+        last_generated_date: date | None,
+        created_at_date: date,
+    ) -> None:
+        """Raise when materialize_all is set without end_date or past the cap.
+
+        materialize_all makes the generation loop skip the upfront-window
+        BREAK entirely, so two guards run BEFORE any mutation on create and
+        update alike (a rejected rule leaves zero rows/rules behind):
+          - materialize_all requires end_date (else the loop would have no
+            stopping condition other than the cap), and
+          - at most MAX_MATERIALIZE_OCCURRENCES occurrences may remain from
+            the generation seed to end_date.
+
+        The occurrence-count walk seeds exactly like the generation loop
+        (pointer + 1 day, else max(start_date, created_at)) and steps with
+        the rule's NEW schedule on an unsaved probe instance -
+        next_occurrence_on_or_after is pure date math, no DB access. The
+        walk mirrors the loop's no-backfill skip (occurrences before
+        created_at never generate, so they never count) and stops at
+        MAX + 1 counted steps, so it terminates even for an end_date far
+        in the future.
+        """
+        if not materialize_all:
+            return
+        if end_date is None:
+            raise RecurringTransactionMaterializeAllWithoutEndDateError()
+        probe = RecurringTransaction(
+            interval_kind=interval_kind,
+            interval_count=interval_count,
+            start_date=start_date,
+        )
+        search_from = (
+            last_generated_date + timedelta(days=1)
+            if last_generated_date is not None
+            else max(start_date, created_at_date)
+        )
+        count = 0
+        while True:
+            occurrence = probe.next_occurrence_on_or_after(search_from)
+            if occurrence > end_date:
+                return
+            if occurrence >= created_at_date:  # mirror the loop's no-backfill skip
+                count += 1
+                if count > MAX_MATERIALIZE_OCCURRENCES:
+                    raise RecurringTransactionMaterializeAllLimitError()
+            search_from = occurrence + timedelta(days=1)
+
+    @staticmethod
     def _generate_for_rule(rule: RecurringTransaction, today: date) -> int:
-        """Run the catch-up materialization loop for ONE rule; return rows created.
+        """Run the materialization loop for ONE rule; return rows created.
 
         Opens its own atomic and re-fetches the rule with select_for_update so
         last_generated_date is read under the lock (double idempotency guard:
         generate_due's is_active scan is the fast path; this is the locked
         re-check). A rule deleted or paused between scan and lock returns 0.
 
-        Materialization window rule (plan decision 7) - occurrence D generates
-        iff ALL hold:
+        Materialization window rule - the loop maintains the invariant
+        "upfront_count PENDING rows with planned_date > today per rule" (ALL
+        remaining occurrences when materialize_all is set). Occurrence D
+        generates iff ALL hold:
           - D > last_generated_date (candidates step strictly past the pointer;
             a defensive break if the stepper ever fails to advance),
           - D >= rule.created_at.date() (never backfill occurrences predating
             the rule itself; a violation SKIPS forward - it does NOT break,
             because the pointer only advances on generation and a fixed seed
             would deadlock rules created with a past start_date),
-          - today >= D - lead_days (the lead window opened; monotone in D, so a
-            not-yet-open window BREAKS the loop - later occurrences open later),
+          - materialize_all OR D <= today OR future_pending < upfront_count
+            (an occurrence at or before today always generates - catch-up:
+            downtime must not lose rows - and a future one generates while
+            the window has room; monotone within a run because future_pending
+            only grows, so a full window BREAKS - later occurrences would
+            only keep it full),
           - end_date is None OR D <= end_date (monotone in D, BREAKS).
 
-        The pointer advances on every generated OR race-lost occurrence, which is
-        what makes repeated runs idempotent (run twice = same rows).
+        future_pending counts the rule's pending rows with planned_date >
+        today, read under the lock (plain related-manager count - the rule row
+        is what carries the lock), and increments for EVERY future occurrence
+        the loop handles, generated or race-lost: the partial unique
+        constraint only fires when another generator already created the
+        occurrence, so the row exists either way and the window slot is
+        consumed. Worked example (upfront_count=3, monthly rule created
+        2026-10-23 starting Nov 2): creation materializes Nov 2, Dec 2,
+        Jan 2 - three pending future rows; on Nov 2, the day the first row
+        comes due, Feb 2 appears: always 3 pending future rows. The default
+        N=1 reproduces "the next row appears on the previous occurrence's
+        due date". materialize_all rules are capped at
+        MAX_MATERIALIZE_OCCURRENCES remaining occurrences at create/update
+        (see _validate_materialize_all), so the loop is bounded.
+
+        The pointer advances on every generated OR race-lost occurrence, which
+        is what makes repeated runs idempotent (run twice = same rows).
         """
         with db_transaction.atomic():
             locked = RecurringTransaction.objects.select_for_update().filter(id=rule.id).first()
@@ -577,6 +660,9 @@ class RecurringTransactionService:
                 return 0
 
             created = 0
+            # Window count under the lock: done/cancelled rows do not hold a
+            # window slot, only pending ones strictly after today do.
+            future_pending = locked.planned_transactions.filter(status='pending', planned_date__gt=today).count()
             search_from = (
                 locked.last_generated_date + timedelta(days=1)
                 if locked.last_generated_date is not None
@@ -595,10 +681,15 @@ class RecurringTransactionService:
                     # already starts at max(start_date, created_at.date()).
                     search_from = occurrence + timedelta(days=1)
                     continue
-                if today < occurrence - timedelta(days=locked.lead_days):
-                    break  # lead window not open yet; later occurrences open later still
+                if occurrence > today and not locked.materialize_all and future_pending >= locked.upfront_count:
+                    break  # window full - monotone BREAK (later occurrences only keep it full)
                 if PlannedTransactionService.create_from_recurring(locked, occurrence) is not None:
                     created += 1
+                if occurrence > today:
+                    # Race loss consumes a slot too: the constraint fired
+                    # because another generator created this occurrence, so
+                    # the row exists either way.
+                    future_pending += 1
                 # Advance on generation AND on race loss (create_from_recurring
                 # returned None): the constraint only fires when another
                 # generator already created this occurrence, so it is handled.
@@ -662,7 +753,8 @@ class RecurringTransactionService:
         after it and never materializes a duplicate. The adopt fetch runs
         BEFORE the rule create so the pointer rides the single INSERT (no
         second save). Sync-generation then materializes the first due
-        occurrence(s) inline before the rule is returned.
+        occurrence(s) - the full upfront window for a future-starting rule -
+        inline before the rule is returned.
         """
         account = PlannedTransactionService._resolve_account(workspace_id, data.account_id)
         currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
@@ -672,6 +764,19 @@ class RecurringTransactionService:
         planned = None
         if data.adopt_planned_id is not None:
             planned = RecurringTransactionService._get_adoptable_planned(workspace_id, data.adopt_planned_id)
+
+        # Before any INSERT. Needs the adopt pointer (it is the seed the
+        # generator will start from), so it runs after the adopt fetch;
+        # created_at is "now" - the INSERT stamps the same transaction's clock.
+        RecurringTransactionService._validate_materialize_all(
+            interval_kind=data.interval_kind,
+            interval_count=data.interval_count,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            materialize_all=data.materialize_all,
+            last_generated_date=planned.planned_date if planned is not None else None,
+            created_at_date=timezone.now().date(),
+        )
 
         rule = RecurringTransaction.objects.create(
             workspace_id=workspace_id,
@@ -683,7 +788,8 @@ class RecurringTransactionService:
             interval_kind=data.interval_kind,
             interval_count=data.interval_count,
             start_date=data.start_date,
-            lead_days=data.lead_days,
+            upfront_count=data.upfront_count,
+            materialize_all=data.materialize_all,
             end_date=data.end_date,
             is_active=data.is_active,
             last_generated_date=planned.planned_date if planned is not None else None,
@@ -714,8 +820,16 @@ class RecurringTransactionService:
         Pause/resume is a plain update (is_active in the PUT body), not a
         dedicated endpoint. Edits are future-only: already-materialized
         planned rows are never rewritten here, and the last_generated_date
-        pointer is untouched so generation never re-emits past
-        occurrences. adopt_planned_id is create-only and rejected here.
+        pointer is untouched so generation never re-emits past occurrences.
+        adopt_planned_id is create-only and rejected here. After the save,
+        the same sync-generate call create makes runs in this transaction:
+        it tops up the materialization window (or the materialize-all gap)
+        immediately - extend end_date, raise upfront_count, toggle
+        materialize_all, or resume a paused rule and the new rows land now;
+        a rule saved with is_active=false generates nothing (the locked
+        re-check guard). The wire response still serializes the
+        PRE-generation state (last_generated_date / pending_planned_count
+        as of the save) - pinned by tests; no re-fetch is added.
         """
         rule = RecurringTransactionService.get_recurring(rule_id, workspace_id)
         if data.adopt_planned_id is not None:
@@ -725,6 +839,18 @@ class RecurringTransactionService:
         currency = PlannedTransactionService._resolve_currency(workspace_id, account, data.currency_code)
         PlannedTransactionService._validate_category(data.category_id, workspace_id)
         RecurringTransactionService._validate_end_date(data.start_date, data.end_date)
+        # Before any mutation: the walk seeds from the rule's EXISTING pointer
+        # and created_at (edits are future-only; the pointer never moves here)
+        # but steps with the NEW schedule the payload carries.
+        RecurringTransactionService._validate_materialize_all(
+            interval_kind=data.interval_kind,
+            interval_count=data.interval_count,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            materialize_all=data.materialize_all,
+            last_generated_date=rule.last_generated_date,
+            created_at_date=rule.created_at.date(),
+        )
 
         rule.account = account
         rule.currency = currency
@@ -734,11 +860,17 @@ class RecurringTransactionService:
         rule.interval_kind = data.interval_kind
         rule.interval_count = data.interval_count
         rule.start_date = data.start_date
-        rule.lead_days = data.lead_days
+        rule.upfront_count = data.upfront_count
+        rule.materialize_all = data.materialize_all
         rule.end_date = data.end_date
         rule.is_active = data.is_active
         rule.updated_by = user
         rule.save()
+
+        # Sync-generate with the same call create makes. The generator
+        # re-fetches its own locked instance, so `rule` here keeps the
+        # pre-generation state the response serializes (wire fact, no fix).
+        RecurringTransactionService._generate_for_rule(rule, timezone.now().date())
         return rule
 
     @staticmethod
@@ -767,7 +899,8 @@ class RecurringTransactionService:
         Each rule materializes in its own transaction (see _generate_for_rule),
         so a failure on one rule leaves earlier rules' rows and pointers
         committed; the task's autoretry re-runs the whole pass and every
-        already-generated rule is a no-op thanks to the pointer. Safe to run any
+        already-caught-up rule is a no-op thanks to the pointer plus the full
+        upfront window. Safe to run any
         number of times, from beat, manually, or concurrently with itself (the
         partial unique constraint is the hard duplicate guard).
 

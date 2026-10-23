@@ -68,3 +68,13 @@ class RecurringTransactionAdoptNotPendingError(ValidationError):
 class RecurringTransactionAdoptAlreadyLinkedError(ValidationError):
     default_message = gettext_lazy('Planned transaction is already linked to a recurring rule')
     default_code = 'adopt_already_linked'
+
+
+class RecurringTransactionMaterializeAllWithoutEndDateError(ValidationError):
+    default_message = gettext_lazy('Materializing all occurrences requires an end date')
+    default_code = 'materialize_all_requires_end'
+
+
+class RecurringTransactionMaterializeAllLimitError(ValidationError):
+    default_message = gettext_lazy('Materializing all occurrences would exceed the allowed limit')
+    default_code = 'materialize_all_limit'
