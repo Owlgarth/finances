@@ -49,6 +49,8 @@ A transaction's currency **is** its account's currency — there is no separate
 `currency` FK. Categories belong to a `Budget` (via `CategoryFactory(budget=...)`),
 not to a period.
 
+**Round-trip and echo pins need non-default factory values** - a default-value round-trip proves nothing (defaults survive trivially): a GDPR export/import test sets `upfront_count=3` and pairs `materialize_all=True` with an `end_date` (the DB check constraint forbids the flag alone), so each field's survival is individually observable.
+
 ## AuthMixin
 
 ```python
@@ -124,7 +126,7 @@ class TestMyFeature(TestCase):
 
 Only patch `on_commit` for the specific tests that need it - never globally, and never on code that does not call `on_commit` at all: an inert patch passes trivially and proves nothing about the code under test (23 such patches were deleted in one audit-remediation sweep).
 
-**Pin the production contract, not the eager-mode artifact.** With dispatch deferred to commit, the synchronous response reflects pre-worker state (e.g. `transaction_id: null`) - under `ALWAYS_EAGER` plus an immediate-on_commit patch, old tests "saw" the task's row, an artifact no production path produces. Assert the null; when the worker's effect matters, capture with `execute=True` and assert after the block. Dispatch placement itself is in the `celery-tasks` skill.
+**Pin the production contract, not the eager-mode artifact.** With dispatch deferred to commit, the synchronous response reflects pre-worker state (e.g. `transaction_id: null`) - under `ALWAYS_EAGER` plus an immediate-on_commit patch, old tests "saw" the task's row, an artifact no production path produces. Assert the null; when the worker's effect matters, capture with `execute=True` and assert after the block. Dispatch placement itself is in the `celery-tasks` skill. The separate-instance variant (side effects that run on a re-fetched instance inside the same request, not a deferred task - the recurring generator re-fetches the rule under lock) pins the same way on EVERY mutation path: assert the response's PRE-side-effect value AND the advanced value in the DB via a fresh query, so a future "fix" that re-fetches before returning breaks tests loudly instead of silently changing the wire (the design rule is in the `django-backend` skill).
 
 ## Testing Token Expiry
 
@@ -239,6 +241,20 @@ with mock.patch.object(
 
 When a private helper's signature changes, grep its test doubles in the same task — `side_effect=fake` stubs must widen with the real method's parameters.
 
+## Testing DB Check Constraints Directly
+
+A model-level check constraint (not reachable through the API, which 422s first via the mirrored schema bounds - see `django-backend`) is testable service-side with factory creates wrapped in a per-case savepoint:
+
+```python
+for bad in (0, 25):
+    with self.assertRaises(IntegrityError):
+        with db_transaction.atomic():  # SAVEPOINT - isolates the rollback
+            RecurringTransactionFactory(workspace=self.workspace, upfront_count=bad)
+self.assertEqual(RecurringTransaction.objects.count(), 0)
+```
+
+The nested `atomic()` is load-bearing: the `IntegrityError` poisons the TestCase's outer transaction (every later query would raise `TransactionManagementError`), and the savepoint rollback keeps the test usable. A trailing count pins that the poisoned creates stored nothing.
+
 ## Testing Data-Migration Functions (Direct Call)
 
 A `RunPython` function is testable by calling it directly against seeded rows - `func(django.apps.apps, schema_editor=None)` - which bypasses the migration recorder BY DESIGN: the test proves the function's effect on rows, not Django's migration-state machinery. The migration module loads via `importlib.import_module` because the file name (`0012_transactionitem_coverage_repair`) starts with a digit and is not a valid identifier.
@@ -294,6 +310,10 @@ When a task deliberately changes a behavior, the tests pinning the OLD behavior 
 **The rewrite census greps the FIELD NAME across ALL apps' test files**, not just the owning app's tests - a payload-field rename (`currency_code` → `currency_codes` on register/account-reset) also lives in `currencies/tests.py`'s registration test, and Pydantic's `extra='ignore'` silently drops the stale key from the payload (no 422), so the failure surfaces only as a downstream order assertion, far from the change that caused it. Behavior changes rewrite their tests WHEREVER the tests pin them.
 
 The same `extra='ignore'` tolerance makes clean-break sequencing forgiving across the stack: until the matching frontend task lands, the old key in the client's payload is silently dropped and defaults apply - no breakage window between the backend and frontend commits of a squash-merged PR.
+
+**A deliberately dropped wire key is pinned with `assertNotIn` - extra tolerance makes silence the default failure mode.** Pydantic's `extra='ignore'` swallows a stale key in either direction with no 422, so nothing except an explicit `self.assertNotIn('lead_days', data)` catches a half-finished rename or a regression that resurrects the field. Send the replacement fields from every payload helper so the pin exercises the real call shape.
+
+**Expected values derive from the landed code, never from the plan text.** Row counts come from the landed loop (a today-start recurring rule materializes the catch-up row plus one window row; a future-start rule with `upfront_count=1` exactly one row at `start_date`), and 400 assertions use the landed `default_code` literals byte-for-byte - probe `exceptions.py` first, a spec's guessed literals are always wrong. When a behavior change alters what every run produces, re-derive sibling test counts from the source instead of incrementing blindly; test comments enumerating each fixture's contribution are the cross-check.
 
 ## URL-Pinning Tests Call the Exact Client URL
 
