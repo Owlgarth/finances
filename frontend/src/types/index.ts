@@ -254,6 +254,34 @@ export interface RecurringTransaction {
   updated_at: string | null;
 }
 
+/**
+ * Personal quick-access bookmark (one user's rows per workspace). Budget
+ * bookmarks capture a budget + currency view (no period - periods rot);
+ * filter bookmarks capture the page's URL query params verbatim as a dict
+ * of single strings (CSV lists inside one value, as the pages write them).
+ */
+export interface Bookmark {
+  id: number;
+  kind: 'budget' | 'transactions' | 'planned';
+  name: string;
+  /** Registry key from components/bookmarks/bookmarkMeta.tsx; null = fallback glyph. */
+  icon: string | null;
+  /** Swatch KEY from BOOKMARK_COLOR_KEYS (never a hex value); null = muted fallback. */
+  color: string | null;
+  /** Sparse ordering - the manage page's up/down order, never renumbered. */
+  position: number;
+  /** Sidebar/More-sheet visibility (the row stays on the manage page when off). */
+  is_active: boolean;
+  /** Hidden everywhere except the manage page's Archived section. */
+  is_archived: boolean;
+  /** budget_id + currency_code are set iff kind = 'budget'. */
+  budget_id: number | null;
+  budget_name: string | null;
+  currency_code: string | null;
+  /** Saved filter params, used iff kind != 'budget' ({} = plain page link). */
+  params: Record<string, string>;
+}
+
 // ============= Reports =============
 
 export interface BudgetSummaryItem {
@@ -314,6 +342,7 @@ export interface UserPreferences {
   font_family: string;
   language: string;
   number_format: string;
+  bookmark_visible_limit: number;
 }
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';

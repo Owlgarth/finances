@@ -9,6 +9,7 @@ import {
   Globe,
   Home,
   Landmark,
+  ListPlus,
   Loader2,
   LogOut,
   MoreHorizontal,
@@ -33,10 +34,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
+import { useVisibleBookmarks } from '../../hooks/useBookmarks'
 import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
 import { useLanguage } from '../../i18n/LanguageContext'
+import { bookmarkIsActive, bookmarkTargetPath } from '../../utils/bookmarks'
 import { getApiErrorMessage } from '../../utils/errors'
 import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
+import { BookmarkGlyph } from '../bookmarks/bookmarkMeta'
 import { openPageSearch } from '../common/CommandPalette'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
 import BottomSheet from '../common/BottomSheet'
@@ -116,6 +120,9 @@ export default function BottomNav() {
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const { language } = useLanguage()
+  // Shared derivation (hooks/useBookmarks): the sheet's bookmarks section
+  // follows the same visibility rule and cap as the sidebar's.
+  const { any: anyBookmarks, visible: visibleBookmarks } = useVisibleBookmarks()
 
   const [moreOpen, setMoreOpen] = useState(false)
   // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
@@ -172,14 +179,17 @@ export default function BottomNav() {
 
   // Close the More sheet when navigation happens from inside it; the create
   // and language modals follow suit so no modal outlives the page it was
-  // opened on. Prev-pathname render adjust (P3): NavLink taps and browser
-  // back/forward change location.pathname with no event handler this
-  // component sees, so there is no P4 seam. The latch initializes to the
-  // current pathname, so unlike the old effect it does not fire on mount -
-  // where all three flags are already false (the old mount-run was a no-op).
-  const [prevPathname, setPrevPathname] = useState(location.pathname)
-  if (prevPathname !== location.pathname) {
-    setPrevPathname(location.pathname)
+  // opened on. Prev-path render adjust (P3): NavLink taps and browser
+  // back/forward change the location with no event handler this component
+  // sees, so there is no P4 seam. The key is pathname PLUS search: bookmark
+  // rows navigate same-pathname-different-filters (a transactions bookmark
+  // tapped from /transactions), which a pathname-only latch would never
+  // see. The latch initializes to the current path, so unlike the old
+  // effect it does not fire on mount - where all three flags are already
+  // false (the old mount-run was a no-op).
+  const [prevPath, setPrevPath] = useState(location.pathname + location.search)
+  if (prevPath !== location.pathname + location.search) {
+    setPrevPath(location.pathname + location.search)
     setMoreOpen(false)
     setCreateWorkspaceOpen(false)
     setLangOpen(false)
@@ -201,7 +211,12 @@ export default function BottomNav() {
     { label: t('quickAdd.recurringRule'), icon: Repeat, onSelect: () => setRecurringOpen(true) },
   ]
 
-  const moreActive = MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to))
+  // /bookmarks is a More-tab destination but not a MORE_DESTINATIONS row -
+  // its entry point is the bookmarks section's Manage link below - so it
+  // joins the tab-highlight check separately.
+  const moreActive =
+    MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to)) ||
+    location.pathname.startsWith('/bookmarks')
   const activeLanguage = registry.languages.find((l) => l.code === language)
 
   return (
@@ -283,6 +298,28 @@ export default function BottomNav() {
             <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
             {t('logout')}
           </button>
+
+          {anyBookmarks && (
+            <div className="border-t border-border mt-2">
+              <SectionLabel>{t('bookmarks')}</SectionLabel>
+              {visibleBookmarks.map((b) => (
+                <NavLink
+                  key={b.id}
+                  to={bookmarkTargetPath(b)}
+                  className={() =>
+                    `${moreRowClass} ${bookmarkIsActive(b, location) ? 'font-medium bg-surface-hover' : ''}`
+                  }
+                >
+                  <BookmarkGlyph bookmark={b} size={16} strokeWidth={1.5} />
+                  <span className="truncate flex-1">{b.name}</span>
+                </NavLink>
+              ))}
+              <NavLink to="/bookmarks" className={moreRowClass}>
+                <ListPlus size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                {t('bookmarksManage')}
+              </NavLink>
+            </div>
+          )}
 
           <div className="border-t border-border mt-2">
             <SectionLabel>{t('workspace')}</SectionLabel>

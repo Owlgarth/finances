@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
+import { ArrowLeft, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
@@ -19,6 +19,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
+import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
@@ -62,6 +63,7 @@ const stripNumberClass = (isActive: boolean, summaryLoading: boolean): string =>
 export default function BudgetDetailPage() {
   const { t } = useTranslation('budgets')
   const { t: tCommon } = useTranslation('common')
+  const { t: tBookmarks } = useTranslation('bookmarks')
   const { id } = useParams<{ id: string }>()
   const budgetId = Number(id)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -92,6 +94,16 @@ export default function BudgetDetailPage() {
   const periodParamRef = useRef<number | null>(intParam(searchParams, 'period'))
   useEffect(() => {
     periodParamRef.current = intParam(searchParams, 'period')
+  }, [searchParams])
+
+  // ?currency= deep-link seed (budget bookmarks), as a latest-ref - same
+  // shape and same declaration constraint as periodParamRef above: the sync
+  // effect must run before the [budgetId] reset effect below, so on mount
+  // and on budget-to-budget navigation the ref already holds the NEW URL's
+  // value when the reset seeds the view currency from it.
+  const currencyParamRef = useRef<string | null>(searchParams.get('currency'))
+  useEffect(() => {
+    currencyParamRef.current = searchParams.get('currency')
   }, [searchParams])
 
   // Default to the current period (materialize it lazily on load). The
@@ -267,6 +279,10 @@ export default function BudgetDetailPage() {
   // Category management (archive/merge/delete) lives in its own mount-per-use
   // modal; this flag is its open/close.
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
+  // Add-bookmark modal (mount-per-use). A plain boolean suffices: the header
+  // button is the only opener, so a close-then-reopen always renders a closed
+  // state in between and the remount re-seeds the form.
+  const [bookmarkModalOpen, setBookmarkModalOpen] = useState(false)
   const openPeriodModal = (mode: 'add' | 'edit', period: Period | null = null) =>
     setPeriodModal({ mode, period, nonce: Date.now() })
 
@@ -364,10 +380,16 @@ export default function BudgetDetailPage() {
   // this same effect (not a new one) so the set-state-in-effect warning count
   // stays put — the rule flags once per effect, not per call.
   useEffect(() => {
-    // Re-open the budget on its last-viewed currency. Stale codes resolve at
-    // render - the active-index derivation falls back to index 0 (first
-    // configured) when the code is absent.
-    setViewCurrency(storedViewRef.current)
+    // Re-open the budget on the ?currency= deep-link seed (budget bookmark),
+    // else its last-viewed currency. The seed writes neither the URL nor
+    // localStorage - selectCurrency keeps owning persistence - and a stale
+    // code resolves at render: the active-index derivation below falls back
+    // to index 0 (first configured) when the code is absent.
+    // (Local const: a setState argument coalescing two ref reads directly
+    // trips set-state-in-effect, while a single ref read or a seeded local
+    // passes - the ref-write-only sync effects keep this seed lint-quiet.)
+    const seededCurrency = currencyParamRef.current ?? storedViewRef.current
+    setViewCurrency(seededCurrency)
     // Seed from ?period= (deep link / reload) instead of resetting to null.
     // The ref-sync effect declared above has already run for this commit, so
     // the ref holds THIS URL's value (null when no param). Sanctioned
@@ -557,6 +579,10 @@ export default function BudgetDetailPage() {
       }
     })
 
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addLabel = tBookmarks('addLabel')
+
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
       <Link to="/budgets" className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]">
@@ -639,11 +665,23 @@ export default function BudgetDetailPage() {
             )}
           </div>
         )}
-        {canWrite && (
-          <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
-            <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
+        {/* Header action group: the labeled actions wrap as ONE unit so
+            justify-between can never fling them to opposite ends of the row,
+            and a wrapping row carries them together. The group itself wraps
+            only when the two buttons cannot share a line at all. */}
+        <div className="flex flex-wrap items-center gap-3">
+          {canWrite && (
+            <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
+              <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
+            </button>
+          )}
+          {/* Add bookmark, labeled like its sibling header action. Any role -
+              personal resource: a bookmark is the user's own convenience view,
+              never a workspace mutation. Always the create flow in v1. */}
+          <button type="button" onClick={() => setBookmarkModalOpen(true)} className={secondaryButtonClass}>
+            <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
           </button>
-        )}
+        </div>
       </div>
 
       {isPast && (
@@ -915,6 +953,17 @@ export default function BudgetDetailPage() {
 
       {manageCategoriesOpen && (
         <ManageCategoriesModal budgetId={budgetId} onClose={() => setManageCategoriesOpen(false)} />
+      )}
+
+      {bookmarkModalOpen && (
+        <BookmarkFormModal
+          budgetContext={{
+            budgetId,
+            budgetName: budget?.name ?? '',
+            currencyCode: activeCurrency,
+          }}
+          onClose={() => setBookmarkModalOpen(false)}
+        />
       )}
 
       <ConfirmDialog
