@@ -1,6 +1,6 @@
 ---
-version: "2.2"
-effective_date: "2026-10-21"
+version: "2.3"
+effective_date: "2026-10-26"
 ---
 
 ## 1. Introduction
@@ -37,6 +37,7 @@ By registering for Owlgarth Finances, you agree to the collection and use of inf
 **Preferences:**
 
 - Calendar start day preference
+- Bookmarks you create (names, icons, colors, and saved view filters)
 
 **Security data:**
 

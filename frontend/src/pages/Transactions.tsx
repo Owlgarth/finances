@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
+import { BookmarkPlus, Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction } from '../types'
@@ -13,8 +13,10 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
+import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
@@ -67,6 +69,7 @@ function readStoredSearch(): string {
 
 export default function Transactions() {
   const { t } = useTranslation('transactions')
+  const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -155,8 +158,10 @@ export default function Transactions() {
     Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
 
-  // Deep links with filters land with the panel already open.
-  const [filtersOpen, setFiltersOpen] = useState(activeFilterCount > 0)
+  // The panel opens only through the toggle - never automatically. Deep
+  // links and bookmarks apply their filters silently; the toggle's badge
+  // count is the visible signal that filters are active.
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
   const clearFilters = () =>
@@ -168,6 +173,9 @@ export default function Transactions() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [copySource, setCopySource] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  // Bookmark capture of the current filter view (mount-per-use modal): the
+  // target derives from the URL at open time, so a boolean is the whole state.
+  const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', page, pageSize, ordering, search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
@@ -242,6 +250,11 @@ export default function Transactions() {
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
 
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addBookmarkTitle = tBookmarks('addTransactionsAria')
+  const addLabel = tBookmarks('addLabel')
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -266,22 +279,38 @@ export default function Transactions() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
+      {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
+          cannot share one line with the search box on 320px screens, so the
+          row wraps: the search box claims the full first line (its
+          max-sm:basis-full below), the controls flow onto the next. min-w-0
+          lets the search box shrink where the row still holds one line. */}
+      <div className="flex max-sm:flex-wrap gap-2 mb-3">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
           placeholder={t('searchPlaceholder')}
           aria-label={t('searchAria')}
-          className="flex-1 max-w-sm max-sm:max-w-none"
+          className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+            label on one line so the flex-1 SearchInput is the row member
+            that yields on narrow screens. */}
+        <button
+          type="button"
+          onClick={() => setPageBookmarkOpen(true)}
+          title={addBookmarkTitle}
+          className={`${secondaryButtonClass} flex-shrink-0`}
+        >
+          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
+        </button>
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
           options={sortOptions}
           placeholder={t('sort.newest')}
           aria-label={t('sortAria')}
-          className="w-48 flex-shrink-0"
+          className="w-48 max-sm:w-24 flex-shrink-0"
         />
       </div>
 
@@ -420,6 +449,12 @@ export default function Transactions() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      {pageBookmarkOpen && (
+        <BookmarkFormModal
+          pageContext={{ kind: 'transactions', params: paramsFromSearchParams(searchParams) }}
+          onClose={() => setPageBookmarkOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -35,5 +35,7 @@
     "plannedTransaction": "Zaplanowana transakcja"
   },
   "receiptReading": "Czytanie paragonu…",
+  "bookmarks": "Zakładki",
+  "bookmarksManage": "Zarządzaj zakładkami",
   "receiptReadFailed": "Nie udało się odczytać paragonu"
 }

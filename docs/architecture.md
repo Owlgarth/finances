@@ -44,6 +44,9 @@ Workspace (top-level container)
 ├── WorkspaceMember          (user access + role)
 ├── WorkspaceCurrency        (which catalog currencies are enabled here; stored
 │                             position orders them - first = workspace primary)
+├── Bookmark                 (personal quick links - one user's saved views: a
+│                             budget + currency, or a transactions/planned
+│                             filter set)
 │
 ├── Account                  (cash / bank / other; holds money in one currency)
 │     ├── Transaction        (income / expense / adjustment; optional category; optionally on this
@@ -85,6 +88,20 @@ Workspace (top-level container)
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); it must differ from the transaction's own currency, and the facet amount itself is informational and excluded from aggregates. When an original-currency account is selected, an auto-created linked adjustment records the movement on that account; the managed adjustment row is editable only via its source transaction. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. A faceted payment auto-creates one (nullable `source_transaction` self-FK on Transaction); these rows are managed by their source and cannot be edited or deleted directly. |
 | **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
+
+**Bookmarks** are personal, per-workspace quick links: each row belongs to one
+user (members see only their own; any role can create them). Three kinds: a
+budget bookmark opens that budget with a chosen currency preselected (no period
+is captured - it opens on the current period); transactions and planned
+bookmarks store the page's URL filter params verbatim, and empty params is a
+plain page link. Active bookmarks render in the desktop sidebar and the mobile
+More sheet, capped by the user's `bookmark_visible_limit` preference (3, 5, 8,
+or all; default 5); the manage page at `/bookmarks` reorders them and toggles
+visibility, archive, edit, and delete (archived rows hide everywhere except the
+manage page's Archived section; deleting a budget deletes its bookmarks). They
+ride the GDPR export/import with filter params translated between IDs and
+names (accounts and budgets by name, categories as `budgetName::categoryName`
+qualified pairs).
 
 ### Multi-Workspace Support
 
@@ -134,6 +151,8 @@ backend/
 ├── planned_transactions/   # Scheduled + recurring transactions
 │   └── tasks.py            # Celery tasks: execute_planned_transaction,
 │                           #   generate_recurring_transactions (daily beat)
+├── bookmarks/              # Personal per-workspace bookmarks (budget +
+│                           #   currency view or saved filter params)
 ├── reports/                # budget-summary, budget-history (planned vs actual), current-balances
 └── locale/                 # gettext catalogs (uk/pl) for translated API error messages
 ```
@@ -203,10 +222,12 @@ frontend/src/
 │   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu, LanguageModal
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
+│   ├── bookmarks/          # bookmarkMeta (bookmark icon + color registry)
 │   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
+│   ├── modals/bookmarks/   # BookmarkFormModal (create/edit bookmarks)
 │   └── modals/transactions/# Transaction / Planned modals (receipt-first create is a
 │                           #   TransactionFormModal mode seeded via its prefillReceipt
 │                           #   prop from the mobile "From receipt" action)
@@ -219,7 +240,7 @@ frontend/src/
 │   ├── useDomain.ts            # useAccounts, useBudgets, useEnabledCurrencies,
 │   │                          #   useMultiCurrency, useExtractionEnabled
 │   ├── usePermissions.ts       # canManageAccounts, canWrite, …
-│   └── (other hooks)           # useAttachments, useListboxPanel,
+│   └── (other hooks)           # useAttachments, useBookmarks, useListboxPanel,
 │                              #   useWorkspaceSwitch, useMediaQuery,
 │                              #   useBreakpoint, useDebouncedField, useOverlay
 ├── i18n/                   # i18next bootstrap (synchronous, before first render),
@@ -228,8 +249,8 @@ frontend/src/
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
 │                           #   Transfers (no sidebar slot - reached from
-│                           #   Accounts and the command palette), Members,
-│                           #   Settings, plus auth/legal pages (Login, Register,
+│                           #   Accounts and the command palette), Bookmarks,
+│                           #   Members, Settings, plus auth/legal pages (Login, Register,
 │                           #   VerifyEmail, ConfirmEmailChange, ReConsent,
 │                           #   PrivacyPolicy, Terms, NotFound)
 ├── utils/                  # format, errors, pageSize, params, transactionItems,
@@ -274,6 +295,7 @@ const { data } = useQuery({
 | `transfers_transfer` | Money moved between accounts |
 | `planned_transactions` | Scheduled transactions |
 | `recurring_transactions` | Recurrence rules that materialize planned transactions |
+| `bookmarks` | Personal quick-access bookmarks (budget + currency view or a saved filter set), one row per user per workspace |
 
 ### Workspace-Scoped Queries
 

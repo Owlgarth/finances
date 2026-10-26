@@ -108,6 +108,10 @@ class UserPreferences(models.Model):
         default=settings.DEFAULT_NUMBER_FORMAT,
         help_text='Number and date formatting style from the language registry',
     )
+    bookmark_visible_limit = models.PositiveSmallIntegerField(
+        default=5,
+        help_text='How many bookmarks render in the sidebar and More menu (0 = all)',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

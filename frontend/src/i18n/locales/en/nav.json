@@ -35,5 +35,7 @@
     "plannedTransaction": "Planned transaction"
   },
   "receiptReading": "Reading receipt…",
+  "bookmarks": "Bookmarks",
+  "bookmarksManage": "Manage bookmarks",
   "receiptReadFailed": "Could not read the receipt"
 }

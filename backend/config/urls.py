@@ -10,6 +10,7 @@ from django.urls import path
 from ninja import NinjaAPI
 
 from accounts.api import router as accounts_router
+from bookmarks.api import router as bookmarks_router
 from budgeting.api import router as budgeting_router
 from common.exceptions import ServiceError
 from core.api import router as auth_router
@@ -40,6 +41,7 @@ api.add_router('/auth', auth_router)
 api.add_router('/legal', legal_router)
 api.add_router('/users', users_router)
 api.add_router('/accounts', accounts_router)
+api.add_router('/bookmarks', bookmarks_router)
 api.add_router('/budgets', budgeting_router)
 api.add_router('/currencies', currencies_router)
 api.add_router('/planned-transactions', planned_transactions_router)

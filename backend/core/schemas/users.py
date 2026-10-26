@@ -29,17 +29,20 @@ class UserPreferencesOut(BaseModel):
     font_family: str
     language: str
     number_format: str
+    bookmark_visible_limit: int
 
 
 class UserPreferencesUpdate(BaseModel):
     """User preferences update schema.
 
     Plain optional fields: semantic validation (registry membership, weekday
-    range) lives in UserService.update_preferences and raises a translated
-    400; Pydantic still rejects wrong-typed payloads with 422.
+    range, bookmark cap allowlist) lives in UserService.update_preferences
+    and raises a translated 400; Pydantic still rejects wrong-typed payloads
+    with 422. None means "unchanged" for every field.
     """
 
     calendar_start_day: int | None = None
     font_family: str | None = None
     language: str | None = None
     number_format: str | None = None
+    bookmark_visible_limit: int | None = None

@@ -13,6 +13,8 @@ from django.test import TestCase
 
 from accounts.factories import AccountFactory
 from accounts.models import Account
+from bookmarks.factories import BookmarkFactory
+from bookmarks.models import Bookmark
 from budgeting.factories import BudgetFactory
 from budgeting.models import Budget, BudgetCurrency, CategoryBudget, Period
 from budgeting.services import PeriodService
@@ -1398,3 +1400,204 @@ class AccountDeletionOrphanTests(AuthMixin, TestCase):
         self.assertFalse(RecurringTransaction.objects.filter(workspace_id=ws_id).exists())
         self.assertFalse(PlannedTransaction.objects.filter(workspace_id=ws_id).exists())
         self.assertFalse(Account.objects.filter(workspace_id=ws_id).exists())
+
+
+class V3BookmarkImportTests(AuthMixin, TestCase):
+    """Bookmark round-trip, stale-file tolerance, hand-edited degradation."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _v3(self, **ws_extra):
+        ws = {'workspace_name': 'Imported Workspace', 'enabled_currencies': [], 'accounts': [], 'budgets': []}
+        ws.update(ws_extra)
+        return {'export_version': '3.0', 'workspaces': [ws]}
+
+    def _bookmark_row(self, **overrides):
+        row = {
+            'name': 'Card spends',
+            'icon': 'bookmark',
+            'color': 'neutral',
+            'kind': 'transactions',
+            'budget_name': None,
+            'currency_code': None,
+            'params_names': {},
+            'position': 0,
+            'is_active': True,
+            'is_archived': False,
+        }
+        row.update(overrides)
+        return row
+
+    def test_bookmarks_round_trip_preserves_targets_order_flags_and_cap(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        cash = AccountFactory(workspace=self.workspace, name='Cash')
+        card = AccountFactory(workspace=self.workspace, name='Card', currency=cash.currency)
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        food = CategoryFactory(budget=budget, workspace=self.workspace, name='Food')
+        BookmarkFactory(
+            user=self.user,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            budget=budget,
+            currency_code='PLN',
+            name='Household PLN',
+            position=0,
+        )
+        BookmarkFactory(
+            user=self.user,
+            budget=None,
+            currency_code=None,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            kind='transactions',
+            name='Card spends',
+            position=1,
+            is_active=False,
+            params={'account': f'{cash.id},{card.id}', 'category': str(food.id), 'type': 'expense'},
+        )
+        BookmarkFactory(
+            user=self.user,
+            budget=None,
+            currency_code=None,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            kind='planned',
+            name='All planned',
+            position=2,
+            is_archived=True,
+        )
+        preferences = UserService.get_or_create_preferences(self.user)
+        preferences.bookmark_visible_limit = 8
+        preferences.save(update_fields=['bookmark_visible_limit'])
+
+        export = UserService.export_all_data(self.user)
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 3)
+        self.assertEqual(result['skipped']['errors'], [])
+        # Workspace ambiguity (skill rule): the imported copy is renamed, so
+        # exclude the AuthMixin workspace instead of matching the new name.
+        imported_ws = Workspace.objects.filter(owner=self.user).exclude(id=self.workspace.id).get()
+        restored = list(Bookmark.objects.filter(user=self.user, workspace=imported_ws).order_by('position', 'id'))
+        self.assertEqual([b.name for b in restored], ['Household PLN', 'Card spends', 'All planned'])
+        self.assertEqual([b.position for b in restored], [0, 1, 2])
+        budget_bm, tx_bm, planned_bm = restored
+        # SAME resolved ids, derived from the RECREATED entities (names in
+        # the new workspace), not from the source workspace's ids.
+        new_cash = Account.objects.get(workspace=imported_ws, name='Cash')
+        new_card = Account.objects.get(workspace=imported_ws, name='Card')
+        new_food = Category.objects.get(workspace=imported_ws, name='Food')
+        self.assertEqual(budget_bm.budget_id, Budget.objects.get(workspace=imported_ws, name='Household').id)
+        self.assertEqual(budget_bm.currency_code, 'PLN')
+        self.assertEqual(
+            tx_bm.params,
+            {'account': f'{new_cash.id},{new_card.id}', 'category': str(new_food.id), 'type': 'expense'},
+        )
+        self.assertFalse(tx_bm.is_active)
+        self.assertTrue(planned_bm.is_archived)
+        self.assertEqual(planned_bm.params, {})
+        preferences.refresh_from_db()
+        self.assertEqual(preferences.bookmark_visible_limit, 8)
+
+    def test_legacy_export_without_bookmarks_section_imports_clean(self):
+        """Pre-bookmarks v3 files lack the key (and the preferences key) - no crash, no rows."""
+        export = self._v3(accounts=[{'name': 'Main', 'currency_code': 'PLN'}])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 0)
+        self.assertEqual(result['skipped']['errors'], [])
+        self.assertEqual(Bookmark.objects.filter(user=self.user).exclude(workspace=self.workspace).count(), 0)
+
+    def test_unresolvable_account_in_params_drops_id_with_error(self):
+        """The recorded divergence: one bad id drops, the bookmark still imports."""
+        export = self._v3(
+            accounts=[{'name': 'Main', 'currency_code': 'PLN'}],
+            bookmarks=[self._bookmark_row(params_names={'account': 'Main, Ghost', 'type': 'expense'})],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown account', result['skipped']['errors'][0])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        bm = Bookmark.objects.get(workspace=ws, name='Card spends')
+        main = Account.objects.get(workspace=ws, name='Main')
+        self.assertEqual(bm.params, {'account': str(main.id), 'type': 'expense'})
+
+    def test_all_unresolvable_category_drops_the_key_entirely(self):
+        """A translated key with zero resolvable ids is removed - an empty CSV
+        filter would narrow the bookmark to nothing."""
+        export = self._v3(bookmarks=[self._bookmark_row(params_names={'category': 'A::B', 'type': 'expense'})])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown category', result['skipped']['errors'][0])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        self.assertEqual(Bookmark.objects.get(workspace=ws, name='Card spends').params, {'type': 'expense'})
+
+    def test_unresolvable_budget_name_on_budget_bookmark_skips_row(self):
+        export = self._v3(
+            bookmarks=[self._bookmark_row(kind='budget', budget_name='Nope', currency_code='PLN')],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('unknown budget', result['skipped']['errors'][0])
+        self.assertEqual(Bookmark.objects.filter(user=self.user).exclude(workspace=self.workspace).count(), 0)
+
+    def test_unknown_kind_skips_row(self):
+        export = self._v3(bookmarks=[self._bookmark_row(kind='weather')])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('invalid kind', result['skipped']['errors'][0])
+
+    def test_missing_name_or_kind_skips_row(self):
+        export = self._v3(
+            bookmarks=[
+                self._bookmark_row(name=None),
+                self._bookmark_row(name='No kind', kind=None),
+            ],
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 0)
+        self.assertEqual(len(result['skipped']['errors']), 2)
+        self.assertIn('missing name or kind', result['skipped']['errors'][0])
+        self.assertIn('missing name or kind', result['skipped']['errors'][1])
+
+    def test_duplicate_names_within_file_skip_second_row(self):
+        """The CI unique constraint would IntegrityError the whole atomic
+        import; the guard degrades to skipping the duplicate row."""
+        export = self._v3(bookmarks=[self._bookmark_row(), self._bookmark_row(name='card spends')])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['imported_bookmarks'], 1)
+        self.assertEqual(len(result['skipped']['errors']), 1)
+        self.assertIn('duplicate name', result['skipped']['errors'][0])
+
+    def test_bookmark_visible_limit_degrades_on_invalid_value(self):
+        export = self._v3()
+        export['preferences'] = {'bookmark_visible_limit': 'lots'}
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        preferences = UserService.get_or_create_preferences(self.user)
+        self.assertEqual(preferences.bookmark_visible_limit, 5)

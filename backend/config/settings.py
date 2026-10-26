@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'transactions',
     'transfers',
     'planned_transactions',
+    'bookmarks',
     'reports',
     'core',
 ]

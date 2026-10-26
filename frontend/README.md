@@ -29,11 +29,13 @@ frontend/
 │   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
+│   │   ├── bookmarks/        # bookmarkMeta (bookmark icon + swatch-key registry, BookmarkGlyph)
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
+│   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, RecurringFormModal
 │   │   └── profile/          # Settings/profile sections
 │   ├── contexts/
@@ -44,6 +46,7 @@ frontend/
 │   ├── hooks/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
+│   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/More-sheet rows)
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
@@ -56,10 +59,10 @@ frontend/
 │   │   ├── LanguageContext.tsx  # LanguageProvider + useLanguage() - active language/number format, switching, server-preference sync
 │   │   ├── dateLocales.ts       # date-fns locale per registry language
 │   │   ├── i18n.d.ts            # Key types derived from the en catalogs
-│   │   └── locales/<lang>/      # One JSON file per domain namespace (12), per language
+│   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date month math for the from/to list-filter params: whole-month ranges, calendar-month detection, adjacent-month shift), transactionItems, attachments (view/download helpers), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date month math for the from/to list-filter params: whole-month ranges, calendar-month detection, adjacent-month shift), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── .i18rc                   # i18next-parser config (i18n:extract; locales list)
 ├── package.json
@@ -71,8 +74,9 @@ frontend/
 
 Six in-app destinations (sidebar) plus the Settings page (user menu on desktop,
 More sheet on mobile), a Transfers page with no nav slot of its own (reached
-from Accounts and the command palette), nested budget routes, auth/legal routes
-and a 404 catch-all.
+from Accounts and the command palette), a Bookmarks manage page (reached from
+the Manage row of the sidebar/More-sheet bookmarks sections), nested budget
+routes, auth/legal routes and a 404 catch-all.
 
 | Path | Component | Description |
 |------|-----------|-------------|
@@ -91,6 +95,7 @@ and a 404 catch-all.
 | `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), explicit or deep-linked date params always win, partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view" - planned view only) |
 | `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
+| `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/More sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the More sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar) |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
 | `*` | NotFoundPage | 404 catch-all for unknown paths |
 
@@ -98,13 +103,16 @@ and a 404 catch-all.
 
 **Layout** (`components/layout/`): `MainLayout` (responsive wrapper - renders the
 desktop `Sidebar` and the mobile `BottomNav`), `Sidebar` (6 destinations +
-workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`),
+workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`; below
+the destinations, a personal bookmarks section lists the user's active
+bookmarks - capped by their preference - with a Manage link to `/bookmarks`),
 `BottomNav` (mobile shell: bottom bar with Home/Txns/Budgets/More tabs around a
 center quick-add FAB - the FAB hides for viewers/workspace-less users but the
 slot stays so tabs don't shift; the FAB's ActionSheet offers new transaction,
 transfer, from-receipt (parse then seed the form), planned and recurring rule;
 the More sheet carries the overflow destinations (Accounts, Planned, Members,
-Settings), search, logout, workspace switcher + create/settings, the theme row
+Settings), a bookmarks section (the same capped entries + Manage link as the
+sidebar's), search, logout, workspace switcher + create/settings, the theme row
 and the zoom toggle),
 `UserMenu`, `WorkspaceSelector`, `ThemeToggleRow` (dark-mode toggle row shared by
 the desktop UserMenu dropdown and the mobile More sheet), `LanguageModal`

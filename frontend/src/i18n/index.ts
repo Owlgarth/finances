@@ -12,6 +12,7 @@ export const NAMESPACES = [
   'budgets',
   'transactions',
   'planned',
+  'bookmarks',
   'dashboard',
   'members',
   'settings',
