@@ -45,6 +45,10 @@ from users.exceptions import (
 from users.models import ConsentType, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
 from workspaces.models import Role, Workspace, WorkspaceMember
 
+# Sidebar/More-menu bookmark cap allowlist (0 = show all). Mirrored on the
+# wire by UserService.update_preferences; the model default is 5.
+BOOKMARK_VISIBLE_LIMITS = (0, 3, 5, 8)
+
 
 class UserService:
     @staticmethod
@@ -83,6 +87,11 @@ class UserService:
             raise ValidationError(
                 _('number_format must be one of: %(codes)s') % {'codes': ', '.join(NUMBER_FORMAT_CODES)}
             )
+        if data.bookmark_visible_limit is not None and data.bookmark_visible_limit not in BOOKMARK_VISIBLE_LIMITS:
+            raise ValidationError(
+                _('bookmark_visible_limit must be one of: %(limits)s')
+                % {'limits': ', '.join(str(limit) for limit in BOOKMARK_VISIBLE_LIMITS)}
+            )
 
         preferences = UserService.get_or_create_preferences(user)
 
@@ -97,6 +106,9 @@ class UserService:
 
         if data.number_format is not None:
             preferences.number_format = data.number_format
+
+        if data.bookmark_visible_limit is not None:
+            preferences.bookmark_visible_limit = data.bookmark_visible_limit
 
         preferences.save()
         return preferences
