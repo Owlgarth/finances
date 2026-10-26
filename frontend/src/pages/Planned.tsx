@@ -32,7 +32,7 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
-import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'text-warning border-warning/40',
@@ -94,9 +94,10 @@ export default function Planned() {
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const statusLabel = (value: StatusFilter) => t(STATUS_OPTIONS.find((o) => o.value === value)!.labelKey)
 
-  // Resolved in the body, not inside the JSX attributes: the literal-string
-  // lint only recognizes the unaliased t() call in attribute positions.
-  const addBookmarkAria = tBookmarks('addPlannedAria')
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addBookmarkTitle = tBookmarks('addPlannedAria')
+  const addLabel = tBookmarks('addLabel')
 
   // Schedule summary for the recurring meta line: "Every month on day 5",
   // "Every 2 weeks". Plural forms resolve via the i18next count; the
@@ -282,16 +283,11 @@ export default function Planned() {
   // message would be misleading, the empty state gets the month treatment.
   const onlyMonthRange = activeFilterCount === 1 && !!exactMonth
 
-  // Deep links with filters land with the panel already open - except a
-  // range equal to the default month (fresh visit pre-materialization, or
-  // a deep link to exactly the current month): that IS the default view,
-  // badge 1, panel closed. Any other range - partial, custom, a different
-  // exact month - still auto-opens. First render only (useState
-  // initializer): the later materialization write cannot flip it.
-  const defRange = monthRange(new Date().getFullYear(), new Date().getMonth())
-  const [filtersOpen, setFiltersOpen] = useState(
-    activeFilterCount > 0 && !(activeFilterCount === 1 && dateFrom === defRange.from && dateTo === defRange.to),
-  )
+  // The panel opens only through the toggle - never automatically. Deep
+  // links and bookmarks apply their filters silently; the toggle's badge
+  // count is the visible signal that filters are active (the default-month
+  // materialization write lands as badge 1, panel closed).
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
   const clearFilters = () =>
@@ -518,14 +514,16 @@ export default function Planned() {
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+            label on one line so the flex-1 SearchInput is the row member
+            that yields on narrow screens. */}
         <button
           type="button"
           onClick={() => setPageBookmarkOpen(true)}
-          title={addBookmarkAria}
-          aria-label={addBookmarkAria}
-          className={`inline-flex items-center justify-center flex-shrink-0 bg-surface border border-border rounded-sm px-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
+          title={addBookmarkTitle}
+          className={`${secondaryButtonClass} flex-shrink-0`}
         >
-          <BookmarkPlus size={13} />
+          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
         <Select
           value={ordering}

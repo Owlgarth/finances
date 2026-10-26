@@ -579,9 +579,9 @@ export default function BudgetDetailPage() {
       }
     })
 
-  // Resolved in the body, not inside the JSX attributes: the literal-string
-  // lint only recognizes the unaliased t() call in attribute positions.
-  const addBookmarkAria = tBookmarks('addBudgetAria')
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addLabel = tBookmarks('addLabel')
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
@@ -670,17 +670,11 @@ export default function BudgetDetailPage() {
             <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
           </button>
         )}
-        {/* Add bookmark (any role - personal resource). Adjacent-icon-button
-            pattern: real padded hit area, NOT .touch-hit (adjacent buttons'
-            expanded areas would overlap). Always the create flow in v1. */}
-        <button
-          type="button"
-          onClick={() => setBookmarkModalOpen(true)}
-          title={addBookmarkAria}
-          aria-label={addBookmarkAria}
-          className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-        >
-          <BookmarkPlus size={14} />
+        {/* Add bookmark, labeled like its sibling header action. Any role -
+            personal resource: a bookmark is the user's own convenience view,
+            never a workspace mutation. Always the create flow in v1. */}
+        <button type="button" onClick={() => setBookmarkModalOpen(true)} className={secondaryButtonClass}>
+          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
       </div>
 

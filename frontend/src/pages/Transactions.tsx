@@ -26,7 +26,7 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
-import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_STYLE: Record<string, string> = {
   income: 'text-positive',
@@ -158,8 +158,10 @@ export default function Transactions() {
     Boolean(dateFrom || dateTo),
   ].filter(Boolean).length
 
-  // Deep links with filters land with the panel already open.
-  const [filtersOpen, setFiltersOpen] = useState(activeFilterCount > 0)
+  // The panel opens only through the toggle - never automatically. Deep
+  // links and bookmarks apply their filters silently; the toggle's badge
+  // count is the visible signal that filters are active.
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
   const clearFilters = () =>
@@ -248,9 +250,10 @@ export default function Transactions() {
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
 
-  // Resolved in the body, not inside the JSX attributes: the literal-string
-  // lint only recognizes the unaliased t() call in attribute positions.
-  const addBookmarkAria = tBookmarks('addTransactionsAria')
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addBookmarkTitle = tBookmarks('addTransactionsAria')
+  const addLabel = tBookmarks('addLabel')
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
@@ -285,14 +288,16 @@ export default function Transactions() {
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+            label on one line so the flex-1 SearchInput is the row member
+            that yields on narrow screens. */}
         <button
           type="button"
           onClick={() => setPageBookmarkOpen(true)}
-          title={addBookmarkAria}
-          aria-label={addBookmarkAria}
-          className={`inline-flex items-center justify-center flex-shrink-0 bg-surface border border-border rounded-sm px-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
+          title={addBookmarkTitle}
+          className={`${secondaryButtonClass} flex-shrink-0`}
         >
-          <BookmarkPlus size={13} />
+          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
         <Select
           value={ordering}
