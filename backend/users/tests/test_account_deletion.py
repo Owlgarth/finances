@@ -137,6 +137,32 @@ class AccountDeletionTests(AuthMixin, TestCase):
         self.assertFalse(User.objects.filter(id=self.user.id).exists())
         self.assertFalse(UserPreferences.objects.filter(user_id=self.user.id).exists())
 
+    def test_bookmarks_deleted_on_account_deletion(self):
+        """Bookmarks are explicitly deleted on account deletion (defense-in-depth)."""
+        from bookmarks.factories import BookmarkFactory
+        from bookmarks.models import Bookmark
+        from budgeting.factories import BudgetFactory
+
+        budget = BudgetFactory(workspace=self.workspace)
+        BookmarkFactory(
+            user=self.user,
+            workspace=self.workspace,
+            budget=budget,
+            currency_code='PLN',
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.client.delete(
+            '/api/users/me',
+            {'password': self.user_password},
+            content_type='application/json',
+            **self.auth_headers(),
+        )
+
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        self.assertEqual(Bookmark.objects.filter(user_id=self.user.id).count(), 0)
+
     def test_consent_records_survive_account_deletion(self):
         """Consent records should be retained (with user=NULL) after account deletion."""
         from users.models import UserConsent

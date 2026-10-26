@@ -6,9 +6,10 @@ The detailed, authoritative frontend documentation lives next to the code:
 
 - **[frontend/README.md](../frontend/README.md)** - project structure, pages &
   routes (Dashboard · Accounts · Budgets · Transactions · Planned · Transfers ·
-  Members · Settings), components, contexts, hooks (`useDomain`, `usePermissions`), the typed
-  `api/client.ts` modules, core TypeScript types, query-key and mutation conventions,
-  translation tooling, and styling.
+  Bookmarks · Members · Settings), components, contexts, hooks
+  (`useDomain`, `usePermissions`), the typed `api/client.ts` modules, core
+  TypeScript types, query-key and mutation conventions, translation tooling,
+  and styling.
 - **[docs/architecture.md](architecture.md)** - how the frontend maps onto the
   account-based data model and the backend API.
 - **[design/](../design/)** - the "Architectural Ledger" design system: `tokens.md`,
@@ -18,15 +19,16 @@ The detailed, authoritative frontend documentation lives next to the code:
 There is no global account or period context - data is read through
 `hooks/useDomain.ts`, and period selection is local to the Budget detail page
 (periods are per-budget; the selection is deep-linkable via the `?period=` URL
-param on `/budgets/:id`, and a per-budget periods overview lives at
-`/budgets/:id/periods`). Receipt extraction UI is gated on `useExtractionEnabled()`
+param on `/budgets/:id`, the viewed currency likewise via `?currency=`, and a
+per-budget periods overview lives at `/budgets/:id/periods`). Receipt extraction
+UI is gated on `useExtractionEnabled()`
 and hidden entirely when no parser is configured.
 
 ## Internationalization (i18n)
 
 The UI ships in English, Ukrainian, and Polish; language and number-format are
 per-user preferences with localStorage + browser detection for anonymous visitors.
-Catalogs live in `src/i18n/locales/<lang>/<ns>.json` (12 domain namespaces);
+Catalogs live in `src/i18n/locales/<lang>/<ns>.json` (13 domain namespaces);
 `src/i18n/index.ts` initializes i18next synchronously before render (no flash), and
 `LanguageContext` exposes `useLanguage()` for switching (optimistic local switch +
 fire-and-forget preferences PATCH). Number/date formatting goes through the
