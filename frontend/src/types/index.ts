@@ -342,6 +342,7 @@ export interface UserPreferences {
   font_family: string;
   language: string;
   number_format: string;
+  bookmark_visible_limit: number;
 }
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
