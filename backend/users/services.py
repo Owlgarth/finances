@@ -14,6 +14,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext as _
 
 from accounts.models import Account
+from bookmarks.models import Bookmark, BookmarkKind
 from common.email import EmailService
 from common.exceptions import ValidationError
 from common.fonts import DEFAULT_FONT, FONT_CODES
@@ -476,6 +477,9 @@ class UserService:
             # Remove memberships from non-owned workspaces (if any remain)
             WorkspaceMember.objects.filter(user=user).delete()
 
+            # Delete bookmarks (user FK CASCADE handles this, but explicit for defense-in-depth)
+            Bookmark.objects.filter(user=user).delete()
+
             # Delete 2FA records (CASCADE handles this, but explicit for defense-in-depth)
             UserTwoFactor.objects.filter(user=user).delete()
 
@@ -595,6 +599,10 @@ class UserService:
                 'font_family': prefs.font_family,
                 'language': prefs.language,
                 'number_format': prefs.number_format,
+                # v3 additive key (no version bump): the sidebar/More-menu
+                # bookmark cap. Restored by import_all_data; older readers
+                # ignore the key and older files .get() the model default.
+                'bookmark_visible_limit': prefs.bookmark_visible_limit,
                 'created_at': prefs.created_at.isoformat(),
                 'updated_at': prefs.updated_at.isoformat(),
             }
@@ -683,6 +691,45 @@ class UserService:
                     'periods': periods,
                 }
             )
+
+        # v3 additive section (no export_version bump): personal bookmarks,
+        # exported name-referenced like every other section. params is the
+        # one place raw ids appear in a bookmark (the transactions/planned
+        # pages write CSVs of account/budget/category ids into the URL query
+        # string), so the id-bearing keys translate to names here and back to
+        # ids on import: 'account' -> account names CSV, 'budget' -> budget
+        # names CSV, 'category' -> '<Budget>::<Category>' qualified CSV (the
+        # importer's category_map is keyed by exactly that pair). Personal
+        # rows only: the section carries the exporting member's own
+        # bookmarks, never other members'.
+        account_name_by_id = dict(Account.objects.for_workspace(ws.id).values_list('id', 'name'))
+        budget_name_by_id = dict(Budget.objects.for_workspace(ws.id).values_list('id', 'name'))
+        category_qualified_by_id = {
+            cat_id: f'{budget_name_by_id.get(budget_id)}::{cat_name}'
+            for cat_id, budget_id, cat_name in Category.objects.for_workspace(ws.id).values_list(
+                'id', 'budget_id', 'name'
+            )
+        }
+        bookmarks = [
+            {
+                'name': b.name,
+                'icon': b.icon,
+                'color': b.color,
+                'kind': b.kind,
+                'budget_name': b.budget.name if b.budget else None,
+                'currency_code': b.currency_code,
+                'params_names': UserService._export_bookmark_params(
+                    b.params, account_name_by_id, budget_name_by_id, category_qualified_by_id
+                ),
+                'position': b.position,
+                'is_active': b.is_active,
+                'is_archived': b.is_archived,
+            }
+            for b in Bookmark.objects.for_workspace(ws.id)
+            .filter(user=membership.user)
+            .select_related('budget')
+            .order_by('position', 'id')
+        ]
 
         return {
             'workspace_id': ws.id,
@@ -833,7 +880,46 @@ class UserService:
                     'account', 'category__budget', 'currency'
                 )
             ],
+            'bookmarks': bookmarks,
         }
+
+    @staticmethod
+    def _export_bookmark_params(params, account_name_by_id, budget_name_by_id, category_qualified_by_id) -> dict:
+        """Translate a bookmark's params dict from raw id CSVs to portable names.
+
+        Only the three id-bearing keys translate ('account', 'budget',
+        'category'); every other key rides verbatim (the pages' other params
+        are already strings on the URL). Unresolvable ids - a bookmark that
+        outlived the account/budget/category it filtered on - drop out of the
+        CSV, and a key whose every id is unresolvable drops entirely: an
+        empty CSV would narrow the restored bookmark to nothing, which is
+        worse than the key being absent (same rule as the import side).
+        Names containing ',' (or '::' for categories) cannot round-trip
+        through this CSV encoding - accepted edge, mirroring the pages' own
+        comma-joined param format.
+        """
+        id_name_maps = {
+            'account': account_name_by_id,
+            'budget': budget_name_by_id,
+            'category': category_qualified_by_id,
+        }
+        translated = {}
+        for key, value in (params or {}).items():
+            id_name_map = id_name_maps.get(key)
+            if id_name_map is None:
+                translated[key] = value
+                continue
+            names = []
+            for token in str(value).split(','):
+                try:
+                    name = id_name_map.get(int(token.strip()))
+                except (TypeError, ValueError):
+                    name = None
+                if name:
+                    names.append(name)
+            if names:
+                translated[key] = ','.join(names)
+        return translated
 
     @staticmethod
     @db_transaction.atomic
@@ -877,6 +963,7 @@ class UserService:
             'imported_transfers': 0,
             'imported_planned_transactions': 0,
             'imported_recurring_transactions': 0,
+            'imported_bookmarks': 0,
         }
         skipped: dict[str, list[str]] = {'workspaces': [], 'errors': []}
         renamed: dict[str, str] = {}
@@ -937,6 +1024,7 @@ class UserService:
                 counts['imported_accounts'] += 1
 
             category_map: dict[tuple[str, str], object] = {}
+            budget_map: dict[str, object] = {}
             for budget_data in ws_data.get('budgets', []):
                 budget = Budget.objects.create(
                     workspace=workspace,
@@ -952,6 +1040,10 @@ class UserService:
                     created_by=user,
                     updated_by=user,
                 )
+                # Name-keyed budget map for bookmark budget_name resolution -
+                # category_map's key tuple only reaches budgets that HAVE
+                # categories, and a bookmark may target a category-less one.
+                budget_map[budget.name] = budget
                 # v3 field; absent key (payloads without it) imports an empty set.
                 codes = budget_data.get('currency_codes', [])
                 # Dedupe preserving first occurrence; list index becomes position.
@@ -1262,6 +1354,146 @@ class UserService:
                 # carry, and the partial unique constraint plus the preserved
                 # pointer keep future generation correct without it.
                 counts['imported_recurring_transactions'] += 1
+
+            # v3 additive section (older v3 files lack the key entirely - the
+            # .get() default imports zero bookmarks, no errors). DELIBERATE
+            # DIVERGENCE from the account skip-the-row pattern, recorded in
+            # the plan: an unresolvable id inside params_names DROPS that one
+            # id (with an error entry) instead of skipping the row - a
+            # bookmark is a convenience view, not financial data, and a
+            # partly-resolved filter is strictly more useful than no
+            # bookmark. A budget-kind bookmark whose budget_name does not
+            # resolve skips whole (its target IS the bookmark). Rows restore
+            # via objects.create - never the bookmark service's create flow
+            # (skill rule: side-effecting service flows stay out of the import path) -
+            # with positions pinned to file order: the enumerate index
+            # renumbers 0..n-1, and since the export orders by (position,
+            # id), relative order round-trips exactly without calling the
+            # service's next-position helper.
+            bookmark_names: set[str] = set()
+            for position, bm_data in enumerate(ws_data.get('bookmarks', [])):
+                # Malformed guard BEFORE any resolver that writes: a missing
+                # name or kind would either IntegrityError (rolling back the
+                # whole import for one row) or import a useless row.
+                name = bm_data.get('name')
+                kind = bm_data.get('kind')
+                if not name or not kind:
+                    skipped['errors'].append(_('%(name)s: bookmark missing name or kind') % {'name': original_name})
+                    continue
+                # Unknown kind would import a row the API and UI cannot
+                # address (hand-edited files only - well-formed exports
+                # always carry a valid kind).
+                if kind not in BookmarkKind.values:
+                    skipped['errors'].append(_('%(name)s: bookmark has invalid kind') % {'name': original_name})
+                    continue
+                budget = None
+                currency_code = None
+                if kind == BookmarkKind.BUDGET:
+                    budget = budget_map.get(bm_data.get('budget_name'))
+                    if budget is None:
+                        skipped['errors'].append(
+                            _('%(name)s: bookmark references unknown budget') % {'name': original_name}
+                        )
+                        continue
+                    currency_code = bm_data.get('currency_code')
+                    if not currency_code:
+                        # The bookmark_budget_kind_requires_target check would
+                        # IntegrityError inside this atomic block otherwise.
+                        skipped['errors'].append(
+                            _('%(name)s: budget bookmark missing currency_code') % {'name': original_name}
+                        )
+                        continue
+                # Filter kinds: budget/currency forced to None even when a
+                # hand-edited file carries them - the coherence constraint
+                # would IntegrityError; silent coercion, materialize_all
+                # precedent (a single unrepresentable bit does not lose the
+                # row).
+                raw_params = bm_data.get('params_names', {})
+                if raw_params is None:
+                    raw_params = {}
+                if not isinstance(raw_params, dict):
+                    skipped['errors'].append(_('%(name)s: bookmark has invalid params') % {'name': original_name})
+                    continue
+                params = {}
+                for key, value in raw_params.items():
+                    if key == 'category':
+                        # Qualified '<Budget>::<Category>' tokens split on the
+                        # FIRST '::' into the (budget_name, category_name)
+                        # key the category_map is built around.
+                        resolved = []
+                        for token in str(value).split(','):
+                            qualified = token.strip().partition('::')
+                            resolved.append(category_map.get((qualified[0], qualified[2])))
+                    else:
+                        entity_map = {'account': account_map, 'budget': budget_map}.get(key)
+                        if entity_map is None:
+                            params[key] = value
+                            continue
+                        resolved = [entity_map.get(token.strip()) for token in str(value).split(',')]
+                    ids = [entity.id for entity in resolved if entity is not None]
+                    if len(ids) != len(resolved):
+                        # One error entry per affected key: unresolvable ids
+                        # dropped, resolvable ones kept (partial utility
+                        # beats skip-the-row - see the section comment).
+                        message = {
+                            'account': _('bookmark references unknown account'),
+                            'budget': _('bookmark references unknown budget'),
+                            'category': _('bookmark references unknown category'),
+                        }[key]
+                        skipped['errors'].append(_('%(name)s: ') % {'name': original_name} + message)
+                    if ids:
+                        # All-ids-dropped key drops entirely: an empty CSV
+                        # filter would narrow the bookmark to nothing.
+                        params[key] = ','.join(str(entity_id) for entity_id in ids)
+                # CI duplicate guard (the uniq_bookmark_name_per_user_workspace_ci
+                # constraint would IntegrityError inside this atomic block).
+                # Seen-set holds only CREATED names, so a name whose first
+                # row failed an earlier guard stays reusable.
+                if name.lower() in bookmark_names:
+                    skipped['errors'].append(_('%(name)s: bookmark duplicate name') % {'name': original_name})
+                    continue
+                Bookmark.objects.create(
+                    workspace=workspace,
+                    user=user,
+                    kind=kind,
+                    name=name,
+                    icon=bm_data.get('icon'),
+                    color=bm_data.get('color'),
+                    position=position,
+                    is_active=bm_data.get('is_active', True),
+                    is_archived=bm_data.get('is_archived', False),
+                    budget=budget,
+                    currency_code=currency_code,
+                    params=params,
+                    created_by=user,
+                    updated_by=user,
+                )
+                bookmark_names.add(name.lower())
+                counts['imported_bookmarks'] += 1
+
+            # Preferences restore is deliberately minimal: the v3 import never
+            # overwrote the importing account's UX preferences (language, font,
+            # calendar) and that does not change here - those describe the
+            # account being imported into. bookmark_visible_limit is the
+            # exception: it is bookmarks data that happens to live on the
+            # preferences row, so it round-trips with the bookmark section.
+            # Additive .get() semantics: an older file without the key leaves
+            # the existing value untouched.
+            prefs_data = export_data.get('preferences') or {}
+            bookmark_visible_limit = prefs_data.get('bookmark_visible_limit') if isinstance(prefs_data, dict) else None
+            if bookmark_visible_limit is not None:
+                # Degradation, not skip (constraint-coercion precedent): the
+                # model domain is any non-negative int (the allowlist guards the
+                # API PATCH, not the import); anything else would IntegrityError
+                # inside the atomic import, so a hand-edited value restores the
+                # default.
+                if not isinstance(bookmark_visible_limit, int) or isinstance(bookmark_visible_limit, bool):
+                    bookmark_visible_limit = 5
+                if bookmark_visible_limit < 0:
+                    bookmark_visible_limit = 5
+                preferences = UserService.get_or_create_preferences(user)
+                preferences.bookmark_visible_limit = bookmark_visible_limit
+                preferences.save(update_fields=['bookmark_visible_limit'])
 
         if counts['imported_workspaces'] > 0:
             user.current_workspace = Workspace.objects.filter(owner=user).order_by('-id').first()

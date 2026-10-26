@@ -119,7 +119,7 @@ class TestRegistrationEmails(AuthTestCase):
                 'full_name': 'New Reg',
                 'workspace_name': 'Reg Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.2',
+                'accepted_privacy_version': '2.3',
             },
         )
         self.assertStatus(201)
