@@ -81,6 +81,7 @@ def get_preferences(request):
         'font_family': preferences.font_family,
         'language': preferences.language,
         'number_format': preferences.number_format,
+        'bookmark_visible_limit': preferences.bookmark_visible_limit,
     }
 
 
@@ -98,6 +99,7 @@ def update_preferences(request, data: UserPreferencesUpdate):
         'font_family': preferences.font_family,
         'language': preferences.language,
         'number_format': preferences.number_format,
+        'bookmark_visible_limit': preferences.bookmark_visible_limit,
     }
 
 

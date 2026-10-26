@@ -451,6 +451,22 @@
   --chart-series-2: #1baf7a;
   --chart-track:    #cde2fb;
 
+  /* Bookmark swatch palette - user-chosen decoration rendered on bookmark
+     glyphs and swatch squares, resolved by bookmarkColorVar in
+     components/bookmarks/bookmarkMeta.tsx. The positive/negative/warning
+     slots intentionally mirror the semantic hues above - they are decoration
+     only and never apply to financial figures. */
+  --bookmark-c-neutral:  #737373;
+  --bookmark-c-positive: #059669;
+  --bookmark-c-negative: #DC2626;
+  --bookmark-c-warning:  #D97706;
+  --bookmark-c-blue:     #2563EB;
+  --bookmark-c-violet:   #7C3AED;
+  --bookmark-c-pink:     #DB2777;
+  --bookmark-c-cyan:     #0891B2;
+  --bookmark-c-teal:     #0D9488;
+  --bookmark-c-indigo:   #6366F1;
+
   font-family: 'Geist', sans-serif;
   line-height: 1.5;
   font-weight: 500;
@@ -532,6 +548,18 @@ button {
   --chart-series-1: #3987e5;
   --chart-series-2: #199e70;
   --chart-track:    #0d366b;
+
+  /* Bookmark swatch palette - dark steps of the same hues */
+  --bookmark-c-neutral:  #A3A3A3;
+  --bookmark-c-positive: #34D399;
+  --bookmark-c-negative: #F87171;
+  --bookmark-c-warning:  #FBBF24;
+  --bookmark-c-blue:     #60A5FA;
+  --bookmark-c-violet:   #8B5CF6;
+  --bookmark-c-pink:     #F472B6;
+  --bookmark-c-cyan:     #22D3EE;
+  --bookmark-c-teal:     #2DD4BF;
+  --bookmark-c-indigo:   #818CF8;
 }
 
 /*

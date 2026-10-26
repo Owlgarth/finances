@@ -125,7 +125,7 @@ class TestPasswordChange(AuthTestCase):
 
 
 class TestPreferences(AuthTestCase):
-    """Tests for the language and number_format preference fields."""
+    """Tests for the language, number_format, and bookmark_visible_limit preference fields."""
 
     def test_get_preferences_defaults(self):
         """Fresh preferences carry the settings/registry defaults for the new fields."""
@@ -235,6 +235,44 @@ class TestPreferences(AuthTestCase):
         data = self.get('/api/users/me/preferences', **self.auth_headers(token))
         self.assertStatus(200)
         self.assertEqual(data['font_family'], 'geist')
+
+    def test_bookmark_visible_limit_defaults_to_5(self):
+        """A fresh user's preferences expose the model default cap (5)."""
+        token = self.register_and_login('prefs_bvl_default@example.com', 'password123', 'Prefs Test')
+
+        data = self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['bookmark_visible_limit'], 5)
+
+    def test_update_bookmark_visible_limit(self):
+        """Every allowlisted cap round-trips; 0 means 'all'."""
+        token = self.register_and_login('prefs_bvl_set@example.com', 'password123', 'Prefs Test')
+
+        for limit in (8, 3, 0):
+            data = self.patch(
+                '/api/users/me/preferences', {'bookmark_visible_limit': limit}, **self.auth_headers(token)
+            )
+            self.assertStatus(200)
+            self.assertEqual(data['bookmark_visible_limit'], limit)
+
+        data = self.get('/api/users/me/preferences', **self.auth_headers(token))
+        self.assertStatus(200)
+        self.assertEqual(data['bookmark_visible_limit'], 0)
+
+    def test_update_invalid_bookmark_visible_limit_rejected(self):
+        """Caps outside 0/3/5/8 are rejected with a 400 from the service (not a schema 422)."""
+        token = self.register_and_login('prefs_bvl_bad@example.com', 'password123', 'Prefs Test')
+
+        data = self.patch('/api/users/me/preferences', {'bookmark_visible_limit': 4}, **self.auth_headers(token))
+        self.assertStatus(400)
+        self.assertEqual(data['detail'], 'bookmark_visible_limit must be one of: 0, 3, 5, 8')
+
+    def test_update_bookmark_visible_limit_wrong_type_still_422(self):
+        """Wrong-typed payloads remain a Pydantic 422 (semantic-vs-structural split)."""
+        token = self.register_and_login('prefs_bvl_type@example.com', 'password123', 'Prefs Test')
+
+        self.patch('/api/users/me/preferences', {'bookmark_visible_limit': 'abc'}, **self.auth_headers(token))
+        self.assertStatus(422)
 
 
 @unittest.skipUnless(shutil.which('msgfmt'), 'gettext not installed')
