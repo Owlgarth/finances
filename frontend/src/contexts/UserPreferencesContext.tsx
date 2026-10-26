@@ -13,6 +13,8 @@ interface UserPreferencesContextType {
   preferences: UserPreferences | null
   calendarStartDay: number
   fontFamily: string
+  /** Sidebar/More bookmark cap: 3/5/8, or 0 = show all. Default mirrors the backend (5). */
+  bookmarkVisibleLimit: number
   isLoading: boolean
 }
 
@@ -30,6 +32,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
 
   const calendarStartDay = preferences?.calendar_start_day ?? 7
   const fontFamily = preferences?.font_family ?? fontsRegistry.defaultFont
+  const bookmarkVisibleLimit = preferences?.bookmark_visible_limit ?? 5
 
   useEffect(() => {
     const fontStack = FONT_STACKS[fontFamily] || FONT_STACKS[fontsRegistry.defaultFont]
@@ -43,6 +46,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
         preferences: preferences || null,
         calendarStartDay,
         fontFamily,
+        bookmarkVisibleLimit,
         isLoading,
       }}
     >

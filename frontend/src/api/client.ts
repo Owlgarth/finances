@@ -6,7 +6,7 @@ import type {
   AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus,
   TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse,
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
-  ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Budget,
+  ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Bookmark, Budget,
   Cadence, Period, Category, CategoryBudget, Transaction, TransactionType, Transfer, PlannedTransaction,
   RecurringTransaction,
   BudgetSummaryResponse, BudgetHistoryResponse, PaginatedResponse, TransactionItemsResponse, TransactionItemInput,
@@ -277,6 +277,48 @@ export const budgetsApi = {
     api.delete(`/budgets/${budgetId}/periods/${periodId}/category-budgets/${categoryBudgetId}`),
 };
 
+// ============= Bookmarks API =============
+/** Editable bookmark fields (update payload). Icon holds a registry key from
+    components/bookmarks/bookmarkMeta.tsx; color holds a swatch KEY from
+    BOOKMARK_COLOR_KEYS (index.css --bookmark-c-<key> variables), never hex. */
+export interface BookmarkInput {
+  name: string;
+  icon: string | null;
+  color: string | null;
+}
+
+/** Full create payload. The target (kind + budget_id/currency_code/params) is
+    immutable after create - later edits go through BookmarkInput only. */
+export interface BookmarkCreateInput {
+  kind: 'budget' | 'transactions' | 'planned';
+  name: string;
+  icon?: string | null;
+  color?: string | null;
+  budget_id?: number;
+  currency_code?: string;
+  /** Saved URL query params of the transactions/planned pages ('page' omitted). */
+  params?: Record<string, string>;
+}
+
+export const bookmarksApi = {
+  /** All of the user's bookmarks in the current workspace (active + archived),
+      ordered by position; consumers filter client-side. */
+  list: (): Promise<Bookmark[]> =>
+    api.get<Bookmark[]>('/bookmarks').then(res => res.data),
+  create: (data: BookmarkCreateInput): Promise<Bookmark> =>
+    api.post<Bookmark>('/bookmarks', data).then(res => res.data),
+  /** Full-replace of name/icon/color - the target fields are not editable. */
+  update: (id: number, data: BookmarkInput): Promise<Bookmark> =>
+    api.put<Bookmark>(`/bookmarks/${id}`, data).then(res => res.data),
+  setVisibility: (id: number, data: { is_active?: boolean; is_archived?: boolean }): Promise<Bookmark> =>
+    api.patch<Bookmark>(`/bookmarks/${id}/visibility`, data).then(res => res.data),
+  /** Atomic neighbor swap; returns the moved bookmark - callers invalidate the list. */
+  move: (id: number, direction: 'up' | 'down'): Promise<Bookmark> =>
+    api.post<Bookmark>(`/bookmarks/${id}/move`, { direction }).then(res => res.data),
+  delete: (id: number): Promise<void> =>
+    api.delete(`/bookmarks/${id}`).then(() => undefined),
+};
+
 // ============= Transactions API =============
 export interface TransactionInput {
   date: string;
@@ -484,7 +526,7 @@ export const authApi = {
   getPreferences: (): Promise<UserPreferences> =>
     api.get<UserPreferences>('/users/me/preferences').then(res => res.data),
 
-  updatePreferences: (data: { calendar_start_day?: number; font_family?: string; language?: string; number_format?: string }): Promise<UserPreferences> =>
+  updatePreferences: (data: { calendar_start_day?: number; font_family?: string; language?: string; number_format?: string; bookmark_visible_limit?: number }): Promise<UserPreferences> =>
     api.patch<UserPreferences>('/users/me/preferences', data).then(res => res.data),
 
   checkDeletion: (): Promise<AccountDeleteCheck> =>

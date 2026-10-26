@@ -8,15 +8,18 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from accounts.factories import AccountFactory
+from bookmarks.factories import BookmarkFactory
 from budgeting.factories import BudgetFactory
 from budgeting.models import BudgetCurrency
 from categories.factories import CategoryFactory
+from common.tests.factories import UserFactory
 from common.tests.mixins import AuthMixin
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory, RecurringTransactionFactory
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from users.models import UserConsent
 from users.services import UserService
+from workspaces.factories import WorkspaceMemberFactory
 
 User = get_user_model()
 
@@ -394,3 +397,88 @@ class RecurringExportTests(AuthMixin, TestCase):
         # The swapped-out key is gone: the no-version-bump contract relies on
         # old readers defaulting it, so nothing may resurrect it.
         self.assertNotIn('lead_days', rent)
+
+
+class BookmarkExportTests(AuthMixin, TestCase):
+    """Bookmarks serialize into the v3 export with params translated to names."""
+
+    def test_export_contains_bookmarks_with_translated_params(self):
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        account = AccountFactory(workspace=self.workspace, name='Cash')
+        budget = BudgetFactory(workspace=self.workspace, name='Household')
+        food = CategoryFactory(budget=budget, workspace=self.workspace, name='Food')
+        BookmarkFactory(
+            user=self.user,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            budget=budget,
+            currency_code='PLN',
+            name='Household PLN',
+            icon='wallet',
+            color='positive',
+            position=0,
+        )
+        BookmarkFactory(
+            user=self.user,
+            budget=None,
+            currency_code=None,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            kind='transactions',
+            name='Card spends',
+            position=1,
+            is_active=False,
+            params={'account': str(account.id), 'category': str(food.id), 'type': 'expense'},
+        )
+        BookmarkFactory(
+            user=self.user,
+            budget=None,
+            currency_code=None,
+            workspace=self.workspace,
+            created_by=self.user,
+            updated_by=self.user,
+            kind='planned',
+            name='All planned',
+            position=2,
+            is_archived=True,
+        )
+        # Personal rows only: another member's bookmark in the same workspace
+        # must stay out of this user's export.
+        other_user = UserFactory(email='other@test.com')
+        WorkspaceMemberFactory(workspace=self.workspace, user=other_user)
+        BookmarkFactory(
+            user=other_user,
+            budget=None,
+            currency_code=None,
+            workspace=self.workspace,
+            created_by=other_user,
+            updated_by=other_user,
+            kind='transactions',
+            name='Theirs',
+        )
+        preferences = UserService.get_or_create_preferences(self.user)
+        preferences.bookmark_visible_limit = 8
+        preferences.save(update_fields=['bookmark_visible_limit'])
+
+        data = UserService.export_all_data(self.user)
+
+        # Additive preferences key rides the existing preferences dict.
+        self.assertEqual(data['preferences']['bookmark_visible_limit'], 8)
+        bookmarks = data['workspaces'][0]['bookmarks']
+        self.assertEqual([b['name'] for b in bookmarks], ['Household PLN', 'Card spends', 'All planned'])
+        budget_bm, tx_bm, planned_bm = bookmarks
+        self.assertEqual(budget_bm['kind'], 'budget')
+        self.assertEqual(budget_bm['budget_name'], 'Household')
+        self.assertEqual(budget_bm['currency_code'], 'PLN')
+        self.assertEqual(budget_bm['params_names'], {})
+        self.assertTrue(budget_bm['is_active'])  # default survived
+        self.assertEqual(tx_bm['kind'], 'transactions')
+        self.assertIsNone(tx_bm['budget_name'])
+        self.assertIsNone(tx_bm['currency_code'])
+        # Id CSVs translated to names; the non-id key rides verbatim.
+        self.assertEqual(tx_bm['params_names'], {'account': 'Cash', 'category': 'Household::Food', 'type': 'expense'})
+        self.assertFalse(tx_bm['is_active'])
+        self.assertTrue(planned_bm['is_archived'])
+        self.assertEqual([b['position'] for b in bookmarks], [0, 1, 2])

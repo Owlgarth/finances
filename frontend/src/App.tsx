@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
 import AccountsPage from './pages/AccountsPage'
+import BookmarksPage from './pages/BookmarksPage'
 import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
 import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
@@ -38,6 +39,7 @@ function AppContent() {
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
+        <Route path="/bookmarks" element={<BookmarksPage />} />
         <Route path="/settings" element={<ProfilePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

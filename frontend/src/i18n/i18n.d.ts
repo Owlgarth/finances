@@ -18,6 +18,7 @@ declare module 'i18next' {
       budgets: typeof import('./locales/en/budgets.json')
       transactions: typeof import('./locales/en/transactions.json')
       planned: typeof import('./locales/en/planned.json')
+      bookmarks: typeof import('./locales/en/bookmarks.json')
       dashboard: typeof import('./locales/en/dashboard.json')
       members: typeof import('./locales/en/members.json')
       settings: typeof import('./locales/en/settings.json')

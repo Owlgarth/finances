@@ -35,5 +35,7 @@
     "plannedTransaction": "Запланована операція"
   },
   "receiptReading": "Читаємо чек…",
+  "bookmarks": "Закладки",
+  "bookmarksManage": "Керувати закладками",
   "receiptReadFailed": "Не вдалося прочитати чек"
 }

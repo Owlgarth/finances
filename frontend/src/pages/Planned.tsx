@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -13,9 +13,11 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { paramsFromSearchParams } from '../utils/bookmarks'
 import { isCalendarMonth, monthRange, shiftMonth } from '../utils/dates'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
+import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
 import PlannedMonthStepper from '../components/transactions/PlannedMonthStepper'
@@ -79,6 +81,7 @@ function readStoredSearch(): string {
 
 export default function Planned() {
   const { t } = useTranslation('planned')
+  const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -90,6 +93,11 @@ export default function Planned() {
   const statusOptions = STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const statusLabel = (value: StatusFilter) => t(STATUS_OPTIONS.find((o) => o.value === value)!.labelKey)
+
+  // Resolved in the body, not inside the JSX: the literal-string lint only
+  // recognizes the unaliased t() callee, in attributes and children alike.
+  const addBookmarkTitle = tBookmarks('addPlannedAria')
+  const addLabel = tBookmarks('addLabel')
 
   // Schedule summary for the recurring meta line: "Every month on day 5",
   // "Every 2 weeks". Plural forms resolve via the i18next count; the
@@ -111,6 +119,9 @@ export default function Planned() {
   // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
   // click on the hover-revealed Ban icon must not fire the mutation directly.
   const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
+  // Bookmark capture of the planned view's filters (mount-per-use modal):
+  // target derives from the URL at open time; renders only in view=planned.
+  const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
   // Recurring view state. Mirrors the planned modal-state quartet above.
   const [recurringFormOpen, setRecurringFormOpen] = useState(false)
@@ -272,16 +283,11 @@ export default function Planned() {
   // message would be misleading, the empty state gets the month treatment.
   const onlyMonthRange = activeFilterCount === 1 && !!exactMonth
 
-  // Deep links with filters land with the panel already open - except a
-  // range equal to the default month (fresh visit pre-materialization, or
-  // a deep link to exactly the current month): that IS the default view,
-  // badge 1, panel closed. Any other range - partial, custom, a different
-  // exact month - still auto-opens. First render only (useState
-  // initializer): the later materialization write cannot flip it.
-  const defRange = monthRange(new Date().getFullYear(), new Date().getMonth())
-  const [filtersOpen, setFiltersOpen] = useState(
-    activeFilterCount > 0 && !(activeFilterCount === 1 && dateFrom === defRange.from && dateTo === defRange.to),
-  )
+  // The panel opens only through the toggle - never automatically. Deep
+  // links and bookmarks apply their filters silently; the toggle's badge
+  // count is the visible signal that filters are active (the default-month
+  // materialization write lands as badge 1, panel closed).
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
   const clearFilters = () =>
@@ -498,23 +504,39 @@ export default function Planned() {
         </div>
       )}
 
+      {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
+          cannot share one line with the search box on 320px screens, so the
+          row wraps: the search box claims the full first line (its
+          max-sm:basis-full below), the controls flow onto the next. min-w-0
+          lets the search box shrink where the row still holds one line. */}
       {view === 'planned' && (
-      <div className="flex gap-2 mb-3">
+      <div className="flex max-sm:flex-wrap gap-2 mb-3">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
           placeholder={t('searchPlaceholder')}
           aria-label={t('searchAria')}
-          className="flex-1 max-w-sm max-sm:max-w-none"
+          className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+            label on one line so the flex-1 SearchInput is the row member
+            that yields on narrow screens. */}
+        <button
+          type="button"
+          onClick={() => setPageBookmarkOpen(true)}
+          title={addBookmarkTitle}
+          className={`${secondaryButtonClass} flex-shrink-0`}
+        >
+          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
+        </button>
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
           options={sortOptions}
           placeholder={t('sort.soonest')}
           aria-label={t('sortAria')}
-          className="w-48 flex-shrink-0"
+          className="w-48 max-sm:w-24 flex-shrink-0"
         />
       </div>
       )}
@@ -754,6 +776,12 @@ export default function Planned() {
           { label: t('recurring.rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => recurringRowAction && openDeleteRule(recurringRowAction) },
         ]}
       />
+      {pageBookmarkOpen && (
+        <BookmarkFormModal
+          pageContext={{ kind: 'planned', params: paramsFromSearchParams(searchParams) }}
+          onClose={() => setPageBookmarkOpen(false)}
+        />
+      )}
     </div>
   )
 }
