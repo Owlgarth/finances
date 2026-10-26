@@ -30,8 +30,8 @@ export function useBookmarks(enabled = true) {
   })
 }
 
-// Mutations own their invalidation; toast copy lives with the consuming
-// components so each surface speaks its own i18n namespace.
+// Mutations own their invalidation; success/error copy lives with the
+// consuming components so each surface speaks its own i18n namespace.
 
 /** Create a bookmark; refetches the list on success. */
 export function useCreateBookmark() {
