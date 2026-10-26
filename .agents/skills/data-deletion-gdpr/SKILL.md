@@ -138,6 +138,8 @@ These files use Django template syntax with variables from environment settings:
 
 After editing, bump the `version` in the YAML frontmatter to trigger re-consent prompts.
 
+**Every template version bump forces a test-payload sweep across four files.** Register-schema validators compare `accepted_terms_version`/`accepted_privacy_version` against the ACTIVE DB version (registration validates, it does not "only record"), and the session conftest seeds legal docs from the templates - so a 2.2 -> 2.3 bump turns every registration-carrying test red until the payloads follow. Sweep `users/tests/test_consent.py`, `core/tests/test_auth.py` (~17 payloads), `core/tests/test_email_verification.py`, and `currencies/tests.py` in the same commit as the bump (precedent: the 2.3 bump commit updated exactly those four). Failing to sweep ships a red suite; trusting a spec that claims registration "only records" the version ships the same red suite one review later.
+
 **Deploying legal document updates**: The database is the runtime source of truth. After bumping template versions, run:
 
 ```bash

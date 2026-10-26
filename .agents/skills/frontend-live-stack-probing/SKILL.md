@@ -32,6 +32,11 @@ same session - in PR #81 it paid for itself twice.
 - Fast path when a token already exists: seed `localStorage` directly (`owlgarth_token`,
   `owlgarth_refresh_token` - see Token Storage in `frontend-react`) instead of driving the
   login form.
+- The UI language follows the SERVER preference, not localStorage: `LanguageContext`
+  applies `preferences.language` over any stored seed, so switch languages in a probe via
+  `PATCH /users/me/preferences` (`{"language": "uk"}`) - writing `owlgarth_language` to
+  localStorage changes nothing the page renders. Multi-language verification (overflow,
+  wrapping, translated chrome) switches all three locales through that one call.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
@@ -79,6 +84,13 @@ same session - in PR #81 it paid for itself twice.
   with the real class strings needs no dev stack and settles the claim in minutes - canonical
   instance: Tailwind v4's alphabetical utility emission made a shared base `w-full` silently
   void caller width classes (trap detail under Responsive Breakpoints in `frontend-react`).
+- Layout claims get MEASURED post-fix evidence, not eyeballing: overflow is a number
+  (`scrollWidth - clientWidth`, probed as a width matrix - e.g. 320/360/390/768/1024 across
+  en/uk/pl - closing at 0px everywhere), and pixel-diff of before/after screenshots is the
+  visual-verification fallback when image viewing is unavailable - it is STRONGER evidence
+  than eyeballing for "desktop unchanged" claims (0 differing pixels of 691200 is a count,
+  not an impression). Lint, build, and i18n gates are structurally blind to rendered pixels;
+  only a width-matrix probe or the user's visual test catches this bug class.
 - Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
   "cannot reproduce" means the trigger is environmental (a failed request), not absent.
   Intercept and force-fail the dependency (request interception blocking the endpoint the
