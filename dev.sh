@@ -215,12 +215,12 @@ start_frontend() {
         # --service-ports publishes UI_PORT for this one-off container; the dev
         # server itself always listens on 5173 inside it.
         exec docker compose run --rm --service-ports --user "$(id -u):$(id -g)" -e HOME=/tmp node \
-            sh -c '[ -x node_modules/.bin/vite ] || npm install --legacy-peer-deps
+            sh -c '[ -x node_modules/.bin/vite ] || npm ci
                    exec npm run dev -- --host --port 5173'
     fi
 
     cd frontend
-    [ -x node_modules/.bin/vite ] || npm install --legacy-peer-deps
+    [ -x node_modules/.bin/vite ] || npm ci
     exec npm run dev -- --host --port "$UI_PORT"
 }
 
