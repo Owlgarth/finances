@@ -665,17 +665,23 @@ export default function BudgetDetailPage() {
             )}
           </div>
         )}
-        {canWrite && (
-          <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
-            <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
+        {/* Header action group: the labeled actions wrap as ONE unit so
+            justify-between can never fling them to opposite ends of the row,
+            and a wrapping row carries them together. The group itself wraps
+            only when the two buttons cannot share a line at all. */}
+        <div className="flex flex-wrap items-center gap-3">
+          {canWrite && (
+            <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
+              <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
+            </button>
+          )}
+          {/* Add bookmark, labeled like its sibling header action. Any role -
+              personal resource: a bookmark is the user's own convenience view,
+              never a workspace mutation. Always the create flow in v1. */}
+          <button type="button" onClick={() => setBookmarkModalOpen(true)} className={secondaryButtonClass}>
+            <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
           </button>
-        )}
-        {/* Add bookmark, labeled like its sibling header action. Any role -
-            personal resource: a bookmark is the user's own convenience view,
-            never a workspace mutation. Always the create flow in v1. */}
-        <button type="button" onClick={() => setBookmarkModalOpen(true)} className={secondaryButtonClass}>
-          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
-        </button>
+        </div>
       </div>
 
       {isPast && (

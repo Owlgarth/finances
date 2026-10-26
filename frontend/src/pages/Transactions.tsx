@@ -279,13 +279,18 @@ export default function Transactions() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
+      {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
+          cannot share one line with the search box on 320px screens, so the
+          row wraps: the search box claims the full first line (its
+          max-sm:basis-full below), the controls flow onto the next. min-w-0
+          lets the search box shrink where the row still holds one line. */}
+      <div className="flex max-sm:flex-wrap gap-2 mb-3">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
           placeholder={t('searchPlaceholder')}
           aria-label={t('searchAria')}
-          className="flex-1 max-w-sm max-sm:max-w-none"
+          className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
         {/* Labeled like the header's export action; flex-shrink-0 keeps the
@@ -305,7 +310,7 @@ export default function Transactions() {
           options={sortOptions}
           placeholder={t('sort.newest')}
           aria-label={t('sortAria')}
-          className="w-48 flex-shrink-0"
+          className="w-48 max-sm:w-24 flex-shrink-0"
         />
       </div>
 
