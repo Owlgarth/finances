@@ -591,3 +591,446 @@ class TestDbConstraints(BookmarkTestCase):
                 with db_transaction.atomic():
                     BookmarkFactory(**kwargs)
         self.assertEqual(Bookmark.objects.count(), 0)
+
+
+# =============================================================================
+# API endpoint tests (task 3) - service tests above must stay untouched
+# =============================================================================
+
+
+class BookmarkAPITestCase(AuthMixin, APIClientMixin, TestCase):
+    """Shared fixtures for the bookmark endpoint tests.
+
+    USD is enabled (budget-kind creates validate the currency against the
+    workspace's enabled set, loosely - the budget itself needs no USD row).
+    Bookmarks under test are created through the API so positions come from
+    the service's next-position helper, exactly like real traffic.
+    """
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'USD')
+        self.budget = BudgetFactory(workspace=self.workspace, name='Main budget')
+
+    def _budget_payload(self, name, **overrides):
+        payload = {
+            'kind': 'budget',
+            'name': name,
+            'icon': 'wallet',
+            'color': 'blue',
+            'budget_id': self.budget.id,
+            'currency_code': 'USD',
+        }
+        payload.update(overrides)
+        return payload
+
+    def _member_in_workspace(self, role='member'):
+        """A second user in the SAME workspace, for cross-user isolation probes."""
+        other = UserFactory(email='other@example.com', current_workspace=self.workspace)
+        WorkspaceMemberFactory(workspace=self.workspace, user=other, role=role)
+        return other
+
+
+class TestBookmarkListAPI(BookmarkAPITestCase):
+    """GET /api/bookmarks - all of the current user's bookmarks, ordered (position, id)."""
+
+    def test_empty_list_for_fresh_user(self):
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data, [])
+
+    def test_returns_own_bookmarks_in_position_order_including_archived(self):
+        self.post('/api/bookmarks', self._budget_payload('Groceries view'), **self.auth_headers())
+        self.assertStatus(201)
+        second = self.post('/api/bookmarks', {'kind': 'transactions', 'name': 'Txns'}, **self.auth_headers())
+        self.assertStatus(201)
+        self.post('/api/bookmarks', {'kind': 'planned', 'name': 'Planned'}, **self.auth_headers())
+        self.assertStatus(201)
+        Bookmark.objects.filter(id=second['id']).update(is_archived=True)
+
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([b['name'] for b in data], ['Groceries view', 'Txns', 'Planned'])
+        # Archived rows ride along (the manage page lists them).
+        self.assertTrue(next(b for b in data if b['id'] == second['id'])['is_archived'])
+
+    def test_excludes_other_users_bookmarks(self):
+        other = self._member_in_workspace()
+        BookmarkFactory(user=other, budget=self.budget, workspace=self.workspace, name='Theirs')
+        self.post('/api/bookmarks', self._budget_payload('Mine'), **self.auth_headers())
+        self.assertStatus(201)
+
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([b['name'] for b in data], ['Mine'])
+
+    def test_excludes_other_workspace_bookmarks(self):
+        other_workspace = WorkspaceFactory()
+        BookmarkFactory(
+            user=self.user,
+            budget=BudgetFactory(workspace=other_workspace),
+            workspace=other_workspace,
+            name='Other workspace view',
+        )
+
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data, [])
+
+
+class TestCreateBookmarkAPI(BookmarkAPITestCase):
+    """POST /api/bookmarks - 201 BookmarkOut | 400 (service validation) | 404 (resource reference) | 422 (schema)."""
+
+    def test_create_budget_bookmark_full_body_shape(self):
+        data = self.post('/api/bookmarks', self._budget_payload('Groceries view'), **self.auth_headers())
+        self.assertStatus(201)
+        # Field set derives from the landed BookmarkOut (task 2), which has
+        # no timestamp fields - the spec text listed created_at/updated_at
+        # the schema never defined.
+        self.assertEqual(
+            set(data),
+            {
+                'id',
+                'kind',
+                'name',
+                'icon',
+                'color',
+                'position',
+                'is_active',
+                'is_archived',
+                'budget_id',
+                'budget_name',
+                'currency_code',
+                'params',
+            },
+        )
+        self.assertEqual(data['kind'], 'budget')
+        self.assertEqual(data['name'], 'Groceries view')
+        self.assertEqual(data['icon'], 'wallet')
+        self.assertEqual(data['color'], 'blue')
+        self.assertTrue(data['is_active'])
+        self.assertFalse(data['is_archived'])
+        self.assertEqual(data['budget_id'], self.budget.id)
+        self.assertEqual(data['budget_name'], 'Main budget')
+        self.assertEqual(data['currency_code'], 'USD')
+        self.assertEqual(data['params'], {})
+
+    def test_create_filter_bookmark_with_params(self):
+        data = self.post(
+            '/api/bookmarks',
+            {'kind': 'transactions', 'name': 'Big spends', 'params': {'account': '12', 'min_amount': '50'}},
+            **self.auth_headers(),
+        )
+        self.assertStatus(201)
+        self.assertIsNone(data['budget_id'])
+        self.assertIsNone(data['budget_name'])
+        self.assertIsNone(data['currency_code'])
+        self.assertEqual(data['params'], {'account': '12', 'min_amount': '50'})
+
+    def test_create_filter_bookmark_with_empty_params(self):
+        data = self.post('/api/bookmarks', {'kind': 'planned', 'name': 'All planned'}, **self.auth_headers())
+        self.assertStatus(201)
+        self.assertEqual(data['params'], {})
+
+    def test_duplicate_name_case_insensitive_returns_400(self):
+        self.post('/api/bookmarks', self._budget_payload('Groceries view'), **self.auth_headers())
+        self.assertStatus(201)
+        detail = self.post('/api/bookmarks', self._budget_payload('groceries VIEW'), **self.auth_headers())
+        self.assertStatus(400)
+        self.assertEqual(detail['code'], 'duplicate_name')
+
+    def test_same_name_across_users_ok(self):
+        other = self._member_in_workspace()
+        BookmarkFactory(user=other, budget=self.budget, workspace=self.workspace, name='Shared name')
+        self.post('/api/bookmarks', self._budget_payload('Shared name'), **self.auth_headers())
+        self.assertStatus(201)
+
+    def test_budget_from_other_workspace_returns_404(self):
+        # Task-1 amended contract: the budget FK is a resource reference, so
+        # BookmarkBudgetNotFoundError extends NotFoundError - wire code 404.
+        foreign_budget = BudgetFactory(workspace=WorkspaceFactory())
+        detail = self.post(
+            '/api/bookmarks',
+            self._budget_payload('Foreign view', budget_id=foreign_budget.id),
+            **self.auth_headers(),
+        )
+        self.assertStatus(404)
+        self.assertEqual(detail['code'], 'budget_not_found')
+        self.assertEqual(Bookmark.objects.count(), 0)
+
+    def test_currency_not_enabled_returns_404(self):
+        detail = self.post(
+            '/api/bookmarks',
+            self._budget_payload('EUR view', currency_code='EUR'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(404)
+        self.assertEqual(detail['code'], 'currency_not_enabled')
+
+    def test_budget_kind_without_budget_and_currency_returns_400(self):
+        self.post(
+            '/api/bookmarks',
+            self._budget_payload('No target', budget_id=None, currency_code=None),
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(Bookmark.objects.count(), 0)
+
+    def test_filter_kind_with_budget_returns_400(self):
+        detail = self.post(
+            '/api/bookmarks',
+            {'kind': 'transactions', 'name': 'Weird', 'budget_id': self.budget.id, 'currency_code': 'USD'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(400)
+        self.assertEqual(detail['code'], 'filter_target_not_allowed')
+
+    def test_name_too_long_returns_422(self):
+        self.post('/api/bookmarks', self._budget_payload('x' * 101), **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_unknown_kind_returns_422(self):
+        # Schema-level kind restriction (task-2 schema).
+        self.post('/api/bookmarks', self._budget_payload('Bad kind', kind='unknown'), **self.auth_headers())
+        self.assertStatus(422)
+
+
+class TestUpdateBookmarkAPI(BookmarkAPITestCase):
+    """PUT /api/bookmarks/{id} - full-replace of name/icon/color only (target immutable)."""
+
+    def setUp(self):
+        super().setUp()
+        created = self.post('/api/bookmarks', self._budget_payload('Old name'), **self.auth_headers())
+        self.assertStatus(201)
+        self.bookmark_id = created['id']
+
+    def _update_payload(self, **overrides):
+        payload = {'name': 'New name', 'icon': 'cart', 'color': 'violet'}
+        payload.update(overrides)
+        return payload
+
+    def test_rename_and_restyle(self):
+        data = self.put(f'/api/bookmarks/{self.bookmark_id}', self._update_payload(), **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'New name')
+        self.assertEqual(data['icon'], 'cart')
+        self.assertEqual(data['color'], 'violet')
+        # Target untouched by a presentation-only edit.
+        self.assertEqual(data['kind'], 'budget')
+        self.assertEqual(data['budget_id'], self.budget.id)
+        self.assertEqual(data['currency_code'], 'USD')
+
+    def test_extra_fields_are_ignored_target_stays_immutable(self):
+        # The schema accepts only name/icon/color; kind/budget/currency/params
+        # in the body are dropped (extra='ignore'), never applied.
+        data = self.put(
+            f'/api/bookmarks/{self.bookmark_id}',
+            self._update_payload(kind='transactions', budget_id=None, currency_code=None, params={'account': '1'}),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['kind'], 'budget')
+        self.assertEqual(data['budget_id'], self.budget.id)
+        self.assertEqual(data['currency_code'], 'USD')
+        self.assertEqual(data['params'], {})
+
+    def test_duplicate_name_returns_400(self):
+        self.post('/api/bookmarks', self._budget_payload('Taken'), **self.auth_headers())
+        self.assertStatus(201)
+        detail = self.put(
+            f'/api/bookmarks/{self.bookmark_id}', self._update_payload(name='taken'), **self.auth_headers()
+        )
+        self.assertStatus(400)
+        self.assertEqual(detail['code'], 'duplicate_name')
+
+    def test_other_users_bookmark_returns_404(self):
+        other = self._member_in_workspace()
+        foreign = BookmarkFactory(user=other, budget=self.budget, workspace=self.workspace, name='Theirs')
+        self.put(f'/api/bookmarks/{foreign.id}', self._update_payload(), **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_unknown_id_returns_404(self):
+        self.put('/api/bookmarks/999999', self._update_payload(), **self.auth_headers())
+        self.assertStatus(404)
+
+
+class TestBookmarkVisibilityAPI(BookmarkAPITestCase):
+    """PATCH /api/bookmarks/{id}/visibility - partial is_active / is_archived."""
+
+    def setUp(self):
+        super().setUp()
+        created = self.post('/api/bookmarks', self._budget_payload('Toggle me'), **self.auth_headers())
+        self.assertStatus(201)
+        self.bookmark_id = created['id']
+
+    def test_deactivate(self):
+        data = self.patch(f'/api/bookmarks/{self.bookmark_id}/visibility', {'is_active': False}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertFalse(data['is_active'])
+        self.assertFalse(data['is_archived'])
+
+    def test_archive_then_restore(self):
+        data = self.patch(f'/api/bookmarks/{self.bookmark_id}/visibility', {'is_archived': True}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertTrue(data['is_archived'])
+        self.assertTrue(data['is_active'])
+        data = self.patch(
+            f'/api/bookmarks/{self.bookmark_id}/visibility', {'is_archived': False}, **self.auth_headers()
+        )
+        self.assertStatus(200)
+        self.assertFalse(data['is_archived'])
+
+    def test_both_flags_in_one_request(self):
+        data = self.patch(
+            f'/api/bookmarks/{self.bookmark_id}/visibility',
+            {'is_active': False, 'is_archived': True},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertFalse(data['is_active'])
+        self.assertTrue(data['is_archived'])
+
+    def test_empty_body_is_a_no_op(self):
+        data = self.patch(f'/api/bookmarks/{self.bookmark_id}/visibility', {}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertTrue(data['is_active'])
+        self.assertFalse(data['is_archived'])
+
+    def test_unknown_id_returns_404(self):
+        self.patch('/api/bookmarks/999999/visibility', {'is_active': False}, **self.auth_headers())
+        self.assertStatus(404)
+
+
+class TestMoveBookmarkAPI(BookmarkAPITestCase):
+    """POST /api/bookmarks/{id}/move - atomic neighbor swap."""
+
+    def setUp(self):
+        super().setUp()
+        for name in ('Alpha', 'Beta', 'Gamma'):
+            self.post('/api/bookmarks', self._budget_payload(name), **self.auth_headers())
+            self.assertStatus(201)
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([b['name'] for b in data], ['Alpha', 'Beta', 'Gamma'])
+        self.ids = [b['id'] for b in data]
+
+    def _names(self):
+        return [b['name'] for b in self.get('/api/bookmarks', **self.auth_headers())]
+
+    def test_move_up_swaps_with_predecessor(self):
+        data = self.post(f'/api/bookmarks/{self.ids[1]}/move', {'direction': 'up'}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'Beta')
+        self.assertEqual(self._names(), ['Beta', 'Alpha', 'Gamma'])
+
+    def test_move_down_swaps_with_successor(self):
+        self.post(f'/api/bookmarks/{self.ids[1]}/move', {'direction': 'down'}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(self._names(), ['Alpha', 'Gamma', 'Beta'])
+
+    def test_move_at_boundary_is_a_no_op(self):
+        # First row moved up stays first (no neighbor to swap with).
+        data = self.post(f'/api/bookmarks/{self.ids[0]}/move', {'direction': 'up'}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'Alpha')
+        self.assertEqual(self._names(), ['Alpha', 'Beta', 'Gamma'])
+
+    def test_invalid_direction_returns_422(self):
+        self.post(f'/api/bookmarks/{self.ids[0]}/move', {'direction': 'sideways'}, **self.auth_headers())
+        self.assertStatus(422)
+
+    def test_other_users_bookmark_returns_404(self):
+        other = self._member_in_workspace()
+        foreign = BookmarkFactory(user=other, budget=self.budget, workspace=self.workspace, name='Theirs')
+        self.post(f'/api/bookmarks/{foreign.id}/move', {'direction': 'up'}, **self.auth_headers())
+        self.assertStatus(404)
+
+
+class TestDeleteBookmarkAPI(BookmarkAPITestCase):
+    """DELETE /api/bookmarks/{id} - 204 | 404."""
+
+    def test_delete(self):
+        created = self.post('/api/bookmarks', self._budget_payload('Delete me'), **self.auth_headers())
+        self.assertStatus(201)
+        self.delete(f'/api/bookmarks/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        self.assertEqual(Bookmark.objects.count(), 0)
+
+    def test_delete_twice_returns_404(self):
+        created = self.post('/api/bookmarks', self._budget_payload('Delete me'), **self.auth_headers())
+        self.assertStatus(201)
+        self.delete(f'/api/bookmarks/{created["id"]}', **self.auth_headers())
+        self.assertStatus(204)
+        self.delete(f'/api/bookmarks/{created["id"]}', **self.auth_headers())
+        self.assertStatus(404)
+
+    def test_other_users_bookmark_returns_404(self):
+        other = self._member_in_workspace()
+        foreign = BookmarkFactory(user=other, budget=self.budget, workspace=self.workspace, name='Theirs')
+        self.delete(f'/api/bookmarks/{foreign.id}', **self.auth_headers())
+        self.assertStatus(404)
+        self.assertTrue(Bookmark.objects.filter(id=foreign.id).exists())
+
+
+class TestBookmarkViewerRoleAPI(BookmarkAPITestCase):
+    """Bookmarks are personal: viewers have full CRUD on their own rows (no require_role)."""
+
+    user_role = 'viewer'
+
+    def test_viewer_full_lifecycle(self):
+        data = self.post('/api/bookmarks', self._budget_payload('Viewer view'), **self.auth_headers())
+        self.assertStatus(201)
+        bookmark_id = data['id']
+
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertEqual([b['name'] for b in data], ['Viewer view'])
+
+        data = self.put(
+            f'/api/bookmarks/{bookmark_id}',
+            {'name': 'Renamed', 'icon': 'home', 'color': 'teal'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['name'], 'Renamed')
+
+        data = self.patch(f'/api/bookmarks/{bookmark_id}/visibility', {'is_archived': True}, **self.auth_headers())
+        self.assertStatus(200)
+        self.assertTrue(data['is_archived'])
+
+        self.post(f'/api/bookmarks/{bookmark_id}/move', {'direction': 'down'}, **self.auth_headers())
+        self.assertStatus(200)
+
+        self.delete(f'/api/bookmarks/{bookmark_id}', **self.auth_headers())
+        self.assertStatus(204)
+
+
+class TestBookmarkWorkspaceIsolationAPI(BookmarkAPITestCase):
+    """Every endpoint scopes to the user's CURRENT workspace - same user, other workspace -> 404."""
+
+    def test_other_workspace_bookmark_invisible_and_unreachable(self):
+        other_workspace = WorkspaceFactory()
+        foreign = BookmarkFactory(
+            user=self.user,
+            budget=BudgetFactory(workspace=other_workspace, name='Other budget'),
+            workspace=other_workspace,
+            name='Other workspace view',
+        )
+
+        data = self.get('/api/bookmarks', **self.auth_headers())
+        self.assertStatus(200)
+        self.assertNotIn(foreign.id, [b['id'] for b in data])
+
+        self.put(
+            f'/api/bookmarks/{foreign.id}',
+            {'name': 'Hijack', 'icon': 'home', 'color': 'teal'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(404)
+        self.patch(f'/api/bookmarks/{foreign.id}/visibility', {'is_active': False}, **self.auth_headers())
+        self.assertStatus(404)
+        self.post(f'/api/bookmarks/{foreign.id}/move', {'direction': 'up'}, **self.auth_headers())
+        self.assertStatus(404)
+        self.delete(f'/api/bookmarks/{foreign.id}', **self.auth_headers())
+        self.assertStatus(404)
+        self.assertTrue(Bookmark.objects.filter(id=foreign.id).exists())
