@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   Calendar,
   ChevronLeft,
   ChevronRight,
   Home,
+  ListPlus,
   PieChart,
   Receipt,
   Search,
@@ -13,6 +14,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { useVisibleBookmarks } from '../../hooks/useBookmarks'
+import { bookmarkIsActive, bookmarkTargetPath } from '../../utils/bookmarks'
+import { BookmarkGlyph } from '../bookmarks/bookmarkMeta'
 import { isMacLike, openPageSearch } from '../common/CommandPalette'
 import UserMenu from './UserMenu'
 import WorkspaceSelector from './WorkspaceSelector'
@@ -41,6 +45,10 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const { t } = useTranslation('nav')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { workspace } = useWorkspace()
+  const location = useLocation()
+  // Shared derivation (hooks/useBookmarks): section renders when ANY
+  // bookmark exists; entry rows are the active non-archived ones, capped.
+  const { any: anyBookmarks, visible: visibleBookmarks } = useVisibleBookmarks()
 
   const handleOpenSettings = () => setIsSettingsOpen(true)
 
@@ -111,6 +119,53 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 )}
               </NavLink>
             ))}
+            {anyBookmarks && (
+              <>
+                <div className="border-t border-border mx-1 my-2" aria-hidden="true" />
+                <div>
+                  {!collapsed && (
+                    <div className="px-3 pt-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted truncate">
+                      {t('bookmarks')}
+                    </div>
+                  )}
+                  {visibleBookmarks.map((b) => (
+                    <NavLink
+                      key={b.id}
+                      to={bookmarkTargetPath(b)}
+                      className={() =>
+                        `flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1
+                        ${bookmarkIsActive(b, location)
+                          ? 'bg-surface-hover border-l-2 border-primary text-text font-medium'
+                          : 'text-text-muted hover:bg-surface-hover hover:text-text'
+                        }`
+                      }
+                      title={collapsed ? b.name : undefined}
+                    >
+                      <BookmarkGlyph bookmark={b} size={14} />
+                      {!collapsed && (
+                        <span className="font-mono text-xs uppercase tracking-wider truncate">{b.name}</span>
+                      )}
+                    </NavLink>
+                  ))}
+                  <NavLink
+                    to="/bookmarks"
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1
+                      ${isActive
+                        ? 'bg-surface-hover border-l-2 border-primary text-text font-medium'
+                        : 'text-text-muted hover:bg-surface-hover hover:text-text'
+                      }`
+                    }
+                    title={collapsed ? t('bookmarksManage') : undefined}
+                  >
+                    <ListPlus size={14} className="flex-shrink-0" />
+                    {!collapsed && (
+                      <span className="font-mono text-xs uppercase tracking-wider">{t('bookmarksManage')}</span>
+                    )}
+                  </NavLink>
+                </div>
+              </>
+            )}
           </nav>
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">

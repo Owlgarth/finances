@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { bookmarksApi } from '../api/client'
 import type { BookmarkCreateInput, BookmarkInput } from '../api/client'
+import type { Bookmark } from '../types'
+import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
 
 // Cache key for the bookmark list. The API is workspace-scoped (rows are
 // personal per workspace), so this is a workspace-scoped key: WorkspaceContext's
@@ -28,6 +31,26 @@ export function useBookmarks(enabled = true) {
     refetchOnWindowFocus: 'always',
     enabled,
   })
+}
+
+/**
+ * Sidebar and More-sheet section derivation, shared by both nav surfaces so
+ * the visibility rule cannot drift between them: the section renders when
+ * ANY bookmark exists (archived and inactive included - the Manage row must
+ * stay reachable), while entry rows list only active non-archived bookmarks
+ * in list order, sliced to the user's bookmark_visible_limit preference
+ * (0 = no cap). Capping never reorders - list order is the manage page's
+ * order. The list query is gated on workspace presence (both nav surfaces
+ * render workspace-less; useEnabledCurrencies precedent).
+ */
+export function useVisibleBookmarks(): { any: boolean; visible: Bookmark[] } {
+  const { workspace } = useWorkspace()
+  const { data } = useBookmarks(workspace != null)
+  const { bookmarkVisibleLimit } = useUserPreferences()
+  const all = data ?? []
+  const active = all.filter((b) => b.is_active && !b.is_archived)
+  const visible = bookmarkVisibleLimit > 0 ? active.slice(0, bookmarkVisibleLimit) : active
+  return { any: all.length > 0, visible }
 }
 
 // Mutations own their invalidation; success/error copy lives with the
