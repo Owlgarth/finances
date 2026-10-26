@@ -41,6 +41,8 @@
     "calendar": "Kalendarz",
     "coin": "Moneta"
   },
+  "addTransactionsAria": "Dodaj zakładkę widoku transakcji",
+  "addPlannedAria": "Dodaj zakładkę widoku planowanych transakcji",
   "colors": {
     "neutral": "Neutralny",
     "positive": "Pozytywny",

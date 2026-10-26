@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -13,9 +13,11 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { paramsFromSearchParams } from '../utils/bookmarks'
 import { isCalendarMonth, monthRange, shiftMonth } from '../utils/dates'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
+import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
 import PlannedMonthStepper from '../components/transactions/PlannedMonthStepper'
@@ -30,7 +32,7 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
-import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'text-warning border-warning/40',
@@ -79,6 +81,7 @@ function readStoredSearch(): string {
 
 export default function Planned() {
   const { t } = useTranslation('planned')
+  const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -90,6 +93,10 @@ export default function Planned() {
   const statusOptions = STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const statusLabel = (value: StatusFilter) => t(STATUS_OPTIONS.find((o) => o.value === value)!.labelKey)
+
+  // Resolved in the body, not inside the JSX attributes: the literal-string
+  // lint only recognizes the unaliased t() call in attribute positions.
+  const addBookmarkAria = tBookmarks('addPlannedAria')
 
   // Schedule summary for the recurring meta line: "Every month on day 5",
   // "Every 2 weeks". Plural forms resolve via the i18next count; the
@@ -111,6 +118,9 @@ export default function Planned() {
   // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
   // click on the hover-revealed Ban icon must not fire the mutation directly.
   const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
+  // Bookmark capture of the planned view's filters (mount-per-use modal):
+  // target derives from the URL at open time; renders only in view=planned.
+  const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
   // Recurring view state. Mirrors the planned modal-state quartet above.
   const [recurringFormOpen, setRecurringFormOpen] = useState(false)
@@ -508,6 +518,15 @@ export default function Planned() {
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        <button
+          type="button"
+          onClick={() => setPageBookmarkOpen(true)}
+          title={addBookmarkAria}
+          aria-label={addBookmarkAria}
+          className={`inline-flex items-center justify-center flex-shrink-0 bg-surface border border-border rounded-sm px-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
+        >
+          <BookmarkPlus size={13} />
+        </button>
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
@@ -754,6 +773,12 @@ export default function Planned() {
           { label: t('recurring.rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => recurringRowAction && openDeleteRule(recurringRowAction) },
         ]}
       />
+      {pageBookmarkOpen && (
+        <BookmarkFormModal
+          pageContext={{ kind: 'planned', params: paramsFromSearchParams(searchParams) }}
+          onClose={() => setPageBookmarkOpen(false)}
+        />
+      )}
     </div>
   )
 }

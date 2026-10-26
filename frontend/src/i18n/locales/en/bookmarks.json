@@ -39,6 +39,8 @@
     "calendar": "Calendar",
     "coin": "Coin"
   },
+  "addTransactionsAria": "Bookmark this transactions view",
+  "addPlannedAria": "Bookmark this planned view",
   "colors": {
     "neutral": "Neutral",
     "positive": "Positive",

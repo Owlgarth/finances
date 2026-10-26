@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
+import { BookmarkPlus, Copy, Download, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction } from '../types'
@@ -13,8 +13,10 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
+import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
@@ -24,7 +26,7 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
-import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_STYLE: Record<string, string> = {
   income: 'text-positive',
@@ -67,6 +69,7 @@ function readStoredSearch(): string {
 
 export default function Transactions() {
   const { t } = useTranslation('transactions')
+  const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -168,6 +171,9 @@ export default function Transactions() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [copySource, setCopySource] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  // Bookmark capture of the current filter view (mount-per-use modal): the
+  // target derives from the URL at open time, so a boolean is the whole state.
+  const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', page, pageSize, ordering, search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
@@ -242,6 +248,10 @@ export default function Transactions() {
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
 
+  // Resolved in the body, not inside the JSX attributes: the literal-string
+  // lint only recognizes the unaliased t() call in attribute positions.
+  const addBookmarkAria = tBookmarks('addTransactionsAria')
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -275,6 +285,15 @@ export default function Transactions() {
           className="flex-1 max-w-sm max-sm:max-w-none"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        <button
+          type="button"
+          onClick={() => setPageBookmarkOpen(true)}
+          title={addBookmarkAria}
+          aria-label={addBookmarkAria}
+          className={`inline-flex items-center justify-center flex-shrink-0 bg-surface border border-border rounded-sm px-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
+        >
+          <BookmarkPlus size={13} />
+        </button>
         <Select
           value={ordering}
           onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
@@ -420,6 +439,12 @@ export default function Transactions() {
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      {pageBookmarkOpen && (
+        <BookmarkFormModal
+          pageContext={{ kind: 'transactions', params: paramsFromSearchParams(searchParams) }}
+          onClose={() => setPageBookmarkOpen(false)}
+        />
+      )}
     </div>
   )
 }
