@@ -25,7 +25,9 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 - **Bottom tab bar, 5 slots**: Home · Transactions · **[+]** · Budgets · More. Labels always
   visible, active tab in the primary color, safe-area padded.
 - **More** opens a sheet: Search (global page search), Accounts, Planned, Members, Settings,
-  logout, then workspace switching
+  logout, then a bookmarks section (the user's active bookmarks, capped
+  by their preference, with a Manage link to `/bookmarks` - shown only
+  when they have any), then workspace switching
   (with role badges), a create-workspace row (closes the sheet and opens the
   create-workspace modal - a bottom sheet with the ordered currency multi-select - as the
   only overlay layer), workspace settings, dark mode, language (closes the sheet
