@@ -12,6 +12,8 @@ from users.two_factor import TwoFactorService
 from workspaces.models import ADMIN_ROLES, OWNER_ROLES, Role
 from workspaces.schemas import (
     MemberPasswordReset,
+    UserWorkspaceSettingsOut,
+    UserWorkspaceSettingsUpdate,
     WorkspaceCreate,
     WorkspaceDefaultBudgetIn,
     WorkspaceMemberAdd,
@@ -20,7 +22,7 @@ from workspaces.schemas import (
     WorkspaceOut,
     WorkspaceUpdate,
 )
-from workspaces.services import WorkspaceMemberService, WorkspaceService
+from workspaces.services import UserWorkspaceSettingsService, WorkspaceMemberService, WorkspaceService
 
 router = Router(tags=['Workspaces'])
 
@@ -127,6 +129,34 @@ def update_current_workspace(request: HttpRequest, data: WorkspaceUpdate):
     workspace_id = request.auth.current_workspace_id
     user_role = require_role(request.auth, workspace_id, ADMIN_ROLES)
     return WorkspaceService.update(workspace_id, data, user_role)
+
+
+# IMPORTANT: flat personal routes (like /current above) must come BEFORE the
+# /{workspace_id} routes - the {workspace_id} pattern matches ANY non-slash
+# segment, so a flat route registered below it answers 405 (Allow: DELETE)
+# into the delete-workspace pattern instead of its own operation.
+@router.get('/member-settings', response=UserWorkspaceSettingsOut, auth=WorkspaceJWTAuth())
+def get_member_settings(request: HttpRequest):
+    """Get the current member's page-default settings for the current workspace.
+
+    Personal resource (bookmarks precedent): every role, including viewers,
+    manages only their own settings - no role gate. get_or_create: a member
+    who never touched their defaults still gets the full fresh shape
+    (every facet null = no preference; the page falls back to its built-in).
+    """
+    return UserWorkspaceSettingsService.get(request.auth, request.auth.current_workspace_id)
+
+
+@router.patch('/member-settings', response=UserWorkspaceSettingsOut, auth=WorkspaceJWTAuth())
+def update_member_settings(request: HttpRequest, data: UserWorkspaceSettingsUpdate):
+    """Update the current member's page defaults (any role, including viewers - personal).
+
+    Only changed page keys are sent; a present page key replaces that page's
+    whole sub-object (facets omitted inside it reset to null), absent page
+    keys are untouched. Returns the full GET shape. Schema violations
+    (unknown enum literal, wrong type) are Django Ninja 422s.
+    """
+    return UserWorkspaceSettingsService.update(request.auth, request.auth.current_workspace_id, data)
 
 
 @router.delete('/{workspace_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=JWTAuth())

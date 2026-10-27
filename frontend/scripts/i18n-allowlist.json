@@ -1,6 +1,7 @@
 {
   "uk": [],
   "pl": [
-    "transactions.autoBadge"
+    "transactions.autoBadge",
+    "settings.workspaceSettings.defaults.plannedStatus"
   ]
 }

@@ -7,6 +7,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { getApiErrorMessage } from '../../utils/errors'
 import Modal from '../common/Modal'
 import CurrenciesSettingsSection from '../currencies/CurrenciesSettingsSection'
+import WorkspaceDefaultsSection from '../settings/WorkspaceDefaultsSection'
 import { inputClass, primaryButtonClass } from '../common/formStyles'
 
 interface WorkspaceSettingsPanelProps {
@@ -129,6 +130,8 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
               </div>
 
               {canManageCurrencies && <CurrenciesSettingsSection />}
+
+              <WorkspaceDefaultsSection />
 
               {isOwner && (
                 <div className="border-t border-border pt-6">

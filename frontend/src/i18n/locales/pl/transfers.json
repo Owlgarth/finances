@@ -12,6 +12,10 @@
     "toDateAria": "Data do"
   },
   "noMatch": "Żaden przelew nie pasuje do filtrów.",
+  "saveDefaults": "Zapisz jako domyślne",
+  "saveDefaultsPending": "Zapisywanie…",
+  "saveDefaultsSuccess": "Zapisano ustawienia domyślne.",
+  "saveDefaultsFailed": "Nie udało się zapisać ustawień domyślnych",
   "emptyHeading": "Nie masz jeszcze przelewów",
   "emptyMessage": "Zarejestruj przelew z poziomu kont lub z menu tworzenia; pojawi się tutaj.",
   "row": {

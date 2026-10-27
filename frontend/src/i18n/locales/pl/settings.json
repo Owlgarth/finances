@@ -258,6 +258,27 @@
     "nameUpdated": "Nazwa obszaru roboczego została zaktualizowana",
     "nameUpdateFailed": "Nie udało się zaktualizować nazwy obszaru roboczego",
     "deleted": "Usunięto „{{name}}”",
+    "defaults": {
+      "title": "Widoki domyślne",
+      "plannedGroup": "Zaplanowane",
+      "plannedStatus": "Status",
+      "plannedRange": "Zakres",
+      "plannedView": "Widok",
+      "plannedOrdering": "Sortowanie",
+      "transactionsGroup": "Transakcje",
+      "txRange": "Zakres",
+      "txType": "Typy",
+      "txOrdering": "Sortowanie",
+      "transfersGroup": "Przelewy",
+      "transfersRange": "Zakres",
+      "rangeMonth": "Miesiąc",
+      "rangeWeek": "Tydzień",
+      "rangeYear": "Rok",
+      "rangeAll": "Cały czas",
+      "defaultOption": "Domyślne ({{builtIn}})",
+      "savedToast": "Zapisano widoki domyślne",
+      "saveFailed": "Nie udało się zapisać widoków domyślnych"
+    },
     "deleteFailed": "Nie udało się usunąć obszaru roboczego"
   },
   "createWorkspace": {

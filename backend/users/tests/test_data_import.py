@@ -30,8 +30,9 @@ from transactions.factories import TransactionFactory, TransactionItemFactory
 from transactions.models import Transaction
 from transfers.factories import TransferFactory
 from users.services import UserService
-from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import Workspace
+from workspaces.factories import UserWorkspaceSettingsFactory, WorkspaceFactory, WorkspaceMemberFactory
+from workspaces.models import UserWorkspaceSettings, Workspace
+from workspaces.services import UserWorkspaceSettingsService
 
 User = get_user_model()
 
@@ -1601,3 +1602,90 @@ class V3BookmarkImportTests(AuthMixin, TestCase):
         self.assertEqual(result['skipped']['errors'], [])
         preferences = UserService.get_or_create_preferences(self.user)
         self.assertEqual(preferences.bookmark_visible_limit, 5)
+
+
+class V3MemberSettingsImportTests(AuthMixin, TestCase):
+    """Member view-settings round-trip, stale-file tolerance, hand-edited degradation."""
+
+    def _make_import_input(self, data):
+        from core.schemas import FullImportIn
+
+        return FullImportIn(data=data)
+
+    def _v3(self, **ws_extra):
+        ws = {'workspace_name': 'Imported Workspace', 'enabled_currencies': [], 'accounts': [], 'budgets': []}
+        ws.update(ws_extra)
+        return {'export_version': '3.0', 'workspaces': [ws]}
+
+    def test_member_settings_round_trip(self):
+        blob = {
+            'planned': {'status': 'pending', 'range': 'month', 'view': 'recurring', 'ordering': 'name'},
+            'transactions': {'range': None, 'type': ['income', 'expense'], 'ordering': '-date'},
+            'transfers': {'range': 'week'},
+        }
+        UserWorkspaceSettingsFactory(
+            workspace=self.workspace,
+            user=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+            settings=blob,
+        )
+
+        export = UserService.export_all_data(self.user)
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        # Workspace ambiguity (skill rule): the imported copy is renamed, so
+        # exclude the AuthMixin workspace instead of matching the new name.
+        imported_ws = Workspace.objects.filter(owner=self.user).exclude(id=self.workspace.id).get()
+        row = UserWorkspaceSettings.objects.get(workspace=imported_ws, user=self.user)
+        self.assertEqual(row.settings, blob)
+        self.assertEqual(row.version, UserWorkspaceSettingsService.CURRENT_VERSION)
+        self.assertEqual(row.created_by, self.user)
+
+    def test_stale_export_without_member_settings_imports_clean(self):
+        """Pre-member-settings v3 files lack the key - no KeyError, no row, no errors."""
+        export = self._v3(accounts=[{'name': 'Main', 'currency_code': 'PLN'}])
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        self.assertEqual(
+            UserWorkspaceSettings.objects.filter(user=self.user).exclude(workspace=self.workspace).count(), 0
+        )
+
+    def test_hand_edited_blob_normalizes_on_import(self):
+        """Garbage facet values degrade to null and unknown keys drop - the
+        file never writes junk into the restored blob."""
+        export = self._v3(
+            member_settings={
+                'planned': {'status': 'garbage', 'range': 'year', 'view': 'recurring', 'ordering': 'name'},
+                'unknown_page': {'anything': True},
+            }
+        )
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        row = UserWorkspaceSettings.objects.get(workspace=ws, user=self.user)
+        self.assertEqual(
+            row.settings,
+            {
+                'planned': {'status': None, 'range': 'year', 'view': 'recurring', 'ordering': 'name'},
+                'transactions': {'range': None, 'type': None, 'ordering': None},
+                'transfers': {'range': None},
+            },
+        )
+
+    def test_all_null_blob_creates_no_row(self):
+        """A blob with zero information (all values unknown) creates nothing -
+        the leanest correct restore; the member's next GET materializes
+        fresh defaults."""
+        export = self._v3(member_settings={'planned': {'status': 'garbage'}, 'transfers': {'range': 'nope'}})
+
+        result = UserService.import_all_data(self.user, self._make_import_input(export))
+
+        self.assertEqual(result['skipped']['errors'], [])
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        self.assertEqual(UserWorkspaceSettings.objects.filter(workspace=ws).count(), 0)

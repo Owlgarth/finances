@@ -55,7 +55,7 @@ class TestAuthRegister(AuthTestCase):
                 'full_name': 'New User',
                 'workspace_name': 'My Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -80,7 +80,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Test Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -118,7 +118,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Demo Workspace',
                 'start_with_sample_data': True,
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -147,7 +147,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 1',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -160,7 +160,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Workspace 2',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(400)
@@ -188,7 +188,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Not Yours',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(400)
@@ -207,7 +207,7 @@ class TestAuthRegister(AuthTestCase):
             'password': 'securepassword123',
             'workspace_name': 'Flood',
             'accepted_terms_version': '2.1',
-            'accepted_privacy_version': '2.3',
+            'accepted_privacy_version': '2.4',
         }
         for _ in range(settings.RATE_LIMIT_REGISTER_ACCOUNT):
             self.post('/api/auth/register', payload)
@@ -254,7 +254,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Multi Workspace',
                 'currency_codes': ['PLN', 'EUR', 'USD'],
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -276,7 +276,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Dollar First',
                 'currency_codes': ['USD', 'PLN'],
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -298,7 +298,7 @@ class TestAuthRegister(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Default Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -318,7 +318,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Big Workspace',
                 'currency_codes': codes,
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(422)
@@ -333,7 +333,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Empty Workspace',
                 'currency_codes': [],
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(422)
@@ -348,7 +348,7 @@ class TestAuthRegister(AuthTestCase):
                 'workspace_name': 'Bad Workspace',
                 'currency_codes': ['PLN', 'XXX'],
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(404)
@@ -545,7 +545,7 @@ class TestDemoMode(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Demo Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(403)
@@ -561,7 +561,7 @@ class TestDemoMode(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Normal Workspace',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -912,7 +912,7 @@ class TestRefreshToken(AuthTestCase):
                 'password': password,
                 'workspace_name': 'Refresh WS',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
@@ -990,7 +990,7 @@ class TestRefreshToken(AuthTestCase):
                 'password': 'securepassword123',
                 'workspace_name': 'Register WS',
                 'accepted_terms_version': '2.1',
-                'accepted_privacy_version': '2.3',
+                'accepted_privacy_version': '2.4',
             },
         )
         self.assertStatus(201)
