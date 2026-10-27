@@ -62,7 +62,7 @@ services:
       - storage-data:/data
 
   storage:
-    # Digest-pinned for reproducibility; Renovate (renovate.json) keeps the digest fresh.
+    # Digest-pinned for reproducibility; kept fresh by hand (Dependabot has no compose manager).
     image: rustfs/rustfs:1.0.0-rc.4@sha256:a9fbb5e5bfce09ccd0869ac9a7b0e39191c6868d75ec4c5d08ebbd5475db5d6b
     environment:
       RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
