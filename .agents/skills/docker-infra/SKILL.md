@@ -51,7 +51,7 @@ Third-party service images are pinned `tag@sha256:...`. Digests are moving targe
 
 When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs: 131 tags, all prerelease, pinned `1.0.0-rc.4`).
 
-`prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently; Renovate keeps both files in sync.
+`prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently. Nothing automates compose digests since PR #154: Dependabot (the update bot) has no compose manager - it covers Dockerfiles only - so digest refresh and keeping the two files' pins in sync are a manual chore (accepted gap; the backlog entry 2026-10-27 records the retrigger options).
 
 ## Out-of-Context Imports: Named Additional Build Contexts
 
