@@ -244,6 +244,27 @@
     "nameUpdated": "Workspace name updated",
     "nameUpdateFailed": "Failed to update workspace name",
     "deleted": "\"{{name}}\" deleted",
+    "defaults": {
+      "title": "Default views",
+      "plannedGroup": "Planned",
+      "plannedStatus": "Status",
+      "plannedRange": "Range",
+      "plannedView": "View",
+      "plannedOrdering": "Sort order",
+      "transactionsGroup": "Transactions",
+      "txRange": "Range",
+      "txType": "Types",
+      "txOrdering": "Sort order",
+      "transfersGroup": "Transfers",
+      "transfersRange": "Range",
+      "rangeMonth": "Month",
+      "rangeWeek": "Week",
+      "rangeYear": "Year",
+      "rangeAll": "All time",
+      "defaultOption": "Default ({{builtIn}})",
+      "savedToast": "Default views saved",
+      "saveFailed": "Failed to save default views"
+    },
     "deleteFailed": "Failed to delete workspace"
   },
   "createWorkspace": {

@@ -136,6 +136,12 @@ Two role groups drive enforcement:
 | Update workspace name | ✓ | ✓ | ✗ | ✗ |
 | Delete workspace | ✓ | ✗ | ✗ | ✗ |
 
+### Member Settings (Personal)
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| Member settings (personal, no role gate) | ✓ | ✓ | ✓ | ✓ |
+
 ### Workspace Management
 
 | Action | Owner | Admin | Member | Viewer |

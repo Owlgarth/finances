@@ -3,7 +3,8 @@ import type { AxiosError } from 'axios';
 import { getRuntimeApiUrl } from '../runtimeConfig';
 import type {
   User, Token, LoginRequest, RegisterRequest, Workspace, WorkspaceMember, AddMemberRequest,
-  AddMemberResponse, UserPreferences, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus,
+  AddMemberResponse, UserPreferences, UserWorkspaceSettings, PlannedPageSettings, TransactionsPageSettings,
+  TransfersPageSettings, AccountDeleteCheck, ConsentStatus, LegalDoc, TwoFAStatus,
   TwoFASetupResponse, TwoFAVerifySetupResponse, TwoFARegenerateResponse, TransactionTotalsResponse,
   PlannedTransactionTotalsResponse, FrequentDescriptionsResponse, CurrentBalancesResponse,
   ImportResult, LegacyImportResult, Account, AccountBalance, AccountType, CatalogCurrency, Bookmark, Budget,
@@ -646,4 +647,24 @@ export const workspaceMembersApi = {
 
   reset2FA: (workspaceId: number, userId: number): Promise<{ message: string }> =>
     api.post(`/workspaces/${workspaceId}/members/${userId}/reset-2fa`).then(res => res.data),
+};
+
+// ============= Workspace Member Settings API =============
+/** PATCH body: only the changed page keys are sent - an absent page key
+    keeps its stored sub-object; a present page key fully replaces that
+    page's sub-object. GET/update responses are always the full blob. */
+export interface WorkspaceSettingsPatch {
+  planned?: PlannedPageSettings;
+  transactions?: TransactionsPageSettings;
+  transfers?: TransfersPageSettings;
+}
+
+export const workspaceSettingsApi = {
+  /** The user's per-workspace page defaults (null facets = unset). */
+  get: (): Promise<UserWorkspaceSettings> =>
+    api.get<UserWorkspaceSettings>('/workspaces/member-settings').then(res => res.data),
+
+  /** Delta update - send only the changed page keys; returns the full blob. */
+  update: (data: WorkspaceSettingsPatch): Promise<UserWorkspaceSettings> =>
+    api.patch<UserWorkspaceSettings>('/workspaces/member-settings', data).then(res => res.data),
 };
