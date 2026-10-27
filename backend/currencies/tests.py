@@ -568,7 +568,7 @@ class TestRegistrationCurrencyCode(APIClientMixin, TestCase):
             'password': 'securepassword123',
             'workspace_name': 'My Workspace',
             'accepted_terms_version': '2.1',
-            'accepted_privacy_version': '2.3',
+            'accepted_privacy_version': '2.4',
             **extra,
         }
         return self.post('/api/auth/register', payload)
