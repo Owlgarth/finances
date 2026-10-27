@@ -249,7 +249,9 @@ git-cliff v2.13.1 to `~/.local/bin` only if you want the grouped
 
 **One-time GitHub setup.** After the first successful release, flip both
 GHCR packages (`finances-backend`, `finances-ui`) to public - packages
-pushed by a workflow default to private. And install the Renovate app on
-the org: `renovate.json` schedules weekly update PRs for the Docker images
-(digest-pinned in the compose files), GitHub Actions, npm, and Python
-dependencies.
+pushed by a workflow default to private. Dependency updates need no app
+install: Dependabot is first-party and activates on push of
+`.github/dependabot.yml`. It opens weekly PRs (Mondays 05:00
+Europe/Warsaw) for npm (frontend), uv (backend), GitHub Actions, and the
+Dockerfiles; the compose image digests are maintained by hand (Dependabot
+does not manage compose files).
