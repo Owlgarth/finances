@@ -5,8 +5,10 @@ WORKDIR /app
 # Copy package files first for layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+# Install dependencies exactly as the lockfile pins them - the same command
+# CI installs with. npm ci fails loudly on a package.json/package-lock.json
+# mismatch instead of silently resolving around it.
+RUN npm ci
 
 # Copy source code
 COPY . .
