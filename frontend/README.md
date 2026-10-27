@@ -37,7 +37,8 @@ frontend/
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, RecurringFormModal
-│   │   └── profile/          # Settings/profile sections
+│   │   ├── profile/          # Settings/profile sections
+│   │   └── settings/         # WorkspaceDefaultsSection (workspace panel "Default views" - per-page view defaults)
 │   ├── contexts/
 │   │   ├── AuthContext.tsx          # Authentication + consent state
 │   │   ├── WorkspaceContext.tsx     # Current workspace and role
@@ -47,6 +48,7 @@ frontend/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
 │   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/More-sheet rows)
+│   │   ├── useWorkspaceSettings.ts  # Per-workspace page defaults - useWorkspaceSettings + useUpdateWorkspaceSettings (the member-settings blob query + delta PATCH)
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
@@ -62,7 +64,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date month math for the from/to list-filter params: whole-month ranges, calendar-month detection, adjacent-month shift), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── .i18rc                   # i18next-parser config (i18n:extract; locales list)
 ├── package.json
@@ -91,9 +93,9 @@ routes, auth/legal routes and a 404 catch-all.
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target) |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
-| `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download |
-| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), explicit or deep-linked date params always win, partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Export view" - planned view only) |
-| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL; edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
+| `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download; opens on the user's saved view defaults (personal, per workspace - explicit URL params win) with a "Save as default" button beside the bookmark action |
+| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Save as default", "Export view" - planned view only) |
+| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/More sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the More sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar) |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -122,7 +124,9 @@ the mobile More sheet, each closing itself first so the modal is the only
 overlay; a tap applies the switch immediately, then a fire-and-forget
 preferences PATCH persists it when authenticated), `WorkspaceSettingsPanel`
 (workspace rename/delete modal hosting the admin-gated
-`CurrenciesSettingsSection`; opened from the sidebar gear and the More sheet),
+`CurrenciesSettingsSection` and the personal `WorkspaceDefaultsSection`
+("Default views" - the member's per-workspace page defaults, every role);
+opened from the sidebar gear and the More sheet),
 and `CreateWorkspaceForm` (mount-per-use create-workspace
 modal - name + ordered currency multi-select via `CurrencySetField` in compact
 mode - opened as a modal from all three call sites: the sidebar button, the
@@ -351,6 +355,7 @@ const api = axios.create({
 | `authApi` | Login, register, current user, preferences (incl. language / number-format), GDPR export/import + legacy import |
 | `workspacesApi` | Workspace management |
 | `workspaceMembersApi` | Member management |
+| `workspaceSettingsApi` | Member settings - the user's per-workspace page-defaults blob (GET returns the full blob; PATCH sends only the changed page keys) |
 | `currenciesApi` | Catalog + enabled currencies (enable/disable/custom/reorder) |
 | `accountsApi` | Accounts, archive, computed balance |
 | `budgetsApi` | Budgets + nested periods, categories, category-budgets |
@@ -559,6 +564,7 @@ user looks at the tab again.
 ['attachment-blob', transactionId, attachmentId]  // immutable files: staleTime/gcTime Infinity; the cache owns the object URL
 ['current-balances', includeArchived]
 ['workspace-members', workspaceId]
+['workspace-settings']  // personal page-defaults blob - workspace-scoped (purged on switch), never in the user keep-set
 ```
 
 ### Mutations
