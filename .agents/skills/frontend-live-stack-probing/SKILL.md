@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, router startTransition races, expected dev-noise console errors), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -40,6 +40,8 @@ same session - in PR #81 it paid for itself twice.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
+- API-driven row assertions read `items` - the Django Ninja `PaginatedResponse` field - not
+  `results`.
 - Clean up with `DELETE /api/users/me` - removes the seeded user and its workspace data.
   The call requires a `{ password }` body carrying the seeded user's password; an empty
   body 422s (the first teardown attempt fails exactly this way).
@@ -78,6 +80,10 @@ same session - in PR #81 it paid for itself twice.
   reported viewport or classification as a hypothesis - "mobile-only" was a workflow artifact
   (bottom-nav flows warm-re-enter while desktop sessions cold-load). (Rule detail under State
   Refresh After Mutations in `frontend-react`.)
+- react-router v7 wraps route commits in `startTransition`: `page.waitForURL()` resolving does NOT
+  mean the route rendered - URL change and DOM swap are separate commits, and an instant
+  `innerText` read catches the PREVIOUS page's h1. Poll for the expected heading (locator
+  `filter({ hasText })` + `waitFor`), never read the heading the moment the URL settles.
 - Cascade and sizing claims are settled against the COMPILED stylesheet, never the source
   className string. A static headless-Chrome harness (`--headless=new --dump-dom`, page
   script writes measured element rects into the DOM) linked against `dist/assets/index-*.css`
@@ -106,6 +112,10 @@ same session - in PR #81 it paid for itself twice.
   verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
   the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
   invalidates the cache. Exemplar: PR #146's first stepper probe.
+- Dependency-only changes have no source-file marker to grep for: bust `node_modules/.vite`,
+  restart the dev server, then prove `.vite/deps/*` mtimes postdate the bust + server start AND
+  `_metadata.json` lists the updated package - only then does the served transform derive from
+  the new install.
 - Real-hardware dynamics: headless emulation has no soft keyboard, so visualViewport/OSK
   behavior (an on-screen keyboard re-render racing a tap, click suppression on
   element-move) is out of emulation reach. A clean headless non-repro of a mobile-only bug
@@ -113,6 +123,13 @@ same session - in PR #81 it paid for itself twice.
   live diagnosis refutes its pre-registered hypotheses, record each refutation with its log
   signatures (which handlers ran, what committed), never silently claim a reproduction the
   logs do not show, and route acceptance to an explicit on-device manual gate riding the PR.
+- Console-error gating is path-precise, never blanket: `/config.js` 404s on dev-server full page
+  loads are documented pre-existing noise (the file is generated only in the deployed ui
+  container; on Vite dev that 404 is expected). Exclude it by an exact pattern
+  (`Failed to load resource` + 404 + `/config\.js`) while still recording and counting every
+  excluded error in step notes - a blanket console-error pass or a silently dropped error hides
+  real regressions. Capture `msg.location().url` from the first run to identify unexplained
+  noise before judging it.
 
 ## Trust the driver less than the product
 
