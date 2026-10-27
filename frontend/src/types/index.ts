@@ -447,6 +447,62 @@ export interface AddMemberResponse {
   member_id: number;
 }
 
+// ============= Workspace Member Settings Types =============
+// Per-user, per-workspace page defaults (the member-settings blob). Every
+// facet is nullable: null = unset, and the page resolves it to its built-in
+// default (utils/pageDefaults.ts PAGE_BUILTIN_DEFAULTS). The literal unions
+// mirror the backend write-schema enums exactly.
+// Synced with backend workspaces/schemas.py member-settings Literals.
+
+/** planned.status wire enum (Planned's STATUS_OPTIONS values). */
+export type PlannedStatusValue = 'all' | 'pending' | 'done' | 'cancelled';
+
+/** planned.view wire enum (Planned's view tabs). */
+export type PlannedViewValue = 'planned' | 'recurring';
+
+/** Range preset shared by every page's range facet. */
+export type RangePreset = 'month' | 'week' | 'year' | 'all';
+
+/** planned.ordering wire enum - Planned's curated SORT_OPTIONS subset of
+    PlannedTransactionOrdering (api/client.ts), not the full backend pattern. */
+export type PlannedOrderingValue = 'planned_date' | '-planned_date' | '-amount' | 'amount' | 'name';
+
+/** transactions.ordering wire enum - Transactions' curated SORT_OPTIONS
+    subset of TransactionOrdering (api/client.ts). */
+export type TransactionsOrderingValue = '-date' | 'date' | '-amount' | 'amount' | 'description';
+
+/** Page keys of the member-settings blob (the PATCH discriminators). */
+export type PageKey = 'planned' | 'transactions' | 'transfers';
+
+export interface PlannedPageSettings {
+  status: PlannedStatusValue | null;
+  range: RangePreset | null;
+  view: PlannedViewValue | null;
+  ordering: PlannedOrderingValue | null;
+}
+
+export interface TransactionsPageSettings {
+  range: RangePreset | null;
+  /** Reuses TransactionType - the same income/expense/adjustment set; a
+      second union for the same three values could drift apart. */
+  type: TransactionType[] | null;
+  ordering: TransactionsOrderingValue | null;
+}
+
+export interface TransfersPageSettings {
+  range: RangePreset | null;
+}
+
+/** The member-settings blob: GET response, PATCH response. The axios
+    generic asserts this shape without validating it - utils/pageDefaults.ts
+    re-checks every facet against its enum before use. */
+export interface UserWorkspaceSettings {
+  version: number;
+  planned: PlannedPageSettings;
+  transactions: TransactionsPageSettings;
+  transfers: TransfersPageSettings;
+}
+
 // ============= Pagination Types =============
 export interface PaginatedResponse<T> {
   items: T[];

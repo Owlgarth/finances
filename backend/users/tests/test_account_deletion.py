@@ -163,6 +163,28 @@ class AccountDeletionTests(AuthMixin, TestCase):
         self.assertFalse(User.objects.filter(id=self.user.id).exists())
         self.assertEqual(Bookmark.objects.filter(user_id=self.user.id).count(), 0)
 
+    def test_member_settings_deleted_on_account_deletion(self):
+        """Per-workspace view settings are explicitly deleted on account deletion (defense-in-depth)."""
+        from workspaces.factories import UserWorkspaceSettingsFactory
+        from workspaces.models import UserWorkspaceSettings
+
+        UserWorkspaceSettingsFactory(
+            workspace=self.workspace,
+            user=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.client.delete(
+            '/api/users/me',
+            {'password': self.user_password},
+            content_type='application/json',
+            **self.auth_headers(),
+        )
+
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        self.assertEqual(UserWorkspaceSettings.objects.filter(user_id=self.user.id).count(), 0)
+
     def test_consent_records_survive_account_deletion(self):
         """Consent records should be retained (with user=NULL) after account deletion."""
         from users.models import UserConsent
