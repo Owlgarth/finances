@@ -237,6 +237,8 @@ Both endpoints live in the `core` app (`core/legal_api.py`); the database is the
 | POST | `/api/workspaces` | Create new workspace (optional `currency_codes` list, max 20, first = primary - used verbatim; otherwise the primary `currency_code` plus silent EUR/USD defaults) |
 | GET | `/api/workspaces/current` | Get current workspace |
 | PUT | `/api/workspaces/current` | Update current workspace name |
+| GET | `/api/workspaces/member-settings` | Get the current member's page-default settings for the current workspace (personal - every role, viewers included, manages only their own; no role gate; returns the full shape with every facet null when nothing was saved) |
+| PATCH | `/api/workspaces/member-settings` | Update the current member's page defaults (personal, any role; only changed page keys are sent - a present page key fully replaces that page's sub-object, absent page keys are untouched; returns the full GET shape) |
 | DELETE | `/api/workspaces/{id}` | Delete workspace (owner only) |
 | POST | `/api/workspaces/{workspaceId}/switch` | Switch to another workspace |
 | PUT | `/api/workspaces/{workspaceId}/default-budget` | Set or clear the workspace's default budget (admin+; takes an explicit workspace id so it works right after a legacy import) |
@@ -375,7 +377,8 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 `GET /api/users/me/export` produces a **v3.0** JSON export of all the user's
 workspaces (accounts, budgets with their ordered currency sets, periods,
 categories, category budgets, transactions with line items + attachments,
-transfers, planned transactions, recurring transaction rules).
+transfers, planned transactions, recurring transaction rules, plus the
+member's personal rows: bookmarks and per-workspace view settings).
 
 `POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
 attachments travel as base64 and are recreated when object storage is configured.

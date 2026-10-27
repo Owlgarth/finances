@@ -126,6 +126,8 @@ For endpoints that don't require an active workspace (e.g., listing all workspac
 
 Collection POSTs register at `''`, and every route path must agree byte-for-byte with the URL the frontend client calls in `client.ts` - Django Ninja registers `''` and `'/'` as two distinct paths and never folds a trailing slash. Failure mode of a mismatch: a collection POST registered at `'/'` while the client calls the slash-less path resolves into the GET-only collection route and answers **405** - not a 404 and no redirect, because `APPEND_SLASH` only fires for URLs that fail to resolve entirely (this exact split broke workspace-create for every real user while all five sibling routers were correct). Keep one canonical collection URL per router - never add a backcompat `'/'` twin, since Django has no REMOVE_SLASH redirect and the duplicate would be permanent convention noise.
 
+**Flat routes register BEFORE parameterized `/{id}` routes - registration order is the only mechanism.** Django resolves URLs in registration order, and Django Ninja compiles `/{workspace_id}` to the str converter `[^/]+` - NOT int-only, despite a `workspace_id: int` annotation (int coercion happens inside the operation) - so a flat route registered after the parameterized block is unreachable: `GET /api/workspaces/member-settings` answered 405 with `Allow: DELETE` from the delete-workspace pattern, and the route existed nowhere. Verify behaviorally, not visually: an unauthenticated probe of the flat route must answer 401 from the endpoint's own auth, never 405 with a wrong `Allow` header. The `/current` + `/member-settings` block in `workspaces/api.py` sits before the parameterized zone with a comment pinning the ordering - the next flat route joins it there.
+
 ### Document All Possible Response Status Codes
 
 Every endpoint's `response` parameter must list **all** status codes the endpoint can return, including those from raised exceptions:
@@ -241,6 +243,8 @@ class TransactionService:
         TransactionService.update_period_balance(...)
         return trans
 ```
+
+**`get_or_create` on a scoped queryset repeats the scoping column as an explicit lookup kwarg.** Django applies queryset filters on the `get()` path but builds the create params from `kwargs + defaults` only - the filters NEVER reach `create()` (Django 6, `django/db/models/query.py`). `Model.objects.for_workspace(ws_id).get_or_create(user=user, ...)` therefore finds existing rows fine but raises `ValueError: workspace_id must be set before save` from `WorkspaceScopedModel.save` on every first GET (a spec that assumed filter propagation here failed 8 tests before the fix). Write `for_workspace(workspace_id).get_or_create(user=user, workspace_id=workspace_id, defaults=...)` so the workspace guard and the create path both hold.
 
 **Service-level uniqueness checks:** Validate uniqueness at the service level so a violation raises one clear domain error from a single place (the DB constraint stays the real guard). Exemplar: the category duplicate-name guard (`_check_ci_duplicate` in `categories/services.py`):
 
@@ -497,6 +501,8 @@ class Meta:
 
 The `condition=Q(...)` form lets any number of `False` rows coexist while guaranteeing at most one `True` row per partition — immune to service-layer bugs and direct DB writes. The constraint `name` is part of the contract (service tests assert against it; renaming requires a migration). See §Pre-clear-then-set for the companion service pattern.
 
+**A model field whose name collides with a module import used by LATER field declarations is declared AFTER them.** A field named `settings` shadows `django.conf.settings` mid-class-body, so a later `ForeignKey(settings.AUTH_USER_MODEL, ...)` (or any `settings.*` read in the class body) evaluates the JSONField instance and raises `AttributeError` at import. `UserWorkspaceSettings` declares the `user` FK before its `settings` JSONField, with a comment pinning why the order is load-bearing - keep that comment when editing the model.
+
 **Check constraints are row invariants, not filters - write conditional invariants as `guard | requirement` disjunctions.** A `CheckConstraint` must evaluate TRUE (or NULL) for EVERY row, so a "constraint" written as the subset conjunction you would use in a query filter (`Q(kind='budget', budget__isnull=False, ...)` alongside `Q(kind__in=(...), budget__isnull=True, ...)`) is FALSE for every row outside its subset - two of those together make every possible INSERT fail. The trap is invisible to violation tests: `assertRaises(IntegrityError)` against an unsatisfiable constraint passes VACUOUSLY, and only a happy-path `objects.create` proves insertability - land at least one valid row per constraint before trusting the suite. Implication form (house precedents `recurring_materialize_all_requires_end` = `Q(materialize_all=False) | Q(end_date__isnull=False)` and `bookmark_budget_kind_requires_target` = `Q(kind__in=('transactions', 'planned')) | Q(budget__isnull=False, currency_code__isnull=False)`): the guard arm covers every row the requirement does not apply to.
 
 **Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` defaults. Concrete models should set explicit `related_name` on all FKs.
@@ -621,6 +627,8 @@ for field, value in update_data.items():
 `exclude_unset=True` includes a key only if the client sent it, so `.get(...)` returns `None` when omitted and the actual value when sent. The `is True` identity check is what distinguishes an explicit `True` from both `None` (omitted) and `False` (explicitly cleared) — truthiness would mis-fire on a truthy non-bool.
 
 **The full-replace dual: direct assignment makes the schema default the stored value.** An update service that assigns fields directly (`trans.note = data.note`, no `exclude_unset` loop) has full-replace semantics - an absent key stores the schema default, i.e. it CLEARS the field. That is free, correct absent-key behavior: pin it with the create schema's docstring and a replace-and-clear test instead of reaching for `exclude_unset`; the dict dance above exists only for partial-update schemas where omission must NOT overwrite.
+
+**`exclude_unset=True` cascades into NESTED models - page-level full-replace dumps each present nested model whole.** A top-level `model_dump(exclude_unset=True)` on a schema with nested sub-models drops every field the client omitted inside a PRESENT nested model, silently losing the replace-with-null contract for those facets (Pydantic v2). For a full-replace PATCH over nested sub-models, iterate the TOP model's `model_fields_set` (which pages are present) and dump each present page WITHOUT `exclude_unset`, so omitted facets persist as explicit nulls; an explicit `null` page value stays a defensive no-op.
 
 ## Safe Defaults for `getattr` Fallbacks
 

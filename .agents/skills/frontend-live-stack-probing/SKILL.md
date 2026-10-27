@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, router startTransition races, expected dev-noise console errors), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, expected dev-noise console errors), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -112,6 +112,12 @@ same session - in PR #81 it paid for itself twice.
   verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
   the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
   invalidates the cache. Exemplar: PR #146's first stepper probe.
+- Backend env drift is the api-container twin of served-code staleness: a container started
+  before the branch serves the new code but has never run the branch's MIGRATIONS, so a
+  brand-new endpoint 500s with `UndefinedTable` on its first hit - it reads like a product
+  bug and is purely environmental. Migrate in-container (`./dev.sh migrate`) before probing
+  new-endpoint surfaces, and classify a 500 whose traceback names a missing relation as env
+  drift, not a finding.
 - Dependency-only changes have no source-file marker to grep for: bust `node_modules/.vite`,
   restart the dev server, then prove `.vite/deps/*` mtimes postdate the bust + server start AND
   `_metadata.json` lists the updated package - only then does the served transform derive from
