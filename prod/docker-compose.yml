@@ -8,7 +8,7 @@
 #     (same one-tag discipline as the dev compose), ui runs finances-ui.
 #   - Third-party images carry the SAME name:tag@digest pins as the dev
 #     docker-compose.yml - copied from there, never re-resolved here.
-#     Renovate keeps both files in sync.
+#     Keep both files in sync by hand (Dependabot has no compose manager).
 #   - No bind mounts and no uvicorn reload flag: every service runs its image
 #     default command. The backend entrypoint migrates and seeds on boot
 #     (idempotent).
