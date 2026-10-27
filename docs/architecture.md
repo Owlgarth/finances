@@ -47,6 +47,7 @@ Workspace (top-level container)
 ├── Bookmark                 (personal quick links - one user's saved views: a
 │                             budget + currency, or a transactions/planned
 │                             filter set)
+├── UserWorkspaceSettings    (personal per-page view settings - versioned JSON blob, one row per user per workspace)
 │
 ├── Account                  (cash / bank / other; holds money in one currency)
 │     ├── Transaction        (income / expense / adjustment; optional category; optionally on this
