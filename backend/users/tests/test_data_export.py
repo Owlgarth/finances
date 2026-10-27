@@ -19,7 +19,7 @@ from planned_transactions.factories import PlannedTransactionFactory, RecurringT
 from transactions.factories import TransactionFactory, TransactionItemFactory
 from users.models import UserConsent
 from users.services import UserService
-from workspaces.factories import WorkspaceMemberFactory
+from workspaces.factories import UserWorkspaceSettingsFactory, WorkspaceMemberFactory
 
 User = get_user_model()
 
@@ -482,3 +482,46 @@ class BookmarkExportTests(AuthMixin, TestCase):
         self.assertFalse(tx_bm['is_active'])
         self.assertTrue(planned_bm['is_archived'])
         self.assertEqual([b['position'] for b in bookmarks], [0, 1, 2])
+
+
+class MemberSettingsExportTests(AuthMixin, TestCase):
+    """Per-workspace member view settings export as-is, personal rows only."""
+
+    def test_export_contains_member_settings_blob(self):
+        blob = {
+            'planned': {'status': 'pending', 'range': 'month', 'view': 'recurring', 'ordering': 'name'},
+            'transactions': {'range': None, 'type': ['income', 'expense'], 'ordering': '-date'},
+            'transfers': {'range': 'week'},
+        }
+        UserWorkspaceSettingsFactory(
+            workspace=self.workspace,
+            user=self.user,
+            created_by=self.user,
+            updated_by=self.user,
+            settings=blob,
+        )
+        # Personal rows only: another member's row in the same workspace
+        # must stay out of this user's export.
+        other_user = UserFactory(email='other@test.com')
+        WorkspaceMemberFactory(workspace=self.workspace, user=other_user)
+        UserWorkspaceSettingsFactory(
+            workspace=self.workspace,
+            user=other_user,
+            created_by=other_user,
+            updated_by=other_user,
+            settings={
+                'planned': {'status': 'done', 'range': 'year', 'view': None, 'ordering': None},
+                'transactions': {'range': None, 'type': None, 'ordering': None},
+                'transfers': {'range': None},
+            },
+        )
+
+        data = UserService.export_all_data(self.user)
+
+        # The blob rides verbatim - no id translation, no normalization.
+        self.assertEqual(data['workspaces'][0]['member_settings'], blob)
+
+    def test_export_without_settings_row_emits_null(self):
+        data = UserService.export_all_data(self.user)
+
+        self.assertIsNone(data['workspaces'][0]['member_settings'])
