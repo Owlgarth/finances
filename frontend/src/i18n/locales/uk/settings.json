@@ -258,6 +258,27 @@
     "nameUpdated": "Назву робочого простору оновлено",
     "nameUpdateFailed": "Не вдалося оновити назву робочого простору",
     "deleted": "«{{name}}» видалено",
+    "defaults": {
+      "title": "Типові подання",
+      "plannedGroup": "Заплановані",
+      "plannedStatus": "Статус",
+      "plannedRange": "Діапазон",
+      "plannedView": "Подання",
+      "plannedOrdering": "Сортування",
+      "transactionsGroup": "Операції",
+      "txRange": "Діапазон",
+      "txType": "Типи",
+      "txOrdering": "Сортування",
+      "transfersGroup": "Перекази",
+      "transfersRange": "Діапазон",
+      "rangeMonth": "Місяць",
+      "rangeWeek": "Тиждень",
+      "rangeYear": "Рік",
+      "rangeAll": "Весь час",
+      "defaultOption": "Типове ({{builtIn}})",
+      "savedToast": "Типові подання збережено",
+      "saveFailed": "Не вдалося зберегти типові подання"
+    },
     "deleteFailed": "Не вдалося видалити робочий простір"
   },
   "createWorkspace": {
