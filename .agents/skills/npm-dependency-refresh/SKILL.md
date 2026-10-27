@@ -23,8 +23,10 @@ an intermediate step:
   a major is backlog.
 - Floor-bump only direct production deps with a security motive (react-router-dom `^7.10.1` ->
   `^7.18.4`, the Link/useNavigate open-redirect fix). Semver majors (tailwind 4, vite 8,
-  react-day-picker 10, typescript 7) stay deferred to the backlog; Renovate is the long-term range
-  manager once installed.
+  react-day-picker 10, typescript 7) stay deferred to the backlog for manual refreshes; Dependabot
+  is the long-term range manager (live since PR #154) - minor+patch arrive as one grouped PR per
+  week, majors as individual reviewable PRs (config facts in `ci-releases`). The security
+  floor-bump rule above still governs manual refreshes; it is not a Dependabot-PR triage rule.
 - When the CI audit gate fails, the remediation is this sequence - never loosening the gate flags
   (gate semantics in `ci-releases`).
 
