@@ -1,6 +1,6 @@
 ---
 name: ci-releases
-description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification via the git refs API, reusable workflow_call test gates, the production-dependency npm audit gate, dual-arch GHCR image publishing, render-testing version-pinned binaries (git-cliff), Renovate config facts and never-ran Renovate diagnosis. Use when editing .github/workflows/*, cliff.toml, VERSION, renovate.json, or anything on the tag-to-release pipeline.
+description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification via the git refs API, reusable workflow_call test gates, the production-dependency npm audit gate, dual-arch GHCR image publishing, render-testing version-pinned binaries (git-cliff), Dependabot config facts (.github/dependabot.yml: schema validation, schedule/groups semantics, the uv ecosystem, no compose manager) and silently-inactive-Dependabot diagnosis. Use when editing .github/workflows/*, cliff.toml, VERSION, .github/dependabot.yml, or anything on the tag-to-release pipeline.
 ---
 
 # CI & Releases
@@ -46,20 +46,20 @@ Anything whose behavior is pinned BY VERSION gets render-tested against the real
 
 `cliff.toml` carries `postprocessors` that normalize em/en dashes (`\x{2014}`/`\x{2013}` regex escapes) to plain hyphens: CHANGELOG.md and release notes are generated into the repo, the repo bans em dashes in committed text, and historical commit subjects carry them.
 
-## Renovate Config Facts (renovate.json)
+## Dependabot Config Facts (.github/dependabot.yml)
 
-- Docker manager names are `dockerfile` and `docker-compose` - `docker` is a preset category, not a manager.
-- `config:recommended` does not bundle `docker:pinDigests`; add it explicitly.
-- Schedules use cron syntax (`* 5-8 * * 1`); Later-string syntax is deprecated.
-- Python deps use the `pep621` manager - no `uv` manager exists; uv.lock presence selects the uv path officially.
-- Validate with `npx --yes renovate-config-validator` - newer npm also needs `--package renovate`.
+Five entries, all `weekly` Monday 05:00 `Europe/Warsaw`: `npm` @ `/frontend`, `uv` @ `/backend`, `github-actions` @ `/`, `docker` @ `/backend`, `docker` @ `/frontend` (PR #154). The `docker` ecosystem covers Dockerfile base images only - Dependabot has NO compose manager, so compose image digests stay manual (rule in `docker-infra`).
 
-### Diagnosing a Renovate that never ran
+- `groups: minor-and-patch` (on npm, uv, github-actions) batches minor+patch into ONE PR per ecosystem; majors deliberately stay individual reviewable PRs. Everything else is Dependabot default - no commit-message, labels, or reviewers overrides; do not over-configure.
+- The schedule transcribes the old Renovate cron (`* 5-8 * * 1`, a Monday-morning window) through the mechanism switch: when swapping update tools, preserve schedule/scope SEMANTICS in the new tool's vocabulary, not its syntax.
+- Validate edits against the official SchemaStore `dependabot-2.0` JSON schema, a stronger gate than a YAML parse: a schema-invalid config silently disables Dependabot with no error anywhere (no failed run, no red X), so syntactically valid YAML is not proof the bot will run.
+- `uv` is a supported ecosystem (backend deps resolve from uv.lock). If a uv-ecosystem PR ever looks wrong, check astral-sh/uv#2512 first - known open uv edge cases in Dependabot.
 
-When Renovate produces zero artifacts (no PRs, no dashboard issue, no branches), check the GitHub App installation BEFORE the config: a validating config that nothing ever read is indistinguishable from a broken one until you list the org's installed apps. Blaming the schedule or manager names is wrong when the app is simply absent - the org probe found only `claude` installed while `renovate.json` validated clean (PR #152's drift diagnosis).
+### Diagnosing a silently-inactive Dependabot
 
-- Installation probe: `gh api /orgs/<org>/installations --jq '.installations[].app_slug'` (needs an org-owner token with admin:org). Do NOT use `gh api /repos/<owner>/<repo>/installation` - it requires GitHub App JWT auth and 401s with a user PAT ("A JSON web token could not be decoded"), saying nothing about installation; `/user/installations` likewise 403s with a PAT.
-- Artifact-absence probes: `gh pr list --search "author:app/renovate" --state all`, `gh issue list --author "app/renovate"` (the dependency-dashboard issue would exist from the first run - `config:recommended` enables it), and `git ls-remote --heads origin | grep -i renovate`.
-- Report-only posture: config defects are the only fixable-in-repo cause; installation state, app config, and dashboard state are user actions (github.com/apps/renovate -> Install -> org, verify at github.com/organizations/<org>/settings/installations). Expect a large first batch once installed (30+ npm PRs plus docker/actions/pep621 PRs).
+Zero Dependabot artifacts (no PRs, no `dependabot/*` branches) is a config problem, not an installation problem: Dependabot is first-party, needs no app install, and activates when `.github/dependabot.yml` lands on the default branch. History: this repo's `renovate.json` once configured a Renovate app the user declined to install (PR #152's drift diagnosis caught it by probing the org's installed apps - a validating config that nothing ever read is indistinguishable from a broken one); PR #154 replaced it with Dependabot, so do not re-propose a third-party update app.
+
+- Artifact-absence probes: `gh pr list --search "author:app/dependabot" --state all` and `git ls-remote --heads origin | grep -i dependabot`. Zero across BOTH means it never ran, not that it is slow - the same probe family that caught never-installed Renovate, adapted to Dependabot's author and branch prefix. (It is live here: `dependabot/*` branches already exist.)
+- Repo-side causes are the config's schema validity (gate above) and the file's presence on the default branch. Repo/org-level enablement (Settings -> Code security -> Dependabot version updates) is a user action, not a repo fix.
 
 The `./dev.sh release` command itself (bash semantics, fail-closed ordering) lives in docker-infra's Dev Script section.
