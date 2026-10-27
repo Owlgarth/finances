@@ -232,8 +232,9 @@ The command then:
 
 **CI.** Pull requests and pushes to `main` run `ci.yml`, which calls the
 reusable `ci-test.yml` workflow: backend `ruff check`, `ruff format --check`,
-and `pytest` against a Postgres 17 service; frontend `npm ci`, `i18n:check`,
-`lint`, `build`. Pushing a `v*` tag (or dispatching `release.yml` manually)
+and `pytest` against a Postgres 17 service; frontend `npm ci`, a production
+`npm audit --omit=dev --audit-level=high` gate, `i18n:check`, `lint`,
+`build`. Pushing a `v*` tag (or dispatching `release.yml` manually)
 re-runs the same `ci-test.yml` as a gate, then builds
 `ghcr.io/owlgarth/finances-backend` and `ghcr.io/owlgarth/finances-ui`
 natively for amd64 and arm64 (one native runner per arch, no QEMU emulation),
