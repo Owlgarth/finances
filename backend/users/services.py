@@ -44,7 +44,7 @@ from users.exceptions import (
     UserSameEmailError,
 )
 from users.models import ConsentType, User, UserConsent, UserPreferences, UserTwoFactor, WeekdayChoices
-from workspaces.models import Role, Workspace, WorkspaceMember
+from workspaces.models import Role, UserWorkspaceSettings, Workspace, WorkspaceMember
 
 # Sidebar/More-menu bookmark cap allowlist (0 = show all). Mirrored on the
 # wire by UserService.update_preferences; the model default is 5.
@@ -480,6 +480,10 @@ class UserService:
             # Delete bookmarks (user FK CASCADE handles this, but explicit for defense-in-depth)
             Bookmark.objects.filter(user=user).delete()
 
+            # Delete per-workspace view settings (user FK CASCADE handles
+            # this, but explicit for defense-in-depth)
+            UserWorkspaceSettings.objects.filter(user=user).delete()
+
             # Delete 2FA records (CASCADE handles this, but explicit for defense-in-depth)
             UserTwoFactor.objects.filter(user=user).delete()
 
@@ -731,6 +735,8 @@ class UserService:
             .order_by('position', 'id')
         ]
 
+        member_settings_row = UserWorkspaceSettings.objects.for_workspace(ws.id).filter(user=membership.user).first()
+
         return {
             'workspace_id': ws.id,
             'workspace_name': ws.name,
@@ -881,6 +887,14 @@ class UserService:
                 )
             ],
             'bookmarks': bookmarks,
+            # v3 additive key (no export_version bump): the exporting
+            # member's own per-workspace view-settings blob, as-is. Unlike
+            # bookmark params there is nothing to translate - the blob's
+            # enums are plain wire strings. None when the member never
+            # saved settings (the preferences-section absence idiom);
+            # older readers ignore the key, and the importer .get()s it
+            # for pre-member-settings exports.
+            'member_settings': member_settings_row.settings if member_settings_row else None,
         }
 
     @staticmethod
@@ -939,6 +953,7 @@ class UserService:
         from transactions.models import Transaction
         from transactions.services import TransactionService
         from transfers.models import Transfer
+        from workspaces.services import UserWorkspaceSettingsService
 
         export_data = data.data
         workspace_filter = data.workspaces
@@ -1470,6 +1485,31 @@ class UserService:
                 )
                 bookmark_names.add(name.lower())
                 counts['imported_bookmarks'] += 1
+
+            # v3 additive section: the member's own per-workspace view-settings
+            # blob. Older v3 files lack the key entirely - .get() imports
+            # nothing and adds no errors (the bookmarks-section stale-file
+            # contract). Values flow through the settings service's
+            # garbage-tolerant normalizer (a side-effect-free pure helper -
+            # the sanctioned re-entry point; import never calls the service's
+            # get_or_create/update), and the row restores via objects.create
+            # (import convention). A blob that normalizes to all-null (empty
+            # or wholly unknown hand-edited content) creates nothing: a
+            # zero-information row is noise, and the member's next GET
+            # materializes fresh defaults anyway. No counts key - the
+            # preferences restore does not count either.
+            member_settings = ws_data.get('member_settings')
+            if isinstance(member_settings, dict):
+                normalized = UserWorkspaceSettingsService._normalize_settings(member_settings)
+                if any(value is not None for facets in normalized.values() for value in facets.values()):
+                    UserWorkspaceSettings.objects.create(
+                        workspace=workspace,
+                        user=user,
+                        settings=normalized,
+                        version=UserWorkspaceSettingsService.CURRENT_VERSION,
+                        created_by=user,
+                        updated_by=user,
+                    )
 
             # Preferences restore is deliberately minimal: the v3 import never
             # overwrote the importing account's UX preferences (language, font,

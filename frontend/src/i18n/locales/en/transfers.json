@@ -12,6 +12,10 @@
     "toDateAria": "To date"
   },
   "noMatch": "No transfers match your filters.",
+  "saveDefaults": "Save as default",
+  "saveDefaultsPending": "Saving\u2026",
+  "saveDefaultsSuccess": "Defaults saved.",
+  "saveDefaultsFailed": "Failed to save defaults",
   "emptyHeading": "No transfers yet",
   "emptyMessage": "Record a transfer from Accounts or the create menu; it will appear here.",
   "row": {
