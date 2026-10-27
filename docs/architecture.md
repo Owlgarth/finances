@@ -241,9 +241,10 @@ frontend/src/
 │   ├── useDomain.ts            # useAccounts, useBudgets, useEnabledCurrencies,
 │   │                          #   useMultiCurrency, useExtractionEnabled
 │   ├── usePermissions.ts       # canManageAccounts, canWrite, …
-│   └── (other hooks)           # useAttachments, useBookmarks, useListboxPanel,
-│                              #   useWorkspaceSwitch, useMediaQuery,
-│                              #   useBreakpoint, useDebouncedField, useOverlay
+│   └── (other hooks)           # useAttachments, useBookmarks, useWorkspaceSettings,
+│                              #   useListboxPanel, useWorkspaceSwitch,
+│                              #   useMediaQuery, useBreakpoint, useDebouncedField,
+│                              #   useOverlay
 ├── i18n/                   # i18next bootstrap (synchronous, before first render),
 │                           #   LanguageContext + useLanguage, date-fns locales,
 │                           #   and the per-language catalogs in locales/<lang>/
@@ -258,7 +259,8 @@ frontend/src/
 │                           #   attachments, currencies, tappable, zoomLock,
 │                           #   amountInput (both decimal separators, normalized
 │                           #   per the active number style at submit), dates
-│                           #   (local-date month math)
+│                           #   (local-date period math), pageDefaults
+│                           #   (member-settings blob to fresh-visit URL params)
 └── types/index.ts          # TypeScript interfaces
 ```
 
@@ -297,6 +299,7 @@ const { data } = useQuery({
 | `planned_transactions` | Scheduled transactions |
 | `recurring_transactions` | Recurrence rules that materialize planned transactions |
 | `bookmarks` | Personal quick-access bookmarks (budget + currency view or a saved filter set), one row per user per workspace |
+| `user_workspace_settings` | Personal per-page view settings - a versioned JSON blob (Planned/Transactions/Transfers defaults), one row per user per workspace |
 
 ### Workspace-Scoped Queries
 

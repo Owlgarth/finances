@@ -102,6 +102,11 @@ transfer. Transfers replace the old currency-exchange records.
 - The list supports account/type filters and pagination (plus a currency filter
   matching each transaction's stored own currency, hidden in single-currency
   workspaces); bulk account reassignment is available.
+- Fresh visits open on the member's saved view defaults for the page (personal,
+  per workspace; explicit URL params always win): **Save as default**, beside
+  the bookmark action in the list controls, captures the current view, and the
+  workspace settings panel's **Default views** section edits every facet. The
+  Planned and Transfers pages work the same way.
 - **Line items** and **receipt attachments** are managed from the Items/Receipts tabs
   on an existing transaction. Items carry per-item categories (an unset category
   inherits the transaction's), and a system-managed remainder row keeps them
@@ -137,10 +142,13 @@ a real transaction carrying the plan's account and currency (via a Celery task,
 idempotent) and marks the planned item done. The list shares the Transactions
 search/filters pattern, including the own-currency filter (URL-synced).
 
-Entering the planned view defaults the date range to the current calendar
-month: the default is materialized into the URL as `from`/`to` (replace, no
-history entry) so the focused view is shareable, and a month stepper above the
-status control hops to adjacent months. Explicit or deep-linked date params
+Entering the planned view opens on the member's saved view defaults (personal,
+per workspace - set from the page's **Save as default** button or the workspace
+settings panel's **Default views** section); with none saved, the date range
+defaults to the current calendar month: the default is materialized into the
+URL as `from`/`to` (replace, no history entry) so the focused view is
+shareable, and a month stepper above the status control hops to adjacent
+months. Explicit or deep-linked date params
 always win (partial ranges pass through untouched), and clearing both params
 (the **All time** preset chip) is an explicit all-time view that never
 re-defaults within the session. An empty focused month with no other filters
