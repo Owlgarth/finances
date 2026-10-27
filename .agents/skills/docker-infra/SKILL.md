@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, the dev.sh release command, or bumping the project version (the uv.lock refresh).
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), or bumping the project version (the uv.lock refresh).
 ---
 
 # Docker & Infrastructure
@@ -79,6 +79,15 @@ COPY --from=backend common/fonts.json /backend/common/fonts.json
 ## Dockerfile ARG Hygiene
 
 ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
+
+## Lockfile-Enforced npm Installs
+
+Every site that installs frontend dependencies runs `npm ci` - the `frontend/Dockerfile` builder stage and both `dev.sh` `start_frontend` bootstrap arms (the node-container `sh -c` string and the host path). Image and dev bootstrap then install exactly the lockfile tree CI tested and fail loudly on a package.json/package-lock.json mismatch instead of silently resolving around it. The old `npm install --legacy-peer-deps` in the Dockerfile was cargo cult: CI (ci-test.yml) has always run plain `npm ci` on the same lockfile and passes - no peer conflict exists.
+
+- The `[ -x node_modules/.bin/vite ] || npm ci` bootstrap guard stays safe under `npm ci`: it falls through only when vite is absent (node_modules missing or partial) - exactly the states where npm ci's delete-`node_modules`-first behavior is harmless - and a present vite short-circuits with no install, as before.
+- The in-container bootstrap arm's `sh -c` string is POSIX sh on purpose: it executes in the node:22-slim container, where `package-lock.json` is visible via the `./frontend` bind mount - dev.sh itself stays bash.
+- Remnant grep gates over the repo: `--exclude-dir=<dir>` must come BEFORE the `--` argument terminator - after `--`, grep parses it as a filename and exits 2, which is a gate that never ran, not a pass.
+- Keeping the lockfile advisory-clean in the first place (the audit-fix refresh procedure) lives in `npm-dependency-refresh`.
 
 ## Dev Script
 

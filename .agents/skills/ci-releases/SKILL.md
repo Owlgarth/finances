@@ -1,6 +1,6 @@
 ---
 name: ci-releases
-description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification via the git refs API, reusable workflow_call test gates, dual-arch GHCR image publishing, render-testing version-pinned binaries (git-cliff), Renovate config facts. Use when editing .github/workflows/*, cliff.toml, VERSION, renovate.json, or anything on the tag-to-release pipeline.
+description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification via the git refs API, reusable workflow_call test gates, the production-dependency npm audit gate, dual-arch GHCR image publishing, render-testing version-pinned binaries (git-cliff), Renovate config facts and never-ran Renovate diagnosis. Use when editing .github/workflows/*, cliff.toml, VERSION, renovate.json, or anything on the tag-to-release pipeline.
 ---
 
 # CI & Releases
@@ -22,6 +22,14 @@ A published release page is NOT proof. astral-sh/setup-uv ships exact tags (`v10
 - Keep the caller byte-identical: sibling feature branches edit `ci.yml` too, and a minimal file minimizes merge conflicts (proven when the i18n branch landed mid-PR and the caller body was the single conflict).
 - pytest needs only a Postgres service container: `config/test_settings.py` self-provides SECRET_KEY/JWT keys, LocMemCache, eager Celery, and disables S3. Do not add Redis or other services.
 - Gotcha: when a PR becomes CONFLICTING, GitHub cannot build the merge ref and silently stops creating `pull_request` workflows - checks vanish with no error. Checks disappearing right after a main merge means merge `origin/main` into the branch first.
+- Editing ci-test.yml: the phrase `Install dependencies` appears TWICE (backend `uv sync`, frontend `npm ci`) - include the `run: npm ci` line in any edit anchor, or the match is ambiguous.
+
+## Production Dependency Audit Gate (ci-test.yml)
+
+The frontend job runs `npm audit --omit=dev --audit-level=high` between `npm ci` and the i18n check. The exit code alone IS the failure mechanism: the command exits non-zero exactly when a high-or-worse advisory exists in the production tree - no output parsing, `if:` conditions, or result wiring. Shipped because react-router 7.11.0 and follow-redirects 1.16.0 reached deployed self-hosted release images while lint/build/i18n stayed green: CI never evaluated advisories.
+
+- Flags are frozen by design: `--omit=dev --audit-level=high` gates the PRODUCTION tree at high severity. Dev-only advisories ship nothing to users and deliberately do not gate (they would periodically break CI for no deployed risk). Adding `--force`, `--package-lock-only`, `--json`, `id:`, `timeout-minutes:`, or `continue-on-error` changes the gate semantics (`continue-on-error: true` silently disables it).
+- When the gate fails, the fix is a dependency refresh gated on the end state (the `npm-dependency-refresh` skill), never loosening the flags; moderate/low or dev-only findings exit 0 and are non-events for CI.
 
 ## Release Workflow (release.yml)
 
@@ -45,5 +53,13 @@ Anything whose behavior is pinned BY VERSION gets render-tested against the real
 - Schedules use cron syntax (`* 5-8 * * 1`); Later-string syntax is deprecated.
 - Python deps use the `pep621` manager - no `uv` manager exists; uv.lock presence selects the uv path officially.
 - Validate with `npx --yes renovate-config-validator` - newer npm also needs `--package renovate`.
+
+### Diagnosing a Renovate that never ran
+
+When Renovate produces zero artifacts (no PRs, no dashboard issue, no branches), check the GitHub App installation BEFORE the config: a validating config that nothing ever read is indistinguishable from a broken one until you list the org's installed apps. Blaming the schedule or manager names is wrong when the app is simply absent - the org probe found only `claude` installed while `renovate.json` validated clean (PR #152's drift diagnosis).
+
+- Installation probe: `gh api /orgs/<org>/installations --jq '.installations[].app_slug'` (needs an org-owner token with admin:org). Do NOT use `gh api /repos/<owner>/<repo>/installation` - it requires GitHub App JWT auth and 401s with a user PAT ("A JSON web token could not be decoded"), saying nothing about installation; `/user/installations` likewise 403s with a PAT.
+- Artifact-absence probes: `gh pr list --search "author:app/renovate" --state all`, `gh issue list --author "app/renovate"` (the dependency-dashboard issue would exist from the first run - `config:recommended` enables it), and `git ls-remote --heads origin | grep -i renovate`.
+- Report-only posture: config defects are the only fixable-in-repo cause; installation state, app config, and dashboard state are user actions (github.com/apps/renovate -> Install -> org, verify at github.com/organizations/<org>/settings/installations). Expect a large first batch once installed (30+ npm PRs plus docker/actions/pep621 PRs).
 
 The `./dev.sh release` command itself (bash semantics, fail-closed ordering) lives in docker-infra's Dev Script section.
