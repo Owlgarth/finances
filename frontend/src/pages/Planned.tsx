@@ -3,18 +3,21 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Save, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
-import type { PlannedTransaction, RecurringTransaction } from '../types'
+import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
+import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { formatAmount, formatMonthYear } from '../utils/format'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
 import { paramsFromSearchParams } from '../utils/bookmarks'
-import { isCalendarMonth, monthRange, shiftMonth } from '../utils/dates'
+import { isCalendarMonth, shiftMonth } from '../utils/dates'
+import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
@@ -79,7 +82,145 @@ function readStoredSearch(): string {
   }
 }
 
+// Arrival gate + page shell. The per-page defaults must resolve before the
+// content mounts: a cold-cache materialization of built-ins would flip every
+// control a moment later. Both gate queries are boot-time fetches with a
+// staleTime, so warm by the time users reach the page - the gate binds on
+// cold cache and workspace switch only. An errored settings query opens the
+// gate with settings undefined and the content degrades to the page
+// built-ins (pageDefaults normalizes undefined to all-null) rather than
+// blocking the page.
 export default function Planned() {
+  const { t } = useTranslation('planned')
+  const [searchParams] = useSearchParams()
+  const { canWrite } = usePermissions()
+  const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
+  const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
+  const defaultsLoading = settingsLoading || preferencesLoading
+
+  const [isExporting, setIsExporting] = useState(false)
+  // Skeleton delay: a skeleton flashing for a fast cache hit is its own
+  // banned pattern, so the pulse shows only after the load has visibly
+  // stalled. The setter lives ONLY inside the timer callback (a synchronous
+  // set in the effect body would trip set-state-in-effect); the reset when
+  // the gate reopens is the fall-through adjust below.
+  const [skeletonShown, setSkeletonShown] = useState(false)
+  useEffect(() => {
+    if (!defaultsLoading) return
+    const timer = setTimeout(() => setSkeletonShown(true), 300)
+    return () => clearTimeout(timer)
+  }, [defaultsLoading])
+
+  // Header New click crosses the component boundary: the button lives here
+  // (above the gate) while the form modals and their seed state live in the
+  // content. A plain counter the content consumes with a render-adjust.
+  const [createRequest, setCreateRequest] = useState(0)
+
+  // Fall-through reset of the skeleton flag (lands on false, which disproves
+  // its own guard - terminates by construction; StrictMode-idempotent).
+  if (!defaultsLoading && skeletonShown) setSkeletonShown(false)
+
+  // Header view label follows the URL: the stored default view is not
+  // resolved during the gate window, so the label may flip once after
+  // materialization - accepted, the header stays mounted either way.
+  const rawView = searchParams.get('view')
+  const view: 'planned' | 'recurring' = rawView === 'recurring' ? 'recurring' : 'planned'
+
+  // Export reads the URL at click time instead of threading the content's
+  // effective derivations across the boundary: the URL is the source of
+  // truth once the defaults have materialized into it. Tradeoff: a click
+  // inside the brief cold-cache gate window exports all-time / all
+  // statuses - a benign degradation; every click after materialization
+  // matches the on-screen view.
+  const handleExportView = async () => {
+    setIsExporting(true)
+    // runBlobExport never throws; it owns every export toast.
+    const rawStatus = searchParams.get('status')
+    const status: StatusFilter = STATUS_OPTIONS.some((o) => o.value === rawStatus) ? (rawStatus as StatusFilter) : 'all'
+    const from = searchParams.get('from') ?? ''
+    const to = searchParams.get('to') ?? ''
+    await runBlobExport(
+      () => plannedTransactionsApi.exportView({
+        status: status === 'all' ? undefined : status,
+        start_date: from || undefined,
+        end_date: to || undefined,
+      }),
+      {
+        filename: `planned_${from || 'all'}_${to || 'all'}.json`,
+        loadingMessage: t('preparingExport'),
+        successMessage: t('exportComplete'),
+        errorMessage: t('exportFailed'),
+      },
+    )
+    setIsExporting(false)
+  }
+
+  return (
+    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
+      {/* The h1 and the action row stay mounted through the gate: route
+          changes move focus to the page h1, and a header that pops in
+          after the gate is churn. The gated region is everything below. */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
+        <div className="flex items-center gap-2">
+          {/* Visible on mobile too: export is a read action with no FAB twin. */}
+          <button
+            type="button"
+            onClick={handleExportView}
+            disabled={isExporting}
+            title={t('exportTitle')}
+            className={secondaryButtonClass}
+          >
+            <Download size={13} className="inline mr-1" /> {t('exportView')}
+          </button>
+          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
+          {canWrite && (
+            <button
+              type="button"
+              onClick={() => setCreateRequest((n) => n + 1)}
+              className={`${primaryButtonClass} max-sm:hidden`}
+            >
+              <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {defaultsLoading ? (
+        // Under the 300ms threshold the gated region simply holds - a blank
+        // beat is imperceptible, a skeleton flash is the anti-pattern. The
+        // skeleton shapes approximate the control rows the defaults feed
+        // (view tabs, month stepper, status tabs, search/filter row) plus
+        // the page's own list-row idiom.
+        skeletonShown ? (
+          <div className="space-y-3" aria-hidden="true">
+            <div className="h-8 w-56 max-sm:w-full bg-surface-muted rounded-sm animate-pulse" />
+            <div className="h-10 w-40 bg-surface-muted rounded-sm animate-pulse" />
+            <div className="h-8 w-64 max-sm:w-full bg-surface-muted rounded-sm animate-pulse" />
+            <div className="h-10 bg-surface-muted rounded-sm animate-pulse" />
+            <div className="space-y-2 pt-1">
+              {[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <PlannedContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+      )}
+    </div>
+  )
+}
+
+interface PlannedContentProps {
+  /** Member-settings blob resolved by the arrival gate; undefined only when
+      the settings query errored (built-ins apply). */
+  settings: UserWorkspaceSettings | undefined
+  /** Calendar start day (1 = Monday .. 7 = Sunday) for the week default. */
+  calendarStartDay: number
+  /** Bumps on every header New click; consumed by a render-adjust. */
+  createRequest: number
+}
+
+function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedContentProps) {
   const { t } = useTranslation('planned')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
@@ -149,15 +290,36 @@ export default function Planned() {
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
+  // Session defaults, restoredSearch pattern generalized to every facet:
+  // the lazy initializer computes the latch ONCE from the resolved settings
+  // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
+  // param of a facet never defaults that facet (a partial date deep link
+  // kills only the range latch; the missing bound is never auto-filled).
+  // A facet is null in the latch when its params are present, when the
+  // stored value equals the page built-in, or when a bounded range resolves
+  // to 'all' - null means "write nothing", so a fresh all-null blob latches
+  // only the built-in current month, exactly the pre-feature behavior.
+  // Consumed - never re-applies - once a facet's param has been present
+  // (see the adjusts below); a fresh mount re-initializes (accepted).
+  const [defaultsLatch, setDefaultsLatch] = useState(() =>
+    buildDefaultsLatch(settings, 'planned', searchParams, calendarStartDay),
+  )
   const rawStatus = searchParams.get('status')
+  // Effective status: an explicit valid param wins; absent falls back to the
+  // still-live latch value (the same value the materialization effect below
+  // is about to write into the URL), then the built-in 'all'. Garbage reads
+  // as unset (status-filter idiom).
   const statusFilter: StatusFilter = STATUS_OPTIONS.some((o) => o.value === rawStatus)
     ? (rawStatus as StatusFilter)
-    : 'all'
-  // View tab lives in the URL (?view=planned|recurring, default planned):
-  // shareable like every other filter, and picking the default clears the
-  // param so the common-case URL stays clean (status-filter idiom).
+    : (defaultsLatch.status ?? 'all')
+  // View tab lives in the URL (?view=planned|recurring): shareable like
+  // every other filter, and picking the default clears the param so the
+  // common-case URL stays clean (status-filter idiom). The latch fallback is
+  // only ever 'recurring' - a stored 'planned' equals the built-in and never
+  // latches; garbage reads as planned.
   const rawView = searchParams.get('view')
-  const view: 'planned' | 'recurring' = rawView === 'recurring' ? 'recurring' : 'planned'
+  const view: 'planned' | 'recurring' =
+    rawView === 'recurring' || (rawView === null && defaultsLatch.view === 'recurring') ? 'recurring' : 'planned'
   // Remembered search: when the URL carries no ?search= param (fresh visit),
   // the last committed term fills the box. Seeded once at mount (the lazy
   // useState initializer reads storage exactly once); after that the URL
@@ -180,55 +342,65 @@ export default function Planned() {
   const amountMax = searchParams.get('amount_max') ?? ''
   const rawFrom = searchParams.get('from')
   const rawTo = searchParams.get('to')
-  // Default month: the planned view focuses the current calendar month on a
-  // fresh visit. All reads below (list, totals, export, filter count) use
-  // the EFFECTIVE range: explicit params win; both absent falls back to the
-  // session default; a PARTIAL range (one bound) passes through as-is - the
-  // missing bound is never auto-filled. ListFilterFields keeps reading the
-  // RAW params (self-contained contract): before materialization the panel
-  // is closed so no mismatch is visible, after it raw == effective.
-  // Session default, restoredSearch pattern: the lazy initializer reads the
-  // URL exactly once - a mount WITH any date param (full or partial deep
-  // link) never defaults. Consumed - never re-applies - once any date param
-  // has been present, so after materialization (or a deep link) clearing
-  // the params means the user's explicit All time, not a re-default.
-  const [dateDefault, setDateDefault] = useState(() =>
-    rawFrom === null && rawTo === null ? monthRange(new Date().getFullYear(), new Date().getMonth()) : null,
-  )
-  // Derived-until-touched consume (render-adjust on LOCAL state - the
-  // sanctioned shape; never an effect, never router state). The set lands
-  // on null which disproves its own guard, so the adjust terminates by
-  // construction; it is a fall-through, keeping every hook below
-  // unconditional, and on the pass where it fires the params already win
-  // the derivations, so no query key churns.
-  if (dateDefault && (rawFrom !== null || rawTo !== null)) setDateDefault(null)
-  const dateFrom = rawFrom ?? dateDefault?.from ?? ''
-  const dateTo = rawTo ?? dateDefault?.to ?? ''
+  const rawOrdering = searchParams.get('ordering')
+  // Effective range, consumed latch: all reads below (list, totals, filter
+  // count) use the EFFECTIVE range - explicit params win; both absent falls
+  // back to the still-live default; a PARTIAL range (one bound) passes
+  // through as-is - the missing bound is never auto-filled.
+  // ListFilterFields keeps reading the RAW params (self-contained contract):
+  // before materialization the panel is closed so no mismatch is visible,
+  // after it raw == effective.
+  // Consume adjusts - fall-through render-adjusts on local state (the
+  // sanctioned shape; never an effect, never router state). The
+  // materialization write below lands every live facet at once, so several
+  // consumes can fire on the same pass: FUNCTIONAL updaters are load-bearing
+  // (an object-spread of the closure's stale latch would let the last write
+  // resurrect facets an earlier one had killed). Each updater lands on a
+  // value that disproves its own guard - the adjust terminates by
+  // construction; hooks below stay unconditional; on the pass where it
+  // fires the params already win the derivations, so no query key churns.
+  if (defaultsLatch.range && (rawFrom !== null || rawTo !== null)) setDefaultsLatch((l) => ({ ...l, range: null }))
+  if (defaultsLatch.status && rawStatus !== null) setDefaultsLatch((l) => ({ ...l, status: null }))
+  if (defaultsLatch.view && rawView !== null) setDefaultsLatch((l) => ({ ...l, view: null }))
+  if (defaultsLatch.ordering && rawOrdering !== null) setDefaultsLatch((l) => ({ ...l, ordering: null }))
+  const dateFrom = rawFrom ?? defaultsLatch.range?.from ?? ''
+  const dateTo = rawTo ?? defaultsLatch.range?.to ?? ''
   const page = intParam(searchParams, 'page') ?? 1
   // Garbage ?ordering= values read as unset (status-filter idiom): the Select
-  // shows the default placeholder and the request sends nothing.
-  const rawOrdering = searchParams.get('ordering')
-  const ordering = SORT_OPTIONS.some((o) => o.value === rawOrdering) ? (rawOrdering as PlannedTransactionOrdering) : null
+  // shows the default placeholder and the request sends nothing. Absent
+  // falls back to the still-live latch value before materialization.
+  const ordering = SORT_OPTIONS.some((o) => o.value === rawOrdering)
+    ? (rawOrdering as PlannedTransactionOrdering)
+    : defaultsLatch.ordering
 
   const [pageSize, setPageSize] = useState(getStoredPageSize)
-  const [isExporting, setIsExporting] = useState(false)
 
   const updateParams = createUpdateParams(setSearchParams)
 
-  // One-shot month materialization (useStalePageReset shape: the URL write
-  // goes through the closure-wrapped updateParams, never setSearchParams
-  // directly - the shipped precedent for a no-event URL write from an
-  // effect; a render-adjust must not write router state). Fires only while
-  // the session default is live: entering the planned view with no date
-  // param writes the current month into the URL (replace, no history
-  // entry; createUpdateParams also drops ?page). The consume adjust above
-  // then kills the default, so All time / Clear filters / deep links never
-  // re-default within a session; a fresh mount re-initializes (accepted).
-  // view in the deps: a recurring -> planned tab switch materializes too.
+  // One-shot defaults materialization (useStalePageReset shape: the URL
+  // write goes through the closure-wrapped updateParams, never
+  // setSearchParams directly - the shipped precedent for a no-event URL
+  // write from an effect; a render-adjust must not write router state).
+  // Fires only while a latch facet is live: entering with a facet's params
+  // absent writes the resolved default into the URL (replace, no history
+  // entry). The write touches ONLY the five defaultable param families
+  // (status/view/ordering/from/to) plus createUpdateParams's automatic
+  // ?page drop - never a FilterPanel field. The consume adjusts above then
+  // kill the consumed facets, so All time / Clear filters / deep links
+  // never re-default within a session; a fresh mount re-initializes the
+  // latch (accepted). Not gated on the view tab: the write may carry ?view=
+  // itself, and on a ?view=recurring entry the planned-view facets (range,
+  // status, ordering) are inert on the recurring surface and already
+  // applied when the user switches tabs.
   useEffect(() => {
-    if (view !== 'planned' || !dateDefault || rawFrom !== null || rawTo !== null) return
-    updateParams({ from: dateDefault.from, to: dateDefault.to })
-  }, [view, dateDefault, rawFrom, rawTo, updateParams])
+    if (!defaultsLatch.range && !defaultsLatch.status && !defaultsLatch.view && !defaultsLatch.ordering) return
+    updateParams({
+      ...(defaultsLatch.range ? { from: defaultsLatch.range.from, to: defaultsLatch.range.to } : {}),
+      ...(defaultsLatch.status ? { status: defaultsLatch.status } : {}),
+      ...(defaultsLatch.view ? { view: defaultsLatch.view } : {}),
+      ...(defaultsLatch.ordering ? { ordering: defaultsLatch.ordering } : {}),
+    })
+  }, [defaultsLatch, updateParams])
 
   // Any manual search interaction drops the restored hint and remembers the
   // new term; clearing the box stores '' so the old term can never re-apply.
@@ -242,28 +414,10 @@ export default function Planned() {
     updateParams({ search: next || null })
   }
 
-  // The export endpoint honors ONLY the status and date-range filters - never
-  // imply the whole filter panel applies to the file.
-  const handleExportView = async () => {
-    setIsExporting(true)
-    // runBlobExport never throws; it owns every export toast.
-    await runBlobExport(
-      () => plannedTransactionsApi.exportView({
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        start_date: dateFrom || undefined,
-        end_date: dateTo || undefined,
-      }),
-      {
-        filename: `planned_${dateFrom || 'all'}_${dateTo || 'all'}.json`,
-        loadingMessage: t('preparingExport'),
-        successMessage: t('exportComplete'),
-        errorMessage: t('exportFailed'),
-      },
-    )
-    setIsExporting(false)
-  }
-
-  // Each facet counts once, however many values it holds.
+  // Each facet counts once, however many values it holds. Default-derived
+  // params still count: a materialized default range IS an active range
+  // (badge 1 with the panel closed is honest - the user can see and clear
+  // what is filtering the list), so materialized params are never excluded.
   const activeFilterCount = [
     accountFilter.length > 0,
     budgetFilter.length > 0,
@@ -276,6 +430,10 @@ export default function Planned() {
   // Exact-calendar-month detection on the EFFECTIVE range: truthy only when
   // from/to are a calendar month's first and last day. The month label and
   // the month-aware empty state below key off it.
+  // A week or year default range is simply not an exact calendar month, so
+  // the stepper and the month-aware empty state hide for those defaults -
+  // isCalendarMonth on the EFFECTIVE range already expresses this; no extra
+  // default-specific branch exists or is needed.
   const exactMonth = isCalendarMonth(dateFrom, dateTo)
   const monthLabel = exactMonth ? formatMonthYear(dateFrom) : null
   // The date facet is the ONLY filter and it is an exact month - ANY month,
@@ -290,6 +448,9 @@ export default function Planned() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
+  // Clears URL params only - saved defaults (if any) are untouched: the
+  // next fresh entry re-materializes them. Clearing is the user's explicit
+  // all-time choice for THIS session (the latch is consumed).
   const clearFilters = () =>
     updateParams({ account: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
 
@@ -445,30 +606,37 @@ export default function Planned() {
     onError: (error) => { toast.error(getApiErrorMessage(error, t('recurring.deleteFailed'))); setDeletingRule(null) },
   })
 
-  return (
-    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* Visible on mobile too: export is a read action with no FAB twin. */}
-          <button
-            type="button"
-            onClick={handleExportView}
-            disabled={isExporting}
-            title={t('exportTitle')}
-            className={secondaryButtonClass}
-          >
-            <Download size={13} className="inline mr-1" /> {t('exportView')}
-          </button>
-          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
-          {canWrite && (
-            <button type="button" onClick={view === 'recurring' ? openNewRecurring : openNew} className={`${primaryButtonClass} max-sm:hidden`}>
-              <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
-            </button>
-          )}
-        </div>
-      </div>
+  // Save the current view facets as this page's defaults. capturePageDefaults
+  // reads the URL (the source of truth) into the full planned sub-object - a
+  // present page key is a full replace, so every facet is always sent.
+  // Toasts are per-call callbacks: the shared hook owns only the cache
+  // invalidation (BookmarksPage's per-call onError precedent).
+  const updateSettings = useUpdateWorkspaceSettings()
+  const handleSaveDefaults = () => {
+    updateSettings.mutate(
+      { planned: capturePageDefaults(searchParams, 'planned', calendarStartDay) },
+      {
+        onSuccess: () => toast.success(t('saveDefaultsSuccess')),
+        onError: (error) => toast.error(getApiErrorMessage(error, t('saveDefaultsFailed'))),
+      },
+    )
+  }
 
+  // Header New click, consumed: the counter lives in the gate wrapper (the
+  // button is above the gate, the modal state is here). Routed against the
+  // EFFECTIVE view - a click inside the cold-cache gate window lands after
+  // materialization, so it opens the modal the post-defaults view calls
+  // for. The latch catches up to the counter on the very next pass: the
+  // adjust terminates by construction and is StrictMode-idempotent.
+  const [consumedCreateRequest, setConsumedCreateRequest] = useState(createRequest)
+  if (createRequest !== consumedCreateRequest) {
+    setConsumedCreateRequest(createRequest)
+    if (view === 'recurring') openNewRecurring()
+    else openNew()
+  }
+
+  return (
+    <>
       {/* View switch sits directly below the header, ABOVE the status
           control: it swaps the whole page surface. */}
       <div className="mb-3">
@@ -529,6 +697,21 @@ export default function Planned() {
           className={`${secondaryButtonClass} flex-shrink-0`}
         >
           <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
+        </button>
+        {/* Save the current view facets as this page's defaults. Sits with
+            the bookmark action (the two save-view actions cluster) and
+            before the ordering Select, which stays at row end. Visible on
+            mobile too: a preference action with no FAB twin, like the
+            header's export. In-flow wrap member of this max-sm:flex-wrap
+            row; flex-shrink-0 keeps the label on one line so line 3 of the
+            320px wrap still holds this button plus the Select. */}
+        <button
+          type="button"
+          onClick={handleSaveDefaults}
+          disabled={updateSettings.isPending}
+          className={`${secondaryButtonClass} flex-shrink-0`}
+        >
+          <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
         </button>
         <Select
           value={ordering}
@@ -782,6 +965,6 @@ export default function Planned() {
           onClose={() => setPageBookmarkOpen(false)}
         />
       )}
-    </div>
+    </>
   )
 }
