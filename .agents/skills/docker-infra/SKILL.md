@@ -85,7 +85,7 @@ ARG values land in image history and in public CI logs - only public values (ver
 Every site that installs frontend dependencies runs `npm ci` - the `frontend/Dockerfile` builder stage and both `dev.sh` `start_frontend` bootstrap arms (the node-container `sh -c` string and the host path). Image and dev bootstrap then install exactly the lockfile tree CI tested and fail loudly on a package.json/package-lock.json mismatch instead of silently resolving around it. The old `npm install --legacy-peer-deps` in the Dockerfile was cargo cult: CI (ci-test.yml) has always run plain `npm ci` on the same lockfile and passes - no peer conflict exists.
 
 - The `[ -x node_modules/.bin/vite ] || npm ci` bootstrap guard stays safe under `npm ci`: it falls through only when vite is absent (node_modules missing or partial) - exactly the states where npm ci's delete-`node_modules`-first behavior is harmless - and a present vite short-circuits with no install, as before.
-- The in-container bootstrap arm's `sh -c` string is POSIX sh on purpose: it executes in the node:22-slim container, where `package-lock.json` is visible via the `./frontend` bind mount - dev.sh itself stays bash.
+- The in-container bootstrap arm's `sh -c` string is POSIX sh on purpose: it executes in the node:26-slim container, where `package-lock.json` is visible via the `./frontend` bind mount - dev.sh itself stays bash.
 - Remnant grep gates over the repo: `--exclude-dir=<dir>` must come BEFORE the `--` argument terminator - after `--`, grep parses it as a filename and exits 2, which is a gate that never ran, not a pass.
 - Keeping the lockfile advisory-clean in the first place (the audit-fix refresh procedure) lives in `npm-dependency-refresh`.
 
@@ -119,7 +119,7 @@ Backend commands resolve through `/venv/bin/<tool>` (`UV_PROJECT_ENVIRONMENT`), 
 
 uv subcommands are a third route and never go through `backend_run`: its host arm would run `uv run <cmd>` (wrong subcommand - it syncs the venv first) and its docker arm execs `/venv/bin/uv`, which does not exist (uv lives at `/bin/uv` in the image). Route them by tool availability, not DEV_TARGET: `command -v uv` succeeds → host `(cd backend && uv <cmd>)`, else `in_service api uv <cmd>` - the dev compose bind-mounts the source and `in_service`'s uid mapping keeps the container-side write host-owned. `uv lock` needs no `use_local_hosts` (it touches no services), and the one uncovered combination, no host uv AND no Docker, cannot run `dev.sh` at all.
 
-The `node` service (profile `tools`) exists only for this: `node:22-slim` with `./frontend` bind-mounted. Debian-based like the builder stage, so the `node_modules` it writes stays usable if the host also runs npm — an alpine/musl image would install incompatible esbuild binaries.
+The `node` service (profile `tools`) exists only for this: `node:26-slim` with `./frontend` bind-mounted. Debian-based, so the `node_modules` it writes stays usable if the host also runs npm - an alpine/musl image would install incompatible esbuild binaries.
 
 `use_local_hosts` exists because the same `.env` serves both worlds: inside compose a service is reached by name (`db`, `redis:6379`), from a host process only through the published port (`localhost:$DB_PORT`). Anything host-run must go through it, or it silently tries to resolve `db`.
 
