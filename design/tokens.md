@@ -199,6 +199,17 @@ Since Tailwind CSS 4 the theme lives in CSS at the top of `frontend/src/index.cs
   --font-mono: "JetBrains Mono", monospace;
   --radius-sm: 4px;   /* == v4 native 0.25rem; explicit as contract documentation */
   --radius-none: 0px; /* == v4 native; explicit for the contract */
+  /* v3 line-height contract: ABSOLUTE values so arbitrary-size children
+     (text-[10px] etc.) inherit the used px, not a unitless ratio. v4 pairs
+     each named size with a unitless ratio (sm: calc(1.25 / .875)), which
+     recomputes against every child font size; these are the v3 absolute
+     pairings, pinned for every named size the tree uses (a census governs
+     the list - add a size here when a new named size enters the tree). */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
 }
 
 /* v4 has no --z-index-* namespace: the semantic z-scale (design rule: never raw
