@@ -25,7 +25,7 @@ function temporalOf(period: Period, todayIso: string): Temporal {
  *  is translated by the component that renders it. */
 function CurrentChip({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none flex-shrink-0">
+    <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none shrink-0">
       {label}
     </span>
   )

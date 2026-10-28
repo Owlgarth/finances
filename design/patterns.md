@@ -279,7 +279,7 @@ Transient, non-blocking feedback for user actions.
               pointer-events-auto
               animate-[slideInRight_150ms_ease-out]">
     <!-- Lucide icon -->
-    <CircleCheck class="text-positive flex-shrink-0" size={20} strokeWidth={1.5} />
+    <CircleCheck class="text-positive shrink-0" size={20} strokeWidth={1.5} />
     <div class="flex-1 min-w-0">
       <div class="text-[13px] font-semibold text-text">
         Transaction saved
@@ -288,7 +288,7 @@ Transient, non-blocking feedback for user actions.
         150.00 PLN added to Food & Groceries
       </div>
     </div>
-    <button class="text-text-muted hover:text-text transition-colors flex-shrink-0 mt-0.5">
+    <button class="text-text-muted hover:text-text transition-colors shrink-0 mt-0.5">
       <X size={16} strokeWidth={1.5} />
     </button>
   </div>
@@ -359,8 +359,8 @@ Floating panels below a trigger. Used for context selectors, category pickers, a
   <div class="px-2 pb-1">
     <input class="w-full bg-background border border-border rounded-none px-2 py-1.5
                   text-xs font-mono text-text
-                  focus:border-border-focus focus:outline-none
-                  placeholder:text-text-muted/50"
+                  focus:border-border-focus focus:outline-hidden
+                  placeholder:text-text-muted"
            placeholder="Search…"/>
   </div>
 

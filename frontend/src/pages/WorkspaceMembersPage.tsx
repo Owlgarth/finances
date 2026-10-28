@@ -154,7 +154,7 @@ export default function WorkspaceMembersPage() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="px-6 py-4 grid grid-cols-4 gap-4 items-center">
                 <div className="flex items-center gap-4">
-                  <Skeleton className="h-10 w-10 flex-shrink-0" />
+                  <Skeleton className="h-10 w-10 shrink-0" />
                   <div className="space-y-1.5">
                     <Skeleton className="h-4 w-32" />
                     <Skeleton className="h-3 w-44" />
@@ -404,14 +404,14 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
         tappable ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
       }`}
     >
-      <div className="flex-shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
+      <div className="shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
         <span className="text-text-muted font-medium">{member.email?.[0]?.toUpperCase() ?? '?'}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-text flex items-center gap-2">
           <span className="truncate">{member.full_name || member.email}</span>
           {isCurrentUser && (
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border flex-shrink-0">
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-surface-hover text-text px-2 py-0.5 rounded-sm border border-border shrink-0">
               {t('badges.you')}
             </span>
           )}
@@ -463,7 +463,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemo
     <tr className={isCurrentUser ? 'bg-surface-hover/50' : ''}>
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center">
-          <div className="flex-shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
+          <div className="shrink-0 h-10 w-10 bg-surface-muted rounded-sm flex items-center justify-center">
             <span className="text-text-muted font-medium">
               {member.email?.[0]?.toUpperCase() ?? '?'}
             </span>
