@@ -45,6 +45,10 @@ an intermediate step:
   tree moved unexpectedly: the change under review is not the change that was specced. Pair it
   with `git diff -U0 -- package.json | grep -c '^[+-][^+-]'` == 2 for the manifest itself.
 
+## Subtree swaps: prove scope with a (key, version)-set diff
+
+The URL-line diff above is the right gate for single-package bumps, but a whole-subtree swap (the tailwind 3 -> 4 CSS-first migration: 49 key@version pairs out, 33 in) breaks it: npm's traversal order moves UNRELATED entries - same key, same version - and git renders the relocation as `-`/`+` pairs, so the URL grep reports change where nothing semantically changed. For a swap, prove the semantic scope with a (key, version)-SET comparison: extract every `node_modules/<key>@<version>` pair from the old and new lockfiles, diff the sets, and account for every added/removed pair on the expected-collateral list. Expect SECOND-level collateral (`detect-libc` via lightningcss, `tapable` via enhanced-resolve in the tailwind 4 swap), and remember that dropping a direct manifest entry does not remove a package that stays transitive - browserslist/caniuse-lite/baseline-browser-mapping survived via `@babel`, postcss/picocolors via vite, after our direct entries left `package.json`.
+
 ## allowScripts: derive from the live post-update tree
 
 - Derive `allowScripts` from the actual post-update tree (`npm install-scripts ls`, plus
@@ -52,6 +56,7 @@ an intermediate step:
   via i18next-parser and 0.28.2 via vite), never from spec predictions: versions move during the
   update, so a predicted entry set pins stale versions.
 - `npm install-scripts approve <pkg>` prunes the stale entries itself - no hand-editing needed.
+- Prebuilt-binary platform packages ship NO install scripts and add no allowScripts entries: `@esbuild/*` always did, and under tailwind 4 `@tailwindcss/oxide` + its platform children and `lightningcss` + its platform children behave the same way - the allowScripts block needed zero changes across that subtree swap.
 - The `.npmrc allow-scripts setting is being ignored` warning is ENVIRONMENTAL (user-level config
   on dev machines only); CI and Docker never see it. The gated warning is only "N package has
   install scripts blocked".
