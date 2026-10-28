@@ -129,7 +129,7 @@ export default function VerifyEmailPage() {
                 required
                 value={resendEmail}
                 onChange={(e) => setResendEmail(e.target.value)}
-                className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+                className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
                 placeholder={t('verifyEmail.resendPlaceholder')}
               />
               <button

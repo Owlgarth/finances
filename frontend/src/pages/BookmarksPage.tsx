@@ -168,7 +168,7 @@ export default function BookmarksPage() {
                   }`}
                 >
                   {/* Leading tile: the colored glyph IS the color affordance (no extra dot). */}
-                  <div className="h-6 w-6 border border-border rounded-none bg-surface flex items-center justify-center flex-shrink-0">
+                  <div className="h-6 w-6 border border-border rounded-none bg-surface flex items-center justify-center shrink-0">
                     <BookmarkGlyph bookmark={b} size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -181,7 +181,7 @@ export default function BookmarksPage() {
                       action sheet (events would bubble into the tappable
                       row handlers). */}
                   <div
-                    className="flex items-center gap-1 flex-shrink-0"
+                    className="flex items-center gap-1 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
@@ -261,7 +261,7 @@ export default function BookmarksPage() {
                       isTouch ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
                     }`}
                   >
-                    <div className="h-6 w-6 border border-border rounded-none bg-surface flex items-center justify-center flex-shrink-0">
+                    <div className="h-6 w-6 border border-border rounded-none bg-surface flex items-center justify-center shrink-0">
                       <BookmarkGlyph bookmark={b} size={12} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -271,7 +271,7 @@ export default function BookmarksPage() {
                     {/* Same anatomy minus Switch and chevrons: restore is
                         reversible, so it stays non-destructive. */}
                     {!isTouch && (
-                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => restore(b)}

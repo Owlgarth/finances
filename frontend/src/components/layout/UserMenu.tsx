@@ -30,7 +30,7 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
         className="flex items-center gap-2 w-full px-3 py-2 rounded-sm text-text-muted hover:bg-surface-hover hover:text-primary transition-all"
         title={collapsed ? (user?.full_name || user?.email) : undefined}
       >
-        <User size={14} className="flex-shrink-0" />
+        <User size={14} className="shrink-0" />
         {!collapsed && (
           <span className="text-sm font-medium truncate">
             {user?.full_name || user?.email}
@@ -69,9 +69,9 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
               }}
               className="w-full text-left px-4 py-2 text-sm text-text hover:bg-surface-hover transition-colors flex items-center gap-2"
             >
-              <Globe size={14} className="flex-shrink-0" />
+              <Globe size={14} className="shrink-0" />
               <span className="flex-1 truncate">{t('language')}</span>
-              <span className="flex-shrink-0 max-w-[72px] truncate text-xs text-text-muted">
+              <span className="shrink-0 max-w-[72px] truncate text-xs text-text-muted">
                 {activeLanguage?.nativeName}
               </span>
             </button>

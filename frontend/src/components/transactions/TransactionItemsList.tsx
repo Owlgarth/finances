@@ -241,7 +241,7 @@ export default function TransactionItemsList({
                   {effectiveCategoryName ? ` · ${effectiveCategoryName}` : ''}
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="font-mono whitespace-nowrap text-text">{rightValue}</span>
                 <ChevronDown
                   size={14}

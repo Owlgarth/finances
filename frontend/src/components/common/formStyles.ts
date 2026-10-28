@@ -12,7 +12,7 @@ export const controlHeightClass = 'min-h-8 pointer-coarse:min-h-[44px]'
 // focus = border-focus + ring-1 (not ring-2), muted placeholder, muted disabled bg.
 export const inputClass =
   `w-full bg-surface border border-border rounded-none px-2 py-1.5 font-mono text-xs text-text ${controlHeightClass} ` +
-  'placeholder:text-text-muted focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
+  'placeholder:text-text-muted focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus ' +
   'transition-colors disabled:bg-surface-muted disabled:opacity-50'
 
 // §4 Labels: Geist 11px, uppercase, tracking-wider, muted, 4px below.
@@ -64,9 +64,10 @@ export const solidNegativeButtonClass =
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
 // Auth pages (Login/Register) input style. These predate the §4 redesign and
-// keep their larger mono inputs (bg-background, text-sm, ring-2 focus) — they
-// are deliberately NOT inputClass above. Register appends
-// `placeholder:text-text-muted` on top of this base at its call site.
+// keep their larger mono inputs (bg-background, text-sm, ring-2 focus) - they
+// are deliberately NOT inputClass above, except for the muted placeholder
+// color, which both input families share so every auth input's placeholder
+// renders in the muted design token instead of the browser default.
 export const authInputClass =
   'w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text ' +
-  'focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors'
+  'placeholder:text-text-muted focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors'

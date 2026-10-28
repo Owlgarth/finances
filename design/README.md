@@ -10,7 +10,7 @@
 | File | Contents |
 |---|---|
 | `README.md` | This file — philosophy, core principles, accessibility, rules, migration delta |
-| `tokens.md` | Fonts, type scale, color tokens (CSS variables), Tailwind config, spacing, borders, radius |
+| `tokens.md` | Fonts, type scale, color tokens (CSS variables), Tailwind theme, spacing, borders, radius |
 | `components.md` | All UI components: sidebar, page header, buttons, inputs, segmented control, cards, balance card, budget card, chips, tables, modals, form layout, confirmation dialog, select, toggle, avatar, badge, pagination, search results, bottom nav, icons |
 | `responsive.md` | Breakpoints, layout behavior per device, mobile bottom sheets, touch targets, content density |
 | `patterns.md` | Motion, empty states, loading/skeleton, toasts, dropdowns, z-index, tooltips, scrollbars, keyboard navigation, file upload/download, stepper/wizard |

@@ -85,7 +85,7 @@ export default function LanguageModal({ onClose }: LanguageModalProps) {
                 )}
               </span>
               {/* Fixed-width check slot so names do not shift on selection change. */}
-              <span className="w-4 flex-shrink-0 flex items-center justify-center">
+              <span className="w-4 shrink-0 flex items-center justify-center">
                 {active && <Check size={16} className="text-primary" />}
               </span>
             </button>

@@ -13,7 +13,7 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
 <aside class="fixed left-0 top-0 h-full w-60 bg-surface border-r border-border flex flex-col z-sidebar">
 
   <!-- Brand -->
-  <div class="flex items-center justify-between px-4 h-12 flex-shrink-0">
+  <div class="flex items-center justify-between px-4 h-12 shrink-0">
     Owlgarth Finances
     <button class="p-1 rounded-none text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
             aria-label="Collapse sidebar">
@@ -22,7 +22,7 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
   </div>
 
   <!-- Selectors (hidden when collapsed) -->
-  <div class="px-3 space-y-1 flex-shrink-0 mb-2">
+  <div class="px-3 space-y-1 shrink-0 mb-2">
     <!-- Workspace selector -->
     <!-- Account selector -->
     <!-- Period selector -->
@@ -51,7 +51,7 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
   </nav>
 
   <!-- Bottom section -->
-  <div class="px-2 flex-shrink-0 py-3 border-t border-border">
+  <div class="px-2 shrink-0 py-3 border-t border-border">
     <button class="flex items-center gap-2 w-full h-8 px-3 rounded-none
                    text-text-muted hover:text-text hover:bg-surface-hover
                    text-xs transition-colors">
@@ -91,34 +91,34 @@ Compact workspace / account / period selectors at the top of the sidebar, above 
 <!-- Workspace selector -->
 <button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
                hover:bg-surface-hover transition-colors text-left">
-  <Home size={14} class="text-text-muted flex-shrink-0" />
+  <Home size={14} class="text-text-muted shrink-0" />
   <div class="flex-1 min-w-0">
     <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Workspace</div>
     <div class="text-xs font-medium text-text truncate">Home</div>
   </div>
-  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
+  <ChevronDown size={12} class="text-text-muted shrink-0" />
 </button>
 
 <!-- Account selector (active / highlighted) -->
 <button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
                bg-surface-hover transition-colors text-left">
-  <Landmark size={14} class="text-text flex-shrink-0" />
+  <Landmark size={14} class="text-text shrink-0" />
   <div class="flex-1 min-w-0">
     <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Account</div>
     <div class="text-xs font-medium text-text truncate">Example Account</div>
   </div>
-  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
+  <ChevronDown size={12} class="text-text-muted shrink-0" />
 </button>
 
 <!-- Period selector -->
 <button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
                hover:bg-surface-hover transition-colors text-left">
-  <Calendar size={14} class="text-text-muted flex-shrink-0" />
+  <Calendar size={14} class="text-text-muted shrink-0" />
   <div class="flex-1 min-w-0">
     <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Period</div>
     <div class="font-mono text-xs font-medium text-text">Feb 2026</div>
   </div>
-  <ChevronDown size={12} class="text-text-muted flex-shrink-0" />
+  <ChevronDown size={12} class="text-text-muted shrink-0" />
 </button>
 ```
 
@@ -290,7 +290,7 @@ Small icon-only buttons for table row actions, toolbar controls, and inline acti
 ```html
 <input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
               font-mono text-xs text-text
-              focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+              focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
               transition-colors
               placeholder:text-text-muted"
        type="text"
@@ -376,9 +376,9 @@ Inline "?" hint icon placed after a form label, showing a short bubble of explan
   <input class="w-full bg-negative-bg border border-negative rounded-none px-2 py-1.5
                 font-mono text-xs text-text
                 ring-1 ring-negative
-                focus:outline-none transition-colors" />
+                focus:outline-hidden transition-colors" />
   <div class="flex items-center gap-1 mt-1">
-    <AlertCircle size={12} class="text-negative flex-shrink-0" />
+    <AlertCircle size={12} class="text-negative shrink-0" />
     <span class="text-[11px] text-negative font-medium">Amount must be greater than 0</span>
   </div>
 </div>
@@ -398,7 +398,7 @@ Inline "?" hint icon placed after a form label, showing a short bubble of explan
 ```html
 <select class="w-full bg-surface border border-border rounded-none px-2 py-1.5
                font-mono text-xs text-text
-               focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+               focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
                transition-colors
                disabled:opacity-50">
   <option value="">Select category...</option>
@@ -416,7 +416,7 @@ A composite component — a read-only input that opens a calendar popup.
 <!-- Trigger input -->
 <input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
               font-mono text-xs text-text
-              focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+              focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
               transition-colors cursor-pointer"
        readOnly
        placeholder="Select date..." />
@@ -441,7 +441,7 @@ A composite component — a read-only input that opens a calendar popup.
 <div class="flex items-center gap-2">
   <input type="color"
          class="h-8 w-8 rounded-none border border-border cursor-pointer
-                focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus" />
+                focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus" />
   <span class="font-mono text-xs text-text-muted">#171717</span>
 </div>
 ```
@@ -452,8 +452,9 @@ Uses standard HTML `<input type="color">` with border treatment matching other i
 
 Heights are **enforced** by `controlHeightClass` (`min-h-8 pointer-coarse:min-h-[44px]`
 in `components/common/formStyles.ts`): 32px base, 44px floor on coarse pointers.
-The floor keys on `@media (pointer: coarse)` (custom `pointer-coarse:` variant in
-`tailwind.config.js`), not viewport width, so tablets and landscape phones above
+The floor keys on `@media (pointer: coarse)` (custom `pointer-coarse:` variant
+registered via `@custom-variant` in `src/index.css`), not viewport width, so
+tablets and landscape phones above
 `sm` keep full touch targets. Every control that can share a row — text inputs,
 Select/MultiSelect triggers, date trigger, search input, buttons, FilterBar
 toggle — composes it, so mixed rows (e.g. a Select next to a text input) always align.
@@ -540,12 +541,12 @@ Styled dropdown trigger that replaces native `<select>`. Opens a floating panel 
                  bg-surface border border-border rounded-none px-2 py-1.5
                  text-xs text-text text-left
                  hover:bg-surface-hover
-                 focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+                 focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
                  transition-colors">
     <div class="flex items-center gap-2 min-w-0">
       <span class="truncate">Food & Groceries</span>
     </div>
-    <ChevronDown size={12} class="text-text-muted flex-shrink-0 transition-transform" />
+    <ChevronDown size={12} class="text-text-muted shrink-0 transition-transform" />
   </button>
 </div>
 
@@ -554,10 +555,10 @@ Styled dropdown trigger that replaces native `<select>`. Opens a floating panel 
                bg-surface border border-border rounded-none px-2 py-1.5
                text-xs text-text-muted text-left
                hover:bg-surface-hover
-               focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+               focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
                transition-colors">
   <span>Select category...</span>
-  <ChevronDown size={12} class="text-text-muted flex-shrink-0 transition-transform" />
+  <ChevronDown size={12} class="text-text-muted shrink-0 transition-transform" />
 </button>
 
 <!-- Dropdown panel -->
@@ -574,7 +575,7 @@ Styled dropdown trigger that replaces native `<select>`. Opens a floating panel 
   <button class="w-full flex items-center gap-2 px-2 h-8 text-left
                  text-xs text-text font-medium
                  bg-surface-muted transition-colors">
-    <Check size={12} class="text-primary flex-shrink-0" />
+    <Check size={12} class="text-primary shrink-0" />
     <span class="truncate">Housing</span>
   </button>
   <!-- Group label -->
@@ -1259,7 +1260,7 @@ Standard vertical form used inside modals and pages. Adapts the Architectural Le
     </label>
     <input class="w-full bg-surface border border-border rounded-none px-2 py-1.5
                   text-[13px] text-text
-                  focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus
+                  focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus
                   transition-colors"
            placeholder="What was this for?"/>
   </div>
@@ -1271,7 +1272,7 @@ Standard vertical form used inside modals and pages. Adapts the Architectural Le
     </label>
     <input class="w-full bg-negative-bg border border-negative/30 rounded-none px-2 py-1.5
                   font-mono text-[13px] text-text
-                  ring-1 ring-negative/40 focus:outline-none transition-colors"/>
+                  ring-1 ring-negative/40 focus:outline-hidden transition-colors"/>
     <div class="flex items-center gap-1 mt-1">
       <AlertCircle class="h-3.5 w-3.5 text-negative" />
       <span class="text-[11px] text-negative font-medium">Amount must be greater than 0</span>
@@ -1340,7 +1341,7 @@ Uses the Modal at `sm` size (400px). Always requires explicit user action — ne
 <div class="bg-surface border border-border rounded-sm w-full max-w-sm p-4">
   <!-- Icon + text -->
   <div class="flex items-start gap-3 mb-4">
-    <div class="h-8 w-8 border border-negative/20 rounded-sm bg-negative-bg flex items-center justify-center flex-shrink-0">
+    <div class="h-8 w-8 border border-negative/20 rounded-sm bg-negative-bg flex items-center justify-center shrink-0">
       <AlertTriangle class="h-4 w-4 text-negative" />
     </div>
     <div>
@@ -1533,7 +1534,7 @@ Desktop shows numbered pages with prev/next; mobile uses "Load More". All stylin
     <div class="flex items-center gap-2">
       <span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">Rows</span>
       <select class="bg-surface border border-border rounded-none px-2 py-1 text-[11px] font-mono text-text
-                     focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus">
+                     focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus">
         <option>50</option>
         <option>100</option>
       </select>
@@ -1673,12 +1674,12 @@ toast.error('Amount must be greater than 0')
 
 ```html
 <!-- With image -->
-<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-muted flex-shrink-0">
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-muted shrink-0">
   <img src="/avatar.jpg" alt="John D." class="h-full w-full object-cover"/>
 </div>
 
 <!-- Initials fallback -->
-<div class="h-8 w-8 rounded-full bg-surface-muted border border-border flex items-center justify-center flex-shrink-0">
+<div class="h-8 w-8 rounded-full bg-surface-muted border border-border flex items-center justify-center shrink-0">
   <span class="font-mono text-[10px] font-medium text-text">JD</span>
 </div>
 
