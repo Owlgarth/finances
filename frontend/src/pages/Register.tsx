@@ -142,7 +142,7 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="bg-surface border border-border rounded-sm p-8 w-full max-w-md">
         {isSubmitting ? (
-          <div ref={panelRef} tabIndex={-1} className="outline-none">
+          <div ref={panelRef} tabIndex={-1} className="outline-hidden">
             <div className="text-center mb-8">
               <h2 className="font-sans font-semibold text-primary text-base tracking-tight">
                 {t('setupPanel.title')}
@@ -170,7 +170,7 @@ export default function Register() {
                       isActive ? 'text-text font-medium' : isComplete ? 'text-text font-normal' : 'text-text-muted'
                     }`}
                   >
-                    <div className="w-3.5 flex-shrink-0 flex items-center justify-center">
+                    <div className="w-3.5 shrink-0 flex items-center justify-center">
                       {isComplete ? (
                         <Check size={14} className="text-positive" />
                       ) : isActive ? (

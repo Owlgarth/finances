@@ -112,7 +112,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="flex h-screen bg-background">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <Sidebar
           collapsed={collapsed}
           onToggleCollapse={toggleCollapse}

@@ -19,7 +19,7 @@ export const listboxTriggerBaseClass =
   `${controlHeightClass} ` +
   'text-xs text-text text-left ' +
   'hover:bg-surface-hover ' +
-  'focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus ' +
+  'focus:border-border-focus focus:outline-hidden focus:ring-1 focus:ring-border-focus ' +
   'transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
 
 // Anchored desktop panel container. w-max fits the panel to the widest
@@ -56,7 +56,7 @@ export function PanelSearchInput({ value, onChange, onKeyDown, variant }: PanelS
         placeholder={t('listbox.searchPlaceholder')}
         aria-label={t('listbox.searchLabel')}
         className={
-          'w-full bg-background border border-border rounded-none px-2 text-xs font-mono text-text focus:border-border-focus focus:outline-none placeholder:text-text-muted/50 ' +
+          'w-full bg-background border border-border rounded-none px-2 text-xs font-mono text-text focus:border-border-focus focus:outline-hidden placeholder:text-text-muted/50 ' +
           (variant === 'sheet' ? 'py-2' : 'py-1.5')
         }
       />
@@ -87,9 +87,9 @@ export function SheetOptionRow({ label, selected, mono = false, onClick }: Sheet
       }
     >
       {selected ? (
-        <Check size={16} className="text-primary flex-shrink-0" />
+        <Check size={16} className="text-primary shrink-0" />
       ) : (
-        <span className="w-4 flex-shrink-0" />
+        <span className="w-4 shrink-0" />
       )}
       <span className="truncate">{label}</span>
     </button>
@@ -125,9 +125,9 @@ export function DropdownOptionRow({ id, label, selected, highlighted, onClick }:
       }
     >
       {selected ? (
-        <Check size={12} className="text-primary flex-shrink-0" />
+        <Check size={12} className="text-primary shrink-0" />
       ) : (
-        <span className="w-3 flex-shrink-0" />
+        <span className="w-3 shrink-0" />
       )}
       <span className="truncate">{label}</span>
     </button>

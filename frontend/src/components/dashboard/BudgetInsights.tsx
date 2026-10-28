@@ -167,7 +167,7 @@ function CategoryBars({ items, currency, loading }: { items: BudgetSummaryItem[]
           key={r.name}
           tabIndex={0}
           aria-label={t('insights.rowAriaLabel', { name: r.name, planned: formatAmount(r.planned), spent: formatAmount(r.actual), currency })}
-          className="flex items-center gap-2 group outline-none focus-visible:ring-2 focus-visible:ring-border-focus rounded-sm"
+          className="flex items-center gap-2 group outline-hidden focus-visible:ring-2 focus-visible:ring-border-focus rounded-sm"
           onPointerMove={(e) =>
             show(e.currentTarget, r.name, [
               { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(r.planned) },
@@ -245,7 +245,7 @@ function PeriodColumns({ periods, currency, currentPeriodId, loading }: { period
                 key={c.id}
                 tabIndex={0}
                 aria-label={t('insights.rowAriaLabel', { name: c.name, planned: formatAmount(c.planned), spent: formatAmount(c.actual), currency })}
-                className="flex items-end justify-center gap-[2px] h-full px-2 outline-none hover:bg-surface-hover focus-visible:bg-surface-hover transition-colors"
+                className="flex items-end justify-center gap-[2px] h-full px-2 outline-hidden hover:bg-surface-hover focus-visible:bg-surface-hover transition-colors"
                 onPointerMove={(e) =>
                   show(e.currentTarget, c.name, [
                     { series: 'planned', label: t('insights.seriesPlanned'), value: formatAmount(c.planned) },

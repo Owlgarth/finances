@@ -59,7 +59,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           ${collapsed ? 'w-14' : 'w-60'}`}
       >
         {/* Logo + collapse toggle */}
-        <div className="flex items-center justify-between p-4 flex-shrink-0 mb-4">
+        <div className="flex items-center justify-between p-4 shrink-0 mb-4">
           {!collapsed && (
             <span className="font-sans font-semibold text-primary text-base tracking-tight select-none whitespace-nowrap">Owlgarth Finances</span>
           )}
@@ -74,7 +74,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         </div>
 
         {/* Workspace selector — icon-only in the collapsed rail (responsive.md tablet spec) */}
-        <div className={`flex-shrink-0 mt-3 ${collapsed ? 'p-2' : 'p-3 space-y-3'}`}>
+        <div className={`shrink-0 mt-3 ${collapsed ? 'p-2' : 'p-3 space-y-3'}`}>
           <WorkspaceSelector onOpenSettings={handleOpenSettings} collapsed={collapsed} />
         </div>
 
@@ -87,7 +87,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               title={collapsed ? t('search') : undefined}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-sm transition-colors mb-1 text-text-muted hover:bg-surface-hover hover:text-text"
             >
-              <Search size={14} className="flex-shrink-0" />
+              <Search size={14} className="shrink-0" />
               {!collapsed && (
                 <>
                   <span className="font-mono text-xs uppercase tracking-wider flex-1 text-left">{t('search')}</span>
@@ -111,7 +111,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 }
                 title={collapsed ? t(item.labelKey) : undefined}
               >
-                <item.icon size={14} className="flex-shrink-0" />
+                <item.icon size={14} className="shrink-0" />
                 {!collapsed && (
                   <span className="font-mono text-xs uppercase tracking-wider">
                     {t(item.labelKey)}
@@ -158,7 +158,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     }
                     title={collapsed ? t('bookmarksManage') : undefined}
                   >
-                    <ListPlus size={14} className="flex-shrink-0" />
+                    <ListPlus size={14} className="shrink-0" />
                     {!collapsed && (
                       <span className="font-mono text-xs uppercase tracking-wider">{t('bookmarksManage')}</span>
                     )}
@@ -179,7 +179,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         )}
 
         {/* Bottom: user menu */}
-        <div className="p-2 flex-shrink-0 space-y-1 py-3 mt-3">
+        <div className="p-2 shrink-0 space-y-1 py-3 mt-3">
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>

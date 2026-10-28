@@ -766,7 +766,7 @@ export default function BudgetDetailPage() {
                             inputMode="decimal"
                             value={cellValue}
                             onChange={(e) => setCellValue(e.target.value)}
-                            className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
+                            className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden"
                             autoFocus
                           />
                           <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={14} /></button>
@@ -837,7 +837,7 @@ export default function BudgetDetailPage() {
                           inputMode="decimal"
                           value={cellValue}
                           onChange={(e) => setCellValue(e.target.value)}
-                          className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-none"
+                          className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden"
                           autoFocus
                         />
                         <div className="flex items-center gap-5">

@@ -361,7 +361,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
                 </div>
                 <div className="text-[10px] font-mono text-text-muted">{row.date}</div>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+              <div className="flex items-center gap-3 shrink-0 pl-3">
                 {/* Cross-currency: second small line instead of one long string
                     that would overflow 375px. */}
                 <span className="font-mono text-text text-right">

@@ -118,7 +118,7 @@ export default function BottomSheet({
           aria-modal="true"
           aria-label={ariaLabel}
           tabIndex={-1}
-          className={`relative w-full bg-surface border border-border rounded-t-sm max-h-[92dvh] overflow-y-auto overscroll-contain pb-safe outline-none ${motion} ${className}`}
+          className={`relative w-full bg-surface border border-border rounded-t-sm max-h-[92dvh] overflow-y-auto overscroll-contain pb-safe outline-hidden ${motion} ${className}`}
           style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px)` } : undefined}
           onClick={(e) => e.stopPropagation()}
         >

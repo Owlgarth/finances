@@ -687,14 +687,14 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
-        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+        {/* Labeled like the header's export action; shrink-0 keeps the
             label on one line so the flex-1 SearchInput is the row member
             that yields on narrow screens. */}
         <button
           type="button"
           onClick={() => setPageBookmarkOpen(true)}
           title={addBookmarkTitle}
-          className={`${secondaryButtonClass} flex-shrink-0`}
+          className={`${secondaryButtonClass} shrink-0`}
         >
           <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
@@ -703,13 +703,13 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
             before the ordering Select, which stays at row end. Visible on
             mobile too: a preference action with no FAB twin, like the
             header's export. In-flow wrap member of this max-sm:flex-wrap
-            row; flex-shrink-0 keeps the label on one line so line 3 of the
+            row; shrink-0 keeps the label on one line so line 3 of the
             320px wrap still holds this button plus the Select. */}
         <button
           type="button"
           onClick={handleSaveDefaults}
           disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} flex-shrink-0`}
+          className={`${secondaryButtonClass} shrink-0`}
         >
           <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
         </button>
@@ -719,7 +719,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           options={sortOptions}
           placeholder={t('sort.soonest')}
           aria-label={t('sortAria')}
-          className="w-48 max-sm:w-24 flex-shrink-0"
+          className="w-48 max-sm:w-24 shrink-0"
         />
       </div>
       )}
@@ -799,7 +799,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
                     {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                <div className="flex items-center gap-3 shrink-0 pl-3">
                   <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
                   {/* Hover reveals are pointer-fine only - on touch the row tap
                       opens the action sheet instead. */}
@@ -859,7 +859,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
                   {scheduleSummary(r)}{r.next_occurrence_date ? ` · ${r.next_occurrence_date}` : ''}{r.category?.name ? ` · ${r.category.name}` : ''} · {r.account_name ?? t('noAccount')}
                 </div>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+              <div className="flex items-center gap-3 shrink-0 pl-3">
                 <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
                 {/* Hover reveals are pointer-fine only - on touch the row tap
                     opens the action sheet instead. */}

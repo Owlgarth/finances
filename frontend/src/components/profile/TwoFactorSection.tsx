@@ -169,7 +169,7 @@ export default function TwoFactorSection() {
               type="text"
               value={verifyCode}
               onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors tracking-widest text-center"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors tracking-widest text-center"
               placeholder="000000"
               maxLength={6}
               required
@@ -219,7 +219,7 @@ export default function TwoFactorSection() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('twoFactor.passwordPlaceholder')}
             />
           </div>
@@ -266,7 +266,7 @@ export default function TwoFactorSection() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+              className="w-full max-w-xs bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('twoFactor.passwordPlaceholder')}
             />
           </div>

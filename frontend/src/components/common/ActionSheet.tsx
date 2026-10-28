@@ -49,7 +49,7 @@ export default function ActionSheet({ open, onClose, title, actions }: ActionShe
               action.destructive ? 'text-negative' : 'text-text'
             }`}
           >
-            {action.icon && <action.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />}
+            {action.icon && <action.icon size={16} strokeWidth={1.5} className="shrink-0" />}
             {action.label}
           </button>
         ))}

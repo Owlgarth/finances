@@ -389,7 +389,7 @@ export default function CommandPalette() {
         onKeyDown={handleKeyDown}
         placeholder={t('palette.searchPlaceholder')}
         aria-label={t('palette.searchLabel')}
-        className="w-full bg-transparent border-0 border-b border-border pl-8 pr-3 py-3 font-mono text-xs max-sm:text-base text-text placeholder:text-text-muted focus:outline-none"
+        className="w-full bg-transparent border-0 border-b border-border pl-8 pr-3 py-3 font-mono text-xs max-sm:text-base text-text placeholder:text-text-muted focus:outline-hidden"
       />
     </div>
   )
@@ -430,15 +430,15 @@ export default function CommandPalette() {
             onMouseEnter={() => setHighlighted(i)}
             className={`${rowClass} ${i === highlighted ? 'bg-surface-hover' : ''}`}
           >
-            <item.icon size={14} strokeWidth={1.5} className="flex-shrink-0 text-text-muted" />
+            <item.icon size={14} strokeWidth={1.5} className="shrink-0 text-text-muted" />
             <span className={`truncate flex-1 text-left ${item.isFooter ? 'text-primary' : ''}`}>
               {item.label}
             </span>
             {item.meta && (
-              <span className="flex-shrink-0 text-[10px] font-mono text-text-muted">{item.meta}</span>
+              <span className="shrink-0 text-[10px] font-mono text-text-muted">{item.meta}</span>
             )}
             {i === highlighted && !isMobile && (
-              <CornerDownLeft size={12} className="flex-shrink-0 text-text-muted" />
+              <CornerDownLeft size={12} className="shrink-0 text-text-muted" />
             )}
           </button>
         </div>
@@ -469,7 +469,7 @@ export default function CommandPalette() {
           aria-modal="true"
           aria-label={t('palette.searchLabel')}
           tabIndex={-1}
-          className="bg-surface border border-border rounded-sm w-full max-w-md outline-none overflow-hidden"
+          className="bg-surface border border-border rounded-sm w-full max-w-md outline-hidden overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {input}

@@ -129,7 +129,7 @@ export default function ManageCategoriesModal({ budgetId, onClose }: Props) {
       <span className={`text-sm truncate ${category.is_archived ? 'text-text-muted' : 'font-medium text-text'}`}>
         {category.name}
       </span>
-      <span className="flex items-center gap-2 flex-shrink-0">
+      <span className="flex items-center gap-2 shrink-0">
         {category.is_archived && (
           <ArchivedBadge />
         )}
