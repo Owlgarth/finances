@@ -28,7 +28,7 @@ export function FiltersToggle({ open, count, onToggle, 'aria-controls': ariaCont
       onClick={onToggle}
       aria-expanded={open}
       aria-controls={ariaControls}
-      className={`bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 ${controlHeightClass} flex-shrink-0`}
+      className={`bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors inline-flex items-center gap-1.5 ${controlHeightClass} shrink-0`}
     >
       <SlidersHorizontal size={13} />
       {t('filters.toggle')}

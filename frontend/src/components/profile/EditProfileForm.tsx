@@ -65,7 +65,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           id="full_name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          className="w-full bg-surface-hover border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+          className="w-full bg-surface-hover border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
           placeholder={t('editProfile.fullNamePlaceholder')}
         />
       </div>
@@ -99,7 +99,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={handleEmailKeyDown}
-              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('editProfile.newEmailPlaceholder')}
             />
             <input
@@ -107,7 +107,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleEmailKeyDown}
-              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-colors"
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('editProfile.currentPasswordPlaceholder')}
             />
             <div className="flex gap-2">
@@ -139,7 +139,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
         <button
           type="submit"
           disabled={isLoading}
-          className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-border-focus focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? t('editProfile.saving') : t('editProfile.save')}
         </button>

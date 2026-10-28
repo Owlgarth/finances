@@ -59,7 +59,7 @@ export default function ChangePasswordForm() {
           id="current_password"
           value={formData.currentPassword}
           onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-all"
           placeholder={t('changePassword.currentPlaceholder')}
           required
         />
@@ -74,7 +74,7 @@ export default function ChangePasswordForm() {
           id="new_password"
           value={formData.newPassword}
           onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-all"
           placeholder={t('changePassword.newPlaceholder')}
           required
           minLength={6}
@@ -91,7 +91,7 @@ export default function ChangePasswordForm() {
           id="confirm_password"
           value={formData.confirmPassword}
           onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
+          className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-all"
           placeholder={t('changePassword.confirmPlaceholder')}
           required
           minLength={6}

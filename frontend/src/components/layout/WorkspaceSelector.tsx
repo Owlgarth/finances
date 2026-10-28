@@ -54,7 +54,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
           aria-label={workspace ? t('workspaceSelector.workspaceAria', { name: workspace.name }) : t('workspaceSelector.noWorkspace')}
           className="flex items-center justify-center w-full py-2 min-h-[44px] rounded-sm text-text-muted hover:bg-surface-hover hover:text-text transition-colors disabled:opacity-50"
         >
-          <Landmark size={14} className="flex-shrink-0" />
+          <Landmark size={14} className="shrink-0" />
         </button>
       ) : (
         <button
@@ -62,7 +62,7 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
           disabled={isLoading}
           className="flex items-center gap-2 w-full px-3 py-2 rounded-sm border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
         >
-          <Landmark size={14} className="flex-shrink-0 text-text-muted" />
+          <Landmark size={14} className="shrink-0 text-text-muted" />
           <span className="text-sm font-medium text-text truncate flex-1 text-left">
             {workspace ? workspace.name : t('workspaceSelector.noWorkspace')}
           </span>
@@ -86,9 +86,9 @@ export default function WorkspaceSelector({ onOpenSettings, collapsed = false }:
               }`}
             >
               {ws.id === workspace?.id ? (
-                <Check size={14} className="text-text flex-shrink-0" />
+                <Check size={14} className="text-text shrink-0" />
               ) : switchingToId === ws.id ? (
-                <Loader2 size={14} className="animate-spin text-text flex-shrink-0" />
+                <Loader2 size={14} className="animate-spin text-text shrink-0" />
               ) : (
                 <div className="h-4 w-4" />
               )}

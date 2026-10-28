@@ -124,7 +124,7 @@ export default function MultiSelect<T extends string | number>({
         <span className={values.length === 0 ? 'truncate text-text-muted' : 'truncate'}>
           {triggerLabel}
         </span>
-        <span className="flex items-center gap-1 flex-shrink-0">
+        <span className="flex items-center gap-1 shrink-0">
           {values.length > 1 && (
             <span className="min-w-[16px] h-4 px-1 rounded-sm bg-primary text-white text-[10px] font-mono inline-flex items-center justify-center">
               {values.length}
