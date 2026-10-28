@@ -76,6 +76,19 @@ COPY --from=backend common/fonts.json /backend/common/fonts.json
 - Verify the named context's source tree is not excluded by its `.dockerignore` (`backend/.dockerignore` must not exclude `common/`) before relying on the context.
 - **Comment-accuracy riders ride the change.** Comments describing the cross-boundary set singularize it ("the shared registry", "one file, two consumers"); when the set grows, reword every one in the same commit - the Dockerfile block, the compose ui-build and node-mount comments, the release.yml matrix comment, `frontend/README.md` - gated by a grep for the singular phrasing reaching zero. A stale comment teaches the next reader a wrong inventory of what the mechanism supplies.
 
+## Image-Build Verification: BuildKit Store vs Classic Store
+
+PR CI (ci-test.yml) never builds Docker images - image builds happen only in the release
+pipeline - so a local `docker compose build ui` is the only pre-merge end-to-end gate for a
+builder-line change: it exercises the base-image pull, `npm ci`, the named-context COPY steps,
+and `tsc -b && vite build` that CI never touches (a Dependabot PR bumping a FROM line can be
+fully green on a builder it never ran). One trap when scripting gates around it: a base image
+pulled BY a build lands in the BuildKit cache, not the classic image store - `docker image
+inspect <image>` fails right after a successful build that visibly pulled the image's layers.
+An explicit `docker pull <image>` registers it in the classic store (digest identical to the
+build's resolve). A gate step that expects `image inspect` to succeed after a build must pull
+first, or it fails on store mechanics instead of the build.
+
 ## Dockerfile ARG Hygiene
 
 ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
