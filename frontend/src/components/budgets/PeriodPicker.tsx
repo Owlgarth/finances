@@ -78,7 +78,7 @@ function optionAriaLabel(period: Period, todayIso: string, currentSuffix: string
  *  translated by the row components that render it. */
 function CurrentChip({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none flex-shrink-0">
+    <span className="inline-flex items-center px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-surface text-text select-none shrink-0">
       {label}
     </span>
   )
@@ -127,9 +127,9 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       }
     >
       {selected ? (
-        <Check size={14} className="text-primary flex-shrink-0" />
+        <Check size={14} className="text-primary shrink-0" />
       ) : (
-        <span className="w-3.5 flex-shrink-0" />
+        <span className="w-3.5 shrink-0" />
       )}
       <span
         className={'flex-1 min-w-0 truncate ' + (temporal === 'past' ? 'text-text-muted' : 'text-text')}
@@ -138,7 +138,7 @@ function DesktopPeriodRow({ id, period, selected, highlighted, todayIso, onActiv
       </span>
       <span
         className={
-          'font-mono text-[11px] flex-shrink-0 ' +
+          'font-mono text-[11px] shrink-0 ' +
           (temporal === 'past' ? 'text-text-muted/60' : 'text-text-muted')
         }
       >
@@ -162,7 +162,7 @@ interface SheetRowProps {
  * press feedback (active:bg-surface-hover - no hover on touch). Selection is
  * row-level (font-medium + bg-surface-muted + Check); the CURRENT chip is
  * line-2-right. Line 2 uses justify-between so the range may truncate
- * (min-w-0) while the chip never does (flex-shrink-0).
+ * (min-w-0) while the chip never does (shrink-0).
  */
 function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProps) {
   const { t } = useTranslation('budgets')
@@ -180,9 +180,9 @@ function SheetPeriodRow({ period, selected, todayIso, onActivate }: SheetRowProp
       }
     >
       {selected ? (
-        <Check size={16} className="text-primary flex-shrink-0" />
+        <Check size={16} className="text-primary shrink-0" />
       ) : (
-        <span className="w-4 flex-shrink-0" />
+        <span className="w-4 shrink-0" />
       )}
       <span className="flex-1 min-w-0">
         <span
@@ -413,7 +413,7 @@ export default function PeriodPicker({
         </span>
         <ChevronDown
           size={12}
-          className={'text-text-muted flex-shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
+          className={'text-text-muted shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
         />
       </button>
 
@@ -457,7 +457,7 @@ export default function PeriodPicker({
                 onClick={() => activateIndex(viewAllIndex)}
                 className="w-full min-h-[44px] px-4 flex items-center gap-3 text-left text-sm text-text transition-colors active:bg-surface-hover"
               >
-                <CalendarRange size={16} className="text-text-muted flex-shrink-0" />
+                <CalendarRange size={16} className="text-text-muted shrink-0" />
                 <span className="truncate">{viewAllLabel}</span>
               </button>
             )}
@@ -516,7 +516,7 @@ export default function PeriodPicker({
                 (highlightedIndex === viewAllIndex ? 'bg-surface-hover ' : 'bg-surface hover:bg-surface-hover ')
               }
             >
-              <CalendarRange size={14} className="text-text-muted flex-shrink-0" />
+              <CalendarRange size={14} className="text-text-muted shrink-0" />
               <span className="flex-1 min-w-0 truncate">{viewAllLabel}</span>
             </button>
           )}

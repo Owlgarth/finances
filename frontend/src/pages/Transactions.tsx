@@ -485,14 +485,14 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
         <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
-        {/* Labeled like the header's export action; flex-shrink-0 keeps the
+        {/* Labeled like the header's export action; shrink-0 keeps the
             label on one line so the flex-1 SearchInput is the row member
             that yields on narrow screens. */}
         <button
           type="button"
           onClick={() => setPageBookmarkOpen(true)}
           title={addBookmarkTitle}
-          className={`${secondaryButtonClass} flex-shrink-0`}
+          className={`${secondaryButtonClass} shrink-0`}
         >
           <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
@@ -501,13 +501,13 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
             before the ordering Select, which stays at row end. Visible on
             mobile too: a preference action with no FAB twin, like the
             header's export. In-flow wrap member of this max-sm:flex-wrap
-            row; flex-shrink-0 keeps the label on one line so the wrapped
+            row; shrink-0 keeps the label on one line so the wrapped
             320px row still holds this button plus the Select. */}
         <button
           type="button"
           onClick={handleSaveDefaults}
           disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} flex-shrink-0`}
+          className={`${secondaryButtonClass} shrink-0`}
         >
           <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
         </button>
@@ -517,7 +517,7 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
           options={sortOptions}
           placeholder={t('sort.newest')}
           aria-label={t('sortAria')}
-          className="w-48 max-sm:w-24 flex-shrink-0"
+          className="w-48 max-sm:w-24 shrink-0"
         />
       </div>
 
@@ -596,7 +596,7 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
                       .join(' · ')}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                <div className="flex items-center gap-3 shrink-0 pl-3">
                   <div className="text-right">
                     <span className={`font-mono whitespace-nowrap ${TYPE_STYLE[tx.type]}`}>
                       {tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}

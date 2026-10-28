@@ -52,7 +52,7 @@ export default function Modal({
       <button
         type="button"
         onClick={onClose}
-        className="-mr-1 flex-shrink-0 flex items-center gap-1.5 px-2 py-1 pointer-coarse:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+        className="-mr-1 shrink-0 flex items-center gap-1.5 px-2 py-1 pointer-coarse:min-h-[44px] rounded-sm text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
       >
         <X size={14} strokeWidth={1.5} />
         {t('modal.close')}
@@ -96,7 +96,7 @@ export default function Modal({
           aria-modal="true"
           aria-label={title}
           tabIndex={-1}
-          className={`relative bg-surface border border-border rounded-sm w-full outline-none ${SIZE_CLASS[size]} ${className}`}
+          className={`relative bg-surface border border-border rounded-sm w-full outline-hidden ${SIZE_CLASS[size]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
           {header}

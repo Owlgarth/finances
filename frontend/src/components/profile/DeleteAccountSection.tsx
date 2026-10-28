@@ -107,7 +107,7 @@ export default function DeleteAccountSection() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-none transition-all"
+            className="w-full bg-surface-muted border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-all"
             placeholder={t('deleteAccount.passwordPlaceholder')}
           />
         </div>
