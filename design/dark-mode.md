@@ -1,7 +1,7 @@
 # Dark Mode
 
 > Dark mode token overrides for the Architectural Ledger design system.
-> Controlled by a `.dark` class on `<html>`. All overrides are CSS custom properties — the Tailwind config in `tokens.md` references these vars, so dark mode works automatically.
+> Controlled by a `.dark` class on `<html>`. All overrides are CSS custom properties — the Tailwind theme in `tokens.md` references these vars, so dark mode works automatically.
 
 ---
 
@@ -39,37 +39,15 @@
 
 ---
 
-## 2. Tailwind Config — Dark Mode Reference
+## 2. Tailwind Theme — Dark Mode Reference
 
-The Tailwind config in `tokens.md` uses `darkMode: "class"` and references `var(--color-*)` for every token. No additional Tailwind configuration is needed for dark mode — the `.dark` class on `<html>` triggers all variable overrides.
+The Tailwind theme in `tokens.md` §3 is CSS-first: it registers the class-based dark variant and maps every token utility to `var(--color-*)`. The dark-variant registration, verbatim from `frontend/src/index.css`:
 
-```js
-tailwind.config = {
-  darkMode: "class",  // ← toggled via .dark class on <html>
-  theme: {
-    extend: {
-      colors: {
-        "primary":       "var(--color-primary)",       // Light: #171717 → Dark: #E5E5E5
-        "primary-hover": "var(--color-primary-hover)",  // Light: #262626 → Dark: #D4D4D4
-        "background":    "var(--color-background)",     // Light: #FAFAFA → Dark: #0A0A0A
-        "surface":       "var(--color-surface)",        // Light: #FFFFFF  → Dark: #171717
-        "surface-hover": "var(--color-surface-hover)",  // Light: #F5F5F5 → Dark: #262626
-        "surface-muted": "var(--color-surface-muted)",  // Light: #E5E5E5 → Dark: #333333
-        "border":        "var(--color-border)",         // Light: #E5E5E5 → Dark: #333333
-        "border-focus":  "var(--color-border-focus)",   // Light: #171717 → Dark: #E5E5E5
-        "text":          "var(--color-text)",           // Light: #171717 → Dark: #FAFAFA
-        "text-muted":    "var(--color-text-muted)",     // Light: #737373 → Dark: #A3A3A3
-        "positive":      "var(--color-positive)",       // Light: #059669 → Dark: #34D399
-        "positive-bg":   "var(--color-positive-bg)",    // Light: #ECFDF5 → Dark: #064E3B
-        "negative":      "var(--color-negative)",       // Light: #DC2626 → Dark: #F87171
-        "negative-bg":   "var(--color-negative-bg)",    // Light: #FEF2F2 → Dark: #450A0A
-        "warning":       "var(--color-warning)",        // Light: #D97706 → Dark: #FBBF24
-        "warning-bg":    "var(--color-warning-bg)",     // Light: #FFFBEB → Dark: #451A03
-      },
-    },
-  },
-}
+```css
+@custom-variant dark (&:where(.dark, .dark *));
 ```
+
+No additional Tailwind configuration is needed for dark mode — the `.dark` class on `<html>` triggers all variable overrides (§1 above). The full token-to-utility mapping lives in `tokens.md` §3.
 
 No component-level `dark:` variants are needed — every component already uses semantic tokens (e.g., `bg-surface`, `text-text`, `border-border`) which resolve to the correct dark values automatically.
 
@@ -149,6 +127,17 @@ Border and focus tokens cross-swap in dark mode, mirroring the text color invers
 | `--color-warning-bg` | `#FFFBEB` | `#451A03` | Warning chip backgrounds |
 
 Semantic text colors shift to lighter, more vivid values in dark mode to maintain legibility against dark surfaces. Background tokens become deeply saturated darks rather than pale tints.
+
+### Budget Ledger Columns and Overlays - Light → Dark Mapping
+
+| Token | Light | Dark | Notes |
+|---|---|---|---|
+| `--color-planned` | `#64809F` | `#A3BEDF` | Planned-value ledger column (slate blue) |
+| `--color-actual` | `#A3814F` | `#D9BC8F` | Actual-spend ledger column (tan) |
+| `--color-remaining` | `#5E937B` | `#9CC9B2` | Remaining-value ledger column (sage green) |
+| `--color-scrim` | `rgba(23, 23, 23, 0.20)` | `rgba(0, 0, 0, 0.50)` | Modal/drawer backdrop (see §10) |
+
+The ledger columns become lighter pastel steps of the same hues in dark mode, keeping the three value columns tellable apart without competing with semantic red/green.
 
 ### Dark Mode Chip Examples
 
