@@ -71,7 +71,11 @@ transfer. Transfers replace the old currency-exchange records.
   default pick). Opening a budget without the param lands on the current period -
   or, when none can be derived (custom cadence, a failed fetch), the period
   nearest today. Categories are created inline; planned amounts are edited inline
-  (current period). Past periods render as read-only snapshots. Custom-cadence
+  (current period). Past periods render as read-only snapshots. The table
+  totals its three money columns exactly (a footer row on desktop, a totals
+  card on mobile), summing the visible, non-archived category rows client-side -
+  never the API's summary totals, which include archived categories' money the
+  table hides. Custom-cadence
   budgets get add/edit/delete period controls beside the switcher (admin+;
   deleting a period removes its planned amounts but never transactions), and a
   custom budget with no periods yet shows an "Add period" empty state instead of
