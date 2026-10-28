@@ -114,6 +114,30 @@ export function subtractAmounts(a: string, b: string): string {
 }
 
 /**
+ * Exact decimal sum of a list of money strings, as a 2-decimal string.
+ * For column totals computed from backend Decimal strings - never
+ * parseFloat (money rule, see formatAmount). Inputs with more than 2
+ * decimals round half-up via toCents; an empty list sums to '0.00', and
+ * a zero sum is never '-0.00' (BigInt sums have no negative zero).
+ *
+ * Worked examples (docblock examples are the contract - the frontend
+ * has no test runner, so they are the review reference; keep them in
+ * sync if the behavior ever changes):
+ *   sumAmounts(['10.00', '20.50', '30.25']) === '60.75'
+ *   sumAmounts(['0.10', '0.20']) === '0.30'
+ *   sumAmounts(['-5.00', '2.50']) === '-2.50'
+ *   sumAmounts([]) === '0.00'
+ *   sumAmounts(['123456789012345.67', '0.33']) === '123456789012346.00'
+ *     (17-integer-digit Decimals lose their last cent through parseFloat)
+ */
+export function sumAmounts(values: string[]): string {
+  const total = values.reduce((acc, value) => acc + toCents(value), 0n)
+  const isNegative = total < 0n
+  const abs = (isNegative ? -total : total).toString().padStart(3, '0')
+  return `${isNegative ? '-' : ''}${abs.slice(0, -2) || '0'}.${abs.slice(-2)}`
+}
+
+/**
  * Name a custom budget period from its ISO date range (yyyy-MM-dd):
  * "04 Sep – 03 Oct 2026" — zero-padded days, abbreviated months, en dash.
  * Mirrors the backend's derived-period naming (budgeting/services.py,
