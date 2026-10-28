@@ -8,7 +8,7 @@ Thank you for your interest in contributing to Owlgarth Finances! This document 
 
 - Docker and Docker Compose - enough on their own for Option 1 and 2 below
 - For running the app outside the containers (`DEV_TARGET=host`): Python 3.13+,
-  Node.js 22+, and [uv](https://github.com/astral-sh/uv)
+  Node.js 26+, and [uv](https://github.com/astral-sh/uv)
 
 ```bash
 # Clone the repository
