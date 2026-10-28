@@ -80,6 +80,7 @@
     "colPlanned": "Planned",
     "colActual": "Actual",
     "colRemaining": "Remaining",
+    "total": "Total",
     "savePlannedAmount": "Save planned amount",
     "cancel": "Cancel",
     "noCategories": "No categories yet.",
