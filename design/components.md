@@ -1018,6 +1018,8 @@ Sticky date banners that separate transaction groups by date.
 </tfoot>
 ```
 
+Pages whose table already established a column-label dialect and semantic column colors (e.g. the budget detail ledger's `text-[9px] tracking-widest` labels and `text-planned`/`text-actual`/`text-remaining` amounts) keep that dialect in their `tfoot` totals row instead of adopting this neutral form.
+
 ### Mobile Card Layout (Instead of Table)
 
 On mobile (≤640px), tables convert to stacked cards:
