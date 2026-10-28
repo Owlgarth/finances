@@ -312,7 +312,16 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
           />
         </FilterField>
         <FilterField label={t('filters.dateLabel')} className="col-span-2">
-          <div className="flex items-center gap-1.5">
+          {/* Below sm the two date inputs cannot share the date cell - each
+              floors at its intrinsic ~160px minimum, so the pair plus the
+              separator overflows the cell on 320px screens. The row wraps and
+              each w-full input claims its own full line (w-full doubles as the
+              wrap recipe's basis-full); the dash separator is meaningless
+              between stacked inputs - it would strand alone on the middle
+              line, so it hides below sm. min-w-0 is not needed: no wrapped
+              line ever shrinks below its content. At >=sm the max-sm variants
+              emit nothing and the one-line pair renders exactly as before. */}
+          <div className="flex max-sm:flex-wrap items-center gap-1.5">
             <input
               type="date"
               value={dateFrom}
@@ -320,7 +329,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
               aria-label={t('filters.fromDateAria')}
               className={`${inputClass} max-sm:min-h-[44px]`}
             />
-            <span className="text-text-muted text-xs">-</span>
+            <span className="text-text-muted text-xs max-sm:hidden">-</span>
             <input
               type="date"
               value={dateTo}
