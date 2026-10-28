@@ -82,6 +82,7 @@
     "colPlanned": "Plan",
     "colActual": "Rzeczywiste",
     "colRemaining": "Zostało",
+    "total": "Suma",
     "savePlannedAmount": "Zapisz planowaną kwotę",
     "cancel": "Anuluj",
     "noCategories": "Brak kategorii.",
