@@ -123,11 +123,11 @@ services:
       - "${UI_PORT}:80"
 
   # The node toolchain for `./dev.sh frontend` and `./dev.sh npm`, so nothing has
-  # to be installed on the host. Debian-based like the builder stage, so the
+  # to be installed on the host. Debian-based, so the
   # node_modules it writes also work if you run npm on a Linux host.
   node:
     profiles: ["tools"]
-    image: node:22-slim
+    image: node:26-slim
     working_dir: /app
     env_file: .env
     volumes:

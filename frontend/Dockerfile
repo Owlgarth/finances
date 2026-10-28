@@ -1,5 +1,5 @@
 # Stage 1: Build the Vite app
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 # Copy package files first for layer caching
