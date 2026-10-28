@@ -148,7 +148,7 @@ export default function WorkspaceSettingsPanel({ isOpen, onClose }: WorkspaceSet
                   ) : (
                     <div className="bg-negative-bg border border-negative/30 rounded-sm p-4">
                       <div className="flex items-start gap-3">
-                        <TriangleAlert size={16} className="text-negative flex-shrink-0 mt-0.5" />
+                        <TriangleAlert size={16} className="text-negative shrink-0 mt-0.5" />
                         <div className="flex-1">
                           <p className="text-sm text-negative font-medium">
                             {t('workspaceSettings.deleteConfirmTitle', { name: workspace?.name })}

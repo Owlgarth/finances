@@ -134,7 +134,7 @@ export default function AccountsPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Icon size={16} className="text-text-muted flex-shrink-0" />
+                    <Icon size={16} className="text-text-muted shrink-0" />
                     <span className="text-sm font-medium text-text truncate">{account.name}</span>
                     {account.is_archived && (
                       <ArchivedBadge />
@@ -204,7 +204,7 @@ export default function AccountsPage() {
                   </div>
                   <div className="text-[10px] font-mono text-text-muted">{row.date}</div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0 pl-3">
+                <div className="flex items-center gap-3 shrink-0 pl-3">
                   {/* Cross-currency: second small line instead of one long string
                       that would overflow 375px. */}
                   <span className="font-mono text-text text-right">

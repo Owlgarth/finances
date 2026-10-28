@@ -185,7 +185,7 @@ export default function TransactionAttachments({ transaction }: Props) {
               <button
                 type="button"
                 onClick={() => remove.mutate(a.id)}
-                className="!absolute top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
+                className="absolute! top-1 right-1 bg-surface/90 border border-border rounded-sm p-1 text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 touch-reveal touch-hit transition-opacity"
                 aria-label={t('attachments.removeAria')}
               >
                 <Trash2 size={12} />
@@ -257,7 +257,7 @@ export default function TransactionAttachments({ transaction }: Props) {
             aria-modal="true"
             aria-label={preview.attachment.filename}
             tabIndex={-1}
-            className="relative flex flex-col items-center gap-3 outline-none max-w-full"
+            className="relative flex flex-col items-center gap-3 outline-hidden max-w-full"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header row convention: actions right, Close far right. */}

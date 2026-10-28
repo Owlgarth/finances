@@ -129,67 +129,122 @@ These are the **only** hex values in the system. Every component references the 
 
 > **Rule:** Only use `positive` / `negative` colors for financial movement. `warning` is for non-blocking caution states (e.g., nearing budget limit). Neutral data stays in `text` / `text-muted`.
 
+#### Budget Ledger Columns
+
+| Token | CSS Variable | Hex | Use |
+|---|---|---|---|
+| `planned` | `--color-planned` | `#64809F` | Planned-value column in the budget ledger (slate blue) |
+| `actual` | `--color-actual` | `#A3814F` | Actual-spend column in the budget ledger (tan) |
+| `remaining` | `--color-remaining` | `#5E937B` | Remaining-value column in the budget ledger (sage green) |
+
+The three ledger columns are deliberately muted pastels so the planned/actual/remaining value columns stay tellable apart without competing with the semantic red/green used for financial movement. Dark mode maps them to lighter pastel steps of the same hues (see `dark-mode.md`).
+
+#### Overlays
+
+| Token | CSS Variable | Value | Use |
+|---|---|---|---|
+| `scrim` | `--color-scrim` | `rgba(23, 23, 23, 0.20)` | Modal/drawer backdrop - `#171717` (primary) at 20%; dark mode uses pure black at 50% |
+
 ---
 
-## 3. Tailwind Config
+## 3. Tailwind CSS 4 Theme (CSS-First)
 
-Paste this into every Owlgarth Finances project. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable overrides.
+Since Tailwind CSS 4 the theme lives in CSS at the top of `frontend/src/index.css` - there is no `tailwind.config.js`. Uses CSS custom properties so dark mode works automatically — see `dark-mode.md` for the variable overrides.
 
-```js
-tailwind.config = {
-  darkMode: "class",
-  theme: {
-    extend: {
-      colors: {
-        // Brand
-        "primary":        "var(--color-primary)",
-        "primary-hover":  "var(--color-primary-hover)",
+```css
+@import "tailwindcss" source(none);
+@source "./**/*.{js,ts,jsx,tsx}";
+@source "../index.html";
 
-        // Surfaces
-        "background":     "var(--color-background)",
-        "surface":        "var(--color-surface)",
-        "surface-hover":  "var(--color-surface-hover)",
-        "surface-muted":  "var(--color-surface-muted)",
+@custom-variant dark (&:where(.dark, .dark *));
 
-        // Borders
-        "border":         "var(--color-border)",
-        "border-focus":   "var(--color-border-focus)",
+/* Touch-target floor keys on pointer coarseness, not viewport width:
+   tablets and landscape phones above `sm` are still touch devices. */
+@custom-variant pointer-coarse (@media (pointer: coarse));
 
-        // Text
-        "text":           "var(--color-text)",
-        "text-muted":     "var(--color-text-muted)",
+/* Design tokens (design/tokens.md is the contract) - inline mode: utilities emit the
+   :root/.dark runtime vars below, no duplicate :root emission. Key name == var name. */
+@theme inline {
+  /* Brand */
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  /* Surfaces */
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-surface-muted: var(--color-surface-muted);
+  /* Borders */
+  --color-border: var(--color-border);
+  --color-border-focus: var(--color-border-focus);
+  /* Text */
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  /* Semantic / Financial */
+  --color-positive: var(--color-positive);
+  --color-positive-bg: var(--color-positive-bg);
+  --color-negative: var(--color-negative);
+  --color-negative-bg: var(--color-negative-bg);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  /* Budget ledger columns (muted pastels) */
+  --color-planned: var(--color-planned);
+  --color-actual: var(--color-actual);
+  --color-remaining: var(--color-remaining);
+  /* Overlays */
+  --color-scrim: var(--color-scrim);
+}
 
-        // Semantic / Financial
-        "positive":       "var(--color-positive)",
-        "positive-bg":    "var(--color-positive-bg)",
-        "negative":       "var(--color-negative)",
-        "negative-bg":    "var(--color-negative-bg)",
-        "warning":        "var(--color-warning)",
-        "warning-bg":     "var(--color-warning-bg)",
-      },
-      fontFamily: {
-        "sans":   ["Geist", "sans-serif"],
-        "mono":   ["JetBrains Mono", "monospace"],
-      },
-      borderRadius: {
-        "sm":    "4px",     // Containers, cards, modals
-        "none":  "0px",     // Internal grid elements, inputs, table cells
-      },
-      zIndex: {
-        "dropdown":       "100",
-        "sticky":         "200",
-        "sidebar":        "300",
-        "bottom-nav":     "300",
-        "topbar":         "400",
-        "modal-backdrop": "500",
-        "modal":          "510",
-        "toast":          "600",
-        "tooltip":        "700",
-      },
-    },
-  },
+@theme {
+  --font-sans: "Geist", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --radius-sm: 4px;   /* == v4 native 0.25rem; explicit as contract documentation */
+  --radius-none: 0px; /* == v4 native; explicit for the contract */
+  /* v3 line-height contract: ABSOLUTE values so arbitrary-size children
+     (text-[10px] etc.) inherit the used px, not a unitless ratio. v4 pairs
+     each named size with a unitless ratio (sm: calc(1.25 / .875)), which
+     recomputes against every child font size; these are the v3 absolute
+     pairings, pinned for every named size the tree uses (a census governs
+     the list - add a size here when a new named size enters the tree). */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+}
+
+/* v4 has no --z-index-* namespace: the semantic z-scale (design rule: never raw
+   z-10/z-50 for overlays) lives as utilities. */
+@utility z-dropdown { z-index: 100; }
+@utility z-sticky { z-index: 200; }
+@utility z-sidebar { z-index: 300; }
+@utility z-bottom-nav { z-index: 300; }
+@utility z-topbar { z-index: 400; }
+@utility z-modal-backdrop { z-index: 500; }
+@utility z-modal { z-index: 510; }
+@utility z-toast { z-index: 600; }
+@utility z-tooltip { z-index: 700; }
+
+/* Variant-composable custom utility (supersedes the v3 addUtilities plugin; plain
+   @layer utilities classes stay variant-inert - see .touch-hit below). The property
+   pair mirrors the global scrollbar block lower in this file (§9): standard
+   `scrollbar-width` (Firefox, Chrome 121+) plus the WebKit pseudo-element. No
+   `-ms-overflow-style`: the codebase ships no -ms- prefixes anywhere. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* v4 preflight drops the v3 button cursor - preserve app behavior. */
+@layer base {
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
 ```
+
+Three contract statements:
+
+1. **The runtime `:root`/`.dark` custom properties remain the source of every token VALUE.** `@theme inline` makes each utility emit a `var(--color-*)` reference; Tailwind never re-emits the `:root` definitions into the compiled sheet, so dark mode still works purely by variable override (`dark-mode.md`).
+2. **Theme key name == variable name.** The `@theme inline` key `--color-primary-hover` IS the token: it generates the `*-primary-hover` utilities. Never rename one side without the other.
+3. **`/N` alpha modifiers are active.** Token utilities compose with opacity modifiers (`border-positive/20`, `text-text-muted/30`) resolved via `color-mix()`. Tailwind 4 activates them; Tailwind 3 silently dropped them for `var()`-mapped colors, so a v3-era `/N` suffix never rendered.
 
 ### Usage Examples
 
@@ -201,7 +256,7 @@ tailwind.config = {
 <button class="bg-primary text-white px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-primary-hover">
 
 <!-- Input -->
-<input class="bg-surface border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-none">
+<input class="bg-surface border border-border rounded-none px-2 py-1.5 text-xs font-mono text-text focus:border-border-focus focus:outline-hidden">
 
 <!-- Chip (rectangular) -->
 <span class="px-2 py-0.5 border border-border rounded-sm font-mono text-[10px] uppercase tracking-wider">

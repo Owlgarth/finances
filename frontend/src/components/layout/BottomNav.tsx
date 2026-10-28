@@ -269,7 +269,7 @@ export default function BottomNav() {
             }}
             className={moreRowClass}
           >
-            <Search size={16} strokeWidth={1.5} className="flex-shrink-0" />
+            <Search size={16} strokeWidth={1.5} className="shrink-0" />
             {t('search')}
           </button>
           {MORE_DESTINATIONS.map((d) => (
@@ -280,7 +280,7 @@ export default function BottomNav() {
                 `${moreRowClass} ${isActive ? 'font-medium bg-surface-hover' : ''}`
               }
             >
-              <d.icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              <d.icon size={16} strokeWidth={1.5} className="shrink-0" />
               {t(d.labelKey)}
             </NavLink>
           ))}
@@ -295,7 +295,7 @@ export default function BottomNav() {
             }}
             className={moreRowClass}
           >
-            <LogOut size={16} strokeWidth={1.5} className="flex-shrink-0" />
+            <LogOut size={16} strokeWidth={1.5} className="shrink-0" />
             {t('logout')}
           </button>
 
@@ -315,7 +315,7 @@ export default function BottomNav() {
                 </NavLink>
               ))}
               <NavLink to="/bookmarks" className={moreRowClass}>
-                <ListPlus size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                <ListPlus size={16} strokeWidth={1.5} className="shrink-0" />
                 {t('bookmarksManage')}
               </NavLink>
             </div>
@@ -332,11 +332,11 @@ export default function BottomNav() {
                 className={moreRowClass}
               >
                 {ws.id === workspace?.id ? (
-                  <Check size={16} className="text-primary flex-shrink-0" />
+                  <Check size={16} className="text-primary shrink-0" />
                 ) : switchingToId === ws.id ? (
-                  <Loader2 size={16} className="animate-spin flex-shrink-0" />
+                  <Loader2 size={16} className="animate-spin shrink-0" />
                 ) : (
-                  <span className="w-4 flex-shrink-0" />
+                  <span className="w-4 shrink-0" />
                 )}
                 <span className="truncate flex-1">{ws.name}</span>
                 <RoleBadge role={ws.user_role} />
@@ -352,7 +352,7 @@ export default function BottomNav() {
               }}
               className={moreRowClass}
             >
-              <Plus size={16} className="flex-shrink-0" />
+              <Plus size={16} className="shrink-0" />
               {t('createWorkspace')}
             </button>
             {workspace && (
@@ -364,7 +364,7 @@ export default function BottomNav() {
                 }}
                 className={moreRowClass}
               >
-                <Landmark size={16} className="flex-shrink-0" />
+                <Landmark size={16} className="shrink-0" />
                 {t('workspaceSettings')}
               </button>
             )}
@@ -374,7 +374,7 @@ export default function BottomNav() {
             <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
             {/* PWA has no browser chrome to refresh with. */}
             <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
-              <RotateCw size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              <RotateCw size={16} strokeWidth={1.5} className="shrink-0" />
               {t('reload')}
             </button>
             <ThemeToggleRow />
@@ -391,13 +391,13 @@ export default function BottomNav() {
               }}
               className={moreRowClass}
             >
-              <Globe size={16} strokeWidth={1.5} className="flex-shrink-0" />
+              <Globe size={16} strokeWidth={1.5} className="shrink-0" />
               <span className="flex-1 truncate">{t('language')}</span>
-              <span className="flex-shrink-0 max-w-[96px] truncate text-text-muted">{activeLanguage?.nativeName}</span>
+              <span className="shrink-0 max-w-[96px] truncate text-text-muted">{activeLanguage?.nativeName}</span>
             </button>
             <div className="flex items-center justify-between min-h-[44px] px-4">
               <span className="flex items-center gap-3 text-sm text-text">
-                <ZoomIn size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                <ZoomIn size={16} strokeWidth={1.5} className="shrink-0" />
                 {t('disableZoom')}
               </span>
               <Switch
@@ -420,7 +420,7 @@ export default function BottomNav() {
                 onClick={() => setMoreOpen(false)}
                 className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
               >
-                <X size={16} strokeWidth={1.5} className="flex-shrink-0" />
+                <X size={16} strokeWidth={1.5} className="shrink-0" />
                 {t('close')}
               </button>
             </div>

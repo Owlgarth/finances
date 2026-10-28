@@ -132,7 +132,7 @@ export default function Select<T extends string | number>({
         </span>
         <ChevronDown
           size={12}
-          className={'text-text-muted flex-shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
+          className={'text-text-muted shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
         />
       </button>
 
@@ -202,7 +202,7 @@ export default function Select<T extends string | number>({
 
       {error && (
         <div className="mt-1 flex items-center gap-1 text-[11px] text-negative font-medium">
-          <AlertCircle size={12} className="flex-shrink-0" />
+          <AlertCircle size={12} className="shrink-0" />
           <span>{error}</span>
         </div>
       )}

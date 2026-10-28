@@ -19,7 +19,7 @@ interface Props {
 
 const LOW_CONFIDENCE = 0.7
 const cellClass =
-  'w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-none'
+  'w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden'
 
 interface Row {
   name: string

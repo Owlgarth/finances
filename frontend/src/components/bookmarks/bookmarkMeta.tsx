@@ -61,7 +61,7 @@ export function BookmarkGlyph({ bookmark, size, strokeWidth, className }: {
   bookmark: Pick<BookmarkModel, 'icon' | 'color'>
   size: number
   strokeWidth?: number
-  /** Appended AFTER the baked flex-shrink-0 default - component defaults
+  /** Appended AFTER the baked shrink-0 default - component defaults
       live inside the component; the passthrough covers surface-specific
       additions without forking the shape. */
   className?: string
@@ -75,7 +75,7 @@ export function BookmarkGlyph({ bookmark, size, strokeWidth, className }: {
     <Icon
       size={size}
       strokeWidth={strokeWidth}
-      className={`flex-shrink-0${className ? ` ${className}` : ''}`}
+      className={`shrink-0${className ? ` ${className}` : ''}`}
       style={{ color: bookmarkColorVar(bookmark.color) }}
     />
   )

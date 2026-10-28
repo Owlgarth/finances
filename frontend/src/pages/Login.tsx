@@ -84,7 +84,7 @@ export default function Login() {
 
         {!requires2FA ? (
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="mb-4">
+            <div>
               <label htmlFor="email" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 {t('loginForm.emailLabel')}
               </label>
@@ -101,7 +101,7 @@ export default function Login() {
               />
             </div>
 
-            <div className="mb-4">
+            <div>
               <label htmlFor="password" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 {t('loginForm.passwordLabel')}
               </label>
@@ -154,7 +154,7 @@ export default function Login() {
           </form>
         ) : (
           <form className="space-y-6" onSubmit={handle2FAVerify}>
-            <div className="mb-4">
+            <div>
               <label htmlFor="2fa-code" className="block font-mono text-[9px] uppercase tracking-widest text-text-muted mb-1">
                 {useRecoveryCode ? t('twoFactor.recoveryLabel') : t('twoFactor.codeLabel')}
               </label>

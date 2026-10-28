@@ -13,7 +13,7 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 | TanStack Query 5 | Server state |
 | Axios | HTTP client |
 | i18next / react-i18next | Internationalization (UI catalogs; en/uk/pl - see [docs/i18n.md](../docs/i18n.md)) |
-| Tailwind CSS 3 | Styling (Architectural Ledger design system) |
+| Tailwind CSS 4 | Styling (Architectural Ledger design system) |
 | Lucide React | Icon library |
 | React Hot Toast | Notifications |
 
@@ -586,13 +586,13 @@ const mutation = useMutation({
 
 ### Design System
 
-The app uses an **Architectural Ledger** design system with CSS custom properties in `src/index.css` mapped to Tailwind utility classes in `tailwind.config.js`.
+The app uses an **Architectural Ledger** design system with CSS custom properties in `src/index.css` mapped to Tailwind utility classes via a CSS-first `@theme inline` block (Tailwind CSS 4; no `tailwind.config.js`).
 
 Visual separation uses flat surfaces with borders (`border border-border`) - no gradients or box shadows.
 
 ### Tailwind Theme
 
-- **Colors**: 16 CSS custom property tokens (brand, surfaces, borders, text, semantic/financial)
+- **Colors**: 20 CSS custom property tokens (brand, surfaces, borders, text, semantic/financial, budget ledger columns, overlays)
 - **Font families**: Geist (`font-sans`) and JetBrains Mono (`font-mono`)
 - **Border radius**: `rounded-sm` (4px) and `rounded-none` (0px)
 - **Z-index**: Named scale from 100 (dropdowns) to 700 (tooltips)
@@ -614,7 +614,7 @@ Visual separation uses flat surfaces with borders (`border border-border`) - no 
 | Error / expense | `--color-negative` | `text-negative`, `bg-negative` |
 | Warnings | `--color-warning` | `text-warning`, `bg-warning` |
 
-> **Dark mode:** a `.dark` block in `src/index.css` overrides all 16 tokens above - see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
+> **Dark mode:** a `.dark` block in `src/index.css` overrides all 20 tokens above - see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
 
 ### Icons
 

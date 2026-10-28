@@ -185,7 +185,7 @@ export default function BookmarkFormModal({ budgetContext, pageContext, bookmark
           />
           {nameError && (
             <div className="mt-1 flex items-center gap-1 text-[11px] text-negative font-medium">
-              <AlertCircle size={12} className="flex-shrink-0" />
+              <AlertCircle size={12} className="shrink-0" />
               <span>{t('nameRequired')}</span>
             </div>
           )}
