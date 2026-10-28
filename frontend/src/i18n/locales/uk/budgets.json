@@ -82,6 +82,7 @@
     "colPlanned": "Заплановано",
     "colActual": "Фактично",
     "colRemaining": "Залишок",
+    "total": "Сума",
     "savePlannedAmount": "Зберегти заплановану суму",
     "cancel": "Скасувати",
     "noCategories": "Категорій ще немає.",

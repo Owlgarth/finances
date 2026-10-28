@@ -8,7 +8,7 @@ import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
-import { formatAmount } from '../utils/format'
+import { formatAmount, sumAmounts } from '../utils/format'
 import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
@@ -579,6 +579,17 @@ export default function BudgetDetailPage() {
       }
     })
 
+  // Exact column totals for the currency shown, summed straight off the
+  // rows the table renders - NOT summary.totals, whose API values include
+  // archived categories' money this table hides. BigInt cents, never float.
+  const totalPlanned = sumAmounts(rows.map((r) => r.planned))
+  const totalActual = sumAmounts(rows.map((r) => r.actual))
+  const totalRemaining = sumAmounts(rows.map((r) => r.remaining))
+  // String-sign check: toCents is not exported, and sumAmounts never
+  // returns '-0.00', so a leading minus is exactly "the total is negative".
+  const totalRemainingNegative = totalRemaining.startsWith('-')
+  const totalLabel = t('detail.total')
+
   // Resolved in the body, not inside the JSX: the literal-string lint only
   // recognizes the unaliased t() callee, in attributes and children alike.
   const addLabel = tBookmarks('addLabel')
@@ -792,6 +803,26 @@ export default function BudgetDetailPage() {
                 <tr><td colSpan={4} className="px-4 py-6 text-center text-text-muted">{t('detail.noCategories')}</td></tr>
               )}
             </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr className="bg-background border-t border-border">
+                  {/* Same 9px label dialect as the thead (this page's
+                      established register), not the canonical 10px tfoot
+                      form - designer-sanctioned deviation. Sticky so the
+                      label survives horizontal scroll like the header and
+                      row identity cells; bg-background matches the tinted
+                      footer row, not the bg-surface used above. */}
+                  <td className="text-left px-4 py-2 sticky left-0 z-10 bg-background text-[9px] font-mono uppercase tracking-widest text-text-muted">
+                    {totalLabel}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono font-medium tabular-nums text-planned">{formatAmount(totalPlanned)}</td>
+                  <td className="px-4 py-2 text-right font-mono font-medium tabular-nums text-actual">{formatAmount(totalActual)}</td>
+                  <td className={`px-4 py-2 text-right font-mono font-medium tabular-nums ${totalRemainingNegative ? 'text-negative' : 'text-remaining'}`}>
+                    {formatAmount(totalRemaining)}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
@@ -874,6 +905,31 @@ export default function BudgetDetailPage() {
               </div>
             )
           })}
+          {rows.length > 0 && (
+            /* Totals card: header strip + the same 3-column grid the row
+               cards use. space-y-2 on the parent supplies the 8px gap. */
+            <div className="border border-border rounded-sm bg-background">
+              <div className="px-4 py-1.5 border-b border-border text-center text-[9px] font-mono uppercase tracking-widest text-text-muted">
+                {totalLabel}
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-border text-center">
+                <div className="px-2 py-2 min-w-0">
+                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colPlanned')}</div>
+                  <div className="font-mono text-sm font-medium text-planned truncate">{formatAmount(totalPlanned)}</div>
+                </div>
+                <div className="px-2 py-2 min-w-0">
+                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colActual')}</div>
+                  <div className="font-mono text-sm font-medium text-actual truncate">{formatAmount(totalActual)}</div>
+                </div>
+                <div className="px-2 py-2 min-w-0">
+                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colRemaining')}</div>
+                  <div className={`font-mono text-sm font-medium truncate ${totalRemainingNegative ? 'text-negative' : 'text-remaining'}`}>
+                    {formatAmount(totalRemaining)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">
               {t('detail.noCategories')}
