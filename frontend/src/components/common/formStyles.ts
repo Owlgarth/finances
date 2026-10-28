@@ -64,9 +64,10 @@ export const solidNegativeButtonClass =
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
 // Auth pages (Login/Register) input style. These predate the §4 redesign and
-// keep their larger mono inputs (bg-background, text-sm, ring-2 focus) — they
-// are deliberately NOT inputClass above. Register appends
-// `placeholder:text-text-muted` on top of this base at its call site.
+// keep their larger mono inputs (bg-background, text-sm, ring-2 focus) - they
+// are deliberately NOT inputClass above, except for the muted placeholder
+// color, which both input families share so every auth input's placeholder
+// renders in the muted design token instead of the browser default.
 export const authInputClass =
   'w-full bg-background border border-border rounded-none px-3 py-2 font-mono text-sm text-text ' +
-  'focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors'
+  'placeholder:text-text-muted focus:bg-surface focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors'
