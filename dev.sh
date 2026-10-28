@@ -128,7 +128,7 @@ backend_run() {
 frontend_run() {
     if on_host; then
         command -v npm >/dev/null ||
-            die "Error: npm is not installed — install Node 22+, or set DEV_TARGET=docker"
+            die "Error: npm is not installed - install Node 26+, or set DEV_TARGET=docker"
         (cd frontend && "$@")
         return
     fi
