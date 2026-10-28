@@ -56,6 +56,20 @@ same session - in PR #81 it paid for itself twice.
   `API_PORT`/`UI_PORT` (rule detail in `docker-infra`). Missing one silently splits
   frontend/backend across checkouts - confirm the UI actually reaches YOUR api before
   debugging the product.
+- One-off `docker compose run` containers OUTLIVE their invoker: a leftover
+  `<project>-<svc>-run-*` container from a prior session can still hold your UI_PORT and
+  answer HTTP 200 on it - a false-positive generator for any readiness poll, not just a
+  future "port is already allocated" failure. Before any port-publishing smoke: capture
+  `docker ps` (the shared-host before/after baseline), remove this project's own one-offs
+  with the DOUBLE label filter - `docker ps -aq --filter
+  label=com.docker.compose.project=<name> --filter
+  label=com.docker.compose.service=<svc>` + `docker rm -f` (the filter pair can only match
+  this workspace's own containers, so the never-touch-sibling-checkouts rule holds by
+  construction) - then prove the port dead (curl fails + `ss` shows no listener) before
+  booting, and diff the before/after captures to confirm nothing else changed.
+- Readiness is polled on the PUBLISHED port; under `--service-ports` remapping the vite
+  banner's `Local:` URL prints the container-internal port (5173) - that mismatch is
+  expected, never misread it as a failure.
 
 ## Budget the fallback before assembling
 

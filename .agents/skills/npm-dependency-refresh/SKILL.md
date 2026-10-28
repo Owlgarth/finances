@@ -1,6 +1,6 @@
 ---
 name: npm-dependency-refresh
-description: Frontend npm dependency refreshes for Owlgarth Finances - audit-fix/update/audit-fix end-state sequencing, allowScripts derivation from the post-update tree, the lockfileVersion 3 compat gate, floor bumps for production-security direct deps vs backlog majors, clean-reinstall proof. Use when refreshing or bumping frontend dependencies in frontend/package.json, triaging npm audit findings or a CI audit-gate failure, or regenerating frontend/package-lock.json.
+description: Frontend npm dependency refreshes for Owlgarth Finances - audit-fix/update/audit-fix end-state sequencing, allowScripts derivation from the post-update tree, the lockfileVersion 3 gate, floor bumps for production-security direct deps vs backlog majors, registry-verified floors and lockfile diff-scope proof for single-package bumps, clean-reinstall proof. Use when refreshing or bumping frontend dependencies in frontend/package.json, triaging npm audit findings or a CI audit-gate failure, or regenerating frontend/package-lock.json.
 ---
 
 # npm Dependency Refresh
@@ -30,6 +30,21 @@ an intermediate step:
 - When the CI audit gate fails, the remediation is this sequence - never loosening the gate flags
   (gate semantics in `ci-releases`).
 
+## Single-package range bumps: pin the floor live, prove the diff scope
+
+- The range floor comes from the LIVE registry, queried before the manifest edit:
+  `npm view <pkg> version`, and the new floor equals its output. A floor copied from a plan
+  snapshot is a date-of-planning value - `latest` moves, and a stale floor either fails to
+  resolve the intended line or forces a second bump. When `latest` has already crossed the
+  target major line, take the newest version of the TARGET major from
+  `npm view <pkg> versions --json` instead of riding to the newer major.
+- Prove the lockfile diff scope with a registry-URL grep, not eyeballing:
+  `git diff -- frontend/package-lock.json | grep '^[+-]' | grep 'registry.npmjs.org'` must list
+  exactly the expected package pairs (a @types/node major's complete collateral is itself plus its
+  one transitive undici-types - 4 lines, 2 packages). A third package's URL in the diff means the
+  tree moved unexpectedly: the change under review is not the change that was specced. Pair it
+  with `git diff -U0 -- package.json | grep -c '^[+-][^+-]'` == 2 for the manifest itself.
+
 ## allowScripts: derive from the live post-update tree
 
 - Derive `allowScripts` from the actual post-update tree (`npm install-scripts ls`, plus
@@ -44,8 +59,14 @@ an intermediate step:
 ## lockfileVersion 3 is a hard gate
 
 After any npm run that rewrites `frontend/package-lock.json`, verify `lockfileVersion: 3` in the
-file: host npm is 12 (writes v3 today, v4 if it ever changes default) while the Docker builder and
-CI run npm 10.9.9, which cannot write v4.
+file. Since the node-26 alignment (PR #171) every lockfile surface writes v3 natively - npm 9+
+does - so the gate no longer guards a cross-version writer/consumer asymmetry: the host and CI
+(setup-node 26) run npm 12, while the Docker node images (`node:26-alpine` builder,
+`node:26-slim` tools service) bundle npm 11.20.0 (node images carry upstream's bundled npm, not
+this repo's choice - the 11/12 spread persists until upstream bundles 12). What the gate guards
+now is npm itself changing its default lockfile format: a v4 default would land on the lockfile
+regardless of which surface's npm writes it. If v4 ever appears, the remediation is re-locking
+with an npm that still writes v3 - never bumping a consuming surface's npm to a v4 writer.
 
 ## Proof gates
 
