@@ -66,7 +66,7 @@ frontend/
 │   ├── types/index.ts        # TypeScript interfaces
 │   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
-├── .i18rc                   # i18next-parser config (i18n:extract; locales list)
+├── i18next.config.ts        # i18next-cli config (i18n:extract; locales list)
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -483,10 +483,10 @@ npm run preview  # Preview production build
 
 ```bash
 npm run i18n:check                              # Catalog gate: key parity vs en, untranslated/empty values (CI runs this)
-npm run i18n:extract                            # i18next-parser: extract keys into the en catalogs (.i18rc)
+npm run i18n:extract                            # i18next-cli: extract keys into the en catalogs (i18next.config.ts)
 npm run lang:list                               # Print the language registry + locale directories
 npm run lang:add <code> <englishName> <nativeName> <dateFnsLocale>  # Scaffold a new language
-npm run lang:rm <code>                          # Remove a language (locale dir + registry + .i18rc)
+npm run lang:rm <code>                          # Remove a language (locale dir + registry + i18next.config.ts locales)
 npm run key:find <ns.key.path>                  # Find code references to a translation key
 npm run key:rm <ns.key.path>                    # Remove a key from every catalog (refuses while still referenced)
 ```
