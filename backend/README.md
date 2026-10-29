@@ -125,6 +125,7 @@ from common.auth import JWTAuth
 
 api = NinjaAPI()
 
+
 @api.get('/protected', auth=JWTAuth())
 def protected_endpoint(request):
     user = request.auth  # Authenticated User instance

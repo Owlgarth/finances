@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
-from ninja import File, Form, Query, Router
+from ninja import File, Form, Query, Router, Status
 from ninja.files import UploadedFile
 
 from common.auth import WorkspaceJWTAuth
@@ -95,10 +95,10 @@ def create_planned(request: HttpRequest, data: PlannedTransactionCreate):
 
     idempotency_key, error = parse_idempotency_key(request)
     if error:
-        return 400, error
+        return Status(400, error)
 
     planned = PlannedTransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
-    return 201, planned
+    return Status(201, planned)
 
 
 @router.get('/totals', response=PlannedTransactionTotalsResponse, auth=WorkspaceJWTAuth())
@@ -177,12 +177,12 @@ def import_planned_transactions(
     try:
         data = json.loads(file.read())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return 400, {'detail': _('Invalid JSON file.')}
+        return Status(400, {'detail': _('Invalid JSON file.')})
 
     count = PlannedTransactionService.import_data(user, workspace_id, account_id, data, budget_id)
     if count == 0:
-        return 201, {'message': _('No new planned transactions to import.')}
-    return 201, {'message': _('Successfully imported %(count)s new planned transactions.') % {'count': count}}
+        return Status(201, {'message': _('No new planned transactions to import.')})
+    return Status(201, {'message': _('Successfully imported %(count)s new planned transactions.') % {'count': count}})
 
 
 # Parameterized routes must come after specific routes
@@ -214,7 +214,7 @@ def delete_planned(request: HttpRequest, planned_id: int):
     require_role(user, workspace_id, WRITE_ROLES)
 
     PlannedTransactionService.delete(workspace_id, planned_id)
-    return 204, None
+    return Status(204, None)
 
 
 @router.post(
@@ -268,7 +268,7 @@ def create_recurring(request: HttpRequest, data: RecurringTransactionCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return 201, RecurringTransactionService.create(user, workspace_id, data)
+    return Status(201, RecurringTransactionService.create(user, workspace_id, data))
 
 
 @recurring_router.get(
@@ -314,4 +314,4 @@ def delete_recurring(request: HttpRequest, recurring_id: int, delete_pending: bo
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     RecurringTransactionService.delete(workspace_id, recurring_id, delete_pending=delete_pending)
-    return 204, None
+    return Status(204, None)

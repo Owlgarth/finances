@@ -3,7 +3,7 @@
 from datetime import date
 
 from django.http import HttpRequest
-from ninja import Query, Router
+from ninja import Query, Router, Status
 
 from common.auth import WorkspaceJWTAuth
 from common.permissions import require_role
@@ -54,7 +54,7 @@ def create_transfer(request: HttpRequest, data: TransferCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return 201, TransferService.create(user, workspace_id, data)
+    return Status(201, TransferService.create(user, workspace_id, data))
 
 
 @router.put(
@@ -77,4 +77,4 @@ def delete_transfer(request: HttpRequest, transfer_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     TransferService.delete(workspace_id, transfer_id)
-    return 204, None
+    return Status(204, None)

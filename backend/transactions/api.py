@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
-from ninja import File, Form, Query, Router
+from ninja import File, Form, Query, Router, Status
 from ninja.files import UploadedFile
 
 from common.auth import WorkspaceJWTAuth
@@ -182,13 +182,13 @@ def import_transactions(
     try:
         data = json.loads(file.read())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return 400, {'detail': _('Invalid JSON file.')}
+        return Status(400, {'detail': _('Invalid JSON file.')})
 
     count = TransactionService.import_data(user, workspace_id, account_id, data, budget_id)
 
     if count == 0:
-        return 201, {'message': _('No new transactions to import.')}
-    return 201, {'message': _('Successfully imported %(count)s new transactions.') % {'count': count}}
+        return Status(201, {'message': _('No new transactions to import.')})
+    return Status(201, {'message': _('Successfully imported %(count)s new transactions.') % {'count': count}})
 
 
 @router.post(
@@ -226,10 +226,10 @@ def create_transaction(request: HttpRequest, data: TransactionCreate):
 
     idempotency_key, error = parse_idempotency_key(request)
     if error:
-        return 400, error
+        return Status(400, error)
 
     trans = TransactionService.create(user, workspace_id, data, idempotency_key=idempotency_key)
-    return 201, trans
+    return Status(201, trans)
 
 
 @router.put(
@@ -253,7 +253,7 @@ def delete_transaction(request: HttpRequest, transaction_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     TransactionService.delete(workspace_id, transaction_id)
-    return 204, None
+    return Status(204, None)
 
 
 @router.get('/{transaction_id}/items', response={200: TransactionItemsOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
@@ -309,7 +309,7 @@ def upload_transaction_attachment(request: HttpRequest, transaction_id: int, fil
     attachment = AttachmentService.upload(user, trans, file)
     result = AttachmentService.list_metadata(trans)
     created = next(a for a in result if a['id'] == attachment.id)
-    return 201, created
+    return Status(201, created)
 
 
 @router.delete(
@@ -324,7 +324,7 @@ def delete_transaction_attachment(request: HttpRequest, transaction_id: int, att
     require_role(user, workspace_id, WRITE_ROLES)
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     AttachmentService.delete(trans, attachment_id)
-    return 204, None
+    return Status(204, None)
 
 
 @router.get(
@@ -365,16 +365,16 @@ def parse_receipt_preview(request: HttpRequest, file: UploadedFile = File(...)):
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     if not parser_client.is_enabled():
-        return 503, {'detail': _('Receipt extraction is not configured.')}
+        return Status(503, {'detail': _('Receipt extraction is not configured.')})
     validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
     try:
         return parser_client.parse_receipt(file.read(), file.name or 'receipt', file.content_type or '')
     except parser_client.ParserUnavailableError:
         # Nothing is wrong with the upload — the scanning host is simply off.
         # 503 (not 400) so the client shows "offline", not "bad receipt".
-        return 503, {'detail': _('Receipt scanning is temporarily offline. Please try again later.')}
+        return Status(503, {'detail': _('Receipt scanning is temporarily offline. Please try again later.')})
     except parser_client.ParserServiceError as exc:
-        return 400, {'detail': str(exc)}
+        return Status(400, {'detail': str(exc)})
 
 
 @router.post(
@@ -388,11 +388,11 @@ def extract_attachment(request: HttpRequest, transaction_id: int, attachment_id:
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
     if not parser_client.is_enabled():
-        return 503, {'detail': _('Receipt extraction is not configured.')}
+        return Status(503, {'detail': _('Receipt extraction is not configured.')})
     trans = TransactionService.get_transaction(transaction_id, workspace_id)
     attachment = AttachmentService.get_attachment(trans, attachment_id)
     AttachmentService.dispatch_extraction(attachment)
-    return 202, ExtractionResultOut(status=attachment.extraction_status, error='', result=None)
+    return Status(202, ExtractionResultOut(status=attachment.extraction_status, error='', result=None))
 
 
 @router.get(
