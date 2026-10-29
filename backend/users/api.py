@@ -6,7 +6,7 @@ from typing import Literal
 from django.conf import settings
 from django.http import HttpResponse
 from django.utils.translation import gettext as _
-from ninja import Router
+from ninja import Router, Status
 
 from common.auth import JWTAuth, user_to_schema
 from common.json_encoder import GDPREncoder
@@ -51,14 +51,14 @@ ConsentTypeLiteral = Literal['terms_of_service', 'privacy_policy']
 @router.get('/me', auth=JWTAuth(), response={200: UserOut, 401: DetailOut})
 def get_me(request):
     """Get current authenticated user's information."""
-    return 200, user_to_schema(request.auth)
+    return Status(200, user_to_schema(request.auth))
 
 
 @router.patch('/me', auth=JWTAuth(), response={200: UserOut, 401: DetailOut})
 def update_me(request, data: UserUpdate):
     """Update current user's profile information."""
     user = services.UserService.update_profile(request.auth, data)
-    return 200, user_to_schema(user)
+    return Status(200, user_to_schema(user))
 
 
 @router.put('/me/password', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut})
@@ -69,20 +69,23 @@ def update_my_password(request, data: UserPasswordUpdate):
     User must provide current password to set new password.
     """
     services.UserService.change_password(request.auth, data.current_password, data.new_password)
-    return 200, {'message': _('Password updated successfully')}
+    return Status(200, {'message': _('Password updated successfully')})
 
 
 @router.get('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 401: DetailOut})
 def get_preferences(request):
     """Get current user's preferences."""
     preferences = services.UserService.get_or_create_preferences(request.auth)
-    return 200, {
-        'calendar_start_day': preferences.calendar_start_day,
-        'font_family': preferences.font_family,
-        'language': preferences.language,
-        'number_format': preferences.number_format,
-        'bookmark_visible_limit': preferences.bookmark_visible_limit,
-    }
+    return Status(
+        200,
+        {
+            'calendar_start_day': preferences.calendar_start_day,
+            'font_family': preferences.font_family,
+            'language': preferences.language,
+            'number_format': preferences.number_format,
+            'bookmark_visible_limit': preferences.bookmark_visible_limit,
+        },
+    )
 
 
 @router.patch('/me/preferences', auth=JWTAuth(), response={200: UserPreferencesOut, 400: DetailOut, 401: DetailOut})
@@ -94,19 +97,22 @@ def update_preferences(request, data: UserPreferencesUpdate):
     range); wrong-typed payloads are rejected by the schema with 422.
     """
     preferences = services.UserService.update_preferences(request.auth, data)
-    return 200, {
-        'calendar_start_day': preferences.calendar_start_day,
-        'font_family': preferences.font_family,
-        'language': preferences.language,
-        'number_format': preferences.number_format,
-        'bookmark_visible_limit': preferences.bookmark_visible_limit,
-    }
+    return Status(
+        200,
+        {
+            'calendar_start_day': preferences.calendar_start_day,
+            'font_family': preferences.font_family,
+            'language': preferences.language,
+            'number_format': preferences.number_format,
+            'bookmark_visible_limit': preferences.bookmark_visible_limit,
+        },
+    )
 
 
 @router.get('/me/consents', auth=JWTAuth(), response={200: list[ConsentOut], 401: DetailOut})
 def list_consents(request):
     """List all active consents for the current user."""
-    return 200, services.UserService.get_active_consents(request.auth)
+    return Status(200, services.UserService.get_active_consents(request.auth))
 
 
 @router.post('/me/consents', auth=JWTAuth(), response={201: ConsentOut, 401: DetailOut})
@@ -114,7 +120,7 @@ def grant_consent(request, data: ConsentIn):
     """Record a new consent (e.g., after accepting updated terms)."""
     ip = get_client_ip(request)
     consent = services.UserService.record_consent(request.auth, data.consent_type, data.version, ip)
-    return 201, consent
+    return Status(201, consent)
 
 
 @router.get('/me/consent-status', auth=JWTAuth(), response={200: ConsentStatusOut, 401: DetailOut})
@@ -125,7 +131,7 @@ def get_consent_status(request):
     Returns needs_reconsent=True when the user must re-accept updated terms or
     privacy policy before continuing to use the application.
     """
-    return 200, services.UserService.get_consent_status(request.auth)
+    return Status(200, services.UserService.get_consent_status(request.auth))
 
 
 @router.delete(
@@ -134,7 +140,7 @@ def get_consent_status(request):
 def withdraw_consent(request, consent_type: ConsentTypeLiteral):
     """Withdraw consent of a specific type."""
     consent = services.UserService.withdraw_consent(request.auth, consent_type)
-    return 200, consent
+    return Status(200, consent)
 
 
 @router.get('/me/deletion-check', auth=JWTAuth(), response={200: AccountDeleteCheckOut, 401: DetailOut})
@@ -150,7 +156,7 @@ def check_account_deletion(request):
     Use this to show a confirmation dialog before actual deletion.
     """
     result = services.UserService.check_deletion(request.auth)
-    return 200, result
+    return Status(200, result)
 
 
 @router.delete('/me', auth=JWTAuth(), response={200: AccountDeleteOut, 400: DetailOut, 401: DetailOut})
@@ -164,10 +170,13 @@ def delete_account(request, data: AccountDeleteIn):
     workspaces are removed (but the workspaces and their data remain).
     """
     result = services.UserService.delete_account(request.auth, data.password)
-    return 200, {
-        'message': _('Account and all associated data deleted successfully.'),
-        'deleted_workspaces': result['deleted_workspaces'],
-    }
+    return Status(
+        200,
+        {
+            'message': _('Account and all associated data deleted successfully.'),
+            'deleted_workspaces': result['deleted_workspaces'],
+        },
+    )
 
 
 @router.post('/me/reset', auth=JWTAuth(), response={200: AccountResetOut, 400: DetailOut, 401: DetailOut})
@@ -186,12 +195,15 @@ def reset_account(request, data: AccountResetIn):
         currency_codes=data.currency_codes,
         confirm_shared=data.confirm_shared,
     )
-    return 200, {
-        'message': _('Account reset. A fresh workspace is ready.'),
-        'deleted_workspaces': result['deleted_workspaces'],
-        'workspace_id': result['workspace_id'],
-        'workspace_name': result['workspace_name'],
-    }
+    return Status(
+        200,
+        {
+            'message': _('Account reset. A fresh workspace is ready.'),
+            'deleted_workspaces': result['deleted_workspaces'],
+            'workspace_id': result['workspace_id'],
+            'workspace_name': result['workspace_name'],
+        },
+    )
 
 
 @router.get('/me/export', auth=JWTAuth(), response={401: DetailOut, 429: DetailOut})
@@ -228,7 +240,7 @@ def import_my_data(request, data: FullImportIn):
     Rate limited to 3 imports per hour.
     """
     result = services.UserService.import_all_data(request.auth, data)
-    return 200, result
+    return Status(200, result)
 
 
 @router.post(
@@ -249,34 +261,34 @@ def import_legacy_data(request, data: LegacyImportIn):
     from users.legacy_import import LegacyImportService
 
     result = LegacyImportService.import_legacy(request.auth, data.data, data.conflict_strategy)
-    return 200, result
+    return Status(200, result)
 
 
 @router.get('/me/2fa', auth=JWTAuth(), response={200: TwoFAStatusOut, 401: DetailOut})
 def get_2fa_status(request):
-    return 200, TwoFactorService.get_status(request.auth)
+    return Status(200, TwoFactorService.get_status(request.auth))
 
 
 @router.post('/me/2fa/setup', auth=JWTAuth(), response={200: TwoFASetupOut, 400: DetailOut, 401: DetailOut})
 def setup_2fa(request):
-    return 200, TwoFactorService.setup(request.auth)
+    return Status(200, TwoFactorService.setup(request.auth))
 
 
 @router.post(
     '/me/2fa/verify-setup', auth=JWTAuth(), response={200: TwoFAVerifySetupOut, 401: DetailOut, 404: DetailOut}
 )
 def verify_setup_2fa(request, data: TwoFAVerifySetupIn):
-    return 200, TwoFactorService.verify_and_enable(request.auth, data.code)
+    return Status(200, TwoFactorService.verify_and_enable(request.auth, data.code))
 
 
 @router.post('/me/2fa/disable', auth=JWTAuth(), response={200: MessageOut, 401: DetailOut, 404: DetailOut})
 def disable_2fa(request, data: TwoFADisableIn):
     TwoFactorService.disable(request.auth, data.password)
-    return 200, {'message': _('Two-factor authentication has been disabled')}
+    return Status(200, {'message': _('Two-factor authentication has been disabled')})
 
 
 @router.post(
     '/me/2fa/regenerate-codes', auth=JWTAuth(), response={200: TwoFARegenerateOut, 401: DetailOut, 404: DetailOut}
 )
 def regenerate_2fa_codes(request, data: TwoFARegenerateIn):
-    return 200, TwoFactorService.regenerate_codes(request.auth, data.password)
+    return Status(200, TwoFactorService.regenerate_codes(request.auth, data.password))

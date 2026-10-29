@@ -1,7 +1,7 @@
 """Django-Ninja API endpoints for the accounts app."""
 
 from django.http import HttpRequest
-from ninja import Query, Router
+from ninja import Query, Router, Status
 
 from accounts.schemas import AccountArchive, AccountBalanceOut, AccountCreate, AccountOut, AccountUpdate
 from accounts.services import AccountService
@@ -33,7 +33,7 @@ def create_account(request: HttpRequest, data: AccountCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, ADMIN_ROLES)
-    return 201, AccountService.create(user, workspace_id, data)
+    return Status(201, AccountService.create(user, workspace_id, data))
 
 
 @router.put(
@@ -66,7 +66,7 @@ def delete_account(request: HttpRequest, account_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     AccountService.delete(workspace_id, account_id)
-    return 204, None
+    return Status(204, None)
 
 
 @router.get('/{account_id}/balance', response={200: AccountBalanceOut, 404: DetailOut}, auth=WorkspaceJWTAuth())

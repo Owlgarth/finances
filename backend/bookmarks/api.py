@@ -1,7 +1,7 @@
 """Django-Ninja API endpoints for the bookmarks app."""
 
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Router, Status
 
 from bookmarks.schemas import (
     BookmarkCreate,
@@ -42,7 +42,7 @@ def create_bookmark(request: HttpRequest, data: BookmarkCreate):
     """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
-    return 201, BookmarkService.create(user, workspace_id, data)
+    return Status(201, BookmarkService.create(user, workspace_id, data))
 
 
 @router.put('/{bookmark_id}', response={200: BookmarkOut, 400: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
@@ -98,4 +98,4 @@ def delete_bookmark(request: HttpRequest, bookmark_id: int):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     BookmarkService.delete(user, workspace_id, bookmark_id)
-    return 204, None
+    return Status(204, None)
