@@ -483,7 +483,7 @@ npm run preview  # Preview production build
 
 ```bash
 npm run i18n:check                              # Catalog gate: key parity vs en, untranslated/empty values (CI runs this)
-npm run i18n:extract                            # i18next-cli: extract keys into the en catalogs (i18next.config.ts)
+npm run i18n:extract                            # i18next-cli: extract keys into the catalogs (i18next.config.ts)
 npm run lang:list                               # Print the language registry + locale directories
 npm run lang:add <code> <englishName> <nativeName> <dateFnsLocale>  # Scaffold a new language
 npm run lang:rm <code>                          # Remove a language (locale dir + registry + i18next.config.ts locales)
