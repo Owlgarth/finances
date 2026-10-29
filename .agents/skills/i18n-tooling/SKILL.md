@@ -1,6 +1,6 @@
 ---
 name: i18n-tooling
-description: i18n toolchain conventions for Owlgarth Finances - the frontend/scripts/ i18n tools (i18n:check, lang:add/lang:rm, key:find/key:rm, i18n:extract), byte-preserving writers for backend/common/languages.json and frontend/.i18rc, catalog \uXXXX escape preservation, landed-key dedup before catalog appends, and the i18next ESLint rule config. Use when adding or removing languages, adding or editing catalog keys by hand (hand-edit vs tool-run decision, escape fences, cross-task key dedup), removing translation keys, editing the frontend/scripts/ i18n tools or i18n-lib.mjs, touching frontend/.i18rc or the language registry, changing the i18next/no-literal-string ESLint configuration, or fixing a newly flagged no-literal-string warning (the zero-warning floor and hoist recipe).
+description: i18n toolchain conventions for Owlgarth Finances - the frontend/scripts/ i18n tools (i18n:check, lang:add/lang:rm, key:find/key:rm, i18n:extract), the i18next-cli extractor and its config frontend/i18next.config.ts (behavior pins removeUnusedKeys/extractFromComments, wrong-namespace appends, extract output never committed), byte-preserving writers for backend/common/languages.json and the config's single-line locales array, catalog \uXXXX escape preservation, landed-key dedup before catalog appends, and the i18next ESLint rule config. Use when adding or removing languages, adding or editing catalog keys by hand (hand-edit vs tool-run decision, escape fences, cross-task key dedup), removing translation keys, running or adjudicating i18n:extract output, editing the frontend/scripts/ i18n tools or i18n-lib.mjs, touching frontend/i18next.config.ts or the language registry, changing the i18next/no-literal-string ESLint configuration, or fixing a newly flagged no-literal-string warning (the zero-warning floor and hoist recipe).
 ---
 
 # i18n Tooling
@@ -16,9 +16,20 @@ The user-facing procedures (language lifecycle walkthroughs, the command table, 
 Both machine-written files have a hand-maintained byte shape that plain `JSON.stringify` does NOT round-trip. A writer that loses the shape dirties the whole file on every run, burying the real one-entry change in reformat noise.
 
 - **`backend/common/languages.json`**: `writeRegistry` in `i18n-lib.mjs` preserves the compact one-line-per-entry style (2-space structure indent); `JSON.stringify(registry, null, 2)` would reformat every entry.
-- **`frontend/.i18rc`**: the file mixes inline arrays (`locales`) with expanded ones (`input`, `lexers`), so stringify reshapes both. `syncI18rcLocale(code, add)` does a surgical text splice of the single-line `locales` array only. When its regex finds no single-line locales array (someone hand-reformatted the file), it throws loudly instead of silently skipping - keep that behavior; a silent skip is the original bug class (a language `i18n:extract` never sees).
+- **`frontend/i18next.config.ts`** (the i18next-cli config that replaced `.i18rc` in PR #179): hand-formatted TS, so `JSON.stringify` cannot round-trip it at all. `syncConfigLocale(code, add)` does a surgical text splice of the single-line `locales:` array only: match `^(\s*locales: \[)...`, parse the captured span with `.replace(/'/g, '"')` (TS single quotes), splice at the code-sorted position, rebuild with single quotes, write back just that line - re-serializing the whole file would reshape untouched lines and dirty it every run. When the regex finds no single-line `locales:` array (someone hand-reformatted the file), it throws loudly instead of silently skipping - keep that behavior; a silent skip is the original bug class (a language `i18n:extract` never sees).
 - **Insert at the code-sorted position** (splice at the first greater code), never a full array sort - the shipped order [en, uk, pl] is deliberate and not code-sorted.
 - New languages are seeded with copies of the en VALUES, not `{}` - `i18n:check` fails on untranslated copies, forcing translation in the same change instead of shipping English placeholders.
+
+## The Extractor (i18next-cli)
+
+`i18n:extract` runs i18next-cli (which replaced the deprecated i18next-parser in PR #179) with `frontend/i18next.config.ts` auto-detected at the frontend root. Two tool defaults are deliberate inversions, pinned in the config - never drop the pins when editing it:
+
+- `removeUnusedKeys: false` - the tool default (true) would DELETE keys the extractor cannot see (dynamic `t(variable)` resolutions, option-object `t()` forms) from catalogs that are hand-authored by contract (docs/i18n.md). Extraction is an append-only assist, never a remover.
+- `extractFromComments: false` - the tool default (true) would inject phantom keys from docblock `t()` examples; the old parser never extracted from comments.
+
+Extraction output is NEVER committed, even with both pins in place. The run reformats every catalog it touches (key sort + de-escaping, like the other tools) and appends newly-seen keys with EMPTY values, which `i18n:check` rejects by design - so `i18n:check` gates over the committed tree, never over fresh extract output. Flow: run -> capture evidence to /tmp -> `git checkout -- src/i18n/locales` -> `npm run i18n:check` over the restored committed catalogs.
+
+Expect wrong-namespace appends in every extract diff and prune them by hand: beyond literal `t()` calls, the SWC extractor harvests bare `labelKey`-style string literals under EVERY `useTranslation` namespace present in the file, plus empty plural pre-registration for `t(key, { count })` sites whose base keys already exist. A file with two hooks (CommandPalette) cross-appends both ways: phantom `nav.palette.transfers` lands in common.json (the real key is `common.palette.transfers`) and phantom `common.dashboard` lands in nav.json (the real key is `nav.dashboard`) - 24 empty wrong-namespace lines per run across 3 languages. Every phantom traces to a real usage, the correct catalogs already carry the filled values, and a dropped phantom returns on the next run - which is the second reason extract output stays uncommitted.
 
 ## Catalog Escapes (\uXXXX)
 
@@ -40,12 +51,12 @@ Cross-task catalog appends dedupe against the LANDED keys before inserting: a la
 ## Key Removal Gates
 
 - `key:rm` refuses while `key:find` still sees references; `--force` is only sane when the remaining hits are dead comments. Never force past a live reference - delete the referencing code (the dead component) in the same change.
-- `key:find` matches static literals only: dynamic key variables and the `t('key', { ns })` option-object form are invisible to it, and bare-string matches count only in files that call `useTranslation` of that namespace. Pre-check the target namespace's `useTranslation` files when predicting gate outcomes.
+- `key:find` matches static literals only: dynamic key variables and the `t('key', { ns })` option-object form are invisible to it, and bare-string matches count only in files that call `useTranslation` of that namespace. Pre-check the target namespace's `useTranslation` files when predicting gate outcomes. Cross-namespace queries need the colon form (`numbers:datePicker.selectDate`); the dot form silently searches the wrong namespace.
 - A section key (`key:rm common.errorMessage`) deletes the whole subtree in one call - prefer it over listing leaves.
 
 ## Round-Trip Gate
 
-After any change to a writer: `npm run lang:add <code> ... && npm run lang:rm <code>` must leave `git diff backend/common/languages.json frontend/.i18rc` empty (covers push insert, middle splice insert, filter removal, and both no-ops). This is the only gate that proves byte preservation end to end.
+After any change to a writer: `npm run lang:add <code> ... && npm run lang:rm <code>` must leave `git diff backend/common/languages.json frontend/i18next.config.ts` empty (covers push insert, middle splice insert, filter removal, and both no-ops). This is the only gate that proves byte preservation end to end.
 
 ## i18next ESLint Rule Config
 

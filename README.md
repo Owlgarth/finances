@@ -43,7 +43,7 @@ Owlgarth Finances is a comprehensive financial management tool designed for indi
 ### Prerequisites
 
 - Docker and Docker Compose
-- Node.js 18+ (for local development)
+- Node.js 22.13+ (for local development)
 - Python 3.13+ (for local development)
 
 ### Installation

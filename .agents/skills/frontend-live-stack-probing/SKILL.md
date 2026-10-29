@@ -170,11 +170,29 @@ same session - in PR #81 it paid for itself twice.
 - In PR #84's pass, 3 of 17 driver failures were bugs in the probe script itself (wrong
   expectation order, a hover auto-scroll invalidating a later centering check, asserting a
   chip the spec says is absent). A failing assertion is a hypothesis - re-derive the
-  expectation from the spec before blaming the product.
+  expectation from the spec before blaming the product. PR #179's DatePicker probe was the
+  stronger instance: 6 fault cycles (role mappings, label DOM shapes, guessed strings,
+  below-fold coordinates), ZERO product findings - the expected distribution for a
+  dependency swap whose static gates already passed.
+- Locator faults from role and DOM-shape assumptions (all harness faults, PR #179):
+  Playwright does NOT map `button[aria-haspopup="listbox"]` to the `combobox` role - target
+  the button itself or its attributes, not `getByRole('combobox')`; a SegmentedControl-style
+  view switcher is a `radiogroup` with `radio` options, not `tab`/`tablist`; and label
+  locators must match the real DOM shape (an InfoHint-wrapped label nests the text in a
+  span; a flex-row label separates it from its control) - inspect the served DOM before
+  writing `getByText`/`getByLabel`.
+- Scope modal-title assertions to `[role="dialog"] h2`, never `h2.first()` - pages carry
+  their own h2s (the planned view's year header) that poison a page-level first match.
+- Localized expected strings come from the CATALOGS, never from guesses or
+  sibling-namespace analogies - uk's quick-add button reads "Нова операція" while the
+  transactions page's is "Нова транзакція"; a guessed string turns a harness fault into an
+  apparent product bug.
 - `elementHandle.click()` on options inside a height-capped scrollable panel auto-scrolls
   the container and can click THROUGH to whatever sits underneath the intended option -
   coordinates and scroll state are the driver's, not the page's truth. Prefer a DOM
-  `el.click()` dispatch (no coordinate dependency) for listbox options inside scrollables.
+  `el.click()` dispatch (no coordinate dependency) for listbox options inside scrollables
+  and for below-fold popup content (a calendar inside a tall modal at 1280x800, where
+  coordinate-based clicks time out on cells the driver cannot bring into reach).
 - That `el.click()` dispatch fires NO `mousedown` - a mousedown-driven close path (the
   listbox outside-click close listens for `mousedown`) can never be exercised by it; driving
   an outside-click close needs real mouse events (`page.mouse`), inheriting the
