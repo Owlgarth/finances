@@ -1,7 +1,7 @@
 """Django-Ninja API endpoints for workspaces app."""
 
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Router, Status
 
 from common.auth import JWTAuth, WorkspaceJWTAuth
 from common.permissions import require_role
@@ -52,7 +52,7 @@ def enable_currency(request: HttpRequest, data: EnableCurrencyIn):
         currency = CurrencyCatalogService.create_custom(user, workspace_id, data.code, data.name, data.symbol)
     else:
         currency = CurrencyCatalogService.enable(user, workspace_id, data.code)
-    return 201, currency
+    return Status(201, currency)
 
 
 @router.delete(
@@ -65,7 +65,7 @@ def disable_currency(request: HttpRequest, code: str):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     CurrencyCatalogService.disable(workspace_id, code)
-    return 204, None
+    return Status(204, None)
 
 
 @router.put(
@@ -113,7 +113,7 @@ def create_workspace_endpoint(request: HttpRequest, data: WorkspaceCreate):
         create_demo=False,
         currency_codes=data.currency_codes,
     )
-    return 201, WorkspaceService._to_response(workspace, Role.OWNER)
+    return Status(201, WorkspaceService._to_response(workspace, Role.OWNER))
 
 
 # IMPORTANT: /current routes must come BEFORE /{workspace_id} routes
@@ -165,7 +165,7 @@ def delete_workspace_endpoint(request: HttpRequest, workspace_id: int):
     WorkspaceMemberService.validate_access(workspace_id, request.auth)
     require_role(request.auth, workspace_id, OWNER_ROLES)
     WorkspaceService.delete_workspace(user=request.auth, workspace_id=workspace_id)
-    return 204, None
+    return Status(204, None)
 
 
 @router.post('/{workspace_id}/switch', response={200: MessageOut, 404: DetailOut}, auth=JWTAuth())
@@ -224,7 +224,7 @@ def add_member_to_workspace(request: HttpRequest, workspace_id: int, data: Works
     user = request.auth
     WorkspaceMemberService.validate_access(workspace_id, user)
     require_role(user, workspace_id, ADMIN_ROLES)
-    return 201, WorkspaceMemberService.add_member(user, workspace_id, data)
+    return Status(201, WorkspaceMemberService.add_member(user, workspace_id, data))
 
 
 @router.post(
@@ -284,7 +284,7 @@ def remove_member_from_workspace(request: HttpRequest, workspace_id: int, member
     WorkspaceMemberService.validate_access(workspace_id, user)
     current_role = require_role(user, workspace_id, ADMIN_ROLES)
     WorkspaceMemberService.remove_member(user, workspace_id, member_user_id, current_role)
-    return 204, None
+    return Status(204, None)
 
 
 @router.put(
@@ -323,4 +323,4 @@ def reset_member_2fa(request: HttpRequest, workspace_id: int, user_id: int):
     user = request.auth
     WorkspaceMemberService.validate_access(workspace_id, user)
     current_role = require_role(user, workspace_id, ADMIN_ROLES)
-    return 200, TwoFactorService.admin_reset(user, workspace_id, user_id, current_role)
+    return Status(200, TwoFactorService.admin_reset(user, workspace_id, user_id, current_role))

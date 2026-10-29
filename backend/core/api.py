@@ -8,7 +8,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.translation import gettext as _
-from ninja import Router
+from ninja import Router, Status
 
 from common.auth import JWTAuth, decode_temp_token
 from common.throttle import rate_limit, rate_limit_account, rate_limit_by_key
@@ -57,7 +57,8 @@ def _extract_register_rate_key(request, data: RegisterIn = None, **kwargs):
 )
 def register(request, data: RegisterIn):
     """Register a new user with workspace and default data. See AuthService.register."""
-    return AuthService.register(data, get_client_ip(request))
+    status, payload = AuthService.register(data, get_client_ip(request))
+    return Status(status, payload)
 
 
 def _extract_login_rate_key(request, data: LoginIn = None, **kwargs):
@@ -80,7 +81,8 @@ def _extract_login_rate_key(request, data: LoginIn = None, **kwargs):
 )
 def login(request, data: LoginIn):
     """Login user and return a JWT pair, or a 2FA temp token. See AuthService.login."""
-    return AuthService.login(data)
+    status, payload = AuthService.login(data)
+    return Status(status, payload)
 
 
 def _extract_2fa_user_key(request, data: Verify2FAIn = None, **kwargs):
@@ -114,13 +116,15 @@ def _extract_2fa_user_key(request, data: Verify2FAIn = None, **kwargs):
 )
 def verify_2fa(request, data: Verify2FAIn):
     """Verify a 2FA temp token + code and issue full tokens. See AuthService.complete_2fa."""
-    return AuthService.complete_2fa(data)
+    status, payload = AuthService.complete_2fa(data)
+    return Status(status, payload)
 
 
 @router.post('/refresh', response={200: Token, 401: DetailOut})
 def refresh_token(request, data: RefreshTokenIn):
     """Exchange a refresh token for a rotated token pair. See AuthService.refresh."""
-    return AuthService.refresh(data)
+    status, payload = AuthService.refresh(data)
+    return Status(status, payload)
 
 
 @router.post('/verify-email', response={200: MessageOut, 400: DetailOut})
@@ -128,7 +132,7 @@ def verify_email(request, data: VerifyEmailIn):
     from users.services import UserService
 
     UserService.verify_email(data.token)
-    return 200, {'message': _('Email verified successfully')}
+    return Status(200, {'message': _('Email verified successfully')})
 
 
 @router.post('/resend-verification', response={200: MessageOut, 429: DetailOut})
@@ -141,7 +145,7 @@ def resend_verification(request, data: ResendVerificationIn):
     from users.services import UserService
 
     UserService.resend_verification(data.email)
-    return 200, {'message': _('If your email is unverified, a new verification email has been sent.')}
+    return Status(200, {'message': _('If your email is unverified, a new verification email has been sent.')})
 
 
 @router.post('/forgot-password', response={200: MessageOut, 429: DetailOut})
@@ -152,7 +156,7 @@ def forgot_password(request, data: ForgotPasswordIn):
     from users.services import UserService
 
     UserService.send_reset_password_email(data.email)
-    return 200, {'message': _('If an account exists with this email, a reset link has been sent.')}
+    return Status(200, {'message': _('If an account exists with this email, a reset link has been sent.')})
 
 
 @router.post('/reset-password', response={200: MessageOut, 400: DetailOut, 429: DetailOut})
@@ -166,14 +170,14 @@ def reset_password(request, data: ResetPasswordIn):
         uid = force_str(urlsafe_base64_decode(data.uidb64))
         user = User.objects.get(pk=uid)
     except (User.DoesNotExist, ValueError, TypeError):
-        return 400, {'detail': _('Invalid reset link')}
+        return Status(400, {'detail': _('Invalid reset link')})
 
     if not default_token_generator.check_token(user, data.token):
-        return 400, {'detail': _('Invalid or expired reset link')}
+        return Status(400, {'detail': _('Invalid or expired reset link')})
 
     UserService.reset_password(user, data.new_password)
 
-    return 200, {'message': _('Password has been reset successfully')}
+    return Status(200, {'message': _('Password has been reset successfully')})
 
 
 @router.post('/request-email-change', response={200: MessageOut, 400: DetailOut}, auth=JWTAuth())
@@ -181,7 +185,7 @@ def request_email_change(request, data: EmailChangeRequestIn):
     from users.services import UserService
 
     UserService.request_email_change(request.auth, data.password, data.new_email)
-    return 200, {'message': _('Verification email sent to your new address')}
+    return Status(200, {'message': _('Verification email sent to your new address')})
 
 
 @router.post('/confirm-email-change', response={200: MessageOut, 400: DetailOut}, auth=JWTAuth())
@@ -189,4 +193,4 @@ def confirm_email_change(request, data: EmailChangeConfirmIn):
     from users.services import UserService
 
     UserService.confirm_email_change(request.auth, data.token)
-    return 200, {'message': _('Email changed successfully')}
+    return Status(200, {'message': _('Email changed successfully')})
