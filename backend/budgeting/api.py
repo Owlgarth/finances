@@ -3,7 +3,7 @@
 from datetime import date
 
 from django.http import HttpRequest
-from ninja import Query, Router
+from ninja import Query, Router, Status
 
 from budgeting.schemas import (
     BudgetArchive,
@@ -45,7 +45,7 @@ def create_budget(request: HttpRequest, data: BudgetCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, ADMIN_ROLES)
-    return 201, BudgetService.create(user, workspace_id, data)
+    return Status(201, BudgetService.create(user, workspace_id, data))
 
 
 # Registered before /{budget_id}; the int converter also keeps 'categories' from
@@ -92,7 +92,7 @@ def delete_budget(request: HttpRequest, budget_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     BudgetService.delete(workspace_id, budget_id)
-    return 204, None
+    return Status(204, None)
 
 
 # =============================================================================
@@ -128,7 +128,7 @@ def create_custom_period(request: HttpRequest, budget_id: int, data: PeriodCreat
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, ADMIN_ROLES)
-    return 201, PeriodService.create_custom(user, workspace_id, budget_id, data)
+    return Status(201, PeriodService.create_custom(user, workspace_id, budget_id, data))
 
 
 @router.put(
@@ -154,7 +154,7 @@ def delete_custom_period(request: HttpRequest, budget_id: int, period_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, ADMIN_ROLES)
     PeriodService.delete(workspace_id, budget_id, period_id)
-    return 204, None
+    return Status(204, None)
 
 
 # =============================================================================
@@ -179,7 +179,7 @@ def create_category(request: HttpRequest, budget_id: int, data: CategoryCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return 201, CategoryService.create(user, workspace_id, budget_id, data)
+    return Status(201, CategoryService.create(user, workspace_id, budget_id, data))
 
 
 @router.put(
@@ -231,7 +231,7 @@ def delete_category(request: HttpRequest, budget_id: int, category_id: int):
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, WRITE_ROLES)
     CategoryService.delete(workspace_id, budget_id, category_id)
-    return 204, None
+    return Status(204, None)
 
 
 # =============================================================================
@@ -275,4 +275,4 @@ def delete_category_budget(request: HttpRequest, budget_id: int, period_id: int,
     workspace_id = request.auth.current_workspace_id
     require_role(request.auth, workspace_id, WRITE_ROLES)
     CategoryBudgetService.remove(workspace_id, budget_id, period_id, category_budget_id)
-    return 204, None
+    return Status(204, None)
