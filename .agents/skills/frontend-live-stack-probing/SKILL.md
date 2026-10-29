@@ -37,6 +37,10 @@ same session - in PR #81 it paid for itself twice.
   `PATCH /users/me/preferences` (`{"language": "uk"}`) - writing `owlgarth_language` to
   localStorage changes nothing the page renders. Multi-language verification (overflow,
   wrapping, translated chrome) switches all three locales through that one call.
+- A probe that PATCHes server-side state (the language switch above) must reset it at pass
+  START, not only at teardown: a crashed run leaks the preference and every subsequent boot
+  renders the poisoned state - PR #177's probe inherited a leaked `uk` preference and it
+  initially read as a product bug. Reset-at-start keeps the probe idempotently re-runnable.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
@@ -70,6 +74,16 @@ same session - in PR #81 it paid for itself twice.
 - Readiness is polled on the PUBLISHED port; under `--service-ports` remapping the vite
   banner's `Local:` URL prints the container-internal port (5173) - that mismatch is
   expected, never misread it as a failure.
+
+## Teardown: kill the listener, not the wrapper
+
+- `pkill -f '<pattern>'` kills the invoking shell too when the shell's own command line
+  matches the pattern - two consecutive PR #177 tasks lost their harness this way
+  (`pkill -f 'docker compose logs -f'` from a shell whose own invocation carried that
+  string). Never pkill a pattern your own command line can match; target PIDs.
+- `npm run dev` wraps vite: killing the npm wrapper's PID leaves the vite child alive and
+  holding the port, so the next boot fails on an in-use port. Kill by LISTENER pid (from
+  `ss`/`lsof`), never the wrapper pid.
 
 ## Budget the fallback before assembling
 
