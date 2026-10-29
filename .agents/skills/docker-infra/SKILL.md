@@ -89,6 +89,12 @@ An explicit `docker pull <image>` registers it in the classic store (digest iden
 build's resolve). A gate step that expects `image inspect` to succeed after a build must pull
 first, or it fails on store mechanics instead of the build.
 
+The step LOG is a separate trap: BuildKit replays no step output for cached steps, so a
+second `docker compose build ui | tee build.log` overwrites the first run's full log with a
+near-empty summary (PR #177: the cached re-run silently replaced the tee'd uncached log,
+and the full step log required a `--no-cache` re-run). When the step log itself is the
+evidence, re-run with `--no-cache` or preserve the first run's capture.
+
 ## Dockerfile ARG Hygiene
 
 ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
@@ -132,7 +138,7 @@ Backend commands resolve through `/venv/bin/<tool>` (`UV_PROJECT_ENVIRONMENT`), 
 
 uv subcommands are a third route and never go through `backend_run`: its host arm would run `uv run <cmd>` (wrong subcommand - it syncs the venv first) and its docker arm execs `/venv/bin/uv`, which does not exist (uv lives at `/bin/uv` in the image). Route them by tool availability, not DEV_TARGET: `command -v uv` succeeds → host `(cd backend && uv <cmd>)`, else `in_service api uv <cmd>` - the dev compose bind-mounts the source and `in_service`'s uid mapping keeps the container-side write host-owned. `uv lock` needs no `use_local_hosts` (it touches no services), and the one uncovered combination, no host uv AND no Docker, cannot run `dev.sh` at all.
 
-The `node` service (profile `tools`) exists only for this: `node:26-slim` with `./frontend` bind-mounted. Debian-based, so the `node_modules` it writes stays usable if the host also runs npm - an alpine/musl image would install incompatible esbuild binaries.
+The `node` service (profile `tools`) exists only for this: `node:26-slim` with `./frontend` bind-mounted. Debian-based, so the `node_modules` it writes stays usable if the host also runs npm - an alpine/musl image would install incompatible prebuilt binaries. The native-binary population is toolchain-relative (post-vite-8: `@rolldown/binding-*`, `lightningcss`, and `@tailwindcss/oxide` platform children, plus `esbuild` only while i18next-parser still pins it) - re-anchor the exemplars whenever the build chain swaps.
 
 `use_local_hosts` exists because the same `.env` serves both worlds: inside compose a service is reached by name (`db`, `redis:6379`), from a host process only through the published port (`localhost:$DB_PORT`). Anything host-run must go through it, or it silently tries to resolve `db`.
 
