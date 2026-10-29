@@ -8,7 +8,7 @@ React SPA for budget tracking with multi-workspace collaboration and role-based 
 |------------|---------|
 | React 19 | UI framework |
 | TypeScript | Type safety |
-| Vite 7 | Build tool |
+| Vite 8 | Build tool |
 | React Router 7 | Client routing |
 | TanStack Query 5 | Server state |
 | Axios | HTTP client |
