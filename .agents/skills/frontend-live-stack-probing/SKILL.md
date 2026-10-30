@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, expected dev-noise console errors), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, beat shelve-schedule reads, HTTP status capture), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -164,6 +164,25 @@ same session - in PR #81 it paid for itself twice.
   excluded error in step notes - a blanket console-error pass or a silently dropped error hides
   real regressions. Capture `msg.location().url` from the first run to identify unexplained
   noise before judging it.
+
+## Backend container probes
+
+- Dependency version probes inside the api container must select the project venv explicitly:
+  `docker compose exec api uv pip list --python /venv`. `uv run` honors `UV_PROJECT_ENVIRONMENT`
+  but `uv pip` does NOT - bare `uv pip list` silently reports the container's /usr/local system
+  env, so the probe succeeds while listing the wrong environment entirely.
+- Reading beat's PersistentScheduler shelve file: a live read-only open is blind to the
+  un-checkpointed sqlite WAL (`no such table: Dict`), and `docker compose exec` cannot target a
+  stopped container. Working sequence: graceful `docker compose stop beat` (the close
+  checkpoints and removes the -wal file) -> `docker cp` the file out -> start beat -> read on the
+  host with the backend/.venv python (plain sqlite3 + pickle; raw shelve Dict keys are BYTES,
+  not str). A beat-schedule gate asserts OUR entry (task + crontab), never the default-entry
+  set: `celery.backend_cleanup` is not installed when the result backend is redis
+  (`supports_autoexpire == True` skips it), so an assertion over the default entries is
+  vacuously empty either way.
+- HTTP status capture: `curl -w '%{http_code}' | tee f | head -c N` silently loses the status
+  line - head's early exit SIGPIPEs tee before the -w trailer is written. Capture to a file
+  with no `head` in the pipeline, then read the file.
 
 ## Trust the driver less than the product
 
