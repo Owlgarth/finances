@@ -15,7 +15,7 @@ from decimal import Decimal
 # Django/Django Ninja
 from django.db import transaction as db_transaction
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Router, Status
 
 # Common utilities
 from common.auth import WorkspaceJWTAuth
@@ -95,7 +95,7 @@ def process_transaction(data):
 
 Endpoints are thin wrappers — parse the request, call the service, return the response. Business logic belongs in service classes. Request-scoped validation that returns HTTP error responses (e.g. token uid/token checking in password reset) may stay in the API layer — only business logic moves to the service.
 
-**API layer responsibilities:** parsing request data, token/uid validation that returns HTTP error responses, authentication/authorization checks, calling the service, returning the response tuple.
+**API layer responsibilities:** parsing request data, token/uid validation that returns HTTP error responses, authentication/authorization checks, calling the service, returning the `Status(...)` response.
 
 **Service layer responsibilities:** business logic (validation, DB operations, side effects, balance updates, email notifications). If logic involves saving to the database or sending emails, it belongs in the service.
 
@@ -115,8 +115,17 @@ def create_transaction(request: HttpRequest, data: TransactionCreate):
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return 201, TransactionService.create(user, workspace_id, data)
+    return Status(201, TransactionService.create(user, workspace_id, data))
 ```
+
+**Endpoint returns use `Status(code, payload)` - never the deprecated `return code, payload` tuple.** Django Ninja >= 1.7 fires `DeprecationWarning: Returning tuple (status_code, response) is deprecated` on ANY 2-tuple endpoint result, including one built inside a service and returned straight through, so a service whose contract returns `(status, payload)` (AuthService.login is the exemplar) is unwrapped at the endpoint boundary - never re-shaped in the service:
+
+```python
+status, payload = AuthService.login(data)
+return Status(status, payload)
+```
+
+Ninja resolves `Status` and the old 2-tuple identically after the status split, so the wire contract is unchanged and service tuple contracts stay as written. `Status` joins the existing single `from ninja import ...` line in isort position (after `Router`). When a `Status(...)` call with a multiline dict payload exceeds the line limit, `ruff format` reflows it to split-args style (status and payload on their own lines) - that split form is the format-clean shape; keeping a compact inline dict that overflows the line fails `ruff format --check`.
 
 For endpoints that don't require an active workspace (e.g., listing all workspaces), use `JWTAuth()`.
 

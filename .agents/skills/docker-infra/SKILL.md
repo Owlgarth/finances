@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), or bumping the project version (the uv.lock refresh).
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), or refreshing backend dependencies (targeted uv lock --upgrade-package bumps).
 ---
 
 # Docker & Infrastructure
@@ -107,6 +107,10 @@ Every site that installs frontend dependencies runs `npm ci` - the `frontend/Doc
 - The in-container bootstrap arm's `sh -c` string is POSIX sh on purpose: it executes in the node:26-slim container, where `package-lock.json` is visible via the `./frontend` bind mount - dev.sh itself stays bash.
 - Remnant grep gates over the repo: `--exclude-dir=<dir>` must come BEFORE the `--` argument terminator - after `--`, grep parses it as a filename and exits 2, which is a gate that never ran, not a pass.
 - Keeping the lockfile advisory-clean in the first place (the audit-fix refresh procedure) lives in `npm-dependency-refresh`.
+
+## Backend Dependency Bumps: Targeted Lock Upgrades
+
+A pinned backend dependency bump edits the `pyproject.toml` specifiers, then refreshes `backend/uv.lock` with targeted flags - `uv lock --upgrade-package <name>` over exactly the named packages, never a blanket `uv lock --upgrade`: the blanket form sweeps unrelated packages into the same commit and destroys the revert-as-a-unit property. Adjudicate the lock diff BEFORE committing (changed versions extracted from `git show HEAD:backend/uv.lock` vs the working tree); a package outside the expected set is a STOP - reverse-map it with `uv tree --invert --package <name>` before anything lands. Content-identical `-`/`+` lines inside a rewritten `[[package]]` entry (`wheels = [`, `source = { registry }`) are diff re-anchors, not semantic changes - compare removed/added multisets before treating them as drift. Land the deps commit (pyproject + uv.lock) separately from any tool-induced reformat: ruff >= 0.17 formats Python blocks inside Markdown, so a ruff bump can reflow `backend/*.md` fenced code - that reformat rides its own revertable commit, and any new fenced Python block under `backend/` must satisfy `ruff format` or CI's `ruff format --check .` fails. Lock interop (host uv writing, image-pinned uv reading) follows the `release`-command rule above. The running api/worker/beat keep the pre-bump deps until the shared image is rebuilt and they are recreated - `docker compose up -d --build api worker beat` (the `x-backend` anchor makes one build serve all three); probing a stale container proves nothing about the new set.
 
 ## Dev Script
 
