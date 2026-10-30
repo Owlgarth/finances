@@ -134,7 +134,7 @@ def forgot_password(request, data: ForgotPasswordIn):
     user = User.objects.filter(email=data.email).first()
     if not user:
         time.sleep(random.uniform(0.1, 0.3))  # Normalize response time to reduce timing side-channel
-        return 200, {'message': 'If an account exists with this email, a reset link has been sent.'}
+        return Status(200, {'message': 'If an account exists with this email, a reset link has been sent.'})
     # ... send reset email (naturally slow) ...
 ```
 

@@ -119,7 +119,7 @@ Detailed conventions are split into skills under `.agents/skills/`. Load the rel
 | `auth-security` | Auth, tokens, 2FA, rate limiting, anti-enumeration, security-sensitive endpoints |
 | `email-sending` | Sending emails, email templates, EmailService |
 | `frontend-react` | Any frontend code — design tokens, components, modals, API client, auth flows |
-| `frontend-live-stack-probing` | Interactive verification of frontend behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class, static-fallback discipline when no stack is available |
+| `frontend-live-stack-probing` | Interactive verification of frontend or backend-stack behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class, backend container probes (in-container version checks, beat schedule reads), static-fallback discipline when no stack is available |
 | `npm-dependency-refresh` | Frontend dependency refreshes - npm audit-fix sequencing, allowScripts derivation from the live tree, lockfileVersion 3 gate, floor bumps vs backlog majors |
 | `i18n-tooling` | i18n toolchain - language lifecycle scripts (lang:add/lang:rm, key:find/key:rm, i18n:check, i18n:extract), the i18next-cli extractor config (i18next.config.ts), byte-preserving writers for the language registry, catalog \uXXXX escape preservation, i18next ESLint rule config |
 | `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
