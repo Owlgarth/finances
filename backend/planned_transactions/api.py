@@ -17,6 +17,7 @@ from core.schemas.common import DetailOut
 from core.schemas.pagination import ALLOWED_PAGE_SIZES, PaginatedOut
 from planned_transactions.schemas import (
     PlannedTransactionCreate,
+    PlannedTransactionExecute,
     PlannedTransactionOut,
     PlannedTransactionTotalsResponse,
     RecurringTransactionCreate,
@@ -222,17 +223,22 @@ def delete_planned(request: HttpRequest, planned_id: int):
     response={200: PlannedTransactionOut, 400: DetailOut, 404: DetailOut},
     auth=WorkspaceJWTAuth(),
 )
-def execute_planned(
-    request: HttpRequest,
-    planned_id: int,
-    payment_date: date = Query(...),
-):
-    """Execute a planned transaction, creating an actual transaction (requires write access)."""
+def execute_planned(request: HttpRequest, planned_id: int, data: PlannedTransactionExecute):
+    """Execute a planned transaction, creating an actual transaction (requires write access).
+
+    Both body fields are optional: an omitted payment_date books on the
+    plan's own planned_date, and an omitted amount books the planned amount
+    (payment_amount stays NULL - as planned). A supplied amount records the
+    actual: the executed transaction books it and planned.payment_amount
+    stores it without rewriting planned.amount.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
 
-    planned = PlannedTransactionService.execute(user, workspace_id, planned_id, payment_date)
+    planned = PlannedTransactionService.execute(
+        user, workspace_id, planned_id, payment_date=data.payment_date, amount=data.amount
+    )
     return planned
 
 
