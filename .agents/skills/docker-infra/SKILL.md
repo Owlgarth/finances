@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), or refreshing backend dependencies (targeted uv lock --upgrade-package bumps).
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning and the compose-digest refresh procedure, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), or refreshing backend dependencies (targeted uv lock --upgrade-package bumps).
 ---
 
 # Docker & Infrastructure
@@ -49,9 +49,40 @@ services:
 
 Third-party service images are pinned `tag@sha256:...`. Digests are moving targets - resolve them at implementation time, never carry one from a plan snapshot or an older checkout. Pin the manifest-LIST digest: the top-level `Digest:` field of `docker buildx imagetools inspect` (MediaType `...image.index`), not a per-platform digest, and require both amd64 and arm64 in the list before pinning.
 
-When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs: 131 tags, all prerelease, pinned `1.0.0-rc.4`).
+When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs was prerelease-only until stable 1.0.0 shipped; now pinned at newest stable and refreshed by the procedure below).
 
-`prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently. Nothing automates compose digests since PR #154: Dependabot (the update bot) has no compose manager - it covers Dockerfiles only - so digest refresh and keeping the two files' pins in sync are a manual chore (accepted gap; the backlog entry 2026-10-27 records the retrigger options).
+`prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently. Nothing automates compose digests since PR #154: Dependabot (the update bot) has no compose manager - it covers Dockerfiles only - so digest refresh and keeping the two files' pins in sync are a manual chore run via the Compose-Digest Refresh Procedure below (accepted gap; the backlog entry 2026-10-27 records the retrigger options).
+
+## Compose-Digest Refresh Procedure
+
+The pinning rules above resolve digests at edit time; this procedure re-resolves them later. It is manual by standing user decision (2026-10-27) - the backlog entry of that date records the retrigger options (a small scheduled digest-bump workflow, or self-hosted Renovate with its docker-compose manager). Two triggers:
+
+- every release cut - the `release` pipeline never touches compose files, so the refresh is a separate pre-cut step
+- immediately on a CVE in a pinned third-party image
+
+Inventory: four tag@digest pins, one per third-party image, IDENTICAL in `docker-compose.yml` and `prod/docker-compose.yml` - `db` (postgres), `redis`, `storage-init` (busybox), `storage` (rustfs). Two image lines are never in scope: the dev `node` tools image is a plain tag with no digest (`node:26-slim`), and the prod GHCR images (`finances-backend`/`finances-ui`) are parameterized by `APP_VERSION` - the release pipeline resolves them.
+
+**Drift-check.** One `docker buildx imagetools inspect <name:tag>` per pinned image; compare the top-level `Digest:` field with the pinned digest. Every NEW digest re-satisfies the pinning section's rules (manifest-LIST digest, amd64 and arm64 both present) - never inherit the old pin's verification. Re-run the inspect at execution time even when a plan pins expected digests: the registry can move again between planning and execution.
+
+**Update.** Edit BOTH files with the identical new reference - `prod/` copies the dev pins verbatim, never re-resolves (pinning-section rule). Keep tag and digest matched: a digest-drift refresh keeps the tag (postgres, redis, busybox); a version move changes tag and digest together, and a new tag with the old digest fails to pull outright (the digest belongs to the old tag's manifest). When a stable semver has appeared for an image pinned as prerelease, move to the newest stable whose digest satisfies the platform rules - the prerelease pin was a stopgap, not a preference (worked example: rustfs `1.0.0-rc.4` -> `1.0.4`, the newest stable, its digest identical to `latest`'s). Enumerate the candidate stable tags via the registry's tag listing (the hub UI or its tags API) - `imagetools inspect` resolves a known tag and cannot list them.
+
+**Verify.** The `docker compose config` rendered-diff gate (Env De-duplication section above) applies in full - `up` is never a verification tool:
+
+```bash
+docker compose --profile tools config > /tmp/opencode/compose-before.yml   # dev, BEFORE editing
+mkdir -p /tmp/opencode/prod-render                                         # scratch project dir, NEVER prod/.env
+cp prod/.env.example /tmp/opencode/prod-render/.env                        # env_file existence target + interpolation source
+docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
+  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-before.yml
+# ... edit both compose files, then:
+docker compose --profile tools config > /tmp/opencode/compose-after.yml
+docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
+  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-after.yml
+diff /tmp/opencode/compose-before.yml /tmp/opencode/compose-after.yml
+diff /tmp/opencode/prod-before.yml /tmp/opencode/prod-after.yml
+```
+
+Expected hunks: exactly the changed `image:` lines (db, redis, storage-init, storage in dev; the same four in prod) and nothing else. The `node` service renders only under `--profile tools` - its image line is a plain tag and never appears in the diff, but the baseline must still cover it. Captures interpolate secrets in cleartext and stay under /tmp/opencode, never in the repo; the prod render runs against a /tmp/opencode scratch project directory holding a `.env` copied from `prod/.env.example` (the `x-backend` anchor's `env_file: .env` is existence-checked against the project directory, and `--env-file` alone does not satisfy it) - never create `prod/.env`. Then recreate the dev stack - `./dev.sh down && ./dev.sh up` pulls the new digests for db, redis, storage-init and storage, and the healthchecks gate the result. When the `storage` TAG moved rather than just its digest, also exercise the S3 path (a boto3 upload/download round-trip against storage; the api container carries boto3 - `docker compose exec -T api /venv/bin/python`) - the one image whose version, not just rebuild, can change behavior; the other three need only the healthcheck gate.
 
 ## Out-of-Context Imports: Named Additional Build Contexts
 
@@ -131,6 +162,7 @@ It `source`s `.env`, so **values containing spaces must be quoted there** — co
 
 - Lock interop is host-writes/container-consumes: a lock refreshed by host uv 0.11.28 was accepted by the image-pinned uv 0.12.8 as a no-op resolve. Re-check that pair if either side is upgraded - a lockfile `revision` bump could break it.
 - When simulating a bump to exercise the pipeline, the version string must be valid PEP 440: uv rejects labels like `0.3.0-test` (exit 2, nothing written to the lock).
+- The pipeline never touches compose files - every release cut is one of the Compose-Digest Refresh Procedure's triggers; run it before the cut.
 
 ### DEV_TARGET: container or host
 
