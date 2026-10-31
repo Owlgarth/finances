@@ -49,7 +49,7 @@ services:
 
 Third-party service images are pinned `tag@sha256:...`. Digests are moving targets - resolve them at implementation time, never carry one from a plan snapshot or an older checkout. Pin the manifest-LIST digest: the top-level `Digest:` field of `docker buildx imagetools inspect` (MediaType `...image.index`), not a per-platform digest, and require both amd64 and arm64 in the list before pinning.
 
-When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs: 131 tags, all prerelease, pinned `1.0.0-rc.4`).
+When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs was prerelease-only until stable 1.0.0 shipped; now pinned at newest stable and refreshed by the procedure below).
 
 `prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently. Nothing automates compose digests since PR #154: Dependabot (the update bot) has no compose manager - it covers Dockerfiles only - so digest refresh and keeping the two files' pins in sync are a manual chore run via the Compose-Digest Refresh Procedure below (accepted gap; the backlog entry 2026-10-27 records the retrigger options).
 
@@ -64,22 +64,25 @@ Inventory: four tag@digest pins, one per third-party image, IDENTICAL in `docker
 
 **Drift-check.** One `docker buildx imagetools inspect <name:tag>` per pinned image; compare the top-level `Digest:` field with the pinned digest. Every NEW digest re-satisfies the pinning section's rules (manifest-LIST digest, amd64 and arm64 both present) - never inherit the old pin's verification. Re-run the inspect at execution time even when a plan pins expected digests: the registry can move again between planning and execution.
 
-**Update.** Edit BOTH files with the identical new reference - `prod/` copies the dev pins verbatim, never re-resolves (pinning-section rule). Keep tag and digest matched: a digest-drift refresh keeps the tag (postgres, redis, busybox); a version move changes tag and digest together, and a new tag with the old digest fails to pull outright (the digest belongs to the old tag's manifest). When a stable semver has appeared for an image pinned as prerelease, move to the newest stable whose digest satisfies the platform rules - the prerelease pin was a stopgap, not a preference (worked example: rustfs `1.0.0-rc.4` -> `1.0.4`, the newest stable, its digest identical to `latest`'s).
+**Update.** Edit BOTH files with the identical new reference - `prod/` copies the dev pins verbatim, never re-resolves (pinning-section rule). Keep tag and digest matched: a digest-drift refresh keeps the tag (postgres, redis, busybox); a version move changes tag and digest together, and a new tag with the old digest fails to pull outright (the digest belongs to the old tag's manifest). When a stable semver has appeared for an image pinned as prerelease, move to the newest stable whose digest satisfies the platform rules - the prerelease pin was a stopgap, not a preference (worked example: rustfs `1.0.0-rc.4` -> `1.0.4`, the newest stable, its digest identical to `latest`'s). Enumerate the candidate stable tags via the registry's tag listing (the hub UI or its tags API) - `imagetools inspect` resolves a known tag and cannot list them.
 
 **Verify.** The `docker compose config` rendered-diff gate (Env De-duplication section above) applies in full - `up` is never a verification tool:
 
 ```bash
 docker compose --profile tools config > /tmp/opencode/compose-before.yml   # dev, BEFORE editing
-cp prod/.env.example /tmp/opencode/prod-render.env                         # scratch env copy, NEVER prod/.env
-(cd prod && docker compose --env-file /tmp/opencode/prod-render.env config > /tmp/opencode/prod-before.yml)
+mkdir -p /tmp/opencode/prod-render                                         # scratch project dir, NEVER prod/.env
+cp prod/.env.example /tmp/opencode/prod-render/.env                        # env_file existence target + interpolation source
+docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
+  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-before.yml
 # ... edit both compose files, then:
 docker compose --profile tools config > /tmp/opencode/compose-after.yml
-(cd prod && docker compose --env-file /tmp/opencode/prod-render.env config > /tmp/opencode/prod-after.yml)
+docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
+  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-after.yml
 diff /tmp/opencode/compose-before.yml /tmp/opencode/compose-after.yml
 diff /tmp/opencode/prod-before.yml /tmp/opencode/prod-after.yml
 ```
 
-Expected hunks: exactly the changed `image:` lines (db, redis, storage-init, storage in dev; the same four in prod) and nothing else. The `node` service renders only under `--profile tools` - its image line is a plain tag and never appears in the diff, but the baseline must still cover it. Captures interpolate secrets in cleartext and stay under /tmp/opencode, never in the repo; the prod render reads its variables from the /tmp/opencode scratch copy of `.env.example` via `--env-file` - never create `prod/.env`. Then recreate the dev stack - `./dev.sh down && ./dev.sh up` pulls the new digests for db, redis, storage-init and storage, and the healthchecks gate the result. When the `storage` TAG moved rather than just its digest, also exercise the S3 path (a boto3 upload/download round-trip against storage) - the one image whose version, not just rebuild, can change behavior; the other three need only the healthcheck gate.
+Expected hunks: exactly the changed `image:` lines (db, redis, storage-init, storage in dev; the same four in prod) and nothing else. The `node` service renders only under `--profile tools` - its image line is a plain tag and never appears in the diff, but the baseline must still cover it. Captures interpolate secrets in cleartext and stay under /tmp/opencode, never in the repo; the prod render runs against a /tmp/opencode scratch project directory holding a `.env` copied from `prod/.env.example` (the `x-backend` anchor's `env_file: .env` is existence-checked against the project directory, and `--env-file` alone does not satisfy it) - never create `prod/.env`. Then recreate the dev stack - `./dev.sh down && ./dev.sh up` pulls the new digests for db, redis, storage-init and storage, and the healthchecks gate the result. When the `storage` TAG moved rather than just its digest, also exercise the S3 path (a boto3 upload/download round-trip against storage; the api container carries boto3 - `docker compose exec -T api /venv/bin/python`) - the one image whose version, not just rebuild, can change behavior; the other three need only the healthcheck gate.
 
 ## Out-of-Context Imports: Named Additional Build Contexts
 
