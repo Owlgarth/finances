@@ -50,6 +50,7 @@
   "noAccount": "No account",
   "rowActions": {
     "execute": "Execute",
+    "executeAdjusted": "Execute with adjustments",
     "cancelPlan": "Cancel plan",
     "edit": "Edit",
     "copy": "Copy",
@@ -57,6 +58,13 @@
   },
   "executed": "Executed \u2014 transaction created",
   "executeFailed": "Failed to execute",
+  "executeAdjusted": {
+    "title": "Execute with adjustments",
+    "context": "Planned: {{values}}",
+    "helper": "Creates the transaction with these values instead of the planned ones.",
+    "submit": "Execute",
+    "submitting": "Executing…"
+  },
   "cancelledToast": "Plan cancelled",
   "cancelFailed": "Failed to cancel",
   "deleted": "Deleted",
