@@ -453,6 +453,14 @@ export interface PlannedInput {
   status?: 'pending' | 'done' | 'cancelled';
 }
 
+/** Execute overrides - both keys optional. An omitted key means "use the
+    plan's own value" (planned_date / amount), so the plain no-override
+    path sends {}. */
+export interface PlannedExecuteInput {
+  payment_date?: string;
+  amount?: string;
+}
+
 export const plannedTransactionsApi = {
   getAll: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; page?: number; page_size?: number; ordering?: PlannedTransactionOrdering }): Promise<PaginatedResponse<PlannedTransaction>> =>
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
@@ -469,8 +477,10 @@ export const plannedTransactionsApi = {
   update: (id: number, data: PlannedInput): Promise<PlannedTransaction> =>
     api.put<PlannedTransaction>(`/planned-transactions/${id}`, data).then(res => res.data),
   delete: (id: number) => api.delete(`/planned-transactions/${id}`),
-  execute: (id: number, paymentDate: string): Promise<PlannedTransaction> =>
-    api.post<PlannedTransaction>(`/planned-transactions/${id}/execute`, null, { params: { payment_date: paymentDate } }).then(res => res.data),
+  /** JSON-body overrides (payment_date moved off the query string in this
+      contract); the default empty body executes as planned. */
+  execute: (id: number, overrides: PlannedExecuteInput = {}): Promise<PlannedTransaction> =>
+    api.post<PlannedTransaction>(`/planned-transactions/${id}/execute`, overrides).then(res => res.data),
 };
 
 // ============= Recurring Transactions API =============
