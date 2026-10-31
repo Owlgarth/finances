@@ -266,5 +266,6 @@ pushed by a workflow default to private. Dependency updates need no app
 install: Dependabot is first-party and activates on push of
 `.github/dependabot.yml`. It opens weekly PRs (Mondays 05:00
 Europe/Warsaw) for npm (frontend), uv (backend), GitHub Actions, and the
-Dockerfiles; the compose image digests are maintained by hand (Dependabot
-does not manage compose files).
+Dockerfiles; the compose image digests are maintained by hand via the
+Compose-Digest Refresh Procedure (.agents/skills/docker-infra/SKILL.md;
+Dependabot does not manage compose files).
