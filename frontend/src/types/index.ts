@@ -223,6 +223,7 @@ export interface PlannedTransaction {
   category: { id: number; budget_id: number; name: string } | null;
   planned_date: string;
   payment_date: string | null;
+  payment_amount: string | null;
   status: 'pending' | 'done' | 'cancelled';
   transaction_id: number | null;
   recurring_id: number | null;

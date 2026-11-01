@@ -1,5 +1,6 @@
 import calendar
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -58,6 +59,11 @@ class PlannedTransaction(WorkspaceScopedModel):
     )
     planned_date = models.DateField()
     payment_date = models.DateField(blank=True, null=True)
+    # The amount that actually booked when the plan was executed. Set ONLY
+    # when the caller supplied an amount at execute time; NULL means
+    # "as planned" (the executed transaction booked `amount` unchanged) -
+    # never materialize `amount` into it.
+    payment_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     transaction = models.ForeignKey(
         'transactions.Transaction',
@@ -97,6 +103,12 @@ class PlannedTransaction(WorkspaceScopedModel):
     @property
     def category_name(self) -> str | None:
         return self.category.name if self.category else None
+
+    @property
+    def effective_amount(self) -> Decimal:
+        """The amount that books on execution: a payment_amount recorded at
+        execute time (the actual) wins; NULL means as-planned."""
+        return self.payment_amount if self.payment_amount is not None else self.amount
 
     def __str__(self):
         return f'{self.name} - {self.amount} ({self.status})'
