@@ -52,6 +52,7 @@
   "noAccount": "Bez konta",
   "rowActions": {
     "execute": "Zrealizuj",
+    "executeAdjusted": "Zrealizuj z modyfikacjami",
     "cancelPlan": "Anuluj plan",
     "edit": "Edytuj",
     "copy": "Kopiuj",
@@ -59,6 +60,13 @@
   },
   "executed": "Zrealizowano - utworzono transakcję",
   "executeFailed": "Nie udało się zrealizować",
+  "executeAdjusted": {
+    "title": "Zrealizuj z modyfikacjami",
+    "context": "Zaplanowano: {{values}}",
+    "helper": "Tworzy transakcję z tymi wartościami zamiast zaplanowanych.",
+    "submit": "Zrealizuj",
+    "submitting": "Realizowanie…"
+  },
   "cancelledToast": "Plan anulowany",
   "cancelFailed": "Nie udało się anulować",
   "deleted": "Usunięto",
