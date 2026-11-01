@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Save, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Save, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
@@ -21,6 +21,7 @@ import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
+import ExecuteAdjustedModal from '../components/modals/transactions/ExecuteAdjustedModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
 import PlannedMonthStepper from '../components/transactions/PlannedMonthStepper'
@@ -260,6 +261,8 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
   // click on the hover-revealed Ban icon must not fire the mutation directly.
   const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
+  // "Execute with adjustments" source (pending rows): the date+amount modal.
+  const [adjusting, setAdjusting] = useState<PlannedTransaction | null>(null)
   // Bookmark capture of the planned view's filters (mount-per-use modal):
   // target derives from the URL at open time; renders only in view=planned.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
@@ -530,7 +533,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
 
   const executeMutation = useMutation({
-    mutationFn: (p: PlannedTransaction) => plannedTransactionsApi.execute(p.id, new Date().toISOString().slice(0, 10)),
+    // No overrides: "as planned" (payment_date = planned_date, plan amount)
+    // is the server-side default, so no client-side date computation can
+    // ever regress this path.
+    mutationFn: (p: PlannedTransaction) => plannedTransactionsApi.execute(p.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['planned'] })
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
@@ -809,6 +815,17 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
                         <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title={t('rowActions.execute')}><CheckCircle size={13} /></button>
                       )}
                       {p.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => setAdjusting(p)}
+                          title={t('rowActions.executeAdjusted')}
+                          aria-label={t('rowActions.executeAdjusted')}
+                          className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                        >
+                          <SlidersHorizontal size={13} />
+                        </button>
+                      )}
+                      {p.status === 'pending' && (
                         <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title={t('rowActions.cancelPlan')}><Ban size={13} /></button>
                       )}
                       {p.status === 'pending' && p.recurring_id == null && (
@@ -905,6 +922,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
         onCancel={() => setCancelling(null)}
       />
+      <ExecuteAdjustedModal open={!!adjusting} planned={adjusting} onClose={() => setAdjusting(null)} />
       <RecurringFormModal
         open={recurringFormOpen}
         onClose={() => setRecurringFormOpen(false)}
@@ -939,6 +957,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           ...(plannedRowAction?.status === 'pending'
             ? [
                 { label: t('rowActions.execute'), icon: CheckCircle, onSelect: () => plannedRowAction && executeMutation.mutate(plannedRowAction) },
+                { label: t('rowActions.executeAdjusted'), icon: SlidersHorizontal, onSelect: () => plannedRowAction && setAdjusting(plannedRowAction) },
                 { label: t('rowActions.cancelPlan'), icon: Ban, onSelect: () => plannedRowAction && setCancelling(plannedRowAction) },
               ]
             : []),

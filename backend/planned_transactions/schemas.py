@@ -47,6 +47,19 @@ class PlannedTransactionCreate(BaseModel):
         return v.strip()
 
 
+class PlannedTransactionExecute(BaseModel):
+    """Schema for executing a planned transaction.
+
+    Both fields optional: an omitted payment_date books on the plan's own
+    planned_date (server-side default - a client can never send a stale
+    date), and an omitted amount books the planned amount with
+    payment_amount left NULL ("as planned").
+    """
+
+    payment_date: Optional[date] = None
+    amount: Optional[Decimal] = Field(None, gt=0)
+
+
 class PlannedTransactionImport(BaseModel):
     """Schema for importing a planned transaction."""
 
@@ -93,6 +106,7 @@ class PlannedTransactionOut(BaseModel):
     category: Optional[CategoryOut] = None
     planned_date: date
     payment_date: Optional[date]
+    payment_amount: Optional[Decimal] = None
     status: str
     transaction_id: Optional[int]
     recurring_id: Optional[int] = None
