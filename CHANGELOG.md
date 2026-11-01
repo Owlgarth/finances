@@ -1,3 +1,50 @@
+# Changelog
+
+All notable changes to Owlgarth Finances will be documented in this file.
+
+## [0.5.0] - 2026-11-01
+
+### Features
+
+- Bookmarks - budget/transactions/planned quick access (#150)
+- Per-user per-workspace page defaults (Planned / Transactions / Transfers) (#169)
+- Task 1 - budget detail totals row + sumAmounts helper (#173)
+
+
+### Bug Fixes
+
+- Frontend dependency security refresh + lockfile-enforced installs + CI audit gate (#152)
+- Planned transaction done-date + execute with adjustments (#185)
+
+
+### Documentation
+
+- Post-merge follow-up for bookmarks-quick-access (#151)
+- Post-merge follow-up for frontend-dep-security-refresh (#153)
+- Sync coding summaries to skills (#168)
+- Post-merge follow-up for workspace-page-defaults (#170)
+- Sync coding summaries to skills (#172)
+- Post-merge follow-up for budget-detail-totals (#174)
+- Skills sync for tailwind 4 css-first (librarian) (#176)
+- Skills sync for vite 8 + plugin-react 6 (librarian) (#178)
+- Skills sync for react-day-picker 10 + i18next-cli (librarian) (#180)
+- Skills sync for ninja Status() returns + container venv probing (librarian) (#182)
+- Skills sync for compose-digest refresh procedure (librarian) (#184)
+- Planned-done-date follow-up (#186)
+
+
+### Miscellaneous
+
+- Task 6 - Dependabot migration, replace Renovate config (#154)
+- *(deps)* Bump astral-sh/setup-uv (#158)
+- *(deps-dev)* Bump eslint-plugin-react-refresh (#159)
+- Node-line alignment to 26 everywhere (upgrade wave 0.5.0, Phase 1) (#171)
+- Tailwind 4 CSS-first migration (upgrade wave 0.5.0 phase 2) (#175)
+- Vite 8 + plugin-react 6 bundler engine swap (#177)
+- React-day-picker 10 + i18next-cli swap (+ riders) (#179)
+- Upgrade wave 0.5.0 phase 5 - backend production deps (django 6.1, uvicorn 0.54, django-ninja 1.7.3, cryptography 50, pytest 9, ruff 0.17) (#181)
+- Compose-digest refresh procedure + 0.5.0 digest refresh (#183)
+
 ## [0.4.0] - 2026-10-23
 
 - docs: promote recurring upfront-window patterns into skills (#149) (a267512)
