@@ -77,6 +77,8 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
 workspace = Workspace.objects.filter(owner=self.user, name='Imported Workspace').first()
 ```
 
+**GDPR round-trip tests rewrite the exported workspace name before import:** a real `export_all_data` payload carries the source workspace's name, and the importing user is a member of that workspace, so `import_all_data`'s default `conflict_strategy='rename'` silently renames the restored workspace to 'Test Workspace (imported ...)' - a lookup by the original name then returns the AuthMixin source workspace instead of the restored rows. Rewrite `payload['workspaces'][0]['workspace_name']` to a fresh name before importing (mirroring a fresh-instance import) so lookup-by-name stays deterministic. Exemplar: the planned-transactions GDPR round-trip test.
+
 **Authenticating as a different user:** `AuthMixin` only mints a JWT for `self.user`. Cross-user tests (same idempotency key under another user, viewer-role probes) mint one directly with `create_access_token(other_user)` from `common.auth` and send it as an explicit `Authorization: Bearer …` header instead of `self.auth_headers()`.
 
 ## Test Auth Without AuthMixin

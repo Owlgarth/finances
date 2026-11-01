@@ -143,8 +143,13 @@ With no parser configured, every extraction affordance is hidden.
 Create scheduled transactions, optionally on an account and always in their own
 currency (locked to the account's whenever one is set) (member+). **Execute** creates
 a real transaction carrying the plan's account and currency (via a Celery task,
-idempotent) and marks the planned item done. The list shares the Transactions
-search/filters pattern, including the own-currency filter (URL-synced).
+idempotent), books it on the plan's own `planned_date` (server-side default) at the
+planned amount, and marks the planned item done. **Execute with adjustments** runs
+the same execute with a date + amount form prefilled from the plan: a supplied
+amount is stored on the plan's `payment_amount` (NULL = as planned) and booked
+instead of the planned one, without rewriting the plan's own `amount`. The list
+shares the Transactions search/filters pattern, including the own-currency filter
+(URL-synced).
 
 Entering the planned view opens on the member's saved view defaults (personal,
 per workspace - set from the page's **Save as default** button or the workspace
