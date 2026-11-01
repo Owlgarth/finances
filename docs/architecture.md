@@ -164,12 +164,15 @@ parsers that delegate to services. Apps with async work have a `tasks.py`.
 ### Async Task Flows
 
 **Planned transaction execution** - the service sets `status='done'` + `payment_date`
-and dispatches `execute_planned_transaction.delay(id)`; the create path defers the
-dispatch to `on_commit`, so the message publishes only after the outermost transaction
-commits (never at a savepoint release - a worker that beat the commit would find no row
-and skip permanently). The worker re-fetches with `select_for_update()`, guards
-idempotency via `transaction_id`, and creates the `Transaction` with the plan's account
-(possibly none) and the plan's own currency.
+(an omitted request date books on the plan's own `planned_date`; a supplied amount is
+stored on `payment_amount` - NULL means as planned - and the plan's own `amount` is
+never rewritten) and dispatches `execute_planned_transaction.delay(id)`; the create
+path defers the dispatch to `on_commit`, so the message publishes only after the
+outermost transaction commits (never at a savepoint release - a worker that beat the
+commit would find no row and skip permanently). The worker re-fetches with
+`select_for_update()`, guards idempotency via `transaction_id`, and creates the
+`Transaction` with the plan's account (possibly none), the plan's own currency, and
+`effective_amount` (the actual recorded at execute time, else the planned amount).
 
 **Recurring-rule materialization** - the daily beat entry `generate-recurring-transactions`
 (crontab `minute=5, hour=0` UTC - the codebase's first periodic task) runs
