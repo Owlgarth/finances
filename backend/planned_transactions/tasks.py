@@ -60,7 +60,7 @@ def execute_planned_transaction(self, planned_id: int) -> None:
                 account_id=planned.account_id,
                 currency_code=planned.currency.code,
                 category_id=planned.category_id,
-                amount=planned.amount,
+                amount=planned.effective_amount,
                 type='expense',
             ),
         )

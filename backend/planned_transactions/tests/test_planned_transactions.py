@@ -14,8 +14,10 @@ from budgeting.factories import BudgetFactory
 from categories.factories import CategoryFactory
 from common.auth import create_access_token
 from common.enums import TotalsLabel
+from common.json_encoder import GDPREncoder
 from common.tests.factories import UserFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
+from core.schemas import FullImportIn
 from currencies.services import CurrencyCatalogService
 from planned_transactions.factories import PlannedTransactionFactory
 from planned_transactions.models import PlannedTransaction, PlannedTransactionIdempotencyKey
@@ -23,8 +25,9 @@ from planned_transactions.schemas import PlannedTransactionCreate
 from planned_transactions.services import PlannedTransactionService
 from planned_transactions.tasks import execute_planned_transaction
 from transactions.models import Transaction
+from users.services import UserService
 from workspaces.factories import WorkspaceFactory, WorkspaceMemberFactory
-from workspaces.models import WorkspaceMember
+from workspaces.models import Workspace, WorkspaceMember
 
 
 class PlannedTransactionTestCase(AuthMixin, APIClientMixin, TestCase):
@@ -516,6 +519,33 @@ class TestUpdatePlannedTransaction(PlannedTransactionTestCase):
         self.assertEqual(mirror.category_id, self.groceries.id)
         self.assertEqual(mirror.date, original_date)
 
+    def test_update_done_with_payment_amount_mirror_keeps_actual(self):
+        """Editing a done row that executed with an adjusted amount: the
+        executed mirror keeps the ACTUAL (payment_amount) even when the
+        plan's amount is edited - payment_amount is the what-really-booked
+        signal and no PUT field can rewrite it."""
+        data = self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'amount': '1100.00'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        transaction_id = data['transaction_id']
+
+        data = self.put(
+            f'/api/planned-transactions/{self.planned1.id}',
+            self._payload(name='Rent (corrected)', amount='1250.00', status='done'),
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+
+        self.planned1.refresh_from_db()
+        self.assertEqual(self.planned1.amount, Decimal('1250.00'))
+        self.assertEqual(self.planned1.payment_amount, Decimal('1100.00'))
+        mirror = Transaction.objects.get(id=transaction_id)
+        self.assertEqual(mirror.amount, Decimal('1100.00'))
+        self.assertEqual(mirror.description, 'Rent (corrected)')
+
     def test_update_done_account_less_plan_mirrors_currency_and_account(self):
         """Editing a done account-less plan updates the executed mirror's amount
         and keeps it account-less in the plan's stored currency."""
@@ -587,13 +617,14 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
         initial_count = Transaction.objects.count()
 
         data = self.post(
-            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05',
-            {},
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'payment_date': '2025-01-05'},
             **self.auth_headers(),
         )
         self.assertStatus(200)
         self.assertEqual(data['status'], 'done')
         self.assertEqual(data['payment_date'], '2025-01-05')
+        self.assertIsNone(data['payment_amount'])
         self.assertIsNotNone(data['transaction_id'])
 
         self.assertEqual(Transaction.objects.count(), initial_count + 1)
@@ -605,29 +636,93 @@ class TestExecutePlannedTransaction(PlannedTransactionTestCase):
 
     def test_execute_planned_twice_fails(self):
         self.post(
-            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05',
-            {},
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'payment_date': '2025-01-05'},
             **self.auth_headers(),
         )
         self.post(
-            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-06',
-            {},
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'payment_date': '2025-01-06'},
             **self.auth_headers(),
         )
         self.assertStatus(400)
 
     def test_execute_planned_not_found(self):
-        self.post('/api/planned-transactions/99999/execute?payment_date=2025-01-05', {}, **self.auth_headers())
+        self.post('/api/planned-transactions/99999/execute', {}, **self.auth_headers())
         self.assertStatus(404)
 
     def test_execute_as_viewer_fails(self):
         WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
         self.post(
-            f'/api/planned-transactions/{self.planned1.id}/execute?payment_date=2025-01-05',
-            {},
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'payment_date': '2025-01-05'},
             **self.auth_headers(),
         )
         self.assertStatus(403)
+
+    def test_execute_omitted_date_defaults_to_planned_date(self):
+        """The frontend bug's structural fix: an empty body executes as
+        planned - the server supplies the date, the client sends nothing."""
+        data = self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['payment_date'], '2025-01-05')
+        self.assertIsNone(data['payment_amount'])
+        created = Transaction.objects.get(id=data['transaction_id'])
+        self.assertEqual(created.date, date(2025, 1, 5))
+        self.assertEqual(created.amount, Decimal('1200.00'))
+
+    def test_execute_adjusted_amount_records_actual(self):
+        data = self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'amount': '1150.50'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['payment_amount'], '1150.50')
+        # The plan itself is never rewritten.
+        self.planned1.refresh_from_db()
+        self.assertEqual(self.planned1.amount, Decimal('1200.00'))
+        self.assertEqual(self.planned1.payment_amount, Decimal('1150.50'))
+        created = Transaction.objects.get(id=data['transaction_id'])
+        self.assertEqual(created.amount, Decimal('1150.50'))
+        # Omitted date still defaults to planned_date.
+        self.assertEqual(created.date, date(2025, 1, 5))
+
+    def test_execute_adjusted_date_and_amount(self):
+        data = self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'payment_date': '2025-01-07', 'amount': '999.99'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(200)
+        self.assertEqual(data['payment_date'], '2025-01-07')
+        self.assertEqual(data['payment_amount'], '999.99')
+        created = Transaction.objects.get(id=data['transaction_id'])
+        self.assertEqual(created.date, date(2025, 1, 7))
+        self.assertEqual(created.amount, Decimal('999.99'))
+
+    def test_execute_rejects_non_positive_amount(self):
+        initial_count = Transaction.objects.count()
+        self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'amount': '0'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(422)
+        self.post(
+            f'/api/planned-transactions/{self.planned1.id}/execute',
+            {'amount': '-5.00'},
+            **self.auth_headers(),
+        )
+        self.assertStatus(422)
+        # Rejected before any write: the plan is still pending, nothing booked.
+        self.planned1.refresh_from_db()
+        self.assertEqual(self.planned1.status, 'pending')
+        self.assertEqual(Transaction.objects.count(), initial_count)
 
 
 class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
@@ -676,6 +771,30 @@ class TestExecutePlannedTransactionTask(PlannedTransactionTestCase):
         self.planned1.refresh_from_db()
         self.assertIsNone(self.planned1.transaction_id)
 
+    def test_task_uses_payment_amount_when_set(self):
+        self.planned3.status = 'done'
+        self.planned3.payment_date = date(2025, 2, 5)
+        self.planned3.payment_amount = Decimal('28.00')
+        self.planned3.save()
+
+        execute_planned_transaction(self.planned3.id)
+
+        self.planned3.refresh_from_db()
+        created = Transaction.objects.get(id=self.planned3.transaction_id)
+        self.assertEqual(created.amount, Decimal('28.00'))
+        self.assertEqual(self.planned3.amount, Decimal('30.00'))
+
+    def test_task_falls_back_to_planned_amount_when_payment_amount_null(self):
+        self.planned1.status = 'done'
+        self.planned1.payment_date = date(2025, 1, 5)
+        self.planned1.save()
+
+        execute_planned_transaction(self.planned1.id)
+
+        self.planned1.refresh_from_db()
+        created = Transaction.objects.get(id=self.planned1.transaction_id)
+        self.assertEqual(created.amount, Decimal('1200.00'))
+
 
 class TestExecutePlannedTransactionDispatch(PlannedTransactionTestCase):
     """Service.execute dispatches the task (CELERY_TASK_ALWAYS_EAGER)."""
@@ -705,6 +824,17 @@ class TestExecutePlannedTransactionDispatch(PlannedTransactionTestCase):
         )
         self.assertEqual(result.status, 'done')
         self.assertIsNotNone(result.transaction_id)
+
+    def test_execute_omitted_payment_date_uses_planned_date(self):
+        result = PlannedTransactionService.execute(
+            user=self.user,
+            workspace_id=self.workspace.id,
+            planned_id=self.planned1.id,
+        )
+        self.assertEqual(result.status, 'done')
+        self.planned1.refresh_from_db()
+        self.assertEqual(self.planned1.payment_date, date(2025, 1, 5))
+        self.assertIsNone(self.planned1.payment_amount)
 
 
 class TestExecutePlannedTransactionConfig(TestCase):
@@ -1090,3 +1220,43 @@ class TestDoneCreateDispatchDeferredToCommit(PlannedTransactionTestCase):
         # Post-commit: the callback ran and the task executed.
         self.assertEqual(Transaction.objects.count(), initial_count + 1)
         self.assertIsNotNone(PlannedTransaction.objects.get(id=data['id']).transaction_id)
+
+
+class TestPaymentAmountGdprRoundTrip(PlannedTransactionTestCase):
+    def test_payment_amount_round_trips_through_export_and_import(self):
+        PlannedTransactionFactory(
+            workspace=self.workspace,
+            account=self.account,
+            name='Paid differently',
+            amount=Decimal('120.00'),
+            planned_date=date(2025, 1, 5),
+            payment_date=date(2025, 1, 6),
+            payment_amount=Decimal('115.00'),
+            status='done',
+        )
+
+        export_data = UserService.export_all_data(self.user)
+        exported = next(
+            p for p in export_data['workspaces'][0]['planned_transactions'] if p['name'] == 'Paid differently'
+        )
+        self.assertEqual(exported['payment_amount'], Decimal('115.00'))
+
+        # The real wire shape: GDPREncoder writes Decimals as strings, so the
+        # importer receives "115.00" exactly like a downloaded file. The
+        # workspace is renamed in the payload to a fresh name (a real import
+        # on a new instance carries no conflicting name), keeping the lookup
+        # below deterministic - the default conflict_strategy would rename
+        # 'Test Workspace (imported ...)' instead.
+        payload = json.loads(json.dumps(export_data, cls=GDPREncoder))
+        payload['workspaces'][0]['workspace_name'] = 'Imported Workspace'
+        result = UserService.import_all_data(self.user, FullImportIn(data=payload))
+        self.assertEqual(result['imported_planned_transactions'], 4)
+        self.assertEqual(result['skipped']['errors'], [])
+
+        ws = Workspace.objects.get(owner=self.user, name='Imported Workspace')
+        restored = PlannedTransaction.objects.get(workspace=ws, name='Paid differently')
+        self.assertEqual(restored.payment_amount, Decimal('115.00'))
+        # As-planned rows round-trip with payment_amount NULL (old-export
+        # tolerance is the same .get() path - the key is simply absent).
+        rent_row = PlannedTransaction.objects.get(workspace=ws, name='Monthly Rent')
+        self.assertIsNone(rent_row.payment_amount)

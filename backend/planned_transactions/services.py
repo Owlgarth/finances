@@ -414,7 +414,11 @@ class PlannedTransactionService:
                 mirror = Transaction.objects.filter(id=planned.transaction_id, workspace_id=workspace_id).first()
                 if mirror:
                     mirror.description = planned.name
-                    mirror.amount = planned.amount
+                    # The executed twin books the ACTUAL amount: a
+                    # payment_amount recorded at execute time wins; NULL
+                    # means as-planned and the planned amount propagates
+                    # (the pre-payment_amount behavior, bit-for-bit).
+                    mirror.amount = planned.effective_amount
                     mirror.category_id = planned.category_id
                     # The executed twin tracks the plan's account and stored
                     # currency in lockstep, including the account-less state.
@@ -431,15 +435,30 @@ class PlannedTransactionService:
         planned.delete()
 
     @staticmethod
-    def execute(user, workspace_id: int, planned_id: int, payment_date: date) -> PlannedTransaction:
-        """Execute a planned transaction, creating an actual transaction on its account."""
+    def execute(
+        user,
+        workspace_id: int,
+        planned_id: int,
+        payment_date: date | None = None,
+        amount: Decimal | None = None,
+    ) -> PlannedTransaction:
+        """Execute a planned transaction, creating an actual transaction on its account.
+
+        An omitted payment_date books on the plan's own planned_date
+        (server-side default), and a supplied amount records the actual
+        paid: planned.payment_amount stores it (NULL = as planned) and the
+        executed transaction books it instead of the planned amount. The
+        plan's own amount is never rewritten.
+        """
         planned = PlannedTransactionService.get_planned(planned_id, workspace_id)
 
         if planned.status == 'done':
             raise PlannedTransactionAlreadyExecutedError()
 
         planned.status = 'done'
-        planned.payment_date = payment_date
+        planned.payment_date = payment_date if payment_date is not None else planned.planned_date
+        if amount is not None:
+            planned.payment_amount = amount
         planned.updated_by = user
         with db_transaction.atomic():
             planned.save()

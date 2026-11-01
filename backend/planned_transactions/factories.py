@@ -30,6 +30,7 @@ class PlannedTransactionFactory(DjangoModelFactory):
     category = None
     planned_date = factory.Faker('future_date')
     payment_date = None
+    payment_amount = None
     status = 'pending'
     created_by = factory.SubFactory('common.tests.factories.UserFactory')
     updated_by = factory.SubFactory('common.tests.factories.UserFactory')
