@@ -36,7 +36,7 @@ frontend/
 │   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
-│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, RecurringFormModal
+│   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, ExecuteAdjustedModal, RecurringFormModal
 │   │   ├── profile/          # Settings/profile sections
 │   │   └── settings/         # WorkspaceDefaultsSection (workspace panel "Default views" - per-page view defaults)
 │   ├── contexts/
@@ -226,6 +226,8 @@ touch-aware),
 `TransactionAttachments` (upload + view/download, extraction),
 `ExtractionReviewModal`, `PlannedFormModal` (same optional-account +
 own-currency pairing; account-less plans default to the workspace primary),
+`ExecuteAdjustedModal` (execute a pending plan with adjustments - payment
+date + amount prefilled from the plan, sent as execute overrides),
 `RecurringFormModal` (recurring-rule create/edit - interval kind/count, start
 date, plan-ahead count, optional end date with create-all-until-end-date
 switch, active toggle, `InfoHint` field hints;
