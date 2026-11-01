@@ -333,7 +333,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | GET | `/api/planned-transactions/export/` | `status`, `start_date`, `end_date` | JSON file export (honors only these filters) |
 | GET/POST/PUT/DELETE | `/api/planned-transactions[/{id}]` | - | Get / create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; a create/update with `status: 'done'` executes via a post-commit Celery task, so the response serializes `transaction_id: null` until the worker lands it - an `Idempotency-Key` replay returns the stored row) |
 | POST | `/api/planned-transactions/import` | - | Import planned transactions from a JSON file into an account (multipart upload, 5 MB max) |
-| POST | `/api/planned-transactions/{id}/execute` | `payment_date` | Execute (creates a transaction carrying the plan's account and own currency) |
+| POST | `/api/planned-transactions/{id}/execute` | - | Execute (optional JSON body `payment_date` + `amount`: an omitted date books on the plan's own `planned_date`, an omitted amount books the planned amount with `payment_amount` left NULL - as planned; a supplied amount is stored on `payment_amount` and booked instead, never rewriting the plan's `amount`; creates a transaction carrying the plan's account and own currency) |
 
 ### Recurring Transactions (write / member+)
 
