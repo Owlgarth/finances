@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 # UV_PROJECT_ENVIRONMENT lives outside /app: the source is bind-mounted in dev,
 # and a volume mounted inside it would create a root-owned .venv in the checkout.
