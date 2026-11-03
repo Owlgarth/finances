@@ -1,6 +1,6 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning and the compose-digest refresh procedure, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), or refreshing backend dependencies (targeted uv lock --upgrade-package bumps).
+description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning and the compose-digest refresh procedure, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), refreshing backend dependencies (targeted uv lock --upgrade-package bumps), or migrating the backend python version (the coordinated FROM + .python-version + lock move, the wheel-only build gate, the backend-venv volume reset).
 ---
 
 # Docker & Infrastructure
@@ -126,6 +126,13 @@ near-empty summary (PR #177: the cached re-run silently replaced the tee'd uncac
 and the full step log required a `--no-cache` re-run). When the step log itself is the
 evidence, re-run with `--no-cache` or preserve the first run's capture.
 
+A wheel-only gate over that log - asserting no package compiles from source on the new base
+image - greps for `Building <pypi-package>` and needs literal-match adjudication: the bare
+substring `Building ` has benign hits (apt's `Building dependency tree...` line, compose's
+`Image <tag> Building` progress header), so a substring match fails the gate on every build.
+The failure signature is a pypi package name in that position plus compiler errors (`Building
+cffi` followed by fatal `ffi.h` errors = no wheel for the bumped python).
+
 ## Dockerfile ARG Hygiene
 
 ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
@@ -142,6 +149,34 @@ Every site that installs frontend dependencies runs `npm ci` - the `frontend/Doc
 ## Backend Dependency Bumps: Targeted Lock Upgrades
 
 A pinned backend dependency bump edits the `pyproject.toml` specifiers, then refreshes `backend/uv.lock` with targeted flags - `uv lock --upgrade-package <name>` over exactly the named packages, never a blanket `uv lock --upgrade`: the blanket form sweeps unrelated packages into the same commit and destroys the revert-as-a-unit property. Adjudicate the lock diff BEFORE committing (changed versions extracted from `git show HEAD:backend/uv.lock` vs the working tree); a package outside the expected set is a STOP - reverse-map it with `uv tree --invert --package <name>` before anything lands. Content-identical `-`/`+` lines inside a rewritten `[[package]]` entry (`wheels = [`, `source = { registry }`) are diff re-anchors, not semantic changes - compare removed/added multisets before treating them as drift. Land the deps commit (pyproject + uv.lock) separately from any tool-induced reformat: ruff >= 0.17 formats Python blocks inside Markdown, so a ruff bump can reflow `backend/*.md` fenced code - that reformat rides its own revertable commit, and any new fenced Python block under `backend/` must satisfy `ruff format` or CI's `ruff format --check .` fails. Lock interop (host uv writing, image-pinned uv reading) follows the `release`-command rule above. The running api/worker/beat keep the pre-bump deps until the shared image is rebuilt and they are recreated - `docker compose up -d --build api worker beat` (the `x-backend` anchor makes one build serve all three); probing a stale container proves nothing about the new set.
+
+## Python-Version Migrations: Three Files Move Together
+
+A backend python-version bump is three coordinated edits, never a FROM-only change: the
+Dockerfile `FROM python:X.Y-slim` line, `backend/.python-version`, and a targeted lock refresh
+(the Backend Dependency Bumps pattern applied to the wheel-availability set instead of a
+pyproject specifier) to versions shipping cp3XY wheels for everything that would otherwise
+compile from source. Each piece flips a different toolchain: the FROM line flips the image,
+`.python-version` flips CI - setup-uv is passed no python-version input, so the runner's
+`uv sync` reads the file - and the lock decides whether the image build needs a compiler. A
+FROM-only bump (the Dependabot shape) is a false green per Image-Build Verification above: CI
+never builds the image, so it stays green testing the OLD python while the real build fails the
+wheel-only gate at the first source-building package (PR #191 superseding #187: cffi 2.0.0 had
+no cp315 wheels, so the image died at `Building cffi` / `ffi.h` with CI green).
+
+Two migration-specific traps:
+
+- **The `backend-venv` named volume shadows the new image's `/venv`.** A volume populated by an
+  older python still mounts over the freshly built one and its `bin/python` symlink dangles -
+  any in-container proof before `docker volume rm <project>_backend-venv` runs a dead
+  interpreter and proves nothing (the stale-container rule in Backend Dependency Bumps, one
+  layer down: there the container outlives the change, here the volume does).
+- **Pinned suite counts must name the toolchain that produced them.** A planning trial on a
+  host beta python (3.15.0b3) showed 5 runtime-conditional skips that un-skip on the final
+  image: 1360 passed / 5 skipped host-beta vs 1365 / 0 container-final, identical collection.
+  A count pinned without its toolchain sends the executor after a phantom drift when the other
+  toolchain reproduces the other number - record which python ran a pinned count in every
+  migration plan.
 
 ## Dev Script
 
