@@ -1907,6 +1907,8 @@ import { Plus, X, ChevronDown, AlertTriangle } from 'lucide-react'
 
 > **Note:** Lucide's default stroke width is 2px at 24px. At 14px rendered size, the effective stroke is ~1.5px visual weight. No `strokeWidth` prop override is needed — use the Lucide defaults.
 
+> **Note:** A filled glyph (fill="currentColor", stroke weight unchanged) is an exists/saved affordance - use it only on a glyph whose outline form is the create affordance in the same location.
+
 ### Common Icon Mappings
 
 | Context | Lucide Icon | Old (Material Symbols) |
