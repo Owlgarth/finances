@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
+import type { Bookmark as BookmarkModel } from '../types'
+import { useBookmarks } from '../hooks/useBookmarks'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount, sumAmounts } from '../utils/format'
@@ -79,6 +81,7 @@ export default function BudgetDetailPage() {
     // Cross-tab convergence — same rationale as the useDomain list hooks.
     refetchOnWindowFocus: 'always',
   })
+  const { data: bookmarks = [] } = useBookmarks()
 
   const [periodId, setPeriodId] = useState<number | null>(null)
 
@@ -279,10 +282,15 @@ export default function BudgetDetailPage() {
   // Category management (archive/merge/delete) lives in its own mount-per-use
   // modal; this flag is its open/close.
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
-  // Add-bookmark modal (mount-per-use). A plain boolean suffices: the header
-  // button is the only opener, so a close-then-reopen always renders a closed
-  // state in between and the remount re-seeds the form.
-  const [bookmarkModalOpen, setBookmarkModalOpen] = useState(false)
+  // Bookmark modal (mount-per-use). The open state carries the session mode
+  // latched at click time from the derived match, because the modal derives
+  // its submit path from props on every render: a mid-open list refetch can
+  // flip the live match, and a render-site ternary would swap a mounted form
+  // between create and edit mid-session. Latching freezes the session; the
+  // close-then-reopen remount re-seeds the form either way (the header button
+  // stays the only opener, so a null state always renders between sessions).
+  const [bookmarkModal, setBookmarkModal] =
+    useState<{ mode: 'create' } | { mode: 'edit'; bookmark: BookmarkModel } | null>(null)
   const openPeriodModal = (mode: 'add' | 'edit', period: Period | null = null) =>
     setPeriodModal({ mode, period, nonce: Date.now() })
 
@@ -593,6 +601,16 @@ export default function BudgetDetailPage() {
   // Resolved in the body, not inside the JSX: the literal-string lint only
   // recognizes the unaliased t() callee, in attributes and children alike.
   const addLabel = tBookmarks('addLabel')
+  const editLabel = tBookmarks('editLabel')
+
+  // List is position-ordered (hook contract), so find() IS "first in position
+  // order". Non-archived only - is_active is irrelevant (a sidebar-hidden
+  // bookmark is still the bookmark this button would edit).
+  const matchedBookmark =
+    bookmarks.find(
+      (b) => b.kind === 'budget' && b.budget_id === budgetId
+        && b.currency_code === activeCurrency && !b.is_archived,
+    ) ?? null
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
@@ -686,11 +704,23 @@ export default function BudgetDetailPage() {
               <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
             </button>
           )}
-          {/* Add bookmark, labeled like its sibling header action. Any role -
-              personal resource: a bookmark is the user's own convenience view,
-              never a workspace mutation. Always the create flow in v1. */}
-          <button type="button" onClick={() => setBookmarkModalOpen(true)} className={secondaryButtonClass}>
-            <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
+          {/* Bookmark this budget+currency view, labeled like its sibling
+              header action. Any role - personal resource: a bookmark is the
+              user's own convenience view, never a workspace mutation. With a
+              matching non-archived bookmark already saved for this budget and
+              the viewed currency, the button becomes the edit affordance for
+              that row (filled glyph) instead of a second create. */}
+          <button
+            type="button"
+            onClick={() =>
+              setBookmarkModal(matchedBookmark ? { mode: 'edit', bookmark: matchedBookmark } : { mode: 'create' })
+            }
+            className={secondaryButtonClass}
+          >
+            {matchedBookmark
+              ? <Bookmark size={13} fill="currentColor" className="inline mr-1" />
+              : <BookmarkPlus size={13} className="inline mr-1" />}{' '}
+            {matchedBookmark ? editLabel : addLabel}
           </button>
         </div>
       </div>
@@ -1011,14 +1041,17 @@ export default function BudgetDetailPage() {
         <ManageCategoriesModal budgetId={budgetId} onClose={() => setManageCategoriesOpen(false)} />
       )}
 
-      {bookmarkModalOpen && (
+      {bookmarkModal && (
         <BookmarkFormModal
-          budgetContext={{
-            budgetId,
-            budgetName: budget?.name ?? '',
-            currencyCode: activeCurrency,
-          }}
-          onClose={() => setBookmarkModalOpen(false)}
+          budgetContext={bookmarkModal.mode === 'create'
+            ? {
+                budgetId,
+                budgetName: budget?.name ?? '',
+                currencyCode: activeCurrency,
+              }
+            : null}
+          bookmark={bookmarkModal.mode === 'edit' ? bookmarkModal.bookmark : null}
+          onClose={() => setBookmarkModal(null)}
         />
       )}
 
