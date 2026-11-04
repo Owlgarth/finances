@@ -99,7 +99,9 @@ plain page link. Active bookmarks render in the desktop sidebar and the mobile
 More sheet, capped by the user's `bookmark_visible_limit` preference (3, 5, 8,
 or all; default 5); the manage page at `/bookmarks` reorders them and toggles
 visibility, archive, edit, and delete (archived rows hide everywhere except the
-manage page's Archived section; deleting a budget deletes its bookmarks). They
+manage page's Archived section; deleting a budget deletes its bookmarks). The
+budget page's header bookmark button offers create for the viewed currency, or
+edits the matching non-archived row when one already exists. They
 ride the GDPR export/import with filter params translated between IDs and
 names (accounts and budgets by name, categories as `budgetName::categoryName`
 qualified pairs).
