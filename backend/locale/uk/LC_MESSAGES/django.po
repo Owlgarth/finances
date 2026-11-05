@@ -274,11 +274,18 @@ msgstr[0] "транзакція"
 msgstr[1] "транзакції"
 msgstr[2] "транзакцій"
 
-#: currencies/exceptions.py:67
+#: currencies/exceptions.py:60
+msgid "recurring rule"
+msgid_plural "recurring rules"
+msgstr[0] "регулярне правило"
+msgstr[1] "регулярні правила"
+msgstr[2] "регулярних правил"
+
+#: currencies/exceptions.py:69
 msgid "other records"
 msgstr "інші записи"
 
-#: currencies/exceptions.py:69
+#: currencies/exceptions.py:71
 #, python-format
 msgid ""
 "Currency %(code)s is in use: %(summary)s. Remove those references before "
