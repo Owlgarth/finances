@@ -150,9 +150,20 @@ export default function ListFilterFields({ dateLabel }: Props) {
             )
           })}
         </div>
-        <div className="flex items-center gap-1.5">
+        {/* Mirrors the /transfers date-filter row: below sm the two date
+            inputs cannot share the col-span-2 cell - each floors at its
+            intrinsic ~160px minimum, so the pair plus the separator
+            overflows on 320px screens. The row wraps and each w-full input
+            claims its own full line (w-full doubles as the wrap recipe's
+            basis-full); the dash separator is meaningless between stacked
+            inputs - it would strand alone on the middle line, so it hides
+            below sm. min-w-0 is not needed: no wrapped line ever shrinks
+            below its content. At >=sm the max-sm variants emit nothing and
+            rendering is unchanged. The row shows only when the host page's
+            filter panel is open - why cold-load width matrices missed it. */}
+        <div className="flex max-sm:flex-wrap items-center gap-1.5">
           <input type="date" value={dateFrom} onChange={(e) => updateParams({ from: e.target.value || null })} aria-label={t('listFilters.fromDateAria')} className={`${inputClass} max-sm:min-h-[44px]`} />
-          <span className="text-text-muted text-xs">–</span>
+          <span className="text-text-muted text-xs max-sm:hidden">–</span>
           <input type="date" value={dateTo} onChange={(e) => updateParams({ to: e.target.value || null })} aria-label={t('listFilters.toDateAria')} className={`${inputClass} max-sm:min-h-[44px]`} />
         </div>
       </FilterField>
