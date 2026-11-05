@@ -11,17 +11,34 @@ export const DTS_PATH = path.join(FRONTEND_DIR, 'src/i18n/i18n.d.ts')
 export const ALLOWLIST_PATH = path.join(SCRIPTS_DIR, 'i18n-allowlist.json')
 export const REGISTRY_PATH = path.resolve(FRONTEND_DIR, '../backend/common/languages.json')
 export const CONFIG_PATH = path.join(FRONTEND_DIR, 'i18next.config.ts')
-
-// Mirror of NAMESPACES in frontend/src/i18n/index.ts: the Vite module cannot
-// be imported from plain Node scripts, so the list is duplicated here. When a
-// namespace is added or renamed, update both lists in the same change.
-export const NAMESPACES = [
-  'auth', 'nav', 'accounts', 'transfers', 'budgets', 'transactions',
-  'planned', 'dashboard', 'members', 'settings', 'common', 'numbers',
-]
+export const INDEX_PATH = path.join(FRONTEND_DIR, 'src/i18n/index.ts')
 
 export function readRegistry() {
   return JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
+}
+
+// Namespace list read at call time from the runtime source of truth in
+// src/i18n/index.ts. The Vite module cannot be imported from plain Node
+// scripts, and a hardcoded mirror here drifted silently once already (it was
+// missing 'bookmarks', so lang-add scaffolded incomplete languages), so the
+// list is extracted instead of duplicated. Throws loudly when the block's
+// shape changes - a silent skip is the original bug class (same contract as
+// syncConfigLocale below).
+export function readNamespaces() {
+  const text = readFileSync(INDEX_PATH, 'utf8')
+  const block = text.match(/export const NAMESPACES = \[([^\]]*)\]/)
+  if (!block) {
+    throw new Error('readNamespaces: no "export const NAMESPACES = [...]" block found in src/i18n/index.ts - update the extractor by hand')
+  }
+  const namespaces = [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1])
+  if (namespaces.length === 0) {
+    throw new Error('readNamespaces: the NAMESPACES block in src/i18n/index.ts parsed as empty - update the extractor by hand')
+  }
+  const dupes = [...new Set(namespaces.filter((ns, i) => namespaces.indexOf(ns) !== i))]
+  if (dupes.length > 0) {
+    throw new Error(`readNamespaces: duplicate namespace entries in src/i18n/index.ts: ${dupes.join(', ')}`)
+  }
+  return namespaces
 }
 
 // Serializes in the registry's established byte style: 2-space indent for the
