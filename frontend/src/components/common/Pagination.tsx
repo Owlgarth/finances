@@ -72,10 +72,10 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
             aria-label={t('pagination.previousPage')}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
           </button>
 
           {getPageNumbers(page, total_pages).map((p, idx) =>
@@ -104,10 +104,10 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= total_pages}
-            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
             aria-label={t('pagination.nextPage')}
           >
-            <ChevronRight size={14} />
+            <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
       )}
