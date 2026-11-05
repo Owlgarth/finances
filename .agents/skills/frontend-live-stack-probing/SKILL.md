@@ -48,7 +48,8 @@ same session - in PR #81 it paid for itself twice.
   `results`.
 - Clean up with `DELETE /api/users/me` - removes the seeded user and its workspace data.
   The call requires a `{ password }` body carrying the seeded user's password; an empty
-  body 422s (the first teardown attempt fails exactly this way).
+  body 422s (the first teardown attempt fails exactly this way). It returns 200 with an
+  `AccountDeleteOut` body, not 204 - do not assert or gate teardown on a no-content status.
 
 ## The stack: check ports before you build on it
 
@@ -112,6 +113,9 @@ same session - in PR #81 it paid for itself twice.
   mean the route rendered - URL change and DOM swap are separate commits, and an instant
   `innerText` read catches the PREVIOUS page's h1. Poll for the expected heading (locator
   `filter({ hasText })` + `waitFor`), never read the heading the moment the URL settles.
+  The same commit race reads through `count()` at `domcontentloaded`: the load event fires
+  before React boots, so a uniqueness `count()` returns 0 and faults as if the element were
+  absent. `waitFor` the locator FIRST, then `count()` for uniqueness.
 - Cold deep links to paginated state do not stick on a fresh mount: `/planned?page=2` resets
   to page 1 by design - the one-shot defaults materialization rewrites the search params on
   mount and drops `?page` (machinery under URL Search-Param State Sync in `frontend-react`).
@@ -240,6 +244,11 @@ same session - in PR #81 it paid for itself twice.
   sibling-namespace analogies - uk's quick-add button reads "Нова операція" while the
   transactions page's is "Нова транзакція"; a guessed string turns a harness fault into an
   apparent product bug.
+- Accessible-name locators for controls that carry a count badge must make the badge
+  OPTIONAL in the pattern: /planned's FiltersToggle reads "Filters 1", not "Filters", on
+  fresh entry - the one-shot default params materialize into the URL on mount and the badge
+  counts them. Match with a catalog-derived regex (`^(Filters|Filtry|Фільтри)( \d+)?$`),
+  never an exact name: the name comes from the catalogs, so the regex must too.
 - `elementHandle.click()` on options inside a height-capped scrollable panel auto-scrolls
   the container and can click THROUGH to whatever sits underneath the intended option -
   coordinates and scroll state are the driver's, not the page's truth. Prefer a DOM
