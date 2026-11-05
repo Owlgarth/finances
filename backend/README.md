@@ -252,7 +252,7 @@ Both endpoints live in the `core` app (`core/legal_api.py`); the database is the
 | GET | `/api/workspaces/enabled-currencies` | List currencies enabled in the current workspace (stored position order - the primary first) |
 | POST | `/api/workspaces/enabled-currencies` | Enable a catalog currency, or create a custom one (`custom: true`; custom currencies are always 2-decimal - no `decimals` param) (admin+) |
 | PUT | `/api/workspaces/enabled-currencies` | Reorder the enabled set (`currency_codes` = the full enabled set in its new order, any permutation; 400 `currency_order_mismatch` otherwise; first = primary) (admin+) |
-| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+; blocked while referenced by accounts, planned amounts, budget currency sets, planned transactions, or transactions storing it as their own currency - the error enumerates the counts; the transaction original-amount facet never blocks) |
+| DELETE | `/api/workspaces/enabled-currencies/{code}` | Disable a currency (admin+; blocked while referenced by accounts, planned amounts, budget currency sets, planned transactions, transactions storing it as their own currency, or recurring rules - the error enumerates the counts; the transaction original-amount facet never blocks) |
 
 ### Workspace Members
 

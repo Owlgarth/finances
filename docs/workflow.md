@@ -189,7 +189,7 @@ row as the rule's first occurrence instead of duplicating it.
   the primary that leads every currency dropdown), and disable. A currency in
   use cannot be disabled: the guard counts per-type references (accounts,
   planned amounts, budget currency sets, planned transactions, transactions
-  storing it as their own currency) and the error names them; the
+  storing it as their own currency, recurring rules) and the error names them; the
   original-amount facet never blocks (a custom row it references stays in the
   catalog, re-enablable). The budget modal and the account form link here
   through "Manage currencies..." bridges.

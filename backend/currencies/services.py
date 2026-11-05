@@ -28,15 +28,16 @@ class CurrencyCatalogService:
         """Count records in the workspace that reference this catalog currency, by type.
 
         Covers the PROTECT FKs whose references must block disable: accounts,
-        category budgets, budget currency sets, planned transactions, and
-        transactions (own stored currency). The transaction original-amount
+        category budgets, budget currency sets, planned transactions,
+        transactions (own stored currency), and recurring rules. The
+        transaction original-amount
         facet is deliberately NOT counted: it resolves against the whole
         catalog and never requires enablement (see the facet guard at the
         custom-row deletion site in disable()).
         """
         from accounts.models import Account
         from budgeting.models import BudgetCurrency, CategoryBudget
-        from planned_transactions.models import PlannedTransaction
+        from planned_transactions.models import PlannedTransaction, RecurringTransaction
         from transactions.models import Transaction
 
         return {
@@ -49,6 +50,9 @@ class CurrencyCatalogService:
                 workspace_id=workspace_id, currency=currency
             ).count(),
             'transactions': Transaction.objects.filter(workspace_id=workspace_id, currency=currency).count(),
+            'recurring_rules': RecurringTransaction.objects.filter(
+                workspace_id=workspace_id, currency=currency
+            ).count(),
         }
 
     @staticmethod
@@ -174,14 +178,22 @@ class CurrencyCatalogService:
         # concurrent reorders for no observable benefit.
         enablement.delete()
         if currency.is_custom and not currency.enablements.exists():
-            # Facet references do not BLOCK disable, but they pin the custom
-            # row: Transaction.original_currency is PROTECT, so deleting a
-            # facet-referenced row would raise ProtectedError (a 500). A
-            # facet-referenced custom row is not orphaned - it stays in the
+            # PROTECT FKs that do not (or no longer) BLOCK disable still pin
+            # the custom row: Transaction.original_currency (the facet) and
+            # RecurringTransaction.currency. Rules are normally stopped by
+            # the reference count above; this second check covers a rule
+            # created between the count and the delete (READ COMMITTED
+            # race) and any future FK the count misses - deleting a
+            # referenced row would raise ProtectedError (a 500). A
+            # referenced custom row is not orphaned - it stays in the
             # workspace catalog, re-enablable from the settings picker.
+            from planned_transactions.models import RecurringTransaction
             from transactions.models import Transaction
 
-            if not Transaction.objects.filter(original_currency=currency).exists():
+            if (
+                not Transaction.objects.filter(original_currency=currency).exists()
+                and not RecurringTransaction.objects.filter(currency=currency).exists()
+            ):
                 currency.delete()
 
     @staticmethod
