@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -112,6 +112,18 @@ same session - in PR #81 it paid for itself twice.
   mean the route rendered - URL change and DOM swap are separate commits, and an instant
   `innerText` read catches the PREVIOUS page's h1. Poll for the expected heading (locator
   `filter({ hasText })` + `waitFor`), never read the heading the moment the URL settles.
+- Cold deep links to paginated state do not stick on a fresh mount: `/planned?page=2` resets
+  to page 1 by design - the one-shot defaults materialization rewrites the search params on
+  mount and drops `?page` (machinery under URL Search-Param State Sync in `frontend-react`).
+  Do not misread the reset as a deep-link bug, and do not build the probe on the deep link:
+  reach the target page by clicking its number chip.
+- Focus-ring COLOR assertions race the color transition: Tailwind v4's `transition-colors`
+  includes `outline-color` in its transition-property list, so a focus ring's color fades in
+  over ~150 ms while `outlineWidth`/`outlineStyle`/`outlineOffset` read correct immediately -
+  an instant `getComputedStyle().outlineColor` read after a Tab focus catches the
+  pre-transition value and fails a correct ring as if it were missing (PR #197's probe hit
+  this twice; both faults were probe-side). Settle ~400 ms after focusing before reading
+  `outlineColor`, or assert width/style/offset, which `transition-colors` does not touch.
 - Cascade and sizing claims are settled against the COMPILED stylesheet, never the source
   className string. A static headless-Chrome harness (`--headless=new --dump-dom`, page
   script writes measured element rects into the DOM) linked against `dist/assets/index-*.css`
@@ -238,5 +250,9 @@ same session - in PR #81 it paid for itself twice.
   listbox outside-click close listens for `mousedown`) can never be exercised by it; driving
   an outside-click close needs real mouse events (`page.mouse`), inheriting the
   coordinate/scroll caveats above.
+- `page.evaluate` cannot return a DOM element (the return value is serialized, a node is
+  not): a keyboard Tab-walk focus helper asserts INSIDE the evaluate via a boolean hit-test
+  on `document.activeElement` (selector/attribute match), or grabs the node itself with
+  `evaluateHandle(() => document.activeElement)` and reads attributes through the handle.
 - Media features are emulator settings, not CSS edits: reduced motion goes through
   Playwright's `page.emulateMedia({ reducedMotion: 'reduce' })` / CDP media emulation.
