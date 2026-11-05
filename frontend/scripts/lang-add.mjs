@@ -7,7 +7,7 @@
 //   dateFnsLocale  date-fns export name, e.g. "de"
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { LOCALES_DIR, NAMESPACES, readRegistry, syncConfigLocale, writeRegistry } from './i18n-lib.mjs'
+import { LOCALES_DIR, readNamespaces, readRegistry, syncConfigLocale, writeRegistry } from './i18n-lib.mjs'
 
 function usage() {
   console.error('usage: node scripts/lang-add.mjs <code> <englishName> <nativeName> <dateFnsLocale>')
@@ -34,6 +34,10 @@ if (registry.languages.some((l) => l.code === code)) {
   process.exit(1)
 }
 
+// Derived from src/i18n/index.ts before ANY write: a parse failure aborts
+// with the tree untouched instead of scaffolding a partial language.
+const namespaces = readNamespaces()
+
 // Insert at the code-sorted position WITHOUT reordering the existing
 // entries: re-sorting the whole array would rewrite unrelated registry lines
 // and break the add/remove round trip's byte-identity (the shipped registry
@@ -47,7 +51,7 @@ const configLocales = syncConfigLocale(code, true)
 
 const langDir = path.join(LOCALES_DIR, code)
 mkdirSync(langDir, { recursive: true })
-for (const ns of NAMESPACES) {
+for (const ns of namespaces) {
   // Copy the CURRENT en values, not empty catalogs: i18n:check then reports
   // every key as untranslated, so the language cannot merge with English
   // placeholders still in place.
@@ -55,7 +59,7 @@ for (const ns of NAMESPACES) {
   writeFileSync(path.join(langDir, `${ns}.json`), JSON.stringify(enJson, null, 2) + '\n')
 }
 
-console.log(`Added language '${code}' (${nativeName}) with ${NAMESPACES.length} namespace files copied from en.`)
+console.log(`Added language '${code}' (${nativeName}) with ${namespaces.length} namespace files copied from en.`)
 if (configLocales) {
   console.log(`Updated frontend/i18next.config.ts locales: ${configLocales.join(', ')}`)
 }
