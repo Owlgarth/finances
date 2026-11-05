@@ -195,6 +195,7 @@ class TestCurrencyCatalogService(TestCase):
                 'budget_currencies': 0,
                 'planned_transactions': 0,
                 'transactions': 0,
+                'recurring_rules': 0,
             },
         ):
             with self.assertRaises(CurrencyInUseError) as ctx:
@@ -296,6 +297,76 @@ class TestCurrencyCatalogService(TestCase):
         with self.assertRaises(CurrencyInUseError) as ctx:
             CurrencyCatalogService.disable(self.workspace.id, 'EUR')
         self.assertIn('1 planned transaction', str(ctx.exception))
+
+    def test_disable_blocked_by_recurring_rule(self):
+        from planned_transactions.factories import RecurringTransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'EUR')
+        eur = Currency.objects.get(workspace__isnull=True, code='EUR')
+        RecurringTransactionFactory(account=None, currency=eur, workspace=self.workspace)
+
+        with self.assertRaises(CurrencyInUseError) as ctx:
+            CurrencyCatalogService.disable(self.workspace.id, 'EUR')
+        self.assertIn('1 recurring rule', str(ctx.exception))
+
+    def test_disable_custom_referenced_by_recurring_rule_raises_instead_of_500(self):
+        """Regression: a custom row referenced only by a recurring rule used to
+        reach currency.delete() and blow up with ProtectedError (HTTP 500) -
+        the count missed the rule and the deletion guard only checked the
+        transaction facet."""
+        from planned_transactions.factories import RecurringTransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        custom = CurrencyCatalogService.create_custom(
+            self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g'
+        )
+        # Account-less rule carrying GOLD; factories never sync-generate, so
+        # no planned rows exist - the rule is GOLD's only reference.
+        RecurringTransactionFactory(account=None, currency=custom, workspace=self.workspace)
+
+        with self.assertRaises(CurrencyInUseError) as ctx:
+            CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
+        self.assertIn('1 recurring rule', str(ctx.exception))
+
+        # Still enabled, custom row intact.
+        codes = [c.code for c in CurrencyCatalogService.list_enabled(self.workspace.id)]
+        self.assertIn('GOLD', codes)
+        self.assertTrue(Currency.objects.filter(id=custom.id).exists())
+
+    def test_disable_keeps_rule_referenced_custom_row_when_count_misses_it(self):
+        """Deletion-guard extension (count->delete race proxy): even with the
+        count stubbed to all-zero, a rule referencing the custom row pins it -
+        no ProtectedError, no deletion, row re-enablable."""
+        from unittest.mock import patch
+
+        from planned_transactions.factories import RecurringTransactionFactory
+
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        custom = CurrencyCatalogService.create_custom(
+            self.user, self.workspace.id, code='GOLD', name='Gold', symbol='g'
+        )
+        RecurringTransactionFactory(account=None, currency=custom, workspace=self.workspace)
+
+        with patch.object(
+            CurrencyCatalogService,
+            '_reference_count',
+            return_value={
+                'accounts': 0,
+                'category_budgets': 0,
+                'budget_currencies': 0,
+                'planned_transactions': 0,
+                'transactions': 0,
+                'recurring_rules': 0,
+            },
+        ):
+            CurrencyCatalogService.disable(self.workspace.id, 'GOLD')
+
+        # The disable completed (enablement gone), but the PROTECT-pinned
+        # custom row survives and stays re-enablable.
+        self.assertFalse(WorkspaceCurrency.objects.filter(workspace=self.workspace, currency=custom).exists())
+        self.assertTrue(Currency.objects.filter(id=custom.id).exists())
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'GOLD')
 
 
 class TestCurrencyOrderService(TestCase):
@@ -484,6 +555,18 @@ class TestCurrencyCatalogAPI(AuthMixin, APIClientMixin, TestCase):
         self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
         self.assertStatus(400)
         self.assertIn('1 account', self.response.json()['detail'])
+
+    def test_disable_in_use_by_recurring_rule_returns_400_with_enumerated_detail(self):
+        from planned_transactions.factories import RecurringTransactionFactory
+
+        self.post('/api/workspaces/enabled-currencies', {'code': 'PLN'}, **self.auth_headers())
+        self.post('/api/workspaces/enabled-currencies', {'code': 'EUR'}, **self.auth_headers())
+        eur = Currency.objects.get(workspace__isnull=True, code='EUR')
+        RecurringTransactionFactory(account=None, currency=eur, workspace=self.workspace)
+
+        self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
+        self.assertStatus(400)
+        self.assertIn('1 recurring rule', self.response.json()['detail'])
 
     def test_disable_not_enabled_returns_404(self):
         self.delete('/api/workspaces/enabled-currencies/EUR', **self.auth_headers())
