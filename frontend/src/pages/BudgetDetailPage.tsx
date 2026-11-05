@@ -628,9 +628,9 @@ export default function BudgetDetailPage() {
               onClick={() => goToPeriod(-1)}
               disabled={!hasPrev}
               aria-label={t('detail.previousPeriod')}
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
             <div className="w-56 max-sm:w-auto max-sm:flex-1">
               <PeriodPicker
@@ -647,9 +647,9 @@ export default function BudgetDetailPage() {
               disabled={!hasNext || isPlanningNext}
               aria-label={t('detail.nextPeriod')}
               title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? t('detail.planNextPeriod') : undefined}
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit"
+              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
             {budget?.cadence === 'custom' && canManageAccounts && (
               <>
@@ -666,9 +666,9 @@ export default function BudgetDetailPage() {
                   onClick={() => openPeriodModal('add')}
                   title={t('detail.addPeriod')}
                   aria-label={t('detail.addPeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                 >
-                  <Plus size={14} />
+                  <Plus size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
@@ -676,9 +676,9 @@ export default function BudgetDetailPage() {
                   disabled={!selectedPeriod}
                   title={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
                   aria-label={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                 >
-                  <Pencil size={14} />
+                  <Pencil size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
@@ -686,9 +686,9 @@ export default function BudgetDetailPage() {
                   disabled={!selectedPeriod}
                   title={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
                   aria-label={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
               </>
             )}

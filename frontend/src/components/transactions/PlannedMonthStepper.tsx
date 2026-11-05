@@ -16,11 +16,10 @@ interface Props {
  * view === 'planned' && exactMonth, so custom/partial ranges and All time
  * never mount this row.
  *
- * BudgetDetailPage's chevron pattern with two deliberate deviations: the
- * focus-visible outline (the source omits it - a pre-existing omission;
- * the design README requires a ring on every interactive element) and
- * strokeWidth 1.5 (global icon rule; the source's default 2 is a
- * pre-existing deviation). The buttons have no inactive state - months run
+ * BudgetDetailPage's chevron pattern; both now carry the corrected
+ * idiom - the focus-visible outline (design README: a ring on every
+ * interactive element) and strokeWidth 1.5 (global icon rule).
+ * The buttons have no inactive state - months run
  * infinitely in both directions. The label span carries aria-live alone
  * (a polite announcement, not a status landmark) and is not focusable or
  * clickable; min-w-[128px] keeps the chevrons in place across locales'
