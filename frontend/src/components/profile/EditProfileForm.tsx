@@ -65,7 +65,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
           id="full_name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          className="w-full bg-surface-hover border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
+          className="w-full bg-surface-hover border border-border rounded-none px-3 py-2 font-mono text-sm text-text placeholder:text-text-muted focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
           placeholder={t('editProfile.fullNamePlaceholder')}
         />
       </div>
@@ -99,7 +99,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               onKeyDown={handleEmailKeyDown}
-              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text placeholder:text-text-muted focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('editProfile.newEmailPlaceholder')}
             />
             <input
@@ -107,7 +107,7 @@ export default function EditProfileForm({ user, onSubmit, isLoading }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleEmailKeyDown}
-              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
+              className="w-full bg-surface border border-border rounded-none px-3 py-2 font-mono text-sm text-text placeholder:text-text-muted focus:ring-2 focus:ring-border-focus focus:outline-hidden transition-colors"
               placeholder={t('editProfile.currentPasswordPlaceholder')}
             />
             <div className="flex gap-2">
