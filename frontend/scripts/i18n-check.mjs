@@ -9,11 +9,13 @@
 //   5. plural families: every en plural base key has exactly the category
 //      set the language requires (derived from Intl.PluralRules)
 //   6. i18n.d.ts lists every namespace present in locales/en
+//   7. NAMESPACES in src/i18n/index.ts matches the locales/en listing
+//      (both directions)
 // Exit 0 = clean; exit 1 = problems (all of them printed, never only the
 // first - CI gates on the exit code).
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { ALLOWLIST_PATH, DTS_PATH, LOCALES_DIR } from './i18n-lib.mjs'
+import { ALLOWLIST_PATH, DTS_PATH, LOCALES_DIR, readNamespaces } from './i18n-lib.mjs'
 
 const PLURAL_SUFFIXES = ['zero', 'one', 'two', 'few', 'many', 'other']
 // Probe counts whose combined Intl.PluralRules categories cover every
@@ -91,6 +93,30 @@ try {
 for (const ns of enNamespaces) {
   if (!dts.includes(`import('./locales/en/${ns}.json')`)) {
     fail(`src/i18n/i18n.d.ts: namespace '${ns}' is missing from the resources block`)
+  }
+}
+
+// Check 7: the runtime namespace list (NAMESPACES in src/i18n/index.ts -
+// what i18next initializes with and lang-add scaffolds from) must match the
+// locales/en listing in both directions. A parse failure is collected as a
+// check failure like every other problem (never only the first - CI gates on
+// the exit code), so the remaining checks still run.
+let indexNamespaces = null
+try {
+  indexNamespaces = new Set(readNamespaces())
+} catch (err) {
+  fail(err.message)
+}
+if (indexNamespaces) {
+  for (const ns of enNamespaces) {
+    if (!indexNamespaces.has(ns)) {
+      fail(`src/i18n/index.ts: namespace '${ns}' has an en catalog file but is not in the NAMESPACES list`)
+    }
+  }
+  for (const ns of [...indexNamespaces].sort()) {
+    if (!enNamespaces.includes(ns)) {
+      fail(`src/i18n/index.ts: namespace '${ns}' is in the NAMESPACES list but has no en catalog file`)
+    }
   }
 }
 
