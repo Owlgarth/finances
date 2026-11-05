@@ -274,11 +274,18 @@ msgstr[0] "transakcja"
 msgstr[1] "transakcje"
 msgstr[2] "transakcji"
 
-#: currencies/exceptions.py:67
+#: currencies/exceptions.py:60
+msgid "recurring rule"
+msgid_plural "recurring rules"
+msgstr[0] "reguła cykliczna"
+msgstr[1] "reguły cykliczne"
+msgstr[2] "reguł cyklicznych"
+
+#: currencies/exceptions.py:69
 msgid "other records"
 msgstr "inne rekordy"
 
-#: currencies/exceptions.py:69
+#: currencies/exceptions.py:71
 #, python-format
 msgid ""
 "Currency %(code)s is in use: %(summary)s. Remove those references before "

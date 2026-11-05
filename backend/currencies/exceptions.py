@@ -56,6 +56,8 @@ def _reference_label(kind: str, count: int) -> str:
         return ngettext('planned transaction', 'planned transactions', count)
     if kind == 'transactions':
         return ngettext('transaction', 'transactions', count)
+    if kind == 'recurring_rules':
+        return ngettext('recurring rule', 'recurring rules', count)
     return kind
 
 
