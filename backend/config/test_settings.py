@@ -1,7 +1,7 @@
 import os
 
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-pytest')
-os.environ.setdefault('JWT_SECRET_KEY', 'test-jwt-secret-key-for-pytest')
+os.environ.setdefault('JWT_SECRET_KEY', 'test-jwt-secret-key-for-pytest-suite')
 os.environ.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
 # Tests make plain-http requests against the test server; DEBUG must be true so
 # the production security block in settings.py (SECURE_SSL_REDIRECT) stays off -
