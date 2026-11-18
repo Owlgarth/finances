@@ -19,6 +19,12 @@ interface Props {
   id?: string
   placeholder?: string
   inline?: boolean
+  /** Desktop popup anchor edge. 'left' (default) is today's flush-left
+      anchor; 'right' pins the popup's right edge to the wrapper's right
+      edge - for triggers in the last column of a grid row, where a
+      left-anchored popup would overflow the panel. No effect on mobile
+      (the calendar opens in a bottom sheet) or inline mode. */
+  align?: 'left' | 'right'
 }
 
 export default function DatePicker({
@@ -30,6 +36,7 @@ export default function DatePicker({
   id,
   placeholder,
   inline = false,
+  align = 'left',
 }: Props) {
   const { t } = useTranslation('numbers')
   const { language } = useLanguage()
@@ -113,7 +120,7 @@ export default function DatePicker({
       />
       {isOpen && !isMobile && (
         <div
-          className="absolute z-dropdown mt-2 bg-surface rounded-sm border border-border p-4"
+          className={`absolute z-dropdown mt-2 bg-surface rounded-sm border border-border p-4${align === 'right' ? ' right-0' : ''}`}
         >
           <DayPicker
             mode="single"

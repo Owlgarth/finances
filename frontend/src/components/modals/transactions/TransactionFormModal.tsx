@@ -641,7 +641,7 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div>
             <label className={labelClass}>{t('form.typeLabel')}</label>
             <Select
@@ -666,6 +666,14 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
                 inputs before JS sees it, so comma-decimal typing must be
                 received as text and parsed at submit (normalizeAmountInput). */}
             <input id="tx-amount" type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} autoFocus={!isTouch} />
+          </div>
+          {/* Date completes the row at sm+ (type | amount | date); below sm the
+              two-column span hands it a full-width row under the pair. The
+              right-anchored desktop popup stays inside the panel from this
+              last-column cell. */}
+          <div className="col-span-2 sm:col-span-1">
+            <label className={labelClass}>{t('form.dateLabel')}</label>
+            <DatePicker value={date} onChange={setDate} align="right" />
           </div>
         </div>
 
@@ -800,11 +808,6 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
             </div>
           </div>
         )}
-
-        <div>
-          <label className={labelClass}>{t('form.dateLabel')}</label>
-          <DatePicker value={date} onChange={setDate} />
-        </div>
 
         {type !== 'adjustment' && otherCurrencyOptions.length > 0 && (
           <div>
