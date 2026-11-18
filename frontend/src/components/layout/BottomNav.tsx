@@ -5,13 +5,14 @@ import {
   ArrowLeftRight,
   Calendar,
   CloudOff,
-  Home,
-  MoreHorizontal,
-  PieChart,
+  FileText,
+  Landmark,
+  LayoutDashboard,
   Plus,
   Receipt,
   Repeat,
   ScanLine,
+  Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,8 +22,6 @@ import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
 import { getApiErrorMessage } from '../../utils/errors'
-import { MORE_DESTINATIONS } from './AccountMenuSheet'
-import { useAccountMenu } from './AccountMenuContext'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
@@ -38,18 +37,27 @@ interface TabProps {
   label: string
   icon: LucideIcon
   exact?: boolean
+  // Sibling routes (prefix match) that also light this tab. NavLink's own
+  // match covers only `to`, so a tab standing for several routes derives
+  // its active state from the live pathname instead.
+  activeFor?: readonly string[]
 }
 
 // components.md §19: 20px icons, 10px uppercase labels, active = text-primary.
-function Tab({ to, label, icon: Icon, exact = false }: TabProps) {
+function Tab({ to, label, icon: Icon, exact = false, activeFor }: TabProps) {
+  const location = useLocation()
+  const tabClass = (active: boolean) =>
+    `flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 min-h-[44px] transition-colors ${
+      active ? 'text-primary' : 'text-text-muted'
+    }`
   return (
     <NavLink
       to={to}
       end={exact}
-      className={({ isActive }) =>
-        `flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 min-h-[44px] transition-colors ${
-          isActive ? 'text-primary' : 'text-text-muted'
-        }`
+      className={
+        activeFor
+          ? () => tabClass(activeFor.some((prefix) => location.pathname.startsWith(prefix)))
+          : ({ isActive }) => tabClass(isActive)
       }
     >
       <Icon size={20} strokeWidth={1.5} />
@@ -59,18 +67,16 @@ function Tab({ to, label, icon: Icon, exact = false }: TabProps) {
 }
 
 /**
- * Mobile navigation shell: bottom bar with a center quick-add FAB. The
- * overflow destinations and workspace/user controls the sidebar provides
- * on desktop live in the account menu sheet, opened here through the
- * More tab.
+ * Mobile navigation shell (M4): five-slot bottom bar (Home, Activity, FAB,
+ * Accounts, Budgets); the account menu with overflow destinations and
+ * workspace/user controls lives in AccountMenuSheet, opened from the
+ * page-header profile button.
  */
 export default function BottomNav() {
   const { t } = useTranslation('nav')
-  const location = useLocation()
   const { workspace } = useWorkspace()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
-  const { open } = useAccountMenu()
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
@@ -133,19 +139,16 @@ export default function BottomNav() {
     { label: t('quickAdd.recurringRule'), icon: Repeat, onSelect: () => setRecurringOpen(true) },
   ]
 
-  // /bookmarks is a More-tab destination but not a More-sheet destination
-  // row - its entry point is the bookmarks section's Manage link inside
-  // the account menu sheet - so it joins the tab-highlight check
-  // separately.
-  const moreActive =
-    MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to)) ||
-    location.pathname.startsWith('/bookmarks')
-
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-bottom-nav bg-surface border-t border-border flex items-end pb-safe">
-        <Tab to="/" label={t('home')} icon={Home} exact />
-        <Tab to="/transactions" label={t('txns')} icon={Receipt} />
+        <Tab to="/" label={t('home')} icon={LayoutDashboard} exact />
+        <Tab
+          to="/transactions"
+          label={t('activity')}
+          icon={FileText}
+          activeFor={['/transactions', '/planned', '/transfers']}
+        />
 
         {/* Center FAB slot — kept even when the FAB is hidden (viewer role /
             no workspace) so the four tabs don't shift. */}
@@ -162,18 +165,8 @@ export default function BottomNav() {
           )}
         </div>
 
-        <Tab to="/budgets" label={t('budgets')} icon={PieChart} />
-
-        <button
-          type="button"
-          onClick={open}
-          className={`flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 min-h-[44px] transition-colors ${
-            moreActive ? 'text-primary' : 'text-text-muted'
-          }`}
-        >
-          <MoreHorizontal size={20} strokeWidth={1.5} />
-          <span className="text-[10px] font-medium uppercase tracking-wider">{t('more')}</span>
-        </button>
+        <Tab to="/accounts" label={t('accounts')} icon={Landmark} />
+        <Tab to="/budgets" label={t('budgets')} icon={Wallet} />
       </nav>
 
       {/* FAB quick-add - owned here so it works on any route */}
