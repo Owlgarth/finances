@@ -58,7 +58,7 @@ function useMobileScrollRestoration(enabled: boolean) {
 }
 
 export default function MainLayout({ children }: MainLayoutProps) {
-  const { isMobile, isTablet } = useBreakpoint()
+  const { isMobile, isTablet, isWide } = useBreakpoint()
   const { workspace, isLoading } = useWorkspace()
 
   useMobileScrollRestoration(isMobile)
@@ -67,10 +67,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (typeof window !== 'undefined') {
       // Tablet mounts collapsed, mirroring the old mount-time auto-collapse
       // effect; the stored preference is a desktop concern. Safe to read
-      // isTablet here: useBreakpoint is accurate on first render (lazy
-      // matchMedia initializer in useMediaQuery).
+      // isTablet/isWide here: useBreakpoint is accurate on first render
+      // (lazy matchMedia initializer in useMediaQuery).
       if (isTablet) return true
       const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+      // Desktop below 1280 also mounts collapsed - a full sidebar plus the
+      // record side panel leaves too little room for the list. With no
+      // stored preference, 1280+ stays expanded: the wide tier keeps
+      // today's default.
+      if (!isWide && stored === null) return true
       return stored === 'true'
     }
     return false
@@ -88,12 +93,34 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (isTablet) setCollapsed(true)
   }
 
+  // Wide-tier crossing: while NO stored preference exists, crossing the
+  // 1280 boundary re-applies the mount default for the new tier (fresh-mount
+  // semantics). prefIsNull is read once, here at mount; toggleCollapse flips
+  // it false in the same batched update that writes the key, so the very
+  // first manual toggle permanently disarms this adjust - stored preference
+  // wins from then on. Self-disproving prev-tier guard, like the tablet
+  // adjust above: the latch initializes equal to isWide so nothing fires on
+  // mount, and setPrevIsWide(isWide) makes the condition false on the
+  // immediate re-render - loop-safe by construction.
+  const [prefIsNull, setPrefIsNull] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === null
+  )
+  const [prevIsWide, setPrevIsWide] = useState(isWide)
+  if (prevIsWide !== isWide) {
+    setPrevIsWide(isWide)
+    if (prefIsNull) setCollapsed(!isWide)
+  }
+
   const toggleCollapse = () => {
     setCollapsed((prev) => {
       const next = !prev
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
       return next
     })
+    // Same batched update as the write above: a stored preference now
+    // exists, so prefIsNull goes false and the wide-tier crossing adjust
+    // is permanently inert from here on.
+    setPrefIsNull(false)
   }
 
   if (isMobile) {

@@ -2,6 +2,12 @@
   "modal": {
     "close": "Закрити"
   },
+  "pageHeader": {
+    "back": "Назад"
+  },
+  "detailPanel": {
+    "close": "Закрити"
+  },
   "confirmDialog": {
     "cancel": "Скасувати",
     "delete": "Видалити"
@@ -36,6 +42,12 @@
     "selectedCount_many": "Вибрано {{count}}",
     "selectedCount_other": "Вибрано {{count}}"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Дата",
+    "today": "Сьогодні",
+    "yesterday": "Вчора",
+    "other": "Інша"
+  },
   "listbox": {
     "searchPlaceholder": "Пошук\u2026",
     "searchLabel": "Пошук варіантів",
@@ -64,6 +76,12 @@
     "title": "Сторінку не знайдено",
     "body": "Сторінки, яку ви шукаєте, не існує або її було переміщено.",
     "cta": "Перейти до панелі"
+  },
+  "editableField": {
+    "save": "Зберегти",
+    "cancel": "Скасувати",
+    "saving": "Збереження...",
+    "updateFailed": "Не вдалося зберегти зміну"
   },
   "validation": {
     "amountInvalid": "Введіть коректну суму"

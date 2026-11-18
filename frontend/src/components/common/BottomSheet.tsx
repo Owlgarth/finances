@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useOverlay } from '../../hooks/useOverlay'
+import { useKeyboardInset } from '../../hooks/useKeyboardInset'
 
 interface BottomSheetProps {
   /** Whether the sheet is visible. Caller still owns the source of truth. */
@@ -53,33 +54,6 @@ function useDelayedUnmount(open: boolean, exitMs: number): boolean {
  * the bottom edge, scrim dismiss, body scroll-lock, safe-area padding.
  * Drag-to-dismiss gesture is deliberately omitted; the handle is a visual affordance.
  */
-/**
- * Height of the on-screen keyboard overlapping the layout viewport.
- * iOS doesn't resize the layout viewport for the keyboard, so a bottom-fixed
- * sheet would sit behind it; visualViewport tells us how much to lift.
- */
-function useKeyboardInset(active: boolean): number {
-  const [inset, setInset] = useState(0)
-
-  useEffect(() => {
-    if (!active) return
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () =>
-      setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop))
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-      setInset(0)
-    }
-  }, [active])
-
-  return inset
-}
-
 export default function BottomSheet({
   open,
   onClose,
