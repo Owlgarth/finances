@@ -249,7 +249,7 @@ frontend/src/
 │   └── (other hooks)           # useAttachments, useBookmarks, useWorkspaceSettings,
 │                              #   useListboxPanel, useWorkspaceSwitch,
 │                              #   useMediaQuery, useBreakpoint, useDebouncedField,
-│                              #   useOverlay
+│                              #   useOverlay, useKeyboardInset, useExtractionPolling
 ├── i18n/                   # i18next bootstrap (synchronous, before first render),
 │                           #   LanguageContext + useLanguage, date-fns locales,
 │                           #   and the per-language catalogs in locales/<lang>/

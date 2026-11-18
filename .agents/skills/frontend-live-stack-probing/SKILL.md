@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -136,6 +136,19 @@ same session - in PR #81 it paid for itself twice.
   shape: when the fault follows the STEP ORDER rather than the viewport - the same check
   passed at 1024, where no tab-walk preceded it - the bug is in the harness sequence, not
   the product.
+- Date-picker (react-day-picker v9) keyboard probes need TRUSTED key presses: synthetic
+  `dispatchEvent` keyboard events are ignored - only real CDP key input moves day focus. The
+  first Tabs into an RDP popup land on the month-nav buttons, so keyboard scenarios tab-walk
+  to a day button. And a popup seeded with a selected date opens on THAT date's month
+  (`defaultMonth`), so day-button picks by number land in that month, not the current one -
+  derive the expected ISO from the seeded date.
+- Flipping puppeteer's `isMobile` emulation flag between `setViewport` calls makes Chromium
+  RELOAD the page (viewport-meta re-evaluation), wiping all page state - state-preservation
+  probes across widths use plain viewports when the app keys on width alone (`useBreakpoint`
+  does).
+- A BottomSheet editor's `autoFocus` input loses focus to `useOverlay`'s panel-focus effect
+  moments after insertion - harnesses focus the input explicitly, and a coordinate-free
+  `evaluate` focus also dodges clickable-point races on the still-animating sheet.
 - Cascade and sizing claims are settled against the COMPILED stylesheet, never the source
   className string. A static headless-Chrome harness (`--headless=new --dump-dom`, page
   script writes measured element rects into the DOM) linked against `dist/assets/index-*.css`
@@ -148,7 +161,11 @@ same session - in PR #81 it paid for itself twice.
   visual-verification fallback when image viewing is unavailable - it is STRONGER evidence
   than eyeballing for "desktop unchanged" claims (0 differing pixels of 691200 is a count,
   not an impression). Lint, build, and i18n gates are structurally blind to rendered pixels;
-  only a width-matrix probe or the user's visual test catches this bug class.
+  only a width-matrix probe or the user's visual test catches this bug class. A "wrapper
+  changes nothing visually" identity claim gates on the overflow DELTA between the two
+  trees, never absolute overflow - synthetic probe content can overflow a narrow viewport
+  identically in both trees (SplitView's identity gate: both trees overflowed 10px at 375px
+  while all ten rect deltas read 0.000px).
 - Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
   "cannot reproduce" means the trigger is environmental (a failed request), not absent.
   Intercept and force-fail the dependency (request interception blocking the endpoint the
@@ -282,9 +299,18 @@ same session - in PR #81 it paid for itself twice.
   listbox outside-click close listens for `mousedown`) can never be exercised by it; driving
   an outside-click close needs real mouse events (`page.mouse`), inheriting the
   coordinate/scroll caveats above.
+- `page.click` on a pre-filled input drops the caret mid-text (the click lands at a
+  default offset and a following type splices into the middle) - replace-type instead:
+  click, Ctrl+A, then type the full replacement value.
 - `page.evaluate` cannot return a DOM element (the return value is serialized, a node is
   not): a keyboard Tab-walk focus helper asserts INSIDE the evaluate via a boolean hit-test
   on `document.activeElement` (selector/attribute match), or grabs the node itself with
   `evaluateHandle(() => document.activeElement)` and reads attributes through the handle.
+  CDP return-by-value serialization also strips PROTOTYPE properties: a returned `DOMRect`
+  serializes to `{}` because its numbers live on the prototype - extract the numbers into
+  own properties inside the evaluate (`{ x: r.x, width: r.width }`) before returning them.
 - Media features are emulator settings, not CSS edits: reduced motion goes through
   Playwright's `page.emulateMedia({ reducedMotion: 'reduce' })` / CDP media emulation.
+  puppeteer's `page.emulateMediaFeatures` whitelists feature names and REJECTS `pointer` -
+  emulating pointer coarseness goes through raw CDP (`Emulation.setEmulatedMedia` with
+  `features: [{ name: 'pointer', value: 'coarse' }]`).
