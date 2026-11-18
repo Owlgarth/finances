@@ -2,6 +2,9 @@
   "modal": {
     "close": "Закрити"
   },
+  "pageHeader": {
+    "back": "Назад"
+  },
   "confirmDialog": {
     "cancel": "Скасувати",
     "delete": "Видалити"

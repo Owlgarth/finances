@@ -2,6 +2,9 @@
   "modal": {
     "close": "Close"
   },
+  "pageHeader": {
+    "back": "Back"
+  },
   "confirmDialog": {
     "cancel": "Cancel",
     "delete": "Delete"
