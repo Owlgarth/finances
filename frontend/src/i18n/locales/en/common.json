@@ -72,6 +72,12 @@
     "body": "The page you're looking for doesn't exist or has moved.",
     "cta": "Go to Dashboard"
   },
+  "editableField": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "updateFailed": "Couldn't save the change"
+  },
   "validation": {
     "amountInvalid": "Enter a valid amount"
   }

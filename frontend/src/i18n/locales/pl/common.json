@@ -74,6 +74,12 @@
     "body": "Strona, której szukasz, nie istnieje lub została przeniesiona.",
     "cta": "Przejdź do pulpitu"
   },
+  "editableField": {
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "saving": "Zapisywanie...",
+    "updateFailed": "Nie udało się zapisać zmiany"
+  },
   "validation": {
     "amountInvalid": "Wpisz prawidłową kwotę"
   }
