@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -128,6 +128,14 @@ same session - in PR #81 it paid for itself twice.
   pre-transition value and fails a correct ring as if it were missing (PR #197's probe hit
   this twice; both faults were probe-side). Settle ~400 ms after focusing before reading
   `outlineColor`, or assert width/style/offset, which `transition-colors` does not touch.
+- Popup RE-CHECKS must blur before refocusing: Escape closes a popup but does NOT blur its
+  trigger, so focus state silently carries across probe steps - a follow-up `.focus()` on
+  the still-focused element fires no event, the popup never reopens, and the probe reports
+  "no popup" against a working product (PR #6's date-popup re-check, where the preceding
+  tab-walk had left focus on the input). Blur the element first, then focus. Diagnostic
+  shape: when the fault follows the STEP ORDER rather than the viewport - the same check
+  passed at 1024, where no tab-walk preceded it - the bug is in the harness sequence, not
+  the product.
 - Cascade and sizing claims are settled against the COMPILED stylesheet, never the source
   className string. A static headless-Chrome harness (`--headless=new --dump-dom`, page
   script writes measured element rects into the DOM) linked against `dist/assets/index-*.css`
@@ -148,6 +156,16 @@ same session - in PR #81 it paid for itself twice.
   a `retry: false` query only shows its failure mode under induced failure - the dead
   period-picker on budget open passed every naive probe and surfaced only when
   `GET /api/budgets/{id}/periods/current` was blocked.
+- Request interception used to STUB an endpoint (enabling a flow whose backend dependency is
+  env-disabled - an unset `PARSER_URL` hides the extraction endpoints) matches by URL
+  pattern, so it also catches that URL's OPTIONS CORS preflight: a `req.respond()` that
+  answers the preflight bodyless/CORS-less fails it, the real request never fires, and the
+  affordance depending on the endpoint never renders - reading as a missing feature, not a
+  probe bug (PR #6's extraction-config stub). Handle OPTIONS separately (204, no body), and
+  give the stubbed response exact CORS headers: the axios client sends `withCredentials`, so
+  a wildcard `Access-Control-Allow-Origin: *` is rejected by the browser - echo the request's
+  Origin header and add `Access-Control-Allow-Credentials: true`, or the stub fails as
+  unexplained CORS console noise.
 - Served-code staleness in long-lived dev containers: a dev container that outlives the
   implementer's edits can serve a stale Vite transform - the module-graph cache frozen at a
   mid-edit intermediate save (bind-mount HMR missing the final write) - so the page renders
@@ -238,6 +256,11 @@ same session - in PR #81 it paid for itself twice.
   locators must match the real DOM shape (an InfoHint-wrapped label nests the text in a
   span; a flex-row label separates it from its control) - inspect the served DOM before
   writing `getByText`/`getByLabel`.
+- DOM-order field counting must exclude CSS-hidden inputs: a receipt-scan block's
+  `<input type="file" className="hidden">` is `type="file"`, not `type="hidden"`, so a type
+  filter still counts it, inflating the field total and shifting every positional index
+  (dateIdx 3 vs 2) against a correct product (PR #6's field-order check). Filter candidates
+  to visible fields (`getClientRects().length > 0`) before asserting DOM-order positions.
 - Scope modal-title assertions to `[role="dialog"] h2`, never `h2.first()` - pages carry
   their own h2s (the planned view's year header) that poison a page-level first match.
 - Localized expected strings come from the CATALOGS, never from guesses or
