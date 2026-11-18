@@ -24,6 +24,7 @@ import Pagination from '../components/common/Pagination'
 import Select from '../components/common/Select'
 import TransferModal from '../components/accounts/TransferModal'
 import { FilterPanel, FilterField } from '../components/common/FilterBar'
+import PageHeader from '../components/layout/PageHeader'
 import { inputClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // Arrival gate + page shell. The per-page defaults must resolve before the
@@ -89,31 +90,34 @@ export default function TransfersPage() {
       {/* The h1 and the action row stay mounted through the gate: route
           changes move focus to the page h1, and a header that pops in
           after the gate is churn. The gated region is everything below. */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* Save the current view facets as this page's defaults.
-              Secondary actions sit left of the primary in a page-header
-              action row. Visible on mobile too: a preference action with
-              no FAB twin - on mobile it becomes this group's only member,
-              which is fine. NOT gated on canWrite: defaults are per-user,
-              every role saves them. */}
-          <button
-            type="button"
-            onClick={handleSaveDefaults}
-            disabled={updateSettings.isPending}
-            className={secondaryButtonClass}
-          >
-            <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
-          </button>
-          {/* Hidden on mobile: the FAB quick-add has Transfer. */}
-          {canWrite && (
-            <button type="button" onClick={() => setCreateRequest((n) => n + 1)} className={`${primaryButtonClass} max-sm:hidden`}>
-              <Plus size={13} className="inline mr-1" /> {t('actions.newTransfer')}
+      <PageHeader
+        title={t('title')}
+        actions={
+          <>
+            {/* Save the current view facets as this page's defaults.
+                Secondary actions sit left of the primary in a page-header
+                action row. Visible on mobile too: a preference action with
+                no FAB twin - on mobile it becomes this group's only member,
+                which is fine. NOT gated on canWrite: defaults are per-user,
+                every role saves them. */}
+            <button
+              type="button"
+              onClick={handleSaveDefaults}
+              disabled={updateSettings.isPending}
+              className={secondaryButtonClass}
+            >
+              <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
             </button>
-          )}
-        </div>
-      </div>
+            {/* Hidden on mobile: the FAB quick-add has Transfer. */}
+            {canWrite && (
+              <button type="button" onClick={() => setCreateRequest((n) => n + 1)} className={`${primaryButtonClass} max-sm:hidden`}>
+                <Plus size={13} className="inline mr-1" /> {t('actions.newTransfer')}
+              </button>
+            )}
+          </>
+        }
+        showAccountActions
+      />
 
       {defaultsLoading ? (
         // Under the 300ms threshold the gated region simply holds - a blank

@@ -36,6 +36,7 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
+import PageHeader from '../components/layout/PageHeader'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const STATUS_STYLE: Record<string, string> = {
@@ -161,31 +162,34 @@ export default function Planned() {
       {/* The h1 and the action row stay mounted through the gate: route
           changes move focus to the page h1, and a header that pops in
           after the gate is churn. The gated region is everything below. */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* Visible on mobile too: export is a read action with no FAB twin. */}
-          <button
-            type="button"
-            onClick={handleExportView}
-            disabled={isExporting}
-            title={t('exportTitle')}
-            className={secondaryButtonClass}
-          >
-            <Download size={13} className="inline mr-1" /> {t('exportView')}
-          </button>
-          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
-          {canWrite && (
+      <PageHeader
+        title={t('title')}
+        actions={
+          <>
+            {/* Visible on mobile too: export is a read action with no FAB twin. */}
             <button
               type="button"
-              onClick={() => setCreateRequest((n) => n + 1)}
-              className={`${primaryButtonClass} max-sm:hidden`}
+              onClick={handleExportView}
+              disabled={isExporting}
+              title={t('exportTitle')}
+              className={secondaryButtonClass}
             >
-              <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
+              <Download size={13} className="inline mr-1" /> {t('exportView')}
             </button>
-          )}
-        </div>
-      </div>
+            {/* Hidden on mobile: the FAB quick-add owns creation there. */}
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => setCreateRequest((n) => n + 1)}
+                className={`${primaryButtonClass} max-sm:hidden`}
+              >
+                <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
+              </button>
+            )}
+          </>
+        }
+        showAccountActions
+      />
 
       {defaultsLoading ? (
         // Under the 300ms threshold the gated region simply holds - a blank

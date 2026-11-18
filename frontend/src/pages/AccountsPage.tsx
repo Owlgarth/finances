@@ -18,6 +18,7 @@ import AccountFormModal from '../components/accounts/AccountFormModal'
 import SetBalanceModal from '../components/accounts/SetBalanceModal'
 import TransferModal from '../components/accounts/TransferModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import PageHeader from '../components/layout/PageHeader'
 import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
@@ -96,22 +97,25 @@ export default function AccountsPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* Hidden on mobile: the FAB quick-add has Transfer. */}
-          {canWrite && (
-            <button onClick={() => openTransfer()} className={`${secondaryButtonClass} max-sm:hidden`}>
-              <ArrowLeftRight size={13} className="inline mr-1" /> {t('actions.transfer')}
-            </button>
-          )}
-          {canManageAccounts && (
-            <button onClick={openNew} className={primaryButtonClass}>
-              <Plus size={13} className="inline mr-1" /> {t('actions.newAccount')}
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={t('title')}
+        actions={
+          <>
+            {/* Hidden on mobile: the FAB quick-add has Transfer. */}
+            {canWrite && (
+              <button onClick={() => openTransfer()} className={`${secondaryButtonClass} max-sm:hidden`}>
+                <ArrowLeftRight size={13} className="inline mr-1" /> {t('actions.transfer')}
+              </button>
+            )}
+            {canManageAccounts && (
+              <button onClick={openNew} className={primaryButtonClass}>
+                <Plus size={13} className="inline mr-1" /> {t('actions.newAccount')}
+              </button>
+            )}
+          </>
+        }
+        showAccountActions
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

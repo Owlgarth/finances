@@ -6,6 +6,7 @@ import { reportsApi, transactionsApi } from '../api/client'
 import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { formatAmount } from '../utils/format'
 import BudgetInsights from '../components/dashboard/BudgetInsights'
+import PageHeader from '../components/layout/PageHeader'
 
 function BalancesCard() {
   const { t } = useTranslation('dashboard')
@@ -83,7 +84,7 @@ export default function Dashboard() {
   const { t } = useTranslation('dashboard')
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      <h1 className="text-lg font-semibold text-text mb-6">{t('title')}</h1>
+      <PageHeader title={t('title')} showAccountActions />
       <BudgetInsights />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BalancesCard />
