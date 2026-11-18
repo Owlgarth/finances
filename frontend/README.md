@@ -26,8 +26,8 @@ frontend/
 │   │   ├── client.ts         # Axios instance + typed API modules
 │   │   └── queryClient.ts    # App-wide QueryClient (own module - no import cycles)
 │   ├── components/
-│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm
-│   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles…
+│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm, PageHeader, FormPage, SplitView, DetailPanel
+│   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles, DateQuickPick, Disclosure, EditableField, LinkedRow…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── bookmarks/        # bookmarkMeta (bookmark icon + swatch-key registry, BookmarkGlyph)
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
@@ -47,13 +47,15 @@ frontend/
 │   ├── hooks/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
+│   │   ├── useExtractionPolling.ts  # Receipt-extraction polling for one transaction's attachments: pending id, poll query, done/failed side effects, review payload
 │   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/More-sheet rows)
 │   │   ├── useWorkspaceSettings.ts  # Per-workspace page defaults - useWorkspaceSettings + useUpdateWorkspaceSettings (the member-settings blob query + delta PATCH)
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
 │   │   ├── useMediaQuery.ts         # Responsive breakpoint detection
-│   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop, Tailwind-snapped) + useIsTouch (pointer: coarse)
+│   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop/isWide, Tailwind-snapped; isWide overlaps isDesktop from 1280px - responsive.md's tier table predates it, the hook's comment is the interim contract) + useIsTouch (pointer: coarse)
+│   │   ├── useKeyboardInset.ts      # On-screen keyboard overlap via visualViewport (iOS never resizes the layout viewport) - lifts BottomSheet and FormPage's sticky footer
 │   │   ├── useDebouncedField.ts     # Draft state for inputs whose committed value lives in URL params (search, amount filters)
 │   │   └── useOverlay.ts            # Blocking-overlay behavior for Modal/BottomSheet: stack-aware Escape, refcounted scroll lock, focus restore
 │   ├── i18n/
@@ -104,7 +106,12 @@ routes, auth/legal routes and a 404 catch-all.
 ## Components
 
 **Layout** (`components/layout/`): `MainLayout` (responsive wrapper - renders the
-desktop `Sidebar` and the mobile `BottomNav`), `Sidebar` (6 destinations +
+desktop `Sidebar` and the mobile `BottomNav`; with no stored sidebar
+preference, desktop viewports below the 1280px `isWide` boundary mount the
+collapsed icon rail - 1280px+ keeps the expanded default - and while no
+preference is stored, crossing that boundary re-applies the tier default; the
+first manual toggle writes the preference and permanently disarms the
+adjust), `Sidebar` (6 destinations +
 workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`; below
 the destinations, a personal bookmarks section lists the user's active
 bookmarks - capped by their preference - with a Manage link to `/bookmarks`),
@@ -132,6 +139,22 @@ modal - name + ordered currency multi-select via `CurrencySetField` in compact
 mode - opened as a modal from all three call sites: the sidebar button, the
 workspace selector dropdown, and the mobile More sheet; also exports
 `CreateWorkspaceButton`).
+`PageHeader` (standard page-top row: an optional back affordance (`backTo`
+route), a context breadcrumb in the metadata register, the title, and
+right-aligned `actions`; the row's min-height floors serve the 44px
+coarse-pointer and 48px phone controls), `FormPage` (full-page form shell: a
+title row whose back affordance calls `onClose` - the caller owns any
+unsaved-changes confirmation - a scrolling body, and a sticky footer whose
+bottom offset composes the phone bottom-nav clearance with the on-screen
+keyboard inset via `useKeyboardInset`), `SplitView` (desktop list + side-panel
+split: the list wrapper is the `@container` container-query container so
+column sets key on the list's own available width, the panel slot carries
+the fixed 400px panel width once, and a null panel leaves the bare list
+pixel-identical), and `DetailPanel` (the in-flow record panel for
+`SplitView`'s slot: a card in the page flow, not an overlay - no scrim, focus
+trap or scroll lock - whose Escape closes it only while no blocking overlay
+is open). The four are redesign phase-1 foundations: no call sites ship yet;
+Phases 2-4 of the redesign wire them into the record pages.
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
@@ -160,8 +183,27 @@ date-less first load), `ListTotalsStrip` (presentational totals
 strip for the list pages - the owning page runs the query and passes the results),
 `InfoHint` (inline "?" hint icon after form labels - the bubble shows on hover on
 hover-capable devices and pins on click/tap elsewhere; negative vertical margins
-keep it from ever growing its label row), and `formStyles.ts` (the input/label/button
-class constants - the redesign's form primitives). `DatePicker` (react-day-picker) and
+keep it from ever growing its label row), `DateQuickPick` (one-tap date control
+composed from `SegmentedControl` + `DatePicker`: Today / Yesterday / the day
+before (labeled by its weekday) / Other - "Other" opens the DatePicker and a
+custom pick takes over the third slot so the choice stays visible),
+`Disclosure` (controlled collapsible form section: a full-width toggle button
+carrying `aria-expanded` over a sibling region wired from one `useId()`; the
+region stays mounted and hides via the class, never the HTML attribute, so
+prefilled content survives toggling), `EditableField` (click-to-edit row field:
+the idle row renders `display`, clicking swaps in the caller-rendered editor -
+`renderEditor` receives the draft, commit/cancel, and `inputProps` with
+Enter=commit / Escape=cancel / blur=commit on single-line inputs; `onSave`
+drives the saving state and a rejection shows the server message under the
+row; mobile renders the editor in a one-field `BottomSheet`, and the editing
+state lives above the mobile/desktop branches so a mid-edit resize keeps the
+draft), `LinkedRow` (`EditableField` plus a trailing chevron `Link` cell - a
+real cell with its own 44px coarse-pointer floor, deliberately not the
+expanded-hit-area utility), and `formStyles.ts` (the input/label/button
+class constants - the redesign's form primitives). `DatePicker` (react-day-picker;
+an optional controlled-open `open`/`onOpenChange` pair drives the calendar in
+place of internal state - `DateQuickPick` is the controlled caller - while
+omitting it keeps the uncontrolled trigger behavior) and
 `LegalDocPage` (shared shell for the Privacy/Terms pages) live at `components/`,
 alongside `ProtectedRoute` (the auth gate: loading splash while auth resolves,
 redirect to `/login` when unauthenticated; wraps the workspace/preferences

@@ -50,6 +50,8 @@ Anchor the edit on the key PLUS its verified neighbor line, never on an assumed 
 
 Cross-task catalog appends dedupe against the LANDED keys before inserting: a later task re-appending an outline's key block against a catalog an earlier task on the same branch already extended creates a duplicate JSON key, and `JSON.parse` accepts duplicates silently (last wins) with nothing failing at `i18n:check` parity time - a pre-existing key satisfies the consuming `t()` call either way, so only reading the landed file catches it. Never trust the append block over the file (instance: `updateFailed` already shipped by an earlier task's modal, re-added by a later page task).
 
+Key-presence greps over the pretty-printed catalogs cannot use the dotted key path: a nested key (`pageHeader.back`) spans two physical lines (the `"pageHeader": {` opener and the `"back": "Back"` leaf), so `grep -c 'pageHeader.back'` returns 0 against a correctly landed key and reads as a missing one. Gate key presence with per-line greps on the section name and the leaf (`grep -c '"pageHeader"'`, `grep -c '"back":'`) or a JSON parse, never the dotted form - its false miss invites re-adding the key, which is the duplicate-key bug above.
+
 ## Key Removal Gates
 
 - `key:rm` refuses while `key:find` still sees references; `--force` is only sane when the remaining hits are dead comments. Never force past a live reference - delete the referencing code (the dead component) in the same change.
