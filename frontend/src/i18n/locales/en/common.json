@@ -5,6 +5,9 @@
   "pageHeader": {
     "back": "Back"
   },
+  "detailPanel": {
+    "close": "Close"
+  },
   "confirmDialog": {
     "cancel": "Cancel",
     "delete": "Delete"
