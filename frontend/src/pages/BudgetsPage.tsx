@@ -10,6 +10,7 @@ import ArchivedBadge from '../components/common/ArchivedBadge'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import CurrencySetField from '../components/currencies/CurrencySetField'
 import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
+import PageHeader from '../components/layout/PageHeader'
 import { budgetsApi } from '../api/client'
 import type { Budget, Cadence } from '../types'
 import { useBudgets, useEnabledCurrencies } from '../hooks/useDomain'
@@ -337,14 +338,17 @@ export default function BudgetsPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        {canManageAccounts && (
-          <button onClick={() => setCreateOpen(true)} className={primaryButtonClass}>
-            <Plus size={13} className="inline mr-1" /> {t('newBudget')}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title={t('title')}
+        actions={
+          canManageAccounts && (
+            <button onClick={() => setCreateOpen(true)} className={primaryButtonClass}>
+              <Plus size={13} className="inline mr-1" /> {t('newBudget')}
+            </button>
+          )
+        }
+        showAccountActions
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[0, 1].map((i) => <div key={i} className="h-20 bg-surface-muted rounded-sm animate-pulse" />)}</div>
