@@ -4,68 +4,31 @@ import { useMutation } from '@tanstack/react-query'
 import {
   ArrowLeftRight,
   Calendar,
-  Check,
   CloudOff,
-  Globe,
   Home,
-  Landmark,
-  ListPlus,
-  Loader2,
-  LogOut,
   MoreHorizontal,
   PieChart,
   Plus,
   Receipt,
   Repeat,
-  RotateCw,
   ScanLine,
-  Search,
-  Settings,
-  Users,
-  Wallet,
-  X,
-  ZoomIn,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi } from '../../api/client'
-import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useExtractionConfig } from '../../hooks/useDomain'
-import { useVisibleBookmarks } from '../../hooks/useBookmarks'
-import { useWorkspaceSwitch } from '../../hooks/useWorkspaceSwitch'
-import { useLanguage } from '../../i18n/LanguageContext'
-import { bookmarkIsActive, bookmarkTargetPath } from '../../utils/bookmarks'
 import { getApiErrorMessage } from '../../utils/errors'
-import { isZoomDisabled, setZoomDisabled } from '../../utils/zoomLock'
-import { BookmarkGlyph } from '../bookmarks/bookmarkMeta'
-import { openPageSearch } from '../common/CommandPalette'
+import { MORE_DESTINATIONS } from './AccountMenuSheet'
+import { useAccountMenu } from './AccountMenuContext'
 import ActionSheet, { type ActionSheetAction } from '../common/ActionSheet'
-import BottomSheet from '../common/BottomSheet'
-import Switch from '../common/Switch'
-import RoleBadge from '../common/RoleBadge'
-import CreateWorkspaceForm from './CreateWorkspaceForm'
-import LanguageModal from './LanguageModal'
-import ThemeToggleRow from './ThemeToggleRow'
-import WorkspaceSettingsPanel from './WorkspaceSettingsPanel'
 import TransactionFormModal from '../modals/transactions/TransactionFormModal'
 import PlannedFormModal from '../modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../modals/transactions/RecurringFormModal'
 import TransferModal from '../accounts/TransferModal'
 import type { ParsedReceipt } from '../../types'
-import registry from '../../../../backend/common/languages.json'
-
-// Overflow destinations live in the More sheet.
-// Keys only: t() is resolved at render time inside the component (a
-// module-level t() call would freeze the language at load time).
-const MORE_DESTINATIONS = [
-  { to: '/accounts', labelKey: 'accounts', icon: Wallet },
-  { to: '/planned', labelKey: 'planned', icon: Calendar },
-  { to: '/members', labelKey: 'members', icon: Users },
-  { to: '/settings', labelKey: 'settings', icon: Settings },
-] as const
 
 // Mirrors the accept list in TransactionFormModal's inline receipt upload.
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
@@ -95,42 +58,19 @@ function Tab({ to, label, icon: Icon, exact = false }: TabProps) {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-4 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted truncate">
-      {children}
-    </div>
-  )
-}
-
-const moreRowClass =
-  'w-full min-h-[44px] px-4 flex items-center gap-3 text-sm text-left text-text transition-colors active:bg-surface-hover disabled:opacity-50'
-
 /**
- * Mobile navigation shell (M4): bottom bar per components.md §19 with a
- * center quick-add FAB, plus the More sheet housing overflow destinations
- * and the workspace/user controls the sidebar provides on desktop.
+ * Mobile navigation shell: bottom bar with a center quick-add FAB. The
+ * overflow destinations and workspace/user controls the sidebar provides
+ * on desktop live in the account menu sheet, opened here through the
+ * More tab.
  */
 export default function BottomNav() {
   const { t } = useTranslation('nav')
   const location = useLocation()
-  const { user, logout } = useAuth()
-  const { workspace, workspaces } = useWorkspace()
-  const { switchingToId, switchTo } = useWorkspaceSwitch()
+  const { workspace } = useWorkspace()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
-  const { language } = useLanguage()
-  // Shared derivation (hooks/useBookmarks): the sheet's bookmarks section
-  // follows the same visibility rule and cap as the sidebar's.
-  const { any: anyBookmarks, visible: visibleBookmarks } = useVisibleBookmarks()
-
-  const [moreOpen, setMoreOpen] = useState(false)
-  // Mirrors the stored zoom preference (utils/zoomLock) for the Switch.
-  const [zoomLocked, setZoomLocked] = useState(isZoomDisabled)
-  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false)
-  // Language picker modal; the More sheet closes itself before this opens.
-  const [langOpen, setLangOpen] = useState(false)
+  const { open } = useAccountMenu()
 
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [transactionOpen, setTransactionOpen] = useState(false)
@@ -177,24 +117,6 @@ export default function BottomNav() {
     if (receiptFileRef.current) receiptFileRef.current.value = ''
   }
 
-  // Close the More sheet when navigation happens from inside it; the create
-  // and language modals follow suit so no modal outlives the page it was
-  // opened on. Prev-path render adjust (P3): NavLink taps and browser
-  // back/forward change the location with no event handler this component
-  // sees, so there is no P4 seam. The key is pathname PLUS search: bookmark
-  // rows navigate same-pathname-different-filters (a transactions bookmark
-  // tapped from /transactions), which a pathname-only latch would never
-  // see. The latch initializes to the current path, so unlike the old
-  // effect it does not fire on mount - where all three flags are already
-  // false (the old mount-run was a no-op).
-  const [prevPath, setPrevPath] = useState(location.pathname + location.search)
-  if (prevPath !== location.pathname + location.search) {
-    setPrevPath(location.pathname + location.search)
-    setMoreOpen(false)
-    setCreateWorkspaceOpen(false)
-    setLangOpen(false)
-  }
-
   const quickAddActions: ActionSheetAction[] = [
     { label: t('quickAdd.newTransaction'), icon: Receipt, onSelect: () => setTransactionOpen(true) },
     { label: t('quickAdd.transfer'), icon: ArrowLeftRight, onSelect: () => setTransferOpen(true) },
@@ -211,13 +133,13 @@ export default function BottomNav() {
     { label: t('quickAdd.recurringRule'), icon: Repeat, onSelect: () => setRecurringOpen(true) },
   ]
 
-  // /bookmarks is a More-tab destination but not a MORE_DESTINATIONS row -
-  // its entry point is the bookmarks section's Manage link below - so it
-  // joins the tab-highlight check separately.
+  // /bookmarks is a More-tab destination but not a More-sheet destination
+  // row - its entry point is the bookmarks section's Manage link inside
+  // the account menu sheet - so it joins the tab-highlight check
+  // separately.
   const moreActive =
     MORE_DESTINATIONS.some((d) => location.pathname.startsWith(d.to)) ||
     location.pathname.startsWith('/bookmarks')
-  const activeLanguage = registry.languages.find((l) => l.code === language)
 
   return (
     <>
@@ -244,7 +166,7 @@ export default function BottomNav() {
 
         <button
           type="button"
-          onClick={() => setMoreOpen(true)}
+          onClick={open}
           className={`flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 min-h-[44px] transition-colors ${
             moreActive ? 'text-primary' : 'text-text-muted'
           }`}
@@ -253,180 +175,6 @@ export default function BottomNav() {
           <span className="text-[10px] font-medium uppercase tracking-wider">{t('more')}</span>
         </button>
       </nav>
-
-      {/* More sheet: overflow destinations + workspace + user controls */}
-      <BottomSheet
-        open={moreOpen}
-        onClose={() => setMoreOpen(false)}
-        aria-label={t('more')}
-      >
-        <div className="pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              setMoreOpen(false)
-              openPageSearch()
-            }}
-            className={moreRowClass}
-          >
-            <Search size={16} strokeWidth={1.5} className="shrink-0" />
-            {t('search')}
-          </button>
-          {MORE_DESTINATIONS.map((d) => (
-            <NavLink
-              key={d.to}
-              to={d.to}
-              className={({ isActive }) =>
-                `${moreRowClass} ${isActive ? 'font-medium bg-surface-hover' : ''}`
-              }
-            >
-              <d.icon size={16} strokeWidth={1.5} className="shrink-0" />
-              {t(d.labelKey)}
-            </NavLink>
-          ))}
-          {/* Logout lives mid-sheet (below Settings), NOT as the bottom row:
-              the bottom row sits right where the thumb tapped "More" and was
-              collecting accidental logouts. */}
-          <button
-            type="button"
-            onClick={() => {
-              setMoreOpen(false)
-              logout()
-            }}
-            className={moreRowClass}
-          >
-            <LogOut size={16} strokeWidth={1.5} className="shrink-0" />
-            {t('logout')}
-          </button>
-
-          {anyBookmarks && (
-            <div className="border-t border-border mt-2">
-              <SectionLabel>{t('bookmarks')}</SectionLabel>
-              {visibleBookmarks.map((b) => (
-                <NavLink
-                  key={b.id}
-                  to={bookmarkTargetPath(b)}
-                  className={() =>
-                    `${moreRowClass} ${bookmarkIsActive(b, location) ? 'font-medium bg-surface-hover' : ''}`
-                  }
-                >
-                  <BookmarkGlyph bookmark={b} size={16} strokeWidth={1.5} />
-                  <span className="truncate flex-1">{b.name}</span>
-                </NavLink>
-              ))}
-              <NavLink to="/bookmarks" className={moreRowClass}>
-                <ListPlus size={16} strokeWidth={1.5} className="shrink-0" />
-                {t('bookmarksManage')}
-              </NavLink>
-            </div>
-          )}
-
-          <div className="border-t border-border mt-2">
-            <SectionLabel>{t('workspace')}</SectionLabel>
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                type="button"
-                onClick={() => switchTo(ws, () => setMoreOpen(false))}
-                disabled={switchingToId !== null}
-                className={moreRowClass}
-              >
-                {ws.id === workspace?.id ? (
-                  <Check size={16} className="text-primary shrink-0" />
-                ) : switchingToId === ws.id ? (
-                  <Loader2 size={16} className="animate-spin shrink-0" />
-                ) : (
-                  <span className="w-4 shrink-0" />
-                )}
-                <span className="truncate flex-1">{ws.name}</span>
-                <RoleBadge role={ws.user_role} />
-              </button>
-            ))}
-            {/* Closes the sheet before opening the create modal, so the modal
-                is the only overlay layer (one Escape press, one dismissal). */}
-            <button
-              type="button"
-              onClick={() => {
-                setMoreOpen(false)
-                setCreateWorkspaceOpen(true)
-              }}
-              className={moreRowClass}
-            >
-              <Plus size={16} className="shrink-0" />
-              {t('createWorkspace')}
-            </button>
-            {workspace && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false)
-                  setWorkspaceSettingsOpen(true)
-                }}
-                className={moreRowClass}
-              >
-                <Landmark size={16} className="shrink-0" />
-                {t('workspaceSettings')}
-              </button>
-            )}
-          </div>
-
-          <div className="border-t border-border mt-2">
-            <SectionLabel>{user?.full_name || user?.email}</SectionLabel>
-            {/* PWA has no browser chrome to refresh with. */}
-            <button type="button" onClick={() => window.location.reload()} className={moreRowClass}>
-              <RotateCw size={16} strokeWidth={1.5} className="shrink-0" />
-              {t('reload')}
-            </button>
-            <ThemeToggleRow />
-            {/* Closes the sheet before opening the language picker, so the
-                modal is the only overlay layer (one Escape press, one
-                dismissal). The active language's native name is registry
-                data, shown truncated so a long name cannot stretch the
-                row. */}
-            <button
-              type="button"
-              onClick={() => {
-                setMoreOpen(false)
-                setLangOpen(true)
-              }}
-              className={moreRowClass}
-            >
-              <Globe size={16} strokeWidth={1.5} className="shrink-0" />
-              <span className="flex-1 truncate">{t('language')}</span>
-              <span className="shrink-0 max-w-[96px] truncate text-text-muted">{activeLanguage?.nativeName}</span>
-            </button>
-            <div className="flex items-center justify-between min-h-[44px] px-4">
-              <span className="flex items-center gap-3 text-sm text-text">
-                <ZoomIn size={16} strokeWidth={1.5} className="shrink-0" />
-                {t('disableZoom')}
-              </span>
-              <Switch
-                checked={zoomLocked}
-                onChange={() => {
-                  const next = !zoomLocked
-                  setZoomLocked(next)
-                  setZoomDisabled(next)
-                }}
-                aria-label={t('disableZoom')}
-              />
-            </div>
-            {/* Logout's old slot (the double-tap misclick zone): only the
-                left-side Close button is interactive - the rest of the row
-                deliberately does nothing, so a stray tap can't trigger
-                anything. Do NOT stretch the button to the full row. */}
-            <div className="flex items-center min-h-[44px] px-4">
-              <button
-                type="button"
-                onClick={() => setMoreOpen(false)}
-                className="flex items-center gap-3 min-h-[44px] pr-4 text-sm text-text transition-colors active:bg-surface-hover"
-              >
-                <X size={16} strokeWidth={1.5} className="shrink-0" />
-                {t('close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </BottomSheet>
 
       {/* FAB quick-add - owned here so it works on any route */}
       <ActionSheet
@@ -445,15 +193,6 @@ export default function BottomNav() {
       <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} />
       <PlannedFormModal open={plannedOpen} onClose={() => setPlannedOpen(false)} />
       <RecurringFormModal open={recurringOpen} onClose={() => setRecurringOpen(false)} />
-      {/* Create-workspace modal (mount-per-use): the More sheet's trigger row
-          closes the sheet first, so this is the only overlay layer while open. */}
-      {createWorkspaceOpen && (
-        <CreateWorkspaceForm onClose={() => setCreateWorkspaceOpen(false)} />
-      )}
-      {/* Language picker modal (mount-per-use): the More sheet's opener row
-          closes the sheet first, so this is the only overlay layer while
-          open. */}
-      {langOpen && <LanguageModal onClose={() => setLangOpen(false)} />}
 
       {/* Receipt-first picker — always mounted so .click() works in the gesture. */}
       {/* No `capture` attribute: it makes mobile browsers open the camera directly instead of the source chooser - existing photos/files must stay pickable. */}
@@ -464,13 +203,6 @@ export default function BottomNav() {
         onChange={handleReceiptFile}
         className="hidden"
       />
-
-      {workspace && (
-        <WorkspaceSettingsPanel
-          isOpen={workspaceSettingsOpen}
-          onClose={() => setWorkspaceSettingsOpen(false)}
-        />
-      )}
     </>
   )
 }

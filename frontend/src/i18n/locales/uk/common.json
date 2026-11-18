@@ -3,6 +3,8 @@
     "close": "Закрити"
   },
   "pageHeader": {
+    "search": "Пошук",
+    "profile": "Профіль",
     "back": "Назад"
   },
   "detailPanel": {

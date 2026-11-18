@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Search, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { controlHeightClass } from '../common/formStyles'
+import { openPageSearch } from '../common/CommandPalette'
+import { useAccountMenu } from './AccountMenuContext'
 
 interface PageHeaderProps {
   /** Page title. UI text - callers pass a t()'d string. */
@@ -14,10 +16,8 @@ interface PageHeaderProps {
   backTo?: string
   /** Page-level action buttons, right-aligned on the row. */
   actions?: ReactNode
-  /** Phone-only account actions (search + profile icon buttons). Deliberately
-      inert: renders nothing until the account-actions context exists - the
-      header-chrome rework wires it. Kept in the interface so call sites from
-      that rework compile against this phase's component. */
+  /** Phone-only account actions (search + profile icon buttons, hidden
+      from sm up): open the command palette and the account menu sheet. */
   showAccountActions?: boolean
 }
 
@@ -29,17 +29,18 @@ interface PageHeaderProps {
 const ROW_CLASS =
   'flex flex-wrap items-center justify-between gap-y-3 min-h-8 pointer-coarse:min-h-[44px] max-sm:min-h-12! mb-6'
 
-// Back affordance (icon-only button, accessible name from the catalog).
-// Keep in sync with the identical copy in FormPage.tsx - two consumers;
-// extract a shared piece at the third.
+// Header-row icon-button register: the back affordance and the phone-only
+// account-action pair. Keep in sync with the identical copy in
+// FormPage.tsx - two files; extract a shared piece at the third.
 const BACK_BUTTON_CLASS =
   'shrink-0 flex items-center justify-center rounded-sm text-text-muted hover:text-text hover:bg-surface-hover ' +
   'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   `${controlHeightClass} pointer-coarse:min-w-[44px]`
 
-export default function PageHeader({ title, breadcrumb, backTo, actions }: PageHeaderProps) {
+export default function PageHeader({ title, breadcrumb, backTo, actions, showAccountActions }: PageHeaderProps) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
+  const { open: openAccountMenu } = useAccountMenu()
 
   return (
     <header className={ROW_CLASS}>
@@ -62,6 +63,28 @@ export default function PageHeader({ title, breadcrumb, backTo, actions }: PageH
         )}
         <h1 className="text-base font-semibold text-text">{title}</h1>
       </div>
+      {showAccountActions && (
+        // Phone-only pair (hidden from sm up): same icon-button register
+        // as the back affordance, coarse-pointer width floor included.
+        <div className="flex items-center gap-2 sm:hidden">
+          <button
+            type="button"
+            onClick={openPageSearch}
+            aria-label={t('pageHeader.search')}
+            className={BACK_BUTTON_CLASS}
+          >
+            <Search size={16} strokeWidth={1.5} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={openAccountMenu}
+            aria-label={t('pageHeader.profile')}
+            className={BACK_BUTTON_CLASS}
+          >
+            <User size={16} strokeWidth={1.5} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {actions && (
         <div className="flex gap-2 items-center max-sm:w-full max-sm:justify-end">{actions}</div>
       )}

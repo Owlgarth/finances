@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
+import AccountMenuSheet from './AccountMenuSheet'
+import { AccountMenuProvider } from './AccountMenuContext'
 import CommandPalette from '../common/CommandPalette'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import CreateWorkspaceForm, { CreateWorkspaceButton } from './CreateWorkspaceForm'
@@ -123,32 +125,38 @@ export default function MainLayout({ children }: MainLayoutProps) {
     setPrefIsNull(false)
   }
 
-  if (isMobile) {
-    return (
-      <div className="min-h-screen bg-background">
-        {/* Top padding covers the standalone-PWA status bar (0 in a browser tab);
-            bottom padding clears the fixed bottom nav + raised FAB. */}
-        <main className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-          {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
-        </main>
-        <BottomNav />
-        <CommandPalette />
-      </div>
-    )
-  }
-
+  // The account-menu provider wraps BOTH branches: page headers call its
+  // hook unconditionally (the account buttons are CSS-hidden, not
+  // branch-gated, on desktop), and mounting it above the branch split
+  // keeps the context alive across a 640px crossing, which remounts the
+  // branch trees below it.
   return (
-    <div className="flex h-screen bg-background">
-      <div className="shrink-0">
-        <Sidebar
-          collapsed={collapsed}
-          onToggleCollapse={toggleCollapse}
-        />
-      </div>
-      <main className="flex-1 overflow-y-auto p-6">
-        {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
-      </main>
-      <CommandPalette />
-    </div>
+    <AccountMenuProvider>
+      {isMobile ? (
+        <div className="min-h-screen bg-background">
+          {/* Top padding covers the standalone-PWA status bar (0 in a browser tab);
+              bottom padding clears the fixed bottom nav + raised FAB. */}
+          <main className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+            {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
+          </main>
+          <BottomNav />
+          <AccountMenuSheet />
+          <CommandPalette />
+        </div>
+      ) : (
+        <div className="flex h-screen bg-background">
+          <div className="shrink-0">
+            <Sidebar
+              collapsed={collapsed}
+              onToggleCollapse={toggleCollapse}
+            />
+          </div>
+          <main className="flex-1 overflow-y-auto p-6">
+            {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
+          </main>
+          <CommandPalette />
+        </div>
+      )}
+    </AccountMenuProvider>
   )
 }
