@@ -236,3 +236,51 @@ export function formatPeriodRange(
 export function formatMonthYear(isoDate: string): string {
   return format(parseISO(isoDate), 'MMMM y', { locale: formattingConfig.dateLocale })
 }
+
+/**
+ * Slot labels for the DateQuickPick control: the day-before slot's weekday
+ * name ('weekday' variant), or a custom-picked date ('date' variant) shown
+ * in the third slot so a far pick stays visible.
+ *
+ * Locale- and style-aware on the same seam as formatPeriodRange: names come
+ * from the configured date-fns locale (passed unconditionally so they track
+ * the UI language), and the 'date' variant follows the number style - 'en'
+ * month-name shapes vs 'eu' numeric dd.MM shapes. The 'date' variant
+ * carries the year only when it differs from the current one (the same
+ * auto-year shape formatPeriodRange applies across new-year boundaries):
+ * same-year labels stay short, a far-past or future pick stays unambiguous.
+ *
+ * Worked examples (docblock examples are the contract - the frontend has no
+ * test runner, so they are the review reference; keep them in sync if the
+ * formats ever change):
+ *   'weekday', enUS (default): formatQuickPickDate('2026-11-17', 'weekday') === 'Tuesday'
+ *   'weekday', pl locale:      formatQuickPickDate('2026-11-17', 'weekday') === 'wtorek'
+ *   'weekday', uk locale:      formatQuickPickDate('2026-11-17', 'weekday') === 'вівторок'
+ *   'date', en style, same year (run during 2026):
+ *     formatQuickPickDate('2026-05-05', 'date') === 'May 5'
+ *   'date', eu style, same year:
+ *     formatQuickPickDate('2026-05-05', 'date') === '05.05'
+ *   'date', en style, other year:
+ *     formatQuickPickDate('2020-05-05', 'date') === 'May 5 2020'
+ *   'date', eu style, other year:
+ *     formatQuickPickDate('2020-05-05', 'date') === '05.05.2020'
+ *   'date', pl locale, other year:
+ *     formatQuickPickDate('2020-05-05', 'date') === 'maj 5 2020'
+ *   'date', uk locale, other year:
+ *     formatQuickPickDate('2020-05-05', 'date') === 'трав. 5 2020'
+ *
+ * parseISO reads date-only strings as local time - no UTC-midnight day
+ * shift in negative-offset zones (see formatPeriodName's note).
+ */
+export function formatQuickPickDate(isoDate: string, variant: 'weekday' | 'date'): string {
+  const date = parseISO(isoDate)
+  const { numberStyle, dateLocale } = formattingConfig
+  if (variant === 'weekday') {
+    return format(date, 'EEEE', { locale: dateLocale })
+  }
+  const withYear = date.getFullYear() !== new Date().getFullYear()
+  const pattern = numberStyle === 'eu'
+    ? (withYear ? 'dd.MM.yyyy' : 'dd.MM')
+    : (withYear ? 'MMM d y' : 'MMM d')
+  return format(date, pattern, { locale: dateLocale })
+}

@@ -25,6 +25,16 @@ interface Props {
       left-anchored popup would overflow the panel. No effect on mobile
       (the calendar opens in a bottom sheet) or inline mode. */
   align?: 'left' | 'right'
+  /** Controlled calendar open state. When provided it drives the popup
+      (desktop) / bottom sheet (mobile) in place of internal state; the
+      trigger input's focus/click and every internal close path (day
+      select, Escape, click-outside, sheet dismiss) report through
+      onOpenChange instead. Omit for the uncontrolled trigger behavior
+      every existing caller uses. */
+  open?: boolean
+  /** Open-state notifications for a controlled caller; fires on every
+      internal open/close transition. Meaningless without `open`. */
+  onOpenChange?: (open: boolean) => void
 }
 
 export default function DatePicker({
@@ -37,12 +47,23 @@ export default function DatePicker({
   placeholder,
   inline = false,
   align = 'left',
+  open,
+  onOpenChange,
 }: Props) {
   const { t } = useTranslation('numbers')
   const { language } = useLanguage()
   const { calendarStartDay } = useUserPreferences()
   const { isMobile } = useBreakpoint()
-  const [isOpen, setIsOpen] = useState(false)
+  // Controlled-open merge: `open` drives the calendar when provided, else
+  // the internal state does - a caller that passes no `open` gets behavior
+  // identical to the purely internal version (open === undefined means
+  // every branch below resolves to the state this component itself set).
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = open !== undefined ? open : internalOpen
+  const setOpen = (next: boolean) => {
+    if (open === undefined) setInternalOpen(next)
+    onOpenChange?.(next)
+  }
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Calendar chrome locale (month/weekday names). The input value stays ISO
@@ -60,17 +81,23 @@ export default function DatePicker({
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
       onChange(format(date, 'yyyy-MM-dd'))
-      setIsOpen(false)
+      setOpen(false)
     }
   }
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-      setIsOpen(false)
-    }
-  }
+  // The document-level outside-click close must fire the CURRENT render's
+  // close path (a controlled caller may pass a fresh onOpenChange arrow per
+  // render), so the mount-time listener reads setOpen through a latest-ref
+  // instead of capturing the first render's closure.
+  const setOpenRef = useRef(setOpen)
+  useEffect(() => { setOpenRef.current = setOpen })
 
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpenRef.current(false)
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
@@ -101,8 +128,8 @@ export default function DatePicker({
         value={value}
         /* Mobile opens on click, not focus: the sheet's focus-return would
            re-fire onFocus and immediately reopen it. */
-        onFocus={() => { if (!isMobile) setIsOpen(true) }}
-        onClick={() => { if (isMobile) setIsOpen(true) }}
+        onFocus={() => { if (!isMobile) setOpen(true) }}
+        onClick={() => { if (isMobile) setOpen(true) }}
         onKeyDown={(e) => {
           if (e.key !== 'Escape' || !isOpen || isMobile) return
           e.preventDefault()
@@ -110,7 +137,7 @@ export default function DatePicker({
           // Escape listener (useOverlay) fires too and closes the whole dialog —
           // same rationale as Select's trigger (Select.tsx:166-172).
           e.stopPropagation()
-          setIsOpen(false)
+          setOpen(false)
         }}
         className={`${inputClass} ${className}`}
         required={required}
@@ -135,7 +162,7 @@ export default function DatePicker({
 
       {/* Mobile: calendar in a bottom sheet with 44px day targets (rdp-sheet scope). */}
       {isMobile && (
-        <BottomSheet open={isOpen} onClose={() => setIsOpen(false)} aria-label={t('datePicker.selectDate')}>
+        <BottomSheet open={isOpen} onClose={() => setOpen(false)} aria-label={t('datePicker.selectDate')}>
           <div className="rdp-inline rdp-sheet px-4 pb-2">
             <DayPicker
               mode="single"

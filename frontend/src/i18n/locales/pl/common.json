@@ -2,6 +2,12 @@
   "modal": {
     "close": "Zamknij"
   },
+  "pageHeader": {
+    "back": "Wstecz"
+  },
+  "detailPanel": {
+    "close": "Zamknij"
+  },
   "confirmDialog": {
     "cancel": "Anuluj",
     "delete": "Usuń"
@@ -36,6 +42,12 @@
     "selectedCount_many": "{{count}} wybranych",
     "selectedCount_other": "{{count}} wybranych"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Data",
+    "today": "Dzisiaj",
+    "yesterday": "Wczoraj",
+    "other": "Inna"
+  },
   "listbox": {
     "searchPlaceholder": "Szukaj\u2026",
     "searchLabel": "Szukaj opcji",
@@ -64,6 +76,12 @@
     "title": "Nie znaleziono strony",
     "body": "Strona, której szukasz, nie istnieje lub została przeniesiona.",
     "cta": "Przejdź do pulpitu"
+  },
+  "editableField": {
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "saving": "Zapisywanie...",
+    "updateFailed": "Nie udało się zapisać zmiany"
   },
   "validation": {
     "amountInvalid": "Wpisz prawidłową kwotę"

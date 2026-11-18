@@ -2,6 +2,12 @@
   "modal": {
     "close": "Close"
   },
+  "pageHeader": {
+    "back": "Back"
+  },
+  "detailPanel": {
+    "close": "Close"
+  },
   "confirmDialog": {
     "cancel": "Cancel",
     "delete": "Delete"
@@ -34,6 +40,12 @@
     "selectedCount_one": "{{count}} selected",
     "selectedCount_other": "{{count}} selected"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Date",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "other": "Other"
+  },
   "listbox": {
     "searchPlaceholder": "Search\u2026",
     "searchLabel": "Search options",
@@ -62,6 +74,12 @@
     "title": "Page not found",
     "body": "The page you're looking for doesn't exist or has moved.",
     "cta": "Go to Dashboard"
+  },
+  "editableField": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "updateFailed": "Couldn't save the change"
   },
   "validation": {
     "amountInvalid": "Enter a valid amount"
