@@ -37,6 +37,12 @@
     "selectedCount_one": "{{count}} selected",
     "selectedCount_other": "{{count}} selected"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Date",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "other": "Other"
+  },
   "listbox": {
     "searchPlaceholder": "Search\u2026",
     "searchLabel": "Search options",

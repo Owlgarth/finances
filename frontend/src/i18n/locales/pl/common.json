@@ -39,6 +39,12 @@
     "selectedCount_many": "{{count}} wybranych",
     "selectedCount_other": "{{count}} wybranych"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Data",
+    "today": "Dzisiaj",
+    "yesterday": "Wczoraj",
+    "other": "Inna"
+  },
   "listbox": {
     "searchPlaceholder": "Szukaj\u2026",
     "searchLabel": "Szukaj opcji",

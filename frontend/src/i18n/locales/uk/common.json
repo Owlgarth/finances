@@ -39,6 +39,12 @@
     "selectedCount_many": "Вибрано {{count}}",
     "selectedCount_other": "Вибрано {{count}}"
   },
+  "dateQuickPick": {
+    "ariaLabel": "Дата",
+    "today": "Сьогодні",
+    "yesterday": "Вчора",
+    "other": "Інша"
+  },
   "listbox": {
     "searchPlaceholder": "Пошук\u2026",
     "searchLabel": "Пошук варіантів",
