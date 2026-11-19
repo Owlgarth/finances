@@ -35,6 +35,11 @@ export interface UseTransactionFormOptions {
       receipt arriving while the modal is already open is ignored - it never
       re-seeds mid-edit. Ignored unless create mode (no transaction/copyFrom). */
   prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
+  /** Create-mode starting account (the page's account filter): seeds the
+   *  account and its currency. Null (the default, the modal's behavior)
+   *  starts from the default account of the form's currency instead, else
+   *  No account. Ignored unless create mode (no transaction/copyFrom). */
+  initialAccountId?: number | null
   /** Validation toasts are this hook's submit gate: same checks, same
    *  messages, fired from submit(). Default true (the modal's behavior).
    *  Pass false when the host surfaces validation inline instead - the
@@ -72,12 +77,6 @@ interface SeedSnapshot {
    *  is not an edit). */
   rows: Array<[string, string, string, string, number | null]>
 }
-
-const TYPE_OPTIONS = [
-  { value: 'expense', labelKey: 'type.expense' },
-  { value: 'income', labelKey: 'type.income' },
-  { value: 'adjustment', labelKey: 'type.adjustment' },
-] as const
 
 /** Sentinel Select value for "no auto-adjustment" - the facet stays
  *  informational-only. Same trick as NO_ACCOUNT: the shared Select cannot
@@ -119,6 +118,7 @@ export function useTransactionForm({
   transaction = null,
   copyFrom = null,
   prefillReceipt = null,
+  initialAccountId = null,
   validationToasts = true,
 }: UseTransactionFormOptions) {
   const { t } = useTranslation('transactions')
@@ -182,25 +182,23 @@ export function useTransactionForm({
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
   const [highlighted, setHighlighted] = useState(-1)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
-  // Optional note, hidden behind an "Add note" disclosure so the form's
-  // common path stays compact. Opens pre-expanded when the source carries a
-  // note - existing data must never sit hidden behind the toggle.
+  // Optional note. The "More details" disclosure hosting it is presentation
+  // (the fields component derives its open state from the values: open while
+  // a note, item rows, a receipt, the other-currency facet or an adjustment
+  // is set, unless the user closed it), so the hook carries only the value.
   const [note, setNote] = useState('')
-  const [noteOpen, setNoteOpen] = useState(false)
 
   // ---- Additions over the moved modal code ----
-  // Display-only field errors (see TransactionFormErrors). Never read by the
-  // submit gate; submit recomputes them from validate() on every attempt so
-  // the inline hints cannot disagree with the gate.
-  const [errors, setErrors] = useState<TransactionFormErrors>({})
+  // Submit-attempt counter. Hosts key their inline-error display gate and
+  // focus-first-invalid pass on it (every error shows after any submit
+  // attempt) without owning validation - the gates live in submit().
+  const [submitCount, setSubmitCount] = useState(0)
   // Seed snapshot for isDirty. State, not a ref: isDirty reads it during
   // render, and render-time ref reads are forbidden. Written only by the
   // snapshot render-adjust below - one pass AFTER a seeding boundary, when
   // the committed values ARE the seeded values.
   const [seedSnapshot, setSeedSnapshot] = useState<SeedSnapshot | null>(null)
-  // Latch naming the session/reset the snapshot was taken at; a fresh
-  // baseline also clears the error map (a stale submit's inline errors must
-  // not survive into the next session).
+  // Latch naming the session/reset the snapshot was taken at.
   const [snapshottedFor, setSnapshottedFor] = useState<{ session: object; resetCount: number } | null>(null)
   const [resetCount, setResetCount] = useState(0)
 
@@ -296,7 +294,6 @@ export function useTransactionForm({
       setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
       setDescription(source.description)
       setNote(source.note ?? '')
-      setNoteOpen(!!source.note)
       setType(source.type)
       setAmount(source.amount)
       setAccountId(source.account_id)
@@ -330,14 +327,19 @@ export function useTransactionForm({
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
       setNote('')
-      setNoteOpen(false)
       setType('expense')
       setAmount('')
-      // Single-account workspaces prefill the only account (a client-side
-      // convenience - the backend no longer defaults); its currency locks the
-      // form. Everything else starts account-less on the primary currency.
-      setAccountId(accounts.length === 1 ? accounts[0].id : null)
-      setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencies[0]?.code ?? null))
+      // Starting account: the caller's initial account (the page's account
+      // filter) when given, else the default account of the form's currency,
+      // else No account (account-less entry stays a first-class path). The
+      // initial account's currency seeds the form; an account-less start
+      // seeds the primary currency.
+      const seededCurrency =
+        initialAccountId != null
+          ? (accounts.find((a) => a.id === initialAccountId)?.currency_code ?? currencies[0]?.code ?? null)
+          : (currencies[0]?.code ?? null)
+      setCurrencyCode(seededCurrency)
+      setAccountId(initialAccountId ?? pickAccountForCurrency(accounts, seededCurrency))
       setBudgetId(defaultBudgetId)
       setCategoryId(null)
       setOtherCurrency(false)
@@ -388,7 +390,7 @@ export function useTransactionForm({
         // Currency seeding above has the same stale-state shape: it derives
         // from `parsed` and `currencies` directly instead of reading any
         // just-set state, for the same reason as the account pick below.
-        const currentAccountId = accounts.length === 1 ? accounts[0].id : null
+        const currentAccountId = initialAccountId ?? pickAccountForCurrency(accounts, parsedEnabled?.code ?? currencies[0]?.code ?? null)
         const pick = pickAccountForCurrency(accounts, parsed.currency)
         if (
           pick !== null &&
@@ -401,15 +403,23 @@ export function useTransactionForm({
   }
 
   // Create-mode arrival adjust: apply the data-derived create defaults
-  // (single-account prefill, primary currency, default budget) when the
-  // reference lists' lengths change, only for fields still at their seed
-  // values - never clears typed edits, never remints the idempotency key.
+  // (initial account / the currency's default account, primary currency,
+  // default budget) when the reference lists' lengths change, only for
+  // fields still at their seed values - never clears typed edits, never
+  // remints the idempotency key.
   if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
     setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
     if (open && !source) {
+      // Only a length-CHANGING refetch re-runs this block (the seededLens
+      // gate above): an equal-length refetch re-seeds nothing, so a
+      // deliberate No-account pick survives it and is re-picked only by that
+      // rare event - the pre-existing limitation, unchanged.
       if (accountId === null) {
-        setAccountId(accounts.length === 1 ? accounts[0].id : null)
-        setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencyCode ?? currencies[0]?.code ?? null))
+        const currency = currencyCode ?? currencies[0]?.code ?? null
+        const next = initialAccountId ?? pickAccountForCurrency(accounts, currency)
+        setAccountId(next)
+        const account = next != null ? accounts.find((a) => a.id === next) : undefined
+        setCurrencyCode(account ? account.currency_code : currency)
       }
       if (budgetId === null) setBudgetId(defaultBudgetId)
     }
@@ -462,7 +472,6 @@ export function useTransactionForm({
   if (open && (snapshottedFor?.session !== session || snapshottedFor?.resetCount !== resetCount)) {
     setSnapshottedFor({ session, resetCount })
     setSeedSnapshot(currentValues())
-    setErrors({})
   }
 
   // True when any user-editable value differs from the session-boundary
@@ -572,9 +581,9 @@ export function useTransactionForm({
   })
 
   /** Field-keyed validation messages for inline display. Pure compute over
-   *  the current values with no state writes - render-safe, so a host can
-   *  derive live errors on blur/keystroke by calling it during render. Key
-   *  precedence matches the gate order in submit. */
+   *  the current values with no state writes - render-safe, so the derived
+   *  errors below can call it on every render. Key precedence matches the
+   *  gate order in submit. */
   const validate = (): TransactionFormErrors => {
     const errors: TransactionFormErrors = {}
     if (!description.trim()) errors.description = t('form.descriptionRequired')
@@ -591,13 +600,21 @@ export function useTransactionForm({
     return errors
   }
 
+  // Live field errors, re-derived every render from the same predicates the
+  // submit gates use - the inline hints can never disagree with the gate.
+  // Hosts gate DISPLAY (an error appears after its field's first invalid
+  // blur, then tracks every keystroke, and all errors appear after a submit
+  // attempt) on their own latches; the errors themselves never gate
+  // anything.
+  const errors = validate()
+
   /** Runs the validation gates and the save. The guards below are the
    *  modal's old handleSubmit checks, same order and same messages, and they
    *  remain the SUBMIT GATE - the field errors from validate() are
    *  display-only and never gate. Resolves after the mutation's
    *  invalidations and toasts have run; hosts await this and close on ok. */
   const submit = async (): Promise<{ ok: boolean; uploadFailed: boolean }> => {
-    setErrors(validate())
+    setSubmitCount((n) => n + 1)
     if (!description.trim()) {
       if (validationToasts) toast.error(t('form.descriptionRequired'))
       return { ok: false, uploadFailed: false }
@@ -647,7 +664,6 @@ export function useTransactionForm({
     setAmount('')
     setCategoryId(null)
     setNote('')
-    setNoteOpen(false)
     setPendingRows([])
     setPendingFile(null)
     setIdempotencyKey(crypto.randomUUID())
@@ -657,7 +673,6 @@ export function useTransactionForm({
   const accountOptions = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
   const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
-  const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   // Adjustments must book to an account (an account-less adjustment moves no
   // balance), so the sentinel disappears from the option list for them; a
   // stale null accountId then simply shows the placeholder.
@@ -746,24 +761,32 @@ export function useTransactionForm({
     }
   }
 
+  // Stable discriminator for the current seeding session: hosts key their
+  // fields component on it so a session change remounts it - the remount is
+  // the reset for that component's local state (disclosure latches, focus
+  // one-shots, touched maps) and re-fires its per-open autoFocus.
+  const sessionKey = `${session.open ? 'o' : 'c'}-${session.mode}-${session.source?.id ?? 'new'}`
+
   return {
     // Field values (budgets is exposed raw: hosts gate multi-budget UI on
-    // its length, like the modal's budget/category row)
+    // its length, like the modal's budget/category row); mode discriminates
+    // edit/copy/create for host UI gates
+    mode,
     date, description, type, amount, accountId, currencyCode, budgetId, categoryId,
     otherCurrency, originalAmount, originalCurrencyCode, originalAccountId,
-    note, noteOpen, pendingFile, pendingRows, budgets,
+    note, pendingFile, pendingRows, budgets,
     // Combobox + detail-tab state (detailTab is modal-only UI state that the
     // session seeding resets; /new-style hosts ignore it)
     highlighted, suggestionsOpen, detailTab,
     // Setters
     setDate, setDescription, setType, setAmount, setCurrencyCode, setBudgetId,
-    setCategoryId, setOtherCurrency, setOriginalAmount, setNote, setNoteOpen,
-    setPendingRows, setHighlighted, setSuggestionsOpen, setDetailTab,
+    setCategoryId, setOtherCurrency, setOriginalAmount, setNote,
+    setPendingRows, setPendingFile, setHighlighted, setSuggestionsOpen, setDetailTab,
     // Field-change handlers (sentinel mapping + currency re-pick logic)
     handleAccountChange, handleOriginalCurrencyChange, handleAdjustmentAccountChange,
     handleDescriptionKeyDown,
     // Derived option lists
-    accountOptions, budgetOptions, categoryOptions, typeOptions, accountSelectOptions,
+    accountOptions, budgetOptions, categoryOptions, accountSelectOptions,
     currencyOptions, otherCurrencyOptions, adjustmentAccountOptions,
     // Autocomplete derivations
     suggestions, showSuggestions,
@@ -771,8 +794,12 @@ export function useTransactionForm({
     parse, parseFile,
     // Submit path
     submit, isSaving: mutation.isPending,
-    errors, setErrors, validate,
+    errors, validate,
     // Session lifecycle
-    isDirty, resetForAnother,
+    sessionKey, submitCount, isDirty, resetForAnother,
   }
 }
+
+/** The hook's full return value, for hosts that thread it into a
+ *  presentational fields component as one prop. */
+export type UseTransactionFormReturn = ReturnType<typeof useTransactionForm>
