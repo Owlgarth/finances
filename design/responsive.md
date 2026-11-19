@@ -135,8 +135,8 @@ Fixed at the bottom of the viewport. Uses Architectural Ledger tokens.
 
 Each nav item is a 44×44px minimum touch target. Icons are Lucide at 20px (`h-5 w-5`), 1.5px
 stroke — the one deliberate size exception to the global 14px icon rule.
-Implementation: `frontend/src/components/layout/BottomNav.tsx` (bar + FAB quick-add action
-sheet; slots Home / Activity / Accounts / Budgets, no More tab). The account menu sheet
+Implementation: `frontend/src/components/layout/BottomNav.tsx` (bar + FAB navigating to the
+`/new` create page; slots Home / Activity / Accounts / Budgets, no More tab). The account menu sheet
 (`AccountMenuSheet.tsx` - overflow destinations plus workspace/user controls) is opened
 from the page-header profile button through `AccountMenuContext`.
 

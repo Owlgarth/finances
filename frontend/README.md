@@ -33,7 +33,7 @@ frontend/
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
-│   │   ├── transactions/     # TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
+│   │   ├── transactions/     # TransactionFormFields, TransferFormFields, AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
 │   │   ├── modals/transactions/ # TransactionFormModal, PlannedFormModal, ExecuteAdjustedModal, RecurringFormModal
@@ -51,6 +51,8 @@ frontend/
 │   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/account-menu-sheet rows)
 │   │   ├── useWorkspaceSettings.ts  # Per-workspace page defaults - useWorkspaceSettings + useUpdateWorkspaceSettings (the member-settings blob query + delta PATCH)
 │   │   ├── usePermissions.ts        # Role-based permission checks
+│   │   ├── useTransactionForm.ts    # Transaction form state machine (create/edit/copy/receipt prefill): field state, session seeding, derived options, validation, save mutation - host-agnostic (TransactionFormModal and the /new page both drive it)
+│   │   ├── useTransferForm.ts       # Transfer form state machine (create/edit/repeat): last-used pair, cross-currency implied rate, validation, save - driven by TransferModal and the /new page
 │   │   ├── useActivityScope.ts      # Shared Activity scope chrome for the three list routes - the "Activity" title plus the scope breadcrumb (exact-calendar-month label + sole filtered account name, joined " / "), derived from the URL like the pages' export handlers
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (workspace selector dropdown + account menu sheet)
@@ -81,7 +83,9 @@ Four primary destinations in the sidebar and the bottom bar (Home, Activity, Acc
 Budgets - Activity covers `/transactions`, `/planned` and `/transfers` through one tab and
 one tab row; the sidebar adds Members and Settings footer rows), a Transfers page reached
 through the Activity tab (and the Accounts "View all transfers" link and the command
-palette), a Bookmarks manage page (reached from
+palette), a full-page create flow at `/new` (transaction and transfer creation in one
+form - the FAB and the below-1024px create buttons land there; edit stays in the modals),
+a Bookmarks manage page (reached from
 the Manage row of the sidebar's or the account menu sheet's bookmarks section), nested budget
 routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 `PageHeader`; the three list routes share the "Activity" title, a scope breadcrumb and the
@@ -100,9 +104,10 @@ routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target); exact planned/actual/remaining column totals (footer row on desktop, totals card on mobile) sum the visible, non-archived rows client-side - not the API's summary totals, which include archived categories' money the table hides |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
-| `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download; opens on the user's saved view defaults (personal, per workspace - explicit URL params win) with a "Save as default" button beside the bookmark action |
+| `/transactions` | Transactions | Transaction list, filters, create (below 1024px the button navigates to `/new`, carrying the account filter when exactly one is set; 1024px+ opens the modal); sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download; opens on the user's saved view defaults (personal, per workspace - explicit URL params win) with a "Save as default" button beside the bookmark action |
 | `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Save as default", "Export view" - planned view only) |
-| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
+| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ opens the modal; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
+| `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=` and `?copy=`, read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox, account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -131,9 +136,11 @@ selector's gear opens `WorkspaceSettingsPanel`; in the collapsed rail the
 labels and sub-rows hide and the icons carry title tooltips),
 `BottomNav` (mobile shell: bottom bar with Home/Activity/Accounts/Budgets tabs
 around a
-center quick-add FAB - the FAB hides for viewers/workspace-less users but the
-slot stays so tabs don't shift; the FAB's ActionSheet offers new transaction,
-transfer, from-receipt (parse then seed the form), planned and recurring rule),
+center create FAB - the FAB navigates to `/new` as a plain push (Back returns
+to the list); from `/transfers` it carries `type=transfer`, and the account
+filter travels as `account` when it holds exactly one id. The FAB hides for
+viewers/workspace-less users and on `/new` itself, but the slot stays so tabs
+don't shift),
 `AccountMenuSheet` (the mobile account menu, opened from the page-header
 profile button through `AccountMenuContext`'s monotonic open-tick: the
 overflow destinations (Accounts, Planned, Members,
@@ -176,9 +183,10 @@ trap or scroll lock - whose Escape closes it only while no blocking overlay
 is open). `ActivityTabs` (the Activity tab row on the three list routes -
 NavLink segments in the SegmentedControl register carrying `from`/`to` always
 and the `account` filter as a comma list between the list pages or a single
-id to Transfers when exactly one account is selected). FormPage, SplitView
-and DetailPanel are redesign phase-1 foundations with no call sites yet;
-the later redesign phases wire them into the record pages.
+id to Transfers when exactly one account is selected). FormPage's first
+consumer is the `/new` create page (redesign phase 3); SplitView and
+DetailPanel remain phase-1 foundations with no call sites yet - the later
+redesign phases wire them into the record pages.
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
@@ -237,8 +245,10 @@ providers around all in-app routes, and `/reconsent` and `/confirm-email-change`
 individually).
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
-balance adjustment), `TransferModal` (last-used pair, cross-currency implied rate;
-doubles as the edit modal - `editFrom` prefills every field and saves via update).
+balance adjustment), `TransferModal` (modal host over the `useTransferForm` hook -
+last-used pair, cross-currency implied rate; doubles as the edit modal - `editFrom`
+prefills every field and saves via update; below 1024px transfer creation navigates to
+`/new?type=transfer` instead).
 
 **Currencies** (`components/currencies/`): `CurrencySetField` (ordered currency-set
 picker on top of `MultiSelect` - a visible ordered list with up/down arrows and a
@@ -276,16 +286,33 @@ chart tokens - series-1 = planned, series-2 = actual, text never wears series
 color).
 
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
-`TransactionFormModal` (with Items/Receipts tabs; optional account - "No account"
-is first-class, adjustments excepted - plus an own-currency select that locks to
-the account's when one is set; receipt-first create seeds the own currency from
-the parsed code when it is enabled and auto-selects the matching account -
-preferring the per-currency default; description autocomplete over frequent
-descriptions of the picked type, applied only on explicit Enter/click; an
-optional free-text note behind an "Add note" disclosure that opens pre-expanded
-when the edited transaction carries one), `TransactionItemsEditor` (loads a saved transaction's items and persists edits
+`TransactionFormFields` (the presentational transaction form body in the G5.1
+order - type segmented control, amount with sign prefix and a trailing
+currency-code button, date quick picks, description combobox, account +
+category side by side, a Budget row in multi-budget workspaces, and one "More
+details" disclosure holding the note, items, the receipt file, the
+other-currency facet and the balance-adjustment switch, derived-open while it
+holds values; host-agnostic, renders against the `useTransactionForm` return
+value - `TransactionFormModal` and the `/new` page both host it; optional
+account - "No account" is first-class, adjustments excepted - plus an
+own-currency select that locks to the account's when one is set; description
+autocomplete over frequent descriptions of the picked type, applied only on
+explicit Enter/click; the disclosure opens pre-expanded when the seeded
+transaction carries values), `AmountField` (amount input with a decorative
+type-sign prefix and a trailing currency-code button/picker that locks to the
+account's currency when one is set; the transfer flavor omits the whole
+currency group - the currency comes from the From account), `TransferFormFields`
+(the transfer form body: From/To selects plus a More-details disclosure with
+the description, the cross-currency received amount and the implied-rate
+line - the shared amount/date rows live in the host), `TransactionFormModal`
+(modal host for edit and copy - and create at 1024px+ - a thin wrapper wiring
+`useTransactionForm` into `TransactionFormFields`, with edit-mode Copy/Delete
+footer buttons (the caller owns the confirms) and the edit-mode Items/Receipts
+tabs below the form; a receipt scan (the `/new` header action) seeds the form
+through the hook: own currency from the parsed code when it is enabled, the
+matching account auto-selected - preferring the per-currency default), `TransactionItemsEditor` (loads a saved transaction's items and persists edits
 through the list), `TransactionItemsList` (the editable rows grid both the
-editor and the create modal render - name/quantity/unit price/line total with
+editor and the transaction form render - name/quantity/unit price/line total with
 add/remove/reorder, a per-item category select (unset inherits the
 transaction's category; the select is disabled until the transaction has one),
 and the remainder card for the uncovered amount (editable name/category in the
@@ -429,7 +456,7 @@ const api = axios.create({
 | `currenciesApi` | Catalog + enabled currencies (enable/disable/custom/reorder) |
 | `accountsApi` | Accounts, archive, computed balance |
 | `budgetsApi` | Budgets + nested periods, categories, category-budgets |
-| `transactionsApi` | Transactions (filters, totals, bulk-account, filtered JSON export, frequent descriptions), line items, attachments, extraction, receipt parse |
+| `transactionsApi` | Transactions (single fetch, filters, totals, bulk-account, filtered JSON export, frequent descriptions), line items, attachments, extraction, receipt parse |
 | `transfersApi` | Transfers between accounts |
 | `plannedTransactionsApi` | Planned with execute, totals by `currency`/`category`, filtered JSON export |
 | `recurringTransactionsApi` | Recurring rules - list (incl. paused), create (optionally adopting a pending planned row), update, delete (optionally its pending planned rows) |
