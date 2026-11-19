@@ -1,25 +1,19 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
+import { useEffect, useId, useRef } from 'react'
 import { Copy, Plus, Trash2, Upload, Loader2, CloudOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import Modal from '../../common/Modal'
 import Select from '../../common/Select'
 import DatePicker from '../../DatePicker'
 import TransactionItemsEditor from '../../transactions/TransactionItemsEditor'
-import TransactionItemsList, { type Row } from '../../transactions/TransactionItemsList'
+import TransactionItemsList from '../../transactions/TransactionItemsList'
 import TransactionAttachments from '../../transactions/TransactionAttachments'
-import { budgetsApi, transactionsApi } from '../../../api/client'
-import type { Account, ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../../../types'
-import { useAccounts, useBudgets, useEnabledCurrencies, useExtractionConfig } from '../../../hooks/useDomain'
+import type { ParsedReceipt, Transaction } from '../../../types'
+import { useExtractionConfig } from '../../../hooks/useDomain'
 import { useIsTouch } from '../../../hooks/useBreakpoint'
-import { useWorkspace } from '../../../contexts/WorkspaceContext'
-import { getApiErrorMessage } from '../../../utils/errors'
-import { normalizeAmountInput } from '../../../utils/amountInput'
 import { NO_ACCOUNT } from '../../../utils/accountSelect'
-import { rowsToItems } from '../../../utils/transactionItems'
 import { listboxPanelClass } from '../../common/listboxParts'
 import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../common/formStyles'
+import { NO_ADJUSTMENT, useTransactionForm } from '../../../hooks/useTransactionForm'
 
 interface Props {
   open: boolean
@@ -43,65 +37,18 @@ interface Props {
   prefillReceipt?: { file: File; parsed: ParsedReceipt } | null
 }
 
-const TYPE_OPTIONS = [
-  { value: 'expense', labelKey: 'type.expense' },
-  { value: 'income', labelKey: 'type.income' },
-  { value: 'adjustment', labelKey: 'type.adjustment' },
-] as const
-
 /** Edit-mode detail tabs below the form. Internal keys only - the button
  *  labels resolve through t(). */
 const DETAIL_TABS = ['items', 'receipts'] as const
 
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
-/** Sentinel Select value for "no auto-adjustment" - the facet stays
- *  informational-only. Same trick as NO_ACCOUNT: the shared Select cannot
- *  hold a null-valued option, and 0 can never collide with a real id. */
-const NO_ADJUSTMENT = 0
-
-/** TransactionItemInput[] (API payload shape) → Row[] (table editing shape).
- *  Parsed and prefilled sources carry no category, so every seeded row
- *  inherits the transaction's (categoryId null = inherit). */
-const itemsToRows = (items: TransactionItemInput[]): Row[] =>
-  items.map((i) => ({
-    id: crypto.randomUUID(),
-    name: i.name,
-    quantity: i.quantity ?? '1',
-    unit_price: i.unit_price ?? '',
-    line_total: i.line_total ?? '',
-    categoryId: null,
-  }))
-
-/** Pick the account id whose currency matches `currencyCode`, preferring the
- * per-currency default-flagged account and falling back to the first account
- * by the backend's `display_order, name` ordering (the list endpoint already
- * returns them in that order, so `matches[0]` is the first by ordering).
- * Returns null when `currencyCode` is falsy/empty or no account matches.
- * Pure — safe to call inline from a mutation callback or effect. */
-const pickAccountForCurrency = (
-  accounts: Account[],
-  currencyCode: string | null | undefined,
-): number | null => {
-  if (!currencyCode) return null
-  const code = currencyCode.toUpperCase()
-  const matches = accounts.filter((a) => a.currency_code.toUpperCase() === code)
-  if (matches.length === 0) return null
-  return matches.find((a) => a.is_default_for_currency)?.id ?? matches[0].id
-}
-
 export default function TransactionFormModal({ open, onClose, transaction, copyFrom, onDelete, onCopy, prefillReceipt = null }: Props) {
   const { t } = useTranslation('transactions')
-  const { t: tCommon } = useTranslation('common')
   const isEdit = !!transaction
-  const queryClient = useQueryClient()
   // No autofocus on touch: focusing an input on open yanks the keyboard up
   // over the fresh modal. The user taps the field they want first.
   const isTouch = useIsTouch()
-  const { workspace } = useWorkspace()
-  const { data: accounts = [] } = useAccounts(false)
-  const { data: budgets = [] } = useBudgets(false)
-  const { data: currencies = [] } = useEnabledCurrencies()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const fileRef = useRef<HTMLInputElement>(null)
   // The textarea this disclosure swaps in, plus a one-shot flag set in the
@@ -115,275 +62,41 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
   const descListId = useId()
   const noteId = useId()
 
-  const defaultBudgetId =
-    budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
-
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [description, setDescription] = useState('')
-  const [type, setType] = useState<TransactionType>('expense')
-  const [amount, setAmount] = useState('')
-  const [accountId, setAccountId] = useState<number | null>(null)
-  const [currencyCode, setCurrencyCode] = useState<string | null>(null)
-  const [budgetId, setBudgetId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [otherCurrency, setOtherCurrency] = useState(false)
-  const [originalAmount, setOriginalAmount] = useState('')
-  const [originalCurrencyCode, setOriginalCurrencyCode] = useState<string | null>(null)
-  // The facet's linked-adjustment account; null = the NO_ADJUSTMENT sentinel
-  // (informational-only facet, no auto-adjustment booked).
-  const [originalAccountId, setOriginalAccountId] = useState<number | null>(null)
-  const [detailTab, setDetailTab] = useState<'items' | 'receipts' | null>(null)
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
-  // Rows are the editing source of truth in create mode (nameless rows, '' qty
-  // mid-edit, etc. survive). Normalization to the API payload shape happens
-  // once, at submit (rowsToItems, utils/transactionItems). Mirrors TransactionItemsEditor.
-  const [pendingRows, setPendingRows] = useState<Row[]>([])
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
-  // Once-per-receipt latch (seenPrefill) for the prefill block in the
-  // session render-adjust: a fresh parse mints a fresh object (BottomNav
-  // builds a new literal per onSuccess), so a second From-receipt flow
-  // still applies; the same reference re-observed never re-seeds. State,
-  // not a ref: the seed runs during render and react-hooks/refs
-  // (error-level) forbids ref writes there.
-  const [seenPrefill, setSeenPrefill] = useState<{ file: File; parsed: ParsedReceipt } | null>(null)
-  // Session tracker for the render-adjust below: the open flip or a
-  // mid-open mode swap (footer Copy: transaction -> null, copyFrom -> t;
-  // same object, so the mode discriminator is load-bearing) starts a new
-  // seeding session. The sentinel initializer (closed, no mode, no source)
-  // can never match a real session, so the first open always seeds. List
-  // lengths and prefillReceipt are deliberately not session inputs: a
-  // refetch that changes a length must never re-seed (it would clear typed
-  // edits and remint the idempotency key mid-session), and a receipt
-  // landing while open must stay ignored.
-  const [session, setSession] = useState<{
-    open: boolean
-    mode: 'edit' | 'copy' | 'create' | 'none'
-    source: Transaction | null
-  }>({ open: false, mode: 'none', source: null })
-  // Reference-list lengths the create-mode seeding last saw.
-  const [seededLens, setSeededLens] = useState({ a: accounts.length, b: budgets.length, c: currencies.length })
-  // Description autocomplete: keyboard highlight index into `suggestions`
-  // (-1 = none) and the panel-open flag (follows focus/typing, closed on
-  // Escape/Tab/select/blur). Reset in the open-effect and on type change.
-  const [highlighted, setHighlighted] = useState(-1)
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
-  // Optional note, hidden behind an "Add note" disclosure so the form's
-  // common path stays compact. Opens pre-expanded when the source carries a
-  // note - existing data must never sit hidden behind the toggle.
-  const [note, setNote] = useState('')
-  const [noteOpen, setNoteOpen] = useState(false)
-
-  const parse = useMutation({
-    mutationFn: (f: File) => transactionsApi.parseReceipt(f),
-    onSuccess: (result: ParsedReceipt, file: File) => {
-      setPendingFile(file)
-      // One-time conversion: parsed items carry extra fields (confidence, etc.)
-      // that must not leak into rows — itemsToRows picks exactly the four row
-      // fields, and ParsedReceiptItem is structurally assignable to
-      // TransactionItemInput, so no strip-map is needed. After this, rows live
-      // as Row[] until submit.
-      setPendingRows(itemsToRows(result.items))
-      setAmount(result.total ?? '')
-      if (result.date) setDate(result.date)
-      // Currency FIRST: when the parsed code is an enabled currency it becomes
-      // the transaction's own currency even if no account matches it (the
-      // traveling-cash case - the receipt alone tells us the money's currency).
-      // The account pick below then locks the same code when a matching account
-      // exists; no match leaves this code selected and the currency editable.
-      // Canonical casing comes from the enabled list, not the raw parse.
-      const parsedEnabled = currencies.find(
-        (c) => c.code.toUpperCase() === result.currency?.toUpperCase(),
-      )
-      if (parsedEnabled) setCurrencyCode(parsedEnabled.code)
-      // Merchant fills description only when the user hasn't typed one — matches
-      // ExtractionReviewModal's rule, simplified because this form's create-mode
-      // default is '' (not 'Receipt').
-      if (description === '' && result.merchant) setDescription(result.merchant)
-      // Auto-select the account whose currency matches the parsed receipt —
-      // prefer the per-currency default-flagged account, else the first by
-      // ordering. `useMutation` recreates this callback each render, so
-      // `accounts` and `accountId` are this render's current values. Do NOT
-      // override an account whose currency already matches (a deliberate user
-      // pick is respected). Read the current account's currency via
-      // `accounts.find(...)` rather than the L210 `account` const (declared
-      // after this mutation — referencing it here is a temporal-dead-zone
-      // ReferenceError; the explicit find is mandatory, not stylistic).
-      const pick = pickAccountForCurrency(accounts, result.currency)
-      if (
-        pick !== null &&
-        accounts.find((a) => a.id === accountId)?.currency_code?.toUpperCase() !== result.currency?.toUpperCase()
-      ) {
-        setAccountId(pick)
-      }
-    },
-    // A 503 here means the self-hosted scanner is off — the backend's detail
-    // already says so, so surface it rather than a generic error.
-    onError: (error) => toast.error(getApiErrorMessage(error, t('form.parseFailedFallback'))),
-  })
+  // The flat destructure keeps the JSX below byte-identical to HEAD: every
+  // name the markup reads is in scope under the same name.
+  const {
+    date, description, type, amount, accountId, currencyCode, budgetId, categoryId,
+    otherCurrency, originalAmount, originalCurrencyCode, originalAccountId,
+    note, noteOpen, pendingRows, budgets, highlighted, detailTab,
+    suggestions, showSuggestions,
+    setDate, setDescription, setType, setAmount, setBudgetId, setCategoryId,
+    setOtherCurrency, setOriginalAmount, setCurrencyCode, setNote, setNoteOpen,
+    setPendingRows, setHighlighted, setSuggestionsOpen, setDetailTab,
+    handleAccountChange, handleOriginalCurrencyChange, handleAdjustmentAccountChange,
+    handleDescriptionKeyDown,
+    budgetOptions, categoryOptions, typeOptions, accountSelectOptions,
+    currencyOptions, otherCurrencyOptions, adjustmentAccountOptions,
+    parse, parseFile, submit, isSaving,
+  } = useTransactionForm({ open, transaction, copyFrom, prefillReceipt })
 
   const handleFile = (f: File | null) => {
     if (!f) return
-    parse.mutate(f)
+    parseFile(f)
     // Same-file reselect must re-fire onChange; the File object is already
-    // captured by parse.mutate, so clearing the input value is safe. Without
-    // this, re-selecting the same file fires no change event (silent no-op).
+    // captured by the hook's parseFile, so clearing the input value is safe.
+    // Without this, re-selecting the same file fires no change event (silent
+    // no-op).
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  // Session-boundary external sync only - the render-adjust below owns all
-  // STATE seeding, so this effect sets no state. Reset the inline parse
-  // mutation (a closed mid-parse session must not leak isPending/error into
-  // the next open) and the file input's DOM value at every session boundary.
-  // Deliberately not run on mere list-length changes anymore: killing an
-  // in-flight parse because accounts refetched was a latent bug, not a
-  // feature.
+  // Session-boundary host sync: clear the file input's DOM value at every
+  // session boundary (the open flip or a mid-open mode swap), keyed on the
+  // same discriminators as the hook's seeding session (the hook resets its
+  // parse mutation at the same boundary).
   useEffect(() => {
     if (!open) return
-    parse.reset()
     if (fileRef.current) fileRef.current.value = ''
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction, copyFrom])
-
-  // Session render-adjust: a session boundary (the open flip, or a mid-open
-  // mode swap) seeds every field; React discards this render pass and
-  // re-runs the component with the seeded state before anything commits.
-  // Seeding runs during render, so this same pass must not consume the
-  // values it just queued.
-  const mode = transaction ? 'edit' : copyFrom ? 'copy' : 'create'
-  const source = transaction ?? copyFrom ?? null
-  const seeding = open !== session.open || session.mode !== mode || session.source !== source
-  if (seeding) setSession({ open, mode, source })
-  if (seeding && open) {
-    // Clear any receipt-upload state from a previous session.
-    setPendingFile(null)
-    setPendingRows([])
-    setDetailTab(null)
-    // Suggestion panel starts closed for every fresh open.
-    setHighlighted(-1)
-    setSuggestionsOpen(false)
-    // Copy mode prefills like edit, except the date: always today (D4).
-    if (source) {
-      setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
-      setDescription(source.description)
-      setNote(source.note ?? '')
-      setNoteOpen(!!source.note)
-      setType(source.type)
-      setAmount(source.amount)
-      setAccountId(source.account_id)
-      setCurrencyCode(source.currency_code)
-      setCategoryId(source.category_id)
-      setOtherCurrency(!!source.original_currency_code)
-      setOriginalAmount(source.original_amount ?? '')
-      setOriginalCurrencyCode(source.original_currency_code)
-      // Facet account round-trip. A stored null (informational-only facet,
-      // including every row saved before facet accounts existed) stays null
-      // in both modes - auto-picking here would book an adjustment on an
-      // unrelated save. Edit echoes the stored id verbatim, like account_id:
-      // the backend keeps an archived adjustment account. Copy is a create,
-      // which rejects archived accounts, so an archived source account falls
-      // back to the default-for-currency pick.
-      setOriginalAccountId(
-        transaction || source.original_account_id == null || accounts.some((a) => a.id === source.original_account_id)
-          ? source.original_account_id
-          : pickAccountForCurrency(accounts, source.original_currency_code),
-      )
-      // Uncategorized source → fall back to the create-mode default budget so the
-      // Category select is immediately usable (it is disabled while budgetId is
-      // null, and the Budget select below only renders for multi-budget
-      // workspaces). Mirrors the create branch's setBudgetId(defaultBudgetId).
-      setBudgetId(source.category_budget_id ?? defaultBudgetId)
-      // Edit mode bypasses the idempotency-key dedup — only create-mode
-      // submissions carry a key (Q5=A: no items on update, same rationale).
-      // Copy mode IS a create, so it gets a fresh key like the else branch.
-      setIdempotencyKey(transaction ? null : crypto.randomUUID())
-    } else {
-      setDate(new Date().toISOString().slice(0, 10))
-      setDescription('')
-      setNote('')
-      setNoteOpen(false)
-      setType('expense')
-      setAmount('')
-      // Single-account workspaces prefill the only account (a client-side
-      // convenience - the backend no longer defaults); its currency locks the
-      // form. Everything else starts account-less on the primary currency.
-      setAccountId(accounts.length === 1 ? accounts[0].id : null)
-      setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencies[0]?.code ?? null))
-      setBudgetId(defaultBudgetId)
-      setCategoryId(null)
-      setOtherCurrency(false)
-      setOriginalAmount('')
-      setOriginalCurrencyCode(null)
-      setOriginalAccountId(null)
-      // Fresh key per open in create mode. Persists across mutation retries
-      // within this open session — that's what makes a double-click or a
-      // network-blip replay return the original 201 instead of a duplicate.
-      setIdempotencyKey(crypto.randomUUID())
-
-      // Receipt-first entry (BottomNav "From receipt"): seed from an
-      // already-parsed receipt. Mirrors parse.onSuccess's seeding (above) but
-      // runs at open time. Once-per-receipt: the parent sets prefillReceipt
-      // BEFORE flipping open (BottomNav's parse.onSuccess does both in one
-      // handler), so the open-flip seeding pass always sees the receipt, and
-      // the seen-prefill state latch applies it at most once per receipt OBJECT.
-      // prefillReceipt is deliberately not a session input: a receipt
-      // landing while the modal is already open (a slow parse racing a manual
-      // New-transaction open) is ignored, not applied - applying it would
-      // re-seed over in-progress edits and regenerate the idempotency key
-      // minted above. The dropped receipt stays recoverable via the inline
-      // "Upload invoice/receipt" button below; do NOT remove that button.
-      // Merchant fills description unconditionally here because the line
-      // above just set it to '' (create-mode default is '').
-      if (prefillReceipt && prefillReceipt !== seenPrefill) {
-        setSeenPrefill(prefillReceipt)
-        const { file, parsed } = prefillReceipt
-        setPendingFile(file)
-        setPendingRows(itemsToRows(parsed.items))
-        setAmount(parsed.total ?? '')
-        if (parsed.date) setDate(parsed.date)
-        setDescription(parsed.merchant ?? '')
-        const parsedEnabled = currencies.find(
-          (c) => c.code.toUpperCase() === parsed.currency?.toUpperCase(),
-        )
-        if (parsedEnabled) setCurrencyCode(parsedEnabled.code)
-        // Auto-select the account whose currency matches the parsed receipt —
-        // mirrors parse.onSuccess. STALE-STATE NOTE: the `setAccountId(...)`
-        // at L170 above has NOT flushed yet within this same effect run (state
-        // reads inside an effect reflect the render that created the effect, not
-        // mid-effect setStates). So reading `accountId` here would be stale.
-        // Instead, recompute the L170 "intended current account id" locally and
-        // compare against that — this is the value accountId will hold once the
-        // effect's setStates flush. If a matching account exists and that
-        // intended account's currency doesn't already match the receipt's
-        // currency, override to the pick.
-        // Currency seeding above has the same stale-state shape: it derives
-        // from `parsed` and `currencies` directly instead of reading any
-        // just-set state, for the same reason as the account pick below.
-        const currentAccountId = accounts.length === 1 ? accounts[0].id : null
-        const pick = pickAccountForCurrency(accounts, parsed.currency)
-        if (
-          pick !== null &&
-          accounts.find((a) => a.id === currentAccountId)?.currency_code?.toUpperCase() !== parsed.currency?.toUpperCase()
-        ) {
-          setAccountId(pick)
-        }
-      }
-    }
-  }
-
-  // Create-mode arrival adjust: apply the data-derived create defaults
-  // (single-account prefill, primary currency, default budget) when the
-  // reference lists' lengths change, only for fields still at their seed
-  // values - never clears typed edits, never remints the idempotency key.
-  if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
-    setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
-    if (open && !source) {
-      if (accountId === null) {
-        setAccountId(accounts.length === 1 ? accounts[0].id : null)
-        setCurrencyCode(accounts.length === 1 ? accounts[0].currency_code : (currencyCode ?? currencies[0]?.code ?? null))
-      }
-      if (budgetId === null) setBudgetId(defaultBudgetId)
-    }
-  }
 
   // Disclosure expansion swaps the toggle button for the textarea (the
   // button unmounts, focus falls to <body>). Focus the freshly mounted
@@ -400,208 +113,10 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
     if (!isTouch) noteRef.current?.focus()
   }, [noteOpen, isTouch])
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories', budgetId],
-    queryFn: () => budgetsApi.listCategories(budgetId!),
-    enabled: open && !!budgetId && type !== 'adjustment',
-  })
-
-  // Frequent descriptions for the description autocomplete, cached per type.
-  // Keyed inside the ['transactions'] family so every transaction mutation's
-  // invalidation (including this form's own save) refetches it - a
-  // just-saved description shows up in the next open's suggestions.
-  const { data: freq } = useQuery({
-    queryKey: ['transactions', 'frequent-descriptions', type],
-    queryFn: () => transactionsApi.getFrequentDescriptions({ transaction_type: [type], limit: 6 }),
-    enabled: open && description.trim().length >= 2,
-    staleTime: 60_000,
-  })
-
-  // Substring matches of what is typed, excluding the exact match (typing a
-  // remembered description verbatim needs no suggestion). Never auto-applied:
-  // a suggestion lands in the field only on explicit Enter or click.
-  const suggestions = (freq?.items ?? [])
-    .filter((s) => {
-      const q = description.trim().toLowerCase()
-      return s.description.toLowerCase().includes(q) && s.description.toLowerCase() !== q
-    })
-    .slice(0, 6)
-  const showSuggestions =
-    open && suggestionsOpen && suggestions.length > 0 && description.trim().length >= 2
-
-  const mutation = useMutation({
-    mutationFn: async (amounts: { amount: string; originalAmount: string }) => {
-      const payload = {
-        date,
-        description: description.trim(),
-        // Always sent, even as null: update is full-replace - an absent key
-        // would silently clear a stored note.
-        note: note.trim() || null,
-        type,
-        // Already-normalized drafts (handleSubmit): the fields keep what
-        // the user typed, the wire gets dot-decimal.
-        amount: amounts.amount,
-        account_id: accountId,
-        currency_code: currencyCode,
-        category_id: type === 'adjustment' ? null : categoryId,
-        original_amount: otherCurrency ? amounts.originalAmount : null,
-        original_currency_code: otherCurrency ? originalCurrencyCode : null,
-        // Always sent, even as null: update is full-replace - null means the
-        // informational-only facet (and deletes any linked adjustment), a
-        // real id auto-creates/updates the adjustment on that account.
-        original_account_id: otherCurrency ? originalAccountId : null,
-      }
-      if (isEdit) {
-        const trans = await transactionsApi.update(transaction.id, payload)
-        // Edit mode never uploads an attachment here — uniform return shape so
-        // onSuccess can destructure { uploadFailed } for both branches.
-        return { trans, uploadFailed: false }
-      }
-      // Inline the items on the create call and send the idempotency key as
-      // a header. This is the atomic
-      // tx + items commit — once it returns, the data is durable.
-      // Adjustments carry no items: the list is hidden for them, so rows parked
-      // in state (a receipt parse before a type switch) must not ride along
-      // invisibly on the payload. An empty list matches the schema's omitted
-      // default exactly.
-      const trans = await transactionsApi.create(
-        { ...payload, items: type === 'adjustment' ? [] : rowsToItems(pendingRows) },
-        { idempotencyKey: idempotencyKey ?? undefined },
-      )
-      // Attachment upload is best-effort: the tx and its items are already
-      // committed. A failure here (e.g. S3 blip) is no longer fatal — report
-      // it via the return value so onSuccess surfaces ONE message, not a
-      // mid-flight error toast followed by a success toast. The user can
-      // re-add the receipt in edit mode.
-      let uploadFailed = false
-      try {
-        if (pendingFile) await transactionsApi.uploadAttachment(trans.id, pendingFile)
-      } catch {
-        uploadFailed = true
-      }
-      return { trans, uploadFailed }
-    },
-    onSuccess: ({ uploadFailed }) => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      // The transaction IS durable either way — invalidations + close run in
-      // both cases. Only the message differs: a single error vs a single success.
-      if (uploadFailed) {
-        toast.error(t('form.uploadFailedPartial'))
-      } else {
-        toast.success(isEdit ? t('form.updated') : t('form.added'))
-      }
-      onClose()
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, t('form.saveFailed'))),
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!description.trim()) return toast.error(t('form.descriptionRequired'))
-    if (!amount) return toast.error(t('form.amountRequired'))
-    const normAmount = normalizeAmountInput(amount)
-    if (normAmount === null) return toast.error(tCommon('validation.amountInvalid'))
-    // The other-currency amount is optional: an empty field keeps today's
-    // empty payload, a typed one must parse.
-    const normOriginalAmount = originalAmount === '' ? '' : normalizeAmountInput(originalAmount)
-    if (normOriginalAmount === null) return toast.error(tCommon('validation.amountInvalid'))
-    if (type === 'adjustment' && !accountId) return toast.error(t('form.adjustmentNeedsAccount'))
-    if (!currencyCode) return toast.error(t('form.chooseCurrency'))
-    mutation.mutate({ amount: normAmount, originalAmount: normOriginalAmount })
-  }
-
-  const accountOptions = accounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency_code})` }))
-  const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
-  const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
-  const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
-  // Adjustments must book to an account (an account-less adjustment moves no
-  // balance), so the sentinel disappears from the option list for them; a
-  // stale null accountId then simply shows the placeholder.
-  const accountSelectOptions =
-    type === 'adjustment'
-      ? accountOptions
-      : [{ value: NO_ACCOUNT, label: t('noAccount') }, ...accountOptions]
-  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
-  const otherCurrencyOptions = useMemo(
-    () => currencies.filter((c) => c.code !== currencyCode).map((c) => ({ value: c.code, label: c.code })),
-    [currencies, currencyCode],
-  )
-  // Sentinel FIRST, then the accounts holding the facet currency (the only
-  // legal adjustment targets). Plain names - every option shares one
-  // currency, so a code suffix would be noise. Archived accounts are not
-  // offered (an edited row's archived account shows the placeholder, like
-  // the account select); an empty list leaves the sentinel alone.
-  const adjustmentAccountOptions = [
-    { value: NO_ADJUSTMENT, label: t('form.noAdjustment') },
-    ...accounts
-      .filter((a) => originalCurrencyCode != null && a.currency_code.toUpperCase() === originalCurrencyCode.toUpperCase())
-      .map((a) => ({ value: a.id, label: a.name })),
-  ]
-
-  /** Picking a real account locks the currency to the account's (changing the
-      currency means changing the account). Re-selecting the sentinel clears the
-      account but KEEPS the currency - it just becomes editable again. */
-  const handleAccountChange = (value: number) => {
-    if (value === NO_ACCOUNT) {
-      setAccountId(null)
-      return
-    }
-    setAccountId(value)
-    const next = accounts.find((a) => a.id === value)
-    if (next) setCurrencyCode(next.currency_code)
-  }
-
-  /** Switching the facet currency re-picks its account (per-currency default
-      first, else the first by ordering, else none - informational-only): a
-      previous pick cannot survive the switch, it holds the old currency. */
-  const handleOriginalCurrencyChange = (code: string) => {
-    setOriginalCurrencyCode(code)
-    setOriginalAccountId(pickAccountForCurrency(accounts, code))
-  }
-
-  /** The sentinel maps back to null - the informational-only facet. */
-  const handleAdjustmentAccountChange = (value: number) => {
-    setOriginalAccountId(value === NO_ADJUSTMENT ? null : value)
-  }
-
-  /** Combobox keyboard semantics for the description field (mirrors
-   *  useListboxPanel): arrows move the highlight with wrap, Enter accepts the
-   *  highlighted suggestion (preventDefault - no form submit) or falls through
-   *  natively so the typed text submits as-is, Escape/Tab close the panel.
-   *  Escape is consumed (stopPropagation) so the surrounding Modal does not
-   *  also close - same rationale as the listbox panels. */
-  const handleDescriptionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSuggestions) return
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setHighlighted((prev) => (prev < 0 ? 0 : (prev + 1) % suggestions.length))
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setHighlighted((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1))
-        break
-      case 'Enter':
-        // Bounds check: a mid-flight refetch can shrink the list under a
-        // highlight set against the previous render's rows.
-        if (highlighted >= 0 && highlighted < suggestions.length) {
-          e.preventDefault()
-          setDescription(suggestions[highlighted].description)
-          setSuggestionsOpen(false)
-          setHighlighted(-1)
-        }
-        break
-      case 'Escape':
-        e.preventDefault()
-        e.stopPropagation()
-        setSuggestionsOpen(false)
-        break
-      case 'Tab':
-        setSuggestionsOpen(false)
-        break
-    }
+    const result = await submit()
+    if (result.ok) onClose()
   }
 
   return (
@@ -870,8 +385,8 @@ export default function TransactionFormModal({ open, onClose, transaction, copyF
           )}
           <div className="ml-auto flex items-center gap-2">
             <button type="button" onClick={onClose} className={secondaryButtonClass}>{t('form.cancel')}</button>
-            <button type="submit" disabled={mutation.isPending} className={primaryButtonClass}>
-              {mutation.isPending ? t('form.saving') : isEdit ? t('form.save') : t('form.add')}
+            <button type="submit" disabled={isSaving} className={primaryButtonClass}>
+              {isSaving ? t('form.saving') : isEdit ? t('form.save') : t('form.add')}
             </button>
           </div>
         </div>
