@@ -136,7 +136,15 @@
     "updated": "Transakcja zaktualizowana",
     "added": "Transakcja dodana",
     "saveFailed": "Nie udało się zapisać transakcji",
+    "saveAndAddAnother": "Zapisz i dodaj kolejną",
+    "saveTransaction": "Zapisz transakcję",
+    "scanReceipt": "Skanuj paragon",
     "uploadFailedPartial": "Transakcja zapisana, ale przesłanie paragonu nie powiodło się - możesz dodać go na ekranie edycji."
+  },
+  "unsavedChanges": {
+    "title": "Wyjść bez zapisywania?",
+    "message": "Twoje zmiany zostaną utracone.",
+    "discard": "Wyjdź"
   },
   "items": {
     "untitled": "Pozycja bez nazwy",

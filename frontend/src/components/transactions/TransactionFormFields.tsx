@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type Ref } from 'react'
 import { AlertCircle, CloudOff, Loader2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SegmentedControl from '../common/SegmentedControl'
@@ -14,6 +14,9 @@ import { useExtractionConfig } from '../../hooks/useDomain'
 import { NO_ACCOUNT } from '../../utils/accountSelect'
 import { NO_ADJUSTMENT, type UseTransactionFormReturn } from '../../hooks/useTransactionForm'
 
+// File types the receipt parser accepts - keep in sync with the
+// byte-identical copy in pages/NewTransactionPage.tsx (two consumers;
+// extract a shared constant at the third).
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 
 /** Sign prefix shown inside the amount input, keyed by type. A record
@@ -48,9 +51,14 @@ interface Props {
    *  latch, the note-focus one-shot ref, the touched map) and re-fires the
    *  amount input's per-open autoFocus. */
   form: UseTransactionFormReturn
+  /** Optional ref forwarded to the amount input. A host that keeps the
+   *  fields mounted across saves (the /new page's "Save and add another")
+   *  refocuses the amount field through it after the reset - the input's
+   *  autoFocus only fires at mount, and no remount happens there. */
+  amountInputRef?: Ref<HTMLInputElement>
 }
 
-export default function TransactionFormFields({ form }: Props) {
+export default function TransactionFormFields({ form, amountInputRef }: Props) {
   const { t } = useTranslation('transactions')
   const isTouch = useIsTouch()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
@@ -200,6 +208,7 @@ export default function TransactionFormFields({ form }: Props) {
                 parse at submit (normalizeAmountInput, hook-side). */}
             <input
               id="tx-amount"
+              ref={amountInputRef}
               type="text"
               inputMode="decimal"
               value={form.amount}

@@ -15,6 +15,7 @@ import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
 import Planned from './pages/Planned'
 import TransfersPage from './pages/TransfersPage'
+import NewTransactionPage from './pages/NewTransactionPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -38,6 +39,7 @@ function AppContent() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
+        <Route path="/new" element={<NewTransactionPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />
         <Route path="/settings" element={<ProfilePage />} />

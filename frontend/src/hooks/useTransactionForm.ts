@@ -40,6 +40,11 @@ export interface UseTransactionFormOptions {
    *  starts from the default account of the form's currency instead, else
    *  No account. Ignored unless create mode (no transaction/copyFrom). */
   initialAccountId?: number | null
+  /** Create-mode starting type (the /new page's ?type= seed): seeds the
+   *  type segmented control. Undefined (the default, the modal's behavior)
+   *  starts on expense. Ignored unless create mode - edit and copy seed
+   *  the type from the source transaction. */
+  initialType?: TransactionType
   /** Validation toasts are this hook's submit gate: same checks, same
    *  messages, fired from submit(). Default true (the modal's behavior).
    *  Pass false when the host surfaces validation inline instead - the
@@ -119,6 +124,7 @@ export function useTransactionForm({
   copyFrom = null,
   prefillReceipt = null,
   initialAccountId = null,
+  initialType,
   validationToasts = true,
 }: UseTransactionFormOptions) {
   const { t } = useTranslation('transactions')
@@ -327,7 +333,9 @@ export function useTransactionForm({
       setDate(new Date().toISOString().slice(0, 10))
       setDescription('')
       setNote('')
-      setType('expense')
+      // The caller's type seed wins (the page's ?type= link); the modal
+      // passes nothing and keeps the expense default.
+      setType(initialType ?? 'expense')
       setAmount('')
       // Starting account: the caller's initial account (the page's account
       // filter) when given, else the default account of the form's currency,
@@ -420,6 +428,14 @@ export function useTransactionForm({
         setAccountId(next)
         const account = next != null ? accounts.find((a) => a.id === next) : undefined
         setCurrencyCode(account ? account.currency_code : currency)
+      } else if (currencyCode == null) {
+        // A cold mount with an explicit initial account seeds the account
+        // before the accounts list arrives, so its currency could not be
+        // derived at seed time and the locked currency select would sit on
+        // its placeholder forever (submit then refuses on Choose currency).
+        // Heal it here, once the list lands.
+        const account = accounts.find((a) => a.id === accountId)
+        if (account) setCurrencyCode(account.currency_code)
       }
       if (budgetId === null) setBudgetId(defaultBudgetId)
     }
