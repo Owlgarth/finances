@@ -84,9 +84,9 @@ The sidebar uses Architectural Ledger tokens — no shadows, borders for structu
 ### Tablet (641–1024px)
 
 - Sidebar collapses to `56px` — icons only, no labels; `bg-surface border-r border-border` preserved
-- Context selectors: icon only (no workspace/account/period text)
+- Workspace selector: icon only (no workspace name)
 - User avatar shown, name hidden
-- Nav items: icon only; tooltip on hover shows label
+- Nav items: icon only; a title tooltip shows the label. Account and budget sub-rows do not render in the rail at all - the six-row caps and View-all links apply to the expanded sidebar only
 - Main content area: `margin-left: 56px`
 - Page content padding: `24px`
 - Balance cards: typically 2 per row
@@ -96,7 +96,9 @@ The sidebar uses Architectural Ledger tokens — no shadows, borders for structu
 
 - Sidebar hidden entirely
 - Bottom Navigation replaces sidebar (see below)
-- Current context (period + account) shown only via page header breadcrumb
+- Current context (the activity pages' month + sole filtered account) shows only via the page-header breadcrumb
+- Page-header account actions (search + profile icon buttons) are phone-only via CSS (`sm:hidden`), not a layout branch: every page header renders the pair, and from 640px up it is hidden. The profile button opens the account menu sheet (overflow destinations + workspace/user controls); the provider rides above the layout's phone/desktop branch so the context survives a 640px crossing
+- Planned's view switch is CSS-gated in both directions: the segmented row is `hidden sm:block`, and below 640px a phone-only recurring-rules icon button in the page header (`sm:hidden`) toggles the same `?view=` param
 - Main content area: full width, `padding-bottom: 72px` to clear bottom nav
 - Page content padding: `20px 16px`
 - Balance cards: 1 per row (full width) or 2 narrow
@@ -133,8 +135,10 @@ Fixed at the bottom of the viewport. Uses Architectural Ledger tokens.
 
 Each nav item is a 44×44px minimum touch target. Icons are Lucide at 20px (`h-5 w-5`), 1.5px
 stroke — the one deliberate size exception to the global 14px icon rule.
-Implementation: `frontend/src/components/layout/BottomNav.tsx` (bar + More sheet + FAB
-quick-add action sheet).
+Implementation: `frontend/src/components/layout/BottomNav.tsx` (bar + FAB quick-add action
+sheet; slots Home / Activity / Accounts / Budgets, no More tab). The account menu sheet
+(`AccountMenuSheet.tsx` - overflow destinations plus workspace/user controls) is opened
+from the page-header profile button through `AccountMenuContext`.
 
 ---
 

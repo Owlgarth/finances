@@ -54,7 +54,7 @@ Key-presence greps over the pretty-printed catalogs cannot use the dotted key pa
 
 ## Key Removal Gates
 
-- `key:rm` refuses while `key:find` still sees references; `--force` is only sane when the remaining hits are dead comments. Never force past a live reference - delete the referencing code (the dead component) in the same change.
+- `key:rm` refuses while `key:find` still sees references; `--force` is only sane when every remaining hit has been READ and adjudicated a non-reference by inspection - dead code comments, doc-comment example text containing the bare string, and keyword-array literals (a palette's `keywords: ['txns']` search terms are data, not keys). `key:find`'s bare-string rule counts comment literals too, so a spec's "exactly N hits" prediction can UNDER-count the real total. The live-reference proof is the direct `t('key')` grep returning 0 across the tree. Never force past a hit you have not read; never force past a live reference - delete the referencing code (the dead component) in the same change.
 - `key:find` matches static literals only: dynamic key variables and the `t('key', { ns })` option-object form are invisible to it, and bare-string matches count only in files that call `useTranslation` of that namespace. Pre-check the target namespace's `useTranslation` files when predicting gate outcomes. Cross-namespace queries need the colon form (`numbers:datePicker.selectDate`); the dot form silently searches the wrong namespace.
 - A section key (`key:rm common.errorMessage`) deletes the whole subtree in one call - prefer it over listing leaves.
 

@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -190,7 +190,14 @@ same session - in PR #81 it paid for itself twice.
   sourcemap's line numbers match the older revision. Before trusting any "missing UI"
   verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
   the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
-  invalidates the cache. Exemplar: PR #146's first stepper probe.
+  invalidates the cache. Exemplar: PR #146's first stepper probe. Verify the served
+  transform per FILE, never per subset: a multi-write edit session freezes the module
+  graph per file - exactly the files whose edits landed as separate writes can sit at
+  mid-edit states (the import write landed, the block write missing) while their siblings
+  verify clean - so one file's clean transform proves nothing about the rest. Curl every
+  touched module's transform before trusting any FAIL; the frozen-file symptom is a
+  runtime `Link is not defined` plus false header assertions against a correct product.
+  Exemplar: PR #10's header swaps, where three of six edited files were frozen mid-edit.
 - Backend env drift is the api-container twin of served-code staleness: a container started
   before the branch serves the new code but has never run the branch's MIGRATIONS, so a
   brand-new endpoint 500s with `UndefinedTable` on its first hit - it reads like a product
@@ -208,6 +215,17 @@ same session - in PR #81 it paid for itself twice.
   live diagnosis refutes its pre-registered hypotheses, record each refutation with its log
   signatures (which handlers ran, what committed), never silently claim a reproduction the
   logs do not show, and route acceptance to an explicit on-device manual gate riding the PR.
+- Backgrounded pages stall rAF polling: a page in a background tab stops advancing
+  `requestAnimationFrame`, so a probe step that waits on a rAF-driven condition hangs while
+  the same step passes with the page in front - the fault follows the harness's own tab
+  switches, not the product. `bringToFront()` at page-switch boundaries keeps rAF time
+  advancing (a different purpose from the cross-tab staleness focus event above).
+- Pixel-diff baselines that span a UTC midnight rollover are date noise, not regression:
+  date-sensitive rendering (a default month range, a "today" marker) re-derives at the
+  rollover, so a before/after screenshot pair captured across midnight diffs on
+  date-derived pixels and reads as a product regression. Re-baseline both trees on the
+  same date before suspecting the product. Exemplar: PR #10's Dashboard pixel-diff
+  investigation, cleared by a same-date re-baseline.
 - Console-error gating is path-precise, never blanket: `/config.js` 404s on dev-server full page
   loads are documented pre-existing noise (the file is generated only in the deployed ui
   container; on Vite dev that 404 is expected). Exclude it by an exact pattern

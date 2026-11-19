@@ -96,7 +96,7 @@ budget bookmark opens that budget with a chosen currency preselected (no period
 is captured - it opens on the current period); transactions and planned
 bookmarks store the page's URL filter params verbatim, and empty params is a
 plain page link. Active bookmarks render in the desktop sidebar and the mobile
-More sheet, capped by the user's `bookmark_visible_limit` preference (3, 5, 8,
+account menu sheet, capped by the user's `bookmark_visible_limit` preference (3, 5, 8,
 or all; default 5); the manage page at `/bookmarks` reorders them and toggles
 visibility, archive, edit, and delete (archived rows hide everywhere except the
 manage page's Archived section; deleting a budget deletes its bookmarks). The
@@ -225,7 +225,7 @@ Fernet-encrypted with a dedicated `TWO_FACTOR_ENCRYPTION_KEY` (empty → legacy
 frontend/src/
 ├── api/client.ts           # Axios instance + typed API modules
 ├── components/
-│   ├── layout/             # MainLayout, Sidebar (6 destinations), UserMenu, LanguageModal
+│   ├── layout/             # MainLayout, Sidebar (Home/Activity/Accounts/Budgets + Members/Settings footer), BottomNav + AccountMenuSheet (mobile), UserMenu, LanguageModal
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
 │   ├── accounts/           # Account/SetBalance/Transfer modals
 │   ├── bookmarks/          # bookmarkMeta (bookmark icon + color registry)
@@ -247,6 +247,8 @@ frontend/src/
 │   │                          #   useMultiCurrency, useExtractionEnabled
 │   ├── usePermissions.ts       # canManageAccounts, canWrite, …
 │   └── (other hooks)           # useAttachments, useBookmarks, useWorkspaceSettings,
+│                              #   useActivityScope (Activity title + scope
+│                              #   breadcrumb for the three list routes),
 │                              #   useListboxPanel, useWorkspaceSwitch,
 │                              #   useMediaQuery, useBreakpoint, useDebouncedField,
 │                              #   useOverlay, useKeyboardInset, useExtractionPolling
@@ -255,8 +257,9 @@ frontend/src/
 │                           #   and the per-language catalogs in locales/<lang>/
 ├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
-│                           #   Transfers (no sidebar slot - reached from
-│                           #   Accounts and the command palette), Bookmarks,
+│                           #   Transfers (part of the Activity scope - reached
+│                           #   from the Activity tab, Accounts, and the
+│                           #   command palette), Bookmarks,
 │                           #   Members, Settings, plus auth/legal pages (Login, Register,
 │                           #   VerifyEmail, ConfirmEmailChange, ReConsent,
 │                           #   PrivacyPolicy, Terms, NotFound)
