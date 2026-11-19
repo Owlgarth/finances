@@ -38,5 +38,7 @@
   "receiptReading": "Reading receipt…",
   "bookmarks": "Bookmarks",
   "bookmarksManage": "Manage bookmarks",
+  "viewAllAccounts": "View all accounts",
+  "viewAllBudgets": "View all budgets",
   "receiptReadFailed": "Could not read the receipt"
 }

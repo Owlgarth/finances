@@ -38,5 +38,7 @@
   "receiptReading": "Czytanie paragonu…",
   "bookmarks": "Zakładki",
   "bookmarksManage": "Zarządzaj zakładkami",
+  "viewAllAccounts": "Zobacz wszystkie konta",
+  "viewAllBudgets": "Zobacz wszystkie budżety",
   "receiptReadFailed": "Nie udało się odczytać paragonu"
 }

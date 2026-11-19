@@ -38,5 +38,7 @@
   "receiptReading": "Читаємо чек…",
   "bookmarks": "Закладки",
   "bookmarksManage": "Керувати закладками",
+  "viewAllAccounts": "Переглянути всі рахунки",
+  "viewAllBudgets": "Переглянути всі бюджети",
   "receiptReadFailed": "Не вдалося прочитати чек"
 }
