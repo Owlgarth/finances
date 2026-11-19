@@ -215,12 +215,18 @@ export default function Planned() {
             >
               <Repeat size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
-            {/* Hidden on mobile: the FAB quick-add owns creation there. */}
+            {/* Planned and recurring creation lives on this tab, not behind
+                the FAB - the button is visible on every tier, phones
+                included, because nothing else offers it. Deviation from
+                the modal-size rule (never put a form with more than three
+                fields in a modal): phone creation stays modal here until
+                the planned forms move to pages - hiding it would make the
+                capability unreachable on phones. */}
             {canWrite && (
               <button
                 type="button"
                 onClick={() => setCreateRequest((n) => n + 1)}
-                className={`${primaryButtonClass} max-sm:hidden`}
+                className={primaryButtonClass}
               >
                 <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
               </button>

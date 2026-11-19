@@ -15,6 +15,7 @@
   "type": {
     "income": "Income",
     "expense": "Expense",
+    "transfer": "Transfer",
     "adjustment": "Adjustment"
   },
   "sort": {
@@ -90,6 +91,7 @@
     "noteAria": "Note",
     "noteLabel": "Note",
     "addNote": "Add note",
+    "moreDetails": "More details",
     "accountLabel": "Account",
     "selectAccount": "Select account",
     "accountAria": "Account",
@@ -109,6 +111,7 @@
     "adjustmentAccountLabel": "Adjustment account (optional)",
     "adjustmentAccountAria": "Adjustment account",
     "noAdjustment": "No adjustment (informational only)",
+    "balanceAdjustment": "Balance adjustment",
     "copy": "Copy",
     "delete": "Delete",
     "cancel": "Cancel",
@@ -121,6 +124,7 @@
     },
     "reading": "Reading…",
     "uploadReceipt": "Upload invoice/receipt",
+    "removeFileAria": "Remove selected file",
     "scanningOffline": "Scanning offline",
     "scannerOfflineTitle": "The receipt scanner is offline right now",
     "parseFailedFallback": "Could not read the receipt",
@@ -131,7 +135,16 @@
     "updated": "Transaction updated",
     "added": "Transaction added",
     "saveFailed": "Failed to save transaction",
+    "saveAndAddAnother": "Save and add another",
+    "saveTransaction": "Save transaction",
+    "saveTransfer": "Save transfer",
+    "scanReceipt": "Scan receipt",
     "uploadFailedPartial": "Transaction saved, but the receipt upload failed \u2014 you can add it from the edit screen."
+  },
+  "unsavedChanges": {
+    "title": "Leave without saving?",
+    "message": "Your changes will be lost.",
+    "discard": "Leave"
   },
   "items": {
     "untitled": "Untitled item",

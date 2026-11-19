@@ -27,18 +27,8 @@
   "disableZoom": "Wyłącz zoom",
   "close": "Zamknij",
   "addRecord": "Dodaj wpis",
-  "quickAdd": {
-    "newTransaction": "Nowa transakcja",
-    "transfer": "Przelew",
-    "fromReceipt": "Z paragonu",
-    "scanningOffline": "Skanowanie niedostępne",
-    "recurringRule": "Reguła cykliczna",
-    "plannedTransaction": "Zaplanowana transakcja"
-  },
-  "receiptReading": "Czytanie paragonu…",
   "bookmarks": "Zakładki",
   "bookmarksManage": "Zarządzaj zakładkami",
   "viewAllAccounts": "Zobacz wszystkie konta",
-  "viewAllBudgets": "Zobacz wszystkie budżety",
-  "receiptReadFailed": "Nie udało się odczytać paragonu"
+  "viewAllBudgets": "Zobacz wszystkie budżety"
 }

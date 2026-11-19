@@ -347,6 +347,8 @@ export interface TransactionInput {
 export const transactionsApi = {
   getAll: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; currency_code?: string[]; search?: string; amount_gte?: number; amount_lte?: number; ordering?: TransactionOrdering; page?: number; page_size?: number }): Promise<PaginatedResponse<Transaction>> =>
     api.get<PaginatedResponse<Transaction>>('/transactions', { params }).then(res => res.data),
+  get: (id: number): Promise<Transaction> =>
+    api.get<Transaction>(`/transactions/${id}`).then(res => res.data),
   getTotals: (params?: { date_from?: string; date_to?: string; account_id?: number[]; category_id?: number[]; budget_id?: number[]; transaction_type?: string[]; currency_code?: string[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'type' | 'category' | 'type,category' }): Promise<TransactionTotalsResponse> =>
     api.get<TransactionTotalsResponse>('/transactions/totals', { params }).then(res => res.data),
   /** Filtered JSON export (blob). Honors only date_from/date_to and a single

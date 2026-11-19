@@ -15,6 +15,7 @@
   "type": {
     "income": "Дохід",
     "expense": "Витрата",
+    "transfer": "Переказ",
     "adjustment": "Коригування"
   },
   "sort": {
@@ -92,6 +93,7 @@
     "noteAria": "Нотатка",
     "noteLabel": "Нотатка",
     "addNote": "Додати нотатку",
+    "moreDetails": "Додатково",
     "accountLabel": "Рахунок",
     "selectAccount": "Оберіть рахунок",
     "accountAria": "Рахунок",
@@ -111,6 +113,7 @@
     "adjustmentAccountLabel": "Рахунок коригування (необов'язово)",
     "adjustmentAccountAria": "Рахунок коригування",
     "noAdjustment": "Без коригування (лише інформація)",
+    "balanceAdjustment": "Коригування балансу",
     "copy": "Копіювати",
     "delete": "Видалити",
     "cancel": "Скасувати",
@@ -123,6 +126,7 @@
     },
     "reading": "Читаємо…",
     "uploadReceipt": "Завантажити рахунок/квитанцію",
+    "removeFileAria": "Видалити вибраний файл",
     "scanningOffline": "Сканування недоступне",
     "scannerOfflineTitle": "Сканер квитанцій зараз недоступний",
     "parseFailedFallback": "Не вдалося прочитати квитанцію",
@@ -133,7 +137,16 @@
     "updated": "Транзакцію оновлено",
     "added": "Транзакцію додано",
     "saveFailed": "Не вдалося зберегти транзакцію",
+    "saveAndAddAnother": "Зберегти та додати ще одну",
+    "saveTransaction": "Зберегти транзакцію",
+    "saveTransfer": "Зберегти переказ",
+    "scanReceipt": "Сканувати квитанцію",
     "uploadFailedPartial": "Транзакцію збережено, але не вдалося завантажити квитанцію - додайте її на екрані редагування."
+  },
+  "unsavedChanges": {
+    "title": "Вийти без збереження?",
+    "message": "Ваші зміни буде втрачено.",
+    "discard": "Вийти"
   },
   "items": {
     "untitled": "Позиція без назви",
