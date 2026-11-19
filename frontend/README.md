@@ -26,7 +26,7 @@ frontend/
 │   │   ├── client.ts         # Axios instance + typed API modules
 │   │   └── queryClient.ts    # App-wide QueryClient (own module - no import cycles)
 │   ├── components/
-│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm, PageHeader, FormPage, SplitView, DetailPanel
+│   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), AccountMenuSheet (mobile account menu) + AccountMenuContext (its open-request channel), ActivityTabs (the Activity tab row), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm, PageHeader, FormPage, SplitView, DetailPanel
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles, DateQuickPick, Disclosure, EditableField, LinkedRow…
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
 │   │   ├── bookmarks/        # bookmarkMeta (bookmark icon + swatch-key registry, BookmarkGlyph)
@@ -48,11 +48,12 @@ frontend/
 │   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled
 │   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
 │   │   ├── useExtractionPolling.ts  # Receipt-extraction polling for one transaction's attachments: pending id, poll query, done/failed side effects, review payload
-│   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/More-sheet rows)
+│   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/account-menu-sheet rows)
 │   │   ├── useWorkspaceSettings.ts  # Per-workspace page defaults - useWorkspaceSettings + useUpdateWorkspaceSettings (the member-settings blob query + delta PATCH)
 │   │   ├── usePermissions.ts        # Role-based permission checks
+│   │   ├── useActivityScope.ts      # Shared Activity scope chrome for the three list routes - the "Activity" title plus the scope breadcrumb (exact-calendar-month label + sole filtered account name, joined " / "), derived from the URL like the pages' export handlers
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
-│   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (sidebar + bottom nav)
+│   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (workspace selector dropdown + account menu sheet)
 │   │   ├── useMediaQuery.ts         # Responsive breakpoint detection
 │   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop/isWide, Tailwind-snapped; isWide overlaps isDesktop from 1280px - responsive.md's tier table predates it, the hook's comment is the interim contract) + useIsTouch (pointer: coarse)
 │   │   ├── useKeyboardInset.ts      # On-screen keyboard overlap via visualViewport (iOS never resizes the layout viewport) - lifts BottomSheet and FormPage's sticky footer
@@ -66,7 +67,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the More sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── i18next.config.ts        # i18next-cli config (i18n:extract; locales list)
 ├── package.json
@@ -76,11 +77,15 @@ frontend/
 
 ## Pages and Routes
 
-Six in-app destinations (sidebar) plus the Settings page (user menu on desktop,
-More sheet on mobile), a Transfers page with no nav slot of its own (reached
-from Accounts and the command palette), a Bookmarks manage page (reached from
-the Manage row of the sidebar/More-sheet bookmarks sections), nested budget
-routes, auth/legal routes and a 404 catch-all.
+Four primary destinations in the sidebar and the bottom bar (Home, Activity, Accounts,
+Budgets - Activity covers `/transactions`, `/planned` and `/transfers` through one tab and
+one tab row; the sidebar adds Members and Settings footer rows), a Transfers page reached
+through the Activity tab (and the Accounts "View all transfers" link and the command
+palette), a Bookmarks manage page (reached from
+the Manage row of the sidebar's or the account menu sheet's bookmarks section), nested budget
+routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
+`PageHeader`; the three list routes share the "Activity" title, a scope breadcrumb and the
+`ActivityTabs` row.
 
 | Path | Component | Description |
 |------|-----------|-------------|
@@ -96,52 +101,67 @@ routes, auth/legal routes and a 404 catch-all.
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target); exact planned/actual/remaining column totals (footer row on desktop, totals card on mobile) sum the visible, non-archived rows client-side - not the API's summary totals, which include archived categories' money the table hides |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, receipt-first create; sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download; opens on the user's saved view defaults (personal, per workspace - explicit URL params win) with a "Save as default" button beside the bookmark action |
-| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Save as default", "Export view" - planned view only) |
-| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; no sidebar slot - entry via the Accounts "View all transfers" link or the command palette |
+| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Save as default", "Export view" - planned view only) |
+| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
 | `/members` | WorkspaceMembersPage | Member management |
-| `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/More sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the More sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
+| `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
 | `*` | NotFoundPage | 404 catch-all for unknown paths |
 
 ## Components
 
 **Layout** (`components/layout/`): `MainLayout` (responsive wrapper - renders the
-desktop `Sidebar` and the mobile `BottomNav`; with no stored sidebar
+desktop `Sidebar` and the mobile `BottomNav`; both branches sit inside
+`AccountMenuProvider`, and the phone branch also mounts `AccountMenuSheet`, so every
+page header can open the account menu and the context survives a 640px viewport
+crossing; with no stored sidebar
 preference, desktop viewports below the 1280px `isWide` boundary mount the
 collapsed icon rail - 1280px+ keeps the expanded default - and while no
 preference is stored, crossing that boundary re-applies the tier default; the
 first manual toggle writes the preference and permanently disarms the
-adjust), `Sidebar` (6 destinations +
-workspace selector + user menu; its gear opens `WorkspaceSettingsPanel`; below
-the destinations, a personal bookmarks section lists the user's active
+adjust), `Sidebar` (a Ctrl K / ⌘K search row, then four nav destinations - Home,
+Activity (lit on `/transactions`, `/planned` and `/transfers` by pathname
+prefix), Accounts and Budgets, each followed by up to six sub-rows plus a
+View-all link (account rows show name + balance, the currency code only in
+multi-currency workspaces; balances reuse the `['current-balances']` cache
+entry), a personal bookmarks section (the user's active
 bookmarks - capped by their preference - with a Manage link to `/bookmarks`),
-`BottomNav` (mobile shell: bottom bar with Home/Txns/Budgets/More tabs around a
+and a footer with Members and Settings rows above the user menu; the workspace
+selector's gear opens `WorkspaceSettingsPanel`; in the collapsed rail the
+labels and sub-rows hide and the icons carry title tooltips),
+`BottomNav` (mobile shell: bottom bar with Home/Activity/Accounts/Budgets tabs
+around a
 center quick-add FAB - the FAB hides for viewers/workspace-less users but the
 slot stays so tabs don't shift; the FAB's ActionSheet offers new transaction,
-transfer, from-receipt (parse then seed the form), planned and recurring rule;
-the More sheet carries the overflow destinations (Accounts, Planned, Members,
+transfer, from-receipt (parse then seed the form), planned and recurring rule),
+`AccountMenuSheet` (the mobile account menu, opened from the page-header
+profile button through `AccountMenuContext`'s monotonic open-tick: the
+overflow destinations (Accounts, Planned, Members,
 Settings), a bookmarks section (the same capped entries + Manage link as the
 sidebar's), search, logout, workspace switcher + create/settings, the theme row
 and the zoom toggle),
 `UserMenu`, `WorkspaceSelector`, `ThemeToggleRow` (dark-mode toggle row shared by
-the desktop UserMenu dropdown and the mobile More sheet), `LanguageModal`
+the desktop UserMenu dropdown and the mobile account menu sheet), `LanguageModal`
 (mount-per-use language picker - one card per registry language with the active
 one checked; opened by the "Language" row in the desktop UserMenu dropdown and
-the mobile More sheet, each closing itself first so the modal is the only
+the mobile account menu sheet, each closing itself first so the modal is the only
 overlay; a tap applies the switch immediately, then a fire-and-forget
 preferences PATCH persists it when authenticated), `WorkspaceSettingsPanel`
 (workspace rename/delete modal hosting the admin-gated
 `CurrenciesSettingsSection` and the personal `WorkspaceDefaultsSection`
 ("Default views" - the member's per-workspace page defaults, every role);
-opened from the sidebar gear and the More sheet),
+opened from the workspace selector's gear and the account menu sheet),
 and `CreateWorkspaceForm` (mount-per-use create-workspace
 modal - name + ordered currency multi-select via `CurrencySetField` in compact
-mode - opened as a modal from all three call sites: the sidebar button, the
-workspace selector dropdown, and the mobile More sheet; also exports
+mode - opened as a modal from all three call sites: the no-workspace message,
+the workspace selector dropdown, and the mobile account menu sheet; also exports
 `CreateWorkspaceButton`).
-`PageHeader` (standard page-top row: an optional back affordance (`backTo`
+`PageHeader` (standard page-top row, used by all eleven pages: an optional back
+affordance (`backTo`
 route), a context breadcrumb in the metadata register, the title, and
-right-aligned `actions`; the row's min-height floors serve the 44px
+right-aligned `actions`; `showAccountActions` adds the phone-only search +
+profile pair (`sm:hidden`) opening the command palette and the account menu
+sheet; the row's min-height floors serve the 44px
 coarse-pointer and 48px phone controls), `FormPage` (full-page form shell: a
 title row whose back affordance calls `onClose` - the caller owns any
 unsaved-changes confirmation - a scrolling body, and a sticky footer whose
@@ -153,8 +173,12 @@ the fixed 400px panel width once, and a null panel leaves the bare list
 pixel-identical), and `DetailPanel` (the in-flow record panel for
 `SplitView`'s slot: a card in the page flow, not an overlay - no scrim, focus
 trap or scroll lock - whose Escape closes it only while no blocking overlay
-is open). The four are redesign phase-1 foundations: no call sites ship yet;
-Phases 2-4 of the redesign wire them into the record pages.
+is open). `ActivityTabs` (the Activity tab row on the three list routes -
+NavLink segments in the SegmentedControl register carrying `from`/`to` always
+and the `account` filter as a comma list between the list pages or a single
+id to Transfers when exactly one account is selected). FormPage, SplitView
+and DetailPanel are redesign phase-1 foundations with no call sites yet;
+the later redesign phases wire them into the record pages.
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
@@ -165,7 +189,8 @@ it on mobile), `ActionSheet` (titled list of 44px tap actions in a bottom sheet 
 the touch replacement for hover-revealed row actions; closes the sheet before
 running the action so it can safely open a modal), `CommandPalette`
 (Ctrl/Cmd+K page search, summoned via the exported `openPageSearch()` from the
-sidebar and the More sheet: static destinations plus server-backed
+sidebar's search row, the page headers' phone-only search button, and the
+account menu sheet: static destinations plus server-backed
 Budgets/Accounts/Transactions/Planned results once the query reaches 2 chars;
 desktop popover, mobile bottom sheet), `FilterBar` (list-page filter scaffolding -
 `FiltersToggle` with an active-filter count badge, the `FilterPanel` region with
@@ -174,7 +199,8 @@ params), `SearchInput` (search box with leading icon, debounced commit and clear
 X - the remembered search on the list pages), `AmountInput` (debounced numeric
 input for the min/max amount filters), `Skeleton` (wireframe loading bars -
 `Skeleton` single bar + `SkeletonRows` stack), `RoleBadge` (inline workspace-role
-chip next to workspace rows in the selector dropdown and the mobile More sheet),
+chip next to workspace rows in the selector dropdown and the mobile account
+menu sheet),
 `ListFilterFields` (the
 shared Transactions/Planned filter panel, with date-preset chips: This month /
 Last month / Last 30 days / This year / All time - the last clears both date

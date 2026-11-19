@@ -22,22 +22,34 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 
 ## Navigation
 
-- **Bottom tab bar, 5 slots**: Home · Transactions · **[+]** · Budgets · More. Labels always
-  visible, active tab in the primary color, safe-area padded.
-- **More** opens a sheet: Search (global page search), Accounts, Planned, Members, Settings,
+- **Bottom tab bar, 5 slots**: Home · Activity · **[+]** · Accounts · Budgets. Labels always
+  visible, active tab in the primary color, safe-area padded. The Activity tab covers all
+  three activity routes (`/transactions`, `/planned`, `/transfers`): it lights by pathname
+  prefix, not per-route matching.
+- **Account menu** (sheet, opened from the page-header profile button on every page; no
+  More tab exists): Search (global page search), Accounts, Planned, Members, Settings,
   logout, then a bookmarks section (the user's active bookmarks, capped
   by their preference, with a Manage link to `/bookmarks` - shown only
   when they have any), then workspace switching
   (with role badges), a create-workspace row (closes the sheet and opens the
   create-workspace modal - a bottom sheet with the ordered currency multi-select - as the
-  only overlay layer), workspace settings, dark mode, language (closes the sheet
+  only overlay layer), workspace settings, then a user section (labeled with the user's
+  full name or email): reload, dark mode, language (closes the sheet
   and opens the language picker - one card per registry language, showing the
   active one's native name on the row; a tap applies the switch immediately),
   disable-zoom toggle (opt-in,
-  per-device: kills double-tap/pinch zoom for a native feel), close. The bottom-most row
-  (logout's old slot, directly above the just-tapped More button, which collected
-  accidental logouts) holds a Close button on its left side only - the rest of the row
+  per-device: kills double-tap/pinch zoom for a native feel), close. Logout lives mid-sheet
+  (below Settings, away from the thumb). The bottom-most row (logout's old slot, kept as a
+  misclick guard) holds a Close button on its left side only - the rest of the row
   is deliberately inert so a stray tap there does nothing.
+- **The three activity routes share one scope chrome**: `/transactions`, `/planned` and
+  `/transfers` all head the page with the same "Activity" title, a breadcrumb naming the
+  current scope (the month label when the URL date range is an exact calendar month, the
+  sole filtered account's name when exactly one account is filtered, joined " / "), and a
+  three-segment tab row (Transactions / Planned / Transfers). A tab switch carries the date
+  range always, and the account filter between the pages: as a comma list between the two
+  list pages, as a single id to Transfers only when exactly one account is selected. Every
+  other filter param stays behind - a tab switch is a scope change, not a filter copy.
 - **The center FAB is the global create action**: New transaction · Transfer · From receipt
   (only when extraction is configured) · Planned · Recurring rule. Available from every
   screen; screens hide their own creation buttons when the FAB covers them. Viewers
@@ -46,8 +58,9 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 - **Global search**: jump to any page or budget by name, and once the query reaches
   two characters also surface matching data - accounts (filtered client-side from the
   shared list cache) and transactions/planned items (server search, top 5 each) -
-  ⌘K/Ctrl+K and a Search entry
-  in the desktop sidebar; the Search row in the More sheet on mobile (sheet presentation).
+  ⌘K/Ctrl+K and a Search row
+  in the desktop sidebar; on mobile, the page-header search button and the account
+  menu's Search row (sheet presentation).
 
 ## Per-screen patterns
 
@@ -55,10 +68,10 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 |---|---|
 | Transactions | List rows (description / meta line / amount right-aligned); row tap → action sheet (Edit, Delete); always-visible debounced search (remembered across visits) + Filters disclosure (multi-select account/type/budget/category/currency - the transaction's stored own currency, hidden in single-currency workspaces - amount range, date range) with an active-count badge and date-preset chips (This month / Last month / Last 30 days / This year / All time - All time clears both date bounds and is lit whenever neither is set, the first-load state when no default is saved); sort select + per-type totals strip (adjustments excluded); Save-as-default button beside the bookmark action (persists the current view as the page's opening state - personal, per workspace); Export view button (JSON; honors only the date range and a single type); filter state lives in the URL |
 | Accounts | Full-width balance cards; card tap → action sheet (View transactions, Set balance, Edit, Archive, Delete-when-archived); transfers listed with cross-currency amounts on two lines, headed by a "View all transfers" link to `/transfers` |
-| Transfers | Rows (from → to / date / amount, cross-currency amounts on two lines); row tap → action sheet (Edit, Repeat, Delete); account (either side) + date-range filters, URL-synced (opens on the saved date-range default, and the same Save-as-default button as the other list pages persists it); creation via the FAB's Transfer action on mobile (no sidebar or More-sheet slot - the page is reached from Accounts or global search) |
+| Transfers | Rows (from → to / date / amount, cross-currency amounts on two lines); row tap → action sheet (Edit, Repeat, Delete); account (either side) + date-range filters, URL-synced (opens on the saved date-range default, and the same Save-as-default button as the other list pages persists it); creation via the FAB's Transfer action on mobile (the page is part of the Activity scope - reached from the Activity tab, the Accounts "View all transfers" link, or global search) |
 | Budget detail | Category cards (name centered in the header; Planned/Actual/Remaining beneath, planned tap → numeric editor; card/row tap toggles a visual highlight); one currency at a time, selected through a per-currency totals strip above the cards (one chip per currency with that currency's own planned total + spend meter, horizontally scrollable; last-viewed currency remembered per budget); single-currency budgets show a plain code chip; desktop keeps the ledger table with a sticky category column; period switcher = arrows + sheet picker (capped window centered on the viewed period; "View all periods" as the sheet's last row), plus admin-only add/edit/delete period icon buttons beside it on custom-cadence budgets (44px touch targets); "Manage categories" (write roles) opens the archive-first manager - delete only on already-archived rows (confirm states the live transaction count), merge into a target; its rows tap → action sheet on touch |
 | Budget periods | Year-sectioned period cards, newest first (CURRENT chip on the active period, past periods muted); card tap opens the budget detail on that period (`?period=`); admin-only edit/delete icons on custom periods and an Add period button on custom-cadence budgets (44px touch targets) |
-| Planned | "Planned \| Recurring" view switch above the status control (`?view=`, URL-synced); planned rows (status chip, Recurring badge on rows a rule materialized) tap → action sheet (Edit, Make recurring - pending rows not yet on a rule, Execute now, Execute with adjustments, and Cancel plan - pending rows only, Delete); recurring rows (Active/Paused chip, schedule + next-occurrence meta line) tap → action sheet (Edit, Pause/Resume, Delete - the confirm offers "Also delete its N pending planned transactions"); the planned view opens on the saved range default (personal, per workspace) or, with none saved, focused on the current calendar month (default written into the URL as `from`/`to`, no history entry; explicit date params win, and an explicit All time never re-defaults within the session); a month stepper row (prev/next chevrons around the month label, full-width on mobile; planned view only) sits above the status control whenever the effective date range is an exact calendar month, and an empty month with no other filters gets a month empty state whose "Show all dates" action clears the range; status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category/currency - the planned transaction's stored own currency, hidden in single-currency workspaces - amount range, planned-date range), URL-synced; sort select + per-currency totals strip; Save-as-default button (as Transactions); Export view button (JSON; honors only the status and date filters) - search/filters/sort/totals/export/save-default belong to the planned view only |
+| Planned | "Planned \| Recurring" view switch above the status control (`?view=`, URL-synced; on phones the header's recurring-rules icon button owns the toggle - the segmented row is hidden below 640px - showing the active-rule count and lit while the recurring view is open); planned rows (status chip, Recurring badge on rows a rule materialized) tap → action sheet (Edit, Make recurring - pending rows not yet on a rule, Execute now, Execute with adjustments, and Cancel plan - pending rows only, Delete); recurring rows (Active/Paused chip, schedule + next-occurrence meta line) tap → action sheet (Edit, Pause/Resume, Delete - the confirm offers "Also delete its N pending planned transactions"); the planned view opens on the saved range default (personal, per workspace) or, with none saved, focused on the current calendar month (default written into the URL as `from`/`to`, no history entry; explicit date params win, and an explicit All time never re-defaults within the session); a month stepper row (prev/next chevrons around the month label, full-width on mobile; planned view only) sits above the status control whenever the effective date range is an exact calendar month, and an empty month with no other filters gets a month empty state whose "Show all dates" action clears the range; status segmented control + same search/Filters pattern as Transactions (multi-select account/budget/category/currency - the planned transaction's stored own currency, hidden in single-currency workspaces - amount range, planned-date range), URL-synced; sort select + per-currency totals strip; Save-as-default button (as Transactions); Export view button (JSON; honors only the status and date filters) - search/filters/sort/totals/export/save-default belong to the planned view only |
 | Members | Card list (avatar, name, role/status badges); card tap → action sheet (Edit role, Reset password, Reset 2FA - same role gate as reset password, Remove) |
 | Settings/Profile | Wrapping tab pills; section forms in sheets |
 

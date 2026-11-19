@@ -21,11 +21,9 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
     </button>
   </div>
 
-  <!-- Selectors (hidden when collapsed) -->
+  <!-- Selectors -->
   <div class="px-3 space-y-1 shrink-0 mb-2">
-    <!-- Workspace selector -->
-    <!-- Account selector -->
-    <!-- Period selector -->
+    <!-- Workspace selector (icon-only in the collapsed rail) -->
   </div>
 
   <!-- Divider -->
@@ -33,31 +31,49 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
 
   <!-- Nav links -->
   <nav class="flex-1 overflow-y-auto px-2">
+    <!-- Search row (⌘K / Ctrl K) -->
+
     <!-- Active nav item -->
     <a class="flex items-center gap-2 h-8 px-3 rounded-none
               bg-surface-hover border-l-2 border-primary text-text
               text-xs font-medium transition-colors">
-      <Wallet size={14} />
-      <span>Budgets</span>
+      <LayoutDashboard size={14} />
+      <span>Home</span>
     </a>
 
-    <!-- Inactive nav item -->
+    <!-- Inactive nav item: Activity lights on /transactions, /planned
+         and /transfers alike (pathname-prefix match) -->
     <a class="flex items-center gap-2 h-8 px-3 rounded-none
               text-text-muted hover:text-text hover:bg-surface-hover
               text-xs transition-colors">
-      <LayoutDashboard size={14} />
-      <span>Dashboard</span>
+      <FileText size={14} />
+      <span>Activity</span>
     </a>
+
+    <!-- Accounts (Landmark): followed by up to six account sub-rows
+         (name + balance), then a View-all link - expanded sidebar only -->
+
+    <!-- Budgets (Wallet): followed by up to six budget sub-rows (name),
+         then a View-all link - expanded sidebar only -->
+
+    <!-- Bookmarks section: divider + the user's visible bookmarks + Manage -->
   </nav>
 
   <!-- Bottom section -->
   <div class="px-2 shrink-0 py-3 border-t border-border">
-    <button class="flex items-center gap-2 w-full h-8 px-3 rounded-none
-                   text-text-muted hover:text-text hover:bg-surface-hover
-                   text-xs transition-colors">
+    <a class="flex items-center gap-2 h-8 px-3 rounded-none
+               text-text-muted hover:text-text hover:bg-surface-hover
+               text-xs transition-colors">
+      <Users size={14} />
+      <span>Members</span>
+    </a>
+    <a class="flex items-center gap-2 h-8 px-3 rounded-none
+               text-text-muted hover:text-text hover:bg-surface-hover
+               text-xs transition-colors">
       <Settings size={14} />
       <span>Settings</span>
-    </button>
+    </a>
+    <!-- User menu -->
   </div>
 </aside>
 ```
@@ -71,7 +87,7 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
 | Right border | `border-r border-border` (1px, `#E5E5E5`) |
 | Brand text | Geist, 16px, weight 600, `text-text` |
 | Nav item height | `32px` (`h-8`) |
-| Nav label font | Geist, 12px, standard case (`text-xs`) |
+| Nav label font | JetBrains Mono, 12px, uppercase, `tracking-wider` (`font-mono text-xs`) |
 | Nav icon size | 14px, Lucide, 1.5px stroke |
 | Active bg | `bg-surface-hover` (`#F5F5F5`) |
 | Active indicator | 2px left border, `border-l-2 border-primary` |
@@ -80,12 +96,24 @@ Fixed-width left navigation panel. No shadows, no container-low fills — only a
 | Inactive hover | `hover:text-text hover:bg-surface-hover` |
 | Divider | `border-t border-border` between sections |
 | Shadows | **None** — zero shadows |
+| Nav destinations | Home (`LayoutDashboard`), Activity (`FileText`), Accounts (`Landmark`), Budgets (`Wallet`); footer rows Members (`Users`) and Settings (`Settings`) above the user menu |
+| Activity coverage | One row lights on all of `/transactions`, `/planned` and `/transfers` - the active state derives from the live pathname prefix, not NavLink's own match |
+| Sub-rows | Accounts and Budgets list up to six child rows beneath their item (account rows carry name + balance), then a View-all link; sub-rows render in the expanded sidebar only |
 | Tablet (641–1024px) | Collapses to `56px` (`w-14`) — labels hidden, icons only |
 | Mobile (≤640px) | Hidden entirely — replaced by Bottom Navigation |
 
+> **Note (pending designer ruling):** the currency code beside an account balance is
+> shown inconsistently across the two account surfaces. The sidebar's account sub-rows and
+> the Dashboard balance list append the code only in multi-currency workspaces
+> (`multiCurrency ? code : ''` in `Sidebar.tsx` / `Dashboard.tsx`); the Accounts page card
+> inverts the ternary (`multiCurrency ? '' : code` in `AccountsPage.tsx`) - there the code
+> follows the amount only in single-currency workspaces, and multi-currency workspaces
+> show it as a badge chip in the card header instead. The surfaces deliberately differ
+> pending a ruling; do not "fix" one to match the other without it.
+
 ### Context Selectors (Sidebar)
 
-Compact workspace / account / period selectors at the top of the sidebar, above nav items.
+Compact workspace selector at the top of the sidebar, above nav items. Its glyph is `Home`; `Landmark` is reserved for Accounts (sidebar nav, bottom bar, account menu sheet). Icon-only in the collapsed rail.
 
 ```html
 <!-- Workspace selector -->
@@ -98,28 +126,6 @@ Compact workspace / account / period selectors at the top of the sidebar, above 
   </div>
   <ChevronDown size={12} class="text-text-muted shrink-0" />
 </button>
-
-<!-- Account selector (active / highlighted) -->
-<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
-               bg-surface-hover transition-colors text-left">
-  <Landmark size={14} class="text-text shrink-0" />
-  <div class="flex-1 min-w-0">
-    <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Account</div>
-    <div class="text-xs font-medium text-text truncate">Example Account</div>
-  </div>
-  <ChevronDown size={12} class="text-text-muted shrink-0" />
-</button>
-
-<!-- Period selector -->
-<button class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-none
-               hover:bg-surface-hover transition-colors text-left">
-  <Calendar size={14} class="text-text-muted shrink-0" />
-  <div class="flex-1 min-w-0">
-    <div class="text-[11px] uppercase tracking-wider text-text-muted leading-tight">Period</div>
-    <div class="font-mono text-xs font-medium text-text">Feb 2026</div>
-  </div>
-  <ChevronDown size={12} class="text-text-muted shrink-0" />
-</button>
 ```
 
 | Property | Value |
@@ -127,8 +133,7 @@ Compact workspace / account / period selectors at the top of the sidebar, above 
 | Position | Top of sidebar, below brand, above nav divider |
 | Row height | `32px` |
 | Micro-label | Geist 11px, uppercase, `tracking-wider`, `text-text-muted` |
-| Value (Workspace/Account) | Geist 12px, weight 500, `text-text` |
-| Value (Period) | JetBrains Mono 12px, weight 500, `text-text` — always mono for dates |
+| Value (Workspace) | Geist 12px, weight 500, `text-text` |
 | Active state | `bg-surface-hover` background |
 | Inactive hover | `bg-surface-hover` background |
 | Icons | Lucide 14px, `text-text-muted` |
@@ -145,7 +150,7 @@ Every page uses a compact single-row header with the page title and primary acti
   <div class="flex items-center gap-3">
     <!-- Context breadcrumb: JetBrains Mono, muted -->
     <span class="font-mono text-[11px] text-text-muted">
-      Feb 2026 · Example Account
+      Feb 2026 / Example Account
     </span>
     <!-- Separator -->
     <span class="text-text-muted">/</span>
@@ -176,7 +181,7 @@ Every page uses a compact single-row header with the page title and primary acti
 | Row height | `32px` (`h-8`) for the action row |
 | Bottom margin | `24px` (`mb-6`) before first content section |
 | Breadcrumb | JetBrains Mono, 11px, `text-text-muted` |
-| Breadcrumb content | `{Period} · {Account name} / {Page Title}` |
+| Breadcrumb content | `{Month} / {Account name} / {Page Title}` - the month label appears when the URL date range is an exact calendar month, the account name when exactly one account is filtered (the Activity pages' scope breadcrumb); budget detail breadcrumbs to the Budgets section, the periods page to its budget's name |
 | Primary action | Flat primary button (see Buttons section) |
 | Secondary actions | Secondary button variant |
 | On mobile | Title and actions wrap; actions row sits below title |
@@ -524,6 +529,8 @@ Replaces radio buttons for binary or ternary exclusive choices. Primary use: Exp
 | Neutral toggle | `bg-primary` | `text-white` |
 
 **Rule:** Never use radio buttons for a binary choice that appears inside a modal or form. Always use the Segmented Control.
+
+**Navigation instance - the Activity tab row:** `layout/ActivityTabs.tsx`, shared by the three activity routes (`/transactions`, `/planned`, `/transfers`), renders this register with `NavLink` segments instead of `SegmentedControl`: the active segment is the active route (Transactions / Planned / Transfers, labels from the `nav` catalog), segments add the 44px phone floor (`max-sm:min-h-[44px]`) and a focus ring, and a tab switch carries the current scope in the query string - `from`/`to` always when present, and the `account` filter as a comma list between the two list pages or as a single id to Transfers only when exactly one account is selected (the transfers filter holds one id); every other param stays behind. The control carries no width class (it sizes to its segments); the surrounding row - margins and space for future header actions - belongs to the page.
 
 ---
 
@@ -1815,7 +1822,7 @@ toast.error('Amount must be greater than 0')
 
 ## 19. Bottom Navigation (Mobile)
 
-Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximum 5 slots — center is always the primary action.
+Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Five slots - Home · Activity · FAB · Accounts · Budgets; the center slot is always the primary action. There is no More tab: overflow destinations and workspace/user controls live in the account menu sheet, opened from the page-header profile button.
 
 ### Structure
 
@@ -1825,19 +1832,22 @@ Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximu
             flex justify-around items-end
             pb-[env(safe-area-inset-bottom)]">
 
-  <!-- Active tab -->
+  <!-- Home (active tab) -->
   <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-primary">
     <LayoutDashboard class="h-5 w-5" />
     <span class="text-[10px] font-medium uppercase tracking-wider">Home</span>
   </button>
 
-  <!-- Inactive tab -->
+  <!-- Activity: one tab for /transactions, /planned and /transfers
+       (active state from the live pathname prefix) -->
   <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
     <FileText class="h-5 w-5" />
-    <span class="text-[10px] font-medium uppercase tracking-wider">Txns</span>
+    <span class="text-[10px] font-medium uppercase tracking-wider">Activity</span>
   </button>
 
-  <!-- Center FAB slot — elevated above the bar -->
+  <!-- Center FAB slot - elevated above the bar; the slot stays mounted even
+       when the FAB is hidden (viewer role / no workspace) so the four tabs
+       don't shift -->
   <button class="flex-1 flex flex-col items-center -mt-5">
     <div class="w-12 h-12 bg-primary border border-border
                 flex items-center justify-center rounded-sm
@@ -1847,14 +1857,13 @@ Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximu
   </button>
 
   <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
-    <Calendar class="h-5 w-5" />
-    <span class="text-[10px] font-medium uppercase tracking-wider">Planned</span>
+    <Landmark class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">Accounts</span>
   </button>
 
-  <!-- "More" opens a bottom sheet -->
   <button class="flex-1 flex flex-col items-center gap-0.5 pt-1.5 pb-2 text-text-muted">
-    <Grid3X3 class="h-5 w-5" />
-    <span class="text-[10px] font-medium uppercase tracking-wider">More</span>
+    <Wallet class="h-5 w-5" />
+    <span class="text-[10px] font-medium uppercase tracking-wider">Budgets</span>
   </button>
 </nav>
 ```
@@ -1863,20 +1872,23 @@ Fixed bottom bar visible only on mobile (≤640px). Replaces the sidebar. Maximu
 
 | Property | Value |
 |---|---|
-| Visibility | Mobile only (`≤640px`) — `display: none` at ≥641px |
+| Visibility | Mobile only (`≤640px`) - `display: none` at ≥641px |
 | Background | `bg-surface` (`#FFFFFF`) |
-| Border | `border-t border-border` — no glassmorphism, no blur |
+| Border | `border-t border-border` - no glassmorphism, no blur |
 | Shadow | **None** |
 | Height | ~56px + `safe-area-inset-bottom` |
 | Tab labels | Geist, 10px, weight 500, `uppercase`, `tracking-wider` |
 | Tab icons | Lucide, 20px (`h-5 w-5`) |
 | Active tab | `text-primary` (icon + label) |
 | Inactive tab | `text-text-muted` |
+| Tabs | Home (`LayoutDashboard`, exact match), Activity (`FileText`), Accounts (`Landmark`), Budgets (`Wallet`) |
+| Activity coverage | One tab lights on all of `/transactions`, `/planned` and `/transfers` - the active state derives from the live pathname prefix, not NavLink's own match |
 | FAB | `48px` square (`w-12 h-12`), `bg-primary`, `border border-border`, `rounded-sm` |
 | FAB icon | Lucide `Plus`, 20px, `text-white` |
 | FAB offset | `-20px` (`-mt-5`) above the bar |
+| FAB slot | The center slot stays mounted when the FAB is hidden (viewer role / no workspace) so the four tabs don't shift |
 | Max tabs | 5 including FAB slot |
-| Overflow nav | Accessible via "More" → bottom sheet |
+| Overflow nav | No More tab: overflow destinations (Accounts, Planned, Members, Settings) plus workspace switching and user controls live in the account menu sheet (`layout/AccountMenuSheet.tsx`), opened from the page-header profile button on every page |
 | Safe area | Always apply `padding-bottom: env(safe-area-inset-bottom)` |
 
 ---
@@ -1926,7 +1938,8 @@ import { Plus, X, ChevronDown, AlertTriangle } from 'lucide-react'
 | Calendar | `Calendar` | `calendar_month` |
 | Budget | `Wallet` | `account_balance_wallet` |
 | Dashboard | `LayoutDashboard` | `dashboard` |
-| Transactions | `FileText` | `receipt_long` |
+| Activity (transactions/planned/transfers) | `FileText` | `receipt_long` |
+| Accounts | `Landmark` | `account_balance` |
 | Planned | `CalendarClock` | `event_note` |
 | Categories | `Tag` | `category` |
 | Members | `Users` | `group` |
@@ -1947,7 +1960,6 @@ import { Plus, X, ChevronDown, AlertTriangle } from 'lucide-react'
 | Shield / Admin | `Shield` | `admin_panel_settings` |
 | Star / Owner | `Star` | `star` |
 | History | `Clock` | `history` |
-| Grid / More | `Grid3X3` | `grid_view` |
 
 ### Icon Color Rules
 
