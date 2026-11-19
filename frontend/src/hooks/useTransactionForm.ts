@@ -50,6 +50,22 @@ export interface UseTransactionFormOptions {
    *  Pass false when the host surfaces validation inline instead - the
    *  gates still run and submit still refuses, only the toasts go. */
   validationToasts?: boolean
+  /** Lifted amount/date rows (the /new shared rows): explicit values win
+   *  downward, internal writes report upward. Omitted (the modal) keeps
+   *  the internal state authoritative. */
+  shared?: TransactionFormShared
+}
+
+/** Controlled-override seam for a host that lifts the amount/date rows
+ *  above the form (the /new shared rows). Internal state stays
+ *  authoritative when no override is passed - the modal passes nothing.
+ *  Explicit values win downward; internal writes (seeding) report upward
+ *  synchronously, so the lifted value and internal state never diverge. */
+export interface TransactionFormShared {
+  amount: string
+  onAmountChange: (value: string) => void
+  date: string
+  onDateChange: (value: string) => void
 }
 
 /** Field keys for display-only inline validation errors, derived 1:1 from
@@ -126,6 +142,7 @@ export function useTransactionForm({
   initialAccountId = null,
   initialType,
   validationToasts = true,
+  shared,
 }: UseTransactionFormOptions) {
   const { t } = useTranslation('transactions')
   const { t: tCommon } = useTranslation('common')
@@ -139,10 +156,10 @@ export function useTransactionForm({
   const defaultBudgetId =
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDateState] = useState(new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
   const [type, setType] = useState<TransactionType>('expense')
-  const [amount, setAmount] = useState('')
+  const [amount, setAmountState] = useState('')
   const [accountId, setAccountId] = useState<number | null>(null)
   const [currencyCode, setCurrencyCode] = useState<string | null>(null)
   const [budgetId, setBudgetId] = useState<number | null>(null)
@@ -207,6 +224,24 @@ export function useTransactionForm({
   // Latch naming the session/reset the snapshot was taken at.
   const [snapshottedFor, setSnapshottedFor] = useState<{ session: object; resetCount: number } | null>(null)
   const [resetCount, setResetCount] = useState(0)
+
+  // Merged setters: internal writes report upward through the override so
+  // the lifted value never goes stale (create seeding, reset). Without an
+  // override they are plain passthroughs - modal behavior is unchanged.
+  const setAmount = (value: string) => {
+    setAmountState(value)
+    shared?.onAmountChange(value)
+  }
+  const setDate = (value: string) => {
+    setDateState(value)
+    shared?.onDateChange(value)
+  }
+  // Downward half: the host's explicit value wins. Value-compare
+  // render-adjust on this hook's own state - loop-safe by construction
+  // (each write lands on a value that disproves the guard on the
+  // immediate re-render) and StrictMode-idempotent.
+  if (shared !== undefined && shared.amount !== amount) setAmount(shared.amount)
+  if (shared !== undefined && shared.date !== date) setDate(shared.date)
 
   const parse = useMutation({
     mutationFn: (f: File) => transactionsApi.parseReceipt(f),

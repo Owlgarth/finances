@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type Ref } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AlertCircle, CloudOff, Loader2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SegmentedControl from '../common/SegmentedControl'
@@ -6,6 +6,7 @@ import Switch from '../common/Switch'
 import Select from '../common/Select'
 import Disclosure from '../common/Disclosure'
 import DateQuickPick from '../common/DateQuickPick'
+import AmountField from './AmountField'
 import TransactionItemsList from './TransactionItemsList'
 import { listboxPanelClass } from '../common/listboxParts'
 import { controlHeightClass, inputClass, labelClass, secondaryButtonClass } from '../common/formStyles'
@@ -32,14 +33,20 @@ const FIELD_ORDER = ['amount', 'currencyCode', 'description', 'accountId', 'orig
 type FieldKey = (typeof FIELD_ORDER)[number]
 
 /** DOM ids for focus-first-invalid: natives and Select triggers alike -
- *  Select forwards no ref, but its id prop lands on the trigger button. */
+ *  Select forwards no ref, but its id prop lands on the trigger button.
+ *  The currency id is AmountField's `${id}-currency` derivation. */
 const FIELD_IDS: Record<FieldKey, string> = {
   amount: 'tx-amount',
-  currencyCode: 'tx-currency',
+  currencyCode: 'tx-amount-currency',
   description: 'tx-desc',
   accountId: 'tx-account',
   originalAmount: 'tx-original-amount',
 }
+
+/** Focus order for the shared-fields variant: the host owns the amount
+ *  row above this component, so the chain starts at the currency
+ *  button. */
+const SHARED_FIELD_ORDER = ['currencyCode', 'description', 'accountId', 'originalAmount'] as const
 
 interface Props {
   /** The transaction form hook's full return value. Host-agnostic: the
@@ -51,14 +58,26 @@ interface Props {
    *  latch, the note-focus one-shot ref, the touched map) and re-fires the
    *  amount input's per-open autoFocus. */
   form: UseTransactionFormReturn
-  /** Optional ref forwarded to the amount input. A host that keeps the
-   *  fields mounted across saves (the /new page's "Save and add another")
-   *  refocuses the amount field through it after the reset - the input's
-   *  autoFocus only fires at mount, and no remount happens there. */
-  amountInputRef?: Ref<HTMLInputElement>
+  /** When true the host renders the type/amount/date rows above this
+   *  component (the /new shared rows) and this component drops its own -
+   *  the modal passes nothing and keeps its full layout. */
+  sharedFields?: boolean
+  /** True after the host observed a failed submit: every field error
+   *  shows (first-blur-then-keystroke otherwise). Read only in the
+   *  sharedFields variant - the modal keys the same timing on the hook's
+   *  own submit counter. */
+  showAllErrors?: boolean
+  /** Bumped by the host after a failed submit whose first invalid field
+   *  lives inside this component - focuses it. 0 = no request. */
+  focusInvalidTick?: number
 }
 
-export default function TransactionFormFields({ form, amountInputRef }: Props) {
+export default function TransactionFormFields({
+  form,
+  sharedFields = false,
+  showAllErrors = false,
+  focusInvalidTick = 0,
+}: Props) {
   const { t } = useTranslation('transactions')
   const isTouch = useIsTouch()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
@@ -96,12 +115,16 @@ export default function TransactionFormFields({ form, amountInputRef }: Props) {
   }, [moreOpen, isTouch])
 
   // Inline-error display gate: an error shows after its field's first
-  // invalid blur (touched) or after any submit attempt (submitCount); once
-  // shown it tracks every keystroke because form.errors re-derives every
-  // render. The submit toasts remain the gate; these are display-only.
+  // invalid blur (touched) or after any submit attempt; once shown it
+  // tracks every keystroke because form.errors re-derives every render.
+  // The modal path keys on the hook's submit counter; a sharedFields host
+  // passes its own latch (it resets after a successful save-and-add-
+  // another, which the counter cannot express). The submit toasts remain
+  // the gate; these are display-only.
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({})
+  const showAll = sharedFields ? showAllErrors : form.submitCount > 0
   const showError = (key: FieldKey): string | undefined =>
-    (touched[key] || form.submitCount > 0) && form.errors[key] ? form.errors[key] : undefined
+    (touched[key] || showAll) && form.errors[key] ? form.errors[key] : undefined
   const errorInput = (key: FieldKey): string =>
     showError(key) ? 'bg-negative-bg border-negative ring-1 ring-negative ' : ''
   const fieldError = (key: FieldKey) => {
@@ -115,23 +138,37 @@ export default function TransactionFormFields({ form, amountInputRef }: Props) {
     )
   }
   // Hoisted: the rule flags literal arguments of calls inside JSX
-  // expression containers, so the three native fields resolve their error
+  // expression containers, so the native fields resolve their error
   // rows in the body and the JSX embeds the result.
-  const amountError = fieldError('amount')
+  const amountError = showError('amount')
+  const currencyError = showError('currencyCode')
   const descriptionError = fieldError('description')
   const originalAmountError = fieldError('originalAmount')
 
   // Focus the first invalid field after a submit attempt: focus-only effect
   // keyed on the submit tick - the same sanctioned shape as Register's
-  // failed-submit focus.
+  // failed-submit focus. A sharedFields host drives focus itself (the
+  // amount row and the save button are page-owned), so this fires only in
+  // the modal layout.
   useEffect(() => {
-    if (form.submitCount === 0) return
+    if (sharedFields || form.submitCount === 0) return
     const firstInvalid = FIELD_ORDER.find((key) => !!form.errors[key])
     if (firstInvalid) document.getElementById(FIELD_IDS[firstInvalid])?.focus()
     // Errors are read as of the post-submit render; re-running on their
     // identity would refocus on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.submitCount])
+
+  // Shared-fields host path: the page bumps the tick after a failed
+  // submit whose first invalid field lives here. One-shot ref latch -
+  // consumed, never re-fired for the same tick. DOM-only effect.
+  const lastFocusTick = useRef(0)
+  useEffect(() => {
+    if (focusInvalidTick === lastFocusTick.current) return
+    lastFocusTick.current = focusInvalidTick
+    const firstInvalid = SHARED_FIELD_ORDER.find((key) => !!form.errors[key])
+    if (firstInvalid) document.getElementById(FIELD_IDS[firstInvalid])?.focus()
+  }, [focusInvalidTick, form.errors])
 
   // Balance-adjustment toggle: ON switches the type to adjustment (delta
   // label + required account); OFF restores the previous expense/income
@@ -164,88 +201,62 @@ export default function TransactionFormFields({ form, amountInputRef }: Props) {
 
   return (
     <>
-      {/* 1. Type: Expense / Income segmented control (Transfer arrives with
-             the transfer flow). Income uses the positive tone. */}
-      <div>
-        <label className={labelClass}>{t('form.typeLabel')}</label>
-        <SegmentedControl
-          value={segmentValue}
-          onChange={(v) => {
-            form.setType(v)
-            // Suggestions are per-type: the panel stays closed until the new
-            // type's list arrives and the user interacts again.
-            form.setHighlighted(-1)
-            form.setSuggestionsOpen(false)
-          }}
-          disabled={adjustmentOn}
-          aria-label={t('form.typeAria')}
-          options={[
-            { value: 'expense', label: t('type.expense') },
-            { value: 'income', label: t('type.income'), tone: 'positive' },
-          ]}
-        />
-      </div>
-
-      {/* 2. Amount with sign prefix + currency code button. One-width-class
-             rule: the row owns layout (flex), the amount column owns flex-1
-             min-w-0, the input's w-full (inside inputClass) is its only
-             width utility, the Select gets exactly one width class. */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1 min-w-0">
-          <label htmlFor="tx-amount" className={labelClass}>
-            {adjustmentOn ? t('form.deltaAmountLabel') : t('form.amountLabel')}
-          </label>
-          <div className="relative">
-            {signPrefix && (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-xs text-text-muted"
-              >
-                {signPrefix}
-              </span>
-            )}
-            {/* text (not number): comma-decimal typing must arrive as text and
-                parse at submit (normalizeAmountInput, hook-side). */}
-            <input
-              id="tx-amount"
-              ref={amountInputRef}
-              type="text"
-              inputMode="decimal"
-              value={form.amount}
-              onChange={(e) => form.setAmount(e.target.value)}
-              onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
-              autoFocus={!isTouch}
-              className={`${inputClass} ${signPrefix ? 'pl-6 ' : ''}${errorInput('amount')}`}
+      {/* Shared-fields hosts render the type/amount/date rows above this
+              component; the modal layout renders them here. */}
+      {!sharedFields && (
+        <>
+          {/* 1. Type: Expense / Income segmented control (Transfer arrives with
+              the transfer flow). Income uses the positive tone. */}
+          <div>
+            <label className={labelClass}>{t('form.typeLabel')}</label>
+            <SegmentedControl
+              value={segmentValue}
+              onChange={(v) => {
+                form.setType(v)
+                // Suggestions are per-type: the panel stays closed until the new
+                // type's list arrives and the user interacts again.
+                form.setHighlighted(-1)
+                form.setSuggestionsOpen(false)
+              }}
+              disabled={adjustmentOn}
+              aria-label={t('form.typeAria')}
+              options={[
+                { value: 'expense', label: t('type.expense') },
+                { value: 'income', label: t('type.income'), tone: 'positive' },
+              ]}
             />
           </div>
-          {amountError}
-        </div>
-        <div className="w-24 shrink-0">
-          <label htmlFor="tx-currency" className={labelClass}>{t('form.currencyLabel')}</label>
-          {/* The compact code button IS a Select (mono, one pinned width) - it
-              opens the existing picker, no new picker component. Locked while
-              an account is set: disabled, still showing the code. aria-label
-              gives the accessible name beyond the visible code. */}
-          <Select
-            id="tx-currency"
-            value={form.currencyCode}
-            onChange={form.setCurrencyCode}
-            options={form.currencyOptions}
-            placeholder={t('form.currencyPlaceholder')}
-            aria-label={t('form.currencyAria')}
-            disabled={form.accountId !== null}
-            mono
-            error={showError('currencyCode')}
-            className="w-full"
-          />
-        </div>
-      </div>
 
-      {/* 3. Date: quick picks replace the DatePicker field. */}
-      <div>
-        <label className={labelClass}>{t('form.dateLabel')}</label>
-        <DateQuickPick value={form.date} onChange={form.setDate} />
-      </div>
+          {/* 2. Amount with sign prefix + currency code button (the shared
+              AmountField row; its docblock carries the width-class rule). */}
+          <AmountField
+            id="tx-amount"
+            label={adjustmentOn ? t('form.deltaAmountLabel') : t('form.amountLabel')}
+            value={form.amount}
+            onChange={form.setAmount}
+            signPrefix={signPrefix}
+            currency={{
+              label: t('form.currencyLabel'),
+              code: form.currencyCode,
+              options: form.currencyOptions,
+              onChange: form.setCurrencyCode,
+              placeholder: t('form.currencyPlaceholder'),
+              locked: form.accountId !== null,
+              ariaLabel: t('form.currencyAria'),
+              error: currencyError,
+            }}
+            error={amountError}
+            autoFocus={!isTouch}
+            onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
+          />
+
+          {/* 3. Date: quick picks replace the DatePicker field. */}
+          <div>
+            <label className={labelClass}>{t('form.dateLabel')}</label>
+            <DateQuickPick value={form.date} onChange={form.setDate} />
+          </div>
+        </>
+      )}
 
       {/* 4. Description combobox (moved verbatim from the modal; state and
              keyboard handler are hook-side). */}

@@ -5,16 +5,21 @@ import { CloudOff, Loader2, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { transactionsApi } from '../api/client'
-import type { TransactionType } from '../types'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useExtractionConfig } from '../hooks/useDomain'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import { useTransactionForm } from '../hooks/useTransactionForm'
+import { useTransferForm } from '../hooks/useTransferForm'
 import { intParam } from '../utils/params'
 import FormPage from '../components/layout/FormPage'
 import TransactionFormFields from '../components/transactions/TransactionFormFields'
+import TransferFormFields from '../components/transactions/TransferFormFields'
+import AmountField from '../components/transactions/AmountField'
+import SegmentedControl from '../components/common/SegmentedControl'
+import DateQuickPick from '../components/common/DateQuickPick'
 import ConfirmDialog from '../components/common/ConfirmDialog'
-import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 // File types the receipt parser accepts - keep in sync with the
 // byte-identical copy in components/transactions/TransactionFormFields.tsx
@@ -25,29 +30,41 @@ const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 // both buttons disable on it, closing the click-to-mutation-start gap).
 type SaveAction = 'save' | 'another' | null
 
-/** Create-only host for the transaction form: URL-seeded (?type=, ?account=,
- *  ?copy=) create mode inside a FormPage, with the sticky two-action footer
- *  and an unsaved-changes confirm on close. Edit stays in the modal. */
+/** The page's type segments. The transaction hook's own type state also
+ *  holds 'adjustment' (the More-details switch owns it and disables the
+ *  segments); 'transfer' is page-only - it swaps the hosted field
+ *  component, so it never maps onto the hook's type. */
+type NewRecordType = 'expense' | 'income' | 'transfer'
+
+/** Create-only host for the transaction AND transfer forms: URL-seeded
+ *  (?type=, ?account=, ?copy=) create mode inside a FormPage, with the
+ *  type/amount/date rows shared above both field flavors (switching type
+ *  keeps amount and date), the sticky two-action footer, and an
+ *  unsaved-changes confirm on close. Edit stays in the modals. */
 export default function NewTransactionPage() {
   const { t } = useTranslation('transactions')
+  const { t: tTransfers } = useTranslation('transfers')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { workspace, isLoading: workspaceLoading } = useWorkspace()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
+  const isTouch = useIsTouch()
 
-  // URL-state contract: the seeds are read ONCE at mount (lazy initializers);
-  // nothing on this page ever writes the URL. Param-only navigation cannot
-  // re-run initializers anyway, but the lazy form keeps that a property of
-  // construction rather than of router internals.
+  // URL-state contract: the seeds are read ONCE at mount (lazy
+  // initializers); nothing on this page ever writes the URL, and the type
+  // param is never re-written when the user switches segments. Param-only
+  // navigation cannot re-run initializers anyway, but the lazy form keeps
+  // that a property of construction rather than of router internals.
+  const typeParam = searchParams.get('type')
   const [initialAccountId] = useState(() => intParam(searchParams, 'account'))
-  const [initialType] = useState<TransactionType>(() =>
-    // 'income' seeds income; every other value reads as expense. A 'transfer'
-    // type needs the transfer flow's own fields, and nothing links here with
-    // one until that flow exists.
-    searchParams.get('type') === 'income' ? 'income' : 'expense',
+  const [sharedType, setSharedType] = useState<NewRecordType>(() =>
+    // 'income' and 'transfer' seed their segment; every other value reads
+    // as expense.
+    typeParam === 'income' || typeParam === 'transfer' ? typeParam : 'expense',
   )
   const [copyId] = useState(() => intParam(searchParams, 'copy'))
+  const isTransfer = sharedType === 'transfer'
 
   // Copy-mode source. Keyed INSIDE the ['transactions'] family prefix so the
   // family's existing invalidation calls (create/edit/delete in the form hook
@@ -62,7 +79,26 @@ export default function NewTransactionPage() {
   // ?copy= and the user can retry by reloading).
   const copyKnown = copyId === null || copyQuery.isSuccess || copyQuery.isError
 
-  const form = useTransactionForm({
+  // Lifted amount/date rows, shared by both form flavors through the hooks'
+  // override seam: each hook's internal state tracks the lifted values
+  // continuously, so switching type keeps amount and date by construction.
+  const [sharedAmount, setSharedAmount] = useState('')
+  const [sharedDate, setSharedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [amountTouched, setAmountTouched] = useState(false)
+  // Set after a failed submit: every field error shows until the next
+  // successful save-and-add-another (first-blur-then-keystroke timing
+  // otherwise).
+  const [showAllErrors, setShowAllErrors] = useState(false)
+  const [focusTick, setFocusTick] = useState(0)
+  const amountRef = useRef<HTMLInputElement | null>(null)
+  const shared = {
+    amount: sharedAmount,
+    onAmountChange: setSharedAmount,
+    date: sharedDate,
+    onDateChange: setSharedDate,
+  }
+
+  const txForm = useTransactionForm({
     // The gate: machinery starts only once the copy seed has resolved, so the
     // hook seeds exactly once with the final copyFrom (no create-then-copy
     // double seed, no category query firing against a form that is about to
@@ -72,13 +108,16 @@ export default function NewTransactionPage() {
     copyFrom: copyQuery.data ?? null,
     validationToasts: false, // the page shows field errors inline; save toasts stay
     initialAccountId,
-    initialType,
+    // The transaction hook's type seeds from the segment; 'transfer' hides
+    // this form, so its internal type stays expense until a real switch.
+    initialType: isTransfer ? undefined : sharedType,
+    shared,
   })
+  const transferForm = useTransferForm({ open: true, validationToasts: false, shared })
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [savingAction, setSavingAction] = useState<SaveAction>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const amountInputRef = useRef<HTMLInputElement>(null)
 
   // Viewers (and, defense-in-depth, workspace-less mounts - MainLayout already
   // swaps children for its no-workspace message) never see this form. Held
@@ -97,47 +136,79 @@ export default function NewTransactionPage() {
     else navigate('/transactions', { replace: true })
   }
 
+  const activeForm = isTransfer ? transferForm : txForm
+  const dirty = txForm.isDirty || transferForm.isDirty
+
   const handleClose = () => {
-    if (form.isDirty) setConfirmOpen(true)
+    if (dirty) setConfirmOpen(true)
     else navigateBack()
+  }
+
+  // After a failed submit, show every error and focus the first invalid
+  // field: the shared amount row is page-owned (focus it directly), the
+  // rest live inside the hosted field component (bump its tick).
+  const reportFailedSubmit = () => {
+    setShowAllErrors(true)
+    if (isTransfer) {
+      if (transferForm.errors.fromAmount && !transferForm.errors.from && !transferForm.errors.to) {
+        amountRef.current?.focus()
+      } else if (transferForm.errors.from || transferForm.errors.to || transferForm.errors.toAmount) {
+        setFocusTick((n) => n + 1)
+      }
+    } else if (txForm.errors.description) {
+      // Description precedes amount in the chain.
+      setFocusTick((n) => n + 1)
+    } else if (txForm.errors.amount) {
+      amountRef.current?.focus()
+    } else if (Object.keys(txForm.errors).length > 0) {
+      setFocusTick((n) => n + 1)
+    }
   }
 
   const handleSave = async () => {
     setSavingAction('save')
-    const { ok } = await form.submit()
+    const { ok } = await activeForm.submit()
     setSavingAction(null)
     if (ok) navigateBack()
+    else reportFailedSubmit()
   }
 
   const handleSaveAndAddAnother = async () => {
     setSavingAction('another')
-    const { ok } = await form.submit()
+    const { ok } = await activeForm.submit()
     setSavingAction(null)
     if (ok) {
-      form.resetForAnother()
-      // The fields stay mounted across saves, so the amount input's
-      // mount-time autofocus never refires - refocus it by ref.
-      amountInputRef.current?.focus()
-    }
+      if (isTransfer) transferForm.resetForAnother()
+      else txForm.resetForAnother()
+      // Fresh form, fresh error timing: the next session's errors wait
+      // for their own blur or submit.
+      setShowAllErrors(false)
+      setAmountTouched(false)
+      // The fields stay mounted across saves, so no mount-time autofocus
+      // refires - refocus the shared amount input by ref.
+      amountRef.current?.focus()
+    } else reportFailedSubmit()
   }
 
   const handleReceiptFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
-    if (f) form.parseFile(f)
+    if (f) txForm.parseFile(f)
     // Same-file reselect must re-fire onChange; the File is already captured
     // by parseFile, so clearing the input value is safe.
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const scanButton = extractionEnabled && (
+  // A receipt produces a transaction, not a transfer: no scan action in
+  // transfer mode.
+  const scanButton = extractionEnabled && !isTransfer && (
     <button
       type="button"
       onClick={() => fileInputRef.current?.click()}
-      disabled={form.parse.isPending || !extractionReachable}
+      disabled={txForm.parse.isPending || !extractionReachable}
       title={extractionReachable ? undefined : t('form.scannerOfflineTitle')}
       className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1`}
     >
-      {form.parse.isPending ? (
+      {txForm.parse.isPending ? (
         <>
           <Loader2 size={13} className="animate-spin" aria-hidden="true" /> {t('form.reading')}
         </>
@@ -153,7 +224,7 @@ export default function NewTransactionPage() {
     </button>
   )
 
-  const savePending = savingAction !== null || form.isSaving
+  const savePending = savingAction !== null || activeForm.isSaving
 
   // Copy-seed arrival gate: hold the form (fields AND footer) until ?copy=
   // resolves. The page keeps no saved-defaults machinery - this hold is the
@@ -168,6 +239,22 @@ export default function NewTransactionPage() {
       </FormPage>
     )
   }
+
+  // Hoisted labels and errors (aliased-t calls must not render inline).
+  const amountSentLabel = tTransfers('fields.amountSent', { code: transferForm.fromAccount?.currency_code ?? '' })
+  const transferAmountLabel = tTransfers('fields.amount')
+  const amountLabel = isTransfer
+    ? transferForm.crossCurrency
+      ? amountSentLabel
+      : transferAmountLabel
+    : txForm.type === 'adjustment'
+      ? t('form.deltaAmountLabel')
+      : t('form.amountLabel')
+  const activeAmountError = isTransfer ? transferForm.errors.fromAmount : txForm.errors.amount
+  const amountError =
+    activeAmountError !== undefined && (amountTouched || showAllErrors) ? activeAmountError : undefined
+  const currencyError = showAllErrors ? txForm.errors.currencyCode : undefined
+  const saveLabel = isTransfer ? t('form.saveTransfer') : t('form.saveTransaction')
 
   return (
     <>
@@ -207,17 +294,100 @@ export default function NewTransactionPage() {
                   {t('form.saving')}
                 </>
               ) : (
-                t('form.saveTransaction')
+                saveLabel
               )}
             </button>
           </div>
         }
       >
-        {/* Keyed on the hook's session key per the fields component's host
-            contract: a session change remounts it (local-state reset + fresh
-            autofocus). On this page the session is fixed per mount, so the
-            fields stay mounted across "Save and add another". */}
-        <TransactionFormFields key={form.sessionKey} form={form} amountInputRef={amountInputRef} />
+        {/* Shared rows: the type/amount/date controls sit above both form
+            flavors, so switching type keeps amount and date. */}
+        <div className="space-y-4">
+          <div>
+            <label className={labelClass}>{t('form.typeLabel')}</label>
+            <SegmentedControl
+              value={sharedType}
+              onChange={(v) => {
+                setSharedType(v)
+                // The transaction hook keeps its own type state (it also
+                // holds 'adjustment', which is not a page segment - the
+                // More-details switch owns it). Push segment picks into
+                // it in the handler.
+                if (v !== 'transfer') {
+                  txForm.setType(v)
+                  // Suggestions are per-type: the panel stays closed
+                  // until the new type's list arrives and the user
+                  // interacts again.
+                  txForm.setHighlighted(-1)
+                  txForm.setSuggestionsOpen(false)
+                }
+              }}
+              // Disabled while the More-details adjustment switch is on,
+              // mirroring the in-form control's rule; the segment keeps
+              // showing the selected expense/income value (no
+              // non-matching radiogroup state).
+              disabled={txForm.type === 'adjustment'}
+              aria-label={t('form.typeAria')}
+              options={[
+                { value: 'expense', label: t('type.expense') },
+                { value: 'income', label: t('type.income'), tone: 'positive' },
+                { value: 'transfer', label: t('type.transfer') },
+              ]}
+            />
+          </div>
+
+          <AmountField
+            id="new-amount"
+            label={amountLabel}
+            value={sharedAmount}
+            onChange={setSharedAmount}
+            signPrefix={isTransfer ? '' : txForm.type === 'income' ? '+' : txForm.type === 'adjustment' ? '' : '-'}
+            currency={
+              isTransfer
+                ? undefined
+                : {
+                    label: t('form.currencyLabel'),
+                    code: txForm.currencyCode,
+                    options: txForm.currencyOptions,
+                    onChange: txForm.setCurrencyCode,
+                    placeholder: t('form.currencyPlaceholder'),
+                    locked: txForm.accountId !== null,
+                    ariaLabel: t('form.currencyAria'),
+                    error: currencyError,
+                  }
+            }
+            error={amountError}
+            inputRef={amountRef}
+            autoFocus={!isTouch}
+            onBlur={() => setAmountTouched(true)}
+          />
+
+          <div>
+            <label className={labelClass}>{t('form.dateLabel')}</label>
+            <DateQuickPick value={sharedDate} onChange={setSharedDate} />
+          </div>
+
+          {/* Both field flavors stay mounted; the hidden CLASS preserves
+              their state (disclosure latches, touched flags, focus)
+              across type switches. */}
+          <div className={isTransfer ? 'hidden' : 'space-y-4'}>
+            {/* Keyed on the hook's session key per the fields component's
+                host contract: a session change remounts it (local-state
+                reset + fresh autofocus). On this page the session is fixed
+                per mount, so the fields stay mounted across "Save and add
+                another". */}
+            <TransactionFormFields
+              key={txForm.sessionKey}
+              form={txForm}
+              sharedFields
+              showAllErrors={showAllErrors}
+              focusInvalidTick={focusTick}
+            />
+          </div>
+          <div className={!isTransfer ? 'hidden' : ''}>
+            <TransferFormFields form={transferForm} showAllErrors={showAllErrors} focusInvalidTick={focusTick} />
+          </div>
+        </div>
       </FormPage>
 
       {/* Receipt picker for the header action - always mounted so .click()

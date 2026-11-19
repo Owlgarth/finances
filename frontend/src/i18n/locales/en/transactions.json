@@ -15,6 +15,7 @@
   "type": {
     "income": "Income",
     "expense": "Expense",
+    "transfer": "Transfer",
     "adjustment": "Adjustment"
   },
   "sort": {
@@ -136,6 +137,7 @@
     "saveFailed": "Failed to save transaction",
     "saveAndAddAnother": "Save and add another",
     "saveTransaction": "Save transaction",
+    "saveTransfer": "Save transfer",
     "scanReceipt": "Scan receipt",
     "uploadFailedPartial": "Transaction saved, but the receipt upload failed \u2014 you can add it from the edit screen."
   },
