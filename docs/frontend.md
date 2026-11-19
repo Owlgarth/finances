@@ -6,7 +6,7 @@ The detailed, authoritative frontend documentation lives next to the code:
 
 - **[frontend/README.md](../frontend/README.md)** - project structure, pages &
   routes (Dashboard · Accounts · Budgets · Transactions · Planned · Transfers ·
-  Bookmarks · Members · Settings), components, contexts, hooks
+  the `/new` create flow · Bookmarks · Members · Settings), components, contexts, hooks
   (`useDomain`, `usePermissions`), the typed `api/client.ts` modules, core
   TypeScript types, query-key and mutation conventions, translation tooling,
   and styling.

@@ -801,8 +801,15 @@ Everything below is enforced through the shared primitives (`Modal`,
 ### Create / Edit
 
 - Triggered from a page header button (`+ New X`) or a per-row `Edit`.
-- Opens a **`Modal`** form (never inline). One modal component serves both
-  create and edit, keyed on a nullable `entity` prop (`isEdit = !!entity`).
+- **Create on a page, edit in a `Modal`** (the transaction/transfer forms, UX
+  redesign phase 3): the form's state machine lives in a hook any host can
+  drive (`useTransactionForm` / `useTransferForm`), the fields in presentational
+  components (`TransactionFormFields` / `TransferFormFields` + `AmountField`),
+  and the host owns the DOM - the `/new` `FormPage` (create below 1024px: URL
+  seeds `?type=`/`?account=`/`?copy=`, a sticky two-action footer, an
+  unsaved-changes confirm on close) or the modal (edit, copy, and create at
+  1024px+). Other entities keep the one-modal pattern: a `Modal` form serving
+  both create and edit, keyed on a nullable `entity` prop (`isEdit = !!entity`).
 - On submit: validate (see below) → `useMutation`.
 - On success: `toast.success('X created' | 'X updated')`, then
   `queryClient.invalidateQueries` for every affected list/report, then close.
@@ -834,6 +841,14 @@ onSuccess: () => {
 - Server/network errors are always surfaced through `toast.error(getApiErrorMessage(error, fallback))` — never silent, never a raw stack.
 - Field-level error styling (negative bg + ring + `AlertCircle`) is available on
   `Select` and text inputs per components.md §4 for inline validation.
+- The form hosts render field errors inline, **first-blur-then-keystroke**: an
+  error stays hidden until its field's first invalid user blur (the `touched`
+  latch ignores programmatic mount-time focus steals), then tracks every
+  keystroke. A failed submit shows every error at once and focuses the first
+  invalid field in visual order, not DOM order. The submit gate is unchanged -
+  the inline errors are display-only; the modal keeps the validation toasts
+  alongside them, while the `/new` page passes `validationToasts: false` to the
+  form hook and shows the inline errors alone (save toasts stay).
 
 ### Empty states
 
@@ -854,9 +869,9 @@ onSuccess: () => {
 | Screen | Create/Edit modal | Delete confirm | toast feedback | skeleton loading | muted empty |
 |---|---|---|---|---|---|
 | Accounts | ✅ | ✅ (archived only) | ✅ | ✅ | ✅ |
-| Transfers | ✅ | — (history is read-only) | ✅ | ✅ | ✅ |
+| Transfers | ✅ edit modal; create = `/new` < 1024px | - (history is read-only) | ✅ | ✅ | ✅ |
 | Budgets / detail | ✅ | ✅ (archive) | ✅ | ✅ | ✅ |
-| Transactions | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transactions | ✅ edit modal; create = `/new` < 1024px | ✅ | ✅ | ✅ | ✅ |
 | Planned | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Dashboard | — | — | — | ✅ | ✅ |
 
@@ -867,7 +882,8 @@ onSuccess: () => {
 Web and mobile may diverge in *interaction* (dropdown vs. option-list sheet) but never in
 *capability* or data rules. The mechanism:
 
-**Callers never branch on device.** A shared component decides its presentation internally:
+**Callers never branch on device in render.** A shared component decides its
+presentation internally:
 
 ```tsx
 export default function Select<T>(props: SelectProps<T>) {
@@ -886,14 +902,27 @@ Rules:
 3. Pick the cheapest level that suffices: CSS breakpoints (layout) → `useBreakpoint()`
    (different interaction pattern) → `useIsTouch()` (input-device behavior: hover reveals,
    hit areas).
+4. **Behavior may branch inside a handler; markup never branches.** When the
+   *action* differs by tier rather than the presentation, the control stays
+   mounted on every tier and its handler branches: the create buttons run
+   `isDesktop ? openModal() : navigate('/new')` (below 1024px creation is the
+   `/new` page; 1024px+ keeps the modal). The button's identity and its
+   `max-sm:hidden` siblings survive a live resize across the breakpoint, which
+   a render-level branch would rebuild.
 
 Adaptive today: `Modal` (→ BottomSheet), `Select`, `DatePicker`, `MainLayout` (sidebar ↔
 bottom nav), Members list (table ↔ card list).
 
 ### Quick-add flow (mobile)
 
-The bottom-nav FAB opens an `ActionSheet`: **New transaction · Transfer · From receipt (only
-when extraction is enabled) · Planned transaction** — wired to the same modals the pages use,
-available from every route. Page-header creation buttons that duplicate a FAB action are
-hidden on mobile (`max-sm:hidden`); actions the FAB does *not* cover (e.g. "New account")
-stay visible.
+The bottom-nav FAB navigates to `/new`, the full-page create flow (no action
+sheet): one form for a new transaction or transfer, Transfer as a third type
+segment beside Expense and Income. A plain push, so Back returns to the list
+the user left; the carry params follow the scope rules - `type=transfer` from
+`/transfers`, and the account filter when it holds exactly one id. The FAB
+hides on `/new` itself (the page already is the create form; the slot stays so
+the four tabs don't shift) and for viewers/workspace-less users. Planned and
+recurring-rule creation is not part of `/new`: the Planned page's own create
+buttons are visible on phones. Page-header creation buttons that duplicate the
+FAB's action are hidden on phones (`max-sm:hidden`); actions the FAB does *not*
+cover (e.g. "New account") stay visible.
