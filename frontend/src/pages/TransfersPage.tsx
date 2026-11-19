@@ -10,6 +10,7 @@ import { useAccounts } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
+import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
@@ -24,6 +25,7 @@ import Pagination from '../components/common/Pagination'
 import Select from '../components/common/Select'
 import TransferModal from '../components/accounts/TransferModal'
 import { FilterPanel, FilterField } from '../components/common/FilterBar'
+import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import { inputClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
@@ -60,6 +62,8 @@ export default function TransfersPage() {
   // content. A plain counter the content consumes with a render-adjust.
   const [createRequest, setCreateRequest] = useState(0)
 
+  const { activityTitle, breadcrumb } = useActivityScope()
+
   // Fall-through reset of the skeleton flag (lands on false, which disproves
   // its own guard - terminates by construction; StrictMode-idempotent).
   if (!defaultsLoading && skeletonShown) setSkeletonShown(false)
@@ -87,11 +91,13 @@ export default function TransfersPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      {/* The h1 and the action row stay mounted through the gate: route
-          changes move focus to the page h1, and a header that pops in
-          after the gate is churn. The gated region is everything below. */}
+      {/* The title row and the Activity tab row stay mounted through the gate:
+          route changes move focus to the page h1, and chrome that pops in
+          after the gate is churn. The gated region is everything below the
+          tab row. */}
       <PageHeader
-        title={t('title')}
+        title={activityTitle}
+        breadcrumb={breadcrumb}
         actions={
           <>
             {/* Save the current view facets as this page's defaults.
@@ -118,6 +124,12 @@ export default function TransfersPage() {
         }
         showAccountActions
       />
+      {/* Tab row: navigation chrome like the title row, mounted above the
+          arrival gate. Later header actions append at this row's end - the
+          control sizes to its segments and leaves the row's end free. */}
+      <div className="flex items-center gap-2 mb-3">
+        <ActivityTabs />
+      </div>
 
       {defaultsLoading ? (
         // Under the 300ms threshold the gated region simply holds - a blank

@@ -1,5 +1,4 @@
 {
-  "title": "Planned",
   "newPlanned": "New planned",
   "exportView": "Export view",
   "exportTitle": "Exports the status and date filters",
@@ -82,6 +81,8 @@
     "tabPlanned": "Planned",
     "tabRecurring": "Recurring",
     "viewAria": "Switch between planned and recurring",
+    "rulesButton_one": "Recurring rules ({{count}} active)",
+    "rulesButton_other": "Recurring rules ({{count}} active)",
     "newRecurring": "New recurring",
     "empty": "No recurring rules yet.",
     "activeChip": "Active",

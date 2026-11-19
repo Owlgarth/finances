@@ -10,6 +10,7 @@ import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/us
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
+import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount, formatMonthYear } from '../utils/format'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
@@ -36,8 +37,9 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
+import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
-import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'text-warning border-warning/40',
@@ -94,7 +96,7 @@ function readStoredSearch(): string {
 // blocking the page.
 export default function Planned() {
   const { t } = useTranslation('planned')
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { canWrite } = usePermissions()
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
@@ -117,6 +119,21 @@ export default function Planned() {
   // (above the gate) while the form modals and their seed state live in the
   // content. A plain counter the content consumes with a render-adjust.
   const [createRequest, setCreateRequest] = useState(0)
+
+  const { activityTitle, breadcrumb } = useActivityScope()
+  const updateParams = createUpdateParams(setSearchParams)
+
+  // Phone-only home of the view switch: the segmented row hides below sm,
+  // so this button is the only way into the recurring view there. Same
+  // ['recurring'] key as the content's view-gated query - cache-shared and
+  // deduped - but unconditional, so the active-rule count is derivable
+  // above the arrival gate where the button lives.
+  const { data: recurringRules = [] } = useQuery({
+    queryKey: ['recurring'],
+    queryFn: () => recurringTransactionsApi.getAll(true),
+  })
+  const activeRuleCount = recurringRules.filter((r) => r.is_active).length
+  const rulesButtonLabel = t('recurring.rulesButton', { count: activeRuleCount })
 
   // Fall-through reset of the skeleton flag (lands on false, which disproves
   // its own guard - terminates by construction; StrictMode-idempotent).
@@ -159,11 +176,13 @@ export default function Planned() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
-      {/* The h1 and the action row stay mounted through the gate: route
-          changes move focus to the page h1, and a header that pops in
-          after the gate is churn. The gated region is everything below. */}
+      {/* The title row and the Activity tab row stay mounted through the gate:
+          route changes move focus to the page h1, and chrome that pops in
+          after the gate is churn. The gated region is everything below the
+          tab row. */}
       <PageHeader
-        title={t('title')}
+        title={activityTitle}
+        breadcrumb={breadcrumb}
         actions={
           <>
             {/* Visible on mobile too: export is a read action with no FAB twin. */}
@@ -175,6 +194,26 @@ export default function Planned() {
               className={secondaryButtonClass}
             >
               <Download size={13} className="inline mr-1" /> {t('exportView')}
+            </button>
+            {/* Under 640 this button is the view switch (the segmented row is
+                hidden below sm): opens the recurring view, toggles back from
+                it - the same param write the segmented control performs. */}
+            <button
+              type="button"
+              onClick={() => updateParams({ view: view === 'recurring' ? null : 'recurring' })}
+              aria-pressed={view === 'recurring'}
+              title={rulesButtonLabel}
+              aria-label={rulesButtonLabel}
+              className={
+                'sm:hidden shrink-0 flex items-center justify-center rounded-sm transition-colors ' +
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+                `${controlHeightClass} pointer-coarse:min-w-[44px] ` +
+                (view === 'recurring'
+                  ? 'bg-primary text-white hover:bg-primary/90'
+                  : 'text-text-muted hover:text-text hover:bg-surface-hover')
+              }
+            >
+              <Repeat size={14} strokeWidth={1.5} aria-hidden="true" />
             </button>
             {/* Hidden on mobile: the FAB quick-add owns creation there. */}
             {canWrite && (
@@ -190,6 +229,12 @@ export default function Planned() {
         }
         showAccountActions
       />
+      {/* Tab row: navigation chrome like the title row, mounted above the
+          arrival gate. Later header actions append at this row's end - the
+          control sizes to its segments and leaves the row's end free. */}
+      <div className="flex items-center gap-2 mb-3">
+        <ActivityTabs />
+      </div>
 
       {defaultsLoading ? (
         // Under the 300ms threshold the gated region simply holds - a blank
@@ -647,9 +692,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
 
   return (
     <>
-      {/* View switch sits directly below the header, ABOVE the status
-          control: it swaps the whole page surface. */}
-      <div className="mb-3">
+      {/* View switch for 640px and up, above the status control: it swaps
+          the whole page surface. Below 640 the header's recurring-rules
+          button owns the toggle instead. */}
+      <div className="mb-3 hidden sm:block">
         <SegmentedControl
           value={view}
           onChange={(v) => updateParams({ view: v === 'planned' ? null : v })}
