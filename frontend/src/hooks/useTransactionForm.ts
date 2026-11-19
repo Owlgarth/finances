@@ -215,6 +215,8 @@ export function useTransactionForm({
   // Submit-attempt counter. Hosts key their inline-error display gate and
   // focus-first-invalid pass on it (every error shows after any submit
   // attempt) without owning validation - the gates live in submit().
+  // Reset to 0 by the snapshot render-adjust at every seeding boundary
+  // and resetForAnother bump, so the count is scoped to one session.
   const [submitCount, setSubmitCount] = useState(0)
   // Seed snapshot for isDirty. State, not a ref: isDirty reads it during
   // render, and render-time ref reads are forbidden. Written only by the
@@ -523,6 +525,14 @@ export function useTransactionForm({
   if (open && (snapshottedFor?.session !== session || snapshottedFor?.resetCount !== resetCount)) {
     setSnapshottedFor({ session, resetCount })
     setSeedSnapshot(currentValues())
+    // The submit counter is per-session display state, not a lifetime
+    // count: hosts gate show-all-errors on it, so a stale count from a
+    // previous session would greet a fresh open with every error visible.
+    // Zeroing here lands on the same discarded-and-rerun pass as the
+    // baseline above, so the reopened form commits clean. Within a session
+    // this adjust never fires, so a failed submit keeps its errors until
+    // the user edits or the session changes.
+    setSubmitCount(0)
   }
 
   // True when any user-editable value differs from the session-boundary
