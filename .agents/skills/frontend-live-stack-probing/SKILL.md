@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits, backend-container migration drift, router startTransition races, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -41,6 +41,13 @@ same session - in PR #81 it paid for itself twice.
   START, not only at teardown: a crashed run leaks the preference and every subsequent boot
   renders the poisoned state - PR #177's probe inherited a leaked `uk` preference and it
   initially read as a product bug. Reset-at-start keeps the probe idempotently re-runnable.
+- Scenario isolation spans localStorage, not just server state: an app feature that persists
+  a "last used" default (the transfer form's last account pair under its localStorage key) is
+  silently rewritten by earlier scenarios in the same run, so a later scenario's assumed
+  default is stale - and the resulting silent, no-request refusal was CORRECT product
+  behavior (a same-account pair on a host that toasts nothing), not a bug. Set
+  persisted-default-backed values explicitly in every scenario, and treat "no request fired"
+  as validation-refusal evidence on no-toast hosts.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
@@ -109,13 +116,22 @@ same session - in PR #81 it paid for itself twice.
   reported viewport or classification as a hypothesis - "mobile-only" was a workflow artifact
   (bottom-nav flows warm-re-enter while desktop sessions cold-load). (Rule detail under State
   Refresh After Mutations in `frontend-react`.)
+- TanStack Query v5's focusManager listens to `visibilitychange` only:
+  `window.dispatchEvent(new Event('focus'))` triggers nothing. To fire the
+  `refetchOnWindowFocus: 'always'` refetch in a SINGLE tab (no second tab to focus), dispatch
+  `document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))` while the
+  document is visible.
 - react-router v7 wraps route commits in `startTransition`: `page.waitForURL()` resolving does NOT
   mean the route rendered - URL change and DOM swap are separate commits, and an instant
   `innerText` read catches the PREVIOUS page's h1. Poll for the expected heading (locator
   `filter({ hasText })` + `waitFor`), never read the heading the moment the URL settles.
   The same commit race reads through `count()` at `domcontentloaded`: the load event fires
   before React boots, so a uniqueness `count()` returns 0 and faults as if the element were
-  absent. `waitFor` the locator FIRST, then `count()` for uniqueness.
+  absent. `waitFor` the locator FIRST, then `count()` for uniqueness. Chained navigation has
+  a supersession twin: after a `navigate(-1)`, waiting on the URL and immediately navigating
+  again re-enters the STILL-MOUNTED page - the pending `startTransition` route commit is
+  superseded by the new location before it renders, so the component never unmounts and its
+  state survives. Poll the destination's rendered h1 before issuing the next navigation.
 - Cold deep links to paginated state do not stick on a fresh mount: `/planned?page=2` resets
   to page 1 by design - the one-shot defaults materialization rewrites the search params on
   mount and drops `?page` (machinery under URL Search-Param State Sync in `frontend-react`).
@@ -136,6 +152,13 @@ same session - in PR #81 it paid for itself twice.
   shape: when the fault follows the STEP ORDER rather than the viewport - the same check
   passed at 1024, where no tab-walk preceded it - the bug is in the harness sequence, not
   the product.
+- Focus-ORDERING probes instrument `.focus()` CALLS, never focus events: patch
+  `HTMLElement.prototype.focus` in `addInitScript` and count calls per element id - a
+  `.focus()` on an already-focused element fires NO event, so event counters are blind to
+  exactly the double-fire class being tested. Gate on RELATIVE per-action deltas (e.g. +1
+  per submit), not absolute counts: unrelated autoFocus/overlay-restore machinery
+  legitimately adds calls across close/reopen cycles without the effect under test
+  misfiring.
 - Date-picker (react-day-picker v9) keyboard probes need TRUSTED key presses: synthetic
   `dispatchEvent` keyboard events are ignored - only real CDP key input moves day focus. The
   first Tabs into an RDP popup land on the month-nav buttons, so keyboard scenarios tab-walk
@@ -183,6 +206,15 @@ same session - in PR #81 it paid for itself twice.
   a wildcard `Access-Control-Allow-Origin: *` is rejected by the browser - echo the request's
   Origin header and add `Access-Control-Allow-Credentials: true`, or the stub fails as
   unexplained CORS console noise.
+- Fix-acceptance probes earn causality with a NEGATIVE CONTROL: run the same harness once
+  against the pre-fix code (stash the fix, re-run, expect the repro) - a passing assertion
+  that also passes pre-fix tests a probe artifact, not the change. A prior task's recorded
+  failing probe state at the same HEAD (notes + screenshot of the failure) can serve as the
+  negative-control leg without the stash, when re-stashing would re-risk the
+  stale-served-transform class for no new information. Design the DISCRIMINATING check on a
+  state where the bug manifests (an empty create form for show-all-errors leakage); a check
+  that passes both pre-fix and post-fix (copying a valid transaction derives no errors
+  either way) is a regression gate only, never proof of the fix.
 - Served-code staleness in long-lived dev containers: a dev container that outlives the
   implementer's edits can serve a stale Vite transform - the module-graph cache frozen at a
   mid-edit intermediate save (bind-mount HMR missing the final write) - so the page renders
@@ -190,7 +222,11 @@ same session - in PR #81 it paid for itself twice.
   sourcemap's line numbers match the older revision. Before trusting any "missing UI"
   verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
   the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
-  invalidates the cache. Exemplar: PR #146's first stepper probe. Verify the served
+  invalidates the cache. Choose markers that survive esbuild's output form: the transform
+  double-quotes strings and strips JSX comments, so a single-quoted or comment-based marker
+  reads "stale" against a fresh transform - a STALE verdict from such a marker is a probe
+  bug until checked against the actual transform text. Exemplar: PR #146's first stepper
+  probe. Verify the served
   transform per FILE, never per subset: a multi-write edit session freezes the module
   graph per file - exactly the files whose edits landed as separate writes can sit at
   mid-edit states (the import write landed, the block write missing) while their siblings
@@ -209,9 +245,14 @@ same session - in PR #81 it paid for itself twice.
   `_metadata.json` lists the updated package - only then does the served transform derive from
   the new install.
 - Real-hardware dynamics: headless emulation has no soft keyboard, so visualViewport/OSK
-  behavior (an on-screen keyboard re-render racing a tap, click suppression on
-  element-move) is out of emulation reach. A clean headless non-repro of a mobile-only bug
-  is evidence the trigger needs real hardware, not evidence of absence - and when a mandated
+  behavior (an on-screen keyboard re-render racing a tap) is out of emulation reach.
+  Element-move click suppression, though, is reproducible headless when the mover is
+  LAYOUT, not the OSK: a freshly autofocused empty amount field blurs on mousedown, the
+  blur-touch error row inserts ~20px, the footer shifts between mousedown and mouseup, and
+  the click lands on the div now above the button - so probes blur freshly focused required
+  fields before clicking a below-the-fields primary button. A clean headless non-repro of a
+  mobile-only bug whose trigger is NOT layout-driven is evidence the trigger needs real
+  hardware, not evidence of absence - and when a mandated
   live diagnosis refutes its pre-registered hypotheses, record each refutation with its log
   signatures (which handlers ran, what committed), never silently claim a reproduction the
   logs do not show, and route acceptance to an explicit on-device manual gate riding the PR.
@@ -298,6 +339,10 @@ same session - in PR #81 it paid for itself twice.
   to visible fields (`getClientRects().length > 0`) before asserting DOM-order positions.
 - Scope modal-title assertions to `[role="dialog"] h2`, never `h2.first()` - pages carry
   their own h2s (the planned view's year header) that poison a page-level first match.
+- Sibling routes can share one h1: the three Activity pages all render "Activity"
+  (`hooks/useActivityScope.ts`), so a heading poll proves only that SOME sibling rendered -
+  when the destination has same-titled siblings, wait on a marker unique to the destination
+  route (its own differentiating h1, e.g. "New transaction", or a page-specific element).
 - Localized expected strings come from the CATALOGS, never from guesses or
   sibling-namespace analogies - uk's quick-add button reads "Нова операція" while the
   transactions page's is "Нова транзакція"; a guessed string turns a harness fault into an
