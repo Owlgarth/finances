@@ -39,6 +39,7 @@ Backend
   migrate [args]        Apply migrations
   makemigrations [app]  Create migrations
   seed                  Seed currencies + legal documents
+  manage seed_qa_user   Create/reset the QA demo user (idempotent, demo data)
   shell                 Django shell
   psql                  psql session on the dev database
   test [args]           pytest
