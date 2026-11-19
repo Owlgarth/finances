@@ -115,13 +115,40 @@ export default function TransactionFormFields({
   }, [moreOpen, isTouch])
 
   // Inline-error display gate: an error shows after its field's first
-  // invalid blur (touched) or after any submit attempt; once shown it
-  // tracks every keystroke because form.errors re-derives every render.
-  // The modal path keys on the hook's submit counter; a sharedFields host
-  // passes its own latch (it resets after a successful save-and-add-
-  // another, which the counter cannot express). The submit toasts remain
-  // the gate; these are display-only.
+  // invalid USER blur (touched, via markTouched) or after any submit
+  // attempt; once shown it tracks every keystroke because form.errors
+  // re-derives every render. The modal path keys on the hook's submit
+  // counter; a sharedFields host passes its own latch (it resets after a
+  // successful save-and-add-another, which the counter cannot express).
+  // The submit toasts remain the gate; these are display-only.
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({})
+
+  // Only USER-initiated blurs mark a field touched. On a pristine desktop
+  // open the amount input's autoFocus focus is immediately stolen by the
+  // modal panel's focus capture (useOverlay focuses the panel wrapper
+  // right after mount - twice under dev StrictMode's double effect run),
+  // and latching that programmatic blur would greet every fresh open with
+  // "Amount is required". Arm the latch on the first real user input after
+  // mount: focusing or leaving a field always takes a pointer or key
+  // event, so every blur that can follow one is a user blur, while the
+  // mount-time steals precede any input. One-way ref, no re-render; the
+  // sessionKey remount re-arms it per open.
+  const userInteractedRef = useRef(false)
+  useEffect(() => {
+    const mark = () => {
+      userInteractedRef.current = true
+    }
+    document.addEventListener('pointerdown', mark, true)
+    document.addEventListener('keydown', mark, true)
+    return () => {
+      document.removeEventListener('pointerdown', mark, true)
+      document.removeEventListener('keydown', mark, true)
+    }
+  }, [])
+  const markTouched = (key: FieldKey) => {
+    if (!userInteractedRef.current) return
+    setTouched((prev) => ({ ...prev, [key]: true }))
+  }
   const showAll = sharedFields ? showAllErrors : form.submitCount > 0
   const showError = (key: FieldKey): string | undefined =>
     (touched[key] || showAll) && form.errors[key] ? form.errors[key] : undefined
@@ -247,7 +274,7 @@ export default function TransactionFormFields({
             }}
             error={amountError}
             autoFocus={!isTouch}
-            onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
+            onBlur={() => markTouched('amount')}
           />
 
           {/* 3. Date: quick picks replace the DatePicker field. */}
@@ -276,7 +303,7 @@ export default function TransactionFormFields({
             // Delayed close: clicking a suggestion row blurs the input first -
             // closing synchronously would unmount the row before the click lands.
             onBlur={() => {
-              setTouched((prev) => ({ ...prev, description: true }))
+              markTouched('description')
               setTimeout(() => form.setSuggestionsOpen(false), 150)
             }}
             onKeyDown={form.handleDescriptionKeyDown}
@@ -490,7 +517,7 @@ export default function TransactionFormFields({
                     inputMode="decimal"
                     value={form.originalAmount}
                     onChange={(e) => form.setOriginalAmount(e.target.value)}
-                    onBlur={() => setTouched((prev) => ({ ...prev, originalAmount: true }))}
+                    onBlur={() => markTouched('originalAmount')}
                     placeholder={t('form.originalAmountPlaceholder')}
                     className={`${inputClass} ${errorInput('originalAmount')}`}
                   />
