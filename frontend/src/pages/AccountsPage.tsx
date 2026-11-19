@@ -10,7 +10,7 @@ import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
 import { getApiErrorMessage } from '../utils/errors'
-import { useIsTouch } from '../hooks/useBreakpoint'
+import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
 import ArchivedBadge from '../components/common/ArchivedBadge'
@@ -32,6 +32,7 @@ export default function AccountsPage() {
   const multiCurrency = useMultiCurrency()
   const { data: currencies = [] } = useEnabledCurrencies()
   const isTouch = useIsTouch()
+  const { isDesktop } = useBreakpoint()
   const [showArchived, setShowArchived] = useState(false)
   // Selected account for the touch action sheet that replaces the desktop
   // inline card action links.
@@ -95,15 +96,27 @@ export default function AccountsPage() {
   const openEdit = (a: Account) => { setEditing(a); setFormOpen(true) }
   const openTransfer = (repeat: Transfer | null = null) => { setRepeatTransfer(repeat); setTransferOpen(true) }
 
+  // Below 1024 the transfer entry is the /new page with type=transfer;
+  // 1024+ keeps the modal.
+  const handleTransfer = () => {
+    if (isDesktop) {
+      openTransfer()
+      return
+    }
+    navigate('/new?type=transfer')
+  }
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       <PageHeader
         title={t('title')}
         actions={
           <>
-            {/* Hidden on mobile: the FAB quick-add has Transfer. */}
+            {/* Hidden on phones (the FAB owns creation there); on tablets
+                below 1024 it navigates to /new?type=transfer, at 1024+ it
+                opens the create modal. */}
             {canWrite && (
-              <button onClick={() => openTransfer()} className={`${secondaryButtonClass} max-sm:hidden`}>
+              <button type="button" onClick={handleTransfer} className={`${secondaryButtonClass} max-sm:hidden`}>
                 <ArrowLeftRight size={13} className="inline mr-1" /> {t('actions.transfer')}
               </button>
             )}

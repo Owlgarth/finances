@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { BookmarkPlus, Copy, Download, Plus, Pencil, Save, Trash2 } from 'lucide-react'
@@ -18,7 +18,7 @@ import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
-import { useIsTouch } from '../hooks/useBreakpoint'
+import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
@@ -84,6 +84,8 @@ function readStoredSearch(): string {
 export default function Transactions() {
   const { t } = useTranslation('transactions')
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { isDesktop } = useBreakpoint()
   const { canWrite } = usePermissions()
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
@@ -106,6 +108,20 @@ export default function Transactions() {
   // (above the gate) while the form modal and its seed state live in the
   // content. A plain counter the content consumes with a render-adjust.
   const [createRequest, setCreateRequest] = useState(0)
+
+  // Below 1024 the create entry is the /new page (the FAB on phones, this
+  // button on tablets); 1024+ keeps the modal. The branch lives INSIDE the
+  // handler - the button stays mounted on every tier. The account filter
+  // carries only when it resolves to exactly one id: /new seeds a single
+  // account, never a CSV list.
+  const handleCreate = () => {
+    if (isDesktop) {
+      setCreateRequest((n) => n + 1)
+      return
+    }
+    const accountIds = intListParam(searchParams, 'account')
+    navigate(accountIds.length === 1 ? `/new?account=${accountIds[0]}` : '/new')
+  }
 
   const { activityTitle, breadcrumb } = useActivityScope()
 
@@ -166,11 +182,13 @@ export default function Transactions() {
             >
               <Download size={13} className="inline mr-1" /> {t('exportView')}
             </button>
-            {/* Hidden on mobile: the FAB quick-add owns creation there. */}
+            {/* Hidden on phones (the FAB owns creation there); on tablets
+                below 1024 it navigates to /new, at 1024+ it opens the
+                create modal. */}
             {canWrite && (
               <button
                 type="button"
-                onClick={() => setCreateRequest((n) => n + 1)}
+                onClick={handleCreate}
                 className={`${primaryButtonClass} max-sm:hidden`}
               >
                 <Plus size={13} className="inline mr-1" /> {t('newTransaction')}

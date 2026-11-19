@@ -27,18 +27,8 @@
   "disableZoom": "Disable zoom",
   "close": "Close",
   "addRecord": "Add record",
-  "quickAdd": {
-    "newTransaction": "New transaction",
-    "transfer": "Transfer",
-    "fromReceipt": "From receipt",
-    "scanningOffline": "Scanning offline",
-    "recurringRule": "Recurring rule",
-    "plannedTransaction": "Planned transaction"
-  },
-  "receiptReading": "Reading receipt…",
   "bookmarks": "Bookmarks",
   "bookmarksManage": "Manage bookmarks",
   "viewAllAccounts": "View all accounts",
-  "viewAllBudgets": "View all budgets",
-  "receiptReadFailed": "Could not read the receipt"
+  "viewAllBudgets": "View all budgets"
 }

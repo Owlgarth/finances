@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeftRight, Pencil, Plus, Repeat, Save, Trash2 } from 'lucide-react'
@@ -16,7 +16,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
-import { useIsTouch } from '../hooks/useBreakpoint'
+import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -40,6 +40,8 @@ import { inputClass, primaryButtonClass, secondaryButtonClass } from '../compone
 export default function TransfersPage() {
   const { t } = useTranslation('transfers')
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { isDesktop } = useBreakpoint()
   const { canWrite } = usePermissions()
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
@@ -61,6 +63,20 @@ export default function TransfersPage() {
   // (above the gate) while the form modal and its seed state live in the
   // content. A plain counter the content consumes with a render-adjust.
   const [createRequest, setCreateRequest] = useState(0)
+
+  // Below 1024 the create entry is /new with this page's subject as the
+  // type; the account filter (a single id here, read with intParam)
+  // travels when set - the same exactly-one-id rule as the FAB carry.
+  const handleCreate = () => {
+    if (isDesktop) {
+      setCreateRequest((n) => n + 1)
+      return
+    }
+    const next = new URLSearchParams({ type: 'transfer' })
+    const account = intParam(searchParams, 'account')
+    if (account) next.set('account', String(account))
+    navigate(`/new?${next.toString()}`)
+  }
 
   const { activityTitle, breadcrumb } = useActivityScope()
 
@@ -114,9 +130,11 @@ export default function TransfersPage() {
             >
               <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
             </button>
-            {/* Hidden on mobile: the FAB quick-add has Transfer. */}
+            {/* Hidden on phones (the FAB owns creation there); on tablets
+                below 1024 it navigates to /new?type=transfer, at 1024+ it
+                opens the create modal. */}
             {canWrite && (
-              <button type="button" onClick={() => setCreateRequest((n) => n + 1)} className={`${primaryButtonClass} max-sm:hidden`}>
+              <button type="button" onClick={handleCreate} className={`${primaryButtonClass} max-sm:hidden`}>
                 <Plus size={13} className="inline mr-1" /> {t('actions.newTransfer')}
               </button>
             )}
