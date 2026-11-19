@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
+import { Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
@@ -23,6 +23,7 @@ import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import PeriodPicker from '../components/budgets/PeriodPicker'
+import PageHeader from '../components/layout/PageHeader'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 /** The day after an ISO date, as an ISO date (local, no TZ shifts). */
@@ -614,116 +615,122 @@ export default function BudgetDetailPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
-      <Link to="/budgets" className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]">
-        <ArrowLeft size={13} /> {t('title')}
-      </Link>
-
       {/* Mobile: title first line, period switcher wraps to a full-width row below. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-lg font-semibold text-text">{budget?.name ?? t('budgetFallback')}</h1>
-        {allPeriods.length > 0 && (
-          <div className="flex items-center gap-1 max-sm:w-full">
-            <button
-              type="button"
-              onClick={() => goToPeriod(-1)}
-              disabled={!hasPrev}
-              aria-label={t('detail.previousPeriod')}
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-            >
-              <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            <div className="w-56 max-sm:w-auto max-sm:flex-1">
-              <PeriodPicker
-                periods={allPeriods}
-                value={periodId}
-                onChange={selectPeriod}
-                limit={7}
-                onViewAll={() => navigate(`/budgets/${budgetId}/periods`)}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => goToPeriod(1)}
-              disabled={!hasNext || isPlanningNext}
-              aria-label={t('detail.nextPeriod')}
-              title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? t('detail.planNextPeriod') : undefined}
-              className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-            >
-              <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            {budget?.cadence === 'custom' && canManageAccounts && (
-              <>
-                {/* Divider between period navigation and period management
-                    (patterns.md §5 group divider, vertical form). Also keeps
-                    the chevrons' touch-hit areas clear of these buttons'. */}
-                <span className="w-px h-4 bg-border mx-1" aria-hidden="true" />
-                {/* Adjacent icon buttons (BudgetsPage pattern): real padded hit
-                    areas instead of .touch-hit (expanded areas would overlap —
-                    responsive.md); §3 restores the hover bg the card buttons
-                    omit, and rounded-none for icon-only. */}
+      <PageHeader
+        backTo="/budgets"
+        breadcrumb={t('title')}
+        title={budget?.name ?? t('budgetFallback')}
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {/* One wrapping group for both action clusters: the header's
+                actions slot does not wrap itself, so this group owns the
+                phone-width wrapping. */}
+            {allPeriods.length > 0 && (
+              <div className="flex items-center gap-1 max-sm:w-full">
                 <button
                   type="button"
-                  onClick={() => openPeriodModal('add')}
-                  title={t('detail.addPeriod')}
-                  aria-label={t('detail.addPeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                  onClick={() => goToPeriod(-1)}
+                  disabled={!hasPrev}
+                  aria-label={t('detail.previousPeriod')}
+                  className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                 >
-                  <Plus size={14} strokeWidth={1.5} aria-hidden="true" />
+                  <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
+                <div className="w-56 max-sm:w-auto max-sm:flex-1">
+                  <PeriodPicker
+                    periods={allPeriods}
+                    value={periodId}
+                    onChange={selectPeriod}
+                    limit={7}
+                    onViewAll={() => navigate(`/budgets/${budgetId}/periods`)}
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => selectedPeriod && openPeriodModal('edit', selectedPeriod)}
-                  disabled={!selectedPeriod}
-                  title={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
-                  aria-label={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                  onClick={() => goToPeriod(1)}
+                  disabled={!hasNext || isPlanningNext}
+                  aria-label={t('detail.nextPeriod')}
+                  title={selectedIdx === ascPeriods.length - 1 && canPlanAhead ? t('detail.planNextPeriod') : undefined}
+                  className="w-8 h-8 flex items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                 >
-                  <Pencil size={14} strokeWidth={1.5} aria-hidden="true" />
+                  <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => selectedPeriod && setDeletingPeriod(selectedPeriod)}
-                  disabled={!selectedPeriod}
-                  title={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
-                  aria-label={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
-                  className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-                >
-                  <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
-                </button>
-              </>
+                {budget?.cadence === 'custom' && canManageAccounts && (
+                  <>
+                    {/* Divider between period navigation and period management
+                        (patterns.md §5 group divider, vertical form). Also keeps
+                        the chevrons' touch-hit areas clear of these buttons'. */}
+                    <span className="w-px h-4 bg-border mx-1" aria-hidden="true" />
+                    {/* Adjacent icon buttons (BudgetsPage pattern): real padded hit
+                        areas instead of .touch-hit (expanded areas would overlap -
+                        responsive.md); §3 restores the hover bg the card buttons
+                        omit, and rounded-none for icon-only. */}
+                    <button
+                      type="button"
+                      onClick={() => openPeriodModal('add')}
+                      title={t('detail.addPeriod')}
+                      aria-label={t('detail.addPeriod')}
+                      className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                    >
+                      <Plus size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectedPeriod && openPeriodModal('edit', selectedPeriod)}
+                      disabled={!selectedPeriod}
+                      title={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
+                      aria-label={selectedPeriod ? t('detail.editPeriodAria', { name: selectedPeriod.name }) : t('detail.editPeriod')}
+                      className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-text hover:bg-surface-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                    >
+                      <Pencil size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectedPeriod && setDeletingPeriod(selectedPeriod)}
+                      disabled={!selectedPeriod}
+                      title={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
+                      aria-label={selectedPeriod ? t('detail.deletePeriodAria', { name: selectedPeriod.name }) : t('detail.deletePeriod')}
+                      className="flex items-center justify-center p-1.5 rounded-none pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:-my-2 text-text-muted hover:text-negative hover:bg-negative-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} aria-hidden="true" />
+                    </button>
+                  </>
+                )}
+              </div>
             )}
+            {/* Header action group: the labeled actions wrap as ONE unit so
+                justify-between can never fling them to opposite ends of the row,
+                and a wrapping row carries them together. The group itself wraps
+                only when the two buttons cannot share a line at all. */}
+            <div className="flex flex-wrap items-center gap-3">
+              {canWrite && (
+                <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
+                  <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
+                </button>
+              )}
+              {/* Bookmark this budget+currency view, labeled like its sibling
+                  header action. Any role - personal resource: a bookmark is the
+                  user's own convenience view, never a workspace mutation. With a
+                  matching non-archived bookmark already saved for this budget and
+                  the viewed currency, the button becomes the edit affordance for
+                  that row (filled glyph) instead of a second create. */}
+              <button
+                type="button"
+                onClick={() =>
+                  setBookmarkModal(matchedBookmark ? { mode: 'edit', bookmark: matchedBookmark } : { mode: 'create' })
+                }
+                className={secondaryButtonClass}
+              >
+                {matchedBookmark
+                  ? <Bookmark size={13} fill="currentColor" className="inline mr-1" />
+                  : <BookmarkPlus size={13} className="inline mr-1" />}{' '}
+                {matchedBookmark ? editLabel : addLabel}
+              </button>
+            </div>
           </div>
-        )}
-        {/* Header action group: the labeled actions wrap as ONE unit so
-            justify-between can never fling them to opposite ends of the row,
-            and a wrapping row carries them together. The group itself wraps
-            only when the two buttons cannot share a line at all. */}
-        <div className="flex flex-wrap items-center gap-3">
-          {canWrite && (
-            <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
-              <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
-            </button>
-          )}
-          {/* Bookmark this budget+currency view, labeled like its sibling
-              header action. Any role - personal resource: a bookmark is the
-              user's own convenience view, never a workspace mutation. With a
-              matching non-archived bookmark already saved for this budget and
-              the viewed currency, the button becomes the edit affordance for
-              that row (filled glyph) instead of a second create. */}
-          <button
-            type="button"
-            onClick={() =>
-              setBookmarkModal(matchedBookmark ? { mode: 'edit', bookmark: matchedBookmark } : { mode: 'create' })
-            }
-            className={secondaryButtonClass}
-          >
-            {matchedBookmark
-              ? <Bookmark size={13} fill="currentColor" className="inline mr-1" />
-              : <BookmarkPlus size={13} className="inline mr-1" />}{' '}
-            {matchedBookmark ? editLabel : addLabel}
-          </button>
-        </div>
-      </div>
+        }
+        showAccountActions
+      />
 
       {isPast && (
         <p className="text-xs text-warning mb-3">{t('detail.pastPeriodNote')}</p>

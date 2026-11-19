@@ -15,6 +15,7 @@ import DeleteAccountSection from '../components/profile/DeleteAccountSection'
 import ResetAccountSection from '../components/profile/ResetAccountSection'
 import TwoFactorSection from '../components/profile/TwoFactorSection'
 import LegacyImportModal from '../components/profile/LegacyImportModal'
+import PageHeader from '../components/layout/PageHeader'
 
 import type { ImportResult } from '../types'
 
@@ -105,7 +106,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-base font-semibold text-text mb-8">{t('profilePage.title')}</h1>
+      <PageHeader title={t('profilePage.title')} showAccountActions />
 
       <div className="bg-surface border border-border rounded-sm">
         <div className="py-3 px-3">

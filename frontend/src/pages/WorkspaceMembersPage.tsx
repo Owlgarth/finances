@@ -24,6 +24,7 @@ import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
+import PageHeader from '../components/layout/PageHeader'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 import { getApiErrorMessage } from '../utils/errors'
 import { tappableProps } from '../utils/tappable'
@@ -178,31 +179,35 @@ export default function WorkspaceMembersPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-base font-semibold text-text">{t('page.title')}</h1>
-          <p className="text-text-muted mt-1">{workspace?.name}</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsChangeMyPasswordModalOpen(true)}
-            className={`flex items-center gap-2 ${secondaryButtonClass}`}
-            title={t('page.changeMyPassword')}
-          >
-            <KeyRound size={14} />
-            <span className="hidden sm:inline">{t('page.changeMyPassword')}</span>
-          </button>
-          {canManageMembers && (
+      <PageHeader
+        title={t('page.title')}
+        actions={
+          <div className="flex gap-2">
             <button
-              onClick={() => setIsAddModalOpen(true)}
-              className={`flex items-center gap-2 ${primaryButtonClass}`}
+              onClick={() => setIsChangeMyPasswordModalOpen(true)}
+              className={`flex items-center gap-2 ${secondaryButtonClass}`}
+              title={t('page.changeMyPassword')}
             >
-              <UserPlus size={14} />
-              <span className="hidden sm:inline">{t('page.addMember')}</span>
+              <KeyRound size={14} />
+              <span className="hidden sm:inline">{t('page.changeMyPassword')}</span>
             </button>
-          )}
-        </div>
-      </div>
+            {canManageMembers && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className={`flex items-center gap-2 ${primaryButtonClass}`}
+              >
+                <UserPlus size={14} />
+                <span className="hidden sm:inline">{t('page.addMember')}</span>
+              </button>
+            )}
+          </div>
+        }
+        showAccountActions
+      />
+      {/* Page context, not a navigation path - a line of its own under the
+          header rather than a breadcrumb. Pulled back into the header row's
+          bottom margin so it stays coupled to the title. */}
+      <p className="text-text-muted -mt-4 mb-6">{workspace?.name}</p>
 
       {members && members.length === 0 ? (
         <EmptyState

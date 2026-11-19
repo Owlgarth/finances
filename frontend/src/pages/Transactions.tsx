@@ -10,6 +10,7 @@ import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/us
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
+import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
@@ -29,6 +30,8 @@ import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
+import ActivityTabs from '../components/layout/ActivityTabs'
+import PageHeader from '../components/layout/PageHeader'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 const TYPE_STYLE: Record<string, string> = {
@@ -104,6 +107,8 @@ export default function Transactions() {
   // content. A plain counter the content consumes with a render-adjust.
   const [createRequest, setCreateRequest] = useState(0)
 
+  const { activityTitle, breadcrumb } = useActivityScope()
+
   // Fall-through reset of the skeleton flag (lands on false, which disproves
   // its own guard - terminates by construction; StrictMode-idempotent).
   if (!defaultsLoading && skeletonShown) setSkeletonShown(false)
@@ -142,33 +147,44 @@ export default function Transactions() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      {/* The h1 and the action row stay mounted through the gate: route
-          changes move focus to the page h1, and a header that pops in
-          after the gate is churn. The gated region is everything below. */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* Visible on mobile too: export is a read action with no FAB twin. */}
-          <button
-            type="button"
-            onClick={handleExportView}
-            disabled={isExporting}
-            title={t('exportTitle')}
-            className={secondaryButtonClass}
-          >
-            <Download size={13} className="inline mr-1" /> {t('exportView')}
-          </button>
-          {/* Hidden on mobile: the FAB quick-add owns creation there. */}
-          {canWrite && (
+      {/* The title row and the Activity tab row stay mounted through the gate:
+          route changes move focus to the page h1, and chrome that pops in
+          after the gate is churn. The gated region is everything below the
+          tab row. */}
+      <PageHeader
+        title={activityTitle}
+        breadcrumb={breadcrumb}
+        actions={
+          <>
+            {/* Visible on mobile too: export is a read action with no FAB twin. */}
             <button
               type="button"
-              onClick={() => setCreateRequest((n) => n + 1)}
-              className={`${primaryButtonClass} max-sm:hidden`}
+              onClick={handleExportView}
+              disabled={isExporting}
+              title={t('exportTitle')}
+              className={secondaryButtonClass}
             >
-              <Plus size={13} className="inline mr-1" /> {t('newTransaction')}
+              <Download size={13} className="inline mr-1" /> {t('exportView')}
             </button>
-          )}
-        </div>
+            {/* Hidden on mobile: the FAB quick-add owns creation there. */}
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => setCreateRequest((n) => n + 1)}
+                className={`${primaryButtonClass} max-sm:hidden`}
+              >
+                <Plus size={13} className="inline mr-1" /> {t('newTransaction')}
+              </button>
+            )}
+          </>
+        }
+        showAccountActions
+      />
+      {/* Tab row: navigation chrome like the title row, mounted above the
+          arrival gate. Later header actions append at this row's end - the
+          control sizes to its segments and leaves the row's end free. */}
+      <div className="flex items-center gap-2 mb-3">
+        <ActivityTabs />
       </div>
 
       {defaultsLoading ? (

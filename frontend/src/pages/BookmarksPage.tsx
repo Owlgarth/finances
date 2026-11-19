@@ -19,6 +19,7 @@ import Select from '../components/common/Select'
 import Switch from '../components/common/Switch'
 import { SkeletonRows } from '../components/common/Skeleton'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
+import PageHeader from '../components/layout/PageHeader'
 
 // The sidebar-cap values the preference accepts (0 = All). Typed as plain
 // numbers, not `as const`: the trigger's value is the raw stored preference
@@ -131,21 +132,23 @@ export default function BookmarksPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        {/* text-base (the 16px page-title cap), not the older pages' text-lg. */}
-        <h1 className="text-base font-semibold text-text">{t('title')}</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{t('showInSidebar')}</span>
-          <Select
-            value={cap}
-            onChange={(v) => capMutation.mutate(v)}
-            options={capOptions}
-            mono
-            className="w-24"
-            aria-label={t('showInSidebar')}
-          />
-        </div>
-      </div>
+      <PageHeader
+        title={t('title')}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{t('showInSidebar')}</span>
+            <Select
+              value={cap}
+              onChange={(v) => capMutation.mutate(v)}
+              options={capOptions}
+              mono
+              className="w-24"
+              aria-label={t('showInSidebar')}
+            />
+          </div>
+        }
+        showAccountActions
+      />
 
       {isLoading ? (
         <SkeletonRows count={4} rowClassName="h-12 w-full" />

@@ -1,5 +1,4 @@
 {
-  "title": "Planowane transakcje",
   "newPlanned": "Nowa planowana",
   "exportView": "Eksportuj widok",
   "exportTitle": "Eksportuje filtry statusu i dat",
@@ -84,6 +83,10 @@
     "tabPlanned": "Planowane",
     "tabRecurring": "Cykliczne",
     "viewAria": "Przełącz między zaplanowanymi i cyklicznymi",
+    "rulesButton_one": "Reguły cykliczne ({{count}} aktywna reguła)",
+    "rulesButton_few": "Reguły cykliczne ({{count}} aktywne reguły)",
+    "rulesButton_many": "Reguły cyklicznych ({{count}} aktywnych reguł)",
+    "rulesButton_other": "Reguły cyklicznych ({{count}} aktywnych reguł)",
     "newRecurring": "Nowa cykliczna",
     "empty": "Brak reguł cyklicznych.",
     "activeChip": "Aktywna",

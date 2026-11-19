@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CalendarRange, Plus } from 'lucide-react'
+import { CalendarRange, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi } from '../api/client'
 import type { Period } from '../types'
@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodCard from '../components/budgets/PeriodCard'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
+import PageHeader from '../components/layout/PageHeader'
 import { primaryButtonClass } from '../components/common/formStyles'
 
 interface PeriodGroup {
@@ -99,21 +100,19 @@ export default function BudgetPeriodsPage() {
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-      <Link
-        to={`/budgets/${budgetId}`}
-        className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text mb-4 max-sm:min-h-[44px]"
-      >
-        <ArrowLeft size={13} /> {budget?.name ?? t('budgetFallback')}
-      </Link>
-
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-text">{t('periods.title')}</h1>
-        {canAddPeriod && (
-          <button type="button" onClick={() => openPeriodModal('add')} className={primaryButtonClass}>
-            <Plus size={13} className="inline mr-1" /> {t('periods.addPeriod')}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        breadcrumb={budget?.name ?? t('budgetFallback')}
+        backTo={`/budgets/${budgetId}`}
+        title={t('periods.title')}
+        actions={
+          canAddPeriod && (
+            <button type="button" onClick={() => openPeriodModal('add')} className={primaryButtonClass}>
+              <Plus size={13} className="inline mr-1" /> {t('periods.addPeriod')}
+            </button>
+          )
+        }
+        showAccountActions
+      />
 
       {isLoading ? (
         /* Six pulse cards in the real grid shape (BudgetsPage line 263 idiom,

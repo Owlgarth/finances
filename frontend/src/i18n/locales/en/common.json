@@ -3,6 +3,8 @@
     "close": "Close"
   },
   "pageHeader": {
+    "search": "Search",
+    "profile": "Profile",
     "back": "Back"
   },
   "detailPanel": {

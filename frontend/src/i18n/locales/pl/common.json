@@ -3,6 +3,8 @@
     "close": "Zamknij"
   },
   "pageHeader": {
+    "search": "Szukaj",
+    "profile": "Profil",
     "back": "Wstecz"
   },
   "detailPanel": {
