@@ -6,9 +6,7 @@
     "accountLabel": "Konto",
     "allAccounts": "Wszystkie konta",
     "filterByAccountAria": "Filtruj według konta",
-    "dateLabel": "Data",
-    "fromDateAria": "Data od",
-    "toDateAria": "Data do"
+    "dateLabel": "Data"
   },
   "noMatch": "Żaden przelew nie pasuje do filtrów.",
   "saveDefaults": "Zapisz jako domyślne",

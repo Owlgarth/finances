@@ -199,10 +199,9 @@ function amountFilterDef<V extends { amountMin: string; amountMax: string }, L>(
 }
 
 /** Budget change: write the new budget list AND prune category selections
- *  that no longer belong to the selected budgets (the panel's
- *  setBudgetFilter rule). ListFilterFields keeps its own copy of the rule
- *  until the shared panel is retired; this is the registry's authoritative
- *  home. The budget editor commits number[] (facet ids). */
+ *  that no longer belong to the selected budgets (the retired collapsible
+ *  panels' setBudgetFilter rule, unified here). The budget editor commits
+ *  number[] (facet ids). */
 export function budgetChangePatch(
   next: number[] | string[],
   values: { category: number[] },
@@ -307,8 +306,8 @@ export function buildPlannedFilters(
     {
       id: 'budget',
       paramKeys: ['budget'],
-      // Planned renders the shared budget/category/amount fields through
-      // transactions-ns keys (ListFilterFields' established home), so the
+      // Planned renders the shared budget/category/amount labels through
+      // transactions-ns keys (the shared filters' established home), so the
       // label is ns-qualified for host resolution outside the planned ns.
       labelKey: 'transactions:listFilters.budget',
       editor: 'multi',

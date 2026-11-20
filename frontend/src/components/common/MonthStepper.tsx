@@ -15,12 +15,22 @@ interface Props {
    *  this prop is present, so the page's isCalendarMonth detection is the
    *  single gate (the handler itself also guards, belt-and-braces). */
   onShift?: (delta: number) => void
-  /** Opens the date range editor. Optional and currently unwired: the label
-   *  is deliberately a button in both stepper states so the editor host can
-   *  later attach this handler (plus aria-haspopup/aria-expanded) without
-   *  changing the control's shape. Without an exact-month range there is no
-   *  other date entry point, so the label-button must exist everywhere. */
+  /** Opens the date range editor. Optional: unwired on the standalone
+   *  phone row's default use (no editor host there), wired by the 640+
+   *  filter toolbar (the popover host) and by phone hosts that open a
+   *  dialog surface. The label is deliberately a button in both stepper
+   *  states so this handler can be attached (plus aria-haspopup and
+   *  aria-expanded, keyed on its presence) without changing the control's
+   *  shape. Without an exact-month range there is no other date entry
+   *  point, so the label-button must exist everywhere. */
   onOpenEditor?: () => void
+  /** True while the editor this label opens is open (aria-expanded). Only
+   *  meaningful together with onOpenEditor. */
+  editorOpen?: boolean
+  /** Toolbar membership: the host row owns spacing and width, so this
+   *  drops the component's own bottom margin and full-width phone claim
+   *  (the standalone row keeps both by default). */
+  inline?: boolean
 }
 
 /** The stepper label for an effective from/to range (both bounds '' when
@@ -55,7 +65,7 @@ export function stepperRangeLabel(from: string, to: string, allTimeLabel: string
  *  strings live in the planned namespace (they predate the shared stepper)
  *  and are reused as-is; the date-range aria is a transactions-namespace
  *  shared-filter string. */
-export default function MonthStepper({ label, onShift, onOpenEditor }: Props) {
+export default function MonthStepper({ label, onShift, onOpenEditor, editorOpen, inline }: Props) {
   const { t: tNav } = useTranslation('planned')
   const { t: tFilters } = useTranslation('transactions')
   // Hoisted: the literal-string lint recognizes only the unaliased t() callee.
@@ -65,7 +75,7 @@ export default function MonthStepper({ label, onShift, onOpenEditor }: Props) {
   const dateRangeAria = tFilters('listFilters.dateRangeAria')
   return (
     <div
-      className="flex items-center gap-1 mb-3 max-sm:w-full"
+      className={`flex items-center gap-1${inline ? '' : ' mb-3 max-sm:w-full'}`}
       role="group"
       aria-label={groupAria}
     >
@@ -83,6 +93,8 @@ export default function MonthStepper({ label, onShift, onOpenEditor }: Props) {
         type="button"
         onClick={onOpenEditor}
         aria-label={dateRangeAria}
+        aria-haspopup={onOpenEditor ? 'dialog' : undefined}
+        aria-expanded={onOpenEditor ? (editorOpen ?? false) : undefined}
         className={`font-mono text-xs font-medium text-text min-w-[128px] text-center max-sm:flex-1 rounded-sm hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
       >
         {label}

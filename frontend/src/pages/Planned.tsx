@@ -1,9 +1,9 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Save, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
@@ -31,16 +31,14 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
-import MultiSelect from '../components/common/MultiSelect'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
-import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
-import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
-import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
 import FilterSheet from '../components/filters/FilterSheet'
+import FilterChipsBar from '../components/filters/FilterChipsBar'
 import DateRangeEditor from '../components/filters/DateRangeEditor'
 import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
 import AmountRangeEditor from '../components/filters/AmountRangeEditor'
@@ -289,17 +287,17 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const { t: tCommon } = useTranslation('common')
   // Shared filter strings live in the transactions namespace (the
   // established cross-page home); all namespaces are eagerly loaded, so a
-  // second translator here is safe (ListFilterFields precedent).
+  // second translator here is safe (the shared filter components'
+  // precedent).
   const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
-  // Facet lists for the filter registry (availability + summaries). The
-  // keys match ListFilterFields' own hooks, so the entries are cache-shared:
-  // no extra request when the panel opens, one fetch per stale window with
-  // it closed.
+  // Facet lists for the filter registry (availability + summaries). Shared
+  // cache entries: the same keys the editors' option lists read, so one
+  // fetch per stale window with the toolbar closed.
   const { data: budgets = [] } = useBudgets(false)
   const { data: categories = [] } = useWorkspaceCategories(false)
 
@@ -425,10 +423,9 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // Effective range, consumed latch: all reads below (list, totals, filter
   // count) use the EFFECTIVE range - explicit params win; both absent falls
   // back to the still-live default; a PARTIAL range (one bound) passes
-  // through as-is - the missing bound is never auto-filled.
-  // ListFilterFields keeps reading the RAW params (self-contained contract):
-  // before materialization the panel is closed so no mismatch is visible,
-  // after it raw == effective.
+  // through as-is - the missing bound is never auto-filled. Every filter
+  // surface reads these same effective derivations, so no visible mismatch
+  // exists before materialization, and after it raw == effective.
   // Consume adjusts - fall-through render-adjusts on local state (the
   // sanctioned shape; never an effect, never router state). The
   // materialization write below lands every live facet at once, so several
@@ -464,10 +461,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // absent writes the resolved default into the URL (replace, no history
   // entry). The write touches ONLY the five defaultable param families
   // (status/view/ordering/from/to) plus createUpdateParams's automatic
-  // ?page drop - never a FilterPanel field. The consume adjusts above then
-  // kill the consumed facets, so All time / Clear filters / deep links
-  // never re-default within a session; a fresh mount re-initializes the
-  // latch (accepted). Not gated on the view tab: the write may carry ?view=
+  // ?page drop - never another facet's params. The consume adjusts above
+  // then kill the consumed facets, so All time / Clear filters / deep
+  // links never re-default within a session; a fresh mount re-initializes
+  // the latch (accepted). Not gated on the view tab: the write may carry ?view=
   // itself, and on a ?view=recurring entry the planned-view facets (range,
   // status, ordering) are inert on the recurring surface and already
   // applied when the user switches tabs.
@@ -531,19 +528,14 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // message would be misleading, the empty state gets the month treatment.
   const onlyMonthRange = activeCount === 1 && !!exactMonth
 
-  // The panel opens only through the toggle - never automatically. Deep
-  // links and bookmarks apply their filters silently; the toggle's badge
-  // count is the visible signal that filters are active (the default-month
-  // materialization write lands as badge 1, panel closed).
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const filterPanelId = useId()
-
-  // Phone filter sheet - the panel's phone replacement in the planned view
-  // (the recurring view has no filter UI at all).
+  // The phone filter sheet opens only through its trigger - never
+  // automatically. Deep links and bookmarks apply their filters silently;
+  // the trigger's badge count is the visible signal that filters are
+  // active (the default-month materialization write lands as badge 1).
   const [sheetOpen, setSheetOpen] = useState(false)
-  // Tier crossing: the sheet is phone-only and the panel 640+-only, so a
-  // crossing closes the departing surface - an open flag surviving the
-  // crossing would resurrect the surface on rotate-back. Every filter
+  // Tier crossing: the sheet is phone-only and the 640+ toolbar row is
+  // CSS-gated, so a crossing closes the departing surface - an open sheet
+  // surviving an up-crossing would resurrect on rotate-back. Every filter
   // change is already on the URL, so no other state needs preserving.
   // Loop-safe by construction (each write lands on a value that disproves
   // its own guard); StrictMode-idempotent.
@@ -551,7 +543,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   if (prevMobile !== isMobile) {
     setPrevMobile(isMobile)
     if (!isMobile) setSheetOpen(false)
-    else setFiltersOpen(false)
   }
 
   // Clears URL params only - saved defaults (if any) are untouched: the
@@ -675,10 +666,12 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
       label: showBudgetSuffix ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}` : c.name,
     }))
 
-  // Editor bodies for the sheet's editor level: each def wired with the
-  // same options and URL writes as the panel fields above (shared-filter
-  // labels resolve through the transactions namespace, the panel's home).
-  const renderSheetEditor = (def: FilterDef<PlannedFilterValues, FilterLookups>) => {
+  // Editor bodies for every filter-editor host (the phone sheet's editor
+  // level and the toolbar's popovers): each def wired with the options and
+  // URL writes above (shared-filter labels resolve through the
+  // transactions namespace, the established cross-page home). One wiring,
+  // two hosts - the surfaces never diverge.
+  const renderFilterEditor = (def: FilterDef<PlannedFilterValues, FilterLookups>) => {
     switch (def.id) {
       case 'date':
         return (
@@ -862,14 +855,20 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
 
       {/* Month window above the status control (scope nesting: view picks
           the surface, month scopes the dataset, status narrows within).
-          Always visible in the planned view: custom ranges and All time
-          keep the label-only stepper as the date entry point, with arrows
-          only while the range is an exact calendar month. */}
+          Phone-only row: its 640+ twin is the toolbar's stepper member
+          below (CSS-gated dual embed; the state is the URL). Always
+          present in the planned view: custom ranges and All time keep the
+          label-only stepper as the date entry point, with arrows only
+          while the range is an exact calendar month. The label opens the
+          phone filter sheet. */}
       {view === 'planned' && (
-        <MonthStepper
-          label={stepperLabel}
-          onShift={exactMonth ? handleMonthShift : undefined}
-        />
+        <div className="sm:hidden">
+          <MonthStepper
+            label={stepperLabel}
+            onShift={exactMonth ? handleMonthShift : undefined}
+            onOpenEditor={() => setSheetOpen(true)}
+          />
+        </div>
       )}
 
       {view === 'planned' && (
@@ -883,20 +882,67 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         </div>
       )}
 
-      {/* Chips beside the controls they summarize (status stays adjacent to
-          the stepper above: scope nesting, then state display). */}
+      {/* 640+ toolbar (planned view only - the recurring view has no
+          filter UI at all): stepper (its label opens the date editor
+          popover), applied chips (a chip opens its filter's editor), Add
+          filter, search, sort, and the Save view menu. Hidden below 640,
+          where the sheet is the filter surface. */}
       {view === 'planned' && (
-        <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
+        <FilterChipsBar
+          filters={filterDefs}
+          values={filterValues}
+          lookups={filterLookups}
+          filterLabel={filterLabel}
+          chips={appliedChips}
+          onClearAll={clearFilters}
+          renderEditor={renderFilterEditor}
+          renderStepper={({ openDateEditor, dateEditorOpen }) => (
+            <MonthStepper
+              inline
+              label={stepperLabel}
+              onShift={exactMonth ? handleMonthShift : undefined}
+              onOpenEditor={openDateEditor}
+              editorOpen={dateEditorOpen}
+            />
+          )}
+          search={
+            <SearchInput
+              value={search}
+              onChange={handleSearchChange}
+              placeholder={t('searchPlaceholder')}
+              aria-label={t('searchAria')}
+              className="flex-1 min-w-40 max-w-sm"
+            />
+          }
+          sort={
+            <Select
+              value={ordering}
+              onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
+              options={sortOptions}
+              placeholder={t('sort.soonest')}
+              aria-label={t('sortAria')}
+              className="w-48 shrink-0"
+            />
+          }
+          saveView={{
+            onSaveDefaults: handleSaveDefaults,
+            saveDefaultsLabel: t('saveDefaults'),
+            saveDefaultsPending: updateSettings.isPending,
+            saveDefaultsPendingLabel: t('saveDefaultsPending'),
+            onSaveBookmark: () => setPageBookmarkOpen(true),
+            bookmarkLabel: addLabel,
+          }}
+        />
       )}
 
       {/* Below sm the row holds the search box (full wrap line) and the
-          phone Filters trigger; the bookmark/save/sort actions move into
-          the phone filter sheet, and the desktop toggle/panel pair stays
-          640+. Phones therefore carry three control rows in this view
-          (month stepper, status, search + filters) - folding search into
-          the sheet is a planned later trim, deliberately not done here. */}
+          phone Filters trigger; the bookmark/save/sort actions live in the
+          phone filter sheet's save rows. Phones therefore carry three
+          control rows in this view (month stepper, status, search +
+          filters) - folding search into the sheet is a planned later trim,
+          deliberately not done here. */}
       {view === 'planned' && (
-      <div className="flex max-sm:flex-wrap gap-2 mb-3">
+      <div className="flex max-sm:flex-wrap gap-2 mb-3 sm:hidden">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
@@ -904,74 +950,8 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        {/* Wrapper div hides the desktop toggle below 640: the toggle takes
-            no className prop, and a call-site wrapper is the least invasive
-            gate (the toggle keeps its accordion wiring at 640+). */}
-        <div className="max-sm:hidden shrink-0">
-          <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
-        </div>
-        {/* Labeled like the header's export action; shrink-0 keeps the
-            label on one line so the flex-1 SearchInput is the row member
-            that yields on narrow screens. On phones the sheet's bookmark
-            row owns this action. */}
-        <button
-          type="button"
-          onClick={() => setPageBookmarkOpen(true)}
-          title={addBookmarkTitle}
-          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
-        >
-          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
-        </button>
-        {/* Save the current view facets as this page's defaults. Sits with
-            the bookmark action (the two save-view actions cluster) and
-            before the ordering Select, which stays at row end. On phones
-            the sheet's save row owns this action; shrink-0 keeps the label
-            on one line. */}
-        <button
-          type="button"
-          onClick={handleSaveDefaults}
-          disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
-        >
-          <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
-        </button>
-        <Select
-          value={ordering}
-          onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
-          options={sortOptions}
-          placeholder={t('sort.soonest')}
-          aria-label={t('sortAria')}
-          className="w-48 shrink-0 max-sm:hidden"
-        />
         <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
       </div>
-      )}
-
-      {/* Phone gating: the panel (and its native date inputs) never mounts
-          below 640 - the FilterSheet below is the phone surface in this
-          view, and a stale-open flag after a down-crossing must not
-          resurrect it. */}
-      {view === 'planned' && filtersOpen && !isMobile && (
-        <FilterPanel id={filterPanelId} onClear={activeCount > 0 ? clearFilters : null}>
-          {accounts.length > 1 && (
-            <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
-            </FilterField>
-          )}
-          {multiCurrency && (
-            <FilterField label={t('filters.currency')}>
-              <MultiSelect
-                values={currencyFilter}
-                onChange={(v) => updateParams({ currency: v })}
-                options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
-                placeholder={t('filters.allCurrencies')}
-                aria-label={t('filters.byCurrencyAria')}
-                className="w-full"
-              />
-            </FilterField>
-          )}
-          <ListFilterFields dateLabel={t('filters.plannedDate')} />
-        </FilterPanel>
       )}
 
       {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
@@ -1212,7 +1192,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           lookups={filterLookups}
           filterLabel={filterLabel}
           updateParams={updateParams}
-          renderEditor={renderSheetEditor}
+          renderEditor={renderFilterEditor}
           sort={{
             value: ordering || DEFAULT_SORT,
             options: sortOptions,

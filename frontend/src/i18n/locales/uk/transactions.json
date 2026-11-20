@@ -41,8 +41,6 @@
     "account": "Рахунок",
     "currency": "Валюта",
     "type": "Тип",
-    "allAccounts": "Усі рахунки",
-    "allCurrencies": "Усі валюти",
     "allTypes": "Усі типи",
     "byAccountAria": "Фільтрувати за рахунком",
     "byCurrencyAria": "Фільтрувати за валютою",
@@ -75,6 +73,8 @@
     "backAria": "Назад до фільтрів",
     "clearAria": "Очистити фільтр",
     "sortLabel": "Сортування",
+    "addFilter": "Додати фільтр",
+    "saveView": "Зберегти подання",
     "presetThisYear": "Цей рік"
   },
   "totals": {

@@ -6,9 +6,7 @@
     "accountLabel": "Рахунок",
     "allAccounts": "Усі рахунки",
     "filterByAccountAria": "Фільтрувати за рахунком",
-    "dateLabel": "Дата",
-    "fromDateAria": "Дата від",
-    "toDateAria": "Дата до"
+    "dateLabel": "Дата"
   },
   "noMatch": "Жоден переказ не відповідає фільтрам.",
   "saveDefaults": "Зберегти як типові",

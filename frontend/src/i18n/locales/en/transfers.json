@@ -6,9 +6,7 @@
     "accountLabel": "Account",
     "allAccounts": "All accounts",
     "filterByAccountAria": "Filter by account",
-    "dateLabel": "Date",
-    "fromDateAria": "From date",
-    "toDateAria": "To date"
+    "dateLabel": "Date"
   },
   "noMatch": "No transfers match your filters.",
   "saveDefaults": "Save as default",

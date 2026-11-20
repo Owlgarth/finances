@@ -39,8 +39,6 @@
     "account": "Account",
     "currency": "Currency",
     "type": "Type",
-    "allAccounts": "All accounts",
-    "allCurrencies": "All currencies",
     "allTypes": "All types",
     "byAccountAria": "Filter by account",
     "byCurrencyAria": "Filter by currency",
@@ -73,6 +71,8 @@
     "backAria": "Back to filters",
     "clearAria": "Clear filter",
     "sortLabel": "Sort",
+    "addFilter": "Add filter",
+    "saveView": "Save view",
     "presetThisYear": "This year"
   },
   "totals": {

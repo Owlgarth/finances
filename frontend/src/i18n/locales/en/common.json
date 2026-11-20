@@ -21,8 +21,7 @@
   "archivedBadge": "Archived",
   "filters": {
     "toggle": "Filters",
-    "regionLabel": "Filters",
-    "clear": "Clear filters"
+    "regionLabel": "Filters"
   },
   "pagination": {
     "rowsPerPage": "Rows per page",

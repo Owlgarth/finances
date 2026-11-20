@@ -26,7 +26,7 @@ interface Props {
  * instead of unmounting.
  */
 export default function Disclosure({ title, hint, open, onToggle, children }: Props) {
-  // One id for the aria-controls/id pair (the FiltersToggle/FilterBar shape).
+  // One id for the aria-controls/id pair (the toggle/region accordion shape).
   const regionId = useId()
 
   return (

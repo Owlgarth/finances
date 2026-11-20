@@ -31,8 +31,6 @@
   "filters": {
     "account": "Account",
     "currency": "Currency",
-    "allAccounts": "All accounts",
-    "allCurrencies": "All currencies",
     "byAccountAria": "Filter by account",
     "byCurrencyAria": "Filter by currency",
     "plannedDate": "Planned date"

@@ -1,8 +1,8 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { BookmarkPlus, Copy, Download, Plus, Save, Trash2 } from 'lucide-react'
+import { Copy, Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction, UserWorkspaceSettings } from '../types'
@@ -27,16 +27,14 @@ import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
-import MultiSelect from '../components/common/MultiSelect'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
-import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
-import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
-import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
 import FilterSheet from '../components/filters/FilterSheet'
+import FilterChipsBar from '../components/filters/FilterChipsBar'
 import DateRangeEditor from '../components/filters/DateRangeEditor'
 import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
 import AmountRangeEditor from '../components/filters/AmountRangeEditor'
@@ -354,10 +352,9 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
-  // Facet lists for the filter registry (availability + summaries). The
-  // keys match ListFilterFields' own hooks, so the entries are cache-shared:
-  // no extra request when the panel opens, one fetch per stale window with
-  // it closed.
+  // Facet lists for the filter registry (availability + summaries). Shared
+  // cache entries: the same keys the editors' option lists read, so one
+  // fetch per stale window with the toolbar closed.
   const { data: budgets = [] } = useBudgets(false)
   const { data: categories = [] } = useWorkspaceCategories(false)
 
@@ -439,9 +436,9 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // Effective values - all reads below (queries, totals, badge, empty
   // state) use the EFFECTIVE value: explicit params win; absent falls back
   // to the still-live latch (the same value the materialization effect
-  // below is about to write into the URL). ListFilterFields keeps reading
-  // the RAW params (self-contained contract): before materialization the
-  // panel is closed so no mismatch is visible, after it raw == effective.
+  // below is about to write into the URL). Every filter surface reads
+  // these same effective derivations, so no visible mismatch exists
+  // before materialization, and after it raw == effective.
   const dateFrom = rawFrom ?? defaultsLatch.range?.from ?? ''
   const dateTo = rawTo ?? defaultsLatch.range?.to ?? ''
   // The type facet is list-valued: param PRESENCE branches (the URL wins
@@ -467,10 +464,10 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // absent writes the resolved default into the URL (replace, no history
   // entry). The write touches ONLY the defaultable param families
   // (from/to/type/ordering - the type list joins to CSV inside
-  // createUpdateParams) plus its automatic ?page drop - never a FilterPanel
-  // field. The consume adjusts above then kill the consumed facets, so
-  // All time / Clear filters / deep links never re-default within a
-  // session; a fresh mount re-initializes the latch (accepted).
+  // createUpdateParams) plus its automatic ?page drop - never another
+  // facet's params. The consume adjusts above then kill the consumed
+  // facets, so All time / Clear filters / deep links never re-default
+  // within a session; a fresh mount re-initializes the latch (accepted).
   useEffect(() => {
     if (!defaultsLatch.range && !defaultsLatch.type && !defaultsLatch.ordering) return
     updateParams({
@@ -519,18 +516,14 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   }
   const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
 
-  // The panel opens only through the toggle - never automatically. Deep
-  // links and bookmarks apply their filters silently; the toggle's badge
-  // count is the visible signal that filters are active.
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const filterPanelId = useId()
-
-  // Phone filter sheet - the panel's phone replacement (the panel remains
-  // the 640+ surface until the toolbar redesign retires it).
+  // The phone filter sheet opens only through its trigger - never
+  // automatically. Deep links and bookmarks apply their filters silently;
+  // the trigger's badge count is the visible signal that filters are
+  // active.
   const [sheetOpen, setSheetOpen] = useState(false)
-  // Tier crossing: the sheet is phone-only and the panel 640+-only, so a
-  // crossing closes the departing surface - an open flag surviving the
-  // crossing would resurrect the surface on rotate-back. Every filter
+  // Tier crossing: the sheet is phone-only and the 640+ toolbar row is
+  // CSS-gated, so a crossing closes the departing surface - an open sheet
+  // surviving an up-crossing would resurrect on rotate-back. Every filter
   // change is already on the URL, so no other state needs preserving.
   // Loop-safe by construction (each write lands on a value that disproves
   // its own guard); StrictMode-idempotent.
@@ -538,7 +531,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   if (prevMobile !== isMobile) {
     setPrevMobile(isMobile)
     if (!isMobile) setSheetOpen(false)
-    else setFiltersOpen(false)
   }
 
   // Clears URL params only - saved defaults (if any) are untouched: the
@@ -753,8 +745,8 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
-  // Editor option lists for the phone filter sheet, mirroring the panel
-  // fields: the budget filter narrows the category options and prunes
+  // Editor option lists for the filter editors (sheet level and toolbar
+  // popovers): the budget filter narrows the category options and prunes
   // selections that no longer belong (the registry's budget change rule).
   const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
   const budgetNames = new Map(budgets.map((b) => [b.id, b.name]))
@@ -767,9 +759,10 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
       label: showBudgetSuffix ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}` : c.name,
     }))
 
-  // Editor bodies for the sheet's editor level: each def wired with the
-  // same options and URL writes as the panel fields above.
-  const renderSheetEditor = (def: FilterDef<TransactionsFilterValues, TransactionsFilterLookups>) => {
+  // Editor bodies for every filter-editor host (the phone sheet's editor
+  // level and the toolbar's popovers): each def wired with the options and
+  // URL writes above. One wiring, two hosts - the surfaces never diverge.
+  const renderFilterEditor = (def: FilterDef<TransactionsFilterValues, TransactionsFilterLookups>) => {
     switch (def.id) {
       case 'date':
         return (
@@ -857,19 +850,25 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   return (
     <>
-      <MonthStepper
-        label={stepperLabel}
-        onShift={exactMonth ? handleMonthShift : undefined}
-      />
-      <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
+      {/* Phone rows (below 640): the month stepper and the search + Filters
+          row. Their 640+ twins live inside the toolbar row below - a
+          CSS-gated dual embed, sanctioned because all shared state lives
+          in the URL or props (the stepper's live region announces from the
+          visible copy only). */}
+      <div className="sm:hidden">
+        <MonthStepper
+          label={stepperLabel}
+          onShift={exactMonth ? handleMonthShift : undefined}
+          onOpenEditor={() => setSheetOpen(true)}
+        />
+      </div>
       {/* Below sm the row holds the search box (full wrap line) and the
-          phone Filters trigger; the bookmark/save/sort actions move into
-          the phone filter sheet, and the desktop toggle/panel pair stays
-          640+. The wrap recipe is unchanged: the search box claims the
-          full first line (max-sm:basis-full), the trigger flows onto the
-          next. min-w-0 lets the search box shrink where the row still
-          holds one line. */}
-      <div className="flex max-sm:flex-wrap gap-2 mb-3">
+          phone Filters trigger; the bookmark/save/sort actions live in the
+          phone filter sheet's save rows. The wrap recipe is unchanged: the
+          search box claims the full first line (max-sm:basis-full), the
+          trigger flows onto the next. min-w-0 lets the search box shrink
+          where the row still holds one line. */}
+      <div className="flex max-sm:flex-wrap gap-2 mb-3 sm:hidden">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
@@ -877,76 +876,59 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        {/* Wrapper div hides the desktop toggle below 640: the toggle takes
-            no className prop, and a call-site wrapper is the least invasive
-            gate (the toggle keeps its accordion wiring at 640+). */}
-        <div className="max-sm:hidden shrink-0">
-          <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
-        </div>
-        {/* Labeled like the header's export action; shrink-0 keeps the
-            label on one line so the flex-1 SearchInput is the row member
-            that yields on narrow screens. On phones the sheet's bookmark
-            row owns this action. */}
-        <button
-          type="button"
-          onClick={() => setPageBookmarkOpen(true)}
-          title={addBookmarkTitle}
-          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
-        >
-          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
-        </button>
-        {/* Save the current view facets as this page's defaults. Sits with
-            the bookmark action (the two save-view actions cluster) and
-            before the ordering Select, which stays at row end. On phones
-            the sheet's save row owns this action; shrink-0 keeps the label
-            on one line. */}
-        <button
-          type="button"
-          onClick={handleSaveDefaults}
-          disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
-        >
-          <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
-        </button>
-        <Select
-          value={ordering}
-          onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
-          options={sortOptions}
-          placeholder={t('sort.newest')}
-          aria-label={t('sortAria')}
-          className="w-48 shrink-0 max-sm:hidden"
-        />
         <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
       </div>
 
-      {/* Phone gating: the panel (and its native date inputs) never mounts
-          below 640 - the FilterSheet below is the phone surface, and a
-          stale-open flag after a down-crossing must not resurrect it. */}
-      {filtersOpen && !isMobile && (
-        <FilterPanel id={filterPanelId} onClear={activeCount > 0 ? clearFilters : null}>
-          {showAccountColumn && (
-            <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
-            </FilterField>
-          )}
-          {multiCurrency && (
-            <FilterField label={t('filters.currency')}>
-              <MultiSelect
-                values={currencyFilter}
-                onChange={(v) => updateParams({ currency: v })}
-                options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
-                placeholder={t('filters.allCurrencies')}
-                aria-label={t('filters.byCurrencyAria')}
-                className="w-full"
-              />
-            </FilterField>
-          )}
-          <FilterField label={t('filters.type')}>
-            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} className="w-full" />
-          </FilterField>
-          <ListFilterFields />
-        </FilterPanel>
-      )}
+      {/* 640+ toolbar: stepper (its label opens the date editor popover),
+          applied chips (a chip opens its filter's editor), Add filter,
+          search, sort, and the Save view menu - one wrapping row, one
+          popover at a time. Hidden below 640, where the sheet above is the
+          filter surface. */}
+      <FilterChipsBar
+        filters={filterDefs}
+        values={filterValues}
+        lookups={filterLookups}
+        filterLabel={filterLabel}
+        chips={appliedChips}
+        onClearAll={clearFilters}
+        renderEditor={renderFilterEditor}
+        renderStepper={({ openDateEditor, dateEditorOpen }) => (
+          <MonthStepper
+            inline
+            label={stepperLabel}
+            onShift={exactMonth ? handleMonthShift : undefined}
+            onOpenEditor={openDateEditor}
+            editorOpen={dateEditorOpen}
+          />
+        )}
+        search={
+          <SearchInput
+            value={search}
+            onChange={handleSearchChange}
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchAria')}
+            className="flex-1 min-w-40 max-w-sm"
+          />
+        }
+        sort={
+          <Select
+            value={ordering}
+            onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
+            options={sortOptions}
+            placeholder={t('sort.newest')}
+            aria-label={t('sortAria')}
+            className="w-48 shrink-0"
+          />
+        }
+        saveView={{
+          onSaveDefaults: handleSaveDefaults,
+          saveDefaultsLabel: t('saveDefaults'),
+          saveDefaultsPending: updateSettings.isPending,
+          saveDefaultsPendingLabel: t('saveDefaultsPending'),
+          onSaveBookmark: () => setPageBookmarkOpen(true),
+          bookmarkLabel: addLabel,
+        }}
+      />
 
       {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
       {(data?.total ?? 0) > 0 && (
@@ -1108,7 +1090,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           lookups={filterLookups}
           filterLabel={filterLabel}
           updateParams={updateParams}
-          renderEditor={renderSheetEditor}
+          renderEditor={renderFilterEditor}
           sort={{
             value: ordering || DEFAULT_SORT,
             options: sortOptions,

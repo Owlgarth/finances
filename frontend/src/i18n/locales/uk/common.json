@@ -21,8 +21,7 @@
   "archivedBadge": "Архівовано",
   "filters": {
     "toggle": "Фільтри",
-    "regionLabel": "Фільтри",
-    "clear": "Очистити фільтри"
+    "regionLabel": "Фільтри"
   },
   "pagination": {
     "rowsPerPage": "Рядків на сторінці",

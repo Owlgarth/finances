@@ -21,8 +21,7 @@
   "archivedBadge": "Zarchiwizowane",
   "filters": {
     "toggle": "Filtry",
-    "regionLabel": "Filtry",
-    "clear": "Wyczyść filtry"
+    "regionLabel": "Filtry"
   },
   "pagination": {
     "rowsPerPage": "Wierszy na stronę",

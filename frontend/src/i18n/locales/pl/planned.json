@@ -33,8 +33,6 @@
   "filters": {
     "account": "Konto",
     "currency": "Waluta",
-    "allAccounts": "Wszystkie konta",
-    "allCurrencies": "Wszystkie waluty",
     "byAccountAria": "Filtruj według konta",
     "byCurrencyAria": "Filtruj według waluty",
     "plannedDate": "Planowana data"

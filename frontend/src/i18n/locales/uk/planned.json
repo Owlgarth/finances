@@ -33,8 +33,6 @@
   "filters": {
     "account": "Рахунок",
     "currency": "Валюта",
-    "allAccounts": "Усі рахунки",
-    "allCurrencies": "Усі валюти",
     "byAccountAria": "Фільтрувати за рахунком",
     "byCurrencyAria": "Фільтрувати за валютою",
     "plannedDate": "Дата плану"
