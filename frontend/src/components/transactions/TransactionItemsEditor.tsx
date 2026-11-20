@@ -65,7 +65,7 @@ export default function TransactionItemsEditor({ transaction }: Props) {
   })
 
   // Categories of the transaction category's budget - the same cache family
-  // as TransactionFormModal's query, so warm entries are shared. A null
+  // as the transaction form's category query, so warm entries are shared. A null
   // budget id (uncategorized transaction, or an adjustment - adjustments
   // never carry a category) disables the query: item categories are legal
   // only within the transaction category's budget, and the List renders its

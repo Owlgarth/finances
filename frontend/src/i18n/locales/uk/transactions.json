@@ -25,6 +25,14 @@
     "amountAsc": "Сума: від меншої до більшої",
     "description": "Опис А-Я"
   },
+  "table": {
+    "ariaLabel": "Операції",
+    "date": "Дата",
+    "description": "Опис",
+    "account": "Рахунок",
+    "category": "Категорія",
+    "amount": "Сума"
+  },
   "filters": {
     "account": "Рахунок",
     "currency": "Валюта",
@@ -90,9 +98,7 @@
     "deltaAmountLabel": "Дельта суми",
     "descriptionLabel": "Опис",
     "frequentAria": "Часті описи",
-    "noteAria": "Нотатка",
     "noteLabel": "Нотатка",
-    "addNote": "Додати нотатку",
     "moreDetails": "Додатково",
     "accountLabel": "Рахунок",
     "selectAccount": "Оберіть рахунок",
@@ -214,5 +220,26 @@
     "replace": "Замінити позиції",
     "saved": "Позиції збережено з квитанції",
     "saveFailed": "Не вдалося зберегти позиції"
+  },
+  "record": {
+    "detailsTitle": "Деталі",
+    "belongsToTitle": "Належить до",
+    "itemsTitle": "Позиції",
+    "receiptTitle": "Квитанція",
+    "otherCurrency": "Інша валюта",
+    "facetAdd": "Додати",
+    "facetRemove": "Прибрати",
+    "noNote": "Немає нотатки",
+    "amountInvalid": "Вкажіть коректну суму",
+    "savesHint": "Зміни зберігаються під час редагування",
+    "duplicate": "Дублювати",
+    "openAccountAria": "Відкрити рахунок {{name}}",
+    "openAccountsAria": "Відкрити рахунки",
+    "openBudgetAria": "Відкрити бюджет {{name}}",
+    "openCategoryAria": "Показати транзакції: {{name}}",
+    "title": "Транзакція",
+    "notFound": "Не знайдено в цьому робочому просторі",
+    "backToList": "Назад до транзакцій",
+    "spentOf": "Витрачено {{spent}} із {{planned}}"
   }
 }

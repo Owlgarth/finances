@@ -67,8 +67,10 @@ export default function BottomNav() {
     navigate(`/new${search ? `?${search}` : ''}`)
   }
 
+  // Mounted at every width, hidden from sm up - the single-tree layout's
+  // CSS gate (PageHeader account-actions precedent).
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-bottom-nav bg-surface border-t border-border flex items-end pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 z-bottom-nav bg-surface border-t border-border flex items-end pb-safe sm:hidden">
       <Tab to="/" label={t('home')} icon={LayoutDashboard} exact />
       <Tab
         to="/transactions"

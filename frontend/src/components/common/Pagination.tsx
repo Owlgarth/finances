@@ -47,8 +47,15 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
   const lastItem = Math.min(page * page_size, total)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-border">
-      <div className="flex items-center gap-3 text-sm text-text-muted">
+    // The pagination strip lives under a ledger whose list slot shrinks
+    // when a record panel is open (down to roughly 260px with an expanded
+    // sidebar). The two halves wrap onto separate lines instead of
+    // overflowing the slot, and each half can shrink: the range counter
+    // truncates and the page chips wrap inside their group. Wherever the
+    // row fits, wrapping never engages and the strip renders exactly as
+    // before.
+    <div className="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4 px-4 py-3 border-t border-border">
+      <div className="flex items-center gap-3 text-sm text-text-muted min-w-0">
         <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">{t('pagination.rowsPerPage')}</span>
         <Select
           value={page_size}
@@ -58,7 +65,7 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
           aria-label={t('pagination.rowsPerPage')}
           className="w-20"
         />
-        <span className="font-mono">
+        <span className="font-mono truncate">
           {t('pagination.range', { from: firstItem, to: lastItem, total })}
         </span>
       </div>
@@ -67,7 +74,7 @@ export default function Pagination({ page, total_pages, total, page_size, onPage
           noise. The rows-per-page row always renders so the size picker stays
           reachable even when the stored page size already covers every row. */}
       {total_pages > 1 && (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap justify-center items-center gap-1">
           <button
             type="button"
             onClick={() => onPageChange(page - 1)}

@@ -13,9 +13,10 @@ import { rowsToItems } from '../utils/transactionItems'
 import type { Row } from '../components/transactions/TransactionItemsList'
 
 /**
- * Form state machine for creating, editing, or copying a transaction,
- * extracted from TransactionFormModal so a page can host the same form
- * inline. Owns the field state and its session seeding (render-adjust), the
+ * Form state machine for creating or copying a transaction, shared by
+ * every form host (the /new page, the transactions list's create panel,
+ * the list's add row). Owns the field state and its session seeding
+ * (render-adjust), the
  * inline receipt parse mutation, the derived option lists, validation, and
  * the save mutation. The HOST owns all DOM: the file input and its refs,
  * focus effects, and the submit-button markup - the hook takes mode

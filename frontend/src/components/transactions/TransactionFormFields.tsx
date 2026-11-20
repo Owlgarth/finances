@@ -50,7 +50,7 @@ const SHARED_FIELD_ORDER = ['currencyCode', 'description', 'accountId', 'origina
 
 interface Props {
   /** The transaction form hook's full return value. Host-agnostic: the
-   *  TransactionFormModal (today) and the /new page both call
+   *  /new page and the transactions list's create panel both call
    *  useTransactionForm and pass the result down - the component renders
    *  fields, owns no form state, and never imports Modal. The host remounts
    *  it via a React key (keyed on form.sessionKey): the remount is the

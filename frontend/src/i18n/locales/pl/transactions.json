@@ -25,6 +25,14 @@
     "amountAsc": "Kwota: od najniższej",
     "description": "Opis A-Z"
   },
+  "table": {
+    "ariaLabel": "Transakcje",
+    "date": "Data",
+    "description": "Opis",
+    "account": "Konto",
+    "category": "Kategoria",
+    "amount": "Kwota"
+  },
   "filters": {
     "account": "Konto",
     "currency": "Waluta",
@@ -90,9 +98,7 @@
     "deltaAmountLabel": "Delta kwoty",
     "descriptionLabel": "Opis",
     "frequentAria": "Częste opisy",
-    "noteAria": "Notatka",
     "noteLabel": "Notatka",
-    "addNote": "Dodaj notatkę",
     "moreDetails": "Więcej szczegółów",
     "accountLabel": "Konto",
     "selectAccount": "Wybierz konto",
@@ -214,5 +220,26 @@
     "replace": "Zastąp pozycje",
     "saved": "Pozycje zapisane z paragonu",
     "saveFailed": "Nie udało się zapisać pozycji"
+  },
+  "record": {
+    "detailsTitle": "Szczegóły",
+    "belongsToTitle": "Przypisane do",
+    "itemsTitle": "Pozycje",
+    "receiptTitle": "Paragon",
+    "otherCurrency": "Inna waluta",
+    "facetAdd": "Dodaj",
+    "facetRemove": "Usuń",
+    "noNote": "Brak notatki",
+    "amountInvalid": "Podaj prawidłową kwotę",
+    "savesHint": "Zmiany zapisują się podczas edycji",
+    "duplicate": "Zduplikuj",
+    "openAccountAria": "Otwórz konto {{name}}",
+    "openAccountsAria": "Otwórz konta",
+    "openBudgetAria": "Otwórz budżet {{name}}",
+    "openCategoryAria": "Pokaż transakcje: {{name}}",
+    "title": "Transakcja",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do transakcji",
+    "spentOf": "Wydano {{spent}} z {{planned}}"
   }
 }

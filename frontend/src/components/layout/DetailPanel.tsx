@@ -7,7 +7,8 @@ import { hasActiveOverlay } from '../../hooks/useOverlay'
 interface DetailPanelProps {
   /** Panel heading, left of the header row. Callers pass t() strings. */
   title?: string
-  /** Called on Escape (when no overlay is open) and on the Close button.
+  /** Called on Escape (when no overlay is open and no inline editor
+      consumed the keypress) and on the Close button.
       The caller's conditional render is the open/close mechanism. */
   onClose: () => void
   /** Action row pinned below the scrolling body (save state, Duplicate, Delete). */
@@ -20,8 +21,10 @@ interface DetailPanelProps {
  * flow, NOT an overlay: no scrim, focus trap, scroll lock, useOverlay, or
  * z-index. Escape closes it through a bubble-phase document listener that
  * yields while any blocking overlay is open (the overlay stack owns the
- * key then, topmost-only close), so nested popups that consume Escape at
- * their own focusable element (DatePicker's desktop popup) stop
+ * key then, topmost-only close) and while the keypress was consumed by
+ * an inline editor (open editors preventDefault their cancel-Escape, so
+ * the first Escape ends the editor only), so nested popups that consume
+ * Escape at their own focusable element (DatePicker's desktop popup) stop
  * propagation before this fires - a capture-phase listener would close
  * both. Carries NO width utility: the host slot owns width
  * (one-width-class rule).
@@ -39,8 +42,11 @@ export default function DetailPanel({ title, onClose, footer, children }: Detail
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
       // Yield Escape while a blocking overlay is open - the overlay stack
-      // owns the key then (topmost-only close).
-      if (e.key !== 'Escape' || hasActiveOverlay()) return
+      // owns the key then (topmost-only close). Also yield when something
+      // already consumed the keypress: an open inline editor preventDefaults
+      // its cancel-Escape, so that press ends the editor only; the next
+      // Escape, unconsumed, closes the panel.
+      if (e.key !== 'Escape' || e.defaultPrevented || hasActiveOverlay()) return
       onCloseRef.current()
     }
     document.addEventListener('keydown', handleKeydown)

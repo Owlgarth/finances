@@ -1,6 +1,6 @@
 /** Sentinel Select value for "no account" - the shared Select cannot hold a
  * null-valued option, and 0 can never collide with a real account id.
- * Extracted at the third consumer (TransactionFormModal, PlannedFormModal,
+ * Extracted at the third consumer (the transaction form, PlannedFormModal,
  * RecurringFormModal) per the dedup rule: copy at two, extract at three. */
 export const NO_ACCOUNT = 0
 

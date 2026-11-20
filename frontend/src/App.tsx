@@ -13,6 +13,7 @@ import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
 import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
+import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
 import TransfersPage from './pages/TransfersPage'
 import NewTransactionPage from './pages/NewTransactionPage'
@@ -26,6 +27,15 @@ import ReConsentPage from './pages/ReConsentPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import ConfirmEmailChangePage from './pages/ConfirmEmailChangePage'
 import NotFoundPage from './pages/NotFoundPage'
+import { useBreakpoint } from './hooks/useBreakpoint'
+
+/** The record route's host follows the tier: at 1024+ the list page hosts
+ *  the record in its side panel (it reads :id itself, so both routes
+ *  render <Transactions />), below 1024 the record is a full page. */
+function TransactionRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Transactions /> : <TransactionRecordPage />
+}
 
 function AppContent() {
   return (
@@ -37,6 +47,7 @@ function AppContent() {
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
         <Route path="/transactions" element={<Transactions />} />
+        <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/new" element={<NewTransactionPage />} />
