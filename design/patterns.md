@@ -800,15 +800,20 @@ Everything below is enforced through the shared primitives (`Modal`,
 
 ### Create / Edit
 
-- Triggered from a page header button (`+ New X`) or a per-row `Edit`.
-- **Create on a page, edit in a `Modal`** (the transaction/transfer forms, UX
-  redesign phase 3): the form's state machine lives in a hook any host can
+- Triggered from a page header button (`+ New X`) or a per-row action.
+- **Create on a page or in a panel, edit in place (transactions) or a `Modal`
+  (transfers)**: the form's state machine lives in a hook any host can
   drive (`useTransactionForm` / `useTransferForm`), the fields in presentational
   components (`TransactionFormFields` / `TransferFormFields` + `AmountField`),
   and the host owns the DOM - the `/new` `FormPage` (create below 1024px: URL
   seeds `?type=`/`?account=`/`?copy=`, a sticky two-action footer, an
-  unsaved-changes confirm on close) or the modal (edit, copy, and create at
-  1024px+). Other entities keep the one-modal pattern: a `Modal` form serving
+  unsaved-changes confirm on close), the transactions create panel at 1024px+
+  (the `?new=` param, below), or the transfer modal (edit and create at
+  1024px+). Transaction editing is no longer a form: the record surface
+  (`/transactions/:id` - a full page below 1024px, a side panel beside the
+  list at 1024px+) edits one field at a time through `EditableField` rows
+  backed by `useTransactionFieldSave` (a full-replace PUT assembled from the
+  loaded row). Other entities keep the one-modal pattern: a `Modal` form serving
   both create and edit, keyed on a nullable `entity` prop (`isEdit = !!entity`).
 - On submit: validate (see below) → `useMutation`.
 - On success: `toast.success('X created' | 'X updated')`, then
@@ -823,6 +828,24 @@ onSuccess: () => {
   onClose()
 }
 ```
+
+- **An in-flow create panel's open state is a URL param** (`?new=transaction`
+  on `/transactions`): shareable, reload-safe, and precedence-ruled - create
+  wins the panel slot over a selected record (every create-open write drops
+  the selection path; every record-open write strips `new`/`copy`), so the two
+  can never co-render and no state reconciliation is needed. Garbage values
+  read as unset (`?new=foo` renders the plain list). Below 1024px the same URL
+  redirects to `/new` (REPLACE), forwarding `?copy=` so a shared copy link
+  survives the band.
+- **Master-detail push/replace contract** (the 1024px+ list plus side panel):
+  the first open of a record PUSHes (Back returns to the bare list), every
+  later selection change REPLACES (Back never walks a click trail), and closing
+  the panel REPLACES - an in-page selection write is not a history step. The
+  list filters travel in the record URL so the list keeps filtering beside the
+  panel. A filter change that proves the open record no longer matches the
+  query closes the panel (a conservative client-side mirror of the server
+  filter: unevaluable facets close, a loading record holds, a record error
+  closes).
 
 ### Delete (destructive)
 
@@ -871,7 +894,7 @@ onSuccess: () => {
 | Accounts | ✅ | ✅ (archived only) | ✅ | ✅ | ✅ |
 | Transfers | ✅ edit modal; create = `/new` < 1024px | - (history is read-only) | ✅ | ✅ | ✅ |
 | Budgets / detail | ✅ | ✅ (archive) | ✅ | ✅ | ✅ |
-| Transactions | ✅ edit modal; create = `/new` < 1024px | ✅ | ✅ | ✅ | ✅ |
+| Transactions | ✅ edit in place (record page/panel, one-field saves); create = `/new` < 1024px, `?new=` panel + inline add row at 1024px+ | ✅ | ✅ | ✅ | ✅ |
 | Planned | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Dashboard | — | — | — | ✅ | ✅ |
 
@@ -905,8 +928,9 @@ Rules:
 4. **Behavior may branch inside a handler; markup never branches.** When the
    *action* differs by tier rather than the presentation, the control stays
    mounted on every tier and its handler branches: the create buttons run
-   `isDesktop ? openModal() : navigate('/new')` (below 1024px creation is the
-   `/new` page; 1024px+ keeps the modal). The button's identity and its
+   `isDesktop ? openCreate() : navigate('/new')` (below 1024px creation is the
+   `/new` page; at 1024px+ transfers open the modal while transactions set the
+   `?new=` panel param - §12). The button's identity and its
    `max-sm:hidden` siblings survive a live resize across the breakpoint, which
    a render-level branch would rebuild.
 
