@@ -878,7 +878,7 @@ Tables are the primary data display component. They follow a strict ledger aesth
 ### Table Container
 
 ```html
-<div class="w-full border border-border rounded-sm overflow-hidden">
+<div class="w-full min-w-0 border border-border rounded-sm">
   <table class="w-full border-collapse">
     <!-- thead, tbody -->
   </table>
@@ -887,11 +887,23 @@ Tables are the primary data display component. They follow a strict ledger aesth
 
 | Property | Value |
 |---|---|
-| Container | `w-full border border-border rounded-sm overflow-hidden` |
+| Container | `w-full min-w-0 border border-border rounded-sm` - no `overflow-hidden` (see note) |
 | Table | `w-full border-collapse` |
 | Outer border | 1px, `--color-border` (`#E5E5E5`) |
 | Internal borders | `border-b border-border` on every `<tr>` (header + data) |
-| Border radius | `rounded-sm` on container only; `rounded-none` on internal cells |
+| Border radius | `rounded-sm` on container; corners finished at the cells (see note) |
+
+The container must NOT carry `overflow-hidden`: `position: sticky` never engages
+inside an `overflow: hidden` ancestor (the hidden box becomes the sticky's
+scrollport and itself never scrolls), and the sticky thead is the functional
+requirement (640-1023px scrolls long lists inside `<main>`). Corner handling
+moves to the cells: the sticky header's top corners sit color-invisible
+(`bg-background` header on the `bg-background` page), and the tbody's last row
+carries `rounded-bl-sm` / `rounded-br-sm` on its end cells
+(`[&_tr:last-child>td:first-child]:rounded-bl-sm
+[&_tr:last-child>td:last-child]:rounded-br-sm` on the tbody) so the bottom
+zebra corners do not bleed past the container. `min-w-0` is defense-in-depth:
+squeezed beside a panel, the card can never push past its slot.
 
 ### Header Row
 
@@ -954,10 +966,11 @@ The chevron icon rotates `180deg` when sort direction is ascending. Uses Lucide 
 
 | Property | Value |
 |---|---|
-| Row height | `32px` **strict** (`h-8`) |
-| Zebra striping | Even: `bg-surface` (`#FFFFFF`); Odd: `bg-background` (`#FAFAFA`) |
+| Row height | Floor via `h-8` on the `<tr>`: `height` acts as a MINIMUM in CSS table sizing (taller content still grows the row), and Chrome's automatic table layout ignores `min-height` on BOTH `<tr>` and `<td>` (measured - a computed 44px `min-height` left the row at its 33px content height), so never `min-h-*`. Coarse pointers get `pointer-coarse:h-[44px]`, and the stacked two-line narrow set `pointer-coarse:@max-[559.98px]:h-[52px]` (the transactions row floor: `h-8 pointer-coarse:h-[44px] pointer-coarse:@max-[559.98px]:h-[52px]`) |
+| Zebra striping | `odd:bg-surface` (`#FFFFFF`) / `even:bg-background` (`#FAFAFA`) on interactive rows; the SELECTED row swaps to a mutually exclusive class string carrying `bg-surface-hover` alone - zebra pseudo-classes (`(0,2,0)`) out-cascade a plain bg utility, so a selected row must not also carry zebra classes |
+| Selected border | Every row reserves `border-l-2 border-l-transparent`; the selected row swaps in `border-l-primary` - the 2px are always paid, so selection never shifts content |
 | Row border | `border-b border-border` on every row |
-| Hover | `hover:bg-surface-hover` (`#F5F5F5`) |
+| Hover | `hover:bg-surface-hover` (`#F5F5F5`) - emitted after `odd:`/`even:` in the sheet, so hover beats zebra |
 | Transition | `transition-colors` |
 | Text cells | Geist 13px, `text-text`, left-aligned |
 | Amount cells | JetBrains Mono 12px, `text-right`, `tabular-nums`, semantic color |
@@ -966,6 +979,39 @@ The chevron icon rotates `180deg` when sort direction is ascending. Uses Lucide 
 | Neutral amount | `text-text` (no prefix) |
 | Date cells | JetBrains Mono 12px, `text-text-muted` |
 | Padding | `px-3 py-1` |
+
+### Inputs Inside the Table (Intrinsic-Width Claims)
+
+A table-hosted input must not feed the table's minimum width. Chrome's
+automatic table layout counts an input's intrinsic width into its column's
+floor: a native date input carries a browser-set ~130px claim no percentage
+width or `min-width: 0` shrinks, and a bare `w-full` text input directly in a
+cell contributes ~149px min-content. The idiom is a `w-0 min-w-full` wrapper:
+the definite zero width shields the content from intrinsic sizing while
+`min-width: 100%` restores the fill, so the input keeps filling whatever the
+column gives it.
+
+The wrapper also kills max-content, so a claim that should apply only in some
+column sets is restored with container-query bands (the transactions add row):
+
+- Date input - banded restore: `w-0 min-w-full @min-[560px]:w-auto
+  @min-[560px]:min-w-0 @min-[760px]:w-0 @min-[760px]:min-w-full`. The claim is
+  allowed only in the middle band (560-759 container px), where the table shows
+  at most four columns; in the narrowest set (squeezed beside the panel) and in
+  the widest set (where the data rows' full dates are narrower than the input's
+  claim) the wrapper stays collapsed - letting the claim stand pushed the whole
+  table past its card.
+- Description input - no restore: `w-0 min-w-full` at every width. A text
+  input's ~400px preference would re-pin the table at whatever width it was
+  handed back, so it stays collapsed and spare column width redistributes
+  through the table's own auto layout.
+
+Data cells use the same wrapper for floor-carrying content: a `truncate` span
+still counts its full text into the column floor, so the transactions
+description cell wraps its first line in `w-0 min-w-full` with a
+`@min-[760px]:w-auto @min-[760px]:min-w-0` restore (collapsed only in the
+squeezed sets, byte-identical proportions at full width); the A/B second line
+needs no restore (it is `display: none` from 760 up).
 
 ### Group Dividers (Date Banners)
 
@@ -1249,6 +1295,25 @@ Modal converts to a bottom sheet:
 | Drag handle | `32px × 4px` bar, `bg-surface-muted`, centered, `8px` top margin |
 | Swipe down | Dismiss gesture (threshold: 80px drag distance) |
 | Footer | Sticky to bottom with `safe-area-inset-bottom` padding |
+
+### In-Flow Panels and Inline Editors (Escape Consumption)
+
+`DetailPanel` is an in-flow record panel for SplitView's panel slot - a card in
+the page flow, NOT an overlay: no scrim, focus trap, scroll lock, `useOverlay`,
+or z-index. Escape closes it through a document-level bubble listener that
+yields while any blocking overlay is open (the overlay stack owns the key then,
+topmost-only close) and while the keypress was already consumed. It carries no
+width utility - the host slot owns width. A `footer` prop row pins actions
+below the scrolling body.
+
+Consumed-Escape contract: an inline editor that handles Escape marks the
+keypress consumed with `preventDefault()` on the native event (`EditableField`'s
+base keydown arm and every override - an `EditorBag` contract), and enclosing
+hosts yield on `e.defaultPrevented` (DetailPanel's close listener). The first
+Escape ends the editor only; the next, unconsumed Escape closes the panel.
+Popups that consume Escape at their own focusable element (DatePicker's desktop
+popup) still stop propagation before the listener fires - a capture-phase
+listener would close both, which is why the listener is bubble-phase.
 
 ---
 
@@ -2059,6 +2124,6 @@ primitives are the reference implementation; screen-level conformance is swept i
    inverts to a light surface with dark text. These two docs conflict. Current code
    follows §3 (`text-white`). Resolve the spec conflict, then align the token/class.
 2. **Dropdown clipping inside scrollable modals.** `Select`'s panel is absolutely
-   positioned, so an ancestor with `overflow-y-auto` (the tall `TransactionFormModal`
-   / `NewFromReceiptModal` / `ExtractionReviewModal`) can clip it when scrolled. Low
+   positioned, so an ancestor with `overflow-y-auto` (the tall `ExtractionReviewModal`
+   / `PlannedFormModal` / `RecurringFormModal`) can clip it when scrolled. Low
    impact today. Proper fix: render the panel in a portal positioned from the trigger.

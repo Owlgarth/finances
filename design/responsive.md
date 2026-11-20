@@ -97,7 +97,7 @@ The sidebar uses Architectural Ledger tokens — no shadows, borders for structu
 - Sidebar hidden entirely
 - Bottom Navigation replaces sidebar (see below)
 - Current context (the activity pages' month + sole filtered account) shows only via the page-header breadcrumb
-- Page-header account actions (search + profile icon buttons) are phone-only via CSS (`sm:hidden`), not a layout branch: every page header renders the pair, and from 640px up it is hidden. The profile button opens the account menu sheet (overflow destinations + workspace/user controls); the provider rides above the layout's phone/desktop branch so the context survives a 640px crossing
+- Page-header account actions (search + profile icon buttons) are phone-only via CSS (`sm:hidden`), not a layout branch: every page header renders the pair, and from 640px up it is hidden. The profile button opens the account menu sheet (overflow destinations + workspace/user controls); the provider wraps the layout's single tree (one subtree at every width - the phone/desktop chrome is CSS-gated, not a JS branch) so the context survives a 640px crossing
 - Planned's view switch is CSS-gated in both directions: the segmented row is `hidden sm:block`, and below 640px a phone-only recurring-rules icon button in the page header (`sm:hidden`) toggles the same `?view=` param
 - Main content area: full width, `padding-bottom: 72px` to clear bottom nav
 - Page content padding: `20px 16px`
