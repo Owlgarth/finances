@@ -214,5 +214,23 @@
     "replace": "Zastąp pozycje",
     "saved": "Pozycje zapisane z paragonu",
     "saveFailed": "Nie udało się zapisać pozycji"
+  },
+  "record": {
+    "detailsTitle": "Szczegóły",
+    "belongsToTitle": "Przypisane do",
+    "itemsTitle": "Pozycje",
+    "receiptTitle": "Paragon",
+    "otherCurrency": "Inna waluta",
+    "facetAdd": "Dodaj",
+    "facetRemove": "Usuń",
+    "noNote": "Brak notatki",
+    "amountInvalid": "Podaj prawidłową kwotę",
+    "savesHint": "Zmiany zapisują się podczas edycji",
+    "duplicate": "Zduplikuj",
+    "openAccountAria": "Otwórz konto {{name}}",
+    "openAccountsAria": "Otwórz konta",
+    "openBudgetAria": "Otwórz budżet {{name}}",
+    "openCategoryAria": "Pokaż transakcje: {{name}}",
+    "spentOf": "Wydano {{spent}} z {{planned}}"
   }
 }

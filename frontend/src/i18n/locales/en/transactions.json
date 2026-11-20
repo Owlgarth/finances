@@ -212,5 +212,23 @@
     "replace": "Replace items",
     "saved": "Items saved from receipt",
     "saveFailed": "Failed to save items"
+  },
+  "record": {
+    "detailsTitle": "Details",
+    "belongsToTitle": "Belongs to",
+    "itemsTitle": "Items",
+    "receiptTitle": "Receipt",
+    "otherCurrency": "Other currency",
+    "facetAdd": "Add",
+    "facetRemove": "Remove",
+    "noNote": "No note",
+    "amountInvalid": "Enter a valid amount",
+    "savesHint": "Changes save as you edit",
+    "duplicate": "Duplicate",
+    "openAccountAria": "Open {{name}} account",
+    "openAccountsAria": "Open accounts",
+    "openBudgetAria": "Open {{name}} budget",
+    "openCategoryAria": "Show {{name}} transactions",
+    "spentOf": "{{spent}} of {{planned}} spent"
   }
 }

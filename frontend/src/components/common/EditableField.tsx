@@ -130,9 +130,16 @@ export default function EditableField<T>({
           {label}
         </span>
         {editing ? (
-          <div className="flex min-w-0 flex-1 justify-end">
-            {saving ? savingLabel : editor}
-          </div>
+          // Phone presentation is the sheet below: the inline slot renders
+          // nothing while mobile, so no dimmed duplicate editor sits under
+          // the sheet. The draft survives either way - editing state sits
+          // above the variants, so a width crossing mid-edit only swaps
+          // which slot mounts the editor.
+          !isMobile && (
+            <div className="flex min-w-0 flex-1 justify-end">
+              {saving ? savingLabel : editor}
+            </div>
+          )
         ) : (
           <button
             type="button"

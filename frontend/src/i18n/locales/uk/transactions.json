@@ -214,5 +214,23 @@
     "replace": "Замінити позиції",
     "saved": "Позиції збережено з квитанції",
     "saveFailed": "Не вдалося зберегти позиції"
+  },
+  "record": {
+    "detailsTitle": "Деталі",
+    "belongsToTitle": "Належить до",
+    "itemsTitle": "Позиції",
+    "receiptTitle": "Квитанція",
+    "otherCurrency": "Інша валюта",
+    "facetAdd": "Додати",
+    "facetRemove": "Прибрати",
+    "noNote": "Немає нотатки",
+    "amountInvalid": "Вкажіть коректну суму",
+    "savesHint": "Зміни зберігаються під час редагування",
+    "duplicate": "Дублювати",
+    "openAccountAria": "Відкрити рахунок {{name}}",
+    "openAccountsAria": "Відкрити рахунки",
+    "openBudgetAria": "Відкрити бюджет {{name}}",
+    "openCategoryAria": "Показати транзакції: {{name}}",
+    "spentOf": "Витрачено {{spent}} із {{planned}}"
   }
 }
