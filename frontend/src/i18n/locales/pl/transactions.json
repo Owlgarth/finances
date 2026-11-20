@@ -7,6 +7,10 @@
   "exportFailed": "Eksport nie powiódł się. Spróbuj ponownie.",
   "saveDefaults": "Zapisz jako domyślne",
   "saveDefaultsPending": "Zapisywanie…",
+  "sheetNoun_one": "transakcja",
+  "sheetNoun_few": "transakcje",
+  "sheetNoun_many": "transakcji",
+  "sheetNoun_other": "transakcji",
   "saveDefaultsSuccess": "Zapisano ustawienia domyślne.",
   "saveDefaultsFailed": "Nie udało się zapisać ustawień domyślnych",
   "searchPlaceholder": "Szukaj opisów…",
@@ -67,6 +71,10 @@
     "removeFilterAria": "Usuń filtr: {{filter}}",
     "dateRangeAria": "Zakres dat",
     "dateInvalid": "Wpisz prawidłową datę",
+    "show": "Pokaż",
+    "backAria": "Wróć do filtrów",
+    "clearAria": "Wyczyść filtr",
+    "sortLabel": "Sortowanie",
     "presetThisYear": "Ten rok"
   },
   "totals": {

@@ -7,6 +7,8 @@
   "exportFailed": "Export failed. Try again.",
   "saveDefaults": "Save as default",
   "saveDefaultsPending": "Saving…",
+  "sheetNoun_one": "transaction",
+  "sheetNoun_other": "transactions",
   "saveDefaultsSuccess": "Defaults saved.",
   "saveDefaultsFailed": "Failed to save defaults",
   "searchPlaceholder": "Search descriptions…",
@@ -67,6 +69,10 @@
     "removeFilterAria": "Remove filter: {{filter}}",
     "dateRangeAria": "Date range",
     "dateInvalid": "Enter a valid date",
+    "show": "Show",
+    "backAria": "Back to filters",
+    "clearAria": "Clear filter",
+    "sortLabel": "Sort",
     "presetThisYear": "This year"
   },
   "totals": {

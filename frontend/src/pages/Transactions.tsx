@@ -17,7 +17,7 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
-import { activeFilterCount, buildTransactionsFilters, clearAllFilters } from '../utils/listFilters'
+import { activeFilterCount, budgetChangePatch, buildTransactionsFilters, clearAllFilters, type FilterDef, type TransactionsFilterLookups, type TransactionsFilterValues } from '../utils/listFilters'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
@@ -35,6 +35,11 @@ import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
+import { FiltersTrigger } from '../components/filters/FiltersTrigger'
+import FilterSheet from '../components/filters/FilterSheet'
+import DateRangeEditor from '../components/filters/DateRangeEditor'
+import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
+import AmountRangeEditor from '../components/filters/AmountRangeEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import DetailPanel from '../components/layout/DetailPanel'
@@ -520,6 +525,22 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
 
+  // Phone filter sheet - the panel's phone replacement (the panel remains
+  // the 640+ surface until the toolbar redesign retires it).
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Tier crossing: the sheet is phone-only and the panel 640+-only, so a
+  // crossing closes the departing surface - an open flag surviving the
+  // crossing would resurrect the surface on rotate-back. Every filter
+  // change is already on the URL, so no other state needs preserving.
+  // Loop-safe by construction (each write lands on a value that disproves
+  // its own guard); StrictMode-idempotent.
+  const [prevMobile, setPrevMobile] = useState(isMobile)
+  if (prevMobile !== isMobile) {
+    setPrevMobile(isMobile)
+    if (!isMobile) setSheetOpen(false)
+    else setFiltersOpen(false)
+  }
+
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
@@ -731,6 +752,87 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
+  // Editor option lists for the phone filter sheet, mirroring the panel
+  // fields: the budget filter narrows the category options and prunes
+  // selections that no longer belong (the registry's budget change rule).
+  const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
+  const budgetNames = new Map(budgets.map((b) => [b.id, b.name]))
+  const budgetSet = new Set(budgetFilter)
+  const showBudgetSuffix = budgets.length > 1 && budgetFilter.length !== 1
+  const categoryOptions = categories
+    .filter((c) => budgetSet.size === 0 || budgetSet.has(c.budget_id))
+    .map((c) => ({
+      value: c.id,
+      label: showBudgetSuffix ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}` : c.name,
+    }))
+
+  // Editor bodies for the sheet's editor level: each def wired with the
+  // same options and URL writes as the panel fields above.
+  const renderSheetEditor = (def: FilterDef<TransactionsFilterValues, TransactionsFilterLookups>) => {
+    switch (def.id) {
+      case 'date':
+        return (
+          <DateRangeEditor
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={(n) => updateParams({ from: n.from, to: n.to })}
+          />
+        )
+      case 'account':
+        return (
+          <MultiChoiceEditor
+            value={accountFilter}
+            onChange={(v) => updateParams({ account: v })}
+            options={accountOptions}
+            aria-label={t('filters.byAccountAria')}
+          />
+        )
+      case 'type':
+        return (
+          <MultiChoiceEditor
+            value={typeFilter}
+            onChange={(v) => updateParams({ type: v })}
+            options={typeOptions}
+            aria-label={t('filters.byTypeAria')}
+          />
+        )
+      case 'currency':
+        return (
+          <MultiChoiceEditor
+            value={currencyFilter}
+            onChange={(v) => updateParams({ currency: v })}
+            options={currencyOptions}
+            aria-label={t('filters.byCurrencyAria')}
+          />
+        )
+      case 'budget':
+        return (
+          <MultiChoiceEditor
+            value={budgetFilter}
+            onChange={(v) => updateParams(budgetChangePatch(v, filterValues, filterLookups))}
+            options={budgetOptions}
+            aria-label={t('listFilters.byBudgetAria')}
+          />
+        )
+      case 'category':
+        return (
+          <MultiChoiceEditor
+            value={categoryFilter}
+            onChange={(v) => updateParams({ category: v })}
+            options={categoryOptions}
+            searchable
+            aria-label={t('listFilters.byCategoryAria')}
+          />
+        )
+      case 'amount':
+        return (
+          <AmountRangeEditor
+            value={{ min: amountMin, max: amountMax }}
+            onChange={(n) => updateParams({ amount_min: n.min, amount_max: n.max })}
+          />
+        )
+    }
+  }
 
   // Resolved in the body, not inside the JSX: the literal-string lint only
   // recognizes the unaliased t() callee, in attributes and children alike.
@@ -760,11 +862,13 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         onShift={exactMonth ? handleMonthShift : undefined}
       />
       <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
-      {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
-          cannot share one line with the search box on 320px screens, so the
-          row wraps: the search box claims the full first line (its
-          max-sm:basis-full below), the controls flow onto the next. min-w-0
-          lets the search box shrink where the row still holds one line. */}
+      {/* Below sm the row holds the search box (full wrap line) and the
+          phone Filters trigger; the bookmark/save/sort actions move into
+          the phone filter sheet, and the desktop toggle/panel pair stays
+          640+. The wrap recipe is unchanged: the search box claims the
+          full first line (max-sm:basis-full), the trigger flows onto the
+          next. min-w-0 lets the search box shrink where the row still
+          holds one line. */}
       <div className="flex max-sm:flex-wrap gap-2 mb-3">
         <SearchInput
           value={search}
@@ -773,30 +877,34 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        {/* Wrapper div hides the desktop toggle below 640: the toggle takes
+            no className prop, and a call-site wrapper is the least invasive
+            gate (the toggle keeps its accordion wiring at 640+). */}
+        <div className="max-sm:hidden shrink-0">
+          <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        </div>
         {/* Labeled like the header's export action; shrink-0 keeps the
             label on one line so the flex-1 SearchInput is the row member
-            that yields on narrow screens. */}
+            that yields on narrow screens. On phones the sheet's bookmark
+            row owns this action. */}
         <button
           type="button"
           onClick={() => setPageBookmarkOpen(true)}
           title={addBookmarkTitle}
-          className={`${secondaryButtonClass} shrink-0`}
+          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
         >
           <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
         </button>
         {/* Save the current view facets as this page's defaults. Sits with
             the bookmark action (the two save-view actions cluster) and
-            before the ordering Select, which stays at row end. Visible on
-            mobile too: a preference action with no FAB twin, like the
-            header's export. In-flow wrap member of this max-sm:flex-wrap
-            row; shrink-0 keeps the label on one line so the wrapped
-            320px row still holds this button plus the Select. */}
+            before the ordering Select, which stays at row end. On phones
+            the sheet's save row owns this action; shrink-0 keeps the label
+            on one line. */}
         <button
           type="button"
           onClick={handleSaveDefaults}
           disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} shrink-0`}
+          className={`${secondaryButtonClass} shrink-0 max-sm:hidden`}
         >
           <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
         </button>
@@ -806,11 +914,15 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           options={sortOptions}
           placeholder={t('sort.newest')}
           aria-label={t('sortAria')}
-          className="w-48 max-sm:w-24 shrink-0"
+          className="w-48 shrink-0 max-sm:hidden"
         />
+        <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
       </div>
 
-      {filtersOpen && (
+      {/* Phone gating: the panel (and its native date inputs) never mounts
+          below 640 - the FilterSheet below is the phone surface, and a
+          stale-open flag after a down-crossing must not resurrect it. */}
+      {filtersOpen && !isMobile && (
         <FilterPanel id={filterPanelId} onClear={activeCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
             <FilterField label={t('filters.account')}>
@@ -984,6 +1096,42 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      {/* Mounted before the bookmark modal so the chained modal (opened by
+          the sheet's bookmark row, which closes the sheet first) stacks
+          above the sheet during its exit animation. */}
+      {isMobile && (
+        <FilterSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          filters={filterDefs}
+          values={filterValues}
+          lookups={filterLookups}
+          filterLabel={filterLabel}
+          updateParams={updateParams}
+          renderEditor={renderSheetEditor}
+          sort={{
+            value: ordering || DEFAULT_SORT,
+            options: sortOptions,
+            onChange: (v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v }),
+          }}
+          onSaveDefaults={handleSaveDefaults}
+          saveDefaultsPending={updateSettings.isPending}
+          saveDefaultsLabel={t('saveDefaults')}
+          saveDefaultsPendingLabel={t('saveDefaultsPending')}
+          bookmark={{
+            label: addLabel,
+            ariaLabel: addBookmarkTitle,
+            // Close the sheet FIRST, then open the modal - one handler, one
+            // commit; the params are already on the URL, so nothing is lost.
+            onOpen: () => {
+              setSheetOpen(false)
+              setPageBookmarkOpen(true)
+            },
+          }}
+          total={data?.total ?? 0}
+          footerNoun={t('sheetNoun', { count: data?.total ?? 0 })}
+        />
+      )}
       {pageBookmarkOpen && (
         <BookmarkFormModal
           pageContext={{ kind: 'transactions', params: paramsFromSearchParams(searchParams) }}

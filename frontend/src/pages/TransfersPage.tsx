@@ -17,7 +17,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
-import { activeFilterCount, buildTransfersFilters, clearAllFilters } from '../utils/listFilters'
+import { activeFilterCount, buildTransfersFilters, clearAllFilters, type FilterDef, type TransfersFilterLookups, type TransfersFilterValues } from '../utils/listFilters'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
@@ -29,9 +29,19 @@ import AppliedFilters, { type AppliedFilterChip } from '../components/common/App
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import TransferModal from '../components/accounts/TransferModal'
 import { FilterPanel, FilterField } from '../components/common/FilterBar'
+import { FiltersTrigger } from '../components/filters/FiltersTrigger'
+import FilterSheet from '../components/filters/FilterSheet'
+import DateRangeEditor from '../components/filters/DateRangeEditor'
+import SingleChoiceEditor from '../components/filters/SingleChoiceEditor'
+import type { ChoiceOption } from '../components/filters/MultiChoiceEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import { inputClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+
+// "All accounts" sentinel for the single-choice account editor in the phone
+// filter sheet (entity ids are positive, so 0 never collides with a real
+// account; picking it clears the param).
+const NO_ACCOUNT = 0
 
 // Arrival gate + page shell. The per-page defaults must resolve before the
 // content mounts: a cold-cache materialization of built-ins would flip every
@@ -122,15 +132,14 @@ export default function TransfersPage() {
           <>
             {/* Save the current view facets as this page's defaults.
                 Secondary actions sit left of the primary in a page-header
-                action row. Visible on mobile too: a preference action with
-                no FAB twin - on mobile it becomes this group's only member,
-                which is fine. NOT gated on canWrite: defaults are per-user,
-                every role saves them. */}
+                action row. Hidden on phones: the filter sheet's save row
+                owns the action there. NOT gated on canWrite: defaults are
+                per-user, every role saves them. */}
             <button
               type="button"
               onClick={handleSaveDefaults}
               disabled={updateSettings.isPending}
-              className={secondaryButtonClass}
+              className={`${secondaryButtonClass} max-sm:hidden`}
             >
               <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
             </button>
@@ -168,7 +177,13 @@ export default function TransfersPage() {
           </div>
         ) : null
       ) : (
-        <TransfersContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+        <TransfersContent
+          settings={settings}
+          calendarStartDay={calendarStartDay}
+          createRequest={createRequest}
+          onSaveDefaults={handleSaveDefaults}
+          saveDefaultsPending={updateSettings.isPending}
+        />
       )}
     </div>
   )
@@ -182,9 +197,13 @@ interface TransfersContentProps {
   calendarStartDay: number
   /** Bumps on every header New click; consumed by a render-adjust. */
   createRequest: number
+  /** Header save-default action, threaded for the phone filter sheet: the
+      handler and its mutation live in the gate wrapper. */
+  onSaveDefaults: () => void
+  saveDefaultsPending: boolean
 }
 
-function TransfersContent({ settings, calendarStartDay, createRequest }: TransfersContentProps) {
+function TransfersContent({ settings, calendarStartDay, createRequest, onSaveDefaults, saveDefaultsPending }: TransfersContentProps) {
   const { t } = useTranslation('transfers')
   // Shared filter strings live in the transactions namespace (the
   // established cross-page home); all namespaces are eagerly loaded, so a
@@ -193,6 +212,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
+  const { isMobile } = useBreakpoint()
   const { data: accounts = [] } = useAccounts(false)
 
   // Filter state lives in the URL (shareable, back-button friendly); any
@@ -248,7 +268,22 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   const filterLookups = { accounts }
   const filterDefs = buildTransfersFilters(filterLookups)
   const filterValues = { account, dateFrom, dateTo }
-  const hasFilters = activeFilterCount(filterDefs, filterValues, filterLookups) > 0
+  const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
+  const hasFilters = activeCount > 0
+
+  // Phone filter sheet - this page's phone surface. The panel had no toggle
+  // before (always open), so the phone trigger row below is a genuinely new
+  // affordance; the panel becomes 640+-only.
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Tier crossing: the sheet is phone-only and the panel 640+-only (no open
+  // flag to reset on this page - the panel is gated directly), so an
+  // up-crossing closes the sheet - an open flag surviving the crossing
+  // would resurrect it on rotate-back. Loop-safe by construction.
+  const [prevMobile, setPrevMobile] = useState(isMobile)
+  if (prevMobile !== isMobile) {
+    setPrevMobile(isMobile)
+    if (!isMobile) setSheetOpen(false)
+  }
 
   // Stepper derivations on the EFFECTIVE range. This page's default range
   // is 'all' for now, so a fresh visit shows the label-only "All time"
@@ -359,6 +394,36 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
+  // Single-choice editor options for the sheet: the unset row first, then
+  // the accounts ("All accounts" clears the param).
+  const accountEditorOptions: ChoiceOption<number>[] = [
+    { value: NO_ACCOUNT, label: t('filters.allAccounts') },
+    ...accountOptions,
+  ]
+
+  // Editor bodies for the sheet's editor level: date gets the shared range
+  // editor, account gets the single-choice editor (this page's account
+  // filter is one id, never a list - a wire constraint).
+  const renderSheetEditor = (def: FilterDef<TransfersFilterValues, TransfersFilterLookups>) => {
+    switch (def.id) {
+      case 'date':
+        return (
+          <DateRangeEditor
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={(n) => updateParams({ from: n.from, to: n.to })}
+          />
+        )
+      case 'account':
+        return (
+          <SingleChoiceEditor
+            value={account ?? NO_ACCOUNT}
+            onChange={(v) => updateParams({ account: v === NO_ACCOUNT ? null : v })}
+            options={accountEditorOptions}
+            aria-label={t('filters.filterByAccountAria')}
+          />
+        )
+    }
+  }
   const items = data?.items ?? []
 
   // Header New click, consumed: the counter lives in the gate wrapper (the
@@ -380,7 +445,16 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
         onShift={exactMonth ? handleMonthShift : undefined}
       />
       <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
-      {/* Always visible: three controls don't justify a collapsible panel. */}
+      {/* Phone filter entry, right-aligned to match where the sibling
+          lists carry the trigger at row end; this page had no filter
+          toggle before (the panel was permanently open at every width). */}
+      <div className="sm:hidden mb-3 flex justify-end">
+        <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
+      </div>
+      {/* 640+ surface only: the always-open panel (and its native date
+          inputs) never mounts below 640 - the phone filter sheet below is
+          the phone surface. */}
+      {!isMobile && (
       <FilterPanel onClear={hasFilters ? clearFilters : null}>
         <FilterField label={t('filters.accountLabel')}>
           <Select
@@ -421,6 +495,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
           </div>
         </FilterField>
       </FilterPanel>
+      )}
 
       {isLoading ? (
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
@@ -490,6 +565,27 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
         </div>
       )}
 
+      {/* Phone filter sheet: date + account only (this page's wire contract
+          has no search or ordering params, and no bookmark kind), so no sort
+          row and no bookmark action. Mounted before the other overlays. */}
+      {isMobile && (
+        <FilterSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          filters={filterDefs}
+          values={filterValues}
+          lookups={filterLookups}
+          filterLabel={filterLabel}
+          updateParams={updateParams}
+          renderEditor={renderSheetEditor}
+          onSaveDefaults={onSaveDefaults}
+          saveDefaultsPending={saveDefaultsPending}
+          saveDefaultsLabel={t('saveDefaults')}
+          saveDefaultsPendingLabel={t('saveDefaultsPending')}
+          total={data?.total ?? 0}
+          footerNoun={t('sheetNoun', { count: data?.total ?? 0 })}
+        />
+      )}
       <ActionSheet
         open={!!rowAction}
         onClose={() => setRowAction(null)}

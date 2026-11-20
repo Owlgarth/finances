@@ -13,6 +13,8 @@
   "noMatch": "No transfers match your filters.",
   "saveDefaults": "Save as default",
   "saveDefaultsPending": "Saving\u2026",
+  "sheetNoun_one": "transfer",
+  "sheetNoun_other": "transfers",
   "saveDefaultsSuccess": "Defaults saved.",
   "saveDefaultsFailed": "Failed to save defaults",
   "emptyHeading": "No transfers yet",

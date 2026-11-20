@@ -7,6 +7,10 @@
   "exportFailed": "Не вдалося експортувати. Спробуйте ще раз.",
   "saveDefaults": "Зберегти як типові",
   "saveDefaultsPending": "Збереження…",
+  "sheetNoun_one": "транзакція",
+  "sheetNoun_few": "транзакції",
+  "sheetNoun_many": "транзакцій",
+  "sheetNoun_other": "транзакції",
   "saveDefaultsSuccess": "Типові налаштування збережено.",
   "saveDefaultsFailed": "Не вдалося зберегти типові налаштування",
   "searchPlaceholder": "Пошук за описами…",
@@ -67,6 +71,10 @@
     "removeFilterAria": "Прибрати фільтр: {{filter}}",
     "dateRangeAria": "Діапазон дат",
     "dateInvalid": "Введіть коректну дату",
+    "show": "Показати",
+    "backAria": "Назад до фільтрів",
+    "clearAria": "Очистити фільтр",
+    "sortLabel": "Сортування",
     "presetThisYear": "Цей рік"
   },
   "totals": {
