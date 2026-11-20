@@ -122,8 +122,9 @@ export default function TransactionsTable({ items, selectedId, showAccountColumn
     // and the sticky thead is the functional requirement (640-1023 scrolls
     // long lists inside <main>). The header's top corners stay
     // color-invisible (bg-background header on the bg-background page); the
-    // tbody corner rounding below patches the bottom zebra corners.
-    <div className="w-full border border-border rounded-sm">
+    // tbody corner rounding below patches the bottom zebra corners. min-w-0
+    // is defense-in-depth: the card can never push past its list slot.
+    <div className="w-full min-w-0 border border-border rounded-sm">
       <table className="w-full border-collapse" aria-label={t('table.ariaLabel')}>
         <thead className="sticky top-0 z-sticky">
           <tr className="bg-background border-b border-border h-8">
@@ -172,7 +173,20 @@ export default function TransactionsTable({ items, selectedId, showAccountColumn
                   <span className="hidden @min-[760px]:inline">{tx.date}</span>
                 </td>
                 <td className="px-3 py-1 text-[13px] text-text min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
+                  {/* The description column must not feed the table's
+                      minimum width: a nowrap truncate span still counts its
+                      full text into the column floor, so with the record
+                      panel open the whole table used to escape its slot
+                      (measured: one 50-char description pinned the column
+                      at 412px). width 0 plus min-width 100% removes the
+                      div from the floor computation (a definite width wins
+                      over content) while its used width still fills the
+                      cell, so rendering is unchanged wherever the column
+                      fits. Scoped to the squeezed column sets: at 760 and
+                      up the table has room and the div goes back to a
+                      plain filling block (w-auto), byte-identical to the
+                      old proportions. */}
+                  <div className="flex items-center gap-2 min-w-0 w-0 min-w-full @min-[760px]:w-auto @min-[760px]:min-w-0">
                     <span className="truncate">{tx.description}</span>
                     {tx.type === 'adjustment' && (
                       <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
@@ -183,8 +197,11 @@ export default function TransactionsTable({ items, selectedId, showAccountColumn
                   </div>
                   {/* Second line (A/B): account stays until the whole line
                       vanishes at 760; the category part and its separator
-                      leave the moment the Category column appears at 560. */}
-                  <div className="block @min-[760px]:hidden text-[10px] font-mono text-text-muted truncate">
+                      leave the moment the Category column appears at 560.
+                      Same floor-removal pair as the first line, base-only:
+                      this line is display:none at 760 and up, so no
+                      restore variant is needed. */}
+                  <div className="block @min-[760px]:hidden text-[10px] font-mono text-text-muted truncate w-0 min-w-full">
                     {accountSegment != null && <span>{accountSegment}</span>}
                     {accountSegment != null && tx.category_name != null && <span className="@min-[560px]:hidden">{' · '}</span>}
                     {tx.category_name != null && <span className="@min-[560px]:hidden">{tx.category_name}</span>}

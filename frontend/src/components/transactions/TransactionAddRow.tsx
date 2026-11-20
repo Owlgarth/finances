@@ -181,15 +181,28 @@ export default function TransactionAddRow({ initialAccountId, hotkeyEnabled }: T
       <tr className="bg-surface border-b border-border focus-within:bg-surface-hover transition-colors">
         <td className="px-1 py-1">
           {/* Native date input: keyboard-navigable with arrow keys, and
-              its yyyy-mm-dd value shape matches the hook's date string. */}
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => form.setDate(e.target.value)}
-            onKeyDown={onEnterSave}
-            aria-label={t('form.dateLabel')}
-            className={inputClass}
-          />
+              its yyyy-mm-dd value shape matches the hook's date string.
+              The wrapper removes the input from the column's floor
+              computation (a native date input carries a browser-set
+              intrinsic width of about 130px that a percentage width does
+              not shrink - measured: the column stayed 135px wide in every
+              state). width 0 plus min-width 100% gives the wrapper a
+              definite zero width for sizing while its used width still
+              fills the cell, so the input keeps filling whatever the
+              column gives it. Below 560 container pixels the date field
+              simply renders narrower (the date column is always visible);
+              at 560 and up the wrapper goes back to a plain filling block
+              so the column proportions are unchanged. */}
+          <div className="w-0 min-w-full @min-[560px]:w-auto @min-[560px]:min-w-0">
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => form.setDate(e.target.value)}
+              onKeyDown={onEnterSave}
+              aria-label={t('form.dateLabel')}
+              className={inputClass}
+            />
+          </div>
         </td>
         <td className="px-1 py-1">
           <input
@@ -242,7 +255,11 @@ export default function TransactionAddRow({ initialAccountId, hotkeyEnabled }: T
             column, and a lone extra cell would break column alignment.
             The input stays left-aligned with its prefix (the form-input
             idiom); saved rows render right-aligned like every ledger
-            row. */}
+            row. The input already shrinks with the column: the flex-1
+            min-w-0 wrapper has no intrinsic floor of its own, so at the
+            panel-open extremes the input simply renders very narrow
+            beside the fixed Add button (the amount column's real floor
+            is the saved rows' own amounts, which must never truncate). */}
         <td className="px-1 py-1">
           <div className="flex items-center gap-1">
             <div className="relative flex-1 min-w-0">
