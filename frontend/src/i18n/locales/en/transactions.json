@@ -25,6 +25,14 @@
     "amountAsc": "Amount low to high",
     "description": "Description A-Z"
   },
+  "table": {
+    "ariaLabel": "Transactions",
+    "date": "Date",
+    "description": "Description",
+    "account": "Account",
+    "category": "Category",
+    "amount": "Amount"
+  },
   "filters": {
     "account": "Account",
     "currency": "Currency",

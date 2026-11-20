@@ -27,6 +27,15 @@ import ReConsentPage from './pages/ReConsentPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import ConfirmEmailChangePage from './pages/ConfirmEmailChangePage'
 import NotFoundPage from './pages/NotFoundPage'
+import { useBreakpoint } from './hooks/useBreakpoint'
+
+/** The record route's host follows the tier: at 1024+ the list page hosts
+ *  the record in its side panel (it reads :id itself, so both routes
+ *  render <Transactions />), below 1024 the record is a full page. */
+function TransactionRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Transactions /> : <TransactionRecordPage />
+}
 
 function AppContent() {
   return (
@@ -38,10 +47,7 @@ function AppContent() {
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
         <Route path="/transactions" element={<Transactions />} />
-        {/* Every tier renders the full record page for now: the 1024+
-            side panel host branches this element when it lands, and until
-            then deep links work at any width. */}
-        <Route path="/transactions/:id" element={<TransactionRecordPage />} />
+        <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/new" element={<NewTransactionPage />} />

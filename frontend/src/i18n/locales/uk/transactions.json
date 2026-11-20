@@ -25,6 +25,14 @@
     "amountAsc": "Сума: від меншої до більшої",
     "description": "Опис А-Я"
   },
+  "table": {
+    "ariaLabel": "Операції",
+    "date": "Дата",
+    "description": "Опис",
+    "account": "Рахунок",
+    "category": "Категорія",
+    "amount": "Сума"
+  },
   "filters": {
     "account": "Рахунок",
     "currency": "Валюта",

@@ -25,6 +25,14 @@
     "amountAsc": "Kwota: od najniższej",
     "description": "Opis A-Z"
   },
+  "table": {
+    "ariaLabel": "Transakcje",
+    "date": "Data",
+    "description": "Opis",
+    "account": "Konto",
+    "category": "Kategoria",
+    "amount": "Kwota"
+  },
   "filters": {
     "account": "Konto",
     "currency": "Waluta",
