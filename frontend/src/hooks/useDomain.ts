@@ -46,6 +46,20 @@ export function useWorkspaceCategories(includeArchived = false) {
   })
 }
 
+/** One transaction by id. Shares the ['transactions', 'detail', id] cache
+ * entry with /new's copy query, so the family-wide ['transactions']
+ * invalidations (form save, field save, list pages) refetch it too via
+ * prefix matching. No refetchOnWindowFocus override: that flag is for the
+ * cheap list GETs feeding dropdowns (file header above) - the detail query
+ * keeps the app defaults, exactly like the copy query it shares the key with. */
+export function useTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ['transactions', 'detail', id],
+    queryFn: () => transactionsApi.get(id!),
+    enabled: id != null,
+  })
+}
+
 /** True when the workspace has more than one enabled currency (drives currency UI). */
 export function useMultiCurrency(): boolean {
   const { data } = useEnabledCurrencies()
