@@ -105,8 +105,12 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
   const isAdjustment = transaction.type === 'adjustment'
   // Auto-created facet adjustments reject updates (they are managed by their
   // source transaction), and read-only roles never edit: both render the
-  // same disabled rows.
-  const rowsDisabled = !canWrite || isAuto
+  // same disabled rows. A pending field save closes the remaining rows too:
+  // each save is a full-replace PUT assembled from the loaded row, so a
+  // second edit committed before the refetch lands would revert the first.
+  // The gate only blocks opening an editor - one already in progress keeps
+  // its draft and settles on its own.
+  const rowsDisabled = !canWrite || isAuto || isSaving
   const budgetId = transaction.category_budget_id
   const budget = budgets.find((b) => b.id === budgetId) ?? null
   const [facetOpen, setFacetOpen] = useState(false)
@@ -422,11 +426,15 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
               {canWrite && !isAuto && !isAdjustment && otherCurrencyOptions.length > 0 && (
                 <button
                   type="button"
+                  // Same pending-save gate as the rows: the modal seeds from
+                  // the loaded row and its save is another full-replace PUT.
+                  disabled={isSaving}
                   onClick={() => setFacetOpen(true)}
                   className={
-                    facetSet
+                    (facetSet
                       ? ''
                       : 'font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus'
+                    ) + ' disabled:cursor-not-allowed disabled:opacity-50'
                   }
                 >
                   {facetSet ? t('rowActions.edit') : t('record.facetAdd')}
