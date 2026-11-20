@@ -12,7 +12,10 @@ import { controlHeightClass, labelClass, primaryButtonClass, secondaryButtonClas
  * onKeyDown would hijack Enter from focused buttons inside it. Single-line
  * editors get Enter=commit, Escape=cancel, blur=commit. Multiline editors
  * override onKeyDown to keep Escape-cancel only: Enter must insert a newline,
- * and commit happens on blur or the sheet's Save button. */
+ * and commit happens on blur or the sheet's Save button. Every handled
+ * Escape is preventDefaulted (also in overrides): an enclosing host's
+ * document-level Escape listener reads defaultPrevented and must not also
+ * close the panel around the just-cancelled editor. */
 export interface EditorBag<T> {
   value: T
   onChange: (next: T) => void
@@ -100,6 +103,11 @@ export default function EditableField<T>({
           e.preventDefault()
           commit()
         } else if (e.key === 'Escape') {
+          // Mark the keypress consumed on the native event: this Escape
+          // ends the editor, and a document-level Escape listener in an
+          // enclosing host (DetailPanel's close) reads defaultPrevented
+          // so the panel around the editor stays open.
+          e.preventDefault()
           cancel()
         }
       },
