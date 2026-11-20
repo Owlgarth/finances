@@ -118,8 +118,9 @@ export default function TransactionAttachments({ transaction }: Props) {
   // tile click) instead of refetching - the blob query cache owns that URL.
   const [preview, setPreview] = useState<{ attachment: TransactionAttachment; url: string } | null>(null)
   // Stack-aware Escape, scroll lock, focus capture/restore for the lightbox.
-  // Without this, Escape inside TransactionFormModal closed the form modal
-  // underneath because the lightbox never joined the overlay stack.
+  // Without this, Escape inside the lightbox would close an enclosing
+  // BottomSheet or modal underneath, because the lightbox never joined
+  // the overlay stack.
   const lightboxRef = useOverlay(preview !== null, () => setPreview(null))
 
   const { data: attachments = [], isLoading } = useTransactionAttachments(transaction.id)
@@ -249,8 +250,8 @@ export default function TransactionAttachments({ transaction }: Props) {
           {/* Hand-rolled fullscreen presentation is intentional: the design
               system has no lightbox component and Modal's panel chrome would
               be wrong - but the overlay RULES apply (useOverlay: stack-aware
-              Escape over the enclosing TransactionFormModal/BottomSheet,
-              scroll lock, focus capture/restore). */}
+              Escape over any enclosing BottomSheet/modal, scroll
+              lock, focus capture/restore). */}
           <div
             ref={lightboxRef}
             role="dialog"

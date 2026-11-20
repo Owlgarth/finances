@@ -97,9 +97,9 @@ export default function PlannedFormModal({ open, onClose, planned, copyFrom, onD
       // Mirrors the create branch's setBudgetId(defaultBudgetId).
       setBudgetId(source.category?.budget_id ?? defaultBudgetId)
       setPlannedDate(planned ? source.planned_date : new Date().toISOString().slice(0, 10))
-      // Edit bypasses the idempotency-key dedup — only create-mode submissions
-      // carry a key. Copy mode IS a create, so it gets a fresh key (mirrors
-      // TransactionFormModal).
+      // Edit bypasses the idempotency-key dedup - only create-mode submissions
+      // carry a key. Copy mode IS a create, so it gets a fresh key (same rule
+      // as the transaction form's create path).
       setIdempotencyKey(planned ? null : crypto.randomUUID())
     } else {
       setName('')

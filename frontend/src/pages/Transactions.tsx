@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { BookmarkPlus, Copy, Download, Plus, Save, Trash2 } from 'lucide-react'
@@ -20,9 +20,9 @@ import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { useMainScrollRestoration } from '../hooks/useMainScrollRestoration'
+import { useTransactionForm } from '../hooks/useTransactionForm'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
-import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import MultiSelect from '../components/common/MultiSelect'
@@ -36,6 +36,7 @@ import PageHeader from '../components/layout/PageHeader'
 import DetailPanel from '../components/layout/DetailPanel'
 import SplitView from '../components/layout/SplitView'
 import TransactionAddRow from '../components/transactions/TransactionAddRow'
+import TransactionFormFields from '../components/transactions/TransactionFormFields'
 import TransactionRecord from '../components/transactions/TransactionRecord'
 import TransactionsTable from '../components/transactions/TransactionsTable'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
@@ -186,19 +187,28 @@ export default function Transactions() {
     return () => clearTimeout(timer)
   }, [defaultsLoading])
 
-  // Header New click crosses the component boundary: the button lives here
-  // (above the gate) while the form modal and its seed state live in the
-  // content. A plain counter the content consumes with a render-adjust.
-  const [createRequest, setCreateRequest] = useState(0)
+  // The ?new= param drives the in-flow create panel at 1024+ (the content
+  // reads it below); the wrapper needs it for the below-1024 redirect.
+  // Garbage reads as unset (the page's garbage-filter idiom): ?new=foo
+  // renders the plain list on every tier.
+  const newParam = searchParams.get('new')
 
   // Below 1024 the create entry is the /new page (the FAB on phones, this
-  // button on tablets); 1024+ keeps the modal. The branch lives INSIDE the
-  // handler - the button stays mounted on every tier. The account filter
-  // carries only when it resolves to exactly one id: /new seeds a single
-  // account, never a CSV list.
+  // button on tablets); at 1024+ it opens the create panel. The branch
+  // lives INSIDE the handler - the button stays mounted on every tier. The
+  // account filter carries only when it resolves to exactly one id: /new
+  // seeds a single account, never a CSV list.
   const handleCreate = () => {
     if (isDesktop) {
-      setCreateRequest((n) => n + 1)
+      // The ?new= param is the create panel's open state (shareable,
+      // reload-safe). Drop any selected record - create wins the panel
+      // slot - and any stale copy seed. REPLACE: an in-page selection
+      // write is not a history step, so Back still leaves the page in
+      // one press.
+      const next = new URLSearchParams(searchParams)
+      next.set('new', 'transaction')
+      next.delete('copy')
+      navigate(`/transactions?${next.toString()}`, { replace: true })
       return
     }
     const accountIds = intListParam(searchParams, 'account')
@@ -243,6 +253,16 @@ export default function Transactions() {
     setIsExporting(false)
   }
 
+  // Below 1024 the create surface is /new: a ?new= URL loaded or resized
+  // into that band redirects there, forwarding ?copy= so a shared copy
+  // link keeps its source. REPLACE: the ?new= URL is an implementation
+  // detail of the desktop panel, not a history step. intParam drops
+  // garbage copy values, so ?new=transaction&copy=abc degrades to /new.
+  if (!isDesktop && newParam === 'transaction') {
+    const copyId = intParam(searchParams, 'copy')
+    return <Navigate to={copyId !== null ? `/new?copy=${copyId}` : '/new'} replace />
+  }
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       {/* The title row and the Activity tab row stay mounted through the gate:
@@ -266,7 +286,7 @@ export default function Transactions() {
             </button>
             {/* Hidden on phones (the FAB owns creation there); on tablets
                 below 1024 it navigates to /new, at 1024+ it opens the
-                create modal. */}
+                create panel. */}
             {canWrite && (
               <button
                 type="button"
@@ -302,7 +322,7 @@ export default function Transactions() {
           </div>
         ) : null
       ) : (
-        <TransactionsContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+        <TransactionsContent settings={settings} calendarStartDay={calendarStartDay} />
       )}
     </div>
   )
@@ -314,11 +334,9 @@ interface TransactionsContentProps {
   settings: UserWorkspaceSettings | undefined
   /** Calendar start day (1 = Monday .. 7 = Sunday) for the week default. */
   calendarStartDay: number
-  /** Bumps on every header New click; consumed by a render-adjust. */
-  createRequest: number
 }
 
-function TransactionsContent({ settings, calendarStartDay, createRequest }: TransactionsContentProps) {
+function TransactionsContent({ settings, calendarStartDay }: TransactionsContentProps) {
   const { t } = useTranslation('transactions')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const queryClient = useQueryClient()
@@ -335,6 +353,12 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   const { isMobile, isDesktop } = useBreakpoint()
   const params = useParams()
   const recordId = params.id && /^\d+$/.test(params.id) ? Number(params.id) : null
+  // The create panel opens on the exact ?new=transaction value at 1024+
+  // (garbage reads as unset, the page's garbage-filter idiom). Precedence:
+  // the create panel wins the panel slot over a selected record - every
+  // create-open write drops the selection path, so the two states are
+  // never both visible.
+  const createOpen = isDesktop && searchParams.get('new') === 'transaction'
   // Shares the ['transactions','detail',id] cache entry with the record page
   // and the /new copy query - one entry per id, refreshed by every
   // family-wide invalidation.
@@ -481,9 +505,6 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
 
   const isTouch = useIsTouch()
 
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<Transaction | null>(null)
-  const [copySource, setCopySource] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
   // Bookmark capture of the current filter view (mount-per-use modal): the
   // target derives from the URL at open time, so a boolean is the whole state.
@@ -565,7 +586,6 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
     )
   }
 
-  const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
   // Row tap opens the record page: a PUSH (browser Back replays this
   // list's URL) with the click-time search string in router state, so
   // the record page's header back target preserves the filters and page.
@@ -583,8 +603,14 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   // the panel; below 1024 the push carries them in router state instead.
   const handleOpenRecord = (tx: Transaction) => {
     if (isDesktop) {
+      // Strip the create panel's params: a row click while the panel is
+      // open must open the record, not carry ?new= into the record URL
+      // where the panel would keep winning the slot.
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      next.delete('copy')
       navigate(
-        { pathname: `/transactions/${tx.id}`, search: searchParams.toString() },
+        { pathname: `/transactions/${tx.id}`, search: next.toString() },
         { replace: recordId != null },
       )
     } else {
@@ -595,9 +621,30 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   // the closed record's URL out of Back's path.
   const handleClosePanel = () =>
     navigate({ pathname: '/transactions', search: searchParams.toString() }, { replace: true })
-  // Copy = new-transaction form prefilled from t, date reset to today. Also
-  // reachable from inside the edit modal, which then morphs into copy mode.
-  const openCopy = (t: Transaction) => { setEditing(null); setCopySource(t); setFormOpen(true) }
+  // Create panel close - the record close write plus dropping the create
+  // params: a stale ?copy= must not re-seed the next create. The selection
+  // path drops with them (a create-open already superseded any record).
+  const closeCreatePanel = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('new')
+    next.delete('copy')
+    navigate(`/transactions?${next.toString()}`, { replace: true })
+  }
+  // Copy = create form prefilled from the source, date reset to today. At
+  // 1024+ the fork opens the create panel in copy mode (?new= with ?copy=
+  // riding along); below 1024 it navigates to /new?copy=. The fork lives
+  // INSIDE the handler - the affordance stays mounted on every tier it
+  // appears at.
+  const openCopy = (tx: Transaction) => {
+    if (isDesktop) {
+      const next = new URLSearchParams(searchParams)
+      next.set('new', 'transaction')
+      next.set('copy', String(tx.id))
+      navigate(`/transactions?${next.toString()}`, { replace: true })
+      return
+    }
+    navigate(`/new?copy=${tx.id}`)
+  }
 
   // Filter facets only - ordering/page/pageSize do not change membership.
   const filterKey = [search, accountFilter.join(','), typeFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo].join('|')
@@ -609,6 +656,9 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   // router write, never component state).
   useEffect(() => {
     if (!(isDesktop && recordId != null)) return
+    // A create URL wins the panel slot over the record: the reconcile
+    // must not navigate away from the open create panel.
+    if (createOpen) return
     if (recordLoading) return
     if (recordError || !record || !recordStillMatches(record, { search, accountFilter, typeFilter, currencyFilter, budgetFilter, categoryFilter, amountMin, amountMax, dateFrom, dateTo })) {
       navigate({ pathname: '/transactions', search: searchParams.toString() }, { replace: true })
@@ -616,7 +666,7 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
     // The effect reads the CURRENT filter values by design; filterKey is
     // the change signal, so the deps list is deliberately partial.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, recordId, isDesktop, record, recordLoading, recordError])
+  }, [filterKey, recordId, isDesktop, createOpen, record, recordLoading, recordError])
 
   const showAccountColumn = accounts.length > 1
   const items = data?.items ?? []
@@ -629,18 +679,6 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   // recognizes the unaliased t() callee, in attributes and children alike.
   const addBookmarkTitle = tBookmarks('addTransactionsAria')
   const addLabel = tBookmarks('addLabel')
-
-  // Header New click, consumed: the counter lives in the gate wrapper (the
-  // button is above the gate, the modal state is here). A click inside the
-  // cold-cache gate window lands after materialization, against the
-  // post-defaults view. The latch catches up to the counter on the very
-  // next pass: the adjust terminates by construction and is
-  // StrictMode-idempotent.
-  const [consumedCreateRequest, setConsumedCreateRequest] = useState(createRequest)
-  if (createRequest !== consumedCreateRequest) {
-    setConsumedCreateRequest(createRequest)
-    openNew()
-  }
 
   // Pagination rides whichever list arm renders (below the phone rows, or
   // inside the split view's list slot - at 1024+ the strip must sit under
@@ -827,12 +865,10 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
                   640-1023 band keeps the create page route; viewers
                   never create). Seeded from the account filter only when
                   it resolves to exactly one account. The hotkey stays
-                  disabled while a record panel is open and while a ?new=
-                  param is present - both are in-flow panels, not
-                  overlays, so the row's own overlay check cannot keep the
-                  hotkey from stealing their focus (nothing reads ?new=
-                  today; the gate is here so an in-flow create panel can
-                  adopt the param without moving this mount). */}
+                  disabled while a record panel is open and while the
+                  create panel is open (?new=) - both are in-flow panels,
+                  not overlays, so the row's own overlay check cannot keep
+                  the hotkey from stealing their focus. */}
               <TransactionsTable
                 items={items}
                 selectedId={isDesktop ? recordId : null}
@@ -849,7 +885,9 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
               {pagination}
             </>
           }
-          panel={isDesktop && recordId != null ? (
+          panel={createOpen ? (
+            <CreateTransactionPanel onClose={closeCreatePanel} />
+          ) : isDesktop && recordId != null ? (
             // The record renders its own footer internally (Duplicate and
             // Delete), so the panel shell passes no footer. The title falls
             // back to the generic record label only for the loading window;
@@ -867,7 +905,7 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
                 <TransactionRecord
                   transaction={record}
                   canWrite={canWrite}
-                  onDuplicate={(tx) => navigate(`/new?copy=${tx.id}`)}
+                  onDuplicate={openCopy}
                   onDelete={(tx) => setDeleting(tx)}
                 />
               ) : null}
@@ -876,14 +914,6 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
         />
       )}
 
-      <TransactionFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        transaction={editing}
-        copyFrom={copySource}
-        onCopy={openCopy}
-        onDelete={(t) => { setFormOpen(false); setDeleting(t) }}
-      />
       <ConfirmDialog
         isOpen={!!deleting}
         title={t('deleteDialog.title')}
@@ -898,6 +928,107 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
           onClose={() => setPageBookmarkOpen(false)}
         />
       )}
+    </>
+  )
+}
+
+/** In-flow create/copy host for the SplitView panel slot (the ?new= URL is
+ *  the open state; the page passes the close write). Single form flavor:
+ *  the fields component renders its full layout (no shared rows), no
+ *  transfer flavor, no receipt-first prefill - that entry stays /new's
+ *  Scan action at every width; the fields component's own More-details
+ *  receipt affordance needs no host wiring. */
+function CreateTransactionPanel({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('transactions')
+  const [searchParams] = useSearchParams()
+
+  // LIVE read, not a lazy initializer: a row-copy click can re-target the
+  // panel while it is open (param-only navigation never re-runs lazy
+  // initializers), and the form hook's session machinery treats the
+  // copyFrom change as a new seeding session.
+  const copyId = intParam(searchParams, 'copy')
+
+  // Copy-mode source fetch, the /new page's contract: keyed INSIDE the
+  // ['transactions'] family so the form's own invalidations refetch it. A
+  // terminal error counts as known - a failed copy fetch degrades to plain
+  // create mode (the URL keeps ?copy=; the user can retry by reloading).
+  const copyQuery = useQuery({
+    queryKey: ['transactions', 'detail', copyId],
+    queryFn: () => transactionsApi.get(copyId!),
+    enabled: copyId !== null,
+  })
+  const copyKnown = copyId === null || copyQuery.isSuccess || copyQuery.isError
+
+  // open gates on the copy seed resolving, so the hook seeds exactly once
+  // with the final copyFrom (no create-then-copy double seed). Default
+  // validationToasts: the fields component owns inline error timing via
+  // the hook's submit counter, and the toasts still fire from submit().
+  const form = useTransactionForm({ open: copyKnown, copyFrom: copyQuery.data ?? null })
+
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  // An accidental Escape/X over typed text must not lose data the /new
+  // flow protects - the same unsaved-changes guard as the create page.
+  const dirtyClose = () => (form.isDirty ? setConfirmOpen(true) : onClose())
+
+  const handleAdd = async () => {
+    const result = await form.submit()
+    // Close only on success: validation failures keep the panel open with
+    // its inline errors and toasts.
+    if (result.ok) onClose()
+  }
+
+  // Copy-seed arrival hold, the /new page's skeleton idiom.
+  const panel = !copyKnown ? (
+    <DetailPanel title={t('form.newTitle')} onClose={dirtyClose}>
+      <div className="space-y-3 pt-2" aria-hidden="true">
+        <div className="h-8 bg-surface-muted rounded-sm animate-pulse" />
+        <div className="h-20 bg-surface-muted rounded-sm animate-pulse" />
+      </div>
+    </DetailPanel>
+  ) : (
+    <DetailPanel
+      title={t('form.newTitle')}
+      onClose={dirtyClose}
+      footer={
+        // The footer prop pins the buttons below the scrolling body -
+        // buttons inside the body would scroll out of view. The primary
+        // action calls handleAdd directly (the panel owns the section
+        // markup, so there is no <form> element) and is type="button" so
+        // it can never submit a parent form. form.add and form.newTitle
+        // for create AND copy - the panel is never edit mode.
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={dirtyClose} className={secondaryButtonClass}>
+            {t('form.cancel')}
+          </button>
+          <button type="button" onClick={handleAdd} disabled={form.isSaving} className={primaryButtonClass}>
+            {form.isSaving ? t('form.saving') : t('form.add')}
+          </button>
+        </div>
+      }
+    >
+      {/* Keyed on the hook's session key per the fields component's host
+          contract: a session change (copy re-target, open flip) remounts
+          it, resetting its local state and re-firing the amount
+          autoFocus. */}
+      <TransactionFormFields key={form.sessionKey} form={form} />
+    </DetailPanel>
+  )
+
+  return (
+    <>
+      {panel}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title={t('unsavedChanges.title')}
+        message={t('unsavedChanges.message')}
+        confirmLabel={t('unsavedChanges.discard')}
+        destructive
+        onConfirm={() => {
+          setConfirmOpen(false)
+          onClose()
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </>
   )
 }
