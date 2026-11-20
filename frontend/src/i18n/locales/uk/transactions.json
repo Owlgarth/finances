@@ -231,6 +231,9 @@
     "openAccountsAria": "Відкрити рахунки",
     "openBudgetAria": "Відкрити бюджет {{name}}",
     "openCategoryAria": "Показати транзакції: {{name}}",
+    "title": "Транзакція",
+    "notFound": "Не знайдено в цьому робочому просторі",
+    "backToList": "Назад до транзакцій",
     "spentOf": "Витрачено {{spent}} із {{planned}}"
   }
 }

@@ -231,6 +231,9 @@
     "openAccountsAria": "Otwórz konta",
     "openBudgetAria": "Otwórz budżet {{name}}",
     "openCategoryAria": "Pokaż transakcje: {{name}}",
+    "title": "Transakcja",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do transakcji",
     "spentOf": "Wydano {{spent}} z {{planned}}"
   }
 }

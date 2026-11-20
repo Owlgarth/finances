@@ -229,6 +229,9 @@
     "openAccountsAria": "Open accounts",
     "openBudgetAria": "Open {{name}} budget",
     "openCategoryAria": "Show {{name}} transactions",
+    "title": "Transaction",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to transactions",
     "spentOf": "{{spent}} of {{planned}} spent"
   }
 }

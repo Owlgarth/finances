@@ -13,6 +13,7 @@ import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
 import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
+import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
 import TransfersPage from './pages/TransfersPage'
 import NewTransactionPage from './pages/NewTransactionPage'
@@ -37,6 +38,10 @@ function AppContent() {
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
         <Route path="/transactions" element={<Transactions />} />
+        {/* Every tier renders the full record page for now: the 1024+
+            side panel host branches this element when it lands, and until
+            then deep links work at any width. */}
+        <Route path="/transactions/:id" element={<TransactionRecordPage />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/new" element={<NewTransactionPage />} />

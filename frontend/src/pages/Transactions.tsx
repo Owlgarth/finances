@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { BookmarkPlus, Copy, Download, Plus, Pencil, Save, Trash2 } from 'lucide-react'
+import { BookmarkPlus, Copy, Download, Plus, Save, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction, UserWorkspaceSettings } from '../types'
@@ -19,6 +19,7 @@ import { amountParam, createUpdateParams, intListParam, intParam, useStalePageRe
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
+import { useMainScrollRestoration } from '../hooks/useMainScrollRestoration'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import TransactionFormModal from '../components/modals/transactions/TransactionFormModal'
@@ -85,7 +86,10 @@ export default function Transactions() {
   const { t } = useTranslation('transactions')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { isDesktop } = useBreakpoint()
+  const { isDesktop, isTablet } = useBreakpoint()
+  // 640-1023 scroll memory: <main> is the scroll container on that band
+  // and a route swap clamps it (hooks/useMainScrollRestoration.ts).
+  useMainScrollRestoration(isTablet)
   const { canWrite } = usePermissions()
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
@@ -247,6 +251,7 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   // Remembered search: when the URL carries no ?search= param (fresh visit),
   // the last committed term fills the box. Seeded once at mount (the lazy
   // useState initializer reads storage exactly once); after that the URL
@@ -474,7 +479,14 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
   }
 
   const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
-  const openEdit = (t: Transaction) => { setEditing(t); setCopySource(null); setFormOpen(true) }
+  // Row tap opens the record page: a PUSH (browser Back replays this
+  // list's URL) with the click-time search string in router state, so
+  // the record page's header back target preserves the filters and page.
+  // Same click-time-URL discipline as handleExportView in the gate
+  // wrapper above.
+  const openRecord = (tx: Transaction) => {
+    navigate(`/transactions/${tx.id}`, { state: { search: searchParams.toString() } })
+  }
   // Copy = new-transaction form prefilled from t, date reset to today. Also
   // reachable from inside the edit modal, which then morphs into copy mode.
   const openCopy = (t: Transaction) => { setEditing(null); setCopySource(t); setFormOpen(true) }
@@ -602,12 +614,12 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
         <div className="border border-border rounded-sm bg-surface divide-y divide-border">
           {items.map((tx) => {
             // Auto-created facet adjustments are managed by their source
-            // transaction: no edit/copy/delete affordances, no tap-to-edit.
+            // transaction: no copy/delete affordances, no tap-to-open.
             const auto = tx.source_transaction_id != null
             return (
               <div
                 key={tx.id}
-                {...(!auto && isTouch && canWrite ? tappableProps(() => openEdit(tx)) : {})}
+                {...(!auto && isTouch && canWrite ? tappableProps(() => openRecord(tx)) : {})}
                 className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
                   !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
                 }`}
@@ -642,14 +654,13 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
                       </div>
                     )}
                   </div>
-                  {/* Hover reveals are pointer-fine only — on touch they'd be
-                      invisible tap targets; the row tap opens the sheet instead.
-                      Auto rows keep the block as an `invisible` spacer (no
+                  {/* Hover reveals are pointer-fine only - on touch they'd be
+                      invisible tap targets; the row tap opens the record page
+                      instead. Auto rows keep the block as an `invisible` spacer (no
                       hover, no focus, no clicks) so their amount stays aligned
                       with the editable rows' amounts. */}
                   {canWrite && !isTouch && (
                     <div className={`flex items-center gap-1 ${auto ? 'invisible' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
-                      <button onClick={() => openEdit(tx)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                       <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
                       <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                     </div>
