@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ArrowLeftRight, Pencil, Plus, Repeat, Save, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transfersApi } from '../api/client'
 import type { Transfer, UserWorkspaceSettings } from '../types'
@@ -12,22 +12,35 @@ import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
+import { isCalendarMonth, shiftMonth } from '../utils/dates'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
+import { activeFilterCount, buildTransfersFilters, clearAllFilters, type FilterDef, type TransfersFilterLookups, type TransfersFilterValues } from '../utils/listFilters'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
-import Select from '../components/common/Select'
+import { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import TransferModal from '../components/accounts/TransferModal'
-import { FilterPanel, FilterField } from '../components/common/FilterBar'
+import { FiltersTrigger } from '../components/filters/FiltersTrigger'
+import FilterSheet from '../components/filters/FilterSheet'
+import FilterChipsBar from '../components/filters/FilterChipsBar'
+import DateRangeEditor from '../components/filters/DateRangeEditor'
+import SingleChoiceEditor from '../components/filters/SingleChoiceEditor'
+import type { ChoiceOption } from '../components/filters/MultiChoiceEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
-import { inputClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
+import { primaryButtonClass } from '../components/common/formStyles'
+
+// "All accounts" sentinel for the single-choice account editor in the phone
+// filter sheet (entity ids are positive, so 0 never collides with a real
+// account; picking it clears the param).
+const NO_ACCOUNT = 0
 
 // Arrival gate + page shell. The per-page defaults must resolve before the
 // content mounts: a cold-cache materialization of built-ins would flip every
@@ -84,16 +97,17 @@ export default function TransfersPage() {
   // its own guard - terminates by construction; StrictMode-idempotent).
   if (!defaultsLoading && skeletonShown) setSkeletonShown(false)
 
-  // Save the current view facets as this page's defaults. This page has no
-  // control row (no bookmark/search/sort actions), so the header action
-  // group is where the secondary action lives - LEFT of the primary, where
-  // secondary actions sit in a page-header action row. The capture helper
-  // reads the URL at click time: the URL is the source of truth once the
-  // default has materialized into it. Tradeoff: a click inside the brief
-  // cold-cache gate window captures the pre-materialization URL (range
-  // 'all') - a benign degradation; every click after materialization
-  // matches the on-screen view. Toasts are per-call callbacks: the shared
-  // hook owns only the cache invalidation.
+  // Save the current view facets as this page's defaults. The action lives
+  // in the 640+ toolbar's Save view menu and the phone filter sheet's save
+  // row - the handler and its mutation live here (above the arrival gate)
+  // and thread down to the content. The capture helper reads the URL at
+  // click time: the URL is the source of truth once the default has
+  // materialized into it. Tradeoff: a click inside the brief cold-cache
+  // gate window captures the pre-materialization URL (range 'all') - a
+  // benign degradation; every click after materialization matches the
+  // on-screen view. Toasts are per-call callbacks: the shared hook owns
+  // only the cache invalidation. NOT gated on canWrite: defaults are
+  // per-user, every role saves them.
   const updateSettings = useUpdateWorkspaceSettings()
   const handleSaveDefaults = () => {
     updateSettings.mutate(
@@ -116,20 +130,6 @@ export default function TransfersPage() {
         breadcrumb={breadcrumb}
         actions={
           <>
-            {/* Save the current view facets as this page's defaults.
-                Secondary actions sit left of the primary in a page-header
-                action row. Visible on mobile too: a preference action with
-                no FAB twin - on mobile it becomes this group's only member,
-                which is fine. NOT gated on canWrite: defaults are per-user,
-                every role saves them. */}
-            <button
-              type="button"
-              onClick={handleSaveDefaults}
-              disabled={updateSettings.isPending}
-              className={secondaryButtonClass}
-            >
-              <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
-            </button>
             {/* Hidden on phones (the FAB owns creation there); on tablets
                 below 1024 it navigates to /new?type=transfer, at 1024+ it
                 opens the create modal. */}
@@ -152,9 +152,9 @@ export default function TransfersPage() {
       {defaultsLoading ? (
         // Under the 300ms threshold the gated region simply holds - a blank
         // beat is imperceptible, a skeleton flash is the anti-pattern. The
-        // skeleton shapes approximate the always-visible FilterPanel (the
-        // bordered account + date-pair panel) plus this page's own
-        // list-row idiom - the same row height as the list skeleton below.
+        // skeleton shapes approximate the filter toolbar (stepper + chips
+        // row) plus this page's own list-row idiom - the same row height
+        // as the list skeleton below.
         skeletonShown ? (
           <div className="space-y-3" aria-hidden="true">
             <div className="h-24 bg-surface-muted rounded-sm animate-pulse" />
@@ -164,7 +164,13 @@ export default function TransfersPage() {
           </div>
         ) : null
       ) : (
-        <TransfersContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+        <TransfersContent
+          settings={settings}
+          calendarStartDay={calendarStartDay}
+          createRequest={createRequest}
+          onSaveDefaults={handleSaveDefaults}
+          saveDefaultsPending={updateSettings.isPending}
+        />
       )}
     </div>
   )
@@ -178,13 +184,24 @@ interface TransfersContentProps {
   calendarStartDay: number
   /** Bumps on every header New click; consumed by a render-adjust. */
   createRequest: number
+  /** Save-default action, threaded from the gate wrapper for the phone
+      filter sheet and the 640+ Save view menu: the handler and its
+      mutation live above the gate. */
+  onSaveDefaults: () => void
+  saveDefaultsPending: boolean
 }
 
-function TransfersContent({ settings, calendarStartDay, createRequest }: TransfersContentProps) {
+function TransfersContent({ settings, calendarStartDay, createRequest, onSaveDefaults, saveDefaultsPending }: TransfersContentProps) {
   const { t } = useTranslation('transfers')
+  // Shared filter strings live in the transactions namespace (the
+  // established cross-page home); all namespaces are eagerly loaded, so a
+  // second translator here is safe (the shared filter components'
+  // precedent).
+  const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
+  const { isMobile } = useBreakpoint()
   const { data: accounts = [] } = useAccounts(false)
 
   // Filter state lives in the URL (shareable, back-button friendly); any
@@ -232,12 +249,62 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   // Default-derived from/to count exactly as user-set ones: a materialized
-  // default range IS an active filter, so the FilterPanel's Clear link
-  // appearing on fresh entry with a defaulted range is honest - the user
-  // can see and clear what is filtering the list. The date inputs read
-  // these same effective values, so the panel never shows a range the
-  // list is not filtered by.
-  const hasFilters = account != null || Boolean(dateFrom || dateTo)
+  // default range IS an active filter, so a visible applied-filter state on
+  // fresh entry with a defaulted range is honest - the user can see and
+  // clear what is filtering the list. Every surface reads these same
+  // effective values, so no surface shows a range the list is not
+  // filtered by.
+  const filterLookups = { accounts }
+  const filterDefs = buildTransfersFilters(filterLookups)
+  const filterValues = { account, dateFrom, dateTo }
+  const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
+  const hasFilters = activeCount > 0
+
+  // Phone filter sheet - this page's phone surface. The 640+ toolbar row
+  // below is the desktop surface; the phone trigger row is a genuinely
+  // new affordance (the old inline panel was permanently open at every
+  // width).
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Tier crossing: the sheet is phone-only and the toolbar row is
+  // CSS-gated, so an up-crossing closes the sheet - an open flag
+  // surviving the crossing would resurrect it on rotate-back. Loop-safe
+  // by construction.
+  const [prevMobile, setPrevMobile] = useState(isMobile)
+  if (prevMobile !== isMobile) {
+    setPrevMobile(isMobile)
+    if (!isMobile) setSheetOpen(false)
+  }
+
+  // Stepper derivations on the EFFECTIVE range. This page's default range
+  // is 'all' for now, so a fresh visit shows the label-only "All time"
+  // stepper - coherent, not a defect; a default month arrives with the
+  // page-defaults phase. The hop target computes from exactMonth (the range
+  // on screen), never from "today"; createUpdateParams drops ?page on any
+  // patch that does not set it.
+  const exactMonth = isCalendarMonth(dateFrom, dateTo)
+  const stepperLabel = stepperRangeLabel(dateFrom, dateTo, tTx('listFilters.presetAllTime'))
+  const handleMonthShift = (delta: number) => {
+    if (!exactMonth) return
+    updateParams(shiftMonth(exactMonth, delta))
+  }
+
+  // Applied-filter chips: every active registry filter except date (the
+  // stepper owns the date). Badge-clear parity and chips read the same
+  // isActive; this page's non-date chip set is account alone. Typed i18next
+  // only accepts a dynamic key alongside an explicit fallback, so the
+  // fallback mirrors the key (every landed labelKey resolves; a missing one
+  // would render its own key - immediately visible, never a silent blank).
+  const filterLabel = (key: string) => t(key, { defaultValue: key })
+  const appliedChips: AppliedFilterChip[] = filterDefs
+    .filter((d) => d.id !== 'date' && d.isActive(filterValues, filterLookups))
+    .map((d) => ({
+      id: d.id,
+      label: filterLabel(d.labelKey),
+      summary: d.editor === 'amount'
+        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        : d.summarize(filterValues, filterLookups),
+      onRemove: () => updateParams(d.clear()),
+    }))
 
   // One-shot defaults materialization (useStalePageReset shape: the URL
   // write goes through the closure-wrapped updateParams, never the raw
@@ -247,7 +314,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   // params absent writes the resolved default into the URL (replace, no
   // history entry). The write touches ONLY the defaultable param family
   // (from/to) plus createUpdateParams's automatic ?page drop - never the
-  // account FilterPanel field. The consume adjust above then kills the
+  // account facet's own param. The consume adjust above then kills the
   // latch, so Clear / deep links never re-default within a session; a
   // fresh mount re-initializes the latch (accepted).
   useEffect(() => {
@@ -314,9 +381,40 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () => updateParams({ account: null, from: null, to: null })
+  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
+  // Single-choice editor options for the sheet: the unset row first, then
+  // the accounts ("All accounts" clears the param).
+  const accountEditorOptions: ChoiceOption<number>[] = [
+    { value: NO_ACCOUNT, label: t('filters.allAccounts') },
+    ...accountOptions,
+  ]
+
+  // Editor bodies for every filter-editor host (the phone sheet's editor
+  // level and the toolbar's popovers): date gets the shared range editor,
+  // account gets the single-choice editor (this page's account filter is
+  // one id, never a list - a wire constraint). One wiring, two hosts.
+  const renderFilterEditor = (def: FilterDef<TransfersFilterValues, TransfersFilterLookups>) => {
+    switch (def.id) {
+      case 'date':
+        return (
+          <DateRangeEditor
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={(n) => updateParams({ from: n.from, to: n.to })}
+          />
+        )
+      case 'account':
+        return (
+          <SingleChoiceEditor
+            value={account ?? NO_ACCOUNT}
+            onChange={(v) => updateParams({ account: v === NO_ACCOUNT ? null : v })}
+            options={accountEditorOptions}
+            aria-label={t('filters.filterByAccountAria')}
+          />
+        )
+    }
+  }
   const items = data?.items ?? []
 
   // Header New click, consumed: the counter lives in the gate wrapper (the
@@ -333,47 +431,52 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
 
   return (
     <>
-      {/* Always visible: three controls don't justify a collapsible panel. */}
-      <FilterPanel onClear={hasFilters ? clearFilters : null}>
-        <FilterField label={t('filters.accountLabel')}>
-          <Select
-            value={account}
-            onChange={(v) => updateParams({ account: v })}
-            options={accountOptions}
-            placeholder={t('filters.allAccounts')}
-            aria-label={t('filters.filterByAccountAria')}
-            className="w-full"
+      {/* Phone rows (below 640): the month stepper and the Filters entry,
+          right-aligned to match where the sibling lists carry the trigger
+          at row end. Their 640+ twins live inside the toolbar row below -
+          a CSS-gated dual embed; the shared state is the URL. */}
+      <div className="sm:hidden">
+        <MonthStepper
+          label={stepperLabel}
+          onShift={exactMonth ? handleMonthShift : undefined}
+          onOpenEditor={() => setSheetOpen(true)}
+        />
+      </div>
+      <div className="sm:hidden mb-3 flex justify-end">
+        <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
+      </div>
+
+      {/* 640+ toolbar: stepper (its label opens the date editor popover),
+          applied chips (a chip opens its filter's editor), Add filter, and
+          the Save view menu - no bookmark/search/sort members on this page
+          (no bookmark kind exists for transfers, and the wire contract has
+          no search or ordering params), so the Save view menu carries the
+          save-default action alone. Hidden below 640, where the sheet
+          above is the filter surface. */}
+      <FilterChipsBar
+        filters={filterDefs}
+        values={filterValues}
+        lookups={filterLookups}
+        filterLabel={filterLabel}
+        chips={appliedChips}
+        onClearAll={clearFilters}
+        renderEditor={renderFilterEditor}
+        renderStepper={({ openDateEditor, dateEditorOpen }) => (
+          <MonthStepper
+            inline
+            label={stepperLabel}
+            onShift={exactMonth ? handleMonthShift : undefined}
+            onOpenEditor={openDateEditor}
+            editorOpen={dateEditorOpen}
           />
-        </FilterField>
-        <FilterField label={t('filters.dateLabel')} className="col-span-2">
-          {/* Below sm the two date inputs cannot share the date cell - each
-              floors at its intrinsic ~160px minimum, so the pair plus the
-              separator overflows the cell on 320px screens. The row wraps and
-              each w-full input claims its own full line (w-full doubles as the
-              wrap recipe's basis-full); the dash separator is meaningless
-              between stacked inputs - it would strand alone on the middle
-              line, so it hides below sm. min-w-0 is not needed: no wrapped
-              line ever shrinks below its content. At >=sm the max-sm variants
-              emit nothing and the one-line pair renders exactly as before. */}
-          <div className="flex max-sm:flex-wrap items-center gap-1.5">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => updateParams({ from: e.target.value || null })}
-              aria-label={t('filters.fromDateAria')}
-              className={`${inputClass} max-sm:min-h-[44px]`}
-            />
-            <span className="text-text-muted text-xs max-sm:hidden">-</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => updateParams({ to: e.target.value || null })}
-              aria-label={t('filters.toDateAria')}
-              className={`${inputClass} max-sm:min-h-[44px]`}
-            />
-          </div>
-        </FilterField>
-      </FilterPanel>
+        )}
+        saveView={{
+          onSaveDefaults,
+          saveDefaultsLabel: t('saveDefaults'),
+          saveDefaultsPending,
+          saveDefaultsPendingLabel: t('saveDefaultsPending'),
+        }}
+      />
 
       {isLoading ? (
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
@@ -443,6 +546,27 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
         </div>
       )}
 
+      {/* Phone filter sheet: date + account only (this page's wire contract
+          has no search or ordering params, and no bookmark kind), so no sort
+          row and no bookmark action. Mounted before the other overlays. */}
+      {isMobile && (
+        <FilterSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          filters={filterDefs}
+          values={filterValues}
+          lookups={filterLookups}
+          filterLabel={filterLabel}
+          updateParams={updateParams}
+          renderEditor={renderFilterEditor}
+          onSaveDefaults={onSaveDefaults}
+          saveDefaultsPending={saveDefaultsPending}
+          saveDefaultsLabel={t('saveDefaults')}
+          saveDefaultsPendingLabel={t('saveDefaultsPending')}
+          total={data?.total ?? 0}
+          footerNoun={t('sheetNoun', { count: data?.total ?? 0 })}
+        />
+      )}
       <ActionSheet
         open={!!rowAction}
         onClose={() => setRowAction(null)}

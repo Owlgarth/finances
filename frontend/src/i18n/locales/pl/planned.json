@@ -7,6 +7,10 @@
   "exportFailed": "Eksport nie powiódł się. Spróbuj ponownie.",
   "saveDefaults": "Zapisz jako domyślne",
   "saveDefaultsPending": "Zapisywanie…",
+  "sheetNoun_one": "zaplanowana transakcja",
+  "sheetNoun_few": "zaplanowane transakcje",
+  "sheetNoun_many": "zaplanowanych transakcji",
+  "sheetNoun_other": "zaplanowanej transakcji",
   "saveDefaultsSuccess": "Zapisano ustawienia domyślne.",
   "saveDefaultsFailed": "Nie udało się zapisać ustawień domyślnych",
   "searchPlaceholder": "Szukaj nazw…",
@@ -29,8 +33,6 @@
   "filters": {
     "account": "Konto",
     "currency": "Waluta",
-    "allAccounts": "Wszystkie konta",
-    "allCurrencies": "Wszystkie waluty",
     "byAccountAria": "Filtruj według konta",
     "byCurrencyAria": "Filtruj według waluty",
     "plannedDate": "Planowana data"

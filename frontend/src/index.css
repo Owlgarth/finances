@@ -80,6 +80,13 @@
    z-10/z-50 for overlays) lives as utilities. */
 @utility z-dropdown { z-index: 100; }
 @utility z-sticky { z-index: 200; }
+/* Transient light-dismiss popovers that must overlay sticky in-flow
+   content: the filter toolbar's editor panels and menus open over the
+   transactions table's sticky THEAD, and the dropdown tier sits below
+   sticky by original design - a popover member crossing the sticky band
+   would be pointer-dead (the TH eats the click). Above sticky, below
+   persistent chrome (sidebar/bottom-nav 300). */
+@utility z-popover { z-index: 250; }
 @utility z-sidebar { z-index: 300; }
 @utility z-bottom-nav { z-index: 300; }
 @utility z-topbar { z-index: 400; }
@@ -869,6 +876,63 @@ button {
 }
 .rdp-sheet .rdp-root {
   font-size: 0.875rem;
+}
+
+/* ============================================================
+   Filter-editor range calendar (`.rdp-range-editor`) - layered on
+   `.rdp-inline` (the wrapper carries both classes) by the date-range
+   filter editor. Scoped additions only: the range-state colors, the
+   compact geometry, and the coarse-pointer 44px targets. The
+   single-date paths keep their exact current rendering.
+
+   The overrides below target `.rdp-root` itself, NOT the wrapper:
+   react-day-picker's stock stylesheet declares every --rdp-* var ON
+   `.rdp-root`, and a declaration on the element beats a value
+   inherited from a wrapper class - a wrapper-scoped `--rdp-*`
+   override never reaches the calendar tree. (That is why the plain
+   `.rdp-inline` / `.rdp-sheet` var blocks above have no effect since
+   the v10 upgrade - only their direct descendant rules do.)
+   ============================================================ */
+.rdp-range-editor .rdp-root {
+  /* Token aliases: endpoints use the background token as text (inverts
+     in both themes against the primary fill - the stock stylesheet
+     hardcodes white, which does not invert in dark mode), in-range days
+     tint through surface-hover via the --rdp-range_middle-background-color
+     alias, today's marker follows the primary accent. */
+  --rdp-accent-color: var(--color-primary);
+  --rdp-accent-background-color: var(--color-surface-hover);
+  --rdp-range_start-color: var(--color-background);
+  --rdp-range_end-color: var(--color-background);
+
+  /* Compact geometry (the .rdp-inline intent, restated where it can
+     actually win): 32px day buttons, square-ish corners, compact nav. */
+  --rdp-day-height: 2.25rem;
+  --rdp-day_button-width: 2rem;
+  --rdp-day_button-height: 2rem;
+  --rdp-day_button-border: none;
+  --rdp-day_button-border-radius: 0.25rem; /* rounded-sm - matches app buttons */
+  --rdp-nav-height: 2.25rem;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-weekday-padding: 0.25rem 0;
+}
+
+/* 44px day/nav targets key on POINTER COARSENESS, not sheet membership:
+   a 640-1023 touch tablet hosts these editors in popovers, not bottom
+   sheets, and must get the same targets (.rdp-sheet cannot serve them).
+   Values mirror .rdp-sheet deliberately - same geometry, different key.
+   This is the media query the pointer-coarse custom variant compiles to;
+   the calendar geometry is CSS custom properties, which live here with
+   the other rdp scopes rather than in utility classes. */
+@media (pointer: coarse) {
+  .rdp-range-editor .rdp-root {
+    --rdp-day-height: 2.75rem;         /* 44px */
+    --rdp-day_button-width: 2.75rem;
+    --rdp-day_button-height: 2.75rem;
+    --rdp-nav_button-height: 2.75rem;
+    --rdp-nav_button-width: 2.75rem;
+    font-size: 0.875rem;
+  }
 }
 
 /* ============================================================

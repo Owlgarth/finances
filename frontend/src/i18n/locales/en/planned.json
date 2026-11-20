@@ -7,6 +7,8 @@
   "exportFailed": "Export failed. Try again.",
   "saveDefaults": "Save as default",
   "saveDefaultsPending": "Saving…",
+  "sheetNoun_one": "planned transaction",
+  "sheetNoun_other": "planned transactions",
   "saveDefaultsSuccess": "Defaults saved.",
   "saveDefaultsFailed": "Failed to save defaults",
   "searchPlaceholder": "Search names…",
@@ -29,8 +31,6 @@
   "filters": {
     "account": "Account",
     "currency": "Currency",
-    "allAccounts": "All accounts",
-    "allCurrencies": "All currencies",
     "byAccountAria": "Filter by account",
     "byCurrencyAria": "Filter by currency",
     "plannedDate": "Planned date"

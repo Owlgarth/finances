@@ -6,13 +6,15 @@
     "accountLabel": "Рахунок",
     "allAccounts": "Усі рахунки",
     "filterByAccountAria": "Фільтрувати за рахунком",
-    "dateLabel": "Дата",
-    "fromDateAria": "Дата від",
-    "toDateAria": "Дата до"
+    "dateLabel": "Дата"
   },
   "noMatch": "Жоден переказ не відповідає фільтрам.",
   "saveDefaults": "Зберегти як типові",
   "saveDefaultsPending": "Збереження…",
+  "sheetNoun_one": "переказ",
+  "sheetNoun_few": "перекази",
+  "sheetNoun_many": "переказів",
+  "sheetNoun_other": "переказу",
   "saveDefaultsSuccess": "Типові налаштування збережено.",
   "saveDefaultsFailed": "Не вдалося зберегти типові налаштування",
   "emptyHeading": "Переказів ще немає",

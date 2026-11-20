@@ -6,13 +6,15 @@
     "accountLabel": "Konto",
     "allAccounts": "Wszystkie konta",
     "filterByAccountAria": "Filtruj według konta",
-    "dateLabel": "Data",
-    "fromDateAria": "Data od",
-    "toDateAria": "Data do"
+    "dateLabel": "Data"
   },
   "noMatch": "Żaden przelew nie pasuje do filtrów.",
   "saveDefaults": "Zapisz jako domyślne",
   "saveDefaultsPending": "Zapisywanie…",
+  "sheetNoun_one": "przelew",
+  "sheetNoun_few": "przelewy",
+  "sheetNoun_many": "przelewów",
+  "sheetNoun_other": "przelewu",
   "saveDefaultsSuccess": "Zapisano ustawienia domyślne.",
   "saveDefaultsFailed": "Nie udało się zapisać ustawień domyślnych",
   "emptyHeading": "Nie masz jeszcze przelewów",

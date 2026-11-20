@@ -1,21 +1,23 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { BookmarkPlus, Copy, Download, Plus, Save, Trash2 } from 'lucide-react'
+import { Copy, Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useEnabledCurrencies, useMultiCurrency, useTransaction } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useTransaction, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
+import { isCalendarMonth, shiftMonth } from '../utils/dates'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { activeFilterCount, budgetChangePatch, buildTransactionsFilters, clearAllFilters, type FilterDef, type TransactionsFilterLookups, type TransactionsFilterValues } from '../utils/listFilters'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
@@ -25,12 +27,17 @@ import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
-import MultiSelect from '../components/common/MultiSelect'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
-import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
-import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
+import { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
+import { FiltersTrigger } from '../components/filters/FiltersTrigger'
+import FilterSheet from '../components/filters/FilterSheet'
+import FilterChipsBar from '../components/filters/FilterChipsBar'
+import DateRangeEditor from '../components/filters/DateRangeEditor'
+import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
+import AmountRangeEditor from '../components/filters/AmountRangeEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import DetailPanel from '../components/layout/DetailPanel'
@@ -339,11 +346,17 @@ interface TransactionsContentProps {
 function TransactionsContent({ settings, calendarStartDay }: TransactionsContentProps) {
   const { t } = useTranslation('transactions')
   const { t: tBookmarks } = useTranslation('bookmarks')
+  const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
+  // Facet lists for the filter registry (availability + summaries). Shared
+  // cache entries: the same keys the editors' option lists read, so one
+  // fetch per stale window with the toolbar closed.
+  const { data: budgets = [] } = useBudgets(false)
+  const { data: categories = [] } = useWorkspaceCategories(false)
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -423,9 +436,9 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // Effective values - all reads below (queries, totals, badge, empty
   // state) use the EFFECTIVE value: explicit params win; absent falls back
   // to the still-live latch (the same value the materialization effect
-  // below is about to write into the URL). ListFilterFields keeps reading
-  // the RAW params (self-contained contract): before materialization the
-  // panel is closed so no mismatch is visible, after it raw == effective.
+  // below is about to write into the URL). Every filter surface reads
+  // these same effective derivations, so no visible mismatch exists
+  // before materialization, and after it raw == effective.
   const dateFrom = rawFrom ?? defaultsLatch.range?.from ?? ''
   const dateTo = rawTo ?? defaultsLatch.range?.to ?? ''
   // The type facet is list-valued: param PRESENCE branches (the URL wins
@@ -451,10 +464,10 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // absent writes the resolved default into the URL (replace, no history
   // entry). The write touches ONLY the defaultable param families
   // (from/to/type/ordering - the type list joins to CSV inside
-  // createUpdateParams) plus its automatic ?page drop - never a FilterPanel
-  // field. The consume adjusts above then kill the consumed facets, so
-  // All time / Clear filters / deep links never re-default within a
-  // session; a fresh mount re-initializes the latch (accepted).
+  // createUpdateParams) plus its automatic ?page drop - never another
+  // facet's params. The consume adjusts above then kill the consumed
+  // facets, so All time / Clear filters / deep links never re-default
+  // within a session; a fresh mount re-initializes the latch (accepted).
   useEffect(() => {
     if (!defaultsLatch.range && !defaultsLatch.type && !defaultsLatch.ordering) return
     updateParams({
@@ -481,27 +494,84 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // active filter (badge 1 with the panel closed is honest - the user can
   // see and clear what is filtering the list), so materialized params are
   // never excluded.
-  const activeFilterCount = [
-    accountFilter.length > 0,
-    typeFilter.length > 0,
-    budgetFilter.length > 0,
-    categoryFilter.length > 0,
-    currencyFilter.length > 0,
-    Boolean(amountMin || amountMax),
-    Boolean(dateFrom || dateTo),
-  ].filter(Boolean).length
+  const filterLookups = {
+    accounts,
+    budgets,
+    categories,
+    multiCurrency,
+    selectedCount: (count: number) => tCommon('multiSelect.selectedCount', { count }),
+    typeLabels: Object.fromEntries(TYPE_OPTIONS.map((o) => [o.value, t(o.labelKey)])),
+  }
+  const filterDefs = buildTransactionsFilters(filterLookups)
+  const filterValues = {
+    account: accountFilter,
+    type: typeFilter,
+    currency: currencyFilter,
+    budget: budgetFilter,
+    category: categoryFilter,
+    amountMin,
+    amountMax,
+    dateFrom,
+    dateTo,
+  }
+  const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
 
-  // The panel opens only through the toggle - never automatically. Deep
-  // links and bookmarks apply their filters silently; the toggle's badge
-  // count is the visible signal that filters are active.
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const filterPanelId = useId()
+  // The phone filter sheet opens only through its trigger - never
+  // automatically. Deep links and bookmarks apply their filters silently;
+  // the trigger's badge count is the visible signal that filters are
+  // active.
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Tier crossing: the sheet is phone-only and the 640+ toolbar row is
+  // CSS-gated, so a crossing closes the departing surface - an open sheet
+  // surviving an up-crossing would resurrect on rotate-back. Every filter
+  // change is already on the URL, so no other state needs preserving.
+  // Loop-safe by construction (each write lands on a value that disproves
+  // its own guard); StrictMode-idempotent.
+  const [prevMobile, setPrevMobile] = useState(isMobile)
+  if (prevMobile !== isMobile) {
+    setPrevMobile(isMobile)
+    if (!isMobile) setSheetOpen(false)
+  }
 
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () =>
-    updateParams({ account: null, type: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
+  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
+
+  // Stepper derivations on the EFFECTIVE range (explicit params win, latch
+  // fallback before materialization - the same values the list query uses).
+  const exactMonth = isCalendarMonth(dateFrom, dateTo)
+  const stepperLabel = stepperRangeLabel(dateFrom, dateTo, t('listFilters.presetAllTime'))
+  // Adjacent-month hop: the target computes from exactMonth (the range on
+  // screen), never from "today"; shiftMonth's monthRange core rolls
+  // out-of-range months by construction. createUpdateParams drops ?page on
+  // any patch that does not set it, so no explicit page clearing.
+  const handleMonthShift = (delta: number) => {
+    if (!exactMonth) return
+    updateParams(shiftMonth(exactMonth, delta))
+  }
+
+  // Applied-filter chips: every active registry filter except date (the
+  // stepper owns the date). Badge and chips read the same isActive, so a
+  // materialized default facet shows as a chip exactly when it counts.
+  // Amount summaries are numeric in every shape and render font-mono;
+  // name/"N selected" summaries stay in the UI font.
+  // Registry labelKeys are data strings - plain keys in this namespace,
+  // cross-namespace ones 'ns:'-qualified. Typed i18next only accepts a
+  // dynamic key alongside an explicit fallback, so the fallback mirrors the
+  // key: every landed labelKey resolves and a missing one would render its
+  // own key (immediately visible, never a silent blank).
+  const filterLabel = (key: string) => t(key, { defaultValue: key })
+  const appliedChips: AppliedFilterChip[] = filterDefs
+    .filter((d) => d.id !== 'date' && d.isActive(filterValues, filterLookups))
+    .map((d) => ({
+      id: d.id,
+      label: filterLabel(d.labelKey),
+      summary: d.editor === 'amount'
+        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        : d.summarize(filterValues, filterLookups),
+      onRemove: () => updateParams(d.clear()),
+    }))
 
   const isTouch = useIsTouch()
 
@@ -674,6 +744,88 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  const currencyOptions = currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
+  // Editor option lists for the filter editors (sheet level and toolbar
+  // popovers): the budget filter narrows the category options and prunes
+  // selections that no longer belong (the registry's budget change rule).
+  const budgetOptions = budgets.map((b) => ({ value: b.id, label: b.name }))
+  const budgetNames = new Map(budgets.map((b) => [b.id, b.name]))
+  const budgetSet = new Set(budgetFilter)
+  const showBudgetSuffix = budgets.length > 1 && budgetFilter.length !== 1
+  const categoryOptions = categories
+    .filter((c) => budgetSet.size === 0 || budgetSet.has(c.budget_id))
+    .map((c) => ({
+      value: c.id,
+      label: showBudgetSuffix ? `${c.name} · ${budgetNames.get(c.budget_id) ?? ''}` : c.name,
+    }))
+
+  // Editor bodies for every filter-editor host (the phone sheet's editor
+  // level and the toolbar's popovers): each def wired with the options and
+  // URL writes above. One wiring, two hosts - the surfaces never diverge.
+  const renderFilterEditor = (def: FilterDef<TransactionsFilterValues, TransactionsFilterLookups>) => {
+    switch (def.id) {
+      case 'date':
+        return (
+          <DateRangeEditor
+            value={{ from: dateFrom, to: dateTo }}
+            onChange={(n) => updateParams({ from: n.from, to: n.to })}
+          />
+        )
+      case 'account':
+        return (
+          <MultiChoiceEditor
+            value={accountFilter}
+            onChange={(v) => updateParams({ account: v })}
+            options={accountOptions}
+            aria-label={t('filters.byAccountAria')}
+          />
+        )
+      case 'type':
+        return (
+          <MultiChoiceEditor
+            value={typeFilter}
+            onChange={(v) => updateParams({ type: v })}
+            options={typeOptions}
+            aria-label={t('filters.byTypeAria')}
+          />
+        )
+      case 'currency':
+        return (
+          <MultiChoiceEditor
+            value={currencyFilter}
+            onChange={(v) => updateParams({ currency: v })}
+            options={currencyOptions}
+            aria-label={t('filters.byCurrencyAria')}
+          />
+        )
+      case 'budget':
+        return (
+          <MultiChoiceEditor
+            value={budgetFilter}
+            onChange={(v) => updateParams(budgetChangePatch(v, filterValues, filterLookups))}
+            options={budgetOptions}
+            aria-label={t('listFilters.byBudgetAria')}
+          />
+        )
+      case 'category':
+        return (
+          <MultiChoiceEditor
+            value={categoryFilter}
+            onChange={(v) => updateParams({ category: v })}
+            options={categoryOptions}
+            searchable
+            aria-label={t('listFilters.byCategoryAria')}
+          />
+        )
+      case 'amount':
+        return (
+          <AmountRangeEditor
+            value={{ min: amountMin, max: amountMax }}
+            onChange={(n) => updateParams({ amount_min: n.min, amount_max: n.max })}
+          />
+        )
+    }
+  }
 
   // Resolved in the body, not inside the JSX: the literal-string lint only
   // recognizes the unaliased t() callee, in attributes and children alike.
@@ -698,12 +850,25 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   return (
     <>
-      {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
-          cannot share one line with the search box on 320px screens, so the
-          row wraps: the search box claims the full first line (its
-          max-sm:basis-full below), the controls flow onto the next. min-w-0
-          lets the search box shrink where the row still holds one line. */}
-      <div className="flex max-sm:flex-wrap gap-2 mb-3">
+      {/* Phone rows (below 640): the month stepper and the search + Filters
+          row. Their 640+ twins live inside the toolbar row below - a
+          CSS-gated dual embed, sanctioned because all shared state lives
+          in the URL or props (the stepper's live region announces from the
+          visible copy only). */}
+      <div className="sm:hidden">
+        <MonthStepper
+          label={stepperLabel}
+          onShift={exactMonth ? handleMonthShift : undefined}
+          onOpenEditor={() => setSheetOpen(true)}
+        />
+      </div>
+      {/* Below sm the row holds the search box (full wrap line) and the
+          phone Filters trigger; the bookmark/save/sort actions live in the
+          phone filter sheet's save rows. The wrap recipe is unchanged: the
+          search box claims the full first line (max-sm:basis-full), the
+          trigger flows onto the next. min-w-0 lets the search box shrink
+          where the row still holds one line. */}
+      <div className="flex max-sm:flex-wrap gap-2 mb-3 sm:hidden">
         <SearchInput
           value={search}
           onChange={handleSearchChange}
@@ -711,68 +876,59 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
-        {/* Labeled like the header's export action; shrink-0 keeps the
-            label on one line so the flex-1 SearchInput is the row member
-            that yields on narrow screens. */}
-        <button
-          type="button"
-          onClick={() => setPageBookmarkOpen(true)}
-          title={addBookmarkTitle}
-          className={`${secondaryButtonClass} shrink-0`}
-        >
-          <BookmarkPlus size={13} className="inline mr-1" /> {addLabel}
-        </button>
-        {/* Save the current view facets as this page's defaults. Sits with
-            the bookmark action (the two save-view actions cluster) and
-            before the ordering Select, which stays at row end. Visible on
-            mobile too: a preference action with no FAB twin, like the
-            header's export. In-flow wrap member of this max-sm:flex-wrap
-            row; shrink-0 keeps the label on one line so the wrapped
-            320px row still holds this button plus the Select. */}
-        <button
-          type="button"
-          onClick={handleSaveDefaults}
-          disabled={updateSettings.isPending}
-          className={`${secondaryButtonClass} shrink-0`}
-        >
-          <Save size={13} className="inline mr-1" /> {updateSettings.isPending ? t('saveDefaultsPending') : t('saveDefaults')}
-        </button>
-        <Select
-          value={ordering}
-          onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
-          options={sortOptions}
-          placeholder={t('sort.newest')}
-          aria-label={t('sortAria')}
-          className="w-48 max-sm:w-24 shrink-0"
-        />
+        <FiltersTrigger open={sheetOpen} count={activeCount} onOpen={() => setSheetOpen(true)} />
       </div>
 
-      {filtersOpen && (
-        <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
-          {showAccountColumn && (
-            <FilterField label={t('filters.account')}>
-              <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
-            </FilterField>
-          )}
-          {multiCurrency && (
-            <FilterField label={t('filters.currency')}>
-              <MultiSelect
-                values={currencyFilter}
-                onChange={(v) => updateParams({ currency: v })}
-                options={currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
-                placeholder={t('filters.allCurrencies')}
-                aria-label={t('filters.byCurrencyAria')}
-                className="w-full"
-              />
-            </FilterField>
-          )}
-          <FilterField label={t('filters.type')}>
-            <MultiSelect values={typeFilter} onChange={(v) => updateParams({ type: v })} options={typeOptions} placeholder={t('filters.allTypes')} aria-label={t('filters.byTypeAria')} className="w-full" />
-          </FilterField>
-          <ListFilterFields />
-        </FilterPanel>
-      )}
+      {/* 640+ toolbar: stepper (its label opens the date editor popover),
+          applied chips (a chip opens its filter's editor), Add filter,
+          search, sort, and the Save view menu - one wrapping row, one
+          popover at a time. Hidden below 640, where the sheet above is the
+          filter surface. */}
+      <FilterChipsBar
+        filters={filterDefs}
+        values={filterValues}
+        lookups={filterLookups}
+        filterLabel={filterLabel}
+        chips={appliedChips}
+        onClearAll={clearFilters}
+        renderEditor={renderFilterEditor}
+        renderStepper={({ openDateEditor, dateEditorOpen }) => (
+          <MonthStepper
+            inline
+            label={stepperLabel}
+            onShift={exactMonth ? handleMonthShift : undefined}
+            onOpenEditor={openDateEditor}
+            editorOpen={dateEditorOpen}
+          />
+        )}
+        search={
+          <SearchInput
+            value={search}
+            onChange={handleSearchChange}
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchAria')}
+            className="flex-1 min-w-40 max-w-sm"
+          />
+        }
+        sort={
+          <Select
+            value={ordering}
+            onChange={(v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v })}
+            options={sortOptions}
+            placeholder={t('sort.newest')}
+            aria-label={t('sortAria')}
+            className="w-48 shrink-0"
+          />
+        }
+        saveView={{
+          onSaveDefaults: handleSaveDefaults,
+          saveDefaultsLabel: t('saveDefaults'),
+          saveDefaultsPending: updateSettings.isPending,
+          saveDefaultsPendingLabel: t('saveDefaultsPending'),
+          onSaveBookmark: () => setPageBookmarkOpen(true),
+          bookmarkLabel: addLabel,
+        }}
+      />
 
       {/* Hidden while the list itself is unknown/empty: no rows, no totals. */}
       {(data?.total ?? 0) > 0 && (
@@ -789,7 +945,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">
-          {search || activeFilterCount > 0 ? t('emptyFiltered') : t('empty')}
+          {search || activeCount > 0 ? t('emptyFiltered') : t('empty')}
         </p>
       ) : isMobile ? (
         <>
@@ -922,6 +1078,42 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
         onCancel={() => setDeleting(null)}
       />
+      {/* Mounted before the bookmark modal so the chained modal (opened by
+          the sheet's bookmark row, which closes the sheet first) stacks
+          above the sheet during its exit animation. */}
+      {isMobile && (
+        <FilterSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          filters={filterDefs}
+          values={filterValues}
+          lookups={filterLookups}
+          filterLabel={filterLabel}
+          updateParams={updateParams}
+          renderEditor={renderFilterEditor}
+          sort={{
+            value: ordering || DEFAULT_SORT,
+            options: sortOptions,
+            onChange: (v) => updateParams({ ordering: v === DEFAULT_SORT ? null : v }),
+          }}
+          onSaveDefaults={handleSaveDefaults}
+          saveDefaultsPending={updateSettings.isPending}
+          saveDefaultsLabel={t('saveDefaults')}
+          saveDefaultsPendingLabel={t('saveDefaultsPending')}
+          bookmark={{
+            label: addLabel,
+            ariaLabel: addBookmarkTitle,
+            // Close the sheet FIRST, then open the modal - one handler, one
+            // commit; the params are already on the URL, so nothing is lost.
+            onOpen: () => {
+              setSheetOpen(false)
+              setPageBookmarkOpen(true)
+            },
+          }}
+          total={data?.total ?? 0}
+          footerNoun={t('sheetNoun', { count: data?.total ?? 0 })}
+        />
+      )}
       {pageBookmarkOpen && (
         <BookmarkFormModal
           pageContext={{ kind: 'transactions', params: paramsFromSearchParams(searchParams) }}

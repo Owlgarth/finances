@@ -7,6 +7,10 @@
   "exportFailed": "Не вдалося експортувати. Спробуйте ще раз.",
   "saveDefaults": "Зберегти як типові",
   "saveDefaultsPending": "Збереження…",
+  "sheetNoun_one": "запланована транзакція",
+  "sheetNoun_few": "заплановані транзакції",
+  "sheetNoun_many": "запланованих транзакцій",
+  "sheetNoun_other": "запланованої транзакції",
   "saveDefaultsSuccess": "Типові налаштування збережено.",
   "saveDefaultsFailed": "Не вдалося зберегти типові налаштування",
   "searchPlaceholder": "Пошук за назвами…",
@@ -29,8 +33,6 @@
   "filters": {
     "account": "Рахунок",
     "currency": "Валюта",
-    "allAccounts": "Усі рахунки",
-    "allCurrencies": "Усі валюти",
     "byAccountAria": "Фільтрувати за рахунком",
     "byCurrencyAria": "Фільтрувати за валютою",
     "plannedDate": "Дата плану"
