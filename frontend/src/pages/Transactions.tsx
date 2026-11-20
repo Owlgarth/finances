@@ -12,6 +12,7 @@ import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
+import { isCalendarMonth, shiftMonth } from '../utils/dates'
 import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
@@ -31,6 +32,8 @@ import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
+import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
@@ -522,6 +525,41 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // all-time choice for THIS session (the latch is consumed).
   const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
+  // Stepper derivations on the EFFECTIVE range (explicit params win, latch
+  // fallback before materialization - the same values the list query uses).
+  const exactMonth = isCalendarMonth(dateFrom, dateTo)
+  const stepperLabel = stepperRangeLabel(dateFrom, dateTo, t('listFilters.presetAllTime'))
+  // Adjacent-month hop: the target computes from exactMonth (the range on
+  // screen), never from "today"; shiftMonth's monthRange core rolls
+  // out-of-range months by construction. createUpdateParams drops ?page on
+  // any patch that does not set it, so no explicit page clearing.
+  const handleMonthShift = (delta: number) => {
+    if (!exactMonth) return
+    updateParams(shiftMonth(exactMonth, delta))
+  }
+
+  // Applied-filter chips: every active registry filter except date (the
+  // stepper owns the date). Badge and chips read the same isActive, so a
+  // materialized default facet shows as a chip exactly when it counts.
+  // Amount summaries are numeric in every shape and render font-mono;
+  // name/"N selected" summaries stay in the UI font.
+  // Registry labelKeys are data strings - plain keys in this namespace,
+  // cross-namespace ones 'ns:'-qualified. Typed i18next only accepts a
+  // dynamic key alongside an explicit fallback, so the fallback mirrors the
+  // key: every landed labelKey resolves and a missing one would render its
+  // own key (immediately visible, never a silent blank).
+  const filterLabel = (key: string) => t(key, { defaultValue: key })
+  const appliedChips: AppliedFilterChip[] = filterDefs
+    .filter((d) => d.id !== 'date' && d.isActive(filterValues, filterLookups))
+    .map((d) => ({
+      id: d.id,
+      label: filterLabel(d.labelKey),
+      summary: d.editor === 'amount'
+        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        : d.summarize(filterValues, filterLookups),
+      onRemove: () => updateParams(d.clear()),
+    }))
+
   const isTouch = useIsTouch()
 
   const [deleting, setDeleting] = useState<Transaction | null>(null)
@@ -717,6 +755,11 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   return (
     <>
+      <MonthStepper
+        label={stepperLabel}
+        onShift={exactMonth ? handleMonthShift : undefined}
+      />
+      <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
       {/* Below sm the fixed controls (filters toggle, bookmark button, sort)
           cannot share one line with the search box on 320px screens, so the
           row wraps: the search box claims the full first line (its

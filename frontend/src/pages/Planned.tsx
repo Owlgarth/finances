@@ -26,7 +26,6 @@ import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import ExecuteAdjustedModal from '../components/modals/transactions/ExecuteAdjustedModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
-import PlannedMonthStepper from '../components/transactions/PlannedMonthStepper'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
@@ -37,6 +36,8 @@ import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
 import ListFilterFields from '../components/common/ListFilterFields'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
+import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersToggle, FilterPanel, FilterField } from '../components/common/FilterBar'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
@@ -281,6 +282,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const { t } = useTranslation('planned')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const { t: tCommon } = useTranslation('common')
+  // Shared filter strings live in the transactions namespace (the
+  // established cross-page home); all namespaces are eagerly loaded, so a
+  // second translator here is safe (ListFilterFields precedent).
+  const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
@@ -542,6 +547,33 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     updateParams(shiftMonth(exactMonth, delta))
   }
 
+  // Stepper label for the always-visible month window: the same month shape
+  // the month-aware empty state's heading shows for exact months, the short
+  // range / single-bound / All time shapes otherwise.
+  const stepperLabel = stepperRangeLabel(dateFrom, dateTo, tTx('listFilters.presetAllTime'))
+
+  // Applied-filter chips: every active registry filter except date (the
+  // stepper owns the date). Badge and chips read the same isActive, so a
+  // materialized default facet shows as a chip exactly when it counts.
+  // Label resolution goes through the planned-ns t(): plain labelKeys live
+  // in this namespace, cross-namespace ones carry the 'transactions:'
+  // prefix any t() resolves. Amount summaries render font-mono; name/
+  // "N selected" summaries stay in the UI font. Typed i18next only accepts
+  // a dynamic key alongside an explicit fallback, so the fallback mirrors
+  // the key (every landed labelKey resolves; a missing one would render its
+  // own key - immediately visible, never a silent blank).
+  const filterLabel = (key: string) => t(key, { defaultValue: key })
+  const appliedChips: AppliedFilterChip[] = filterDefs
+    .filter((d) => d.id !== 'date' && d.isActive(filterValues, filterLookups))
+    .map((d) => ({
+      id: d.id,
+      label: filterLabel(d.labelKey),
+      summary: d.editor === 'amount'
+        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        : d.summarize(filterValues, filterLookups),
+      onRemove: () => updateParams(d.clear()),
+    }))
+
   const { data, isLoading } = useQuery({
     queryKey: ['planned', statusFilter, page, pageSize, ordering, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo],
     queryFn: () =>
@@ -733,12 +765,14 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
 
       {/* Month window above the status control (scope nesting: view picks
           the surface, month scopes the dataset, status narrows within).
-          Rendered only when the effective range is an exact calendar month:
-          custom/partial ranges and All time hide the whole row. The label
-          null check narrows the string prop; it is non-null exactly when
-          exactMonth is. */}
-      {view === 'planned' && exactMonth && monthLabel !== null && (
-        <PlannedMonthStepper label={monthLabel} onShift={handleMonthShift} />
+          Always visible in the planned view: custom ranges and All time
+          keep the label-only stepper as the date entry point, with arrows
+          only while the range is an exact calendar month. */}
+      {view === 'planned' && (
+        <MonthStepper
+          label={stepperLabel}
+          onShift={exactMonth ? handleMonthShift : undefined}
+        />
       )}
 
       {view === 'planned' && (
@@ -750,6 +784,12 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
             aria-label={t('statusAria')}
           />
         </div>
+      )}
+
+      {/* Chips beside the controls they summarize (status stays adjacent to
+          the stepper above: scope nesting, then state display). */}
+      {view === 'planned' && (
+        <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
       )}
 
       {/* Below sm the fixed controls (filters toggle, bookmark button, sort)

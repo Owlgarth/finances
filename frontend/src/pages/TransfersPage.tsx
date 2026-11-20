@@ -12,6 +12,7 @@ import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount } from '../utils/format'
+import { isCalendarMonth, shiftMonth } from '../utils/dates'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
@@ -24,6 +25,8 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
 import Select from '../components/common/Select'
+import AppliedFilters, { type AppliedFilterChip } from '../components/common/AppliedFilters'
+import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import TransferModal from '../components/accounts/TransferModal'
 import { FilterPanel, FilterField } from '../components/common/FilterBar'
 import ActivityTabs from '../components/layout/ActivityTabs'
@@ -183,6 +186,10 @@ interface TransfersContentProps {
 
 function TransfersContent({ settings, calendarStartDay, createRequest }: TransfersContentProps) {
   const { t } = useTranslation('transfers')
+  // Shared filter strings live in the transactions namespace (the
+  // established cross-page home); all namespaces are eagerly loaded, so a
+  // second translator here is safe (ListFilterFields precedent).
+  const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
@@ -242,6 +249,37 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   const filterDefs = buildTransfersFilters(filterLookups)
   const filterValues = { account, dateFrom, dateTo }
   const hasFilters = activeFilterCount(filterDefs, filterValues, filterLookups) > 0
+
+  // Stepper derivations on the EFFECTIVE range. This page's default range
+  // is 'all' for now, so a fresh visit shows the label-only "All time"
+  // stepper - coherent, not a defect; a default month arrives with the
+  // page-defaults phase. The hop target computes from exactMonth (the range
+  // on screen), never from "today"; createUpdateParams drops ?page on any
+  // patch that does not set it.
+  const exactMonth = isCalendarMonth(dateFrom, dateTo)
+  const stepperLabel = stepperRangeLabel(dateFrom, dateTo, tTx('listFilters.presetAllTime'))
+  const handleMonthShift = (delta: number) => {
+    if (!exactMonth) return
+    updateParams(shiftMonth(exactMonth, delta))
+  }
+
+  // Applied-filter chips: every active registry filter except date (the
+  // stepper owns the date). Badge-clear parity and chips read the same
+  // isActive; this page's non-date chip set is account alone. Typed i18next
+  // only accepts a dynamic key alongside an explicit fallback, so the
+  // fallback mirrors the key (every landed labelKey resolves; a missing one
+  // would render its own key - immediately visible, never a silent blank).
+  const filterLabel = (key: string) => t(key, { defaultValue: key })
+  const appliedChips: AppliedFilterChip[] = filterDefs
+    .filter((d) => d.id !== 'date' && d.isActive(filterValues, filterLookups))
+    .map((d) => ({
+      id: d.id,
+      label: filterLabel(d.labelKey),
+      summary: d.editor === 'amount'
+        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        : d.summarize(filterValues, filterLookups),
+      onRemove: () => updateParams(d.clear()),
+    }))
 
   // One-shot defaults materialization (useStalePageReset shape: the URL
   // write goes through the closure-wrapped updateParams, never the raw
@@ -337,6 +375,11 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
 
   return (
     <>
+      <MonthStepper
+        label={stepperLabel}
+        onShift={exactMonth ? handleMonthShift : undefined}
+      />
+      <AppliedFilters chips={appliedChips} onClearAll={clearFilters} />
       {/* Always visible: three controls don't justify a collapsible panel. */}
       <FilterPanel onClear={hasFilters ? clearFilters : null}>
         <FilterField label={t('filters.accountLabel')}>

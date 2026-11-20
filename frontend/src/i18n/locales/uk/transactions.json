@@ -63,6 +63,9 @@
     "presetLastMonth": "Минулий місяць",
     "presetLast30": "Останні 30 днів",
     "presetAllTime": "Весь час",
+    "clearAll": "Очистити все",
+    "removeFilterAria": "Прибрати фільтр: {{filter}}",
+    "dateRangeAria": "Діапазон дат",
     "presetThisYear": "Цей рік"
   },
   "totals": {

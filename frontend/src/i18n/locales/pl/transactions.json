@@ -63,6 +63,9 @@
     "presetLastMonth": "Zeszły miesiąc",
     "presetLast30": "Ostatnie 30 dni",
     "presetAllTime": "Cały czas",
+    "clearAll": "Wyczyść wszystko",
+    "removeFilterAria": "Usuń filtr: {{filter}}",
+    "dateRangeAria": "Zakres dat",
     "presetThisYear": "Ten rok"
   },
   "totals": {
