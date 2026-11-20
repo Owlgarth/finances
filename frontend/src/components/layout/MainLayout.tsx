@@ -125,38 +125,39 @@ export default function MainLayout({ children }: MainLayoutProps) {
     setPrefIsNull(false)
   }
 
-  // The account-menu provider wraps BOTH branches: page headers call its
-  // hook unconditionally (the account buttons are CSS-hidden, not
-  // branch-gated, on desktop), and mounting it above the branch split
-  // keeps the context alive across a 640px crossing, which remounts the
-  // branch trees below it.
+  // The account-menu provider wraps the whole layout: page headers call
+  // its hook unconditionally (the account buttons are CSS-hidden, not
+  // branch-gated, on desktop), and its identity never changes across a
+  // width crossing.
   return (
     <AccountMenuProvider>
-      {isMobile ? (
-        <div className="min-h-screen bg-background">
-          {/* Top padding covers the standalone-PWA status bar (0 in a browser tab);
-              bottom padding clears the fixed bottom nav + raised FAB. */}
-          <main className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-            {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
-          </main>
-          <BottomNav />
-          <AccountMenuSheet />
-          <CommandPalette />
+      {/* One tree at every width: children, the sheets and the palette
+          mount once and survive the 640px crossing (the record page's
+          edit-in-place drafts depend on it). Width chrome is CSS-gated
+          instead - the PageHeader account-actions precedent (sm:hidden
+          pair) at layout scale. */}
+      <div className="min-h-screen bg-background sm:h-screen sm:flex">
+        <div className="hidden sm:block shrink-0">
+          <Sidebar
+            collapsed={collapsed}
+            onToggleCollapse={toggleCollapse}
+          />
         </div>
-      ) : (
-        <div className="flex h-screen bg-background">
-          <div className="shrink-0">
-            <Sidebar
-              collapsed={collapsed}
-              onToggleCollapse={toggleCollapse}
-            />
-          </div>
-          <main className="flex-1 overflow-y-auto p-6">
-            {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
-          </main>
-          <CommandPalette />
-        </div>
-      )}
+        {/* Top padding covers the standalone-PWA status bar (0 in a browser
+            tab); bottom padding clears the fixed bottom nav + raised FAB.
+            The sm: overrides are axis-matched to the base paddings
+            (px<->px, pt<->pt, pb<->pb): every sm:* rule compiles after
+            every base utility in the sheet (offsets verified in
+            dist/assets/*.css), so each override replaces exactly the
+            property its base twin set. Keep the pairing axis-matched -
+            never a box padding shorthand over axis bases. */}
+        <main className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-6 sm:flex-1 sm:overflow-y-auto">
+          {!workspace && !isLoading ? <NoWorkspaceMessage /> : children}
+        </main>
+        <BottomNav />
+        <AccountMenuSheet />
+        <CommandPalette />
+      </div>
     </AccountMenuProvider>
   )
 }
