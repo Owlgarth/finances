@@ -6,7 +6,7 @@ import { BookmarkPlus, Copy, Download, Plus, Save, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { transactionsApi, type TransactionOrdering } from '../api/client'
 import type { Transaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useEnabledCurrencies, useMultiCurrency, useTransaction } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useTransaction, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
@@ -16,6 +16,7 @@ import { runBlobExport } from '../utils/blobExport'
 import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { amountParam, createUpdateParams, intListParam, intParam, useStalePageReset } from '../utils/params'
+import { activeFilterCount, buildTransactionsFilters, clearAllFilters } from '../utils/listFilters'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
@@ -339,11 +340,18 @@ interface TransactionsContentProps {
 function TransactionsContent({ settings, calendarStartDay }: TransactionsContentProps) {
   const { t } = useTranslation('transactions')
   const { t: tBookmarks } = useTranslation('bookmarks')
+  const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
+  // Facet lists for the filter registry (availability + summaries). The
+  // keys match ListFilterFields' own hooks, so the entries are cache-shared:
+  // no extra request when the panel opens, one fetch per stale window with
+  // it closed.
+  const { data: budgets = [] } = useBudgets(false)
+  const { data: categories = [] } = useWorkspaceCategories(false)
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -481,15 +489,27 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // active filter (badge 1 with the panel closed is honest - the user can
   // see and clear what is filtering the list), so materialized params are
   // never excluded.
-  const activeFilterCount = [
-    accountFilter.length > 0,
-    typeFilter.length > 0,
-    budgetFilter.length > 0,
-    categoryFilter.length > 0,
-    currencyFilter.length > 0,
-    Boolean(amountMin || amountMax),
-    Boolean(dateFrom || dateTo),
-  ].filter(Boolean).length
+  const filterLookups = {
+    accounts,
+    budgets,
+    categories,
+    multiCurrency,
+    selectedCount: (count: number) => tCommon('multiSelect.selectedCount', { count }),
+    typeLabels: Object.fromEntries(TYPE_OPTIONS.map((o) => [o.value, t(o.labelKey)])),
+  }
+  const filterDefs = buildTransactionsFilters(filterLookups)
+  const filterValues = {
+    account: accountFilter,
+    type: typeFilter,
+    currency: currencyFilter,
+    budget: budgetFilter,
+    category: categoryFilter,
+    amountMin,
+    amountMax,
+    dateFrom,
+    dateTo,
+  }
+  const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
 
   // The panel opens only through the toggle - never automatically. Deep
   // links and bookmarks apply their filters silently; the toggle's badge
@@ -500,8 +520,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () =>
-    updateParams({ account: null, type: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
+  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
   const isTouch = useIsTouch()
 
@@ -711,7 +730,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
         {/* Labeled like the header's export action; shrink-0 keeps the
             label on one line so the flex-1 SearchInput is the row member
             that yields on narrow screens. */}
@@ -749,7 +768,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
       </div>
 
       {filtersOpen && (
-        <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
+        <FilterPanel id={filterPanelId} onClear={activeCount > 0 ? clearFilters : null}>
           {showAccountColumn && (
             <FilterField label={t('filters.account')}>
               <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
@@ -789,7 +808,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-surface-muted rounded-sm animate-pulse" />)}</div>
       ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">
-          {search || activeFilterCount > 0 ? t('emptyFiltered') : t('empty')}
+          {search || activeCount > 0 ? t('emptyFiltered') : t('empty')}
         </p>
       ) : isMobile ? (
         <>

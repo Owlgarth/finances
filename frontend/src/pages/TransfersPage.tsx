@@ -16,6 +16,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { getStoredPageSize, setStoredPageSize } from '../utils/pageSize'
 import { createUpdateParams, intParam, useStalePageReset } from '../utils/params'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
+import { activeFilterCount, buildTransfersFilters, clearAllFilters } from '../utils/listFilters'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import ActionSheet from '../components/common/ActionSheet'
@@ -237,7 +238,10 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   // can see and clear what is filtering the list. The date inputs read
   // these same effective values, so the panel never shows a range the
   // list is not filtered by.
-  const hasFilters = account != null || Boolean(dateFrom || dateTo)
+  const filterLookups = { accounts }
+  const filterDefs = buildTransfersFilters(filterLookups)
+  const filterValues = { account, dateFrom, dateTo }
+  const hasFilters = activeFilterCount(filterDefs, filterValues, filterLookups) > 0
 
   // One-shot defaults materialization (useStalePageReset shape: the URL
   // write goes through the closure-wrapped updateParams, never the raw
@@ -314,7 +318,7 @@ function TransfersContent({ settings, calendarStartDay, createRequest }: Transfe
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () => updateParams({ account: null, from: null, to: null })
+  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const items = data?.items ?? []

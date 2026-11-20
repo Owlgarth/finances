@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { Ban, BookmarkPlus, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, Save, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
@@ -19,6 +19,7 @@ import { amountParam, createUpdateParams, intListParam, intParam, useStalePageRe
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { isCalendarMonth, shiftMonth } from '../utils/dates'
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
+import { activeFilterCount, buildPlannedFilters, clearAllFilters } from '../utils/listFilters'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
@@ -279,11 +280,18 @@ interface PlannedContentProps {
 function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedContentProps) {
   const { t } = useTranslation('planned')
   const { t: tBookmarks } = useTranslation('bookmarks')
+  const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
+  // Facet lists for the filter registry (availability + summaries). The
+  // keys match ListFilterFields' own hooks, so the entries are cache-shared:
+  // no extra request when the panel opens, one fetch per stale window with
+  // it closed.
+  const { data: budgets = [] } = useBudgets(false)
+  const { data: categories = [] } = useWorkspaceCategories(false)
 
   const isTouch = useIsTouch()
 
@@ -476,14 +484,25 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // params still count: a materialized default range IS an active range
   // (badge 1 with the panel closed is honest - the user can see and clear
   // what is filtering the list), so materialized params are never excluded.
-  const activeFilterCount = [
-    accountFilter.length > 0,
-    budgetFilter.length > 0,
-    categoryFilter.length > 0,
-    currencyFilter.length > 0,
-    Boolean(amountMin || amountMax),
-    Boolean(dateFrom || dateTo),
-  ].filter(Boolean).length
+  const filterLookups = {
+    accounts,
+    budgets,
+    categories,
+    multiCurrency,
+    selectedCount: (count: number) => tCommon('multiSelect.selectedCount', { count }),
+  }
+  const filterDefs = buildPlannedFilters(filterLookups)
+  const filterValues = {
+    account: accountFilter,
+    currency: currencyFilter,
+    budget: budgetFilter,
+    category: categoryFilter,
+    amountMin,
+    amountMax,
+    dateFrom,
+    dateTo,
+  }
+  const activeCount = activeFilterCount(filterDefs, filterValues, filterLookups)
 
   // Exact-calendar-month detection on the EFFECTIVE range: truthy only when
   // from/to are a calendar month's first and last day. The month label and
@@ -497,7 +516,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // The date facet is the ONLY filter and it is an exact month - ANY month,
   // the default or one the user arrived at: the generic "filtered" empty
   // message would be misleading, the empty state gets the month treatment.
-  const onlyMonthRange = activeFilterCount === 1 && !!exactMonth
+  const onlyMonthRange = activeCount === 1 && !!exactMonth
 
   // The panel opens only through the toggle - never automatically. Deep
   // links and bookmarks apply their filters silently; the toggle's badge
@@ -509,8 +528,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () =>
-    updateParams({ account: null, budget: null, category: null, currency: null, amount_min: null, amount_max: null, from: null, to: null })
+  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
 
   // Month stepper: step to the adjacent calendar month. The target computes
   // from exactMonth (the range on screen), NEVER from "today" - December
@@ -748,7 +766,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           aria-label={t('searchAria')}
           className="flex-1 min-w-0 max-w-sm max-sm:max-w-none max-sm:basis-full"
         />
-        <FiltersToggle open={filtersOpen} count={activeFilterCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
+        <FiltersToggle open={filtersOpen} count={activeCount} onToggle={() => setFiltersOpen((v) => !v)} aria-controls={filterPanelId} />
         {/* Labeled like the header's export action; shrink-0 keeps the
             label on one line so the flex-1 SearchInput is the row member
             that yields on narrow screens. */}
@@ -787,7 +805,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
       )}
 
       {view === 'planned' && filtersOpen && (
-        <FilterPanel id={filterPanelId} onClear={activeFilterCount > 0 ? clearFilters : null}>
+        <FilterPanel id={filterPanelId} onClear={activeCount > 0 ? clearFilters : null}>
           {accounts.length > 1 && (
             <FilterField label={t('filters.account')}>
               <MultiSelect values={accountFilter} onChange={(v) => updateParams({ account: v })} options={accountOptions} placeholder={t('filters.allAccounts')} aria-label={t('filters.byAccountAria')} className="w-full" />
@@ -823,7 +841,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         isLoading ? (
           <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
         ) : items.length === 0 ? (
-          search || (activeFilterCount > 0 && !onlyMonthRange) ? (
+          search || (activeCount > 0 && !onlyMonthRange) ? (
             <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
           ) : statusFilter !== 'all' ? (
             <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
