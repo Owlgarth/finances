@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection incl. Chrome 157 silently ignoring Emulation.setEmulatedMedia pointer/hover overrides (setTouchEmulationEnabled as the working mechanism, re-armed after every setViewport) and headless hover:none, dispatched el.click() not reaching React handlers (real coordinate clicks, settle-before-click), fullPage-capture media-query perturbation (viewport-only captures for chrome-identity claims), overflow measurement inside inner scroll containers vs the document, in-page cell-hiding table min-content forensics, StrictMode 2x boot-query baselines for request-count gates, viewer-consent + General-budget seeding facts), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -48,6 +48,11 @@ same session - in PR #81 it paid for itself twice.
   behavior (a same-account pair on a host that toasts nothing), not a bug. Set
   persisted-default-backed values explicitly in every scenario, and treat "no request fired"
   as validation-refusal evidence on no-toast hosts.
+- A directly-added viewer member has no recorded consents and lands on `/reconsent` -
+  seed `POST /users/me/consents` (`terms_of_service`/`privacy_policy`) before driving
+  member-role scenarios. Registration auto-creates a "General" budget: a seeded
+  workspace with two test budgets holds THREE, not two - derive budget-count assertions
+  from that.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
@@ -116,6 +121,10 @@ same session - in PR #81 it paid for itself twice.
   reported viewport or classification as a hypothesis - "mobile-only" was a workflow artifact
   (bottom-nav flows warm-re-enter while desktop sessions cold-load). (Rule detail under State
   Refresh After Mutations in `frontend-react`.)
+- React StrictMode double-mounts every boot query on the dev stack: request-count gates
+  read 2x per deduped query set, and the duplicate discriminator is "no 4x" plus the
+  expected 0->2 delta - re-derive a spec's "exactly 1 request" gate against that baseline
+  before flagging duplicates.
 - TanStack Query v5's focusManager listens to `visibilitychange` only:
   `window.dispatchEvent(new Event('focus'))` triggers nothing. To fire the
   `refetchOnWindowFocus: 'always'` refetch in a SINGLE tab (no second tab to focus), dispatch
@@ -189,6 +198,19 @@ same session - in PR #81 it paid for itself twice.
   trees, never absolute overflow - synthetic probe content can overflow a narrow viewport
   identically in both trees (SplitView's identity gate: both trees overflowed 10px at 375px
   while all ten rect deltas read 0.000px).
+- Overflow must be measured on the element that actually scrolls: this app scrolls inside
+  `<main>`, not the document, so a document-level `document.documentElement.scrollWidth`
+  reads clean while a card overflows its inner scroll context - measure the card/element
+  (or the real scroll container), never the document, or the check is vacuously green.
+- puppeteer fullPage screenshots (`captureBeyondViewport`) are not viewport-neutral: the
+  expanded capture surface momentarily perturbs the media-query environment, firing REAL
+  breakpoint flips that race width-transitioning chrome mid-capture. Chrome-identity and
+  pixel-diff claims pair VIEWPORT-ONLY captures with settled DOM geometry reads; never
+  fullPage.
+- Table min-content root-causing is done in-page: hide candidate cells/wrappers one by
+  one (`el.style.display = 'none'`) and re-read the overflow after each to find which
+  element sets the floor, then force explicit widths on the container to binary-search
+  each claim's numeric floor. Faster and more decisive than stylesheet trial-and-error.
 - Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
   "cannot reproduce" means the trigger is environmental (a failed request), not absent.
   Intercept and force-fail the dependency (request interception blocking the endpoint the
@@ -206,6 +228,11 @@ same session - in PR #81 it paid for itself twice.
   a wildcard `Access-Control-Allow-Origin: *` is rejected by the browser - echo the request's
   Origin header and add `Access-Control-Allow-Credentials: true`, or the stub fails as
   unexplained CORS console noise.
+- Timing-window verification STALLS instead of blocking: intercept only the method under
+  test (a field-save PUT) and delay `continue()` by ~3s to widen a pending window
+  (`isSaving`) for real coordinate clicks. The match must exclude the CORS preflight -
+  the OPTIONS request passes through untouched, or the stalled request never fires at
+  all.
 - Fix-acceptance probes earn causality with a NEGATIVE CONTROL: run the same harness once
   against the pre-fix code (stash the fix, re-run, expect the repro) - a passing assertion
   that also passes pre-fix tests a probe artifact, not the change. A prior task's recorded
@@ -234,6 +261,12 @@ same session - in PR #81 it paid for itself twice.
   touched module's transform before trusting any FAIL; the frozen-file symptom is a
   runtime `Link is not defined` plus false header assertions against a correct product.
   Exemplar: PR #10's header swaps, where three of six edited files were frozen mid-edit.
+  The Tailwind SCAN can freeze the same way (twice in one session): the served sheet
+  lagged the source until an mtime bust - same cure, same before-any-FAIL verification
+  against a served-transform marker. Comment-only edits have NO marker at all (interface
+  docblocks and JSX comments do not survive the Vite transform), so a comment-only change
+  cannot be freshness-proven from the served transform - mtime-bust and verify through a
+  runtime marker instead.
 - Backend env drift is the api-container twin of served-code staleness: a container started
   before the branch serves the new code but has never run the branch's MIGRATIONS, so a
   brand-new endpoint 500s with `UndefinedTable` on its first hit - it reads like a product
@@ -332,6 +365,8 @@ same session - in PR #81 it paid for itself twice.
   locators must match the real DOM shape (an InfoHint-wrapped label nests the text in a
   span; a flex-row label separates it from its control) - inspect the served DOM before
   writing `getByText`/`getByLabel`.
+- `innerText` reflects applied `text-transform`: a section title styled `uppercase` reads
+  "DETAILS" - assert case-insensitively against uppercase-styled chrome.
 - DOM-order field counting must exclude CSS-hidden inputs: a receipt-scan block's
   `<input type="file" className="hidden">` is `type="file"`, not `type="hidden"`, so a type
   filter still counts it, inflating the field total and shifting every positional index
@@ -357,11 +392,24 @@ same session - in PR #81 it paid for itself twice.
   coordinates and scroll state are the driver's, not the page's truth. Prefer a DOM
   `el.click()` dispatch (no coordinate dependency) for listbox options inside scrollables
   and for below-fold popup content (a calendar inside a tall modal at 1280x800, where
-  coordinate-based clicks time out on cells the driver cannot bring into reach).
+  coordinate-based clicks time out on cells the driver cannot bring into reach) - but
+  verify the dispatch actually reaches the handler on the current stack first (see the
+  el.click()-vs-React correction below).
 - That `el.click()` dispatch fires NO `mousedown` - a mousedown-driven close path (the
   listbox outside-click close listens for `mousedown`) can never be exercised by it; driving
   an outside-click close needs real mouse events (`page.mouse`), inheriting the
   coordinate/scroll caveats above.
+- On the current stack (Chrome 157 / React 19) a dispatched `el.click()` does NOT reach
+  React handlers - observed twice in one session against plain `onClick` handlers: the
+  dispatch fires, the handler never runs. Drive real coordinate clicks, or keyboard Enter
+  on a focused element. This supersedes the `el.click()` preference above for anything
+  React-handled; the dispatch remains usable only where the target's behavior is verified
+  to fire under it.
+- Real coordinate clicks need the layout SETTLED first: a click issued while the page is
+  still moving (right after `scrollIntoView`, mid-commit on a busy tree) dies between
+  pointerdown and mouseup and reads exactly like a product bug. Below-fold targets (a
+  panel footer riding a tall list) get scrollIntoView + a settle beat before the
+  coordinate click.
 - `page.click` on a pre-filled input drops the caret mid-text (the click lands at a
   default offset and a following type splices into the middle) - replace-type instead:
   click, Ctrl+A, then type the full replacement value.
@@ -374,6 +422,14 @@ same session - in PR #81 it paid for itself twice.
   own properties inside the evaluate (`{ x: r.x, width: r.width }`) before returning them.
 - Media features are emulator settings, not CSS edits: reduced motion goes through
   Playwright's `page.emulateMedia({ reducedMotion: 'reduce' })` / CDP media emulation.
-  puppeteer's `page.emulateMediaFeatures` whitelists feature names and REJECTS `pointer` -
-  emulating pointer coarseness goes through raw CDP (`Emulation.setEmulatedMedia` with
-  `features: [{ name: 'pointer', value: 'coarse' }]`).
+  puppeteer's `page.emulateMediaFeatures` whitelists feature names and REJECTS `pointer`,
+  and raw CDP `Emulation.setEmulatedMedia` with
+  `features: [{ name: 'pointer', value: 'coarse' }]` is SILENTLY IGNORED for pointer/hover
+  by Chrome 157 - the call succeeds and nothing changes. The working mechanism for
+  `(pointer: coarse)` is `Emulation.setTouchEmulationEnabled({ enabled: true,
+  maxTouchPoints: 5 })`, which drives the media query and survives navigation. Both are
+  reset by `setViewport` (the device-metrics override rebuilds emulation state): re-arm
+  after EVERY viewport change in a drive loop, or later steps run un-emulated while the
+  harness believes otherwise. And headless Chrome reports `(hover: none)` natively
+  regardless of emulation - hover-cascade claims (hover vs zebra specificity) are proven
+  from served-sheet rule order, never from an emulated hover match.
