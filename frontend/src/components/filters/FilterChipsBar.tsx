@@ -7,16 +7,18 @@ import { listboxPanelClass } from '../common/listboxParts'
 import type { FilterDef } from '../../utils/listFilters'
 
 /**
- * Editor-popover panel. Same anchor/border/bg/z idiom as the shared
+ * Editor-popover panel. Same anchor/border/bg idiom as the shared
  * listbox panel class, but sized for a filter editor body instead of a
  * listbox: the range calendar's editor is far taller than a listbox's
  * 280px cap, and a bare fit-to-content width would let the presets row
  * drive the panel width - so the width floors at the range calendar's
  * natural span and caps at the viewport, and long content wraps instead
- * of widening.
+ * of widening. z sits one tier ABOVE the listbox's dropdown (popover,
+ * 250): these panels open over the table's sticky THEAD (200), and a
+ * member inside the sticky band must stay clickable.
  */
 export const filterEditorPanelClass =
-  'absolute z-dropdown mt-1 min-w-[336px] max-w-[calc(100vw-3rem)] ' +
+  'absolute z-popover mt-1 min-w-[336px] max-w-[calc(100vw-3rem)] ' +
   'bg-surface border border-border rounded-sm p-3 ' +
   'max-h-[min(560px,calc(100dvh-10rem))] overflow-y-auto'
 
@@ -275,7 +277,11 @@ export default function FilterChipsBar<V, L>({
           <Plus size={13} className="inline mr-1" aria-hidden="true" /> {t('listFilters.addFilter')}
         </button>
         {addMenuOpen && (
-          <div role="menu" aria-label={t('listFilters.addFilter')} className={`${listboxPanelClass} py-1`}>
+          // z-popover appended over the verbatim listboxPanelClass (the
+          // right-0/py-1 composition precedent): the panel's built-in
+          // z-dropdown sits below the sticky THEAD; the append raises the
+          // menu over the sticky band.
+          <div role="menu" aria-label={t('listFilters.addFilter')} className={`${listboxPanelClass} z-popover py-1`}>
             {inactiveDefs.map((def) => (
               <button
                 key={def.id}
@@ -318,7 +324,9 @@ export default function FilterChipsBar<V, L>({
           />
         </button>
         {saveMenuOpen && (
-          <div role="menu" aria-label={t('listFilters.saveView')} className={`${listboxPanelClass} right-0 py-1`}>
+          // Same z-popover append as the Add-filter menu - overlays the
+          // sticky THEAD band.
+          <div role="menu" aria-label={t('listFilters.saveView')} className={`${listboxPanelClass} z-popover right-0 py-1`}>
             <button
               type="button"
               role="menuitem"

@@ -80,6 +80,13 @@
    z-10/z-50 for overlays) lives as utilities. */
 @utility z-dropdown { z-index: 100; }
 @utility z-sticky { z-index: 200; }
+/* Transient light-dismiss popovers that must overlay sticky in-flow
+   content: the filter toolbar's editor panels and menus open over the
+   transactions table's sticky THEAD, and the dropdown tier sits below
+   sticky by original design - a popover member crossing the sticky band
+   would be pointer-dead (the TH eats the click). Above sticky, below
+   persistent chrome (sidebar/bottom-nav 300). */
+@utility z-popover { z-index: 250; }
 @utility z-sidebar { z-index: 300; }
 @utility z-bottom-nav { z-index: 300; }
 @utility z-topbar { z-index: 400; }
