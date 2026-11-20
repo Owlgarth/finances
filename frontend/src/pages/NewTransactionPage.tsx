@@ -5,6 +5,7 @@ import { CloudOff, Loader2, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { transactionsApi } from '../api/client'
+import type { Transaction } from '../types'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useExtractionConfig } from '../hooks/useDomain'
@@ -78,12 +79,20 @@ export default function NewTransactionPage() {
   // create mode (silent, like an optional-enhancement query - the URL keeps
   // ?copy= and the user can retry by reloading).
   const copyKnown = copyId === null || copyQuery.isSuccess || copyQuery.isError
+  const copySource = copyQuery.data ?? null
 
   // Lifted amount/date rows, shared by both form flavors through the hooks'
   // override seam: each hook's internal state tracks the lifted values
   // continuously, so switching type keeps amount and date by construction.
-  const [sharedAmount, setSharedAmount] = useState('')
+  // The amount seeds from the copy source when the cache is already warm on
+  // mount; the copy-seed adjust below re-asserts it after both form hooks
+  // have seeded.
+  const [sharedAmount, setSharedAmount] = useState(() => copySource?.amount ?? '')
   const [sharedDate, setSharedDate] = useState(new Date().toISOString().slice(0, 10))
+  // Copy source object the lifted amount was last seeded from (null = none
+  // yet). Deliberately NOT initialized to copySource: on a warm mount the
+  // first render must still run the seeding assert below.
+  const [seededCopy, setSeededCopy] = useState<Transaction | null>(null)
   const [amountTouched, setAmountTouched] = useState(false)
   // Set after a failed submit: every field error shows until the next
   // successful save-and-add-another (first-blur-then-keystroke timing
@@ -105,7 +114,7 @@ export default function NewTransactionPage() {
     // be re-seeded). With no ?copy= the flag is true on first render, which
     // IS the "hook runs with open=true" contract.
     open: copyKnown,
-    copyFrom: copyQuery.data ?? null,
+    copyFrom: copySource,
     validationToasts: false, // the page shows field errors inline; save toasts stay
     initialAccountId,
     // The transaction hook's type seeds from the segment; 'transfer' hides
@@ -238,6 +247,21 @@ export default function NewTransactionPage() {
         </div>
       </FormPage>
     )
+  }
+
+  // Copy-seed assert for the lifted amount. On a mount whose copy cache is
+  // already warm, both form hooks seed during the same render pass: the
+  // transaction hook reports the copied amount upward through the shared
+  // seam, then the always-mounted transfer hook's create seeding reports ''
+  // after it, and the last queued write wins - the lifted amount would start
+  // empty, after which the hooks' downward adjust clobbers their own seeded
+  // value. Re-asserting the copy amount here runs after both hooks, so this
+  // write owns the queue. Fires once per copy source object (warm mount or
+  // fetch resolution) and never again, so user edits and the reset after
+  // save-and-add-another are never re-applied.
+  if (seededCopy !== copySource) {
+    setSeededCopy(copySource)
+    setSharedAmount(copySource?.amount ?? '')
   }
 
   // Hoisted labels and errors (aliased-t calls must not render inline).
