@@ -185,15 +185,19 @@ export default function TransactionAddRow({ initialAccountId, hotkeyEnabled }: T
               The wrapper removes the input from the column's floor
               computation (a native date input carries a browser-set
               intrinsic width of about 130px that a percentage width does
-              not shrink - measured: the column stayed 135px wide in every
-              state). width 0 plus min-width 100% gives the wrapper a
+              not shrink). width 0 plus min-width 100% gives the wrapper a
               definite zero width for sizing while its used width still
               fills the cell, so the input keeps filling whatever the
-              column gives it. Below 560 container pixels the date field
-              simply renders narrower (the date column is always visible);
-              at 560 and up the wrapper goes back to a plain filling block
-              so the column proportions are unchanged. */}
-          <div className="w-0 min-w-full @min-[560px]:w-auto @min-[560px]:min-w-0">
+              column gives it. The input's own width claim is allowed only
+              in the middle band, 560 to 759 container pixels, where the
+              table shows at most four columns and always has room for
+              it; below 560 (squeezed slot) and at 760 and up (five
+              columns) the wrapper stays collapsed so the column's own
+              content governs its width. In the widest set the data rows'
+              full dates are narrower than the input's claim, and letting
+              the claim stand pushed the whole table past its card at the
+              squeezed panel-closed widths. */}
+          <div className="w-0 min-w-full @min-[560px]:w-auto @min-[560px]:min-w-0 @min-[760px]:w-0 @min-[760px]:min-w-full">
             <input
               type="date"
               value={form.date}
@@ -205,27 +209,42 @@ export default function TransactionAddRow({ initialAccountId, hotkeyEnabled }: T
           </div>
         </td>
         <td className="px-1 py-1">
-          <input
-            ref={descRef}
-            type="text"
-            value={form.description}
-            onChange={(e) => form.setDescription(e.target.value)}
-            onKeyDown={(e) => {
-              // The form hook's combobox handler first: should a
-              // suggestion panel ever be wired here, its Enter acceptance
-              // wins (it prevents default). No panel opens in this
-              // compact row today.
-              form.handleDescriptionKeyDown(e)
-              if (e.defaultPrevented) return
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void handleAdd()
-              }
-            }}
-            onBlur={() => markTouched('description')}
-            aria-label={t('form.descriptionLabel')}
-            className={`${inputClass} ${showError('description') ? 'bg-negative-bg border-negative ring-1 ring-negative ' : ''}`}
-          />
+          {/* Same intrinsic-width shield as the date cell's wrapper above:
+              a plain text input prefers about 400px (browser-set sizing),
+              and that preference counted into the description column's
+              width, pinning the table past its card at the squeezed
+              panel-closed widths. The wrapper's definite zero width keeps
+              the input out of the column's sizing while min-width 100%
+              keeps the input filling the cell. Unlike the date wrapper
+              there is no restore at wider containers: the date's ~130px
+              floor is tolerable handed back at 560 and up, but handing
+              this input's ~400px preference back would re-pin the table
+              at whatever width it returned, so it stays collapsed at
+              every width and spare column width redistributes through
+              the table's own auto layout. */}
+          <div className="w-0 min-w-full">
+            <input
+              ref={descRef}
+              type="text"
+              value={form.description}
+              onChange={(e) => form.setDescription(e.target.value)}
+              onKeyDown={(e) => {
+                // The form hook's combobox handler first: should a
+                // suggestion panel ever be wired here, its Enter acceptance
+                // wins (it prevents default). No panel opens in this
+                // compact row today.
+                form.handleDescriptionKeyDown(e)
+                if (e.defaultPrevented) return
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void handleAdd()
+                }
+              }}
+              onBlur={() => markTouched('description')}
+              aria-label={t('form.descriptionLabel')}
+              className={`${inputClass} ${showError('description') ? 'bg-negative-bg border-negative ring-1 ring-negative ' : ''}`}
+            />
+          </div>
         </td>
         {/* The account and category cells carry the data cells'
             container-gate classes, so the row mirrors the visible column
