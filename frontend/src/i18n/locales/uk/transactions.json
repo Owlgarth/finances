@@ -66,6 +66,7 @@
     "clearAll": "Очистити все",
     "removeFilterAria": "Прибрати фільтр: {{filter}}",
     "dateRangeAria": "Діапазон дат",
+    "dateInvalid": "Введіть коректну дату",
     "presetThisYear": "Цей рік"
   },
   "totals": {

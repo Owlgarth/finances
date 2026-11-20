@@ -66,6 +66,7 @@
     "clearAll": "Clear all",
     "removeFilterAria": "Remove filter: {{filter}}",
     "dateRangeAria": "Date range",
+    "dateInvalid": "Enter a valid date",
     "presetThisYear": "This year"
   },
   "totals": {
