@@ -35,6 +35,7 @@ import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import DetailPanel from '../components/layout/DetailPanel'
 import SplitView from '../components/layout/SplitView'
+import TransactionAddRow from '../components/transactions/TransactionAddRow'
 import TransactionRecord from '../components/transactions/TransactionRecord'
 import TransactionsTable from '../components/transactions/TransactionsTable'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
@@ -822,12 +823,28 @@ function TransactionsContent({ settings, calendarStartDay, createRequest }: Tran
         <SplitView
           list={
             <>
+              {/* Inline create row: desktop tier, writers only (the
+                  640-1023 band keeps the create page route; viewers
+                  never create). Seeded from the account filter only when
+                  it resolves to exactly one account. The hotkey stays
+                  disabled while a record panel is open and while a ?new=
+                  param is present - both are in-flow panels, not
+                  overlays, so the row's own overlay check cannot keep the
+                  hotkey from stealing their focus (nothing reads ?new=
+                  today; the gate is here so an in-flow create panel can
+                  adopt the param without moving this mount). */}
               <TransactionsTable
                 items={items}
                 selectedId={isDesktop ? recordId : null}
                 showAccountColumn={showAccountColumn}
                 multiCurrency={multiCurrency}
                 onOpen={handleOpenRecord}
+                leadRow={canWrite && isDesktop ? (
+                  <TransactionAddRow
+                    initialAccountId={accountFilter.length === 1 ? accountFilter[0] : null}
+                    hotkeyEnabled={recordId == null && !searchParams.has('new')}
+                  />
+                ) : null}
               />
               {pagination}
             </>
