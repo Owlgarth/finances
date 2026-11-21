@@ -33,7 +33,10 @@ each TOTP code is single-use. Every workspace-scoped request carries
 - **Dashboard** shows each account's **computed** balance (opening balance +
   transactions ± transfers) and recent activity. Nothing is stored - balances are
   always derived.
-- **Accounts page** (admin+): create/edit/archive accounts. **"Set balance…"** records
+- **Accounts page** (admin+): create accounts; each card opens the **account page**
+  (balance, in/out this month, upcoming planned and recent transactions and transfers),
+  which owns edit, archive/unarchive and delete-when-archived (overflow menu) beside
+  **"Set balance…"** - it records
   an *adjustment* transaction for the delta between the current and target balance -
   the app never overwrites a balance directly. A record-free archived account can be
   deleted; one with records is PROTECT-blocked (surfaced as a clear error).
@@ -46,7 +49,8 @@ each TOTP code is single-use. Every workspace-scoped request carries
 
 Move money between two accounts (member+). The last-used account pair is remembered;
 with exactly two accounts they auto-fill. **Cross-currency** transfers take both the
-sent and received amounts and display the implied rate. "Repeat" prefills a past
+sent and received amounts and display the implied rate. Each transfer has a record
+(editing is one field at a time); "Repeat" prefills a past
 transfer. Transfers replace the old currency-exchange records.
 
 ## Budgets & Planning

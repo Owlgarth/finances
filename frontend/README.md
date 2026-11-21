@@ -28,13 +28,13 @@ frontend/
 │   ├── components/
 │   │   ├── layout/           # MainLayout, Sidebar, BottomNav (mobile), AccountMenuSheet (mobile account menu) + AccountMenuContext (its open-request channel), ActivityTabs (the Activity tab row), UserMenu, LanguageModal (language picker), WorkspaceSelector, ThemeToggleRow, WorkspaceSettingsPanel, CreateWorkspaceForm, PageHeader, FormPage, SplitView, DetailPanel
 │   │   ├── common/           # Modal, Select, ConfirmDialog, Pagination, formStyles, DateQuickPick, Disclosure, EditableField, LinkedRow…
-│   │   ├── accounts/         # AccountFormModal, SetBalanceModal, TransferModal
+│   │   ├── accounts/         # AccountFormModal, SetBalanceModal
 │   │   ├── bookmarks/        # bookmarkMeta (bookmark icon + swatch-key registry, BookmarkGlyph)
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
 │   │   ├── filters/          # FiltersTrigger (phone Filters entry), FilterSheet (two-level phone bottom sheet), FilterChipsBar (640+ toolbar), DateRangeEditor, MultiChoiceEditor, AmountRangeEditor, SingleChoiceEditor (container-agnostic editor bodies)
-│   │   ├── transactions/     # TransactionsTable, TransactionAddRow, TransactionRecord, TransactionFormFields, TransferFormFields, AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
+│   │   ├── transactions/     # TransactionsTable, TransactionAddRow, TransactionRecord, TransferRecord, TransactionFormFields, TransferFormFields, AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
 │   │   ├── modals/transactions/ # PlannedFormModal, ExecuteAdjustedModal, RecurringFormModal
@@ -54,7 +54,8 @@ frontend/
 │   │   ├── usePermissions.ts        # Role-based permission checks
 │   │   ├── useTransactionForm.ts    # Transaction form state machine (create/copy/receipt prefill): field state, session seeding, derived options, validation, save mutation - host-agnostic (the /new page and the transactions create panel both drive it)
 │   │   ├── useTransactionFieldSave.ts # One-field saves on a loaded transaction row: full-replace PUT assembled from the row (`Omit<Partial<TransactionInput>, 'items'>` patch), rejects without toasting (the editor owns error display), invalidates the form's three keys
-│   │   ├── useTransferForm.ts       # Transfer form state machine (create/edit/repeat): last-used pair, cross-currency implied rate, validation, save - driven by TransferModal and the /new page
+│   │   ├── useTransferFieldSave.ts  # One-field saves on a loaded transfer row: full-replace PUT assembled from the row (`Partial<TransferInput>` patch), rejects without toasting (the editor owns error display), invalidates the form's three keys
+│   │   ├── useTransferForm.ts       # Transfer form state machine (create/repeat): last-used pair, cross-currency implied rate, validation, save - driven by the /new page and the transfers list's create panel
 │   │   ├── useActivityScope.ts      # Shared Activity scope chrome for the three list routes - the "Activity" title plus the scope breadcrumb (exact-calendar-month label + sole filtered account name, joined " / "), derived from the URL like the pages' export handlers
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
 │   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (workspace selector dropdown + account menu sheet)
@@ -87,7 +88,8 @@ Budgets - Activity covers `/transactions`, `/planned` and `/transfers` through o
 one tab row; the sidebar adds Members and Settings footer rows), a Transfers page reached
 through the Activity tab (and the Accounts "View all transfers" link and the command
 palette), a full-page create flow at `/new` (transaction and transfer creation in one
-form - the FAB and the below-1024px create buttons land there; edit stays in the modals),
+form - the FAB and the below-1024px create buttons land there; editing a transaction or
+transfer happens on its record through one-field saves, not `/new`),
 a Bookmarks manage page (reached from
 the Manage row of the sidebar's or the account menu sheet's bookmarks section), nested budget
 routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
@@ -103,15 +105,17 @@ routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 | `/privacy` | PrivacyPolicyPage | Public; Privacy Policy rendered through the shared `LegalDocPage` shell (`legalApi.getPrivacy`) |
 | `/terms` | TermsPage | Public; Terms of Service through the same `LegalDocPage` shell (`legalApi.getTerms`) |
 | `/` | Dashboard | Account balances + recent activity; balance rows link to the account's filtered transactions |
-| `/accounts` | AccountsPage | Accounts, set-balance, transfers; per-account "View transactions" drill-down and a "View all transfers" link to `/transfers` |
+| `/accounts` | AccountsPage | Account cards (name, computed balance with the currency code as the suffix in multi-currency workspaces, Archived badge) that link to the account page; per-currency totals above the grid (one line per enabled currency in creation order); create account (admin+), header Transfer button to `/new?type=transfer` (hidden on phones, where the FAB owns creation), Show-archived toggle, and - when transfers exist - one chevron "View all transfers" link row to `/transfers` |
+| `/accounts/:id` | AccountPage | One account's page, a full page at every width: summary card (name, balance from the shared `['current-balances']` entry, In/Out this month), Add (`/new?account=`) and Transfer (`/new?type=transfer&account=`) actions for writers, Set balance (admin+), and an overflow menu with Edit, Archive/Unarchive and Delete (archived accounts only) - ActionSheet on touch, anchored popover on fine pointers; Upcoming planned, Recent transactions (rows link to `/transactions/:id`) and Recent transfers sections whose header chevrons link to the filtered Activity tab (empty sections hide; transactions keeps an empty state); archived accounts render read-only with the badge (balance and sections still show); foreign/deleted/garbage ids render a not-found state |
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target); exact planned/actual/remaining column totals (footer row on desktop, totals card on mobile) sum the visible, non-archived rows client-side - not the API's summary totals, which include archived categories' money the table hides |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
 | `/transactions` | Transactions | Transaction list, filters, create (below 1024px the button navigates to `/new`, carrying the account filter when exactly one is set; 1024px+ sets the `?new=transaction` param, opening the in-flow create panel in SplitView's panel slot - copy mode rides `?copy=`); rows open the record (below 1024px the full page, 1024px+ the side panel; the ledger table with container-query column sets and the keyboard-first inline add row renders at 640px+, phones keep the two-line div rows); totals strip, remembered search, "Export view" JSON download; the filter surface is a two-level phone sheet (Filters trigger with an active-count badge; date presets live in its date editor, sort and the Save-as-default/bookmark actions in the sheet) below 640px, and a 640+ chips toolbar above it (month stepper whose label opens the date editor, applied chips, "Add filter" menu, search, sort select, "Save view" menu holding Save-as-default and the bookmark action); opens on the user's saved view defaults (personal, per workspace - explicit URL params win) |
 | `/transactions/:id` | TransactionRecordPage / Transactions | A single transaction's record: a full page below 1024px, the side panel beside the list at 1024px+ (one route; the element branches on tier). Summary + one-field edit-in-place rows (sheet presentation on phones), belongs-to LinkedRows, Items/Receipts sections for writers, footer Duplicate and Delete-with-confirm returning to the list; foreign/deleted/garbage ids render a not-found state, and rows stay disabled for viewers and auto-managed adjustments |
 | `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›; chevrons only while the range is an exact calendar month) above the status control is always present (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (the same phone filter sheet and 640+ chips toolbar, totals strip, remembered search, "Save as default", "Export view" - planned view only; the recurring view has no filter UI) |
-| `/transfers` | TransfersPage | Transfer history with account (either side, single-select) + date filters in the URL (opens on the saved date-range default, personal per workspace; the "Save as default" action lives in the 640+ "Save view" menu - the page header keeps only New - and in the phone filter sheet's save row, whose hub offers date + account rows only); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ opens the modal; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
-| `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=` and `?copy=`, read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox, account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
+| `/transfers` | TransfersPage | Transfer history with account (either side, single-select) + date filters in the URL (opens on the saved date-range default, personal per workspace; the "Save as default" action lives in the 640+ "Save view" menu - the page header keeps only New - and in the phone filter sheet's save row, whose hub offers date + account rows only); rows open the transfer record (full page below 1024px, the list's side panel at 1024px+ - the selected row carries the reserved-border highlight and `aria-current`; fine-pointer hover rows keep Repeat/Delete shortcuts for writers); creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ sets `?new=transfer`, opening the in-flow create panel in SplitView's panel slot (create wins the panel slot over a selected record); part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
+| `/transfers/:id` | TransferRecordPage / TransfersPage | A single transfer's record: a full page below 1024px, the side panel beside the list at 1024px+ (one route; the element branches on tier). Summary (description, From → To, amounts - a second line when cross-currency) + one-field edit-in-place rows (date, description, sent amount, received amount when cross-currency, From/To accounts - the account rows are also LinkedRows to the account pages), footer Repeat (to `/new?type=transfer&copy_transfer=<id>`) and Delete-with-confirm (the full-page host returns to the list with replace); foreign/deleted/garbage ids render a not-found state, and rows stay disabled for viewers and while a save is in flight |
+| `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=`, `?copy=` (transaction copy) and `?copy_transfer=` (transfer repeat - pair + description prefilled, amounts and date cleared), read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox, account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter surfaces - the phone sheet or the 640+ toolbar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -131,8 +135,9 @@ first manual toggle writes the preference and permanently disarms the
 adjust), `Sidebar` (a Ctrl K / ⌘K search row, then four nav destinations - Home,
 Activity (lit on `/transactions`, `/planned` and `/transfers` by pathname
 prefix), Accounts and Budgets, each followed by up to six sub-rows plus a
-View-all link (account rows show name + balance, the currency code only in
-multi-currency workspaces; balances reuse the `['current-balances']` cache
+View-all link (account rows are per-account NavLinks to `/accounts/:id`
+showing name + balance, the currency code only in multi-currency workspaces;
+balances reuse the `['current-balances']` cache
 entry), a personal bookmarks section (the user's active
 bookmarks - capped by their preference - with a Manage link to `/bookmarks`),
 and a footer with Members and Settings rows above the user menu; the workspace
@@ -188,9 +193,10 @@ is open). `ActivityTabs` (the Activity tab row on the three list routes -
 NavLink segments in the SegmentedControl register carrying `from`/`to` always
 and the `account` filter as a comma list between the list pages or a single
 id to Transfers when exactly one account is selected). FormPage's first
-consumer is the `/new` create page (redesign phase 3); SplitView and
-DetailPanel remain phase-1 foundations with no call sites yet - the later
-redesign phases wire them into the record pages.
+consumer was the `/new` create page (redesign phase 3); SplitView and
+DetailPanel host the record panels beside the Transactions and Transfers
+lists at 1024px+ (phases 4 and 6), where the same slot also holds each
+list's in-flow create panel (`?new=transaction` / `?new=transfer`).
 
 **Common** (`components/common/`): `Modal`, `Select`/`MultiSelect` (custom dropdowns
 sharing the `useListboxPanel` hook + `listboxParts.tsx` primitives), `ConfirmDialog`,
@@ -249,10 +255,7 @@ providers around all in-app routes, and `/reconsent` and `/confirm-email-change`
 individually).
 
 **Accounts** (`components/accounts/`): `AccountFormModal`, `SetBalanceModal` (records a
-balance adjustment), `TransferModal` (modal host over the `useTransferForm` hook -
-last-used pair, cross-currency implied rate; doubles as the edit modal - `editFrom`
-prefills every field and saves via update; below 1024px transfer creation navigates to
-`/new?type=transfer` instead).
+balance adjustment).
 
 **Currencies** (`components/currencies/`): `CurrencySetField` (ordered currency-set
 picker on top of `MultiSelect` - a visible ordered list with up/down arrows and a
@@ -341,6 +344,13 @@ focuses the description), `TransactionRecord` (the host-neutral record
 content: summary, one-field `EditableField` rows saved through
 `useTransactionFieldSave`, belongs-to `LinkedRow`s, Items/Receipts sections,
 footer - rendered by the full-page host below 1024px and the side panel at
+1024px+), `TransferRecord` (the host-neutral transfer record content:
+summary - description, From → To, amounts with a second line when
+cross-currency - Details rows (date, description, sent amount, received
+amount when cross-currency) and From/To account rows that are each both an
+`EditableField` and a `LinkedRow` to `/accounts/:id`, saved through
+`useTransferFieldSave`, with footer Repeat/Delete as host hooks - rendered
+by the full-page host below 1024px and the transfers list's side panel at
 1024px+), `TransactionItemsEditor` (loads a saved transaction's items and persists edits
 through the list), `TransactionItemsList` (the editable rows grid both the
 editor and the transaction form render - name/quantity/unit price/line total with

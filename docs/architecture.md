@@ -227,12 +227,13 @@ frontend/src/
 ├── components/
 │   ├── layout/             # MainLayout, Sidebar (Home/Activity/Accounts/Budgets + Members/Settings footer), BottomNav + AccountMenuSheet (mobile), UserMenu, LanguageModal
 │   ├── common/             # Modal, Select, ConfirmDialog, formStyles, Pagination…
-│   ├── accounts/           # Account/SetBalance/Transfer modals
+│   ├── accounts/           # Account/SetBalance modals
 │   ├── bookmarks/          # bookmarkMeta (bookmark icon + color registry)
 │   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
 │   ├── transactions/       # Form fields (TransactionFormFields, TransferFormFields,
-│                           #   AmountField), items editor, attachments, extraction review
+│                           #   AmountField), record content (TransactionRecord,
+│                           #   TransferRecord), items editor, attachments, extraction review
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   ├── modals/bookmarks/   # BookmarkFormModal (create/edit bookmarks)
 │   └── modals/transactions/# Transaction (edit/copy; creation moved to the /new page in
@@ -251,18 +252,22 @@ frontend/src/
 │                              #   breadcrumb for the three list routes),
 │                              #   useTransactionForm / useTransferForm (the
 │                              #   transaction/transfer form state machines,
-│                              #   driven by both the modals and /new),
+│                              #   driven by /new and the list create panels),
 │                              #   useListboxPanel, useWorkspaceSwitch,
 │                              #   useMediaQuery, useBreakpoint, useDebouncedField,
 │                              #   useOverlay, useKeyboardInset, useExtractionPolling
 ├── i18n/                   # i18next bootstrap (synchronous, before first render),
 │                           #   LanguageContext + useLanguage, date-fns locales,
 │                           #   and the per-language catalogs in locales/<lang>/
-├── pages/                  # Dashboard, Accounts, Budgets, BudgetDetail,
+├── pages/                  # Dashboard, Accounts, AccountPage (one account at
+│                           #   /accounts/:id), Budgets, BudgetDetail,
 │                           #   BudgetPeriods, Transactions, Planned,
 │                           #   Transfers (part of the Activity scope - reached
 │                           #   from the Activity tab, Accounts, and the
-│                           #   command palette), NewTransaction (the /new
+│                           #   command palette), the Transaction/Transfer
+│                           #   record pages (full page below 1024px, side
+│                           #   panel beside the list at 1024px+),
+│                           #   NewTransaction (the /new
 │                           #   create page for transactions and transfers),
 │                           #   Bookmarks,
 │                           #   Members, Settings, plus auth/legal pages (Login, Register,
