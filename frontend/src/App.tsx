@@ -17,6 +17,7 @@ import Transactions from './pages/Transactions'
 import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
 import TransfersPage from './pages/TransfersPage'
+import TransferRecordPage from './pages/TransferRecordPage'
 import NewTransactionPage from './pages/NewTransactionPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
@@ -52,6 +53,8 @@ function AppContent() {
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
+        {/* Full-page at every width for now; the follow-up replaces the 1024+ case with the list's side panel (the transactions precedent). */}
+        <Route path="/transfers/:id" element={<TransferRecordPage />} />
         <Route path="/new" element={<NewTransactionPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />

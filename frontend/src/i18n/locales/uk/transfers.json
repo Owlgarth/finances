@@ -61,6 +61,16 @@
     "save": "Зберегти",
     "transfer": "Переказати"
   },
+  "record": {
+    "title": "Переказ",
+    "notFound": "Не знайдено в цьому робочому просторі",
+    "backToList": "Назад до переказів",
+    "detailsTitle": "Деталі",
+    "accountsTitle": "Рахунки",
+    "noDescription": "Немає опису",
+    "savesHint": "Зміни зберігаються під час редагування",
+    "openAccountAria": "Відкрити рахунок {{name}}"
+  },
   "validation": {
     "chooseBoth": "Виберіть обидва рахунки",
     "accountsDiffer": "Рахунки мають відрізнятися",

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CloudOff, Loader2, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { transactionsApi } from '../api/client'
+import { transactionsApi, transfersApi } from '../api/client'
 import type { Transaction } from '../types'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -81,6 +81,21 @@ export default function NewTransactionPage() {
   const copyKnown = copyId === null || copyQuery.isSuccess || copyQuery.isError
   const copySource = copyQuery.data ?? null
 
+  // Transfer repeat seed, transfer flavor (the record page's Repeat
+  // action navigates here with ?copy_transfer=). Keyed INSIDE the
+  // ['transfers'] family prefix - the same entry the transfer record page
+  // and the list's edit prefill read - so the family's existing
+  // invalidation calls refetch it. Terminal error counts as known:
+  // silent degradation to plain create, the ?copy= contract.
+  const [copyTransferId] = useState(() => intParam(searchParams, 'copy_transfer'))
+  const copyTransferQuery = useQuery({
+    queryKey: ['transfers', 'detail', copyTransferId],
+    queryFn: () => transfersApi.get(copyTransferId!),
+    enabled: copyTransferId !== null,
+  })
+  const copyTransferKnown = copyTransferId === null || copyTransferQuery.isSuccess || copyTransferQuery.isError
+  const copyTransferSource = copyTransferQuery.data ?? null
+
   // Lifted amount/date rows, shared by both form flavors through the hooks'
   // override seam: each hook's internal state tracks the lifted values
   // continuously, so switching type keeps amount and date by construction.
@@ -122,7 +137,17 @@ export default function NewTransactionPage() {
     initialType: isTransfer ? undefined : sharedType,
     shared,
   })
-  const transferForm = useTransferForm({ open: true, validationToasts: false, shared })
+  // Same arrival gate for the transfer flavor: machinery starts only once
+  // the copy_transfer seed has resolved, so the hook seeds exactly once
+  // with the final repeatFrom (no create-then-repeat double seed). Without
+  // the param the flag is true on first render - plain create is
+  // unchanged.
+  const transferForm = useTransferForm({
+    open: copyTransferKnown,
+    repeatFrom: copyTransferSource,
+    validationToasts: false,
+    shared,
+  })
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [savingAction, setSavingAction] = useState<SaveAction>(null)
@@ -236,9 +261,9 @@ export default function NewTransactionPage() {
   const savePending = savingAction !== null || activeForm.isSaving
 
   // Copy-seed arrival gate: hold the form (fields AND footer) until ?copy=
-  // resolves. The page keeps no saved-defaults machinery - this hold is the
-  // only gate.
-  if (!copyKnown) {
+  // or ?copy_transfer= resolves. The page keeps no saved-defaults
+  // machinery - this hold is the only gate.
+  if (!copyKnown || !copyTransferKnown) {
     return (
       <FormPage title={t('newTransaction')} onClose={handleClose}>
         <div className="space-y-3 pt-2" aria-hidden="true">
@@ -263,6 +288,12 @@ export default function NewTransactionPage() {
     setSeededCopy(copySource)
     setSharedAmount(copySource?.amount ?? '')
   }
+  // No transfer twin of this assert, deliberately. The transaction copy
+  // seed needs it because it writes a NON-empty amount into the shared
+  // row while the always-mounted transfer hook's create seeding queues
+  // '' after it. The transfer repeat seeding itself CLEARS amounts and
+  // re-dates (both hooks queue '' and today's date - identical values,
+  // order irrelevant), so there is nothing to re-assert.
 
   // Hoisted labels and errors (aliased-t calls must not render inline).
   const amountSentLabel = tTransfers('fields.amountSent', { code: transferForm.fromAccount?.currency_code ?? '' })

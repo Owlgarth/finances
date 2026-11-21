@@ -61,6 +61,16 @@
     "save": "Zapisz",
     "transfer": "Przelej"
   },
+  "record": {
+    "title": "Przelew",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do przelewów",
+    "detailsTitle": "Szczegóły",
+    "accountsTitle": "Konta",
+    "noDescription": "Brak opisu",
+    "savesHint": "Zmiany zapisują się podczas edycji",
+    "openAccountAria": "Otwórz konto {{name}}"
+  },
   "validation": {
     "chooseBoth": "Wybierz oba konta",
     "accountsDiffer": "Konta muszą się różnić",

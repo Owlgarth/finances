@@ -59,6 +59,16 @@
     "save": "Save",
     "transfer": "Transfer"
   },
+  "record": {
+    "title": "Transfer",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to transfers",
+    "detailsTitle": "Details",
+    "accountsTitle": "Accounts",
+    "noDescription": "No description",
+    "savesHint": "Changes save as you edit",
+    "openAccountAria": "Open {{name}} account"
+  },
   "validation": {
     "chooseBoth": "Choose both accounts",
     "accountsDiffer": "Accounts must differ",

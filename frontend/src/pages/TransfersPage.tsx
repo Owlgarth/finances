@@ -201,8 +201,9 @@ function TransfersContent({ settings, calendarStartDay, createRequest, onSaveDef
   const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
-  const { isMobile } = useBreakpoint()
+  const { isMobile, isDesktop } = useBreakpoint()
   const { data: accounts = [] } = useAccounts(false)
+  const navigate = useNavigate()
 
   // Filter state lives in the URL (shareable, back-button friendly); any
   // filter change resets pagination via createUpdateParams.
@@ -378,6 +379,22 @@ function TransfersContent({ settings, calendarStartDay, createRequest, onSaveDef
   // reachable inside this helper.
   const openRepeat = (transfer: Transfer) => { setRepeatTransfer(transfer); setTransferOpen(true) }
 
+  // Row tap below 1024 opens the record for EVERY role (viewing a record
+  // is read-level). At 1024+ touch keeps the write-action sheet for
+  // writers until the side panel host lands (the follow-up); a 1024+
+  // touch VIEWER gets no row affordance at all (nothing would happen - an
+  // inert role=button is worse than a plain row). Fine pointers below
+  // 1024 mirror the transactions list: hover buttons for writers, no row
+  // click.
+  const tapOpensRecord = isTouch && !isDesktop
+  const rowInteractive = isTouch && (tapOpensRecord || canWrite)
+  const openRecord = (row: Transfer) =>
+    navigate(`/transfers/${row.id}`, { state: { search: searchParams.toString() } })
+  const handleRowTap = (row: Transfer) => {
+    if (tapOpensRecord) openRecord(row)
+    else if (canWrite) setRowAction(row)
+  }
+
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
@@ -495,9 +512,9 @@ function TransfersContent({ settings, calendarStartDay, createRequest, onSaveDef
           {items.map((row) => (
             <div
               key={row.id}
-              {...(isTouch && canWrite ? tappableProps(() => setRowAction(row)) : {})}
+              {...(rowInteractive ? tappableProps(() => handleRowTap(row)) : {})}
               className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
-                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                rowInteractive ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
               }`}
             >
               <div className="min-w-0 flex-1">
