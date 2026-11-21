@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
 import AccountsPage from './pages/AccountsPage'
+import AccountPage from './pages/AccountPage'
 import BookmarksPage from './pages/BookmarksPage'
 import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
@@ -43,6 +44,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/accounts/:id" element={<AccountPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
