@@ -6,8 +6,8 @@
   },
   "emptyState": "No accounts yet.",
   "showArchivedLabel": "Show archived accounts",
+  "totals": { "label": "Total" },
   "accountCard": {
-    "viewTransactions": "View transactions",
     "setBalance": "Set balance\u2026",
     "edit": "Edit",
     "archive": "Archive",
@@ -15,10 +15,7 @@
     "delete": "Delete"
   },
   "recentTransfers": {
-    "title": "Recent transfers",
-    "viewAll": "View all transfers",
-    "repeatTitle": "Repeat",
-    "repeatAria": "Repeat transfer"
+    "viewAll": "View all transfers"
   },
   "confirmDelete": {
     "title": "Delete account",
@@ -75,5 +72,31 @@
     "enterTarget": "Enter a target balance",
     "alreadyThisAmount": "Balance is already this amount",
     "adjustFailed": "Failed to adjust balance"
+  },
+  "accountPage": {
+    "title": "Account",
+    "notFound": "This account is not in this workspace.",
+    "backToAccounts": "Back to accounts",
+    "actions": {
+      "add": "Add",
+      "more": "More actions"
+    },
+    "thisMonthIn": "In this month",
+    "thisMonthOut": "Out this month",
+    "sections": {
+      "upcoming": "Upcoming planned",
+      "transactions": "Recent transactions",
+      "transfers": "Recent transfers",
+      "viewAllTransactions": "View all transactions for {{name}}",
+      "viewAllPlanned": "View planned items for {{name}}",
+      "viewAllTransfers": "View transfers for {{name}}"
+    },
+    "empty": {
+      "transactions": "No transactions yet."
+    },
+    "toast": {
+      "archived": "Account archived",
+      "unarchived": "Account unarchived"
+    }
   }
 }

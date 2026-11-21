@@ -6,8 +6,8 @@
   },
   "emptyState": "Рахунків ще немає.",
   "showArchivedLabel": "Показувати архівовані рахунки",
+  "totals": { "label": "Разом" },
   "accountCard": {
-    "viewTransactions": "Переглянути операції",
     "setBalance": "Встановити баланс…",
     "edit": "Редагувати",
     "archive": "Архівувати",
@@ -15,10 +15,7 @@
     "delete": "Видалити"
   },
   "recentTransfers": {
-    "title": "Останні перекази",
-    "viewAll": "Переглянути всі перекази",
-    "repeatTitle": "Повторити",
-    "repeatAria": "Повторити переказ"
+    "viewAll": "Переглянути всі перекази"
   },
   "confirmDelete": {
     "title": "Видалити рахунок",
@@ -75,5 +72,31 @@
     "enterTarget": "Вкажіть цільовий баланс",
     "alreadyThisAmount": "Баланс уже дорівнює цій сумі",
     "adjustFailed": "Не вдалося змінити баланс"
+  },
+  "accountPage": {
+    "title": "Рахунок",
+    "notFound": "Цього рахунку немає в цьому робочому просторі.",
+    "backToAccounts": "Повернутися до рахунків",
+    "actions": {
+      "add": "Додати",
+      "more": "Більше дій"
+    },
+    "thisMonthIn": "Надходження цього місяця",
+    "thisMonthOut": "Витрати цього місяця",
+    "sections": {
+      "upcoming": "Майбутні заплановані",
+      "transactions": "Останні транзакції",
+      "transfers": "Останні перекази",
+      "viewAllTransactions": "Переглянути всі транзакції для рахунку {{name}}",
+      "viewAllPlanned": "Переглянути заплановані записи для рахунку {{name}}",
+      "viewAllTransfers": "Переглянути перекази для рахунку {{name}}"
+    },
+    "empty": {
+      "transactions": "Транзакцій ще немає."
+    },
+    "toast": {
+      "archived": "Рахунок архівовано",
+      "unarchived": "Рахунок розархівовано"
+    }
   }
 }

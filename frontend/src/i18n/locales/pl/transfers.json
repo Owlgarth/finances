@@ -20,8 +20,6 @@
   "emptyHeading": "Nie masz jeszcze przelewów",
   "emptyMessage": "Zarejestruj przelew z poziomu kont lub z menu tworzenia; pojawi się tutaj.",
   "row": {
-    "edit": "Edytuj",
-    "editAria": "Edytuj przelew",
     "repeat": "Powtórz",
     "repeatAria": "Powtórz przelew",
     "delete": "Usuń",
@@ -39,10 +37,6 @@
     "updateFailed": "Nie udało się zaktualizować przelewu",
     "recordFailed": "Nie udało się zarejestrować przelewu"
   },
-  "modal": {
-    "titleEdit": "Edytuj przelew",
-    "titleDefault": "Przelew"
-  },
   "fields": {
     "from": "Z",
     "fromAccount": "Z konta",
@@ -55,11 +49,15 @@
     "description": "Opis (opcjonalnie)"
   },
   "impliedRate": "Kurs wynikowy: 1 {{from}} = {{rate}} {{to}}",
-  "formActions": {
-    "cancel": "Anuluj",
-    "saving": "Zapisywanie…",
-    "save": "Zapisz",
-    "transfer": "Przelej"
+  "record": {
+    "title": "Przelew",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do przelewów",
+    "detailsTitle": "Szczegóły",
+    "accountsTitle": "Konta",
+    "noDescription": "Brak opisu",
+    "savesHint": "Zmiany zapisują się podczas edycji",
+    "openAccountAria": "Otwórz konto {{name}}"
   },
   "validation": {
     "chooseBoth": "Wybierz oba konta",

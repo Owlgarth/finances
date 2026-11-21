@@ -18,8 +18,6 @@
   "emptyHeading": "No transfers yet",
   "emptyMessage": "Record a transfer from Accounts or the create menu; it will appear here.",
   "row": {
-    "edit": "Edit",
-    "editAria": "Edit transfer",
     "repeat": "Repeat",
     "repeatAria": "Repeat transfer",
     "delete": "Delete",
@@ -37,10 +35,6 @@
     "updateFailed": "Failed to update transfer",
     "recordFailed": "Failed to record transfer"
   },
-  "modal": {
-    "titleEdit": "Edit transfer",
-    "titleDefault": "Transfer"
-  },
   "fields": {
     "from": "From",
     "fromAccount": "From account",
@@ -53,11 +47,15 @@
     "description": "Description (optional)"
   },
   "impliedRate": "Implied rate: 1 {{from}} = {{rate}} {{to}}",
-  "formActions": {
-    "cancel": "Cancel",
-    "saving": "Saving\u2026",
-    "save": "Save",
-    "transfer": "Transfer"
+  "record": {
+    "title": "Transfer",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to transfers",
+    "detailsTitle": "Details",
+    "accountsTitle": "Accounts",
+    "noDescription": "No description",
+    "savesHint": "Changes save as you edit",
+    "openAccountAria": "Open {{name}} account"
   },
   "validation": {
     "chooseBoth": "Choose both accounts",

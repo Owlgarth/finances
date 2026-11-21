@@ -317,7 +317,7 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
           budget-wise renders for them. */}
       <Section title={t('record.belongsToTitle')}>
         <LinkedRow<number | null>
-          to="/accounts" /* per-account destinations arrive with the accounts pages */
+          to={transaction.account_id != null ? `/accounts/${transaction.account_id}` : '/accounts'}
           linkLabel={
             transaction.account_name
               ? t('record.openAccountAria', { name: transaction.account_name })

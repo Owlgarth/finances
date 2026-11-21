@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './components/layout/MainLayout'
 import Dashboard from './pages/Dashboard'
 import AccountsPage from './pages/AccountsPage'
+import AccountPage from './pages/AccountPage'
 import BookmarksPage from './pages/BookmarksPage'
 import BudgetsPage from './pages/BudgetsPage'
 import BudgetDetailPage from './pages/BudgetDetailPage'
@@ -16,6 +17,7 @@ import Transactions from './pages/Transactions'
 import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
 import TransfersPage from './pages/TransfersPage'
+import TransferRecordPage from './pages/TransferRecordPage'
 import NewTransactionPage from './pages/NewTransactionPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
@@ -37,12 +39,20 @@ function TransactionRecordRoute() {
   return isDesktop ? <Transactions /> : <TransactionRecordPage />
 }
 
+/** Same tier split for transfers: at 1024+ the transfers list hosts the
+ *  record in its side panel, below 1024 the record is a full page. */
+function TransferRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <TransfersPage /> : <TransferRecordPage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/accounts/:id" element={<AccountPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/budgets/:id" element={<BudgetDetailPage />} />
         <Route path="/budgets/:id/periods" element={<BudgetPeriodsPage />} />
@@ -50,6 +60,7 @@ function AppContent() {
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
+        <Route path="/transfers/:id" element={<TransferRecordRoute />} />
         <Route path="/new" element={<NewTransactionPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />

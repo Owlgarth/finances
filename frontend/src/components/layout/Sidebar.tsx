@@ -123,18 +123,19 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
         <Landmark size={14} className="shrink-0" />
         {!collapsed && <span className="font-mono text-xs uppercase tracking-wider">{t('accounts')}</span>}
       </NavLink>
-      {/* Every account row opens the accounts page until per-account routes
-          exist: plain Links, so no row can claim to be the current page. */}
+      {/* Per-account destinations (the budget sub-row precedent): NavLink
+          with no end - segment-aware matching lights only the open
+          account's row and cannot collide /accounts/5 with /accounts/55. */}
       {!collapsed &&
         cappedAccounts.map((a) => (
-          <Link key={a.account_id} to="/accounts" className={subRowClass(false)}>
+          <NavLink key={a.account_id} to={`/accounts/${a.account_id}`} className={({ isActive }) => subRowClass(isActive)}>
             <span className="font-mono text-xs uppercase tracking-wider truncate flex-1 min-w-0 text-left">
               {a.account_name}
             </span>
             <span className="font-mono text-xs whitespace-nowrap shrink-0">
               {formatAmount(a.balance)} {multiCurrency ? a.currency_code : ''}
             </span>
-          </Link>
+          </NavLink>
         ))}
       {!collapsed && accountRows.length > SUB_ROW_CAP && (
         <Link to="/accounts" className={subRowClass(false)}>

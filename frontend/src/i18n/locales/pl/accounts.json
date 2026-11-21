@@ -6,8 +6,8 @@
   },
   "emptyState": "Nie masz jeszcze kont.",
   "showArchivedLabel": "Pokaż zarchiwizowane konta",
+  "totals": { "label": "Ogółem" },
   "accountCard": {
-    "viewTransactions": "Zobacz transakcje",
     "setBalance": "Ustaw saldo…",
     "edit": "Edytuj",
     "archive": "Archiwizuj",
@@ -15,10 +15,7 @@
     "delete": "Usuń"
   },
   "recentTransfers": {
-    "title": "Ostatnie przelewy",
-    "viewAll": "Zobacz wszystkie przelewy",
-    "repeatTitle": "Powtórz",
-    "repeatAria": "Powtórz przelew"
+    "viewAll": "Zobacz wszystkie przelewy"
   },
   "confirmDelete": {
     "title": "Usuń konto",
@@ -75,5 +72,31 @@
     "enterTarget": "Podaj saldo docelowe",
     "alreadyThisAmount": "Saldo już ma tę wartość",
     "adjustFailed": "Nie udało się zmienić salda"
+  },
+  "accountPage": {
+    "title": "Konto",
+    "notFound": "To konto nie znajduje się w tej przestrzeni.",
+    "backToAccounts": "Wróć do kont",
+    "actions": {
+      "add": "Dodaj",
+      "more": "Więcej działań"
+    },
+    "thisMonthIn": "Wpływy w tym miesiącu",
+    "thisMonthOut": "Wydatki w tym miesiącu",
+    "sections": {
+      "upcoming": "Nadchodzące zaplanowane",
+      "transactions": "Ostatnie transakcje",
+      "transfers": "Ostatnie przelewy",
+      "viewAllTransactions": "Zobacz wszystkie transakcje konta {{name}}",
+      "viewAllPlanned": "Zobacz zaplanowane pozycje konta {{name}}",
+      "viewAllTransfers": "Zobacz przelewy konta {{name}}"
+    },
+    "empty": {
+      "transactions": "Nie masz jeszcze transakcji."
+    },
+    "toast": {
+      "archived": "Konto zarchiwizowane",
+      "unarchived": "Cofnięto archiwizację konta"
+    }
   }
 }
