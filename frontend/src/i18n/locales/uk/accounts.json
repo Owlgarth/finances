@@ -6,8 +6,8 @@
   },
   "emptyState": "Рахунків ще немає.",
   "showArchivedLabel": "Показувати архівовані рахунки",
+  "totals": { "label": "Разом" },
   "accountCard": {
-    "viewTransactions": "Переглянути операції",
     "setBalance": "Встановити баланс…",
     "edit": "Редагувати",
     "archive": "Архівувати",
@@ -15,10 +15,7 @@
     "delete": "Видалити"
   },
   "recentTransfers": {
-    "title": "Останні перекази",
-    "viewAll": "Переглянути всі перекази",
-    "repeatTitle": "Повторити",
-    "repeatAria": "Повторити переказ"
+    "viewAll": "Переглянути всі перекази"
   },
   "confirmDelete": {
     "title": "Видалити рахунок",

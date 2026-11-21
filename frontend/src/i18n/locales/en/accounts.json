@@ -6,8 +6,8 @@
   },
   "emptyState": "No accounts yet.",
   "showArchivedLabel": "Show archived accounts",
+  "totals": { "label": "Total" },
   "accountCard": {
-    "viewTransactions": "View transactions",
     "setBalance": "Set balance\u2026",
     "edit": "Edit",
     "archive": "Archive",
@@ -15,10 +15,7 @@
     "delete": "Delete"
   },
   "recentTransfers": {
-    "title": "Recent transfers",
-    "viewAll": "View all transfers",
-    "repeatTitle": "Repeat",
-    "repeatAria": "Repeat transfer"
+    "viewAll": "View all transfers"
   },
   "confirmDelete": {
     "title": "Delete account",
