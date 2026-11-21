@@ -39,6 +39,13 @@ function TransactionRecordRoute() {
   return isDesktop ? <Transactions /> : <TransactionRecordPage />
 }
 
+/** Same tier split for transfers: at 1024+ the transfers list hosts the
+ *  record in its side panel, below 1024 the record is a full page. */
+function TransferRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <TransfersPage /> : <TransferRecordPage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -53,8 +60,7 @@ function AppContent() {
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/transfers" element={<TransfersPage />} />
-        {/* Full-page at every width for now; the follow-up replaces the 1024+ case with the list's side panel (the transactions precedent). */}
-        <Route path="/transfers/:id" element={<TransferRecordPage />} />
+        <Route path="/transfers/:id" element={<TransferRecordRoute />} />
         <Route path="/new" element={<NewTransactionPage />} />
         <Route path="/members" element={<WorkspaceMembersPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />

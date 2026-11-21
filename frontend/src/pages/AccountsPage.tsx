@@ -4,14 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, ArrowLeftRight, ChevronRight, Wallet, Landmark, Coins } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { accountsApi, reportsApi, transfersApi } from '../api/client'
-import type { AccountType, Transfer } from '../types'
+import type { AccountType } from '../types'
 import { useEnabledCurrencies, useMultiCurrency } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount } from '../utils/format'
-import { useBreakpoint } from '../hooks/useBreakpoint'
 import ArchivedBadge from '../components/common/ArchivedBadge'
 import AccountFormModal from '../components/accounts/AccountFormModal'
-import TransferModal from '../components/accounts/TransferModal'
 import PageHeader from '../components/layout/PageHeader'
 import WorkspaceSettingsPanel from '../components/layout/WorkspaceSettingsPanel'
 import { primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
@@ -24,12 +22,9 @@ export default function AccountsPage() {
   const { canManageAccounts, canWrite, canManageCurrencies } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: currencies = [] } = useEnabledCurrencies()
-  const { isDesktop } = useBreakpoint()
   const [showArchived, setShowArchived] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
-  const [transferOpen, setTransferOpen] = useState(false)
-  const [repeatTransfer, setRepeatTransfer] = useState<Transfer | null>(null)
   // Workspace settings opened from the account form's currency bridge; the
   // panel instance renders LAST so it stacks above the still-open form.
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -62,17 +57,10 @@ export default function AccountsPage() {
   )
 
   const openNew = () => { setFormOpen(true) }
-  const openTransfer = (repeat: Transfer | null = null) => { setRepeatTransfer(repeat); setTransferOpen(true) }
 
-  // Below 1024 the transfer entry is the /new page with type=transfer;
-  // 1024+ keeps the modal.
-  const handleTransfer = () => {
-    if (isDesktop) {
-      openTransfer()
-      return
-    }
-    navigate('/new?type=transfer')
-  }
+  // The transfer entry is the /new page with type=transfer at every width
+  // (the transfers list owns the panel surface at 1024+).
+  const handleTransfer = () => navigate('/new?type=transfer')
 
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
@@ -80,9 +68,8 @@ export default function AccountsPage() {
         title={t('title')}
         actions={
           <>
-            {/* Hidden on phones (the FAB owns creation there); on tablets
-                below 1024 it navigates to /new?type=transfer, at 1024+ it
-                opens the create modal. */}
+            {/* Hidden on phones (the FAB owns creation there); every wider
+                tier navigates to the /new page with type=transfer. */}
             {canWrite && (
               <button type="button" onClick={handleTransfer} className={`${secondaryButtonClass} max-sm:hidden`}>
                 <ArrowLeftRight size={13} className="inline mr-1" /> {t('actions.transfer')}
@@ -177,7 +164,6 @@ export default function AccountsPage() {
         account={null}
         onManageCurrencies={canManageCurrencies ? () => setSettingsOpen(true) : undefined}
       />
-      <TransferModal open={transferOpen} onClose={() => setTransferOpen(false)} repeatFrom={repeatTransfer} />
       <WorkspaceSettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )

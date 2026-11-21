@@ -70,8 +70,9 @@ function deriveDefaultPair(accounts: Account[]): { from: number | null; to: numb
 
 /**
  * Form state machine for recording, editing, or repeating a transfer,
- * extracted from TransferModal so a page can host the same form inline
- * (the /new page's transfer flavor). Owns the pair/amount/date/description
+ * split from its original host so pages and panels can host the same
+ * form inline (the /new page's transfer flavor). Owns the
+ * pair/amount/date/description
  * state and its session seeding render-adjust (edit/repeat prefills, the
  * last-used-pair default, the two-account auto-fill), the cross-currency
  * derivations, validation, and the save mutation. The HOST owns all DOM
