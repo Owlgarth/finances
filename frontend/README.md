@@ -33,7 +33,8 @@ frontend/
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
 │   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card)
 │   │   ├── dashboard/        # BudgetInsights (planned-vs-actual widget on the Dashboard)
-│   │   ├── transactions/     # TransactionsTable, TransactionAddRow, TransactionRecord, TransactionFormFields, TransferFormFields, AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal, PlannedMonthStepper
+│   │   ├── filters/          # FiltersTrigger (phone Filters entry), FilterSheet (two-level phone bottom sheet), FilterChipsBar (640+ toolbar), DateRangeEditor, MultiChoiceEditor, AmountRangeEditor, SingleChoiceEditor (container-agnostic editor bodies)
+│   │   ├── transactions/     # TransactionsTable, TransactionAddRow, TransactionRecord, TransactionFormFields, TransferFormFields, AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
 │   │   ├── modals/budgets/   # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
 │   │   ├── modals/bookmarks/ # BookmarkFormModal (create/edit bookmarks)
 │   │   ├── modals/transactions/ # PlannedFormModal, ExecuteAdjustedModal, RecurringFormModal
@@ -71,7 +72,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), listFilters (the Activity lists' filter registry - one ordered def list per page over the unchanged URL param names; drives badge counts, Clear, chips, the sheet hub and the Add-filter menu), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── i18next.config.ts        # i18next-cli config (i18n:extract; locales list)
 ├── package.json
@@ -106,13 +107,13 @@ routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 | `/budgets` | BudgetsPage | Budget list with create/edit modals (name + ordered currency set); cards list their currency codes; card icons open a budget's periods / add a custom period; "Show archived budgets" toggle with per-card unarchive (archived cards stay navigable, presentation muted) |
 | `/budgets/:id` | BudgetDetailPage | Category plan-vs-actual with period switcher (`?period=` param deep-links a period; capped 7-row window + "View all periods" row; opens on the current period, nearest-today fallback); multi-currency budgets select the viewed currency through a per-currency totals strip (keyboard-cyclable tablist; last view remembered per budget in localStorage); custom-cadence period management; "Manage categories" (write roles) opens an archive-first manager (delete offered only on already-archived rows, merge moves a category's history to a target); exact planned/actual/remaining column totals (footer row on desktop, totals card on mobile) sum the visible, non-archived rows client-side - not the API's summary totals, which include archived categories' money the table hides |
 | `/budgets/:id/periods` | BudgetPeriodsPage | All periods of a budget as year-sectioned cards (newest first); cards deep-link to the detail page via `?period=`; add/edit/delete for custom periods (admin) |
-| `/transactions` | Transactions | Transaction list, filters, create (below 1024px the button navigates to `/new`, carrying the account filter when exactly one is set; 1024px+ sets the `?new=transaction` param, opening the in-flow create panel in SplitView's panel slot - copy mode rides `?copy=`); rows open the record (below 1024px the full page, 1024px+ the side panel; the ledger table with container-query column sets and the keyboard-first inline add row renders at 640px+, phones keep the two-line div rows); sort select, date-preset chips, totals strip, remembered search, "Export view" JSON download; opens on the user's saved view defaults (personal, per workspace - explicit URL params win) with a "Save as default" button beside the bookmark action |
+| `/transactions` | Transactions | Transaction list, filters, create (below 1024px the button navigates to `/new`, carrying the account filter when exactly one is set; 1024px+ sets the `?new=transaction` param, opening the in-flow create panel in SplitView's panel slot - copy mode rides `?copy=`); rows open the record (below 1024px the full page, 1024px+ the side panel; the ledger table with container-query column sets and the keyboard-first inline add row renders at 640px+, phones keep the two-line div rows); totals strip, remembered search, "Export view" JSON download; the filter surface is a two-level phone sheet (Filters trigger with an active-count badge; date presets live in its date editor, sort and the Save-as-default/bookmark actions in the sheet) below 640px, and a 640+ chips toolbar above it (month stepper whose label opens the date editor, applied chips, "Add filter" menu, search, sort select, "Save view" menu holding Save-as-default and the bookmark action); opens on the user's saved view defaults (personal, per workspace - explicit URL params win) |
 | `/transactions/:id` | TransactionRecordPage / Transactions | A single transaction's record: a full page below 1024px, the side panel beside the list at 1024px+ (one route; the element branches on tier). Summary + one-field edit-in-place rows (sheet presentation on phones), belongs-to LinkedRows, Items/Receipts sections for writers, footer Duplicate and Delete-with-confirm returning to the list; foreign/deleted/garbage ids render a not-found state, and rows stay disabled for viewers and auto-managed adjustments |
-| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›) above the status control appears whenever the effective range is an exact calendar month (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (sort select, date presets, totals strip, remembered search, "Save as default", "Export view" - planned view only) |
-| `/transfers` | TransfersPage | Transfer history with account (either side) + date filters in the URL (opens on the saved date-range default, personal per workspace; "Save as default" button); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ opens the modal; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
+| `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›; chevrons only while the range is an exact calendar month) above the status control is always present (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (the same phone filter sheet and 640+ chips toolbar, totals strip, remembered search, "Save as default", "Export view" - planned view only; the recurring view has no filter UI) |
+| `/transfers` | TransfersPage | Transfer history with account (either side, single-select) + date filters in the URL (opens on the saved date-range default, personal per workspace; the "Save as default" action lives in the 640+ "Save view" menu - the page header keeps only New - and in the phone filter sheet's save row, whose hub offers date + account rows only); edit (opens against fetched server truth), repeat (prefills a new transfer), delete; creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ opens the modal; part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
 | `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=` and `?copy=`, read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox, account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
 | `/members` | WorkspaceMembersPage | Member management |
-| `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter bar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
+| `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter surfaces - the phone sheet or the 640+ toolbar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
 | `*` | NotFoundPage | 404 catch-all for unknown paths |
 
@@ -203,20 +204,20 @@ running the action so it can safely open a modal), `CommandPalette`
 sidebar's search row, the page headers' phone-only search button, and the
 account menu sheet: static destinations plus server-backed
 Budgets/Accounts/Transactions/Planned results once the query reaches 2 chars;
-desktop popover, mobile bottom sheet), `FilterBar` (list-page filter scaffolding -
-`FiltersToggle` with an active-filter count badge, the `FilterPanel` region with
-Clear filters, `FilterField`; the pages own the actual filter state in URL search
-params), `SearchInput` (search box with leading icon, debounced commit and clear
+desktop popover, mobile bottom sheet), `MonthStepper` (the Activity lists' month
+stepper: chevrons only while the effective range is one exact calendar month -
+the page gates them via `onShift` - and the label always a button, the
+date-editor trigger; `inline` drops the standalone phone row's margin and width
+claim for toolbar membership), `AppliedFilters` (removable applied-filter
+chips, one per active registry filter except the date range, plus "Clear all";
+640px+ only standalone via a CSS gate, `inline` inside the toolbar),
+`SearchInput` (search box with leading icon, debounced commit and clear
 X - the remembered search on the list pages), `AmountInput` (debounced numeric
 input for the min/max amount filters), `Skeleton` (wireframe loading bars -
 `Skeleton` single bar + `SkeletonRows` stack), `RoleBadge` (inline workspace-role
 chip next to workspace rows in the selector dropdown and the mobile account
 menu sheet),
-`ListFilterFields` (the
-shared Transactions/Planned filter panel, with date-preset chips: This month /
-Last month / Last 30 days / This year / All time - the last clears both date
-params and is active whenever neither is set, so it lights up on Transactions'
-date-less first load), `ListTotalsStrip` (presentational totals
+`ListTotalsStrip` (presentational totals
 strip for the list pages - the owning page runs the query and passes the results),
 `InfoHint` (inline "?" hint icon after form labels - the bubble shows on hover on
 hover-capable devices and pins on click/tap elsewhere; negative vertical margins
@@ -288,6 +289,24 @@ per period, a table/chart view toggle, per-currency Select and hover tooltips;
 chart tokens - series-1 = planned, series-2 = actual, text never wears series
 color).
 
+**Filters** (`components/filters/`): the Activity lists' filter surface, built
+over the per-page registries in `utils/listFilters.ts` (one ordered def list
+per page over the unchanged URL param names - badge counts, Clear, chips, the
+sheet hub and the Add-filter menu all read the same defs).
+`FiltersTrigger` (phone-only trigger with the active-count badge; the
+`sm:hidden` gate is baked in), `FilterSheet` (the below-640 two-level bottom
+sheet: hub rows with summaries and per-row clears, an editor level behind each
+row with a Back header, the sort/save rows and a live "Show N" footer),
+`FilterChipsBar` (the 640+ wrapping toolbar: stepper label opening the
+date-editor popover, applied chips opening their editors, an "Add filter" menu
+of inactive defs, search and sort slots, and a "Save view" menu - one popover
+at a time, panels at the `z-popover` tier over the sticky table THEAD), and
+the four container-agnostic editor bodies - `DateRangeEditor` (presets +
+localized From/To inputs with blur-revert + the first range-mode calendar),
+`MultiChoiceEditor` (search field above 8 options), `AmountRangeEditor`,
+`SingleChoiceEditor` (no chrome or Escape handling of their own; the host owns
+the panel).
+
 **Transactions** (`components/transactions/` + `components/modals/transactions/`):
 `TransactionFormFields` (the presentational transaction form body in the G5.1
 order - type segmented control, amount with sign prefix and a trailing
@@ -339,11 +358,7 @@ date + amount prefilled from the plan, sent as execute overrides),
 date, plan-ahead count, optional end date with create-all-until-end-date
 switch, active toggle, `InfoHint` field hints;
 "Make recurring" prefills it from a pending planned row and adopts that row as
-the rule's first occurrence instead of duplicating it), `PlannedMonthStepper`
-(presentational month stepper for the Planned page - prev/next chevrons around
-a `formatMonthYear` month label; mounted only when the planned view's effective
-date range spans exactly one calendar month, custom/partial ranges and All
-time hide the row).
+the rule's first occurrence instead of duplicating it).
 
 ## Contexts
 

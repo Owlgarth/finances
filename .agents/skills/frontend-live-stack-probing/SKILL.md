@@ -249,10 +249,17 @@ same session - in PR #81 it paid for itself twice.
   sourcemap's line numbers match the older revision. Before trusting any "missing UI"
   verdict, verify a distinctive marker of the LANDED diff (an import, a handler name) in
   the SERVED transform; if stale, an mtime bust (`touch` the file, no content change)
-  invalidates the cache. Choose markers that survive esbuild's output form: the transform
-  double-quotes strings and strips JSX comments, so a single-quoted or comment-based marker
-  reads "stale" against a fresh transform - a STALE verdict from such a marker is a probe
-  bug until checked against the actual transform text. Exemplar: PR #146's first stepper
+  invalidates the cache - and when the bust does not cure it (a transform frozen across
+  host-side multi-write edits can survive `touch`), restart the dev container: the frozen
+  module graph lives in the container, and only the restart clears it. Choose markers
+  that survive esbuild's output form: the transform double-quotes strings and strips JSX
+  comments, so a single-quoted or comment-based marker reads "stale" against a fresh
+  transform - a STALE verdict from such a marker is a probe bug until checked against
+  the actual transform text. Type-position identifiers are erased along with the types
+  (an imported name used only in annotations does not appear in the transform at all), so
+  a type-only marker reads 0 occurrences against a CORRECT fresh transform - make
+  freshness claims from a value-position marker (a runtime string, an export, a handler
+  name), never a type-only one. Exemplar: PR #146's first stepper
   probe. Verify the served
   transform per FILE, never per subset: a multi-write edit session freezes the module
   graph per file - exactly the files whose edits landed as separate writes can sit at
@@ -383,7 +390,8 @@ same session - in PR #81 it paid for itself twice.
   transactions page's is "Нова транзакція"; a guessed string turns a harness fault into an
   apparent product bug.
 - Accessible-name locators for controls that carry a count badge must make the badge
-  OPTIONAL in the pattern: /planned's FiltersToggle reads "Filters 1", not "Filters", on
+  OPTIONAL in the pattern: /planned's phone filter trigger (`components/filters/FiltersTrigger.tsx`)
+  reads "Filters 1", not "Filters", on
   fresh entry - the one-shot default params materialize into the URL on mount and the badge
   counts them. Match with a catalog-derived regex (`^(Filters|Filtry|Фільтри)( \d+)?$`),
   never an exact name: the name comes from the catalogs, so the regex must too.

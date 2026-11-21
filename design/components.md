@@ -461,7 +461,7 @@ The floor keys on `@media (pointer: coarse)` (custom `pointer-coarse:` variant
 registered via `@custom-variant` in `src/index.css`), not viewport width, so
 tablets and landscape phones above
 `sm` keep full touch targets. Every control that can share a row — text inputs,
-Select/MultiSelect triggers, date trigger, search input, buttons, FilterBar
+Select/MultiSelect triggers, date trigger, search input, buttons, Filters
 toggle — composes it, so mixed rows (e.g. a Select next to a text input) always align.
 
 | Element | Height | Padding | Radius |
@@ -2079,6 +2079,121 @@ disabled? }[] }`.
 `Select` and `DatePicker` are adaptive: one exported API, desktop keeps the anchored
 dropdown/popover, mobile presents a sheet (44px option rows with check mark; 44px calendar
 day cells via the `rdp-sheet` scope). See `design/patterns.md` §13 for the pattern rules.
+
+---
+
+## 22. Filters (Activity Lists)
+
+The filter surface of the three Activity lists (`/transactions`, `/planned`,
+`/transfers`) is registry-driven: one ordered filter-def list per page
+(`utils/listFilters.ts`) over the UNCHANGED URL param names (`from`/`to`,
+`account`, `type`, `currency`, `budget`, `category`, `amount_min`/`amount_max`),
+so bookmarks and saved defaults replay by construction. Every surface - the
+trigger's badge count, Clear, the applied chips, the phone sheet's hub rows and
+the 640+ "Add filter" menu - consumes the same defs. Each def declares its own
+param keys, a label key, an editor kind (`date` / `multi` / `amount` /
+`single`), a runtime availability condition, an `isActive` predicate over the
+page's EFFECTIVE values (a materialized default counts as active), a short
+pre-localized summary fragment, a per-def clear patch, and an optional change
+patch (the budget def prunes category selections that no longer belong to the
+selected budgets). Counting and clearing run over the FULL def list -
+availability only gates what hosts may OFFER (a stale param replayed from a
+bookmark still counts in the badge and still clears; it just gets no hub row or
+menu entry while the facet is empty on this workspace). Sort is not a registry
+def: the pages' sort option lists feed the sheet's Sort row and the toolbar's
+Select. Shared filter chrome self-translates through the transactions namespace
+(the established cross-page filter home); page-specific strings arrive as props.
+
+### MonthStepper (`common/MonthStepper.tsx`)
+
+Always visible on all three lists (each page renders a standalone phone row and
+an `inline` toolbar member - a CSS-gated dual embed; the shared state is the
+URL).
+
+| Property | Value |
+|---|---|
+| Chevrons | Prev/next render only while the effective range is exactly one calendar month - the page gates them through the `onShift` prop (custom ranges, partial ranges and All time show the label alone) |
+| Label | Always a button (the date-editor trigger) in both states, with `aria-haspopup`/`aria-expanded` keyed on the `onOpenEditor` prop's presence: without an exact-month range there is no other date entry point, so the label button must exist everywhere. The 640+ toolbar wires it to the date-editor popover; the standalone phone rows wire it to the filter sheet |
+| Label text | `stepperRangeLabel(from, to, allTimeLabel)`: the month name for an exact calendar month, the configured all-time wording when both bounds are empty, the short localized period range when both are set, the single formatted bound for a partial range |
+| Announcement | The changing value is announced by a visually-hidden polite sibling region (a live region must never be an interactive element); the button keeps a stable accessible name |
+| Sizing | `min-w-[128px]` on the label keeps the chevrons in place across locales' month-name widths; `max-sm:flex-1` absorbs the full-width mobile row; chevron buttons `w-8 h-8` with `touch-hit`; `inline` drops the standalone row's bottom margin and phone width claim (the host row owns spacing) |
+| Fonts | Label in the mono register (`font-mono text-xs font-medium`); month names and date shapes come from the date-fns locale / number-style config, never from i18n catalogs |
+
+### AppliedFilters (`common/AppliedFilters.tsx`)
+
+One removable chip per active registry filter except the date range (the
+stepper owns the date), plus a "Clear all" link (the registry-wide clear patch
+through the page's URL updater). Renders nothing when no chip is active, so the
+row never takes vertical space on an unfiltered list.
+
+| Property | Value |
+|---|---|
+| Standalone gate | 640px and up only, CSS-gated: `hidden sm:flex`, the hidden CLASS never the HTML attribute, so the row stays in the accessibility tree's DOM at every width and simply display-nones below `sm` (phones see the applied state through the trigger's badge and the sheet's hub rows) |
+| `inline` | Toolbar membership: drops the width gate and bottom margin (the toolbar row owns both) |
+| Chip anatomy | The chip body button and its X button are siblings inside a wrapper (a button may never descend from a button); the wrapper owns the chip skin and the popover anchor while its editor is open |
+| Editor seams | `onOpenEditor` (chip body click opens the filter's editor popover; without it the body stays an inert label), `editorOpenId` (the open chip, the popover's anchor), `renderEditorPanel` (the host-built panel anchored under the chip). Focus returns to the chip body when its popover closes and focus would otherwise fall to `<body>` |
+| Removal | The X alone removes, through the def's clear patch via the page's URL-param updater (a replace write); rows and X interpolate the full height constant (`min-h-8` base plus the 44px coarse floor; the icon-only X also carries the coarse width floor) |
+
+### Editor bodies (`filters/*Editor.tsx`)
+
+Four container-agnostic bodies: no trigger, no popup chrome, no internal
+scrolling, no Escape handling, no width pins - the host (the sheet's editor
+level or a toolbar popover) owns the panel, focus and Escape. The page wires
+each def to its body once (options + URL writes); one wiring feeds every host,
+so the surfaces never diverge. Every change applies to the URL immediately.
+
+| Editor | Body |
+|---|---|
+| `DateRangeEditor` | Preset chips (This month / Last month / Last 30 days / This year / All time; a range preset lights only on an exact match, All time only when neither bound is set - clicking it clears both bounds), localized From/To short-date text inputs (the input mirror of the quick-pick date format; an invalid entry reverts on blur with an under-field error, never a toast), and the first range-mode calendar: `.rdp-range-editor` layered on `.rdp-inline` (range-state colors, compact geometry and coarse-pointer 44px targets, `index.css`), `resetOnSelect` so a third click restarts the range instead of extending it |
+| `MultiChoiceEditor` | Checkmark rows (`role="listbox"` `aria-multiselectable`); a search field appears above 8 options - deliberately higher than MultiSelect's >5, since the editor bodies are wider and host their own scroll; the `searchable` prop is the def-level always-on override (category). The search consumes Enter but not Escape: the host panel owns Escape |
+| `AmountRangeEditor` | `AmountInput` min/max pair (debounced commits); empty passes through as a param delete, unparseable text travels raw for the API validator to reject |
+| `SingleChoiceEditor` | One-active-row list (the Transfers account filter, the sort options); clicking a selected row keeps it selected - there is no "none" state unless the host offers one through its options |
+
+### FiltersTrigger + FilterSheet (below 640px)
+
+`FiltersTrigger` is the phone-only entry (`sm:hidden` baked in - no call site
+can forget the gate): a secondary-register button with the registry badge count
+(active filters, date included). It opens `FilterSheet`, a presentational
+two-level `BottomSheet` composition; the page owns every piece of state (open
+flag, URL params, queries).
+
+| Property | Value |
+|---|---|
+| Hub level | One row per OFFERABLE def: label plus short summary (active rows only), the active marker (left accent bar + surface tint, never color-alone - inactive rows reserve the bar's space so text never shifts) and an X clear on active rows; optional Sort row (no marker, no clear - the default option is always selectable); the save rows (Save as default, bookmark where the page has a bookmark kind) live here on phones instead of the toolbar |
+| Editor level | One filter's editor body behind each row, under a sticky Back header (ArrowLeft plus the filter's label; the back button autofocuses on entry) |
+| Escape | Steps exactly one level per press: the editor level consumes it at its own container; hub-level Escape passes to the sheet's own listener and closes the sheet. A scrim tap closes the whole sheet from either level |
+| Footer | Sticky full-width primary "Show N <noun>" (font-mono numeral); the previous total shows while the list refetches - intended |
+| Reset | Every close path funnels through the parent's `open=false`, which resets the level so the next open starts at the hub |
+
+### FilterChipsBar (640px and up)
+
+The 640+ toolbar: one wrapping flex row (`hidden sm:flex flex-wrap`), one
+popover open at a time, tracked in a single state slot.
+
+| Property | Value |
+|---|---|
+| Members | Month stepper (its label opens the date-editor popover anchored below), applied chips (a chip body opens that filter's editor, anchored under the chip), the "Add filter" menu, optional search and sort slots (the pages' own SearchInput / Select, given a min-width floor so the row wraps instead of collapsing them), and the "Save view" menu at the row's right edge |
+| Add filter | A menu of inactive defs only (an entry is never a no-op); picking one swaps straight into that def's editor; disabled when every offerable def is active |
+| Save view | Save-as-default row plus the bookmark row on pages with a bookmark kind; on Transfers the menu carries save-default alone (the page header keeps only New). The menu closes before the bookmark modal mounts, so Escape always faces one layer |
+| Z tier | Editor panels and menus sit at `z-popover` (250, the `tokens.md` §3 fence) so they overlay the table's sticky THEAD (`z-sticky`, 200) and stay clickable - the dropdown tier (100) sits below sticky by original design |
+| Escape | Consumed at the row (document bubble-phase preventDefault + stopPropagation) so nothing beneath reacts; the editors carry no Escape handling by contract - the row owns it for every popover it hosts. An outside click landing on a focusable element moves focus there; anything else dismisses and returns focus to the trigger |
+
+### Paired-input wrap recipe and the wrap-row floor
+
+The paired-input recipe (both bound-pair editors): `flex max-sm:flex-wrap` -
+below `sm` each `w-full` input claims its own full line (`w-full` doubles as
+`basis-full`) and the separator hides (`max-sm:hidden`); at `>=sm` the pair
+shares one line. It was formerly a de facto convention documented only in code
+comments across its then-two sites; it is spec'd here now that the two editors
+carry it.
+
+Its old neighbor defect is gone by construction: the retired controls row
+collapsed its search input toward 0px in the ~640-725px band, and the
+`position: relative` wrapper painted over the Filters toggle, intercepting its
+clicks. The toolbar replaces the per-input fix with the wrapping-flex row
+itself: the search slot carries `flex-1 min-w-40` (a 160px floor), so the input
+can no longer collapse under the shrink-0 controls - the row wraps instead of
+overlapping.
 
 ---
 
