@@ -110,6 +110,7 @@
     "deltaAmountLabel": "Дельта суми",
     "descriptionLabel": "Опис",
     "frequentAria": "Часті описи",
+    "lastAmountLabel": "Остання:",
     "noteLabel": "Нотатка",
     "moreDetails": "Додатково",
     "accountLabel": "Рахунок",
@@ -165,6 +166,10 @@
     "title": "Вийти без збереження?",
     "message": "Ваші зміни буде втрачено.",
     "discard": "Вийти"
+  },
+  "draft": {
+    "restored": "Відновлено незбережені зміни з останнього візиту.",
+    "discard": "Відхилити"
   },
   "items": {
     "untitled": "Позиція без назви",

@@ -1,10 +1,24 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, type Path } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { authInputClass } from '../components/common/formStyles';
 import { useAuth } from '../contexts/AuthContext';
 import { getRuntimeDemoMode } from '../runtimeConfig';
+
+/** The protected-route return target carried in router state by
+ *  ProtectedRoute's sign-in redirect. Router state is app-written but
+ *  untyped - accept only an in-app path object ('/'-prefixed, not
+ *  protocol-relative) so nothing else in the history entry can aim the
+ *  post-sign-in navigation off-site. */
+function returnToFromState(state: unknown): Partial<Path> | null {
+  if (typeof state !== 'object' || state === null) return null;
+  const from = (state as { from?: unknown }).from;
+  if (typeof from !== 'object' || from === null) return null;
+  const { pathname } = from as { pathname?: unknown };
+  if (typeof pathname !== 'string' || !pathname.startsWith('/') || pathname.startsWith('//')) return null;
+  return from as Partial<Path>;
+}
 
 export default function Login() {
   const { t } = useTranslation('auth');
@@ -16,9 +30,15 @@ export default function Login() {
   const [tempToken, setTempToken] = useState('');
   const [twoFACode, setTwoFACode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const location = useLocation();
+  // Where a successful sign-in returns to: the protected route that bounced
+  // here (carried in router state, search string included), or the dashboard
+  // for direct visits. Recomputed per render; the 2FA step is component
+  // state, not navigation, so the value survives it.
+  const from = returnToFromState(location.state);
 
   if (!isLoading && isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={from ?? '/'} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

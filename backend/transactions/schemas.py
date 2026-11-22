@@ -141,12 +141,23 @@ class TransactionTotalsResponse(BaseModel):
 
 
 class FrequentDescriptionItem(BaseModel):
-    """Schema for a single frequent description item."""
+    """Schema for a single frequent description item.
+
+    last_* fields describe the group's most recent transaction (max date,
+    tiebreak max id). An archived category nulls last_category_id AND
+    last_budget_id; an archived account nulls last_account_id; budget state
+    is never consulted. All four are nullable - the newest row may lack a
+    category or an account.
+    """
 
     description: str
     count: int
     total: Decimal
     currency: str
+    last_category_id: Optional[int] = None
+    last_budget_id: Optional[int] = None
+    last_account_id: Optional[int] = None
+    last_amount: Optional[Decimal] = None
 
 
 class FrequentDescriptionsResponse(BaseModel):

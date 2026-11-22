@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { AlertCircle } from 'lucide-react'
 import Select from '../common/Select'
 import { inputClass, labelClass } from '../common/formStyles'
@@ -43,6 +43,10 @@ interface Props {
   /** Blur signal for the caller's error-display gate (an error shows
    *  after the field's first invalid blur, then tracks keystrokes). */
   onBlur?: () => void
+  /** Optional hint row under the error line, inside the amount column
+   *  (e.g. the suggestion Last-amount button). Rendered as-is - the
+   *  caller owns content, translation, and any styling. */
+  hint?: ReactNode
 }
 
 /** The amount row shared by every record type: label, optional sign
@@ -63,6 +67,7 @@ export default function AmountField({
   inputRef,
   autoFocus,
   onBlur,
+  hint,
 }: Props) {
   return (
     <div className="flex items-end gap-2">
@@ -99,6 +104,7 @@ export default function AmountField({
             <span>{error}</span>
           </div>
         )}
+        {hint}
       </div>
       {currency && (
         <div className="w-24 shrink-0">

@@ -7,6 +7,7 @@ import type { Account, Transfer } from '../types'
 import { useAccounts } from './useDomain'
 import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
+import { type FormDraftController, type NewFormDraftValues } from '../utils/formDraft'
 
 const LAST_PAIR_KEY = 'owlgarth-last-transfer-pair'
 
@@ -44,6 +45,18 @@ interface Options {
    *  /new renders field errors instead and passes false). Default true. */
   validationToasts?: boolean
   shared?: TransferFormShared
+  /** /new draft persistence. When provided, the user-action setters write
+   *  through the debounced controller, and `values` (the draft restored
+   *  at mount; null when none/expired) seeds the create-mode
+   *  pair/amounts/description ahead of the plain-create derivation.
+   *  Undefined (the default) keeps every other host draft-free. */
+  draft?: {
+    controller: FormDraftController
+    values: NewFormDraftValues | null
+  } | null
+  /** Bump to force a fresh create-mode re-seed without a remount (the /new
+   *  draft notice's Discard). Default 0 = never re-seeds. */
+  reseedNonce?: number
 }
 
 function accountById(accounts: Account[], id: number | null): Account | undefined {
@@ -79,7 +92,15 @@ function deriveDefaultPair(accounts: Account[]): { from: number | null; to: numb
  * and closes after submit() resolves ok - the modal keeps its validation
  * toasts, /new passes validationToasts: false and renders field errors.
  */
-export function useTransferForm({ open, editFrom = null, repeatFrom = null, validationToasts = true, shared }: Options) {
+export function useTransferForm({
+  open,
+  editFrom = null,
+  repeatFrom = null,
+  validationToasts = true,
+  shared,
+  draft = null,
+  reseedNonce = 0,
+}: Options) {
   const { t } = useTranslation('transfers')
   const { t: tCommon } = useTranslation('common')
   const queryClient = useQueryClient()
@@ -105,7 +126,8 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
     open: boolean
     mode: 'edit' | 'repeat' | 'create' | 'none'
     source: Transfer | null
-  }>({ open: false, mode: 'none', source: null })
+    reseedNonce: number
+  }>({ open: false, mode: 'none', source: null, reseedNonce: 0 })
   // Length of the accounts list the default-branch pair seeding last saw.
   const [seededAccountsLen, setSeededAccountsLen] = useState(accounts.length)
 
@@ -135,8 +157,12 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
 
   const mode = editFrom ? 'edit' : repeatFrom ? 'repeat' : 'create'
   const source = editFrom ?? repeatFrom ?? null
-  const seeding = open !== session.open || session.mode !== mode || session.source !== source
-  if (seeding) setSession({ open, mode, source })
+  const seeding =
+    open !== session.open ||
+    session.mode !== mode ||
+    session.source !== source ||
+    reseedNonce !== session.reseedNonce
+  if (seeding) setSession({ open, mode, source, reseedNonce })
   if (seeding && open) {
     if (editFrom) {
       setFromId(editFrom.from_account_id)
@@ -153,13 +179,16 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
       setToAmount('')
       setDate(new Date().toISOString().slice(0, 10))
     } else {
+      const dv = draft?.values ?? null
       const pair = deriveDefaultPair(accounts)
-      setFromId(pair.from)
-      setToId(pair.to)
-      setFromAmount('')
-      setToAmount('')
-      setDescription('')
-      setDate(new Date().toISOString().slice(0, 10))
+      // Draft picks win over the derived default pair (null = explicit no
+      // pick); amounts/description/date come from the shared draft fields.
+      setFromId(dv?.transferFromId !== undefined ? dv.transferFromId : pair.from)
+      setToId(dv?.transferToId !== undefined ? dv.transferToId : pair.to)
+      setFromAmount(dv?.amount !== undefined ? dv.amount : '')
+      setToAmount(dv?.transferToAmount ?? '')
+      setDescription(dv?.transferDescription ?? '')
+      setDate(dv?.date !== undefined ? dv.date : new Date().toISOString().slice(0, 10))
     }
   }
 
@@ -170,10 +199,22 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
   // never clobbers a typed transfer.
   if (accounts.length !== seededAccountsLen) {
     setSeededAccountsLen(accounts.length)
-    if (open && !editFrom && !repeatFrom && fromId === null && toId === null) {
-      const pair = deriveDefaultPair(accounts)
-      setFromId(pair.from)
-      setToId(pair.to)
+    if (open && !editFrom && !repeatFrom) {
+      const dv = draft?.values ?? null
+      // A draft carrying a pair choice made it EXPLICITLY (either end null
+      // = deliberate no pick): suppress the auto-fill, or every cold mount
+      // would re-derive over the draft's pair.
+      const explicitPair = dv !== null && ('transferFromId' in dv || 'transferToId' in dv)
+      if (fromId === null && toId === null && !explicitPair) {
+        const pair = deriveDefaultPair(accounts)
+        setFromId(pair.from)
+        setToId(pair.to)
+      } else if (dv !== null) {
+        // Draft-restored ids that no longer exist restore as absent
+        // (dropped to null, never re-derived).
+        if (fromId !== null && !accounts.some((a) => a.id === fromId)) setFromId(null)
+        if (toId !== null && !accounts.some((a) => a.id === toId)) setToId(null)
+      }
     }
   }
 
@@ -301,6 +342,39 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
     setSeedSession(null)
   }
 
+  // ---- Draft writes: returned setters are the user-action seams; seeding
+  // and resetForAnother keep the raw setters (see the transaction hook's
+  // twin block). The merged setFromAmount/setDate stay unwrapped - the /new
+  // page owns the draft writes for the lifted amount/date rows. ----
+  const draftUpdate = (patch: Partial<NewFormDraftValues>) => {
+    draft?.controller.update(patch)
+  }
+  const changeFromId = (v: number | null) => {
+    setFromId(v)
+    draftUpdate({ transferFromId: v })
+  }
+  const changeToId = (v: number | null) => {
+    setToId(v)
+    draftUpdate({ transferToId: v })
+  }
+  const changeToAmount = (v: string) => {
+    setToAmount(v)
+    draftUpdate({ transferToAmount: v })
+  }
+  const changeDescription = (v: string) => {
+    setDescription(v)
+    draftUpdate({ transferDescription: v })
+  }
+
+  // Stable discriminator for the current seeding session (mirrors
+  // useTransactionForm.sessionKey): the /new page keys its fields component
+  // on it so a draft-Discard re-seed remounts the fields (local touched
+  // flags and disclosure latches reset). The nonce suffix appears only
+  // after an explicit re-seed request, so other hosts' keys are unchanged.
+  const sessionKey = `${session.open ? 'o' : 'c'}-${session.mode}-${session.source?.id ?? 'new'}${
+    session.reseedNonce > 0 ? `-${session.reseedNonce}` : ''
+  }`
+
   return {
     accounts,
     fromId,
@@ -309,12 +383,12 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
     toAmount,
     date,
     description,
-    setFromId,
-    setToId,
+    setFromId: changeFromId,
+    setToId: changeToId,
     setFromAmount,
-    setToAmount,
+    setToAmount: changeToAmount,
     setDate,
-    setDescription,
+    setDescription: changeDescription,
     fromAccount,
     toAccount,
     crossCurrency,
@@ -324,6 +398,7 @@ export function useTransferForm({ open, editFrom = null, repeatFrom = null, vali
     isSaving: mutation.isPending,
     isDirty,
     resetForAnother,
+    sessionKey,
   }
 }
 

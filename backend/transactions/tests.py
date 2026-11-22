@@ -2173,6 +2173,217 @@ class TestFrequentDescriptions(TransactionTestCase):
         self.assertEqual(by_currency[('Biedronka', 'PLN')], 1)
 
 
+class TestFrequentDescriptionsLastValues(TransactionTestCase):
+    """last_* fields: newest-per-group category/budget/account/amount.
+
+    Newest = max(date), tiebreak max(id) - the service's window ordering.
+    """
+
+    def _get_first_item(self):
+        data = self.get('/api/transactions/frequent-descriptions', **self.auth_headers())
+        self.assertStatus(200)
+        return data['items'][0]
+
+    def test_last_values_from_most_recent_transaction(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        dining = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Dining')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 1, 10),
+            amount=Decimal('10.00'),
+            category=self.groceries,
+        )
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 2, 20),
+            amount=Decimal('25.00'),
+            category=dining,
+        )
+
+        item = self._get_first_item()
+        self.assertEqual(item['count'], 2)
+        self.assertEqual(item['last_category_id'], dining.id)
+        self.assertEqual(item['last_budget_id'], other_budget.id)
+        self.assertEqual(item['last_account_id'], self.account.id)
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('25.00'))
+
+    def test_same_date_tiebreak_uses_newest_id(self):
+        other_budget = BudgetFactory(workspace=self.workspace)
+        dining = CategoryFactory(budget=other_budget, workspace=self.workspace, name='Dining')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 3, 5),
+            amount=Decimal('1.00'),
+            category=self.groceries,
+        )
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 3, 5),
+            amount=Decimal('2.00'),
+            category=dining,
+        )
+
+        item = self._get_first_item()
+        self.assertEqual(item['last_category_id'], dining.id)
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('2.00'))
+
+    def test_archived_category_nulls_category_and_budget(self):
+        archived = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Old', is_archived=True)
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 1, 10),
+            amount=Decimal('10.00'),
+            category=self.groceries,
+        )
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 2, 20),
+            amount=Decimal('25.00'),
+            category=archived,
+        )
+
+        item = self._get_first_item()
+        self.assertIsNone(item['last_category_id'])
+        self.assertIsNone(item['last_budget_id'])
+        # Only the category pair is nulled; account and amount stay.
+        self.assertEqual(item['last_account_id'], self.account.id)
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('25.00'))
+
+    def test_archived_account_nulls_account_only(self):
+        archived_account = AccountFactory(workspace=self.workspace, name='Old bank', is_archived=True)
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 1, 10),
+            amount=Decimal('10.00'),
+            category=self.groceries,
+        )
+        TransactionFactory(
+            account=archived_account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 2, 20),
+            amount=Decimal('25.00'),
+            category=self.groceries,
+        )
+
+        item = self._get_first_item()
+        self.assertIsNone(item['last_account_id'])
+        self.assertEqual(item['last_category_id'], self.groceries.id)
+        self.assertEqual(item['last_budget_id'], self.budget.id)
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('25.00'))
+
+    def test_inactive_budget_keeps_category_and_budget_ids(self):
+        # Budget has no archived flag - is_active=False is the closest
+        # state, and it must NOT null the ids (only the category's archive
+        # state is ever consulted).
+        retired_budget = BudgetFactory(workspace=self.workspace, is_active=False)
+        retired = CategoryFactory(budget=retired_budget, workspace=self.workspace, name='Retired')
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 2, 20),
+            amount=Decimal('25.00'),
+            category=retired,
+        )
+
+        item = self._get_first_item()
+        self.assertEqual(item['last_category_id'], retired.id)
+        self.assertEqual(item['last_budget_id'], retired_budget.id)
+
+    def test_last_transaction_without_category_and_account(self):
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 1, 10),
+            amount=Decimal('10.00'),
+            category=self.groceries,
+        )
+        TransactionFactory(
+            account=None,
+            currency=Currency.objects.get(code='PLN'),
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 2, 20),
+            amount=Decimal('12.00'),
+        )
+
+        item = self._get_first_item()
+        self.assertIsNone(item['last_category_id'])
+        self.assertIsNone(item['last_budget_id'])
+        self.assertIsNone(item['last_account_id'])
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('12.00'))
+
+    def test_other_workspace_transactions_never_leak(self):
+        TransactionFactory(
+            account=self.account,
+            workspace=self.workspace,
+            description='Biedronka',
+            date=date(2026, 1, 10),
+            amount=Decimal('10.00'),
+            category=self.groceries,
+        )
+        other_workspace = WorkspaceFactory()
+        other_account = AccountFactory(workspace=other_workspace)  # PLN by default: same group key
+        other_budget = BudgetFactory(workspace=other_workspace)
+        other_category = CategoryFactory(budget=other_budget, workspace=other_workspace, name='Foreign')
+        TransactionFactory(
+            account=other_account,
+            workspace=other_workspace,
+            description='Biedronka',
+            date=date(2026, 9, 9),
+            amount=Decimal('99.00'),
+            category=other_category,
+        )
+
+        item = self._get_first_item()
+        self.assertEqual(item['count'], 1)
+        self.assertEqual(Decimal(str(item['last_amount'])), Decimal('10.00'))
+        self.assertEqual(item['last_category_id'], self.groceries.id)
+        self.assertNotEqual(item['last_category_id'], other_category.id)
+        self.assertNotEqual(item['last_account_id'], other_account.id)
+
+    def test_query_count_constant_in_number_of_items(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for idx in range(6):
+            TransactionFactory(
+                account=self.account,
+                workspace=self.workspace,
+                description=f'Shop {idx}',
+                date=date(2026, 1, 10 + idx),
+                amount=Decimal('5.00'),
+            )
+
+        with CaptureQueriesContext(connection) as one:
+            data_one = self.get('/api/transactions/frequent-descriptions?limit=1', **self.auth_headers())
+        with CaptureQueriesContext(connection) as many:
+            data_many = self.get('/api/transactions/frequent-descriptions?limit=6', **self.auth_headers())
+
+        self.assertEqual(len(data_one['items']), 1)
+        self.assertEqual(len(data_many['items']), 6)
+        # Fixed query budget (auth + display map + grouped rows + one
+        # window query) regardless of how many items return.
+        self.assertGreaterEqual(len(one.captured_queries), 3)
+        self.assertEqual(len(one.captured_queries), len(many.captured_queries))
+
+
 class TestDerivedPeriodServiceLevel(TestCase):
     """get_or_create_for_date is invoked with the transaction's own date."""
 

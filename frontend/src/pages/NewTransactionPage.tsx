@@ -1,18 +1,21 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CloudOff, Loader2, ScanLine } from 'lucide-react'
+import { CloudOff, Info, Loader2, ScanLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { transactionsApi, transfersApi } from '../api/client'
 import type { Transaction } from '../types'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useExtractionConfig } from '../hooks/useDomain'
 import { useIsTouch } from '../hooks/useBreakpoint'
 import { useTransactionForm } from '../hooks/useTransactionForm'
 import { useTransferForm } from '../hooks/useTransferForm'
 import { intParam } from '../utils/params'
+import { formatAmount } from '../utils/format'
+import { createFormDraftController, formDraftKey, readFormDraft } from '../utils/formDraft'
 import FormPage from '../components/layout/FormPage'
 import TransactionFormFields from '../components/transactions/TransactionFormFields'
 import TransferFormFields from '../components/transactions/TransferFormFields'
@@ -48,6 +51,7 @@ export default function NewTransactionPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { workspace, isLoading: workspaceLoading } = useWorkspace()
+  const { user } = useAuth()
   const { canWrite } = usePermissions()
   const { enabled: extractionEnabled, reachable: extractionReachable } = useExtractionConfig()
   const isTouch = useIsTouch()
@@ -96,6 +100,41 @@ export default function NewTransactionPage() {
   const copyTransferKnown = copyTransferId === null || copyTransferQuery.isSuccess || copyTransferQuery.isError
   const copyTransferSource = copyTransferQuery.data ?? null
 
+  // ---- /new draft persistence ----
+  // Dormant under ?copy=/?copy_transfer=: no restore, no write, no delete -
+  // a copy draft would fight the copy-source seed, and copy-mode edits must
+  // not clobber a stored draft either. Query params win over the draft
+  // everywhere.
+  const draftDormant = copyId !== null || copyTransferId !== null
+  const activeDraftKey = !draftDormant && user && workspace ? formDraftKey(user.id, workspace.id) : null
+  // Read ONCE per key (pure read; a useMemo re-runs only if user/workspace
+  // resolve or change). On a cold mount the key exists only once the
+  // workspace query resolves - which is also when the hooks' open flips
+  // true (see below), so their first seeding pass consumes the draft.
+  const restoredDraft = useMemo(
+    () => (activeDraftKey !== null ? readFormDraft(activeDraftKey) : null),
+    [activeDraftKey],
+  )
+  const draftController = useMemo(
+    () => (activeDraftKey !== null ? createFormDraftController(activeDraftKey, restoredDraft?.values ?? null) : null),
+    [activeDraftKey, restoredDraft],
+  )
+  // Hides the notice after the draft is consumed (saved or discarded);
+  // controller writes continue either way - fresh edits after a clear start
+  // a new draft.
+  const [draftConsumed, setDraftConsumed] = useState(false)
+  const [draftSeeded, setDraftSeeded] = useState(false)
+  const [reseedNonce, setReseedNonce] = useState(0)
+  // Flush pending debounced writes when the user leaves mid-edit (the core
+  // draft scenario). The controller closure holds the latest values - no
+  // React state is read here. Removals (logout/workspace switch) bump the
+  // controller's generation, aborting this write after their clear.
+  useEffect(() => () => draftController?.flush(), [draftController])
+  // ?type= wins over the draft's txType; 'transfer' maps to the page
+  // segment only (the hook keeps its own expense default until a real
+  // segment switch, exactly as before).
+  const paramType = typeParam === 'income' || typeParam === 'expense' ? typeParam : undefined
+
   // Lifted amount/date rows, shared by both form flavors through the hooks'
   // override seam: each hook's internal state tracks the lifted values
   // continuously, so switching type keeps amount and date by construction.
@@ -122,36 +161,84 @@ export default function NewTransactionPage() {
     onDateChange: setSharedDate,
   }
 
+  const txDraft =
+    draftController !== null
+      ? { controller: draftController, values: draftConsumed ? null : (restoredDraft?.values ?? null) }
+      : undefined
   const txForm = useTransactionForm({
     // The gate: machinery starts only once the copy seed has resolved, so the
     // hook seeds exactly once with the final copyFrom (no create-then-copy
     // double seed, no category query firing against a form that is about to
     // be re-seeded). With no ?copy= the flag is true on first render, which
-    // IS the "hook runs with open=true" contract.
-    open: copyKnown,
+    // IS the "hook runs with open=true" contract. open also waits for the
+    // workspace: the draft key needs it, and the first seeding pass must run
+    // with the draft in hand (cold mounts - the hooks would otherwise seed
+    // before the draft key exists and the restore would never land).
+    open: copyKnown && workspace !== null,
     copyFrom: copySource,
     validationToasts: false, // the page shows field errors inline; save toasts stay
     initialAccountId,
     // The transaction hook's type seeds from the segment; 'transfer' hides
     // this form, so its internal type stays expense until a real switch.
-    initialType: isTransfer ? undefined : sharedType,
+    // ?type= explicit param > draft txType > segment value > 'expense'.
+    initialType: paramType ?? (isTransfer ? undefined : sharedType === 'income' ? 'income' : undefined),
     shared,
+    draft: txDraft,
+    reseedNonce,
   })
   // Same arrival gate for the transfer flavor: machinery starts only once
   // the copy_transfer seed has resolved, so the hook seeds exactly once
   // with the final repeatFrom (no create-then-repeat double seed). Without
   // the param the flag is true on first render - plain create is
-  // unchanged.
+  // unchanged. The workspace wait mirrors the transaction hook (draft key).
   const transferForm = useTransferForm({
-    open: copyTransferKnown,
+    open: copyTransferKnown && workspace !== null,
     repeatFrom: copyTransferSource,
     validationToasts: false,
     shared,
+    draft: txDraft,
+    reseedNonce,
   })
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [savingAction, setSavingAction] = useState<SaveAction>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ?scan=1 (an app-shortcut deep link) seeds the header scan action: focus
+  // plus a static highlight ring once the button is actually usable. Read
+  // once at mount like every seed param (exact value - garbage reads as
+  // unset); nothing on this page writes the URL.
+  const [scanSeed] = useState(() => searchParams.get('scan') === '1')
+  const [scanInteracted, setScanInteracted] = useState(false)
+  const scanButtonRef = useRef<HTMLButtonElement | null>(null)
+  const scanFocusDoneRef = useRef(false)
+  // The scan focus steal blurs the autofocused amount input on its way to
+  // the header button; a programmatic blur is not a user blur and must not
+  // latch the amount's error display against the pristine value.
+  const scanStealRef = useRef(false)
+
+  // The scan action is usable once the copy gates have resolved, extraction
+  // is enabled and reachable, a receipt target exists (not transfer mode),
+  // and no parse is in flight - the render + disabled conditions of the
+  // header button.
+  const scanEnabled =
+    copyKnown && copyTransferKnown && extractionEnabled && !isTransfer && extractionReachable && !txForm.parse.isPending
+  const scanHighlighted = scanSeed && !scanInteracted && scanEnabled
+
+  // One-shot focus. If the button never becomes usable (transfer seeded,
+  // extraction off, scanner unreachable), the amount input's autoFocus
+  // stands - silent degrade, no error path. The file chooser itself always
+  // waits for the user's tap (browser policy).
+  useEffect(() => {
+    if (!scanSeed || scanFocusDoneRef.current || !scanEnabled) return
+    scanFocusDoneRef.current = true
+    // Arm the one-shot blur suppression only when the amount input really
+    // holds focus (touch mounts nothing autofocused, so no blur will fire).
+    scanStealRef.current = document.activeElement === amountRef.current
+    scanButtonRef.current?.focus()
+  }, [scanSeed, scanEnabled])
+
+  const clearScanHint = () => setScanInteracted(true)
 
   // Viewers (and, defense-in-depth, workspace-less mounts - MainLayout already
   // swaps children for its no-workspace message) never see this form. Held
@@ -176,6 +263,20 @@ export default function NewTransactionPage() {
   const handleClose = () => {
     if (dirty) setConfirmOpen(true)
     else navigateBack()
+  }
+
+  // Notice Discard: drop the stored draft and re-seed BOTH hooks to a fresh
+  // create state (the nonce bump re-runs their create seeding with
+  // values=null; amount/date re-land on the shared rows through the hooks'
+  // upward reporting). The segment is page-owned - reset it here.
+  const handleDraftDiscard = () => {
+    draftController?.clear()
+    setDraftConsumed(true)
+    setReseedNonce((n) => n + 1)
+    setSharedType('expense')
+    // Fresh form, fresh error timing (mirrors save-and-add-another).
+    setShowAllErrors(false)
+    setAmountTouched(false)
   }
 
   // After a failed submit, show every error and focus the first invalid
@@ -203,8 +304,11 @@ export default function NewTransactionPage() {
     setSavingAction('save')
     const { ok } = await activeForm.submit()
     setSavingAction(null)
-    if (ok) navigateBack()
-    else reportFailedSubmit()
+    if (ok) {
+      draftController?.clear()
+      setDraftConsumed(true)
+      navigateBack()
+    } else reportFailedSubmit()
   }
 
   const handleSaveAndAddAnother = async () => {
@@ -212,6 +316,11 @@ export default function NewTransactionPage() {
     const { ok } = await activeForm.submit()
     setSavingAction(null)
     if (ok) {
+      // Clear BEFORE resetForAnother: the reset's raw setters must not race
+      // a pending write; the controller's own latest resets, so fresh edits
+      // start a new draft.
+      draftController?.clear()
+      setDraftConsumed(true)
       if (isTransfer) transferForm.resetForAnother()
       else txForm.resetForAnother()
       // Fresh form, fresh error timing: the next session's errors wait
@@ -237,10 +346,16 @@ export default function NewTransactionPage() {
   const scanButton = extractionEnabled && !isTransfer && (
     <button
       type="button"
-      onClick={() => fileInputRef.current?.click()}
+      ref={scanButtonRef}
+      onClick={() => {
+        clearScanHint()
+        fileInputRef.current?.click()
+      }}
+      onBlur={clearScanHint}
+      onKeyDown={clearScanHint}
       disabled={txForm.parse.isPending || !extractionReachable}
       title={extractionReachable ? undefined : t('form.scannerOfflineTitle')}
-      className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1`}
+      className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1${scanHighlighted ? ' outline-2 outline-offset-2 outline-border-focus' : ''}`}
     >
       {txForm.parse.isPending ? (
         <>
@@ -295,6 +410,18 @@ export default function NewTransactionPage() {
   // re-dates (both hooks queue '' and today's date - identical values,
   // order irrelevant), so there is nothing to re-assert.
 
+  // Draft-restore assert for the lifted rows: re-assert the draft's
+  // amount/date/type after both hooks have seeded, so this write owns the
+  // shared-row queue (the transfer hook's create seeding queues ''/today
+  // last). Fires once per restored draft object. ?type= beats the draft.
+  if (!draftSeeded && restoredDraft !== null) {
+    setDraftSeeded(true)
+    const dv = restoredDraft.values
+    if (dv.amount !== undefined) setSharedAmount(dv.amount)
+    if (dv.date !== undefined) setSharedDate(dv.date)
+    if (typeParam === null && dv.type !== undefined) setSharedType(dv.type)
+  }
+
   // Hoisted labels and errors (aliased-t calls must not render inline).
   const amountSentLabel = tTransfers('fields.amountSent', { code: transferForm.fromAccount?.currency_code ?? '' })
   const transferAmountLabel = tTransfers('fields.amount')
@@ -309,6 +436,23 @@ export default function NewTransactionPage() {
   const amountError =
     activeAmountError !== undefined && (amountTouched || showAllErrors) ? activeAmountError : undefined
   const currencyError = showAllErrors ? txForm.errors.currencyCode : undefined
+  // The chosen suggestion's last amount as a muted text button. Fills the
+  // amount ONLY on tap - never automatic. Byte-equivalent copy of the one
+  // in components/transactions/TransactionFormFields.tsx (two consumers;
+  // extract at the third). The transfer flavor never shows it: only the
+  // transaction hook tracks suggestions.
+  const lastAmount = txForm.lastAmountHint
+  const txLastAmountHint =
+    !isTransfer && lastAmount !== null ? (
+      <button
+        type="button"
+        onClick={() => txForm.setAmount(lastAmount)}
+        className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+      >
+        {t('form.lastAmountLabel')}{' '}
+        <span className="font-mono font-medium tabular-nums">{formatAmount(lastAmount)}</span>
+      </button>
+    ) : undefined
   const saveLabel = isTransfer ? t('form.saveTransfer') : t('form.saveTransaction')
 
   return (
@@ -358,12 +502,30 @@ export default function NewTransactionPage() {
         {/* Shared rows: the type/amount/date controls sit above both form
             flavors, so switching type keeps amount and date. */}
         <div className="space-y-4">
+          {/* Restored-draft notice: one line, info icon + text + Discard.
+              flex-wrap is load-bearing - the longer locales must wrap at
+              375px, never overflow. No dismissal X and no modal: the row
+              disappears once the draft is saved or discarded. */}
+          {restoredDraft !== null && !draftConsumed && (
+            <div className="flex flex-wrap items-center gap-x-2 bg-surface border border-border rounded-sm px-3 py-2 text-xs text-text">
+              <Info size={13} strokeWidth={1.5} aria-hidden="true" className="text-text-muted" />
+              <span>{t('draft.restored')}</span>
+              <button
+                type="button"
+                onClick={handleDraftDiscard}
+                className="ml-auto text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+              >
+                {t('draft.discard')}
+              </button>
+            </div>
+          )}
           <div>
             <label className={labelClass}>{t('form.typeLabel')}</label>
             <SegmentedControl
               value={sharedType}
               onChange={(v) => {
                 setSharedType(v)
+                draftController?.update({ type: v })
                 // The transaction hook keeps its own type state (it also
                 // holds 'adjustment', which is not a page segment - the
                 // More-details switch owns it). Push segment picks into
@@ -395,7 +557,10 @@ export default function NewTransactionPage() {
             id="new-amount"
             label={amountLabel}
             value={sharedAmount}
-            onChange={setSharedAmount}
+            onChange={(v) => {
+              setSharedAmount(v)
+              draftController?.update({ amount: v })
+            }}
             signPrefix={isTransfer ? '' : txForm.type === 'income' ? '+' : txForm.type === 'adjustment' ? '' : '-'}
             currency={
               isTransfer
@@ -412,14 +577,29 @@ export default function NewTransactionPage() {
                   }
             }
             error={amountError}
+            hint={txLastAmountHint}
             inputRef={amountRef}
             autoFocus={!isTouch}
-            onBlur={() => setAmountTouched(true)}
+            onBlur={() => {
+              // Swallow exactly the blur the scan focus steal fires; every
+              // other blur is a user blur.
+              if (scanStealRef.current) {
+                scanStealRef.current = false
+                return
+              }
+              setAmountTouched(true)
+            }}
           />
 
           <div>
             <label className={labelClass}>{t('form.dateLabel')}</label>
-            <DateQuickPick value={sharedDate} onChange={setSharedDate} />
+            <DateQuickPick
+              value={sharedDate}
+              onChange={(v) => {
+                setSharedDate(v)
+                draftController?.update({ date: v })
+              }}
+            />
           </div>
 
           {/* Both field flavors stay mounted; the hidden CLASS preserves
@@ -440,7 +620,11 @@ export default function NewTransactionPage() {
             />
           </div>
           <div className={!isTransfer ? 'hidden' : ''}>
-            <TransferFormFields form={transferForm} showAllErrors={showAllErrors} focusInvalidTick={focusTick} />
+            {/* Keyed on the hook's session key per the fields component's
+                host contract (mirrors TransactionFormFields): a draft
+                Discard re-seed remounts it - local-state reset + fresh
+                autofocus. */}
+            <TransferFormFields key={transferForm.sessionKey} form={transferForm} showAllErrors={showAllErrors} focusInvalidTick={focusTick} />
           </div>
         </div>
       </FormPage>
@@ -467,6 +651,9 @@ export default function NewTransactionPage() {
         destructive
         onConfirm={() => {
           setConfirmOpen(false)
+          // Discarding the unsaved changes discards the draft too - the
+          // user just declared this form's values unwanted.
+          draftController?.clear()
           navigateBack()
         }}
         onCancel={() => setConfirmOpen(false)}

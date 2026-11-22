@@ -110,6 +110,7 @@
     "deltaAmountLabel": "Delta kwoty",
     "descriptionLabel": "Opis",
     "frequentAria": "Częste opisy",
+    "lastAmountLabel": "Ostatnia:",
     "noteLabel": "Notatka",
     "moreDetails": "Więcej szczegółów",
     "accountLabel": "Konto",
@@ -165,6 +166,10 @@
     "title": "Wyjść bez zapisywania?",
     "message": "Twoje zmiany zostaną utracone.",
     "discard": "Wyjdź"
+  },
+  "draft": {
+    "restored": "Przywrócono niezapisane zmiany z ostatniej wizyty.",
+    "discard": "Odrzuć"
   },
   "items": {
     "untitled": "Pozycja bez nazwy",
