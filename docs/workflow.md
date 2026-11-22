@@ -143,7 +143,20 @@ transfer. Transfers replace the old currency-exchange records.
   state and line items are never drafted.
 - The list supports account/type filters and pagination (plus a currency filter
   matching each transaction's stored own currency, hidden in single-currency
-  workspaces); bulk account reassignment is available.
+  workspaces); bulk account reassignment is available. The remembered search is
+  a filter like any other: an active term shows as a removable **Search** chip
+  and counts toward the Filters badge, and Clear all (or the chip's X) drops
+  the URL param, the stored value and the restored hint together.
+- **Deleting a transaction or transfer** replaces the confirm dialog with a
+  5-second **Undo** window: the row (or record) disappears at once and a toast
+  offers Undo while the DELETE request is held back client-side - it is sent
+  when the window expires, when a second delete supersedes it, or on tab
+  close/app switch as a best-effort keepalive flush. Undo restores the row with
+  nothing sent; a rejected delete (an auto-managed adjustment, for example)
+  brings it back with the server's message. While a delete is pending the
+  transactions totals strip pulses as "updating". Every other delete (accounts,
+  budgets, categories, periods, rules, members, planned items) still asks to
+  confirm.
 - Fresh visits open on the member's saved view defaults for the page (personal,
   per workspace; explicit URL params always win): **Save as default**, beside
   the bookmark action in the list controls, captures the current view, and the
