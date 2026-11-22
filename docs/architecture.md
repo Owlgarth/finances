@@ -230,7 +230,10 @@ frontend/src/
 │   ├── accounts/           # Account/SetBalance modals
 │   ├── bookmarks/          # bookmarkMeta (bookmark icon + color registry)
 │   ├── currencies/         # CurrencySetField (ordered set picker), CurrenciesSettingsSection
-│   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page)
+│   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page),
+│   │                       #   BudgetSummaryCard + BudgetCategoryList (phone budget detail)
+│   ├── dashboard/          # Home widgets (Accounts, Budget, Upcoming, RecentActivity),
+│   │                       #   BudgetInsights (planned-vs-spent charts on the periods page)
 │   ├── transactions/       # Form fields (TransactionFormFields, TransferFormFields,
 │                           #   AmountField), record content (TransactionRecord,
 │                           #   TransferRecord), items editor, attachments, extraction review

@@ -30,9 +30,13 @@ each TOTP code is single-use. Every workspace-scoped request carries
 
 ## Accounts & Balances
 
-- **Dashboard** shows each account's **computed** balance (opening balance +
-  transactions ± transfers) and recent activity. Nothing is stored - balances are
-  always derived.
+- **Dashboard** (Home) renders four widgets: Accounts (each account's **computed**
+  balance - opening balance + transactions ± transfers - with rows linking to the
+  account page and exact per-currency totals beneath), Budget (the default budget's
+  current period, spent-of-planned per currency plus attention rows - over or >=75%
+  of planned - linking into filtered Activity), Upcoming (pending planned items due
+  within 14 days, overdue included) and Recent activity (the last three
+  transactions). Nothing is stored - balances are always derived.
 - **Accounts page** (admin+): create accounts; each card opens the **account page**
   (balance, in/out this month, upcoming planned and recent transactions and transfers),
   which owns edit, archive/unarchive and delete-when-archived (overflow menu) beside
@@ -74,12 +78,24 @@ transfer. Transfers replace the old currency-exchange records.
   and shared links land on the chosen period; an invalid id falls back to the
   default pick). Opening a budget without the param lands on the current period -
   or, when none can be derived (custom cadence, a failed fetch), the period
-  nearest today. Categories are created inline; planned amounts are edited inline
-  (current period). Past periods render as read-only snapshots. The table
-  totals its three money columns exactly (a footer row on desktop, a totals
-  card on mobile), summing the visible, non-archived category rows client-side -
+  nearest today. Categories are created inline; planned amounts are edited through
+  the page-wide **Edit plan** mode (member+): every planned figure
+  of the viewed currency becomes a draft input, a sticky footer offers Save plan /
+  Cancel with a changed-row count, Save sequentially PUTs only the changed rows
+  (failed rows keep their drafts and show their server error inline), and
+  discarding dirty drafts - via Cancel or a period/currency switch - asks to
+  confirm. Past periods render as read-only snapshots. The table
+  totals its three money columns exactly (a footer row on desktop, a
+  swatch-labeled summary card on mobile), summing the visible, non-archived
+  category rows client-side -
   never the API's summary totals, which include archived categories' money the
-  table hides. Custom-cadence
+  table hides. The desktop ledger leads with what needs attention (over rows,
+  then near-limit, percent descending; a row-order select keeps the natural
+  category order one click away and remembers the choice per budget) and carries
+  status chips beside each category name, the name linking into Activity filtered
+  to that category and the viewed period; phones render grouped cards ("Needs
+  attention" first, then "On track") with spend bars and the same Activity links.
+  Custom-cadence
   budgets get add/edit/delete period controls beside the switcher (admin+;
   deleting a period removes its planned amounts but never transactions), and a
   custom budget with no periods yet shows an "Add period" empty state instead of
@@ -96,7 +112,9 @@ transfer. Transfers replace the old currency-exchange records.
   periods" row and from the view-periods icon on a budget card (all roles);
   add-period (the budget card icon and the page button) is custom-cadence and
   admin-only, and the card edit/delete icons appear only on custom periods
-  (admin).
+  (admin). Below the card grid, the budget's history data view renders the
+  planned-versus-spent charts (scoped to this budget - the view Home used to
+  carry, re-homed here).
 - Categories and planned amounts are member+; creating budgets/periods is admin+.
 
 ## Transactions
@@ -199,7 +217,7 @@ row as the rule's first occurrence instead of duplicating it.
   through "Manage currencies..." bridges.
 - **Budget currency sets**: budgets carry an ordered set (max 10) from the
   enabled subset; the first entry is the default view in the budget table and
-  the dashboard insights, which share one derivation.
+  the periods page's history charts, which share one derivation.
 
 ## Workspaces & Members
 
