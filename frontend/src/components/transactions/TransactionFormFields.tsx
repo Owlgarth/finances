@@ -14,6 +14,7 @@ import { useIsTouch } from '../../hooks/useBreakpoint'
 import { useExtractionConfig } from '../../hooks/useDomain'
 import { NO_ACCOUNT } from '../../utils/accountSelect'
 import { NO_ADJUSTMENT, type UseTransactionFormReturn } from '../../hooks/useTransactionForm'
+import { formatAmount } from '../../utils/format'
 
 // File types the receipt parser accepts - keep in sync with the
 // byte-identical copy in pages/NewTransactionPage.tsx (two consumers;
@@ -171,6 +172,22 @@ export default function TransactionFormFields({
   const currencyError = showError('currencyCode')
   const descriptionError = fieldError('description')
   const originalAmountError = fieldError('originalAmount')
+  // The chosen suggestion's last amount as a muted text button. Fills the
+  // amount ONLY on tap - never automatic. Byte-equivalent copy of the one
+  // in pages/NewTransactionPage.tsx (two consumers; extract at the third).
+  // Button idiom per AccountFormModal's manage-currencies link.
+  const lastAmount = form.lastAmountHint
+  const lastAmountHint =
+    lastAmount !== null ? (
+      <button
+        type="button"
+        onClick={() => form.setAmount(lastAmount)}
+        className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+      >
+        {t('form.lastAmountLabel')}{' '}
+        <span className="font-mono font-medium tabular-nums">{formatAmount(lastAmount)}</span>
+      </button>
+    ) : undefined
 
   // Focus the first invalid field after a submit attempt: focus-only effect
   // keyed on the submit tick - the same sanctioned shape as Register's
@@ -273,6 +290,7 @@ export default function TransactionFormFields({
               error: currencyError,
             }}
             error={amountError}
+            hint={lastAmountHint}
             autoFocus={!isTouch}
             onBlur={() => markTouched('amount')}
           />
@@ -326,9 +344,7 @@ export default function TransactionFormFields({
                   aria-selected={i === form.highlighted}
                   tabIndex={-1}
                   onClick={() => {
-                    form.setDescription(s.description)
-                    form.setSuggestionsOpen(false)
-                    form.setHighlighted(-1)
+                    form.applySuggestion(s)
                   }}
                   className={
                     'w-full flex items-center px-2 text-left text-xs text-text transition-colors ' +
@@ -357,7 +373,10 @@ export default function TransactionFormFields({
           <Select
             id="tx-account"
             value={form.accountId ?? NO_ACCOUNT}
-            onChange={form.handleAccountChange}
+            onChange={(v) => {
+              form.markPrefillTouched('account')
+              form.handleAccountChange(v)
+            }}
             options={form.accountSelectOptions}
             placeholder={t('form.selectAccount')}
             aria-label={t('form.accountAria')}
@@ -370,7 +389,10 @@ export default function TransactionFormFields({
             <label className={labelClass}>{t('form.categoryLabel')}</label>
             <Select
               value={form.categoryId}
-              onChange={form.setCategoryId}
+              onChange={(v) => {
+                form.markPrefillTouched('category')
+                form.setCategoryId(v)
+              }}
               options={form.categoryOptions}
               placeholder={t('form.uncategorized')}
               aria-label={t('form.categoryAria')}

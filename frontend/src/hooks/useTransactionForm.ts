@@ -3,7 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, transactionsApi } from '../api/client'
-import type { Account, ParsedReceipt, Transaction, TransactionItemInput, TransactionType } from '../types'
+import type {
+  Account,
+  FrequentDescriptionItem,
+  ParsedReceipt,
+  Transaction,
+  TransactionItemInput,
+  TransactionType,
+} from '../types'
 import { useAccounts, useBudgets, useEnabledCurrencies } from './useDomain'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { getApiErrorMessage } from '../utils/errors'
@@ -158,7 +165,7 @@ export function useTransactionForm({
     budgets.length === 1 ? budgets[0].id : (budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? null)
 
   const [date, setDateState] = useState(new Date().toISOString().slice(0, 10))
-  const [description, setDescription] = useState('')
+  const [description, setDescriptionState] = useState('')
   const [type, setType] = useState<TransactionType>('expense')
   const [amount, setAmountState] = useState('')
   const [accountId, setAccountId] = useState<number | null>(null)
@@ -206,6 +213,21 @@ export function useTransactionForm({
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
   const [highlighted, setHighlighted] = useState(-1)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  // Account/category fields the USER has explicitly chosen this session
+  // (Select picks in the hosts). A suggestion choose never overwrites a
+  // chosen field; the session seeding below resets the set. Prefill
+  // writes themselves never mark (a suggestion may be superseded by a
+  // later suggestion), and seeding/reset writes never mark either.
+  const [prefillTouched, setPrefillTouched] = useState<{ category: boolean; account: boolean }>({
+    category: false,
+    account: false,
+  })
+  // The chosen suggestion's last amount, shown as the "Last: ..." button
+  // under the amount field. Set by applySuggestion; cleared by any
+  // description write (the hint belongs to the suggestion text the field
+  // no longer holds) and at the session boundary. NEVER fills the amount
+  // by itself - filling is the button's tap action only.
+  const [lastAmountHint, setLastAmountHint] = useState<string | null>(null)
   // Optional note. The "More details" disclosure hosting it is presentation
   // (the fields component derives its open state from the values: open while
   // a note, item rows, a receipt, the other-currency facet or an adjustment
@@ -238,6 +260,15 @@ export function useTransactionForm({
   const setDate = (value: string) => {
     setDateState(value)
     shared?.onDateChange(value)
+  }
+  // Any description write retires the current suggestion's amount hint:
+  // the hint describes suggestion text the field no longer holds (user
+  // typing, session seeding, save-and-add-another reset, receipt fills).
+  // applySuggestion writes past this seam via setDescriptionState and
+  // then arms the new suggestion's hint - the later write wins the queue.
+  const setDescription = (value: string) => {
+    setDescriptionState(value)
+    setLastAmountHint(null)
   }
   // Downward half: the host's explicit value wins. Value-compare
   // render-adjust on this hook's own state - loop-safe by construction
@@ -330,9 +361,13 @@ export function useTransactionForm({
     setPendingFile(null)
     setPendingRows([])
     setDetailTab(null)
-    // Suggestion panel starts closed for every fresh open.
+    // Suggestion panel starts closed for every fresh open, and the
+    // suggestion prefill machinery starts from a clean slate: no guarded
+    // fields, no stale Last-amount hint.
     setHighlighted(-1)
     setSuggestionsOpen(false)
+    setPrefillTouched({ category: false, account: false })
+    setLastAmountHint(null)
     // Copy mode prefills like edit, except the date: always today (D4).
     if (source) {
       setDate(transaction ? source.date : new Date().toISOString().slice(0, 10))
@@ -785,6 +820,51 @@ export function useTransactionForm({
     setOriginalAccountId(value === NO_ADJUSTMENT ? null : value)
   }
 
+  /** Mark a field user-chosen this session - later suggestion chooses never
+   *  overwrite it. Called from the hosts' account/category Select onChange
+   *  seams ONLY (never from seeding, prefill, or reset writes - those are
+   *  not user picks of those fields). */
+  const markPrefillTouched = (field: 'category' | 'account') => {
+    setPrefillTouched((prev) => ({ ...prev, [field]: true }))
+  }
+
+  /** Accept a frequent-description suggestion: set the description, close
+   *  the panel, and prefill the fields the user has not chosen this
+   *  session - the category (with its budget) and the account (its
+   *  currency follows via handleAccountChange, exactly like a manual
+   *  pick). A suggestion's own prefill never marks a field guarded, so a
+   *  later suggestion may still refresh it. Values missing from the
+   *  loaded options - an archived or other-budget category, an archived
+   *  account, or an older backend omitting the fields entirely - are
+   *  skipped: no prefill, no error. The last amount is only ever SHOWN;
+   *  filling it is the hint button's tap action, never automatic. */
+  const applySuggestion = (s: FrequentDescriptionItem) => {
+    setDescriptionState(s.description)
+    setSuggestionsOpen(false)
+    setHighlighted(-1)
+    setLastAmountHint(s.last_amount ?? null)
+    // Category: only when the loaded (per-budget, unarchived) category
+    // list still offers it. The budget comes from the loaded category's
+    // own budget_id - with a per-budget list it equals the current
+    // budgetId, so the write is a same-value no-op that keeps the
+    // category/budget pairing explicit. The wire's last_budget_id is
+    // deliberately not read: the loaded list is the only source of truth
+    // for what a Select can actually show.
+    if (!prefillTouched.category && s.last_category_id != null) {
+      const category = categories.find((c) => c.id === s.last_category_id)
+      if (category) {
+        setCategoryId(category.id)
+        setBudgetId(category.budget_id)
+      }
+    }
+    // Account: only when the loaded account list still offers it. Routed
+    // through handleAccountChange so the currency follows the account -
+    // changing the account still drives the currency.
+    if (!prefillTouched.account && s.last_account_id != null && accounts.some((a) => a.id === s.last_account_id)) {
+      handleAccountChange(s.last_account_id)
+    }
+  }
+
   /** Combobox keyboard semantics for the description field (mirrors
    *  useListboxPanel): arrows move the highlight with wrap, Enter accepts the
    *  highlighted suggestion (preventDefault - no form submit) or falls through
@@ -807,9 +887,7 @@ export function useTransactionForm({
         // highlight set against the previous render's rows.
         if (highlighted >= 0 && highlighted < suggestions.length) {
           e.preventDefault()
-          setDescription(suggestions[highlighted].description)
-          setSuggestionsOpen(false)
-          setHighlighted(-1)
+          applySuggestion(suggestions[highlighted])
         }
         break
       case 'Escape':
@@ -844,6 +922,9 @@ export function useTransactionForm({
     setDate, setDescription, setType, setAmount, setCurrencyCode, setBudgetId,
     setCategoryId, setOtherCurrency, setOriginalAmount, setNote,
     setPendingRows, setPendingFile, setHighlighted, setSuggestionsOpen, setDetailTab,
+    // Suggestion prefill (choosing a suggestion fills untouched fields;
+    // the Last-amount hint value and its never-automatic fill contract)
+    lastAmountHint, applySuggestion, markPrefillTouched,
     // Field-change handlers (sentinel mapping + currency re-pick logic)
     handleAccountChange, handleOriginalCurrencyChange, handleAdjustmentAccountChange,
     handleDescriptionKeyDown,

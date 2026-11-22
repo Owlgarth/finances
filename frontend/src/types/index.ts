@@ -540,6 +540,15 @@ export interface FrequentDescriptionItem {
   count: number;
   total: string;
   currency: string;
+  /** Last-used values from the group's most recent transaction. Optional
+   *  and nullable: an older backend omits them entirely, and the newest row
+   *  may lack a category or an account (the backend also nulls an archived
+   *  category's ids and an archived account id). Absence means no prefill. */
+  last_category_id?: number | null;
+  last_budget_id?: number | null;
+  last_account_id?: number | null;
+  /** 2-decimal string on the wire, same convention as `total`. */
+  last_amount?: string | null;
 }
 
 export interface FrequentDescriptionsResponse {

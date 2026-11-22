@@ -13,6 +13,7 @@ import { useIsTouch } from '../hooks/useBreakpoint'
 import { useTransactionForm } from '../hooks/useTransactionForm'
 import { useTransferForm } from '../hooks/useTransferForm'
 import { intParam } from '../utils/params'
+import { formatAmount } from '../utils/format'
 import FormPage from '../components/layout/FormPage'
 import TransactionFormFields from '../components/transactions/TransactionFormFields'
 import TransferFormFields from '../components/transactions/TransferFormFields'
@@ -351,6 +352,23 @@ export default function NewTransactionPage() {
   const amountError =
     activeAmountError !== undefined && (amountTouched || showAllErrors) ? activeAmountError : undefined
   const currencyError = showAllErrors ? txForm.errors.currencyCode : undefined
+  // The chosen suggestion's last amount as a muted text button. Fills the
+  // amount ONLY on tap - never automatic. Byte-equivalent copy of the one
+  // in components/transactions/TransactionFormFields.tsx (two consumers;
+  // extract at the third). The transfer flavor never shows it: only the
+  // transaction hook tracks suggestions.
+  const lastAmount = txForm.lastAmountHint
+  const txLastAmountHint =
+    !isTransfer && lastAmount !== null ? (
+      <button
+        type="button"
+        onClick={() => txForm.setAmount(lastAmount)}
+        className="mt-1 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text transition-colors touch-hit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus rounded-sm"
+      >
+        {t('form.lastAmountLabel')}{' '}
+        <span className="font-mono font-medium tabular-nums">{formatAmount(lastAmount)}</span>
+      </button>
+    ) : undefined
   const saveLabel = isTransfer ? t('form.saveTransfer') : t('form.saveTransaction')
 
   return (
@@ -454,6 +472,7 @@ export default function NewTransactionPage() {
                   }
             }
             error={amountError}
+            hint={txLastAmountHint}
             inputRef={amountRef}
             autoFocus={!isTouch}
             onBlur={() => {
