@@ -248,7 +248,7 @@ frontend/src/
 │   └── ThemeContext.tsx        # Light/dark
 ├── hooks/
 │   ├── useDomain.ts            # useAccounts, useBudgets, useEnabledCurrencies,
-│   │                          #   useMultiCurrency, useExtractionEnabled
+│   │                          #   useMultiCurrency, useExtractionConfig
 │   ├── usePermissions.ts       # canManageAccounts, canWrite, …
 │   └── (other hooks)           # useAttachments, useBookmarks, useWorkspaceSettings,
 │                              #   useActivityScope (Activity title + scope
