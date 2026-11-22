@@ -1,6 +1,6 @@
 ---
 name: email-sending
-description: Email conventions for Owlgarth Finances — EmailService usage, on_commit patterns, subject format, HTML/txt templates, adding new emails, email env vars. Use when sending emails from services, creating or editing email templates in backend/templates/email/, or wiring email notifications.
+description: Email conventions for Owlgarth Finances - EmailService usage, on_commit patterns, subject format, HTML/txt templates, adding new emails, email env vars. Use when sending emails from services, creating or editing email templates in backend/templates/email/, or wiring email notifications.
 ---
 
 # Email Patterns
@@ -9,7 +9,7 @@ description: Email conventions for Owlgarth Finances — EmailService usage, on_
 
 Use `EmailService.send_email()` so emails are only sent after the database transaction succeeds. Two valid patterns:
 
-**Pattern A — Decorator + `on_commit`** (when the method uses `@db_transaction.atomic` for its own DB operations):
+**Pattern A - Decorator + `on_commit`** (when the method uses `@db_transaction.atomic` for its own DB operations):
 
 ```python
 from django.db import transaction as db_transaction
@@ -34,7 +34,7 @@ class MyService:
         )
 ```
 
-**Pattern B — Context manager + direct call after block** (simpler, no lambda, clearer stack traces):
+**Pattern B - Context manager + direct call after block** (simpler, no lambda, clearer stack traces):
 
 ```python
 class MyService:
@@ -49,11 +49,11 @@ class MyService:
 ```
 
 **Rules:**
-- Only use `on_commit` inside `@db_transaction.atomic` methods. Never use `on_commit` outside an atomic block — it fires immediately anyway, so a direct call is clearer.
+- Only use `on_commit` inside `@db_transaction.atomic` methods. Never use `on_commit` outside an atomic block - it fires immediately anyway, so a direct call is clearer.
 - Prefer Pattern B when the method doesn't already use `@db_transaction.atomic` as a decorator.
 - Extract email-sending logic into a separate static method (not a nested function) on the service class. Use a `lambda` in `on_commit` to call it.
 - When registering `on_commit` callbacks inside a loop, capture loop variables via lambda default arguments (`lambda x=val: ...`) to avoid late binding.
-- `EmailService.send_email` handles failures internally with logging — do not wrap it in `try/except`. If you need to know whether the email was sent, check its boolean return value.
+- `EmailService.send_email` handles failures internally with logging - do not wrap it in `try/except`. If you need to know whether the email was sent, check its boolean return value.
 
 ## Email Subject Format
 
@@ -71,12 +71,12 @@ Each email has an HTML and plain text version in `backend/templates/email/`. HTM
 
 **To add a new email template:**
 1. Create `email/my_email.html` extending `email/base.html` with `{% block content %}`, `{% block cta_url %}`, `{% block cta_text %}`
-2. Create `email/my_email.txt` standalone — copy an existing `.txt` sibling verbatim as the skeleton (they inline the header/footer; only `.html` templates extend a base)
+2. Create `email/my_email.txt` standalone - copy an existing `.txt` sibling verbatim as the skeleton (they inline the header/footer; only `.html` templates extend a base)
 3. Call `EmailService.send_email(template_name='email/my_email', ...)`
 
-**Emails without a CTA button:** When no action can be taken (e.g., account deleted, password changed), do not include a CTA button — override `{% block cta_url %}` with a security note paragraph. See `password_changed.html` and `account_deleted.html`.
+**Emails without a CTA button:** When no action can be taken (e.g., account deleted, password changed), do not include a CTA button - override `{% block cta_url %}` with a security note paragraph. See `password_changed.html` and `account_deleted.html`.
 
-**Query-string URLs in `.txt` templates need `{% autoescape off %}`:** Django autoescapes plain-text templates too — a `{{ url }}` containing `?uid=…&token=…` renders the `&` as `&amp;`, breaking the copy-pasted link (and any token-regex test). Wrap just the URL line, scoped, with a comment — see `workspace_invitation_set_password.txt`:
+**Query-string URLs in `.txt` templates need `{% autoescape off %}`:** Django autoescapes plain-text templates too - a `{{ url }}` containing `?uid=…&token=…` renders the `&` as `&amp;`, breaking the copy-pasted link (and any token-regex test). Wrap just the URL line, scoped, with a comment - see `workspace_invitation_set_password.txt`:
 
 ```django
 {% autoescape off %}{{ reset_url }}{% endautoescape %}
@@ -102,4 +102,4 @@ unrecognized value fails at startup with `ImproperlyConfigured`.
 message) under `EMAIL_FILE_PATH` (default `backend/sent-emails/`, gitignored) -
 the dev way to inspect fully rendered emails.
 
-In tests, `EMAIL_BACKEND` is `locmem` (via `config/test_settings.py`) — inspect sent emails with `mail.outbox`.
+In tests, `EMAIL_BACKEND` is `locmem` (via `config/test_settings.py`) - inspect sent emails with `mail.outbox`.

@@ -1,6 +1,6 @@
 ---
 name: ci-releases
-description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification via the git refs API, reusable workflow_call test gates, the production-dependency npm audit gate, dual-arch GHCR image publishing, render-testing version-pinned binaries (git-cliff), Dependabot config facts (.github/dependabot.yml: schema validation, schedule/groups semantics, the uv ecosystem, no compose manager) and silently-inactive-Dependabot diagnosis. Use when editing .github/workflows/*, cliff.toml, VERSION, .github/dependabot.yml, or anything on the tag-to-release pipeline.
+description: GitHub Actions workflows and release tooling for Owlgarth Finances - action pin verification, reusable test-gate workflows, the npm audit gate, GHCR image publishing, git-cliff changelogs, and Dependabot config. Use when editing .github/workflows/*, .github/dependabot.yml, cliff.toml, VERSION, or anything on the tag-to-release pipeline.
 ---
 
 # CI & Releases
@@ -48,7 +48,7 @@ Anything whose behavior is pinned BY VERSION gets render-tested against the real
 
 ## Dependabot Config Facts (.github/dependabot.yml)
 
-Five entries, all `weekly` Monday 05:00 `Europe/Warsaw`: `npm` @ `/frontend`, `uv` @ `/backend`, `github-actions` @ `/`, `docker` @ `/backend`, `docker` @ `/frontend` (PR #154). The `docker` ecosystem covers Dockerfile base images only - Dependabot has NO compose manager, so compose image digests stay manual (rule in `docker-infra`).
+Five entries, all `weekly` Monday 05:00 `Europe/Warsaw`: `npm` @ `/frontend`, `uv` @ `/backend`, `github-actions` @ `/`, `docker` @ `/backend`, `docker` @ `/frontend`. The `docker` ecosystem covers Dockerfile base images only - Dependabot has NO compose manager, so compose image digests stay manual (rule in `docker-infra`).
 
 - `groups: minor-and-patch` (on npm, uv, github-actions) batches minor+patch into ONE PR per ecosystem; majors deliberately stay individual reviewable PRs. Everything else is Dependabot default - no commit-message, labels, or reviewers overrides; do not over-configure.
 - The schedule transcribes the old Renovate cron (`* 5-8 * * 1`, a Monday-morning window) through the mechanism switch: when swapping update tools, preserve schedule/scope SEMANTICS in the new tool's vocabulary, not its syntax.

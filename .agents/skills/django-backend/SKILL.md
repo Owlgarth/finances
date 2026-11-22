@@ -1,9 +1,67 @@
 ---
 name: django-backend
-description: Backend (Python/Django/Django Ninja) code conventions for Owlgarth Finances. Use when writing or modifying backend code - endpoints, services, models, schemas, exceptions, queries, or migrations in backend/. Covers import order, naming, service-layer architecture, workspace scoping, Pydantic schemas, error handling, translatable error messages (gettext, Accept-Language), concurrency patterns, newest-per-group enrichment via window functions (RowNumber, rn=1 kept in Python), migration authoring, and shared catalog registries (common/<name>.json shared with the frontend).
+description: Backend conventions for Owlgarth Finances (Django 6, Django Ninja, Pydantic v2, PostgreSQL) - core rules plus a routing table into reference files for endpoints, services and locking, models and migrations, queries, schemas, and errors and settings. Use when writing or modifying any code in backend/ other than tests (tests: backend-testing).
 ---
 
 # Django Backend Conventions
+
+This file holds the rules every backend task needs. Detailed patterns live in `references/` next to this file (`.agents/skills/django-backend/references/`): read the ones matching your change BEFORE writing code. The data model is described in `docs/architecture.md`.
+
+## Read Before You Edit
+
+| Your change touches | Read |
+|---|---|
+| an endpoint, router, auth class, route path, response codes, sortable or paginated lists, file downloads | `references/endpoints.md` |
+| a service method, uniqueness or limit checks, ordered member sets, optional FKs, row locks, prefetch caches | `references/services.md` |
+| a model, constraint, migration, FK change, or `backend/common/*.json` registry | `references/models-and-migrations.md` (deletion and export impact: `data-deletion-gdpr` skill) |
+| aggregates, GROUP BY, newest-per-group enrichment | `references/queries.md` |
+| request or response schemas, optional collections, partial updates | `references/schemas.md` |
+| a domain exception, error message text, env-dependent settings | `references/errors-and-settings.md` |
+| tests | `backend-testing` skill |
+| auth, tokens, rate limits, anti-enumeration | `auth-security` skill |
+| Celery tasks | `celery-tasks` skill |
+| sending email | `email-sending` skill |
+
+Rules cited elsewhere as "§Section Name" keep their original headings inside these files - grep `references/` for the heading.
+
+## Core Rules
+
+### Layers
+- Endpoints are thin: parse the request, check auth and role, call the service, return `Status(code, payload)` (never the deprecated `return code, payload` tuple). Business logic, DB writes and side effects live in `<app>/services.py` as class-based services with `@staticmethod` methods; domain exceptions live in `<app>/exceptions.py`.
+- Workspace-scoped endpoints use `auth=WorkspaceJWTAuth()` and read `request.auth.current_workspace_id`; endpoints that need no active workspace use `JWTAuth()`. Writes call `require_role(user, workspace_id, WRITE_ROLES)` (`common/permissions.py`, roles in `workspaces/models.py`). Personal resources (bookmarks) drop the role gate: the service's user filter is the authorization.
+- Route paths byte-match the URL the frontend calls in `client.ts`; collection POSTs register at `''`. Ninja treats `''` and `'/'` as different paths, and a mismatch answers 405.
+- Every possible status code is listed in the endpoint's `response=` map.
+
+```python
+@router.post('', response={201: TransactionOut}, auth=WorkspaceJWTAuth())
+def create_transaction(request: HttpRequest, data: TransactionCreate):
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return Status(201, TransactionService.create(user, workspace_id, data))
+```
+
+### Workspace Scoping
+- Every workspace-owned model inherits `WorkspaceScopedModel` (`common/models.py`): workspace FK, audit fields, `for_workspace()`, and a guard against changing `workspace_id` after creation. Creates always set `workspace_id`.
+- Every query is scoped: `Model.objects.for_workspace(workspace_id)`. A resource from another workspace is indistinguishable from a missing one (404). `get_or_create` on a scoped queryset repeats `workspace_id=` as an explicit kwarg, because queryset filters never reach the create path.
+- Services re-check authorization themselves (defense in depth); see §Service-Layer Authorization below.
+
+### Data Integrity
+- Any service method with more than one write runs under `@db_transaction.atomic`. `select_for_update()` only inside `atomic()`: it crashes in autocommit, and `TestCase` hides that because every test already runs in a transaction. Lock multiple rows in id order.
+- Account balances and budget periods are derived on read, never stored, so no write path maintains a balance row.
+- Invariants live in the DB (unique and check constraints, partial unique constraints for "at most one flagged row"); service checks exist to raise one clear domain error, never as the only guard.
+- `save(update_fields=[...])` must include every field the model's `save()` override sets (`updated_at` and friends).
+- Keep what `makemigrations` emits, and run `makemigrations --check` on a clean tree.
+
+### Errors
+- Domain exceptions subclass the `ServiceError` family in `common/exceptions.py` (`NotFoundError` 404, `ValidationError` 400, `AuthenticationError` 401, `PermissionDeniedError` 403); the global handler in `config/urls.py` turns them into responses. Name them `<Domain><ErrorType>Error` with class-level `default_message` and snake_case `default_code`.
+- Messages are translated: `default_message` is wrapped in `gettext_lazy`, and dynamic messages %-format into a wrapped msgid, never an f-string. Details: `references/errors-and-settings.md`.
+
+### Schemas
+- Pydantic v2 `BaseModel` with `ConfigDict(from_attributes=True)` on output schemas. Optional collections default via `Field(default_factory=list, max_length=N)`, never a bare `[]`. Partial updates distinguish "client sent" from "defaulted" with `model_dump(exclude_unset=True)`.
+
+### Verification
+- `uv run ruff check --fix .` and `uv run ruff format .` after every change, then `pytest` (or `./dev.sh lint` and `./dev.sh test`).
 
 ## Imports
 
@@ -27,7 +85,6 @@ from transactions.schemas import TransactionCreate, TransactionOut
 from transactions.services import TransactionService
 from workspaces.models import WRITE_ROLES
 ```
-
 ## Naming Conventions
 
 - **Files**: snake_case (`transactions/api.py`, `budgeting/models.py`)
@@ -35,10 +92,9 @@ from workspaces.models import WRITE_ROLES
 - **Functions/Variables**: snake_case (`resolve_account`, `account_id`, `date_from`)
 - **Constants**: UPPER_SNAKE_CASE (`WRITE_ROLES`, `TOKEN_KEY`)
 - **Schemas**: Suffix with purpose (`TransactionCreate`, `TransactionOut`, `TransactionImport`)
-
 ## Input Normalization
 
-Normalize user inputs (emails, strings, etc.) early — at the schema/validation level — so all downstream logic (uniqueness checks, token generation, email sending) uses the normalized value. The `ValidatedEmail` type lowercases emails before they reach any endpoint.
+Normalize user inputs (emails, strings, etc.) early - at the schema/validation level - so all downstream logic (uniqueness checks, token generation, email sending) uses the normalized value. The `ValidatedEmail` type lowercases emails before they reach any endpoint.
 
 For inputs not covered by a schema validator (e.g., direct function arguments), normalize immediately after validation:
 
@@ -53,12 +109,11 @@ def request_email_change(user, new_email: str, password: str):
         raise SameEmailError()
     # ... rest of logic uses normalized new_email
 ```
-
 ## Email Lookups
 
 Emails are always stored as lowercase (`UserManager.normalize_email`, `User.save()`, and the `ValidatedEmail` schema handle this). Use exact match for email lookups.
 
-Prefer `filter().first()` with a `None` check over `get()` with `try/except DoesNotExist` — it follows the return-early pattern and avoids exception-driven control flow:
+Prefer `filter().first()` with a `None` check over `get()` with `try/except DoesNotExist` - it follows the return-early pattern and avoids exception-driven control flow:
 
 ```python
 # Bad: exception-driven control flow
@@ -74,7 +129,6 @@ if not user:
 ```
 
 **Exception:** methods that need `select_for_update()` legitimately use `get()` inside `try/except DoesNotExist` because they need the lock and the query in one call.
-
 ## Return Early Pattern
 
 Use guard clauses and early returns to reduce nesting:
@@ -90,229 +144,12 @@ def process_transaction(data):
         return None
     return create_transaction(data)
 ```
-
-## Django Ninja Endpoints
-
-Endpoints are thin wrappers — parse the request, call the service, return the response. Business logic belongs in service classes. Request-scoped validation that returns HTTP error responses (e.g. token uid/token checking in password reset) may stay in the API layer — only business logic moves to the service.
-
-**API layer responsibilities:** parsing request data, token/uid validation that returns HTTP error responses, authentication/authorization checks, calling the service, returning the `Status(...)` response.
-
-**Service layer responsibilities:** business logic (validation, DB operations, side effects, balance updates, email notifications). If logic involves saving to the database or sending emails, it belongs in the service.
-
-For workspace-scoped endpoints, use `WorkspaceJWTAuth` (auto-validates the user has an active workspace):
-
-```python
-router = Router(tags=['Transactions'])
-
-@router.get('', response=list[TransactionOut], auth=WorkspaceJWTAuth())
-def list_transactions(request: HttpRequest, account_id: int | None = Query(None)):
-    """Docstring describing the endpoint."""
-    workspace_id = request.auth.current_workspace_id
-    return TransactionService.list(workspace_id, account_id=account_id)
-
-@router.post('', response={201: TransactionOut}, auth=WorkspaceJWTAuth())
-def create_transaction(request: HttpRequest, data: TransactionCreate):
-    user = request.auth
-    workspace_id = request.auth.current_workspace_id
-    require_role(user, workspace_id, WRITE_ROLES)
-    return Status(201, TransactionService.create(user, workspace_id, data))
-```
-
-**Endpoint returns use `Status(code, payload)` - never the deprecated `return code, payload` tuple.** Django Ninja >= 1.7 fires `DeprecationWarning: Returning tuple (status_code, response) is deprecated` on ANY 2-tuple endpoint result, including one built inside a service and returned straight through, so a service whose contract returns `(status, payload)` (AuthService.login is the exemplar) is unwrapped at the endpoint boundary - never re-shaped in the service:
-
-```python
-status, payload = AuthService.login(data)
-return Status(status, payload)
-```
-
-Ninja resolves `Status` and the old 2-tuple identically after the status split, so the wire contract is unchanged and service tuple contracts stay as written. `Status` joins the existing single `from ninja import ...` line in isort position (after `Router`). When a `Status(...)` call with a multiline dict payload exceeds the line limit, `ruff format` reflows it to split-args style (status and payload on their own lines) - that split form is the format-clean shape; keeping a compact inline dict that overflows the line fails `ruff format --check`.
-
-For endpoints that don't require an active workspace (e.g., listing all workspaces), use `JWTAuth()`.
-
-**Personal-resource endpoints drop the role gate entirely.** When a workspace-scoped resource belongs to the individual user rather than the workspace's shared data (bookmarks are the exemplar), `auth=WorkspaceJWTAuth()` plus the service's own user filter IS the authorization: no `require_role`, no `common.permissions` import. The natural copy-paste from role-gated siblings would lock viewers out of their own rows - the exact bug the pattern exists to prevent. A foreign row (another user's, or the same user's in another workspace) surfaces as 404 because the user-scoped query never finds it - never 403; no extra authorization branch exists to get wrong, and probing another user's ids leaks nothing (existence is indistinguishable from a nonexistent id). Word endpoint docstrings "no role gate" - the literal phrase `require_role` in prose trips role-matrix grep gates that count it.
-
-### Route Paths Byte-Match the Client URL
-
-Collection POSTs register at `''`, and every route path must agree byte-for-byte with the URL the frontend client calls in `client.ts` - Django Ninja registers `''` and `'/'` as two distinct paths and never folds a trailing slash. Failure mode of a mismatch: a collection POST registered at `'/'` while the client calls the slash-less path resolves into the GET-only collection route and answers **405** - not a 404 and no redirect, because `APPEND_SLASH` only fires for URLs that fail to resolve entirely (this exact split broke workspace-create for every real user while all five sibling routers were correct). Keep one canonical collection URL per router - never add a backcompat `'/'` twin, since Django has no REMOVE_SLASH redirect and the duplicate would be permanent convention noise.
-
-**Flat routes register BEFORE parameterized `/{id}` routes - registration order is the only mechanism.** Django resolves URLs in registration order, and Django Ninja compiles `/{workspace_id}` to the str converter `[^/]+` - NOT int-only, despite a `workspace_id: int` annotation (int coercion happens inside the operation) - so a flat route registered after the parameterized block is unreachable: `GET /api/workspaces/member-settings` answered 405 with `Allow: DELETE` from the delete-workspace pattern, and the route existed nowhere. Verify behaviorally, not visually: an unauthenticated probe of the flat route must answer 401 from the endpoint's own auth, never 405 with a wrong `Allow` header. The `/current` + `/member-settings` block in `workspaces/api.py` sits before the parameterized zone with a comment pinning the ordering - the next flat route joins it there.
-
-### Document All Possible Response Status Codes
-
-Every endpoint's `response` parameter must list **all** status codes the endpoint can return, including those from raised exceptions:
-
-```python
-# Bad — 404 is possible but not documented
-@router.post('/verify-2fa', response={200: Token, 401: DetailOut})
-
-# Good — all status codes are documented
-@router.post('/verify-2fa', response={200: Token, 401: DetailOut, 404: DetailOut})
-```
-
-### Sortable List Endpoints
-
-When a list endpoint accepts a user-controlled `ordering` parameter that flows into `queryset.order_by()`, validate it with a regex `pattern=` allowlist on the `Query(...)` param. Django's `order_by()` raises `FieldError` (→ 500) on unknown fields; the allowlist prevents arbitrary-field injection:
-
-```python
-ordering: str | None = Query(
-    None,
-    pattern=r'^(-?(date|description|amount|type|category__name|account__name|account__currency__code))$',
-),
-```
-
-Pattern structure is `^(-?(field1|field2|fk__field))$` — optional `-` prefix for descending, then an alternation of allowed fields. Always anchor with `^` and `$`.
-
-**Deterministic tiebreaker for paginated sortable lists:** Append a unique-field secondary sort after the primary `order_by()` to guarantee stable ordering across pages:
-
-```python
-sort_order = ordering or '-date'
-queryset = queryset.order_by(sort_order, '-id')  # '-id' tiebreaker → stable pagination
-```
-
-Transactions use `-date, -id`; transfers and planned transactions use `-date, -id`. Either an id or created_at tiebreak is fine — the rule is "always append a unique-field secondary sort on paginated + user-sortable lists."
-
-**Creation order can itself be the payload.** Ordering a list by `created_at, id` makes "first" meaningful with zero schema fields: the `id` tiebreak is load-bearing because Postgres `now()` is transaction-stable, so rows created in one atomic block share a timestamp and only `id` (insertion order) puts the intended-first row first. `CurrencyCatalogService.list_enabled` is the exemplar - the first enabled currency IS the workspace primary, and consumers derive `currencies[0]` with no `is_primary` field. The order is read-only by construction: the moment users need to reorder, it must become an explicit `position` column (the `BudgetCurrency` through-model is the in-repo precedent), never a reinterpretation of timestamps.
-
-**List-filter values are not resource lookups: no pattern, no 422, no 404.** A `currency_code: list[str] | None = Query(None)` filter carries no `pattern=` - unknown or malformed values simply match nothing and return a 200 with an empty list, identical to filtering by an unknown `account_id`. The regex allowlist above is specifically for `ordering` values, because those reach `order_by()` and raise `FieldError` (500) on unknown fields; filter values only feed `__in` lookups. When a filter is ambiguous about WHICH field it targets, state the semantics in the endpoint docstring (the account-currency filter targets `account__currency__code__in`, never the informational `original_currency` facet).
-
-**Aggregation siblings stay in filter parity with their list endpoint.** When a totals endpoint shares the list's `_build_filtered_queryset` helper, adding a filter to the list endpoint is pure param threading: the aggregation endpoint gains the same bare `Query(None)` param at the same position, and its service methods pass it into the shared helper - a totals strip that disagrees with the filtered list (group totals ignoring the active filter) is exactly the bug this prevents.
-
-**"Row OR any child row" list filters stay SEPARATE `.filter()` calls - one per filter param, each an OR-group over its own joins ending in `.distinct()`.** Successive `.filter()` calls AND together, while merging every param's arms into a single `Q(...)` alternation would UNION the params (category-match OR budget-match instead of category-match AND budget-match). A NULL-inheriting child needs no explicit arm when the parent arm already covers it through the read-side Coalesce attribution - the `category_id`/`budget_id` OR-match on `_build_filtered_queryset` is the exemplar.
-
-**After touching a `Query(..., pattern=...)` line, the gate is a route-importing pytest run, not ruff.** A corrupted regex in the raw string (a stray parenthesis) passes `ruff check` AND `ruff format`, and explodes only at Django Ninja route registration (Pydantic compiles the pattern at import), taking down every test that imports the router - a full traceback wall on the first run. Ruff alone is never sufficient verification for a `pattern=` edit.
-
-### Pagination Param Caps (`page_size`)
-
-Numeric bounds on list-endpoint query params are part of the endpoint contract, declared on the `Query(...)` itself so Django Ninja rejects out-of-range values with an automatic 422 — services keep receiving already-validated ints:
-
-```python
-from core.schemas.pagination import ALLOWED_PAGE_SIZES
-
-MAX_PAGE_SIZE = max(ALLOWED_PAGE_SIZES)  # module level in each api.py
-
-page_size: int = Query(25, ge=1, le=MAX_PAGE_SIZE),
-```
-
-- Pair `le=` with `ge=1` — the contract rejects 0/negative sizes too, not just huge ones.
-- **Derive the cap from the source of truth** (`max(ALLOWED_PAGE_SIZES)`), never hardcode `le=100`. `paginate_queryset` silently coerces any size outside `ALLOWED_PAGE_SIZES` to its default; deriving `MAX_PAGE_SIZE` keeps the explicit 422 and the silent coercion in lockstep if the allowed set ever changes.
-- **The cap must not fall below the frontend's maximum.** `ALLOWED_PAGE_SIZES` (backend) and `PAGE_SIZE_OPTIONS` (frontend `utils/pageSize.ts`) duplicate the same list with no cross-reference; the frontend persists the user's choice in localStorage and sends it as `page_size` on every list request. A backend cap below the frontend max 422s real users' stored preference on their main pages — a functional regression dressed as a security fix. Lowering the cap or shrinking the allowed set requires a coordinated frontend change (drop the option from `PAGE_SIZE_OPTIONS` + migrate stored prefs) in the same PR.
-- Pin the contract with one boundary test per app: `page_size=1000` → 422, `page_size=0` → 422, and `page_size=<frontend max>` → 200 — the last assertion makes a future cap-lower fail loudly in tests instead of silently breaking the UI.
-- Assertions that cross a page edge (distinct counts across two pages) must use an `ALLOWED_PAGE_SIZES` value: `paginate_queryset` silently coerces anything else to the default, so a `page_size=1` boundary assertion tests the coercion, not the boundary.
-- **Stale `?page=N` clamps server-side in the shared helper, never 404s or endpoint caps.** `page = min(page, max(total_pages, 1))` after `total_pages` is computed in `core/schemas/pagination.py` - a client holding a stale bookmark (rows deleted, page_size grew) gets the last valid page WITH its items instead of an empty list whose meta lies (`page=3, total=20, total_pages=1` is indistinguishable from a genuinely empty list for the frontend, which gates pagination UI on `total`). An empty queryset reads as page 1 via the `max(..., 1)` floor. Do not add an `le=` bound or a 404 on `page` at the endpoint - that reintroduces the stale-bookmark failure the clamp exists to absorb; the endpoint keeps `page: int = Query(1, ge=1)` and the helper absorbs the rest.
-
-### Byte-Streaming Download Endpoints
-
-Endpoints that stream stored bytes to the client return a plain
-`HttpResponse(content, content_type=...)` with no Ninja response schema -
-mirroring `export_transactions` / `users/me/export`. Error status codes are
-still declared in `response={404: DetailOut, 503: DetailOut}` and itemized in
-the docstring; only the 200 body (the file itself) escapes schematization.
-Exemplar: `download_transaction_attachment` in `transactions/api.py`.
-
-- Routing bytes through an authenticated endpoint instead of handing out
-  presigned URLs keeps every download behind the four security layers and the
-  client-facing URL surface constant - presigned URLs leak the storage host to
-  clients and expire opaquely. The Django admin is the sanctioned
-  presigned-URL consumer (`transactions/admin.py`).
-- User-controlled filenames never reach `Content-Disposition` raw: the RFC
-  6266/5987 formatting (ASCII-sanitized `filename="..."` fallback plus a
-  `filename*=UTF-8''...` param via `urllib.parse.quote(filename, safe='')`)
-  lives on the service (`AttachmentService.content_disposition`), not the
-  endpoint module - header-encoding policy is domain logic, and the endpoint
-  stays a thin wrapper.
-- A stored object that is gone while its metadata row survives raises a
-  `NotFoundError` subclass with its own `default_code` (`file_missing`) so the
-  client can tell "no such attachment" (`not_found`) from "row intact, bytes
-  unreachable".
-
-## Service Layer
-
-Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation and DB operations. Account balances and budget periods are derived on read, never stored, so no service write path maintains a balance row (see `docs/architecture.md`). Domain-specific exceptions live in `<app>/exceptions.py`.
-
-Shared helpers:
-- `common/permissions.py` - `require_role(user, workspace_id, allowed_roles)` - raises 403, returns the role
-- `currencies/services.py` - `CurrencyCatalogService.get_enabled(workspace_id, code)` - returns an enabled workspace currency or raises `CurrencyNotEnabledError`
-- `common/services/base.py` - `delete_workspace_financial_records(workspace_id)` - deletes a workspace's domain records in PROTECT-safe dependency order
-
-```python
-class TransactionService:
-    @staticmethod
-    def get_transaction(transaction_id: int, workspace_id: int) -> Transaction:
-        trans = Transaction.objects.for_workspace(workspace_id).filter(id=transaction_id).first()
-        if not trans:
-            raise TransactionNotFoundError()
-        return trans
-
-    @staticmethod
-    @db_transaction.atomic
-    def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
-        account = TransactionService._resolve_account(workspace_id, data.account_id)
-        currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
-        return Transaction.objects.create(
-            ..., account=account, currency=currency, created_by=user, updated_by=user
-        )
-```
-
-**`get_or_create` on a scoped queryset repeats the scoping column as an explicit lookup kwarg.** Django applies queryset filters on the `get()` path but builds the create params from `kwargs + defaults` only - the filters NEVER reach `create()` (Django 6, `django/db/models/query.py`). `Model.objects.for_workspace(ws_id).get_or_create(user=user, ...)` therefore finds existing rows fine but raises `ValueError: workspace_id must be set before save` from `WorkspaceScopedModel.save` on every first GET (a spec that assumed filter propagation here failed 8 tests before the fix). Write `for_workspace(workspace_id).get_or_create(user=user, workspace_id=workspace_id, defaults=...)` so the workspace guard and the create path both hold.
-
-**Service-level uniqueness checks:** Validate uniqueness at the service level so a violation raises one clear domain error from a single place (the DB constraint stays the real guard). Exemplar: the category duplicate-name guard (`_check_ci_duplicate` in `categories/services.py`):
-
-```python
-queryset = Category.objects.filter(budget_id=budget_id, name__iexact=name)
-if exclude_id is not None:
-    queryset = queryset.exclude(id=exclude_id)
-if queryset.exists():
-    raise CategoryDuplicateNameError()
-```
-
-**Pre-clear-then-set for partial-unique-constraint partitions:** When a partial unique constraint enforces "at most one flagged row per partition" (see §Workspace-Scoped Models), the service pre-clears the partition *before* setting the new flag so well-behaved clients never hit the constraint — the DB constraint is the real guard, the pre-clear exists for clean UX, never as the only enforcement (no `try/except IntegrityError`):
-
-```python
-@staticmethod
-@db_transaction.atomic
-def create(user, workspace_id, data):
-    Account.objects.for_workspace(workspace_id).filter(
-        currency=data.currency, is_default_for_currency=True
-    ).update(is_default_for_currency=False)  # pre-clear the partition
-    return Account.objects.create(..., is_default_for_currency=data.is_default_for_currency)
-```
-
-On update, `.exclude(id=account.id)` so a row never clears its own flag.
-
-**Per-resource limit checks:** When a resource has a workspace-scoped maximum count, validate against a settings-backed env var before creation. Exemplar: the workspace member limit (`add_member` in `workspaces/services.py`):
-
-```python
-current_member_count = WorkspaceMember.objects.filter(workspace_id=workspace_id).count()
-if current_member_count >= settings.WORKSPACE_MAX_MEMBERS:
-    raise WorkspaceMemberLimitReachedError()
-```
-
-**Derived-count limit checks validate BEFORE any mutation, walking an unsaved probe.** When a limit guards a derived count (occurrences from a generation pointer to an end date), it cannot be a DB constraint - the count is never stored - so it is service validation raising a clean 400 (`MAX_MATERIALIZE_OCCURRENCES` in `RecurringTransactionService._validate_materialize_all`). The guard runs on create AND update before the first INSERT/save: a rejected rule must leave zero rows behind, and a post-hoc guard means the rows already exist. The count walk seeds exactly like the generation loop (pointer + 1 day, else `max(start_date, created_at)`), mirrors the loop's no-backfill skip, and steps an UNSAVED probe instance with the model's own `next_occurrence_on_or_after` - a second implementation of the calendar math drifts from the loop's - capped at MAX + 1 steps so it terminates for any end_date.
-
-**A mutation response serializes the endpoint's own instance; side-effect machinery running on a separate instance never updates it.** The recurring generator re-fetches the rule under lock and advances `last_generated_date` there, so create/update responses still carry the PRE-generation pointer and pending counts. That is the deliberate wire contract, not an omission: never "fix" it with a re-fetch before returning (the test shape that pins it - both facts, every mutation path - is in the `backend-testing` skill).
-
-**Ordered member sets are through-models with a `position` column, not FK flags on the parent** (`BudgetCurrency`, after the `WorkspaceCurrency` precedent: plain `Model` - scoped transitively via the parent FK, no audit fields - `Meta.ordering = ['position', 'id']`, unique together on parent+member). Writes validate ALL members first (every `get_enabled(...)` raise happens BEFORE any delete - a bad payload must not wipe the existing set inside the caller's atomic block), dedupe preserving first occurrence (`list(dict.fromkeys(codes))`), then delete + `bulk_create` with `position=enumerate_index`. Importers restore junction rows the same way, inside their existing atomic block - per-row creates matching the neighboring children, codes resolved through the same path the sibling entities use. The read side serializes through a model property (see §Pydantic Schemas).
-
-**Same-set reorders use `bulk_update`; delete + `bulk_create` is for set-changing writes.** When only positions move and the membership set is unchanged, recreating the rows churns ids and `created_at` for nothing. Reorder validation stays validate-all-first: a single `len(codes) != len(rows) or set(codes) != set(row_by_code)` permutation check raises before any write (a bad payload can never disturb the stored order) and catches every failure shape structurally - unknown, missing, extra, duplicate, and empty among direct callers; the schema 422s empty at the API. Positions stay sparse: no renumbering on disable, gaps cost nothing, and ordering never assumes contiguity. Direct creates must append via the next-position helper - a bare `WorkspaceCurrency.objects.create` lands at the column default `0`, AHEAD of the primary, breaking the position-0-is-primary invariant.
-
-**Split resolvers for optional FKs with a dependent field.** When a parent FK becomes optional but a derived field stays mandatory (account optional, own currency required), split resolution into `_resolve_account` (optional - omitted id resolves to `None`, but an explicitly-set archived id still raises) and `_resolve_currency` with a three-way branch: account set + currency omitted = derive from the account; account set + mismatched currency = 400; no account + omitted = 400 required. The account branch compares plain codes with no enablement lookup - an account's currency is enabled by construction; only the account-less branch resolves through `get_enabled` (404). Resolution order is a UX contract: run specific validators (`adjustment requires an account`) BEFORE the generic currency-required branch so `adjustment + no account + no currency` reports the specific error, not the generic one.
-
-**A model change's rider census is a grep, not a list.** When a model gains a NOT NULL column or a positional invariant, every direct `Model.objects.create` site outside the owning service needs the rider kwarg to keep the column satisfiable - find them by grepping `Model.objects.create` across ALL apps (service importers, legacy import, demo fixtures), and land every rider in the same task as the column so the NOT NULL lands green. Audit plan-provided rider snippets especially: a rider written `currency=account,` where `account` is an Account INSTANCE silently stores `currency_id = account.id` - cross-FK corruption that passes tests only where ids happen to coincide. An assignment must name the like-typed field: `currency=account.currency`. The same census grep matches SUBMODEL names - `PlannedTransaction.objects.create` contains the literal `Transaction.objects.create` - so classify substring hits explicitly instead of letting them pad the census. When the referenced entity is merge-able, the census has a second write-site family: a new FK consumer extends the merge's re-point block in the SAME locked transaction (in the existing re-point order, no workspace scoping - the source is pre-verified), or the merge re-points the old consumers while the new FK SET_NULLs to inherit, silently losing attribution.
-
-**A system-owned derived row type has exactly ONE writer helper; every managed write path routes through it.** When the server owns a derived row (the coverage remainder), one service helper (`TransactionService._normalize_coverage`) is its only constructor, and create/update/replace/auto-fill/demo-fixture/import paths all call it - a second construction site drifts from the normalization rule and double-represents the derived value. Optional control fields targeting the derived row (`remainder_category_id`) validate only AFTER the helper runs and only when a row actually results: whether they apply is decidable only post-derivation, so an exact-cover payload silently ignores them instead of 400ing on fields the system would disregard anyway. Importers re-enter the same helper rather than re-implementing its math (import-side rules in the `data-deletion-gdpr` skill).
-
-**New params on a service method with positional callers join the keyword group.** When existing call sites pass the first N arguments positionally (`PlannedTransactionService.list(workspace_id, status, account_id, start_date, end_date)`), inserting a new param at its semantically natural spot (right after `account_id`, where the filter chain would suggest) silently rebinds every caller's next positional argument - `start_date` becomes `currency_code` with no error. Place new params after the established positional run and pass them by keyword everywhere: filter-chain order is semantically irrelevant (an AND of all provided filters), signature placement is not. Before adding a param, check how the method's real callers invoke it.
-
-**Pop the prefetch cache after rewriting rows behind a prefetched relation.** When a read path prefetches a relation (`BudgetService.get()` prefetches `currencies`) and a write path on the same instance rewrites those rows via plain querysets (delete + recreate), the in-memory prefetch cache still serves the OLD set to anything reading the relation afterward - plain queryset writes never touch the instance cache. End the write helper with `getattr(obj, '_prefetched_objects_cache', {}).pop('<relation>', None)` (the `getattr` guard keeps the create path safe where no cache exists). `refresh_from_db()` would clear the cache too, but it also discards unsaved instance state, so it is unusable mid-update.
-
-**User-sent collections raise on invalid entries; machine-chosen defaults skip.** An unknown code in an explicit client list raises (`UnknownCurrencyError`, 404 - correct feedback for user choices), while an unknown entry in a module-level convenience default (`DEFAULT_WORKSPACE_EXTRA_CURRENCIES`) is silently skipped - raising on a machine-chosen default would take down registration and account reset on a partially seeded catalog. Single-source the raise path (a `strict` flag set at the codes-dedup branch) instead of duplicating the validation call between the two routes.
-
 ## No Nested Helper Functions
 
 Do not define helper functions inside a method body. Extract them as `@staticmethod` methods on the service class:
 
 ```python
-# Good — class-level static methods
+# Good - class-level static methods
 class WorkspaceService:
     @staticmethod
     def _send_existing_invite(user, workspace):
@@ -324,13 +161,13 @@ class WorkspaceService:
 
 **Private method ordering:** Place private `@staticmethod` methods before the public methods that call them (private-methods-first).
 
-**Shared helpers for side effects:** When multiple public methods need the same side-effect logic, extract it into a shared private `@staticmethod`. Keep caller-specific guard checks in the public method — the shared helper contains only the side-effect logic:
+**Shared helpers for side effects:** When multiple public methods need the same side-effect logic, extract it into a shared private `@staticmethod`. Keep caller-specific guard checks in the public method - the shared helper contains only the side-effect logic:
 
 ```python
 class PlannedTransactionService:
     @staticmethod
     def _execute_side_effects(planned, workspace_id):
-        """Shared logic — no guards, just side effects."""
+        """Shared logic - no guards, just side effects."""
 
     @staticmethod
     @db_transaction.atomic
@@ -340,7 +177,6 @@ class PlannedTransactionService:
             raise PlannedTransactionAlreadyExecutedError()  # Guard stays in public method
         PlannedTransactionService._execute_side_effects(planned, workspace_id)
 ```
-
 ## Service-Layer Authorization (Defense-in-Depth)
 
 Service methods that perform destructive operations should validate authorization themselves, not rely solely on API-layer checks. This prevents accidental misuse if the service is called from a management command or future endpoint:
@@ -358,103 +194,21 @@ def delete_workspace(user, workspace_id: int) -> None:
     if not membership or membership.role != Role.OWNER:
         raise WorkspacePermissionDeniedError()
 ```
-
-## Concurrent Safety with `select_for_update`
-
-For operations that must be atomic under concurrent requests (e.g., consuming a one-time recovery code), use `select_for_update()` to acquire a row-level lock and combine related field updates into a single `save()`:
-
-```python
-@staticmethod
-@db_transaction.atomic
-def verify_code(user: User, code: str) -> bool:
-    try:
-        twofa = UserTwoFactor.objects.select_for_update().get(user=user, is_enabled=True)
-    except UserTwoFactor.DoesNotExist:
-        return False
-
-    if _try_recovery_code(twofa, code):
-        twofa.last_used_at = timezone.now()
-        twofa.save(update_fields=['backup_codes', 'last_used_at', 'updated_at'])
-        return True
-    return False
-```
-
-**`select_for_update()` must execute inside `atomic()`:** All reads, validation, and writes using `select_for_update()` must be inside a single `atomic()` block. Without `ATOMIC_REQUESTS=True`, PostgreSQL raises `TransactionManagementError` in autocommit mode. Django's `TestCase` wraps each test in a transaction, masking this bug — it only surfaces in production.
-
-```python
-# Bad — select_for_update outside atomic (crashes in production, passes in tests):
-workspace = Workspace.objects.select_for_update().get(id=workspace_id)
-with db_transaction.atomic():
-    ...
-
-# Good — everything inside atomic:
-with db_transaction.atomic():
-    workspace = Workspace.objects.select_for_update().get(id=workspace_id)
-    ...
-```
-
-**`select_for_update()` + `select_related()` caveat:** Cannot combine with `select_related()` on nullable FKs — PostgreSQL raises "FOR UPDATE cannot be applied to the nullable side of an outer join". Remove `select_related` from locked queries involving nullable FKs.
-
-**Multi-row `select_for_update` — lock in id-order, re-check with `list()`:** When a mutation locks more than one row (e.g. merging two categories), acquire locks in ascending id order so concurrent transactions over the same pair can never deadlock — id-ascending is the house default lock order, and every transaction in the app acquires locks in the same order:
-
-```python
-locked = list(
-    Category.objects.select_for_update()
-    .filter(id__in=[target.id, source.id])
-    .order_by('id')
-)
-if len(locked) != 2:
-    raise CategoryNotFoundError()  # a concurrent tx deleted the source while we waited on the lock
-```
-
-The post-lock re-check uses `list(...)` + `len(locked) != N` — a concurrent transaction may have deleted a row while this one waited, and the count check surfaces that as a domain 404 rather than a 500. This is the multi-row analogue of the single-row `get()` + `DoesNotExist` form above.
-
-**Aggregates silently strip `FOR UPDATE`:** Postgres forbids `FOR UPDATE` with aggregate functions, so `.count()`, `.exists()`, and `.aggregate()` on a `select_for_update()` queryset silently emit a plain `SELECT` with no lock — no error, no warning, and the race the lock was meant to close stays open (single-threaded tests still pass). Only row-returning evaluation (e.g. `list(qs)`) actually acquires locks. Never use an aggregate terminal to verify or count a `select_for_update` queryset.
-
-**Unique-constraint races: savepoint, then re-read outside it.** When a create path can race on a unique constraint (e.g. idempotency-key dedup), wrap the racing insert — and the parent-row writes that must not be orphaned — in a *nested* `with db_transaction.atomic():` (SAVEPOINT), catch `IntegrityError`, and re-read the winner **after** the savepoint block:
-
-```python
-@staticmethod
-@db_transaction.atomic
-def create_with_key(user, workspace_id, data, key):
-    existing = MyService._lookup(key, user, workspace_id)
-    if existing:
-        return existing.target
-    MyService._sweep_expired(key, user, workspace_id)  # expired rows still hold the constraint
-    try:
-        with db_transaction.atomic():  # SAVEPOINT
-            target = MyService._do_create(user, workspace_id, data)
-            KeyRecord.objects.create(key=key, user=user, workspace_id=workspace_id, target=target)
-            return target
-    except IntegrityError:
-        pass  # lost the race — savepoint rollback removed BOTH the key insert and the target
-    return MyService._lookup(key, user, workspace_id).target  # re-read OUTSIDE the savepoint
-```
-
-- A bare `try/except IntegrityError` around the outer atomic block is **wrong**: Django marks the outer `atomic()` broken on any `IntegrityError`, even when caught — the follow-up re-read raises `TransactionManagementError` at runtime (single-threaded tests won't show it). The savepoint isolates the rollback so the outer transaction stays usable.
-- TTL-style dedup records: expired rows still occupy the unique constraint and will raise on insert — sweep them (same filter set as the lookup) between lookup and insert. Never-reused keys are a periodic-cleanup concern, not a request-path one.
-- Helpers that only ever run inside an existing atomic block (the savepoint, or the outer method's) stay undecorated — a redundant `@db_transaction.atomic` would open a pointless nested savepoint on every call.
-
-**This flow is ONE shared helper, not an inline pattern to re-implement.** `common/idempotency.py` exports `create_with_idempotency(...)`, the parameterized lookup→sweep→savepoint→IntegrityError flow above (`lookup`/`do_create` callables + `record_model`/`target_model`/`target_field`), and `parse_idempotency_key(request) -> (key, error_dict)` — a tuple, not an exception, so the 400 response tuple stays in the API layer. Injecting the lookup as a callable (resolved at call time via `Service._lookup_idempotency_key`) preserves the `mock.patch.object(Service, '_lookup_idempotency_key', ...)` test seam. When another model needs the flow, **mirror the dedup table field-for-field as a plain model** (own migration, own constraint name; transient record — not `WorkspaceScopedModel`, no audit fields, excluded from export/import/delete per the `data-deletion-gdpr` skill) and delegate to the helper: reshaping an existing dedup table (GenericFK, second nullable FK, shared-app move) churns its constraint name, migration chain, and test contract. TTL/max-length live only in the module constants (`IDEMPOTENCY_TTL`, `IDEMPOTENCY_KEY_MAX_LENGTH`) — never re-hardcode `timedelta(hours=24)`; lookup window and sweep window must not be able to drift apart.
-
-**Dedup lookups and unique constraints stay in lockstep.** For any unique-constraint-backed dedup, the lookup's filter set and the constraint's column set must widen or narrow **together**. Workspace-scoping the lookup while the constraint stays narrower turns a legitimate cross-scope collision into an unhandled `IntegrityError` (500) on the savepoint race path above — the constraint must widen in the same commit so the race-path insert succeeds per-scope. Keep the sweep's filter set identical to the lookup's.
-
 ## Check Object State, Not Just Existence
 
 When a model has a boolean flag (`is_enabled`, `is_active`, `is_verified`, …), always check both existence AND the flag:
 
 ```python
-# Good — checks existence AND enabled state
+# Good - checks existence AND enabled state
 twofa = UserTwoFactor.objects.filter(user_id=user_id).first()
 if not twofa or not twofa.is_enabled:
     raise TwoFactorNotEnabledError()
 ```
-
 ## Validate Stateful Dependencies Before Operations
 
-When an endpoint or service depends on a resource being in a specific state, validate that state **before** the main operation — a specific error beats a misleading generic one (e.g., check 2FA is enabled before reporting "Invalid verification code").
+When an endpoint or service depends on a resource being in a specific state, validate that state **before** the main operation - a specific error beats a misleading generic one (e.g., check 2FA is enabled before reporting "Invalid verification code").
 
-Also validate and raise **before** creating records — e.g., reject a transaction on a custom-cadence budget when no period covers the date, rather than saving something the UI can't place:
+Also validate and raise **before** creating records - e.g., reject a transaction on a custom-cadence budget when no period covers the date, rather than saving something the UI can't place:
 
 ```python
 account = TransactionService._resolve_account(workspace_id, data.account_id)
@@ -463,205 +217,7 @@ if account.is_archived:
 Transaction.objects.create(account=account, workspace_id=workspace_id, ...)
 ```
 
-This applies to both `create` and `update` paths — if a guard exists on create, apply the same guard on update.
-
-## Workspace-Scoped Models
-
-All models that belong to a workspace must inherit from `WorkspaceScopedModel`. This provides:
-- Direct `workspace` FK for efficient filtering
-- Audit fields: `created_by`, `updated_by`, `created_at`, `updated_at`
-- `for_workspace()` queryset method via `WorkspaceScopedQuerySet`
-- Validation preventing `workspace_id` changes after creation
-
-```python
-from common.models import WorkspaceScopedModel
-
-class Category(WorkspaceScopedModel):
-    """Category model scoped to a workspace, owned by a Budget."""
-
-    budget = models.ForeignKey('budgeting.Budget', on_delete=models.CASCADE, related_name='categories')
-    name = models.CharField(max_length=100)
-    is_archived = models.BooleanField(default=False)
-
-    class Meta:
-        db_table = 'categories'
-        constraints = [
-            models.UniqueConstraint(Lower('name'), 'budget', name='uniq_category_name_per_budget'),
-        ]
-
-# Service usage - always set workspace_id on creation:
-Category.objects.create(budget_id=budget_id, workspace_id=workspace_id, name='Food', created_by=user)
-```
-
-**Partial unique constraints for "at most one flagged row per partition":** When an invariant is "at most one row with `flag=True` per (scope, partition)" while many rows carry `flag=False`, enforce it at the DB level with a partial unique constraint, not service logic alone:
-
-```python
-from django.db.models import Q, UniqueConstraint
-
-class Meta:
-    constraints = [
-        UniqueConstraint(
-            condition=Q(is_default_for_currency=True),
-            fields=['workspace', 'currency'],
-            name='one_default_account_per_currency',
-        ),
-    ]
-```
-
-The `condition=Q(...)` form lets any number of `False` rows coexist while guaranteeing at most one `True` row per partition — immune to service-layer bugs and direct DB writes. The constraint `name` is part of the contract (service tests assert against it; renaming requires a migration). See §Pre-clear-then-set for the companion service pattern.
-
-**A model field whose name collides with a module import used by LATER field declarations is declared AFTER them.** A field named `settings` shadows `django.conf.settings` mid-class-body, so a later `ForeignKey(settings.AUTH_USER_MODEL, ...)` (or any `settings.*` read in the class body) evaluates the JSONField instance and raises `AttributeError` at import. `UserWorkspaceSettings` declares the `user` FK before its `settings` JSONField, with a comment pinning why the order is load-bearing - keep that comment when editing the model.
-
-**Check constraints are row invariants, not filters - write conditional invariants as `guard | requirement` disjunctions.** A `CheckConstraint` must evaluate TRUE (or NULL) for EVERY row, so a "constraint" written as the subset conjunction you would use in a query filter (`Q(kind='budget', budget__isnull=False, ...)` alongside `Q(kind__in=(...), budget__isnull=True, ...)`) is FALSE for every row outside its subset - two of those together make every possible INSERT fail. The trap is invisible to violation tests: `assertRaises(IntegrityError)` against an unsatisfiable constraint passes VACUOUSLY, and only a happy-path `objects.create` proves insertability - land at least one valid row per constraint before trusting the suite. Implication form (house precedents `recurring_materialize_all_requires_end` = `Q(materialize_all=False) | Q(end_date__isnull=False)` and `bookmark_budget_kind_requires_target` = `Q(kind__in=('transactions', 'planned')) | Q(budget__isnull=False, currency_code__isnull=False)`): the guard arm covers every row the requirement does not apply to.
-
-**Override abstract FK related names:** `WorkspaceScopedModel`'s abstract base uses `%(class)s_set` defaults. Concrete models should set explicit `related_name` on all FKs.
-
-For models with custom querysets:
-
-```python
-class AccountQuerySet(WorkspaceScopedQuerySet):
-    def active(self):
-        return self.filter(is_archived=False)
-
-class Account(WorkspaceScopedModel):
-    objects = AccountQuerySet.as_manager()
-```
-
-**Workspace-scoped queries:** Prefer `Model.objects.for_workspace(workspace_id)` over manual FK-chain filters like `filter(account__workspace_id=...)`.
-
-## Migrations
-
-- **Keep what `makemigrations` emits, even beyond the spec'd change.** The autodetector may emit `AlterModelOptions` carrying options the model has had all along (`verbose_name_plural` riding along with a new `ordering`) because the existing migration state never recorded them - stripping the "extra" keys leaves latent drift for the next `makemigrations` run to rediscover.
-- **Migration dependencies follow the landed tree, not the plan text.** When an earlier task on the same branch already added a sibling-app migration, the new migration depends on THAT migration, not the plan-pinned older one; `makemigrations --check` on a clean tree is the arbiter.
-- **Behavior-replacing fields land additive-first: the whole new surface in one commit, model defaults reproducing legacy behavior, before any consumer exists.** New fields, their named check constraints, schema members, domain exceptions, and factory defaults land together while the old field stays the only thing the engine reads (`upfront_count=1` IS the old lead-window materialization; `materialize_all=False` is off); the engine flip and the old field's removal then land as their own reviewable diff. Schema and behavior in one diff is unreviewable, and defaults that change runtime semantics mid-branch break every intermediate commit's suite.
-- **A NOT NULL FK column lands as ONE hand-merged migration.** Declare the field nullable → run `makemigrations` (this captures the autodetector's index name and full dependency list) → tighten to NOT NULL → hand-merge into one migration: `AddField(null=True)` + `AlterField(null=False)` + `AddIndex`. The interactive questioner cannot run non-interactively, so the second generation is derived by hand from the first's shape. With the no-existing-data decision, there is no backfill - dev DBs with rows are dropped and recreated, and pytest's fresh test DB proves the apply.
-- **An index lands WITH the column it serves**, in the same migration (the reading task expects it there). A nullable-column index needs no nulls-tolerant companion: Postgres btree indexes NULLs, and account-filtered queries never match account-less rows. When the FK's single-column index is declared explicitly in `Meta.indexes`, set `db_index=False` on the field - the autodetector otherwise emits two identical single-column indexes for it (`TransactionItem.category` follows the `source_transaction` precedent).
-- **A `RunPython` data backfill mirrors the live service helper it derives from - same rule, same quantization point.** Recompute in Python what the helper computes rather than reaching for a SQL `Coalesce` aggregate: a quantity (3dp) x unit_price (2dp) product is 5dp, and only the helper's sum-level quantize folds it to the value later validations and UI hints read - SQL-side rounding drifts from the helper silently. Chunk the pass pk-paginated; the reverse migration deletes by the FLAG the backfill set, never by re-deriving the rule.
-- **A repair migration re-derives the original backfill's rule from the SERVICE helper it mirrors, not from the old migration's code.** A Django migration never re-runs, so rows entering after the backfill was recorded (legacy importers, restores) silently violate its invariant - and the repair's aggregate semantics must account for rows the first pass itself created: the original's sum-over-all-items is provably wrong to copy once its own remainder rows exist, so the repair's user-sum excludes them. Make the repair idempotent by construction (create when missing, resize the system-owned row in place, delete the surplus), keep that row's position on resize (the system owns its size, never its place), and pin idempotence with the direct-call snapshot test (see the `backend-testing` skill).
-
-## FK Flips: Stale-Join Sweep and Aggregate Rewiring
-
-When an FK relationship moves (an aggregate source flipping from `account__currency__code` to a stored own `currency__code`), grep for readers of the OLD path (`account__currency`, `instance.account.currency`) and flip them together - totals annotations, list filters, `ORDERING_PATTERN` tokens, and export `select_related` chains all rewire in one commit; INNER JOINs through a now-NULL FK would silently drop the null-side rows from every aggregate. An aggregate flip touches four surfaces together: the annotation source, the `values()`/map keys, the docstrings, AND the tests - a half-flipped aggregate (annotation renamed, map key not) fails loudly, but a stale docstring misleads silently. Put the newly-required `select_related` member FIRST in the argument list (`select_related('currency', ...)`) so prefix-greps stay honest; argument order is join-plan-neutral. Doc riders (a filter-language paragraph in a UX doc) ride the code task that changes the semantics, never a separate docs-only commit.
-
-**Interim guards carry their own removal conditions.** A guard that exists only because another model's column is still NOT NULL states, in domain terms, what it protects and what completes the change (no task ids); the task that nulls the column REMOVES the guard and completes the behavior in the same commit - an interim guard left behind becomes a permanent wrong branch.
-
-## Aggregation Seams and GROUP BY Discipline
-
-**Cross-app aggregates delegate to a seam in the OWNING app.** When another app reads an aggregate over your rows (budget actuals over transaction items), the owning app exposes the shared math as module-level expression constants (`EFFECTIVE_CATEGORY_ID`, `EFFECTIVE_TOTAL`) plus one public helper or row-generator; consumers fold rows into their own response shapes and never re-derive the expression math. Reports imports from transactions, never the reverse - two inline derivations of the same Coalesce logic drift apart silently.
-
-**`values().annotate(Sum(...))` over a model with `Meta.ordering` splits every row into its own group** unless the ordering is cleared first: Django appends the ordering columns to the GROUP BY, so `TransactionItem.Meta.ordering = ['position', 'id']` turns a per-category sum into one group per item. End the chain with an explicit `.order_by()` (the grouped columns, or empty) plus a WHY comment at the call site. The trap is invisible in assertions - a correct Python-side dict-fold over the split rows still sums to the right total while quietly pulling one row per item - so only the query shape proves the fix.
-
-## Newest-Per-Group Enrichment (Window Functions)
-
-Enriching grouped rows with their newest member (last-used values per frequent description) is ONE window-function query joined to the grouped rows via a dict in Python - never per-group `.first()` chains, which cost N+1 queries scaling with group count and `limit`:
-
-```python
-rows = queryset.annotate(
-    lower_desc=Lower('description'),
-    currency_code=F('currency__code'),
-    rn=Window(
-        expression=RowNumber(),
-        partition_by=[Lower('description'), F('currency__code')],
-        order_by=[F('date').desc(), F('id').desc()],
-    ),
-).values('lower_desc', 'currency_code', 'amount', 'category_id',
-         'category__is_archived', 'account__is_archived', 'rn')
-last_by_group = {(r['lower_desc'], r['currency_code']): r for r in rows if r['rn'] == 1}
-```
-
-- **Django disallows filtering on window annotations** (`FieldError: Window is disallowed in the filter clause`), so `rn == 1` rows are kept during PYTHON evaluation - the query count stays constant in the number of groups and in `limit`, which is the property the endpoint owns (when the sibling queries already scan every workspace row, the window scan adds no new cost class). The query-count invariance is pinned by the two-run `CaptureQueriesContext` test shape in the `backend-testing` skill.
-- **`.annotate(window)` + `.values(...)` with no aggregate functions is a plain SELECT (no GROUP BY)**; related traversals (`category__is_archived`, `account__is_archived`) LEFT JOIN and read as `None` when the FK is `None`, so archived-nulling logic branches on them directly.
-- The ordering (`F('date').desc(), F('id').desc()`) is the same unique-field tiebreak rule as sortable lists - max date, then max id.
-- Exemplar: `TransactionService._last_transactions_by_group` feeding `frequent_descriptions`.
-
-## Pydantic Schemas
-
-```python
-from pydantic import BaseModel, ConfigDict, Field
-
-class TransactionCreate(BaseModel):
-    """Schema for creating a transaction."""
-    date: date
-    description: str = Field(..., max_length=500)
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(..., pattern=r'^[A-Z]{3}$')
-
-class TransactionOut(BaseModel):
-    """Schema for transaction response."""
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    date: date
-    amount: Decimal
-```
-
-**Optional list fields (and same-module forward references):** A schema referencing a type defined later in the same module must use the string form — `items: list['TransactionItemIn']` — because Python evaluates bare annotations at class-definition time (`NameError` fires before Pydantic ever sees the model; ruff flags `F821`); Pydantic v2 resolves string annotations at module-load finalization. The default is `Field(default_factory=list, max_length=N)` — never a bare `[]` (mutable default) — with `max_length` matching the sibling endpoint that already caps the same collection. `default_factory=list` keeps every existing caller that omits the field working. In the service, bulk-create the children inside the parent's existing `@db_transaction.atomic` block, guarded by `if data.items:` — the children become atomic with the parent for free. Helpers consuming an already-validated schema skip per-row defensive parsing; reserve try/except parsing for untyped sources (parser dicts, external APIs).
-
-That default is for collections with a sane EMPTY default. When absence and emptiness must stay distinguishable - `[]` is invalid input (a 422 via `min_length=1`) while omission means "use your defaults" - the field is `Field(None, min_length=1, ...)` instead, and the service branches on truthiness (`if currency_codes:`), which additionally shields direct callers from an `IndexError` on an empty list.
-
-**M2M collections serialize through a model property.** `from_attributes` cannot coerce a Django `RelatedManager` to `list[str]` - define `@property currency_codes -> list[str]` on the model (`[bc.currency.code for bc in self.currencies.all()]`). It serializes cleanly, consumes the prefetch cache when present, falls back to `Meta.ordering` otherwise, and becomes the ONE derivation path: the API `Out` schema, the GDPR exporter (`prefetch_related('currencies__currency')` feeding the same cache), and any future reader all read the property instead of re-deriving the comprehension. Exemplar: `Budget.currency_codes`.
-
-**Cross-field validation:** Use `@field_validator` with `mode='after'`:
-
-```python
-@field_validator('to_currency', mode='after')
-@classmethod
-def currencies_must_differ(cls, v, info):
-    if info.data.get('from_currency') == v:
-        raise ValueError('Currencies must be different')
-    return v
-```
-
-**Shared validated types:** When identical field validators repeat across schemas, extract a shared `Annotated` type with `BeforeValidator`:
-
-```python
-def _validate_email(v: str) -> str:
-    v = v.lower().strip()
-    validator = EmailValidator()
-    try:
-        validator(v)
-    except DjangoValidationError:
-        raise ValueError('Enter a valid email address')
-    return v
-
-ValidatedEmail = Annotated[str, BeforeValidator(_validate_email)]
-```
-
-Define the validation function as a module-level private function and the annotated type as a module constant. Only extract validators that are truly identical across all schemas — keep separate validators on schemas that may diverge. Email validators must include `.lower().strip()` so downstream code receives pre-normalized values.
-
-**Dynamic dict-based schemas for multi-currency data:** When response data is keyed by a dynamic value (e.g., currency codes), use `dict[str, ValueType]` instead of hardcoded fields:
-
-```python
-class BudgetSummaryResponse(BaseModel):
-    period: BudgetSummaryOut
-    currencies: dict[str, CurrencySummary]   # Keyed by currency code ("PLN", "USD", …)
-    balances: dict[str, CurrencyBalances]
-```
-
-Populate in the API layer by iterating the queryset and grouping into dicts.
-
-**Removing a response field requires a consumer census.** Before dropping a field from an `Out` schema, grep every consumer of that field - frontend types, components, and tests - and migrate them in the same branch (the `download_url` removal paired the backend drop with the frontend blob rework). A field the backend silently stops sending while the frontend still types it is an invisible `undefined` at runtime, not a compile error.
-
-## Distinguishing "Client Sent" from "Defaulted" on Partial Updates
-
-When a Pydantic update schema defaults a boolean to `False` (not `None`) so the `setattr` loop sees a plain `bool`, the service cannot tell "client omitted the field" from "client sent `False`" by reading the validated attribute — both are `False`. Branch on the `model_dump(exclude_unset=True)` dict instead:
-
-```python
-update_data = data.model_dump(exclude_unset=True)
-if update_data.get('is_default_for_currency') is True:
-    # client explicitly sent True — run the pre-clear (see §Service Layer)
-    Account.objects.for_workspace(workspace_id).filter(
-        currency=account.currency, is_default_for_currency=True
-    ).exclude(id=account.id).update(is_default_for_currency=False)
-for field, value in update_data.items():
-    setattr(account, field, value)
-```
-
-`exclude_unset=True` includes a key only if the client sent it, so `.get(...)` returns `None` when omitted and the actual value when sent. The `is True` identity check is what distinguishes an explicit `True` from both `None` (omitted) and `False` (explicitly cleared) — truthiness would mis-fire on a truthy non-bool.
-
-**The full-replace dual: direct assignment makes the schema default the stored value.** An update service that assigns fields directly (`trans.note = data.note`, no `exclude_unset` loop) has full-replace semantics - an absent key stores the schema default, i.e. it CLEARS the field. That is free, correct absent-key behavior: pin it with the create schema's docstring and a replace-and-clear test instead of reaching for `exclude_unset`; the dict dance above exists only for partial-update schemas where omission must NOT overwrite.
-
-**`exclude_unset=True` cascades into NESTED models - page-level full-replace dumps each present nested model whole.** A top-level `model_dump(exclude_unset=True)` on a schema with nested sub-models drops every field the client omitted inside a PRESENT nested model, silently losing the replace-with-null contract for those facets (Pydantic v2). For a full-replace PATCH over nested sub-models, iterate the TOP model's `model_fields_set` (which pages are present) and dump each present page WITHOUT `exclude_unset`, so omitted facets persist as explicit nulls; an explicit `null` page value stays a defensive no-op.
-
+This applies to both `create` and `update` paths - if a guard exists on create, apply the same guard on update.
 ## Safe Defaults for `getattr` Fallbacks
 
 When using `getattr` as a safety net for fields added by recent migrations (rolling deploys), always default to the more restrictive/secure value:
@@ -673,97 +229,28 @@ email_verified = getattr(user, 'email_verified', True)
 # Good: default False fails safe
 email_verified = getattr(user, 'email_verified', False)
 ```
-
 ## Model Field Defaults Must Match Service Defaults
 
-When a service overrides a model field default (e.g., creates with `WeekdayChoices.MONDAY`), the model field `default` must match. Otherwise direct creation paths (Django admin, factories, management commands) produce inconsistent data. Only the field `default` changes — no data migration needed.
-
-## Shared Catalog Registries
-
-A catalog that both sides of the stack consume (languages, fonts) lives as a shared JSON registry in `backend/common/`: `common/<name>.json` is the single source of truth (the frontend imports it cross-tree), and `common/<name>.py` is the backend's typed view - `REGISTRY_PATH` plus constants (`FONT_CODES`, `DEFAULT_FONT`) derived at import. No `settings.py` row and no env var: the JSON is the only default source. `DEFAULT_LANGUAGE` is the deliberate exception (deploy-time localization overrides are real); a new catalog arguing for an env var must say why it beats the registry default. The pattern exists because hardcoded copies of one list drift - the font list sat in four places (backend choices class, two frontend lookups, index.html webfont loads) before `fonts.json`.
-
-- **Model fields over registry values carry no `choices=`.** Drop the choices class and point the field `default` at the same registry constant the service uses - model default == service default by construction. A dynamic choices class built from the registry at import time was rejected because every registry edit churns a migration; that is why the language fields never had model choices. The autodetector emits a state-only `AlterField` (Django `choices` create no DB constraint) and serializes the default as the resolved literal (`default='geist'`, not the constant reference) - keep makemigrations output verbatim.
-- **Semantic-vs-structural validation split.** The Pydantic schema keeps only type/shape checks (Ninja's 422); value checks - registry membership, ranges - raise `common.exceptions.ValidationError` from the service so they ride the global handler as 400 with a translated detail. Move the WHOLE mistake class together: the rejected alternative was a font-only 400 while language/number_format stayed 422 on the same PATCH - one endpoint returning mixed codes for the same kind of mistake. Validate BEFORE `get_or_create` so a rejected request never creates a row, and preserve existing msgids byte-identical when moving a validator - the .po translations carry over with zero i18n churn. Tests pinning the old code flip from Ninja's 422 detail list to the handler's plain-string `{'detail': ...}`.
-- **Self-heal-on-read when a registry shrinks.** In the getter, `value not in REGISTRY_CODES` subsumes the old falsy check: rows stored under dropped entries heal to the registry default on read, no data migration. Safe only once no writer of invalid values survives - and verify the GDPR import never restores the field before skipping an import-side check.
-
+When a service overrides a model field default (e.g., creates with `WeekdayChoices.MONDAY`), the model field `default` must match. Otherwise direct creation paths (Django admin, factories, management commands) produce inconsistent data. Only the field `default` changes - no data migration needed.
 ## `update_fields` Must Include Fields Set by Model Overrides
 
-`save(update_fields=[...])` persists **only** the listed fields — any field a model-level override sets in memory is silently dropped, with no error and no failing test. When a model method mutates state beyond the field it is named for (e.g. `User.set_password` also stamps `password_changed_at`), every `save(update_fields=...)` call site on that model must list the extra fields:
+`save(update_fields=[...])` persists **only** the listed fields - any field a model-level override sets in memory is silently dropped, with no error and no failing test. When a model method mutates state beyond the field it is named for (e.g. `User.set_password` also stamps `password_changed_at`), every `save(update_fields=...)` call site on that model must list the extra fields:
 
 ```python
 user.set_password(new_password)
 user.save(update_fields=['password', 'password_changed_at'])  # stamp comes from the override
 ```
 
-When adding a field to such an override, grep `update_fields=` across the app in the same task — a missed list quietly drops the write (for the `password_changed_at` instance, a dropped stamp lets a stolen refresh token survive a password change; see the `auth-security` skill).
-
+When adding a field to such an override, grep `update_fields=` across the app in the same task - a missed list quietly drops the write (for the `password_changed_at` instance, a dropped stamp lets a stolen refresh token survive a password change; see the `auth-security` skill).
 ## Read Settings at Call Time
 
-Read `django.conf.settings` values inside the function body, not at module import. Import-time reads freeze the value for the process lifetime and make `override_settings` useless in tests — call-time reads are why `override_settings(TRUSTED_PROXY_COUNT=...)` and `override_settings(TWO_FACTOR_ENCRYPTION_KEY=...)` work. The deliberate exception is decorator configuration (e.g. `rate_limit(...)` captures `settings.RATE_LIMIT_*` at decoration time); the test consequence — those limits are only testable at their defaults — is in the `backend-testing` skill.
-
-## Env-Mode Dispatch in settings.py
-
-When `config/settings.py` selects between implementations via an env var (`EMAIL_MODE`: console/file/smtp), use a validated closed-set mode variable - never let arbitrary values flow into branch logic. Exemplar: the email block in `config/settings.py`, tested by `core/tests/test_settings_email.py`.
-
-- **Lowercase before validating** (`os.getenv('EMAIL_MODE', '').lower()`) so `SMTP`/`File` are accepted, and treat unset/empty as the legacy auto behavior (`EMAIL_HOST` set means smtp, empty means console) - empty equals the pre-mode-var behavior, so no existing deployment changes on upgrade.
-- **Fail loud at boot.** Every other value - including whitespace-only - raises `ImproperlyConfigured` at startup, naming the env var and listing the valid values. A silent fallback masks misconfiguration, and naming the var is what makes the failure assertable on stderr by the subprocess probe tests (see the `backend-testing` skill's probe section).
-- **Sub-settings live inside their branch only.** `EMAIL_FILE_PATH` is assigned in file mode alone (undefined elsewhere), the SMTP `EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_USE_TLS` cluster in smtp mode alone. A sub-setting assigned outside its branch leaks a half-configured mode into every other branch.
-
-## Error Handling
-
-- **Domain Exceptions**: Services raise domain exceptions inheriting from `ServiceError` (in `common/exceptions.py`)
-- **Global Handler**: A Django Ninja exception handler in `config/urls.py` converts `ServiceError` to HTTP responses automatically
-- **Exception Types**: `NotFoundError` (404), `ValidationError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403)
-- **App Exceptions**: Each app defines specific exceptions in `<app>/exceptions.py`
-- **Transactions**: Use `@db_transaction.atomic` for database operations that update balances
-- **Exception Naming**: `<Domain><ErrorType>Error` — e.g., `TwoFactorNotEnabledError`. Always set `default_message` and `default_code` as class attributes
-- **Exception Codes**: Every domain exception should include a `default_code` (snake_case string) for frontend error matching (e.g., `'two_factor_not_enabled'`)
-- **DB check constraints mirror into the API surface:** the exception's `default_code` may deliberately equal the constraint name minus its table prefix (`materialize_all_requires_end` for constraint `recurring_materialize_all_requires_end`) so clients can correlate the 400 with the constraint that fired, and a check-constrained numeric range is mirrored as Create-schema `ge`/`le` (`upfront_count: Field(1, ge=1, le=24)` for `recurring_upfront_count_range`) so Pydantic 422s before the DB ever sees it.
-- **Translatable by default:** `default_message` is `gettext_lazy`-wrapped; dynamic messages %-format into a wrapped msgid (see Error Messages Are Translated)
-
-```python
-# users/exceptions.py
-from django.utils.translation import gettext_lazy
-
-class TwoFactorNotEnabledError(NotFoundError):
-    default_message = gettext_lazy('Two-factor authentication is not enabled for this user')
-    default_code = 'two_factor_not_enabled'
-
-# For exceptions with dynamic messages, accept params in __init__ and
-# %-format into the wrapped msgid (never an f-string; see Error Messages Are Translated):
-class UnknownCurrencyError(NotFoundError):
-    default_code = 'unknown_currency'
-
-    def __init__(self, code: str):
-        super().__init__(gettext_lazy('Currency %(code)s not found in the catalog') % {'code': code})
-```
-
-**Disable/delete guards enumerate their blockers per type.** A guard that counts blocking references returns a per-type breakdown dict (`{'accounts': n, 'category_budgets': n, ...}`), not a summed int, and the exception composes the human-readable sentence from a locale-correct plural-label helper (`_reference_label(kind, count)` in `currencies/exceptions.py`: one `ngettext` branch per kind - literal msgid pairs so xgettext collects them - with unknown kinds falling back to the raw key). The sentence rides the existing `{'detail': ...}` handler channel, so the frontend renders it verbatim with zero client-side enumeration logic. Exemplar: `CurrencyInUseError`. Guard extensions are append-only: a new reference type joins `_reference_count` LAST and its `_reference_label` branch joins LAST (the helper's docstring contract) - dict iteration order drives sentence order, and inserting mid-order silently rewrites every pinned sentence assertion.
-
-**A new reference kind joins the guard as a single-commit census across all its surfaces.** One commit touches: the count dict key and the label branch (both LAST, per the append-only rule above), the custom-row deletion guard in `disable()`, BOTH po catalogs (the new plural entry + any shifted `#:` refs), and BOTH docs enumerations (`docs/workflow.md`, `backend/README.md`) - never the count alone. The count is only the UX/blocking layer: a reference row created between the count and the custom-row delete (READ COMMITTED) still trips the PROTECT FK as `ProtectedError` (500), and any future FK the count misses has the same failure mode - the deletion-guard re-check is the correctness layer (see the pin rule below) that makes delete safe regardless of what the count saw. Regression tests assert the domain error where the 500 used to escape (`CurrencyInUseError`, never `ProtectedError`).
-
-**An FK that does not gate an operation can still pin the row against its cleanup.** When un-blocking a guard (transaction original-currency facets stopped counting toward currency disable), check `on_delete` at every DELETION site, not just in the guard: `Transaction.original_currency` is `on_delete=PROTECT`, so the "orphaned" custom-row cleanup that now runs anyway would raise `ProtectedError` (500) on a facet-referenced row. The deletion site needs its own reference check - a facet-referenced row is not orphaned (it stays, re-enablable). Excluding a reference type from the guard NEVER means the row is safe to delete; it means the guard and the cleanup answer different questions. Deletion-guard reference queries are deliberately unscoped: a custom currency row belongs to exactly one workspace, and the guard protects the FK, not workspace visibility - do not "fix" them into `for_workspace(...)` filters.
-
-## Error Messages Are Translated (gettext)
-
-API error details are user-facing UI: every message that can reach the `{'detail': ...}` handler is translatable. Selection is request-driven - `LocaleMiddleware` (after SessionMiddleware) picks the catalog from the request's `Accept-Language` header (the frontend sends it on every request); no header, an unknown language, or a missing translation falls back to the English source string.
-
-- **`<app>/exceptions.py` uses `gettext_lazy` throughout.** Class attributes are assigned at import time, so only a lazy proxy resolves the language at response time: `default_message = gettext_lazy('...')`, and dynamic constructors %-format the lazy msgid (`super().__init__(gettext_lazy('Currency %(code)s not found') % {'code': code})`).
-- **Service raise sites and Pydantic validators use runtime `gettext` `_()`** - the same split as any other import-time vs. request-time evaluation: `raise ValidationError(_('Currency %(code)s not found') % {'code': code})`.
-- **Placeholders in translatable messages are named %-format, never f-strings.** An f-string interpolates before gettext sees it, baking English word order into the message; the msgid must be one complete sentence.
-- **Never name a partition/split throwaway `_` inside a function that calls gettext as `_`.** One assignment (`budget, _, cat = token.partition('::')`) makes `_` local to the ENTIRE function scope, so every earlier `_(...)` call in that function raises `UnboundLocalError` - in `import_all_data` the failure was every import 500ing at the version gate, dozens of lines before the new code, invisible to ruff and to a diff-reading reviewer. Use indexed reads on the partition tuple (`parts[0]`, `parts[2]`) or any non-`_` throwaway name.
-- **Updating translations:** `uv run python manage.py makemessages -l uk -l pl --no-obsolete` regenerates `locale/<lang>/LC_MESSAGES/django.po`; translate the msgstrs, run `compilemessages` (the Docker entrypoints compile on boot; a gettext-absent host runs the same command through `./dev.sh manage makemessages ...`). The full workflow is in `docs/i18n.md`. For a small additive msgid change on a catalog carrying unrelated debt, hand-add the entries instead (correct `#:` refs, the `#, python-format` flag where placeholders exist, msgstr wrapping matching the file's style) - a full regen re-wraps hundreds of unrelated lines per catalog and buries the real change.
-- **Scope: API error details only.** Emails and legal document text stay English by design (see the `email-sending` skill); do not gettext those.
-- Testing translated responses (headers, fallback assertions) is in the `backend-testing` skill's Accept-Language pattern.
-
+Read `django.conf.settings` values inside the function body, not at module import. Import-time reads freeze the value for the process lifetime and make `override_settings` useless in tests - call-time reads are why `override_settings(TRUSTED_PROXY_COUNT=...)` and `override_settings(TWO_FACTOR_ENCRYPTION_KEY=...)` work. The deliberate exception is decorator configuration (e.g. `rate_limit(...)` captures `settings.RATE_LIMIT_*` at decoration time); the test consequence - those limits are only testable at their defaults - is in the `backend-testing` skill.
 ## Case-Insensitive Grouping with Display Casing
 
 When grouping text values that vary in casing (e.g., "Amazon"/"amazon"), group by lowercase but display the most common original casing: build a `lowercase → most common variant` map (via `Counter(...).most_common(1)`), aggregate with `.annotate(lower_desc=Lower('description'))`, then map results back through the display map.
-
 ## Code Cleanup When Refactoring
 
-When removing code that uses specific imports, also remove the now-unused imports — especially `logging`/`logger` when removing the only logging call, `send_mail`/`EmailMessage` when migrating to `EmailService`, and `db_transaction` when removing the only atomic block.
-
+When removing code that uses specific imports, also remove the now-unused imports - especially `logging`/`logger` when removing the only logging call, `send_mail`/`EmailMessage` when migrating to `EmailService`, and `db_transaction` when removing the only atomic block.
 ## Workspace Management
 
 ```python

@@ -1,6 +1,6 @@
 ---
 name: npm-dependency-refresh
-description: Frontend npm dependency refreshes for Owlgarth Finances - audit-fix/update/audit-fix end-state sequencing, allowScripts derivation from the post-update tree, the lockfileVersion 3 gate, floor bumps for production-security direct deps vs backlog majors, registry-verified floors and lockfile diff-scope proof for single-package bumps, clean-reinstall proof. Use when refreshing or bumping frontend dependencies in frontend/package.json, triaging npm audit findings or a CI audit-gate failure, or regenerating frontend/package-lock.json.
+description: Frontend npm dependency refreshes for Owlgarth Finances - audit-fix sequencing, allowScripts derivation, the lockfileVersion 3 gate, security floor bumps vs backlog majors, and lockfile diff-scope proof. Use when bumping frontend dependencies, triaging npm audit findings or a CI audit failure, or regenerating frontend/package-lock.json.
 ---
 
 # npm Dependency Refresh
@@ -24,7 +24,7 @@ an intermediate step:
 - Floor-bump only direct production deps with a security motive (react-router-dom `^7.10.1` ->
   `^7.18.4`, the Link/useNavigate open-redirect fix). Semver majors (tailwind 4, vite 8,
   react-day-picker 10, typescript 7) stay deferred to the backlog for manual refreshes; Dependabot
-  is the long-term range manager (live since PR #154) - minor+patch arrive as one grouped PR per
+  is the long-term range manager - minor+patch arrive as one grouped PR per
   week, majors as individual reviewable PRs (config facts in `ci-releases`). The security
   floor-bump rule above still governs manual refreshes; it is not a Dependabot-PR triage rule.
 - When the CI audit gate fails, the remediation is this sequence - never loosening the gate flags
@@ -66,7 +66,7 @@ When the swap exchanges the bundler ENGINE itself (vite 7 -> 8 traded Rollup+esb
 ## lockfileVersion 3 is a hard gate
 
 After any npm run that rewrites `frontend/package-lock.json`, verify `lockfileVersion: 3` in the
-file. Since the node-26 alignment (PR #171) every lockfile surface writes v3 natively - npm 9+
+file. Since the node-26 alignment every lockfile surface writes v3 natively - npm 9+
 does - so the gate no longer guards a cross-version writer/consumer asymmetry: the host and CI
 (setup-node 26) run npm 12, while the Docker node images (`node:26-alpine` builder,
 `node:26-slim` tools service) bundle npm 11.20.0 (node images carry upstream's bundled npm, not

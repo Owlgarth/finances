@@ -1,6 +1,6 @@
 ---
 name: docs-accuracy
-description: Documentation editing conventions for Owlgarth Finances - accuracy sweeps (verify claims against source, census-before-edit, grep-gated done criteria, dead names to zero, anchor links, terminology mirroring of described sources) and markdown mechanics (code-fenced tree alignment, repr() whitespace verification, verbatim transcription, non-dash glyph preservation). Use when editing any README.md, docs/ or design/ markdown, or when running a documentation accuracy or audit sweep.
+description: Documentation editing conventions for Owlgarth Finances - accuracy sweeps (verify claims against source, census before editing, grep-gated done criteria, dead names to zero) and markdown mechanics (code-fenced trees, verbatim transcription, glyph preservation). Use when editing any README.md, docs/ or design/ markdown, or running a documentation audit.
 ---
 
 # Documentation Accuracy

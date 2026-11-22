@@ -1,50 +1,35 @@
 ---
 name: docker-infra
-description: Docker, nginx, and S3-compatible storage conventions for Owlgarth Finances - DNS-safe service names, nginx header inheritance, entrypoint consistency, dual S3 URLs, bucket policies, init ordering, third-party image tag+digest pinning and the compose-digest refresh procedure, Dockerfile ARG hygiene, lockfile-enforced npm installs, named additional build contexts for source files a build context does not contain. Use when editing docker-compose.yml, Dockerfiles, entrypoint scripts, nginx config, storage/S3 configuration, dev.sh (incl. the release command and the npm ci bootstrap), bumping the project version (the uv.lock refresh), refreshing backend dependencies (targeted uv lock --upgrade-package bumps, incl. the protocol-coupled client/server one-commit pairing with a compose image move), or migrating the backend python version (the coordinated FROM + .python-version + lock move, the wheel-only build gate, the backend-venv volume reset).
+description: Docker, compose, nginx, S3-compatible storage and dev.sh conventions for Owlgarth Finances, plus reference files for compose anchors, image digest refreshes, build contexts, image-build proofs, and backend dependency or Python-version upgrades. Use when editing docker-compose files, Dockerfiles, entrypoints, nginx config, storage setup, or dev.sh.
 ---
 
 # Docker & Infrastructure
 
+Core rules below. Read the reference files (`.agents/skills/docker-infra/references/`) when the change calls for them:
+
+| When | Read |
+|---|---|
+| editing compose env blocks or `x-*` anchors, refreshing pinned image digests, adding a cross-tree import to an image build, proving an image build | `references/compose-and-images.md` |
+| bumping backend dependencies in `uv.lock`, moving the Python version | `references/dependency-upgrades.md` |
+| frontend npm dependency refreshes | `npm-dependency-refresh` skill |
+| CI workflows and release publishing | `ci-releases` skill |
+
 ## DNS-Safe Service Names
 
-Service names are the hostnames on the compose network, so keep them short and DNS-safe (hyphens, never underscores): `db`, `redis`, `storage`, `api`, `ui`, `worker`, `beat`. botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames — `ValueError: Invalid endpoint` crashes at runtime.
+Service names are the hostnames on the compose network, so keep them short and DNS-safe (hyphens, never underscores): `db`, `redis`, `storage`, `api`, `ui`, `worker`, `beat`. botocore, strict URL validators, and RFC 952/1123 reject underscores in hostnames - `ValueError: Invalid endpoint` crashes at runtime.
 
 ```
 POSTGRES_HOST=db
 REDIS_URL=redis://redis:6379
 S3_ENDPOINT_URL=http://storage:9000
 ```
-
 ## Configuration Lives in .env
 
-`docker-compose.yml` holds no literal configuration — every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift. The `ui` service splits the difference: a built image that takes an explicit `environment:` map for just its two runtime knobs (`API_URL`, `DEMO_MODE`), never `env_file` - the file carries secrets, and the nginx container must not receive them.
+`docker-compose.yml` holds no literal configuration - every credential, hostname and published port is interpolated from `.env` (template: `example.env`). Backend services take the whole file via `env_file`; third-party images (`db`, `storage`) get an explicit `environment:` map so one variable feeds both sides (`RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}`) and can't drift. The `ui` service splits the difference: a built image that takes an explicit `environment:` map for just its two runtime knobs (`API_URL`, `DEMO_MODE`), never `env_file` - the file carries secrets, and the nginx container must not receive them.
 
 Published ports are `${DB_PORT}:5432`-style so a second checkout, or a shared Postgres/Redis on the host, can run alongside without editing the compose file. A port shift for a second checkout is a TRIPLE, not a one-variable edit: `VITE_API_URL` (root `.env`; compose interpolates it into the ui service's runtime `API_URL` env, which the container entrypoint writes into `/config.js` at startup - shifting it is a ui recreate, not an image rebuild), `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` hardcode the API/UI origins and do NOT derive from `API_PORT`/`UI_PORT` - shifting only the port variables silently points the frontend at the other checkout's backend (or makes CORS reject it), which costs a debugging cycle before anyone suspects the env. Shared setup (build context, `env_file`, volumes, `depends_on`) lives in an `x-backend` anchor at the top of the file.
 
 **The root `.env` is the container world.** Service-host lines (`POSTGRES_HOST=db`, `redis://redis:6379`) stay on compose service names: host-targeted runs get the published-port rewrite at runtime from `dev.sh` (`use_local_hosts`), never by editing the file - flipping them to `localhost` makes a port-shifted checkout silently use a sibling checkout's containers on the default ports, a cross-workspace leak rather than an error. For bare host commands (pytest outside `dev.sh`), `config/settings.py` runs `load_dotenv()` at import, which walks up from `backend/` and loads the ROOT `.env` - container-world values (`POSTGRES_HOST=db`, internal `POSTGRES_PORT=5432`) that host processes cannot reach or that point at a sibling's published default port. The sanctioned override is a gitignored `backend/.env` pinning the host-world values (the developer-`.env` pattern referenced in `config/test_settings.py`).
-
-## Env De-duplication: Map-Form `x-*` Anchors
-
-When several services share an identical `environment:` subset, hoist it into a root-level extension field in **map syntax** and merge it in — list-form `environment:` (`- KEY=VAL`) has no anchor/merge mechanism, so converting the merged blocks to map form is part of the change:
-
-```yaml
-x-backend-shared-env: &backend-shared-env
-  USE_S3_STORAGE: "true"
-  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
-
-services:
-  api:
-    environment:
-      <<: *backend-shared-env
-      ALLOWED_HOSTS: '*'
-```
-
-- Compose treats top-level `x-*` keys as opaque pass-through — the anchor block never becomes a container. Move explanatory comments onto the anchor so the *why* lives with the values.
-- Only merge where the shared vars genuinely match in kind — forcing an anchor onto a service that never had those vars injects them (and `environment:` wins over `env_file`, so it would also shadow `.env` values).
-- Map-form quoting: quote `true`/`false`/numbers to document intent, and `*`-valued keys MUST be quoted (`ALLOWED_HOSTS: '*'` — a bare `*` is the YAML alias indicator). Rule of thumb: quote any value that is a bool/null/number or starts with `*`/`&`/`!`/`|`/`>`/`{`/`[`.
-
-**Verification gate - `docker compose config` rendered diff, never `up`:** capture `docker compose config` before and after the edit and diff the two. `config` normalizes list- and map-form `environment:` into the same sorted-map rendering, so a correct de-dup shows exactly one hunk - the rendered `x-*` block itself - and zero service-level changes; any moved env line means a corrupted value. (`up` is never a verification tool in this stack: services bind shared host ports and images do slow boot work.) Two more edges for any count-based gate over rendered output: top-level `x-*` extension fields render verbatim in addition to every service that merges them, so anchor-block copies inflate counts (this is why `restart: unless-stopped` sits on `api`/`worker`/`beat` individually in `prod/` rather than the shared anchor - inside the anchor it renders an extra time and a 7-policy gate counts 8); and `config` renders interpolated secrets in cleartext, so before/after captures stay under /tmp/opencode, never in the repo. A third edge: profile-gated services (the `node` service sits behind profile `tools`) render ONLY when `--profile <name>` precedes the `config` subcommand - a default render silently omits them and the before/after diff gate goes blind to exactly those services (re-derive a lost baseline from git rather than re-capturing blind). Render baselines with every profile the diff is supposed to cover: `docker compose --profile tools config`. A fourth edge, when the render targets `prod/` compose: `env_file:` paths are existence-checked against the project directory, and `--env-file` feeds interpolation only - so the `x-backend` anchor's `env_file: .env` exits 1 wherever `prod/.env` is absent (it is never created); the scratch-project-dir workaround is the fence in the Compose-Digest Refresh Procedure below.
-
 ## Third-Party Image Pins: Tag+Digest, Resolved at Edit Time
 
 Third-party service images are pinned `tag@sha256:...`. Digests are moving targets - resolve them at implementation time, never carry one from a plan snapshot or an older checkout. Pin the manifest-LIST digest: the top-level `Digest:` field of `docker buildx imagetools inspect` (MediaType `...image.index`), not a per-platform digest, and require both amd64 and arm64 in the list before pinning.
@@ -52,91 +37,9 @@ Third-party service images are pinned `tag@sha256:...`. Digests are moving targe
 When an image has no stable semver tags, pin the newest prerelease/RC tag whose digest differs from `latest`'s - the tag is the semantic choice and a digest on `latest` carries no version signal (rustfs was prerelease-only until stable 1.0.0 shipped; now pinned at newest stable and refreshed by the procedure below).
 
 `prod/` copies third-party pins verbatim from the dev compose - never re-resolve them independently. Nothing automates compose digests since PR #154: Dependabot (the update bot) has no compose manager - it covers Dockerfiles only - so digest refresh and keeping the two files' pins in sync are a manual chore run via the Compose-Digest Refresh Procedure below (accepted gap; the backlog entry 2026-10-27 records the retrigger options).
-
-## Compose-Digest Refresh Procedure
-
-The pinning rules above resolve digests at edit time; this procedure re-resolves them later. It is manual by standing user decision (2026-10-27) - the backlog entry of that date records the retrigger options (a small scheduled digest-bump workflow, or self-hosted Renovate with its docker-compose manager). Two triggers:
-
-- every release cut - the `release` pipeline never touches compose files, so the refresh is a separate pre-cut step
-- immediately on a CVE in a pinned third-party image
-
-Inventory: four tag@digest pins, one per third-party image, IDENTICAL in `docker-compose.yml` and `prod/docker-compose.yml` - `db` (postgres), `redis`, `storage-init` (busybox), `storage` (rustfs). Two image lines are never in scope: the dev `node` tools image is a plain tag with no digest (`node:26-slim`), and the prod GHCR images (`finances-backend`/`finances-ui`) are parameterized by `APP_VERSION` - the release pipeline resolves them.
-
-**Drift-check.** One `docker buildx imagetools inspect <name:tag>` per pinned image; compare the top-level `Digest:` field with the pinned digest. Every NEW digest re-satisfies the pinning section's rules (manifest-LIST digest, amd64 and arm64 both present) - never inherit the old pin's verification. Re-run the inspect at execution time even when a plan pins expected digests: the registry can move again between planning and execution.
-
-**Update.** Edit BOTH files with the identical new reference - `prod/` copies the dev pins verbatim, never re-resolves (pinning-section rule). Keep tag and digest matched: a digest-drift refresh keeps the tag (postgres, redis, busybox); a version move changes tag and digest together, and a new tag with the old digest fails to pull outright (the digest belongs to the old tag's manifest). When a stable semver has appeared for an image pinned as prerelease, move to the newest stable whose digest satisfies the platform rules - the prerelease pin was a stopgap, not a preference (worked example: rustfs `1.0.0-rc.4` -> `1.0.4`, the newest stable, its digest identical to `latest`'s). Enumerate the candidate stable tags via the registry's tag listing (the hub UI or its tags API) - `imagetools inspect` resolves a known tag and cannot list them.
-
-**Verify.** The `docker compose config` rendered-diff gate (Env De-duplication section above) applies in full - `up` is never a verification tool:
-
-```bash
-docker compose --profile tools config > /tmp/opencode/compose-before.yml   # dev, BEFORE editing
-mkdir -p /tmp/opencode/prod-render                                         # scratch project dir, NEVER prod/.env
-cp prod/.env.example /tmp/opencode/prod-render/.env                        # env_file existence target + interpolation source
-docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
-  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-before.yml
-# ... edit both compose files, then:
-docker compose --profile tools config > /tmp/opencode/compose-after.yml
-docker compose -f prod/docker-compose.yml --project-directory /tmp/opencode/prod-render \
-  --env-file /tmp/opencode/prod-render/.env config > /tmp/opencode/prod-after.yml
-diff /tmp/opencode/compose-before.yml /tmp/opencode/compose-after.yml
-diff /tmp/opencode/prod-before.yml /tmp/opencode/prod-after.yml
-```
-
-Expected hunks: exactly the changed `image:` lines (db, redis, storage-init, storage in dev; the same four in prod) and nothing else. The `node` service renders only under `--profile tools` - its image line is a plain tag and never appears in the diff, but the baseline must still cover it. Captures interpolate secrets in cleartext and stay under /tmp/opencode, never in the repo; the prod render runs against a /tmp/opencode scratch project directory holding a `.env` copied from `prod/.env.example` (the `x-backend` anchor's `env_file: .env` is existence-checked against the project directory, and `--env-file` alone does not satisfy it) - never create `prod/.env`. Then recreate the dev stack - `./dev.sh down && ./dev.sh up` pulls the new digests for db, redis, storage-init and storage, and the healthchecks gate the result. When the `storage` TAG moved rather than just its digest, also exercise the S3 path (a boto3 upload/download round-trip against storage; the api container carries boto3 - `docker compose exec -T api /venv/bin/python`) - the one image whose version, not just rebuild, can change behavior; the other three need only the healthcheck gate.
-
-## Out-of-Context Imports: Named Additional Build Contexts
-
-When source inside a build context imports a file that lives outside it (frontend files importing the shared `backend/common` registries - `languages.json`, `fonts.json`), host dev and host-checkout CI both see the file (vite grants `server.fs.allow` to the repo root; CI builds on the full checkout), so the gap surfaces only in Docker builds: a TS2307 at image-build time, after review. Never fix it by widening the build context to the repo root (context bloat, needs a root `.dockerignore`) or by copying the file into the source tree (guaranteed drift - the registry is single-sourced per the i18n contract). Supply the file as a named additional build context, mirrored at the EXACT in-container path the unchanged relative imports resolve to:
-
-```yaml
-# docker-compose.yml - ui build (context: ./frontend, WORKDIR /app;
-# imports from /app/src/** resolve to /backend/common/languages.json)
-additional_contexts:
-  backend: ./backend
-```
-
-```dockerfile
-# frontend/Dockerfile
-COPY --from=backend common/languages.json /backend/common/languages.json
-COPY --from=backend common/fonts.json /backend/common/fonts.json
-```
-
-- **One COPY line per imported file - enumerate, never widen.** Every out-of-context import gets its own `COPY --from=backend common/<name>.json` line at the exact in-container path the relative imports resolve to; a new registry crossing the boundary is one new COPY line, never a widened context and never a copy of the file into `frontend/`. The named context supplies the whole directory wholesale, so a missed line is invisible on the host (vite `server.fs.allow`, full-checkout CI) and surfaces only as a TS2307 at Docker image-build time, after review - any plan adding a cross-tree import must pair it with the COPY line in the same plan.
-- release.yml (build-push-action): `build-contexts: backend=./backend` fed from a per-image `build_contexts` matrix field, empty string on legs that need none (the action skips the flag on empty input - see the `ci-releases` skill).
-- Runtime containers that bind-mount the source tree (the `node` tools service) need the same path as a read-only bind mount (`./backend:/backend:ro`) - imports resolve through the filesystem there, not through build contexts.
-- Verify the named context's source tree is not excluded by its `.dockerignore` (`backend/.dockerignore` must not exclude `common/`) before relying on the context.
-- **Comment-accuracy riders ride the change.** Comments describing the cross-boundary set singularize it ("the shared registry", "one file, two consumers"); when the set grows, reword every one in the same commit - the Dockerfile block, the compose ui-build and node-mount comments, the release.yml matrix comment, `frontend/README.md` - gated by a grep for the singular phrasing reaching zero. A stale comment teaches the next reader a wrong inventory of what the mechanism supplies.
-
-## Image-Build Verification: BuildKit Store vs Classic Store
-
-PR CI (ci-test.yml) never builds Docker images - image builds happen only in the release
-pipeline - so a local `docker compose build ui` is the only pre-merge end-to-end gate for a
-builder-line change: it exercises the base-image pull, `npm ci`, the named-context COPY steps,
-and `tsc -b && vite build` that CI never touches (a Dependabot PR bumping a FROM line can be
-fully green on a builder it never ran). One trap when scripting gates around it: a base image
-pulled BY a build lands in the BuildKit cache, not the classic image store - `docker image
-inspect <image>` fails right after a successful build that visibly pulled the image's layers.
-An explicit `docker pull <image>` registers it in the classic store (digest identical to the
-build's resolve). A gate step that expects `image inspect` to succeed after a build must pull
-first, or it fails on store mechanics instead of the build.
-
-The step LOG is a separate trap: BuildKit replays no step output for cached steps, so a
-second `docker compose build ui | tee build.log` overwrites the first run's full log with a
-near-empty summary (PR #177: the cached re-run silently replaced the tee'd uncached log,
-and the full step log required a `--no-cache` re-run). When the step log itself is the
-evidence, re-run with `--no-cache` or preserve the first run's capture.
-
-A wheel-only gate over that log - asserting no package compiles from source on the new base
-image - greps for `Building <pypi-package>` and needs literal-match adjudication: the bare
-substring `Building ` has benign hits (apt's `Building dependency tree...` line, compose's
-`Image <tag> Building` progress header), so a substring match fails the gate on every build.
-The failure signature is a pypi package name in that position plus compiler errors (`Building
-cffi` followed by fatal `ffi.h` errors = no wheel for the bumped python).
-
 ## Dockerfile ARG Hygiene
 
 ARG values land in image history and in public CI logs - only public values (versions, build flags) go in ARG/ENV, and each new ARG/ENV pair carries a one-line rationale comment saying so. Version ARGs (`APP_VERSION`, `VITE_APP_VERSION`) default to `dev` so plain compose builds need no build-arg changes; the release pipeline passes the real version, and the frontend value is builder-stage only (baked into the JS bundle, absent from the final nginx image). COPY --from tool images (`ghcr.io/astral-sh/uv:*`) pin an exact upstream release tag, re-resolved at edit time - with a lockfile-compat pre-flight when the tool reads the lock (`uv lock --check` under the new version) before editing.
-
 ## Lockfile-Enforced npm Installs
 
 Every site that installs frontend dependencies runs `npm ci` - the `frontend/Dockerfile` builder stage and both `dev.sh` `start_frontend` bootstrap arms (the node-container `sh -c` string and the host path). Image and dev bootstrap then install exactly the lockfile tree CI tested and fail loudly on a package.json/package-lock.json mismatch instead of silently resolving around it. The old `npm install --legacy-peer-deps` in the Dockerfile was cargo cult: CI (ci-test.yml) has always run plain `npm ci` on the same lockfile and passes - no peer conflict exists.
@@ -145,51 +48,16 @@ Every site that installs frontend dependencies runs `npm ci` - the `frontend/Doc
 - The in-container bootstrap arm's `sh -c` string is POSIX sh on purpose: it executes in the node:26-slim container, where `package-lock.json` is visible via the `./frontend` bind mount - dev.sh itself stays bash.
 - Remnant grep gates over the repo: `--exclude-dir=<dir>` must come BEFORE the `--` argument terminator - after `--`, grep parses it as a filename and exits 2, which is a gate that never ran, not a pass.
 - Keeping the lockfile advisory-clean in the first place (the audit-fix refresh procedure) lives in `npm-dependency-refresh`.
-
-## Backend Dependency Bumps: Targeted Lock Upgrades
-
-A pinned backend dependency bump edits the `pyproject.toml` specifiers, then refreshes `backend/uv.lock` with targeted flags - `uv lock --upgrade-package <name>` over exactly the named packages, never a blanket `uv lock --upgrade`: the blanket form sweeps unrelated packages into the same commit and destroys the revert-as-a-unit property. Adjudicate the lock diff BEFORE committing (changed versions extracted from `git show HEAD:backend/uv.lock` vs the working tree); a package outside the expected set is a STOP - reverse-map it with `uv tree --invert --package <name>` before anything lands. Content-identical `-`/`+` lines inside a rewritten `[[package]]` entry (`wheels = [`, `source = { registry }`) are diff re-anchors, not semantic changes - compare removed/added multisets before treating them as drift. Land the deps commit (pyproject + uv.lock) separately from any tool-induced reformat: ruff >= 0.17 formats Python blocks inside Markdown, so a ruff bump can reflow `backend/*.md` fenced code - that reformat rides its own revertable commit, and any new fenced Python block under `backend/` must satisfy `ruff format` or CI's `ruff format --check .` fails. Lock interop (host uv writing, image-pinned uv reading) follows the `release`-command rule above. The running api/worker/beat keep the pre-bump deps until the shared image is rebuilt and they are recreated - `docker compose up -d --build api worker beat` (the `x-backend` anchor makes one build serve all three); probing a stale container proves nothing about the new set.
-
-**Protocol-coupled client/server bumps ride ONE commit.** When the bumped dependency talks a protocol to a pinned third-party image - the kombu/redis-py broker transport against the `redis` compose image - the pyproject pin swap, the targeted lock refresh, and the compose tag+digest move in BOTH compose files (run through the Compose-Digest Refresh Procedure) are a single revertable commit. The two sides are protocol-coupled, so splitting them across commits ships either the stack or the code on a client/server version pair never tested together, and the split reverts only piecemeal (kombu 5.7 + redis-py 8.1 + redis:8-alpine, PR #193, moved as exactly this unit). The pyproject pin's ceiling mirrors the transport library's own declaration - `redis>=8.1,<9` carries kombu 5.7's `redis>=6.4,<9`, with a comment saying so - because a floor-only pin would let a later bump drift the pair past what the transport declares; the mirrored ceiling makes every future move a conscious pairing decision.
-
-## Python-Version Migrations: Three Files Move Together
-
-A backend python-version bump is three coordinated edits, never a FROM-only change: the
-Dockerfile `FROM python:X.Y-slim` line, `backend/.python-version`, and a targeted lock refresh
-(the Backend Dependency Bumps pattern applied to the wheel-availability set instead of a
-pyproject specifier) to versions shipping cp3XY wheels for everything that would otherwise
-compile from source. Each piece flips a different toolchain: the FROM line flips the image,
-`.python-version` flips CI - setup-uv is passed no python-version input, so the runner's
-`uv sync` reads the file - and the lock decides whether the image build needs a compiler. A
-FROM-only bump (the Dependabot shape) is a false green per Image-Build Verification above: CI
-never builds the image, so it stays green testing the OLD python while the real build fails the
-wheel-only gate at the first source-building package (PR #191 superseding #187: cffi 2.0.0 had
-no cp315 wheels, so the image died at `Building cffi` / `ffi.h` with CI green).
-
-Two migration-specific traps:
-
-- **The `backend-venv` named volume shadows the new image's `/venv`.** A volume populated by an
-  older python still mounts over the freshly built one and its `bin/python` symlink dangles -
-  any in-container proof before `docker volume rm <project>_backend-venv` runs a dead
-  interpreter and proves nothing (the stale-container rule in Backend Dependency Bumps, one
-  layer down: there the container outlives the change, here the volume does).
-- **Pinned suite counts must name the toolchain that produced them.** A planning trial on a
-  host beta python (3.15.0b3) showed 5 runtime-conditional skips that un-skip on the final
-  image: 1360 passed / 5 skipped host-beta vs 1365 / 0 container-final, identical collection.
-  A count pinned without its toolchain sends the executor after a phantom drift when the other
-  toolchain reproduces the other number - record which python ran a pinned count in every
-  migration plan.
-
 ## Dev Script
 
-`./dev.sh` at the repo root is the only one — bash, not POSIX `sh` (`pipefail`, `read -rp`, `local`). Keep new commands in it rather than adding scripts, and keep its `usage()` heredoc in sync.
+`./dev.sh` at the repo root is the only one - bash, not POSIX `sh` (`pipefail`, `read -rp`, `local`). Keep new commands in it rather than adding scripts, and keep its `usage()` heredoc in sync.
 
-- `up` — `db redis storage`; `up --full` adds `api ui worker beat`; `up <svc...>` passes through
-- `backend` / `frontend` — start the app; `logs`, `manage`, `migrate`, `seed`, `psql`, `test`, `lint`, `npm`
+- `up` - `db redis storage`; `up --full` adds `api ui worker beat`; `up <svc...>` passes through
+- `backend` / `frontend` - start the app; `logs`, `manage`, `migrate`, `seed`, `psql`, `test`, `lint`, `npm`
 - `release <version>` - fail-closed release pipeline (see below)
 - helpers: `load_env`, `use_local_hosts`, `require_service`, `on_host`, `in_service`
 
-It `source`s `.env`, so **values containing spaces must be quoted there** — compose parses that file itself and doesn't care, bash does.
+It `source`s `.env`, so **values containing spaces must be quoted there** - compose parses that file itself and doesn't care, bash does.
 
 ### The `release` command
 
@@ -203,9 +71,9 @@ It `source`s `.env`, so **values containing spaces must be quoted there** — co
 
 ### DEV_TARGET: container or host
 
-`DEV_TARGET=docker` (the default, from `.env`) runs backend/frontend commands in the `api` and `node` containers, so no Python/uv/Node is needed on the machine — the case a PyCharm remote interpreter targets. `DEV_TARGET=host` runs them through `uv`/`npm` locally and is the only path that needs `use_local_hosts`.
+`DEV_TARGET=docker` (the default, from `.env`) runs backend/frontend commands in the `api` and `node` containers, so no Python/uv/Node is needed on the machine - the case a PyCharm remote interpreter targets. `DEV_TARGET=host` runs them through `uv`/`npm` locally and is the only path that needs `use_local_hosts`.
 
-`in_service` execs into the service when it is up and uses `docker compose run --rm --entrypoint ''` otherwise (the image entrypoint would migrate and collectstatic). Both pass `--user "$(id -u):$(id -g)" -e HOME=/tmp`: **without the uid mapping every file the command writes into the bind mount — new migrations, `.pytest_cache`, `.ruff_cache` — lands root-owned in the checkout**, and without `HOME` uv/npm fail trying to write `/.cache`.
+`in_service` execs into the service when it is up and uses `docker compose run --rm --entrypoint ''` otherwise (the image entrypoint would migrate and collectstatic). Both pass `--user "$(id -u):$(id -g)" -e HOME=/tmp`: **without the uid mapping every file the command writes into the bind mount - new migrations, `.pytest_cache`, `.ruff_cache` - lands root-owned in the checkout**, and without `HOME` uv/npm fail trying to write `/.cache`.
 
 Backend commands resolve through `/venv/bin/<tool>` (`UV_PROJECT_ENVIRONMENT`), not `uv run`, which would try to sync the environment it cannot write.
 
@@ -214,16 +82,15 @@ uv subcommands are a third route and never go through `backend_run`: its host ar
 The `node` service (profile `tools`) exists only for this: `node:26-slim` with `./frontend` bind-mounted. Debian-based, so the `node_modules` it writes stays usable if the host also runs npm - an alpine/musl image would install incompatible prebuilt binaries. The native-binary population is toolchain-relative (post-PR-#179: `@rolldown/binding-*`, `lightningcss`, and `@tailwindcss/oxide` platform children, plus `@swc/core` - i18next-cli's parser engine and the only postinstall carrier since esbuild left the tree entirely with i18next-parser) - re-anchor the exemplars whenever the build chain swaps.
 
 `use_local_hosts` exists because the same `.env` serves both worlds: inside compose a service is reached by name (`db`, `redis:6379`), from a host process only through the published port (`localhost:$DB_PORT`). Anything host-run must go through it, or it silently tries to resolve `db`.
-
 ## Nothing Container-Owned Inside the Bind Mount
 
-The backend containers run as root against a bind-mounted, host-owned source tree, so any path a named volume mounts *inside* `/app` gets created on the host as a root-owned directory — which then blocks the host toolchain (`uv` can't write `backend/.venv`, `npm` can't write `frontend/node_modules`). Keep generated artefacts outside the mount:
+The backend containers run as root against a bind-mounted, host-owned source tree, so any path a named volume mounts *inside* `/app` gets created on the host as a root-owned directory - which then blocks the host toolchain (`uv` can't write `backend/.venv`, `npm` can't write `frontend/node_modules`). Keep generated artefacts outside the mount:
 
 - `UV_PROJECT_ENVIRONMENT=/venv` in the backend image, volume mounted at `/venv`
 - Celery beat gets `--schedule=/tmp/celerybeat-schedule`
 - The `ui` service is the nginx production build (no bind mount, no `node_modules` volume); frontend hot reload comes from `./dev.sh frontend` (Vite in a one-off `node` container run as the invoking user, or on the host with `DEV_TARGET=host`), so `frontend/node_modules` is always host-owned
 
-Compose otherwise builds **one image per service** from the same Dockerfile, so `docker compose build api` would leave `worker`/`beat` on the old image — which is how a stale worker once recreated a root-owned `/app/.venv`. `api`, `worker` and `beat` therefore share one tag via the anchor:
+Compose otherwise builds **one image per service** from the same Dockerfile, so `docker compose build api` would leave `worker`/`beat` on the old image - which is how a stale worker once recreated a root-owned `/app/.venv`. `api`, `worker` and `beat` therefore share one tag via the anchor:
 
 ```yaml
 x-backend: &backend
@@ -234,24 +101,20 @@ x-backend: &backend
 Compose interpolates `COMPOSE_PROJECT_NAME` from the derived project name (the directory), so sibling checkouts keep separate images. Any new service built from `backend/` must use the anchor, never a bare `build:`.
 
 Tooling config must not rely on `.gitignore` for exclusions: `/app` in the container isn't a git checkout. Ruff uses `extend-exclude` so its built-in `.venv` exclusion survives.
-
 ## nginx Header Inheritance
 
-nginx does NOT inherit parent-context `add_header` directives into child blocks that define their own `add_header`. Security headers (CSP, HSTS, X-Frame-Options, etc.) must be repeated in each `location` block that has its own `add_header` — e.g., `location = /index.html` and the static-assets regex location. Critical for SPAs where `try_files` internally redirects to `/index.html`.
-
+nginx does NOT inherit parent-context `add_header` directives into child blocks that define their own `add_header`. Security headers (CSP, HSTS, X-Frame-Options, etc.) must be repeated in each `location` block that has its own `add_header` - e.g., `location = /index.html` and the static-assets regex location. Critical for SPAs where `try_files` internally redirects to `/index.html`.
 ## One Entrypoint, Overridden Commands
 
-`api` keeps the image `ENTRYPOINT` (`docker-entrypoint.sh`: migrate → seed → bucket init → collectstatic) and only overrides `command` to add `--reload`. Never inline a copy of that script in `docker-compose.yml` — the copy silently drifts (it used to skip `seed_currencies`). Celery services override `entrypoint` with `celery-entrypoint.sh` precisely because they must *not* run migrations.
-
+`api` keeps the image `ENTRYPOINT` (`docker-entrypoint.sh`: migrate → seed → bucket init → collectstatic) and only overrides `command` to add `--reload`. Never inline a copy of that script in `docker-compose.yml` - the copy silently drifts (it used to skip `seed_currencies`). Celery services override `entrypoint` with `celery-entrypoint.sh` precisely because they must *not* run migrations.
 ## S3-Compatible Storage: Two URLs
 
 With S3-compatible storage (RustFS, MinIO, …) in Docker Compose, use two URLs:
 
-- `S3_ENDPOINT_URL` — internal Docker network hostname (e.g., `http://rustfs:9000`), used by boto3 for server-side API calls (uploads, bucket management)
-- `S3_EXTERNAL_URL` — browser-accessible URL (e.g., `http://localhost:9000`), used for static file URLs rendered in HTML and presigned URLs
+- `S3_ENDPOINT_URL` - internal Docker network hostname (e.g., `http://rustfs:9000`), used by boto3 for server-side API calls (uploads, bucket management)
+- `S3_EXTERNAL_URL` - browser-accessible URL (e.g., `http://localhost:9000`), used for static file URLs rendered in HTML and presigned URLs
 
-Internal Docker hostnames are unresolvable from the browser. Static files configure `custom_domain` in STORAGES OPTIONS to use the external URL. Presigned URL generation uses a separate boto3 client pointed at the external URL (safe — `generate_presigned_url` is a purely local cryptographic operation, no network call).
-
+Internal Docker hostnames are unresolvable from the browser. Static files configure `custom_domain` in STORAGES OPTIONS to use the external URL. Presigned URL generation uses a separate boto3 client pointed at the external URL (safe - `generate_presigned_url` is a purely local cryptographic operation, no network call).
 ## Bucket Policies Over Object ACLs
 
 Use **bucket policies** (not per-object ACLs) for S3 access control. Bucket policies are retroactive, idempotent, and more reliable across S3-compatible services. Per-object ACLs require setting ACL on every `put_object` and don't apply retroactively:
@@ -268,10 +131,9 @@ policy = {
 }
 client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
 ```
-
 ## Entrypoint Ordering: Init Before Upload
 
-Bucket initialization must run **before** `collectstatic` — buckets must exist before files can be uploaded. Apply bucket policies during initialization:
+Bucket initialization must run **before** `collectstatic` - buckets must exist before files can be uploaded. Apply bucket policies during initialization:
 
 ```
 migrate → seed_legal_documents → init_storage_buckets (creates buckets + applies policies) → collectstatic → start server

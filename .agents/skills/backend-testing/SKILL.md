@@ -1,9 +1,11 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services, direct-call data-migration tests, query-count invariance tests via CaptureQueriesContext). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend test conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, on_commit, Celery tasks, email), plus a reference file for specialized techniques: time control, token expiry, rate limits, translated errors, subprocess settings probes, race-loss branches, constraints, query counts, data migrations, dry runs. Use when writing or modifying backend tests.
 ---
 
 # Backend Testing Conventions
+
+Core rules below. When a test needs time control, token expiry, rate limits, Accept-Language, import-time settings branches, race-loss branches, DB check constraints, query-count invariance, data-migration functions, or a dry run against real dev data, read `.agents/skills/backend-testing/references/specialized-tests.md`.
 
 ## Commands
 
@@ -17,12 +19,11 @@ pytest -k "test_create"                   # Run tests matching pattern
 pytest --cov=. --cov-report=html          # With coverage
 pytest --create-db -v                     # Fresh test DB (use when cross-branch migrations cause stale DB issues)
 ```
-
 ## Use Factories, Not Direct Creates or Service Calls
 
 Use Factory Boy factories (e.g., `WorkspaceMemberFactory`) instead of direct `Model.objects.create()` calls. Factories exist in `<app>/factories.py` across the codebase.
 
-Prefer factories over service calls for setup — service calls create extra side effects (enabled currencies, a Main account, a General budget, memberships) that make assertions unreliable:
+Prefer factories over service calls for setup - service calls create extra side effects (enabled currencies, a Main account, a General budget, memberships) that make assertions unreliable:
 
 ```python
 # Bad: service call creates a full workspace with demo fixtures
@@ -45,14 +46,13 @@ transaction = TransactionFactory(
 )
 ```
 
-A transaction's currency **is** its account's currency — there is no separate
+A transaction's currency **is** its account's currency - there is no separate
 `currency` FK. Categories belong to a `Budget` (via `CategoryFactory(budget=...)`),
 not to a period.
 
 **Round-trip and echo pins need non-default factory values** - a default-value round-trip proves nothing (defaults survive trivially): a GDPR export/import test sets `upfront_count=3` and pairs `materialize_all=True` with an `end_date` (the DB check constraint forbids the flag alone), so each field's survival is individually observable.
 
 **Per-row RANDOM factory defaults break ordering assertions.** `TransactionFactory.date` defaults to `Faker('date_this_year')` (`backend/transactions/factories.py`) - random per row - so any test asserting newest-per-group ordering, or any date-order-dependent result, must pass explicit `date=` on EVERY created row; leaving dates to chance makes the assertion pass or fail per Faker seed.
-
 ## AuthMixin
 
 ```python
@@ -67,7 +67,7 @@ class TestTransactions(AuthMixin, APIClientMixin, TestCase):
         self.assertStatus(201)
 ```
 
-`AuthMixin` creates a bare workspace (via `WorkspaceFactory`), a user, and a workspace membership — it does **not** enable currencies or create accounts/budgets (that keeps assertions clean). Enable a currency and create accounts/budgets explicitly in `setUp` when the test needs them (e.g. `CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')` then `AccountFactory(workspace=self.workspace)`). It also creates `auth_token` and provides `auth_headers()`. `self.user`, `self.workspace`, `self.auth_token` are available.
+`AuthMixin` creates a bare workspace (via `WorkspaceFactory`), a user, and a workspace membership - it does **not** enable currencies or create accounts/budgets (that keeps assertions clean). Enable a currency and create accounts/budgets explicitly in `setUp` when the test needs them (e.g. `CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')` then `AccountFactory(workspace=self.workspace)`). It also creates `auth_token` and provides `auth_headers()`. `self.user`, `self.workspace`, `self.auth_token` are available.
 
 **Byte-streaming endpoints:** `APIClientMixin`'s `self.get` parses JSON only - success-path assertions on file bytes and headers (`response.content`, `response['Content-Disposition']`) use `self.client.get` directly, while error paths keep `self.get` + `assertStatus`. Exemplar: `TestAttachmentDownload` in `transactions/tests.py`.
 
@@ -82,7 +82,6 @@ workspace = Workspace.objects.filter(owner=self.user, name='Imported Workspace')
 **GDPR round-trip tests rewrite the exported workspace name before import:** a real `export_all_data` payload carries the source workspace's name, and the importing user is a member of that workspace, so `import_all_data`'s default `conflict_strategy='rename'` silently renames the restored workspace to 'Test Workspace (imported ...)' - a lookup by the original name then returns the AuthMixin source workspace instead of the restored rows. Rewrite `payload['workspaces'][0]['workspace_name']` to a fresh name before importing (mirroring a fresh-instance import) so lookup-by-name stays deterministic. Exemplar: the planned-transactions GDPR round-trip test.
 
 **Authenticating as a different user:** `AuthMixin` only mints a JWT for `self.user`. Cross-user tests (same idempotency key under another user, viewer-role probes) mint one directly with `create_access_token(other_user)` from `common.auth` and send it as an explicit `Authorization: Bearer …` header instead of `self.auth_headers()`.
-
 ## Test Auth Without AuthMixin
 
 For tests that need an authenticated user without workspace setup:
@@ -99,8 +98,7 @@ token = create_access_token(user)
 headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
 ```
 
-Avoid `User.objects.get()` queries in test setup — the factory already returns the user instance.
-
+Avoid `User.objects.get()` queries in test setup - the factory already returns the user instance.
 ## Testing on_commit Callbacks
 
 Django's `TestCase` wraps each test in a transaction, so `on_commit` callbacks never fire naturally inside a test. The default idiom is `captureOnCommitCallbacks`, which captures (and optionally runs) the registered callbacks without patching anything:
@@ -131,155 +129,15 @@ class TestMyFeature(TestCase):
 Only patch `on_commit` for the specific tests that need it - never globally, and never on code that does not call `on_commit` at all: an inert patch passes trivially and proves nothing about the code under test (23 such patches were deleted in one audit-remediation sweep).
 
 **Pin the production contract, not the eager-mode artifact.** With dispatch deferred to commit, the synchronous response reflects pre-worker state (e.g. `transaction_id: null`) - under `ALWAYS_EAGER` plus an immediate-on_commit patch, old tests "saw" the task's row, an artifact no production path produces. Assert the null; when the worker's effect matters, capture with `execute=True` and assert after the block. Dispatch placement itself is in the `celery-tasks` skill. The separate-instance variant (side effects that run on a re-fetched instance inside the same request, not a deferred task - the recurring generator re-fetches the rule under lock) pins the same way on EVERY mutation path: assert the response's PRE-side-effect value AND the advanced value in the DB via a fresh query, so a future "fix" that re-fetches before returning breaks tests loudly instead of silently changing the wire (the design rule is in the `django-backend` skill).
-
-## Testing Token Expiry
-
-On Python 3.13+, `datetime.datetime` is C-implemented and immutable — `patch('datetime.datetime.now', ...)` fails, and PyJWT uses `datetime.datetime.now(tz=timezone.utc).timestamp()` internally so patching `time.time` doesn't affect JWT decoding. Instead, craft a JWT with a past `exp` directly:
-
-```python
-import datetime as dt
-import jwt
-from django.conf import settings
-
-now = dt.datetime.now(dt.timezone.utc)
-payload = {
-    'user_id': str(user.id),
-    'type': 'refresh',
-    'jti': str(uuid.uuid4()),
-    'iat': (now - dt.timedelta(days=8)).timestamp(),
-    'exp': (now - dt.timedelta(days=1)).timestamp(),
-}
-expired_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-```
-
-Assert the error `detail` message, not just the 401 status: adjacent auth branches (expired token vs invalid code) both return 401, and only the message pins which branch rejected. A mutation check - minting the same token with a future `exp` flips the test to the other branch's message - proves the discrimination.
-
-## Mocking Time in TTL Tests
-
-The codebase does not use `freezegun` or `time_machine`. For expiry/TTL behavior, patch Django's clock directly and keep the patch around the whole request or call — both the lookup and the write usually consult `now()`:
-
-```python
-with mock.patch('django.utils.timezone.now', return_value=future):
-    self.post('/api/transactions', payload, **self.auth_headers())
-```
-
-Patch the clock the code under test actually reads, at the module where it reads it: code that calls `time.time()` directly (e.g. TOTP timestep math in `users/two_factor.py`) never sees a `django.utils.timezone.now` patch — `mock.patch('users.two_factor.time.time', return_value=...)` is the fix, stepping the return value to cross window boundaries.
-
-## Rate-Limit & Throttle Tests
-
-- Rate-limit decorators capture `settings.RATE_LIMIT_*` at import (decoration) time — `override_settings` cannot change them. Write these tests against the configured defaults instead of trying to override.
-- `APIClientMixin.setUp` clears the cache, so throttle counters are isolated per test.
-- To assert the account-keyed (IP-independent) limit in isolation, rotate `REMOTE_ADDR` per request — otherwise a "no 429" assertion is ambiguous between the IP-keyed and account-keyed decorators stacked on the same endpoint.
-- Test the boundary at the exact cap: N−1 failures followed by one success must succeed (`count > limit` blocks only above the limit — a lock must not fire AT the limit on a legitimate user).
-- Exact attempt counts require exact auth traffic: create users directly (`AuthTestCase.create_user` or factory + token), not via helpers that themselves log in — `register_and_login` pre-increments the login counter.
-- Unit-testing a throttle: `@patch('common.throttle.cache')` with `add`/`incr` return values, and assert the exact cache-key string — that is how "no IP component in the key" gets pinned.
-
-## Accept-Language and Translated Error Tests
-
-Backend error messages are selected per request from the `Accept-Language` header (`LocaleMiddleware`), so translated responses are testable with plain client headers - no translation activation needed. `APIClientMixin`'s helpers forward `**kwargs` to the Django test client, and request headers ride the same `HTTP_*` kwarg convention as `auth_headers()`:
-
-```python
-detail = str(self.patch('/api/users/me/preferences', {'calendar_start_day': 13},
-                        **self.auth_headers(), HTTP_ACCEPT_LANGUAGE='pl')['detail'])
-```
-
-Translated assertions need compiled catalogs: guard the class with `@unittest.skipUnless(shutil.which('msgfmt'), 'gettext not installed')` and compile in `setUpClass` via `call_command('compilemessages', verbosity=0)` - without .mo files the translated assertions fail by design. Exemplar: `TestPreferencesMessageLocalization` in `users/tests/test_users.py`.
-
-- **No header = English fallback.** Every pre-existing test that asserts an error `detail` already pins this path (source msgid string); an unknown language (`xx`) negotiates to English and a partial tag (`uk-UA`) resolves to the `uk` catalog - one boundary test each is enough.
-- **Assert the exact translated msgstr**, not just "not the English string" - a partial overlap (shared prefix, punctuation-only difference) passes a negative assertion while proving nothing about selection. Keep the msgid English in code and pin the expected Ukrainian/Polish sentence in the test.
-- A request can assert BOTH the error status and the language selection in one call; do not burn a second request re-triggering the same error for the translation assertion.
-- **Behavior tests never pin msgid TEXT - that is this section's concern, inverted.** A test verifying service behavior (return-dict shape, which role was rejected, which error class) around a gettext-translated message asserts the translation-independent contract instead: dict key sets (`set(result) == {'message'}`), untranslated sibling values (`user_id`, `email`), interpolated placeholder values (`assertIn('owner', ...)` - named `%(...)s` placeholders survive in every catalog), and the exception class's `http_status`. The failure mode: in a full in-container run, compiled `.mo` catalogs plus an ordering-level locale leak can activate a non-English catalog at the moment a message is gettext-resolved - the English msgid-text assertion then fails only there, and chasing the leak activator is fragile; the locale-independent assertions pin the same behavior under any catalog. Mark each converted block with a `# Locale-independent:` comment. Exemplars: `workspaces/tests/test_services.py`'s hardened tests.
-
-## Testing Import-Time Settings Branches (Subprocess Probe)
-
-`config.settings` builds some settings at import time from env vars (e.g. STORAGES from `USE_S3_STORAGE` / `S3_*`, the email backend from `EMAIL_MODE`), and pytest runs under `config.test_settings`, which forces `USE_S3_STORAGE=False` and the locmem backend - those branches are unreachable in-process, and `override_settings` cannot help: the value is already built by the time a test imports Django. Exercise the real settings module in a subprocess with a controlled environment (reference implementations: `core/tests/test_settings_storage.py` - single-value probe; `core/tests/test_settings_email.py` - multi-attribute probe that also asserts failure modes):
-
-```python
-BACKEND_DIR = Path(__file__).resolve().parents[2]
-
-_PROBE = (
-    'import django; django.setup(); '
-    'from django.contrib.staticfiles.storage import staticfiles_storage; '
-    "print(staticfiles_storage.url('admin/css/base.css'))"
-)
-
-def _static_url(env_overrides: dict) -> str:
-    env = {
-        'DJANGO_SETTINGS_MODULE': 'config.settings',
-        'SECRET_KEY': 'test-secret-key',
-        'JWT_SECRET_KEY': 'test-jwt-secret-key',
-        'S3_BUCKET_STATIC': 'finances-static',  # pin every var the output depends on
-        **env_overrides,
-    }
-    result = subprocess.run(
-        [sys.executable, '-c', _PROBE], capture_output=True, text=True,
-        timeout=60, cwd=BACKEND_DIR, env=env,
-    )
-    assert result.returncode == 0, f'probe failed:\n{result.stderr}'
-    return result.stdout.strip()
-
-class TestStaticStorageUrlScheme(SimpleTestCase):  # no DB - AuthMixin/factories don't apply
-    def test_http_dev_url(self):
-        url = _static_url({'USE_S3_STORAGE': 'true', 'S3_EXTERNAL_URL': 'http://localhost:9000'})
-        self.assertTrue(url.startswith('http://localhost:9000/finances-static/'))
-```
-
-- The subprocess env is a **whitelist, not a base layer**: pin EVERY env var the asserted output depends on, not just the var under test. `load_dotenv()` at settings import fills unset vars from the developer's root `.env` (a checkout-specific `S3_BUCKET_STATIC` shadowed the expected URL prefix mid-assertion); an unpinned var makes the test pass only where the local `.env` happens to match.
-- **Empty-string pins are load-bearing.** Pinning a var to `''` is the hermetic way to express "no value": `load_dotenv()` never overrides vars already present, so `''` beats any root `.env` value, while an omitted var hands the test's outcome to the developer's `.env`. The email probe pins `EMAIL_MODE`/`EMAIL_HOST`/`EMAIL_FILE_PATH` all to `''` in its base env - and the settings module must treat `''` as unset (`os.getenv(...) or default`) for the two behaviors to interlock.
-- **Multi-attribute probes map printed "None" back to Python None.** Print each asserted attribute with `getattr(settings, 'NAME', None)` and map the literal `None` lines back (`[None if line == 'None' else line for line in stdout.splitlines()]`) so tests can `assertIsNone` on attributes the settings module never defines.
-- **Know which asserted settings carry Django global defaults.** `EMAIL_HOST` defaults to `'localhost'` in Django's global settings while `EMAIL_FILE_PATH` has none - assert a module-set attribute only in the branch that sets it; outside that branch a global default masks "module didn't set it" behind a plausible-looking value (console/file tests must not assert the host line).
-- **Failure modes assert on stderr.** A validated settings module crashes the probe interpreter on bad input - assert `returncode != 0` plus the env var name in `stderr` (this is why the `ImproperlyConfigured` message must name the env var; see the env-mode dispatch pattern in the `django-backend` skill).
-- Keep the probe network-free: with `custom_domain` set, django-storages `url()` is pure string formatting, so asserting through `staticfiles_storage.url(...)` needs no storage containers in CI. Keep it disk-free too: the filebased email backend only writes on an actual send, and `test ! -e backend/sent-emails` after the suite pins that neither the tests nor the probe created anything. Dev artifact dirs like `sent-emails/` are gitignored and never pre-created (no `.gitkeep`) - the backend creates the dir on first real send.
-
-## Testing Race-Loss Branches Deterministically
-
-A true concurrent race can't be simulated inside `TestCase`. To exercise a unique-constraint `IntegrityError` handler (see the savepoint pattern in the `django-backend` skill): (1) pre-commit the winner's record directly — it lives in the test's outer transaction, so it survives the code's savepoint rollback; (2) mock the lookup to lose the race — capture the real function first, then force `None` on the first call (insert path) and delegate to the real lookup after the error:
-
-```python
-real = TransactionService._lookup_idempotency_key
-with mock.patch.object(
-    TransactionService, '_lookup_idempotency_key', side_effect=[None, real]
-):
-    ...
-```
-
-When a private helper's signature changes, grep its test doubles in the same task — `side_effect=fake` stubs must widen with the real method's parameters.
-
-## Testing DB Check Constraints Directly
-
-A model-level check constraint (not reachable through the API, which 422s first via the mirrored schema bounds - see `django-backend`) is testable service-side with factory creates wrapped in a per-case savepoint:
-
-```python
-for bad in (0, 25):
-    with self.assertRaises(IntegrityError):
-        with db_transaction.atomic():  # SAVEPOINT - isolates the rollback
-            RecurringTransactionFactory(workspace=self.workspace, upfront_count=bad)
-self.assertEqual(RecurringTransaction.objects.count(), 0)
-```
-
-The nested `atomic()` is load-bearing: the `IntegrityError` poisons the TestCase's outer transaction (every later query would raise `TransactionManagementError`), and the savepoint rollback keeps the test usable. A trailing count pins that the poisoned creates stored nothing.
-
-## Query-Count Invariance (CaptureQueriesContext)
-
-Pin "the query count does not scale with N" with two `CaptureQueriesContext` runs compared to EACH OTHER - never a fixed `assertNumQueries(N)`. The absolute count includes JWT-auth and middleware queries whose internals change independently of the code under test, so a pinned number fails on unrelated refactors while proving nothing about the code it claimed to cover; the INVARIANCE is the contract the endpoint owns. Exemplar: `TestFrequentDescriptionsLastValues` in `transactions/tests.py` captures counts at `limit=1` vs `limit=6` and asserts equality - the endpoint's query count is constant in `limit` and in the number of groups (the window-function pattern in the `django-backend` skill).
-
-## Testing Data-Migration Functions (Direct Call)
-
-A `RunPython` function is testable by calling it directly against seeded rows - `func(django.apps.apps, schema_editor=None)` - which bypasses the migration recorder BY DESIGN: the test proves the function's effect on rows, not Django's migration-state machinery. The migration module loads via `importlib.import_module` because the file name (`0012_transactionitem_coverage_repair`) starts with a digit and is not a valid identifier.
-
-- Pass the real `django.apps.apps`; `schema_editor=None` is safe whenever the function only uses `apps.get_model` (data migrations do).
-- Pin idempotence with a snapshot equality: `values_list` over the pk plus every mutated-relevant field, run the function a SECOND time, compare - a repair migration that re-creates rows on a second pass fails here, not in production.
-- Seed every branch the migration distinguishes (create/resize/delete/no-op cases), including the rows the original backfill never saw, and count-pin fixtures before looping row assertions so a fixture change fails loudly instead of the loop passing vacuously.
-
 ## Testing Celery Tasks
 
-Test settings use `CELERY_TASK_ALWAYS_EAGER=True`, so `.delay()` executes synchronously — no worker needed. Call tasks directly (`execute_planned_transaction(planned_id)`) instead of via `.delay()` for clearer error messages. After dispatching a task in a test, call `instance.refresh_from_db()` to pick up changes the synchronous task made.
+Test settings use `CELERY_TASK_ALWAYS_EAGER=True`, so `.delay()` executes synchronously - no worker needed. Call tasks directly (`execute_planned_transaction(planned_id)`) instead of via `.delay()` for clearer error messages. After dispatching a task in a test, call `instance.refresh_from_db()` to pick up changes the synchronous task made.
 
 Use a three-class structure:
 
-1. **Direct task invocation** — call the task function directly, assert side effects
-2. **Service-level dispatch** — call the service method, verify the task executed (works because of `ALWAYS_EAGER`)
-3. **Configuration validation** — assert task attributes match expected retry config
+1. **Direct task invocation** - call the task function directly, assert side effects
+2. **Service-level dispatch** - call the service method, verify the task executed (works because of `ALWAYS_EAGER`)
+3. **Configuration validation** - assert task attributes match expected retry config
 
 ```python
 class TestSendEmailTaskDirect(TestCase):
@@ -298,22 +156,15 @@ class TestTaskConfig(TestCase):
         self.assertEqual(send_email_task.autoretry_for, (Exception,))
         self.assertTrue(send_email_task.retry_backoff)
 ```
-
 ## Deleting a Workspace in Tests
 
-Direct `workspace.delete()` raises `ProtectedError` — accounts are PROTECT-referenced by transactions, transfers, and planned transactions. Do what production does (`UserService.delete_account`, `WorkspaceService.delete_workspace`): call `delete_workspace_financial_records(workspace_id)` first (deletion ordering is in the `data-deletion-gdpr` skill).
-
-## Dry-Run Harness: Destructive Services Against Real Dev Data
-
-To validate destructive or importing service code against real data (e.g. a user-reported malformed GDPR import file) without persisting anything, run the REAL service inside an outer `atomic()` that is always unwound by raising a marker exception at the end: the service's own `atomic()` becomes a savepoint, the marker exception rolls back everything including it, and a zero-persistence check afterward proves the unwind. Inspect intermediate state (verification-report counts, created rows) before raising the marker. The rollback unwinds only DB work - side effects outside the transaction (storage writes, emails, broker dispatches) are NOT undone; point those at throwaway targets or assert before unwinding. This is a manual-harness pattern for the dev database, not a pytest shape - `TestCase` already gives actual tests these semantics for free.
-
+Direct `workspace.delete()` raises `ProtectedError` - accounts are PROTECT-referenced by transactions, transfers, and planned transactions. Do what production does (`UserService.delete_account`, `WorkspaceService.delete_workspace`): call `delete_workspace_financial_records(workspace_id)` first (deletion ordering is in the `data-deletion-gdpr` skill).
 ## New Optional Schema Field: Five-Test Shape
 
-Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat — field omitted, (3) explicit empty collection, (4) `max_length` rejection — asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together. In the `max_length`-rejection test, every list item must satisfy the PER-ITEM constraint - items that fail their own pattern (digit-containing currency codes) still 422 but from the wrong constraint, so a cap regression to a huge value goes unnoticed. Generate per-item-valid items (`'ZZ' + chr(ord('A') + idx)`) so only the collection cap can fire.
-
+Cover a newly added optional schema field with one test class: (1) positive case with ordered values, (2) backward-compat - field omitted, (3) explicit empty collection, (4) `max_length` rejection - asserts 422 straight from Pydantic `ValidationError`, no DB hit, (5) the cross-cutting invariant the field could violate (e.g. items must not influence the authoritative `amount`/balance). This shape catches schema, service, and invariant regressions together. In the `max_length`-rejection test, every list item must satisfy the PER-ITEM constraint - items that fail their own pattern (digit-containing currency codes) still 422 but from the wrong constraint, so a cap regression to a huge value goes unnoticed. Generate per-item-valid items (`'ZZ' + chr(ord('A') + idx)`) so only the collection cap can fire.
 ## Behavior Changes Rewrite Their Tests
 
-When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup — rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior. Where the invariant survives the change, keep the old test's NAME (the rewrite then reads as a strengthening in the diff); rename only when the old contract is gone.
+When a task deliberately changes a behavior, the tests pinning the OLD behavior are part of the change, not optional cleanup - rewrite them in the same task and grep the old test names to confirm none survive (the trusted-proxy change rewrote three tests that asserted first-hop XFF parsing). A test left asserting the old behavior either breaks CI later or gets "fixed" by reverting the behavior. Where the invariant survives the change, keep the old test's NAME (the rewrite then reads as a strengthening in the diff); rename only when the old contract is gone.
 
 **The rewrite census greps the FIELD NAME across ALL apps' test files**, not just the owning app's tests - a payload-field rename (`currency_code` → `currency_codes` on register/account-reset) also lives in `currencies/tests.py`'s registration test, and Pydantic's `extra='ignore'` silently drops the stale key from the payload (no 422), so the failure surfaces only as a downstream order assertion, far from the change that caused it. Behavior changes rewrite their tests WHEREVER the tests pin them.
 
@@ -324,15 +175,13 @@ The same `extra='ignore'` tolerance makes clean-break sequencing forgiving acros
 **Expected values derive from the landed code, never from the plan text.** Row counts come from the landed loop (a today-start recurring rule materializes the catch-up row plus one window row; a future-start rule with `upfront_count=1` exactly one row at `start_date`), and 400 assertions use the landed `default_code` literals byte-for-byte - probe `exceptions.py` first, a spec's guessed literals are always wrong. When a behavior change alters what every run produces, re-derive sibling test counts from the source instead of incrementing blindly; test comments enumerating each fixture's contribution are the cross-check.
 
 **Plan-authored test snippets are unexecuted code - trace each against the pinned service behavior before landing it.** The same distrust that applies to expected values applies to the test body itself: spec test snippets have never run, so they can assert unreachable states and use invalid call shapes. Three flavors from one session: an assertion moving the already-last row "down" (a boundary no-op by pinned design - the swap it asserts can never happen; resetting the collision first also reaches the branch the original never exercised); a duplicate-keyword factory call (`Factory(budget=x, **{'budget': None})` is a `TypeError` before any DB access - merge overrides into ONE kwargs dict; dict-literal `**` merge is legal last-wins, duplicate call kwargs are not); and a cross-workspace test keeping a currency only enabled in the source workspace (the per-workspace enablement check correctly 404s it). Fix the test to exercise the pinned behavior - never bend the landed service to match a broken test. Plan service-code snippets are unexecuted code too - syntax-check them before landing (one spec snippet wrote `order_by=F('date').desc(), F('id').desc(),` - positional after keyword - and failed at import).
-
 ## URL-Pinning Tests Call the Exact Client URL
 
 Tests that exercise an endpoint must call the exact URL the real frontend client sends - never a variant the router also happens to accept. The workspace-create 405 survived a green suite because every test posted to `/api/workspaces/` while the frontend called the slash-less `/api/workspaces`; the tests blessed a URL no real client used (the route-registration side of this rule is in the `django-backend` skill). When a route's path changes or is questioned, grep the literal URL string across ALL test files and docstrings, not just the spec'd call sites - fixture-setup calls in other apps' tests (a currencies test creating a workspace) and test-class docstrings hold slashed URLs too.
-
 ## Email in Tests
 
 `EMAIL_BACKEND` is set to `django.core.mail.backends.locmem.EmailBackend` via `config/test_settings.py`. Use `mail.outbox` to inspect sent emails.
 
-For flows that send email on success, give each failure-path test its own `assertEqual(len(mail.outbox), 0)` next to its status assertion — a future guard reorder that starts emailing before validation then fails that specific path's test, not a distant aggregate. Two counting details:
-- A delivered email proves both templates rendered — eager Celery's `send_email_task` renders `.txt` and `.html` before sending, so `len(mail.outbox) == 1` plus a body assertion covers "template exists, context vars present" without a render-to-string test.
-- `on_commit` emails never fire in `TestCase`, so on an early-return path the only outbox entry is the direct-send email — `len(mail.outbox) == 1` is exact without patching.
+For flows that send email on success, give each failure-path test its own `assertEqual(len(mail.outbox), 0)` next to its status assertion - a future guard reorder that starts emailing before validation then fails that specific path's test, not a distant aggregate. Two counting details:
+- A delivered email proves both templates rendered - eager Celery's `send_email_task` renders `.txt` and `.html` before sending, so `len(mail.outbox) == 1` plus a body assertion covers "template exists, context vars present" without a render-to-string test.
+- `on_commit` emails never fire in `TestCase`, so on an early-return path the only outbox entry is the direct-send email - `len(mail.outbox) == 1` is exact without patching.

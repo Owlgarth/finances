@@ -54,18 +54,18 @@ There is no frontend test suite - verification is `npm run lint` + `npm run buil
 
 ### Full Stack (Docker)
 
-Default workflow: services in Docker, backend and frontend on the host.
+Default workflow (`DEV_TARGET=docker`): everything runs in containers, driven through `./dev.sh`.
 
 ```bash
 cp example.env .env    # every setting, including published ports
 ./dev.sh up            # db, redis, storage
-./dev.sh backend       # migrate + seed, then uvicorn --reload + Celery worker
+./dev.sh backend       # api + Celery worker (host mode: migrate, seed, uvicorn --reload, worker)
 ./dev.sh frontend      # Vite dev server
 ./dev.sh up --full     # everything in Docker instead (adds api, ui, worker, beat)
 ./dev.sh release 0.1.0 # cut a release: checks, changelog, commit, tag, push
 ```
 
-`./dev.sh` is the single entry point and covers everything else too —
+`./dev.sh` is the single entry point and covers everything else too -
 `down`/`logs`/`ps`, plus `manage`, `migrate`, `seed`, `shell`, `psql`, `test`,
 `lint`, `npm`; run it with no arguments for the list.
 
@@ -78,8 +78,8 @@ to the published ports; it can also be set per command
 
 ## Working Rules
 
-- Never stage or commit personal data exports (`*_data_export_*.json`); stage explicit paths only — no `git add -A` / `git add .`.
-- Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers — a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
+- Never stage or commit personal data exports (`*_data_export_*.json`); stage explicit paths only - no `git add -A` / `git add .`.
+- Every published port comes from `.env` (`DB_PORT`, `REDIS_PORT`, `API_PORT`, `UI_PORT`, `STORAGE_PORT`, `STORAGE_CONSOLE_PORT`). Check `docker ps` before starting the stack and shift those values rather than stopping someone else's containers - a shared Postgres/Redis and other checkouts of this repo may already hold the defaults. Backend pytest against a running Postgres is safe (Django creates an isolated `test_*` database).
 
 ## Data Model
 
@@ -110,20 +110,20 @@ Every endpoint must verify resources belong to the user's workspace. Four securi
 
 ## Detailed Conventions (Skills)
 
-Detailed conventions are split into skills under `.agents/skills/`. Load the relevant skill(s) before working on the corresponding area:
+Detailed conventions live in skills under `.agents/skills/`. Load every skill that covers your area before writing code. Each `SKILL.md` holds the core rules plus a "Read Before You Edit" table; the larger skills keep their detailed patterns in a `references/` folder beside it - read the reference files that table names for your change.
 
 | Skill | Load when working on |
 |-------|----------------------|
-| `django-backend` | Any backend code — endpoints, services, models, schemas, exceptions, queries |
-| `backend-testing` | Backend tests — factories, AuthMixin, on_commit, token expiry, Celery testing |
-| `celery-tasks` | Celery tasks — retry semantics, idempotency, dispatch patterns |
-| `auth-security` | Auth, tokens, 2FA, rate limiting, anti-enumeration, security-sensitive endpoints |
-| `email-sending` | Sending emails, email templates, EmailService |
-| `frontend-react` | Any frontend code — design tokens, components, modals, API client, auth flows |
-| `frontend-live-stack-probing` | Interactive verification of frontend or backend-stack behavior against a live dev stack - probe harnesses (Playwright/system Chrome), API-driven auth and seeding, port-shifted stacks, probing by bug class, backend container probes (in-container version checks, beat schedule reads), static-fallback discipline when no stack is available |
-| `npm-dependency-refresh` | Frontend dependency refreshes - npm audit-fix sequencing, allowScripts derivation from the live tree, lockfileVersion 3 gate, floor bumps vs backlog majors |
-| `i18n-tooling` | i18n toolchain - language lifecycle scripts (lang:add/lang:rm, key:find/key:rm, i18n:check, i18n:extract), the i18next-cli extractor config (i18next.config.ts), byte-preserving writers for the language registry, catalog \uXXXX escape preservation, i18next ESLint rule config |
-| `data-deletion-gdpr` | Adding/removing models, FK/on_delete changes, delete_account, export/import, legal docs |
-| `docker-infra` | docker-compose, Dockerfiles, entrypoints, nginx, S3 storage, dev.sh (incl. the release command and version-bump uv.lock refresh) |
-| `ci-releases` | GitHub Actions workflows, release tooling (VERSION, cliff.toml, GHCR publishing), Dependabot config - action pin verification via git refs, reusable test-gate workflow, render-testing pinned binaries |
-| `docs-accuracy` | Editing READMEs or docs/ markdown - accuracy sweeps, census/grep gates, code-fenced trees, verbatim transcription |
+| `django-backend` | Any backend code except tests: endpoints, services, models, migrations, schemas, exceptions, queries |
+| `backend-testing` | Backend tests |
+| `celery-tasks` | Celery tasks and dispatching background work from services |
+| `auth-security` | Auth, tokens, 2FA, rate limiting, anti-enumeration, any security-sensitive endpoint |
+| `email-sending` | Sending emails, email templates, `EmailService` |
+| `data-deletion-gdpr` | Adding or removing models, FK/on_delete changes, delete_account, export/import, legal documents |
+| `frontend-react` | Any frontend code |
+| `frontend-live-stack-probing` | Verifying behavior against a live dev stack (browser probes, container probes), or budgeting a static fallback when no stack is available |
+| `i18n-tooling` | Languages, catalog keys, the i18n scripts and extractor config, no-literal-string lint config |
+| `npm-dependency-refresh` | Frontend dependency bumps, npm audit triage, `package-lock.json` regeneration |
+| `docker-infra` | Compose files, Dockerfiles, entrypoints, nginx, S3 storage, `dev.sh`, backend dependency and Python-version upgrades |
+| `ci-releases` | GitHub Actions workflows, Dependabot config, release tooling (VERSION, cliff.toml, GHCR publishing) |
+| `docs-accuracy` | Editing README, `docs/` or `design/` markdown, documentation audits |
