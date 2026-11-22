@@ -97,11 +97,8 @@
     "delete": "Usuń"
   },
   "deleted": "Transakcja usunięta",
-  "deleteFailed": "Nie udało się usunąć",
-  "deleteDialog": {
-    "title": "Usuń transakcję",
-    "message": "Usunąć \"{{description}}\"?"
-  },
+  "undo": "Cofnij",
+  "deleteRejected": "Nie udało się usunąć - transakcja wróciła na listę",
   "form": {
     "newTitle": "Nowa transakcja",
     "editTitle": "Edytuj transakcję",

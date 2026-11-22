@@ -25,13 +25,10 @@
     "delete": "Usuń",
     "deleteAria": "Usuń przelew"
   },
-  "confirmDelete": {
-    "title": "Usuń przelew",
-    "message": "Usunąć przelew z \"{{from}}\" na \"{{to}}\"? Obie strony zostaną usunięte."
-  },
   "toast": {
     "deleted": "Przelew usunięty",
-    "deleteFailed": "Nie udało się usunąć przelewu",
+    "undo": "Cofnij",
+    "deleteRejected": "Nie udało się usunąć - przelew wrócił na listę",
     "updated": "Przelew zaktualizowany",
     "recorded": "Przelew zarejestrowany",
     "updateFailed": "Nie udało się zaktualizować przelewu",

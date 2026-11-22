@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Copy, Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +21,7 @@ import { activeFilterCount, budgetChangePatch, buildTransactionsFilters, clearAl
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
+import { useTransactionDeferredDelete } from '../hooks/useDeferredDelete'
 import { useMainScrollRestoration } from '../hooks/useMainScrollRestoration'
 import { useTransactionForm } from '../hooks/useTransactionForm'
 import { tappableProps } from '../utils/tappable'
@@ -347,7 +348,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const { t } = useTranslation('transactions')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const { t: tCommon } = useTranslation('common')
-  const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
@@ -622,7 +622,11 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   const isTouch = useIsTouch()
 
-  const [deleting, setDeleting] = useState<Transaction | null>(null)
+  // Deferred delete: the row hides at once and Undo holds the request back
+  // for 5s. pendingId filters the row from BOTH list arms and holds the
+  // totals strip in its updating state.
+  const { request: requestDelete, pendingId } = useTransactionDeferredDelete()
+
   // Bookmark capture of the current filter view (mount-per-use modal): the
   // target derives from the URL at open time, so a boolean is the whole state.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
@@ -674,17 +678,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         date_to: dateTo || undefined,
         group_by: 'type',
       }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => transactionsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success(t('deleted'))
-      setDeleting(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('deleteFailed'))); setDeleting(null) },
   })
 
   // Save the current view facets as this page's defaults. The URL is the
@@ -787,6 +780,11 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   const showAccountColumn = accounts.length > 1
   const items = data?.items ?? []
+  // The pending-delete row is hidden from both list arms; the empty-state
+  // gate stays on the unfiltered list (data still contains the row until
+  // the commit's refetch lands, so deleting the only row on the page does
+  // not flash the empty state for the window).
+  const visibleItems = pendingId != null ? items.filter((tx) => tx.id !== pendingId) : items
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
@@ -991,7 +989,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           items={totalsData?.totals ?? []}
           tone={(group) => (group === 'income' ? 'positive' : group === 'expense' ? 'negative' : 'neutral')}
           help={t('totals.help')}
-          isLoading={totalsIsLoading}
+          isLoading={totalsIsLoading || pendingId != null}
         />
       )}
 
@@ -1007,7 +1005,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
               pushes the full record page (openRecord carries the
               click-time search in router state). */}
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-            {items.map((tx) => {
+            {visibleItems.map((tx) => {
               // Auto-created facet adjustments are managed by their source
               // transaction: no copy/delete affordances, no tap-to-open.
               const auto = tx.source_transaction_id != null
@@ -1057,7 +1055,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                     {canWrite && !isTouch && (
                       <div className={`flex items-center gap-1 ${auto ? 'invisible' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
                         <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                        <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                        <button onClick={() => requestDelete(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                       </div>
                     )}
                   </div>
@@ -1080,7 +1078,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                   not overlays, so the row's own overlay check cannot keep
                   the hotkey from stealing their focus. */}
               <TransactionsTable
-                items={items}
+                items={visibleItems}
                 selectedId={isDesktop ? recordId : null}
                 showAccountColumn={showAccountColumn}
                 multiCurrency={multiCurrency}
@@ -1116,7 +1114,13 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                   transaction={record}
                   canWrite={canWrite}
                   onDuplicate={openCopy}
-                  onDelete={(tx) => setDeleting(tx)}
+                  onDelete={(tx) => {
+                    // The panel closes at once (the row is already hidden);
+                    // the module-level window survives the route swap and
+                    // the toast keeps the Undo affordance.
+                    requestDelete(tx)
+                    handleClosePanel()
+                  }}
                 />
               ) : null}
             </DetailPanel>
@@ -1124,14 +1128,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         />
       )}
 
-      <ConfirmDialog
-        isOpen={!!deleting}
-        title={t('deleteDialog.title')}
-        message={t('deleteDialog.message', { description: deleting?.description })}
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
-        onCancel={() => setDeleting(null)}
-      />
       {/* Mounted before the bookmark modal so the chained modal (opened by
           the sheet's bookmark row, which closes the sheet first) stacks
           above the sheet during its exit animation. */}

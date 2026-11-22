@@ -93,11 +93,8 @@
     "delete": "Delete"
   },
   "deleted": "Transaction deleted",
-  "deleteFailed": "Failed to delete",
-  "deleteDialog": {
-    "title": "Delete transaction",
-    "message": "Delete \"{{description}}\"?"
-  },
+  "undo": "Undo",
+  "deleteRejected": "Could not delete - the transaction is back in the list",
   "form": {
     "newTitle": "New transaction",
     "editTitle": "Edit transaction",

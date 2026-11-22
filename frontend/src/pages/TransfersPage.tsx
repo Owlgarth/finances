@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { ArrowLeftRight, Plus, Repeat, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +20,7 @@ import { createUpdateParams, intParam, useStalePageReset } from '../utils/params
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { activeFilterCount, buildTransfersFilters, clearAllFilters, type FilterDef, type TransfersFilterLookups, type TransfersFilterValues } from '../utils/listFilters'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
+import { useTransferDeferredDelete } from '../hooks/useDeferredDelete'
 import { tappableProps } from '../utils/tappable'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
@@ -222,7 +223,6 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
   // second translator here is safe (the shared filter components'
   // precedent).
   const { t: tTx } = useTranslation('transactions')
-  const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const isTouch = useIsTouch()
   const { isMobile, isDesktop } = useBreakpoint()
@@ -390,22 +390,11 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
   // an :id (the route element renders the record page there instead).
   const selectedId = recordId
 
-  const [deleting, setDeleting] = useState<Transfer | null>(null)
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => transfersApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success(t('toast.deleted'))
-      setDeleting(null)
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, t('toast.deleteFailed')))
-      setDeleting(null)
-    },
-  })
+  // Deferred delete: the row hides at once and Undo holds the request
+  // back for 5s. This page renders no totals strip, so there is nothing
+  // to pulse - the count and pagination ride the stale response until
+  // the commit's refetch lands.
+  const { request: requestDelete, pendingId } = useTransferDeferredDelete()
 
   // Row tap/click opens the record. The tier fork lives INSIDE the handler
   // so the list stays mounted on every tier. At 1024+ a panel is "already
@@ -500,6 +489,10 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
     }
   }
   const items = data?.items ?? []
+  // The pending-delete row is hidden from the rendered list; the
+  // empty-state branches stay on the unfiltered list (data still contains
+  // the row until the commit's refetch lands).
+  const visibleItems = pendingId != null ? items.filter((row) => row.id !== pendingId) : items
 
   return (
     <>
@@ -570,7 +563,7 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
               )
             ) : (
               <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-                {items.map((row) => {
+                {visibleItems.map((row) => {
                   // Selected and unselected are mutually exclusive class
                   // sets; every row reserves the 2px left border
                   // (transparent when unselected) so selection never
@@ -619,7 +612,7 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button type="button" onClick={() => navigate(`/new?type=transfer&copy_transfer=${row.id}`)} title={t('row.repeat')} aria-label={t('row.repeatAria')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
-                            <button type="button" onClick={() => setDeleting(row)} title={t('row.delete')} aria-label={t('row.deleteAria')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                            <button type="button" onClick={() => requestDelete(row)} title={t('row.delete')} aria-label={t('row.deleteAria')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                           </div>
                         )}
                       </div>
@@ -664,7 +657,13 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
                 transfer={record}
                 canWrite={canWrite}
                 onRepeat={(transfer) => navigate(`/new?type=transfer&copy_transfer=${transfer.id}`)}
-                onDelete={(transfer) => setDeleting(transfer)}
+                onDelete={(transfer) => {
+                  // The panel closes at once (the row is already hidden);
+                  // the module-level window survives the route swap and
+                  // the toast keeps the Undo affordance.
+                  requestDelete(transfer)
+                  handleClosePanel()
+                }}
               />
             ) : null}
           </DetailPanel>
@@ -692,17 +691,6 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
           footerNoun={t('sheetNoun', { count: data?.total ?? 0 })}
         />
       )}
-      <ConfirmDialog
-        isOpen={!!deleting}
-        title={t('confirmDelete.title')}
-        message={t('confirmDelete.message', {
-          from: deleting?.from_account_name ?? '',
-          to: deleting?.to_account_name ?? '',
-        })}
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
-        onCancel={() => setDeleting(null)}
-      />
     </>
   )
 }

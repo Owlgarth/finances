@@ -1,33 +1,30 @@
-import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
 import { Repeat, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { transfersApi } from '../api/client'
 import { usePermissions } from '../hooks/usePermissions'
 import { useBreakpoint } from '../hooks/useBreakpoint'
+import { useTransferDeferredDelete } from '../hooks/useDeferredDelete'
 import { useMainScrollRestoration } from '../hooks/useMainScrollRestoration'
-import { getApiErrorMessage } from '../utils/errors'
 import PageHeader from '../components/layout/PageHeader'
 import TransferRecord from '../components/transactions/TransferRecord'
-import ConfirmDialog from '../components/common/ConfirmDialog'
 import { destructiveButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 /** Full-page host for a single transfer's record: the below-1024
  *  destination of a list row tap and (until the 1024+ side panel host
  *  lands) of every tier, so deep links work at any width. Owns the
  *  transfer query plus loading and not-found states, the header with
- *  back + Repeat/Delete actions, a delete ConfirmDialog that returns to
- *  the list on success, and the not-found state for foreign, deleted or
- *  garbage ids - never an empty page with working fields. */
+ *  back + Repeat/Delete actions (Delete arms the deferred-delete window
+ *  and returns to the list at once - the Undo toast outlives the route
+ *  change), and the not-found state for foreign, deleted or garbage
+ *  ids - never an empty page with working fields. */
 export default function TransferRecordPage() {
   const { t } = useTranslation('transfers')
   const { id: idParam } = useParams<{ id: string }>()
   const location = useLocation()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const { isTablet } = useBreakpoint()
 
@@ -65,26 +62,18 @@ export default function TransferRecordPage() {
     enabled: validId,
   })
 
-  const [confirmOpen, setConfirmOpen] = useState(false)
-
-  // Same three keys a transfer save touches - deleting changes both
-  // account balances exactly as editing does.
-  const deleteMutation = useMutation({
-    mutationFn: () => transfersApi.delete(transferId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transfers'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      queryClient.invalidateQueries({ queryKey: ['account-balance'] })
-      toast.success(t('toast.deleted'))
-      // Return to the list. replace keeps the deleted record's URL out of
-      // Back's path (a POP there would land on the not-found state).
-      navigate(backTo, { replace: true })
-    },
-    onError: (error) => {
-      toast.error(getApiErrorMessage(error, t('toast.deleteFailed')))
-      setConfirmOpen(false)
-    },
-  })
+  // Deferred delete: arm the window and return to the list at once -
+  // this page disappearing IS the hide. The window and toast live at
+  // module scope (hooks/useDeferredDelete.tsx), so the navigate-back does
+  // not flush; on the list the row is hidden and Undo restores it.
+  const { request: requestDelete } = useTransferDeferredDelete()
+  const handleDelete = () => {
+    if (!record.data) return
+    requestDelete(record.data)
+    // replace keeps the deleted record's URL out of Back's path (a POP
+    // there would land on the not-found state).
+    navigate(backTo, { replace: true })
+  }
 
   // Repeat prefills the create page with this row as the copy_transfer
   // source (seed: pair + description, amounts/date cleared).
@@ -115,7 +104,7 @@ export default function TransferRecordPage() {
             <button type="button" onClick={handleRepeat} className={secondaryButtonClass}>
               <Repeat size={13} className="inline mr-1" /> {t('row.repeat')}
             </button>
-            <button type="button" onClick={() => setConfirmOpen(true)} className={destructiveButtonClass}>
+            <button type="button" onClick={handleDelete} className={destructiveButtonClass}>
               <Trash2 size={13} className="inline mr-1" /> {t('row.delete')}
             </button>
           </>
@@ -133,20 +122,9 @@ export default function TransferRecordPage() {
           transfer={record.data}
           canWrite={canWrite}
           onRepeat={handleRepeat}
-          onDelete={() => setConfirmOpen(true)}
+          onDelete={handleDelete}
         />
       ) : null}
-      <ConfirmDialog
-        isOpen={confirmOpen}
-        title={t('confirmDelete.title')}
-        message={t('confirmDelete.message', {
-          from: record.data?.from_account_name ?? '',
-          to: record.data?.to_account_name ?? '',
-        })}
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate()}
-        onCancel={() => setConfirmOpen(false)}
-      />
     </div>
   )
 }

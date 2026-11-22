@@ -36,11 +36,19 @@ export type PlannedTransactionOrdering =
   | '-category__name' | 'category__name'
   | '-account__name' | 'account__name' | '-currency__code' | 'currency__code';
 
+// ============= Base URL =============
+/** Base API URL for requests that bypass the axios instance (the keepalive
+ *  DELETE in hooks/useDeferredDelete.tsx - fetch survives page teardown,
+ *  axios does not). Single source of the expression: the axios baseURL
+ *  below and any out-of-band request must resolve identically. */
+export const getApiBaseUrl = (): string =>
+  getRuntimeApiUrl() || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
 const api = axios.create({
   // Deployed images override the API URL via /config.js (see
   // runtimeConfig.ts); the Vite env var only reaches host dev builds
   // (it is baked at build time); localhost is the last resort.
-  baseURL: getRuntimeApiUrl() || import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
   paramsSerializer: {
     indexes: null, // This removes the brackets from array parameters
