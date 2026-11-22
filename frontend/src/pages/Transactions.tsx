@@ -30,6 +30,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
+import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -1010,13 +1011,20 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
               // transaction: no copy/delete affordances, no tap-to-open.
               const auto = tx.source_transaction_id != null
               return (
-                <div
+                <SwipeRow
                   key={tx.id}
-                  {...(!auto && isTouch && canWrite ? tappableProps(() => openRecord(tx)) : {})}
-                  className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
-                    !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                  }`}
+                  enabled={isTouch && canWrite && !auto}
+                  actions={[
+                    { key: 'duplicate', label: t('rowActions.duplicate'), icon: Copy, onSelect: () => openCopy(tx) },
+                    { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => requestDelete(tx) },
+                  ]}
                 >
+                  <div
+                    {...(!auto && isTouch && canWrite ? tappableProps(() => openRecord(tx)) : {})}
+                    className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
+                      !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                    }`}
+                  >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-text truncate">{tx.description}</span>
@@ -1059,7 +1067,8 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                       </div>
                     )}
                   </div>
-                </div>
+                  </div>
+                </SwipeRow>
               )
             })}
           </div>

@@ -25,6 +25,7 @@ import { tappableProps } from '../utils/tappable'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
+import SwipeRow from '../components/common/SwipeRow'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import DateQuickPick from '../components/common/DateQuickPick'
@@ -571,18 +572,25 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
                   // selected-row idiom.
                   const selected = row.id === selectedId
                   return (
-                    <div
+                    <SwipeRow
                       key={row.id}
-                      {...(isTouch
-                        ? tappableProps(() => handleOpenRecord(row))
-                        : { onClick: () => handleOpenRecord(row) })}
-                      aria-current={selected ? 'true' : undefined}
-                      className={`flex items-center justify-between px-4 py-2.5 text-sm group border-l-2 transition-colors cursor-pointer ${
-                        selected
-                          ? 'border-l-primary bg-surface-hover'
-                          : 'border-l-transparent active:bg-surface-hover'
-                      }`}
+                      enabled={isTouch && canWrite}
+                      actions={[
+                        { key: 'repeat', label: t('row.repeat'), icon: Repeat, onSelect: () => navigate(`/new?type=transfer&copy_transfer=${row.id}`) },
+                        { key: 'delete', label: t('row.delete'), icon: Trash2, destructive: true, onSelect: () => requestDelete(row) },
+                      ]}
                     >
+                      <div
+                        {...(isTouch
+                          ? tappableProps(() => handleOpenRecord(row))
+                          : { onClick: () => handleOpenRecord(row) })}
+                        aria-current={selected ? 'true' : undefined}
+                        className={`flex items-center justify-between px-4 py-2.5 text-sm group border-l-2 transition-colors cursor-pointer ${
+                          selected
+                            ? 'border-l-primary bg-surface-hover'
+                            : 'border-l-transparent active:bg-surface-hover'
+                        }`}
+                      >
                       <div className="min-w-0 flex-1">
                         <div className="text-text truncate">
                           {row.from_account_name} → {row.to_account_name}
@@ -616,7 +624,8 @@ function TransfersContent({ settings, calendarStartDay, onSaveDefaults, saveDefa
                           </div>
                         )}
                       </div>
-                    </div>
+                      </div>
+                    </SwipeRow>
                   )
                 })}
               </div>

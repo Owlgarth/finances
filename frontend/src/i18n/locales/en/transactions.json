@@ -90,6 +90,7 @@
   "rowActions": {
     "edit": "Edit",
     "copy": "Copy",
+    "duplicate": "Duplicate",
     "delete": "Delete"
   },
   "deleted": "Transaction deleted",

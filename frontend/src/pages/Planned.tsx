@@ -33,6 +33,7 @@ import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
+import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -1039,13 +1040,20 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         ) : (
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {items.map((p) => (
-              <div
+              <SwipeRow
                 key={p.id}
-                {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
-                className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                  isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                }`}
+                enabled={isTouch && canWrite && p.status === 'pending'}
+                actions={[
+                  { key: 'paidDifferently', label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => setAdjusting(p) },
+                  { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
+                ]}
               >
+                <div
+                  {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
+                  className={`flex items-center justify-between px-4 py-3 text-sm group ${
+                    isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                  }`}
+                >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-text truncate">{p.name}</span>
@@ -1092,7 +1100,8 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
+              </SwipeRow>
             ))}
             {data && data.total > 0 && (
               <Pagination
