@@ -84,8 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
         toast.success(t('toasts.loggedIn'));
-        const reconsent = await checkConsentStatus();
-        if (!reconsent) navigate('/');
+        // Post-sign-in navigation is owned by the Login page (it returns the
+        // user to the protected route they came from, via its
+        // already-authenticated guard). Reconsent still redirects from inside
+        // checkConsentStatus - it is mandatory before any page.
+        await checkConsentStatus();
       } else {
         toast.error(t('toasts.unexpectedResponse'));
       }
@@ -93,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error(getApiErrorMessage(error, t('toasts.loginFailed')));
       throw error;
     }
-  }, [checkConsentStatus, navigate, t]);
+  }, [checkConsentStatus, t]);
 
   const register = useCallback(async (data: RegisterRequest) => {
     try {
@@ -133,8 +136,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
         toast.success(t('toasts.loggedIn'));
-        const reconsent = await checkConsentStatus();
-        if (!reconsent) navigate('/');
+        // Post-sign-in navigation is owned by the Login page (it returns the
+        // user to the protected route they came from, via its
+        // already-authenticated guard). Reconsent still redirects from inside
+        // checkConsentStatus - it is mandatory before any page.
+        await checkConsentStatus();
       } else {
         toast.error(t('toasts.unexpectedResponse'));
       }
@@ -142,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error(getApiErrorMessage(error, t('toasts.verificationFailed')));
       throw error;
     }
-  }, [checkConsentStatus, navigate, t]);
+  }, [checkConsentStatus, t]);
 
   const logout = useCallback(() => {
     clearAuthToken();

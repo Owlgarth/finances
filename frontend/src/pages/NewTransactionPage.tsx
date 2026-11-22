@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CloudOff, Loader2, ScanLine } from 'lucide-react'
@@ -153,6 +153,42 @@ export default function NewTransactionPage() {
   const [savingAction, setSavingAction] = useState<SaveAction>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ?scan=1 (an app-shortcut deep link) seeds the header scan action: focus
+  // plus a static highlight ring once the button is actually usable. Read
+  // once at mount like every seed param (exact value - garbage reads as
+  // unset); nothing on this page writes the URL.
+  const [scanSeed] = useState(() => searchParams.get('scan') === '1')
+  const [scanInteracted, setScanInteracted] = useState(false)
+  const scanButtonRef = useRef<HTMLButtonElement | null>(null)
+  const scanFocusDoneRef = useRef(false)
+  // The scan focus steal blurs the autofocused amount input on its way to
+  // the header button; a programmatic blur is not a user blur and must not
+  // latch the amount's error display against the pristine value.
+  const scanStealRef = useRef(false)
+
+  // The scan action is usable once the copy gates have resolved, extraction
+  // is enabled and reachable, a receipt target exists (not transfer mode),
+  // and no parse is in flight - the render + disabled conditions of the
+  // header button.
+  const scanEnabled =
+    copyKnown && copyTransferKnown && extractionEnabled && !isTransfer && extractionReachable && !txForm.parse.isPending
+  const scanHighlighted = scanSeed && !scanInteracted && scanEnabled
+
+  // One-shot focus. If the button never becomes usable (transfer seeded,
+  // extraction off, scanner unreachable), the amount input's autoFocus
+  // stands - silent degrade, no error path. The file chooser itself always
+  // waits for the user's tap (browser policy).
+  useEffect(() => {
+    if (!scanSeed || scanFocusDoneRef.current || !scanEnabled) return
+    scanFocusDoneRef.current = true
+    // Arm the one-shot blur suppression only when the amount input really
+    // holds focus (touch mounts nothing autofocused, so no blur will fire).
+    scanStealRef.current = document.activeElement === amountRef.current
+    scanButtonRef.current?.focus()
+  }, [scanSeed, scanEnabled])
+
+  const clearScanHint = () => setScanInteracted(true)
+
   // Viewers (and, defense-in-depth, workspace-less mounts - MainLayout already
   // swaps children for its no-workspace message) never see this form. Held
   // through the workspace-loading window so a legitimate member is not bounced
@@ -237,10 +273,16 @@ export default function NewTransactionPage() {
   const scanButton = extractionEnabled && !isTransfer && (
     <button
       type="button"
-      onClick={() => fileInputRef.current?.click()}
+      ref={scanButtonRef}
+      onClick={() => {
+        clearScanHint()
+        fileInputRef.current?.click()
+      }}
+      onBlur={clearScanHint}
+      onKeyDown={clearScanHint}
       disabled={txForm.parse.isPending || !extractionReachable}
       title={extractionReachable ? undefined : t('form.scannerOfflineTitle')}
-      className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1`}
+      className={`${secondaryButtonClass} disabled:hover:bg-surface inline-flex items-center gap-1${scanHighlighted ? ' outline-2 outline-offset-2 outline-border-focus' : ''}`}
     >
       {txForm.parse.isPending ? (
         <>
@@ -414,7 +456,15 @@ export default function NewTransactionPage() {
             error={amountError}
             inputRef={amountRef}
             autoFocus={!isTouch}
-            onBlur={() => setAmountTouched(true)}
+            onBlur={() => {
+              // Swallow exactly the blur the scan focus steal fires; every
+              // other blur is a user blur.
+              if (scanStealRef.current) {
+                scanStealRef.current = false
+                return
+              }
+              setAmountTouched(true)
+            }}
           />
 
           <div>
