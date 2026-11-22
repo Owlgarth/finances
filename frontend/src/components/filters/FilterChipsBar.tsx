@@ -200,8 +200,11 @@ export default function FilterChipsBar<V, L>({
   // Only offerable defs may enter the Add-filter menu: an unavailable
   // facet (single account, mono-currency, no budgets) cannot bind
   // anything on this workspace. Active defs are excluded by definition -
-  // an entry here is never a no-op.
-  const inactiveDefs = filters.filter((d) => d.available && !d.isActive(values, lookups))
+  // an entry here is never a no-op. The search def never enters either:
+  // its editor is the always-visible search input sitting in this same
+  // row, and an entry would open an empty editor panel (no body exists
+  // for the 'search' kind).
+  const inactiveDefs = filters.filter((d) => d.available && d.editor !== 'search' && !d.isActive(values, lookups))
   const dateDef = filters.find((d) => d.editor === 'date') ?? null
   const openDef =
     openPopover?.kind === 'editor' ? (filters.find((d) => d.id === openPopover.defId) ?? null) : null

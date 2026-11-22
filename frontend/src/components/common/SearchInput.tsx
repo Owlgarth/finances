@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useDebouncedField } from '../../hooks/useDebouncedField'
@@ -11,6 +12,9 @@ interface SearchInputProps {
   placeholder?: string
   'aria-label'?: string
   className?: string
+  /** Optional ref to the inner <input> (the applied Search chip's body
+   *  focuses it). Additive: callers that pass nothing are unchanged. */
+  inputRef?: Ref<HTMLInputElement>
 }
 
 /** §4-styled search box with a leading icon, debounced commit and a clear X. */
@@ -20,6 +24,7 @@ export default function SearchInput({
   placeholder,
   'aria-label': ariaLabel,
   className = '',
+  inputRef,
 }: SearchInputProps) {
   const { t } = useTranslation('common')
   const [draft, setDraft] = useDebouncedField(value, onChange)
@@ -34,6 +39,7 @@ export default function SearchInput({
         className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
       />
       <input
+        ref={inputRef}
         type="search"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
