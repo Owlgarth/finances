@@ -51,6 +51,7 @@
     "execute": "Execute",
     "executeAdjusted": "Execute with adjustments",
     "cancelPlan": "Cancel plan",
+    "paidDifferently": "Paid differently",
     "edit": "Edit",
     "copy": "Copy",
     "delete": "Delete"

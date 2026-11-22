@@ -50,6 +50,7 @@
     "budget": "Бюджет",
     "category": "Категорія",
     "amount": "Сума",
+    "search": "Пошук",
     "allBudgets": "Усі бюджети",
     "allCategories": "Усі категорії",
     "min": "Мін",
@@ -93,14 +94,12 @@
   "rowActions": {
     "edit": "Редагувати",
     "copy": "Копіювати",
+    "duplicate": "Дублювати",
     "delete": "Видалити"
   },
   "deleted": "Транзакцію видалено",
-  "deleteFailed": "Не вдалося видалити",
-  "deleteDialog": {
-    "title": "Видалити транзакцію",
-    "message": "Видалити \"{{description}}\"?"
-  },
+  "undo": "Відновити",
+  "deleteRejected": "Не вдалося видалити - транзакцію повернуто в список",
   "form": {
     "newTitle": "Нова транзакція",
     "editTitle": "Редагувати транзакцію",

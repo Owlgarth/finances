@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -33,6 +33,7 @@ import Pagination from '../components/common/Pagination'
 import SegmentedControl from '../components/common/SegmentedControl'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
+import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -405,6 +406,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     searchParams.get('search') === null ? readStoredSearch() : '',
   )
   const search = searchParams.get('search') ?? restoredSearch
+  // Toolbar search input (640+): the applied Search chip's body focuses
+  // it. The phone instance needs no ref - the chips row is hidden below
+  // sm, so the chip cannot be clicked there.
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const accountFilter = intListParam(searchParams, 'account')
   const budgetFilter = intListParam(searchParams, 'budget')
   const categoryFilter = intListParam(searchParams, 'category')
@@ -490,6 +495,20 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     updateParams({ search: next || null })
   }
 
+  // Shared clear path for the search facet (Clear all and the Search
+  // chip's X): the URL param alone is NOT enough - `search = param ??
+  // restoredSearch` re-applies the remembered term on the very next
+  // render when only the param dies (the re-apply hazard), so the
+  // restored hint and the stored value die in the same handler.
+  const forgetStoredSearch = () => {
+    setRestoredSearch('')
+    try {
+      localStorage.setItem(SEARCH_STORAGE_KEY, '')
+    } catch {
+      // Storage unavailable: remembering is best-effort.
+    }
+  }
+
   // Each facet counts once, however many values it holds. Default-derived
   // params still count: a materialized default range IS an active range
   // (badge 1 with the panel closed is honest - the user can see and clear
@@ -503,6 +522,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   }
   const filterDefs = buildPlannedFilters(filterLookups)
   const filterValues = {
+    search,
     account: accountFilter,
     currency: currencyFilter,
     budget: budgetFilter,
@@ -548,7 +568,12 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
+  const clearFilters = () => {
+    // clearAllFilters already includes the search def's { search: null }
+    // URL write; the remembered value dies here in the same handler.
+    forgetStoredSearch()
+    updateParams(clearAllFilters(filterDefs))
+  }
 
   // Month stepper: step to the adjacent calendar month. The target computes
   // from exactMonth (the range on screen), NEVER from "today" - December
@@ -583,10 +608,33 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     .map((d) => ({
       id: d.id,
       label: filterLabel(d.labelKey),
-      summary: d.editor === 'amount'
-        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
-        : d.summarize(filterValues, filterLookups),
-      onRemove: () => updateParams(d.clear()),
+      summary:
+        d.id === 'search' ? (
+          // Free UNBOUNDED text, unlike the bounded name/count/date
+          // fragments: cap + ellipsize so one long term cannot stretch
+          // the wrapping chips row. inline-block because max-width never
+          // applies to a bare inline span; align-bottom because an
+          // overflow-hidden inline-block loses the text baseline (its
+          // baseline becomes its bottom margin edge), which would sit
+          // the fragment slightly above the label.
+          <span className="inline-block max-w-[16rem] truncate align-bottom">
+            {d.summarize(filterValues, filterLookups)}
+          </span>
+        ) : d.editor === 'amount' ? (
+          <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        ) : (
+          d.summarize(filterValues, filterLookups)
+        ),
+      onRemove: () => {
+        // The search facet clears three ways at once (URL param + stored
+        // value + restored hint) - see forgetStoredSearch.
+        if (d.id === 'search') forgetStoredSearch()
+        updateParams(d.clear())
+      },
+      // The search chip's body focuses the search input (it has no
+      // editor popover): AppliedFilters suppresses this chip's
+      // haspopup/expanded whenever onBodyClick is present.
+      onBodyClick: d.id === 'search' ? () => searchInputRef.current?.focus() : undefined,
     }))
 
   const { data, isLoading } = useQuery({
@@ -680,6 +728,12 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
             onChange={(n) => updateParams({ from: n.from, to: n.to })}
           />
         )
+      case 'search':
+        // Unreachable: hosts never route the search def to an editor
+        // surface (the always-visible input IS its editor). Guard so a
+        // future host that forgets the skip renders nothing instead of
+        // silently falling through.
+        return null
       case 'account':
         return (
           <MultiChoiceEditor
@@ -912,6 +966,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
               placeholder={t('searchPlaceholder')}
               aria-label={t('searchAria')}
               className="flex-1 min-w-40 max-w-sm"
+              inputRef={searchInputRef}
             />
           }
           sort={
@@ -985,13 +1040,20 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         ) : (
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
             {items.map((p) => (
-              <div
+              <SwipeRow
                 key={p.id}
-                {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
-                className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                  isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                }`}
+                enabled={isTouch && canWrite && p.status === 'pending'}
+                actions={[
+                  { key: 'paidDifferently', label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => setAdjusting(p) },
+                  { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
+                ]}
               >
+                <div
+                  {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
+                  className={`flex items-center justify-between px-4 py-3 text-sm group ${
+                    isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                  }`}
+                >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-text truncate">{p.name}</span>
@@ -1038,7 +1100,8 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
+              </SwipeRow>
             ))}
             {data && data.total > 0 && (
               <Pagination

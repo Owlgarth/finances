@@ -2,6 +2,9 @@
   "modal": {
     "close": "Zamknij"
   },
+  "bottomSheet": {
+    "close": "Zamknij"
+  },
   "pageHeader": {
     "search": "Szukaj",
     "profile": "Profil",

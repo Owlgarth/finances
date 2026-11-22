@@ -50,6 +50,7 @@
     "budget": "Budżet",
     "category": "Kategoria",
     "amount": "Kwota",
+    "search": "Szukaj",
     "allBudgets": "Wszystkie budżety",
     "allCategories": "Wszystkie kategorie",
     "min": "Od",
@@ -93,14 +94,12 @@
   "rowActions": {
     "edit": "Edytuj",
     "copy": "Kopiuj",
+    "duplicate": "Duplikuj",
     "delete": "Usuń"
   },
   "deleted": "Transakcja usunięta",
-  "deleteFailed": "Nie udało się usunąć",
-  "deleteDialog": {
-    "title": "Usuń transakcję",
-    "message": "Usunąć \"{{description}}\"?"
-  },
+  "undo": "Cofnij",
+  "deleteRejected": "Nie udało się usunąć - transakcja wróciła na listę",
   "form": {
     "newTitle": "Nowa transakcja",
     "editTitle": "Edytuj transakcję",

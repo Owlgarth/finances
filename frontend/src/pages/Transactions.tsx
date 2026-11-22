@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Copy, Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +21,7 @@ import { activeFilterCount, budgetChangePatch, buildTransactionsFilters, clearAl
 import { buildDefaultsLatch, capturePageDefaults } from '../utils/pageDefaults'
 import { paramsFromSearchParams } from '../utils/bookmarks'
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
+import { useTransactionDeferredDelete } from '../hooks/useDeferredDelete'
 import { useMainScrollRestoration } from '../hooks/useMainScrollRestoration'
 import { useTransactionForm } from '../hooks/useTransactionForm'
 import { tappableProps } from '../utils/tappable'
@@ -29,6 +30,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import Pagination from '../components/common/Pagination'
 import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
+import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -347,7 +349,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   const { t } = useTranslation('transactions')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const { t: tCommon } = useTranslation('common')
-  const queryClient = useQueryClient()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
@@ -384,6 +385,10 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
     searchParams.get('search') === null ? readStoredSearch() : '',
   )
   const search = searchParams.get('search') ?? restoredSearch
+  // Toolbar search input (640+): the applied Search chip's body focuses
+  // it. The phone instance needs no ref - the chips row is hidden below
+  // sm, so the chip cannot be clicked there.
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const accountFilter = intListParam(searchParams, 'account')
   const budgetFilter = intListParam(searchParams, 'budget')
   const categoryFilter = intListParam(searchParams, 'category')
@@ -489,6 +494,20 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
     updateParams({ search: next || null })
   }
 
+  // Shared clear path for the search facet (Clear all and the Search
+  // chip's X): the URL param alone is NOT enough - `search = param ??
+  // restoredSearch` re-applies the remembered term on the very next
+  // render when only the param dies (the re-apply hazard), so the
+  // restored hint and the stored value die in the same handler.
+  const forgetStoredSearch = () => {
+    setRestoredSearch('')
+    try {
+      localStorage.setItem(SEARCH_STORAGE_KEY, '')
+    } catch {
+      // Storage unavailable: remembering is best-effort.
+    }
+  }
+
   // Each facet counts once, however many values it holds. Default-derived
   // params still count: a materialized default range or type list IS an
   // active filter (badge 1 with the panel closed is honest - the user can
@@ -504,6 +523,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   }
   const filterDefs = buildTransactionsFilters(filterLookups)
   const filterValues = {
+    search,
     account: accountFilter,
     type: typeFilter,
     currency: currencyFilter,
@@ -536,7 +556,12 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
   // Clears URL params only - saved defaults (if any) are untouched: the
   // next fresh entry re-materializes them. Clearing is the user's explicit
   // all-time choice for THIS session (the latch is consumed).
-  const clearFilters = () => updateParams(clearAllFilters(filterDefs))
+  const clearFilters = () => {
+    // clearAllFilters already includes the search def's { search: null }
+    // URL write; the remembered value dies here in the same handler.
+    forgetStoredSearch()
+    updateParams(clearAllFilters(filterDefs))
+  }
 
   // Stepper derivations on the EFFECTIVE range (explicit params win, latch
   // fallback before materialization - the same values the list query uses).
@@ -567,15 +592,42 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
     .map((d) => ({
       id: d.id,
       label: filterLabel(d.labelKey),
-      summary: d.editor === 'amount'
-        ? <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
-        : d.summarize(filterValues, filterLookups),
-      onRemove: () => updateParams(d.clear()),
+      summary:
+        d.id === 'search' ? (
+          // Free UNBOUNDED text, unlike the bounded name/count/date
+          // fragments: cap + ellipsize so one long term cannot stretch
+          // the wrapping chips row. inline-block because max-width never
+          // applies to a bare inline span; align-bottom because an
+          // overflow-hidden inline-block loses the text baseline (its
+          // baseline becomes its bottom margin edge), which would sit
+          // the fragment slightly above the label.
+          <span className="inline-block max-w-[16rem] truncate align-bottom">
+            {d.summarize(filterValues, filterLookups)}
+          </span>
+        ) : d.editor === 'amount' ? (
+          <span className="font-mono">{d.summarize(filterValues, filterLookups)}</span>
+        ) : (
+          d.summarize(filterValues, filterLookups)
+        ),
+      onRemove: () => {
+        // The search facet clears three ways at once (URL param + stored
+        // value + restored hint) - see forgetStoredSearch.
+        if (d.id === 'search') forgetStoredSearch()
+        updateParams(d.clear())
+      },
+      // The search chip's body focuses the search input (it has no
+      // editor popover): AppliedFilters suppresses this chip's
+      // haspopup/expanded whenever onBodyClick is present.
+      onBodyClick: d.id === 'search' ? () => searchInputRef.current?.focus() : undefined,
     }))
 
   const isTouch = useIsTouch()
 
-  const [deleting, setDeleting] = useState<Transaction | null>(null)
+  // Deferred delete: the row hides at once and Undo holds the request back
+  // for 5s. pendingId filters the row from BOTH list arms and holds the
+  // totals strip in its updating state.
+  const { request: requestDelete, pendingId } = useTransactionDeferredDelete()
+
   // Bookmark capture of the current filter view (mount-per-use modal): the
   // target derives from the URL at open time, so a boolean is the whole state.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
@@ -627,17 +679,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         date_to: dateTo || undefined,
         group_by: 'type',
       }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => transactionsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success(t('deleted'))
-      setDeleting(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('deleteFailed'))); setDeleting(null) },
   })
 
   // Save the current view facets as this page's defaults. The URL is the
@@ -740,6 +781,11 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
 
   const showAccountColumn = accounts.length > 1
   const items = data?.items ?? []
+  // The pending-delete row is hidden from both list arms; the empty-state
+  // gate stays on the unfiltered list (data still contains the row until
+  // the commit's refetch lands, so deleting the only row on the page does
+  // not flash the empty state for the window).
+  const visibleItems = pendingId != null ? items.filter((tx) => tx.id !== pendingId) : items
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }))
   const typeOptions = TYPE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
@@ -771,6 +817,12 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
             onChange={(n) => updateParams({ from: n.from, to: n.to })}
           />
         )
+      case 'search':
+        // Unreachable: hosts never route the search def to an editor
+        // surface (the always-visible input IS its editor). Guard so a
+        // future host that forgets the skip renders nothing instead of
+        // silently falling through.
+        return null
       case 'account':
         return (
           <MultiChoiceEditor
@@ -908,6 +960,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
             placeholder={t('searchPlaceholder')}
             aria-label={t('searchAria')}
             className="flex-1 min-w-40 max-w-sm"
+            inputRef={searchInputRef}
           />
         }
         sort={
@@ -937,7 +990,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
           items={totalsData?.totals ?? []}
           tone={(group) => (group === 'income' ? 'positive' : group === 'expense' ? 'negative' : 'neutral')}
           help={t('totals.help')}
-          isLoading={totalsIsLoading}
+          isLoading={totalsIsLoading || pendingId != null}
         />
       )}
 
@@ -953,18 +1006,25 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
               pushes the full record page (openRecord carries the
               click-time search in router state). */}
           <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-            {items.map((tx) => {
+            {visibleItems.map((tx) => {
               // Auto-created facet adjustments are managed by their source
               // transaction: no copy/delete affordances, no tap-to-open.
               const auto = tx.source_transaction_id != null
               return (
-                <div
+                <SwipeRow
                   key={tx.id}
-                  {...(!auto && isTouch && canWrite ? tappableProps(() => openRecord(tx)) : {})}
-                  className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
-                    !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                  }`}
+                  enabled={isTouch && canWrite && !auto}
+                  actions={[
+                    { key: 'duplicate', label: t('rowActions.duplicate'), icon: Copy, onSelect: () => openCopy(tx) },
+                    { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => requestDelete(tx) },
+                  ]}
                 >
+                  <div
+                    {...(!auto && isTouch && canWrite ? tappableProps(() => openRecord(tx)) : {})}
+                    className={`flex items-center justify-between px-4 py-2.5 text-sm group ${
+                      !auto && isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                    }`}
+                  >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-text truncate">{tx.description}</span>
@@ -1003,11 +1063,12 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                     {canWrite && !isTouch && (
                       <div className={`flex items-center gap-1 ${auto ? 'invisible' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
                         <button onClick={() => openCopy(tx)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                        <button onClick={() => setDeleting(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                        <button onClick={() => requestDelete(tx)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                       </div>
                     )}
                   </div>
-                </div>
+                  </div>
+                </SwipeRow>
               )
             })}
           </div>
@@ -1026,7 +1087,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                   not overlays, so the row's own overlay check cannot keep
                   the hotkey from stealing their focus. */}
               <TransactionsTable
-                items={items}
+                items={visibleItems}
                 selectedId={isDesktop ? recordId : null}
                 showAccountColumn={showAccountColumn}
                 multiCurrency={multiCurrency}
@@ -1062,7 +1123,13 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                   transaction={record}
                   canWrite={canWrite}
                   onDuplicate={openCopy}
-                  onDelete={(tx) => setDeleting(tx)}
+                  onDelete={(tx) => {
+                    // The panel closes at once (the row is already hidden);
+                    // the module-level window survives the route swap and
+                    // the toast keeps the Undo affordance.
+                    requestDelete(tx)
+                    handleClosePanel()
+                  }}
                 />
               ) : null}
             </DetailPanel>
@@ -1070,14 +1137,6 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
         />
       )}
 
-      <ConfirmDialog
-        isOpen={!!deleting}
-        title={t('deleteDialog.title')}
-        message={t('deleteDialog.message', { description: deleting?.description })}
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
-        onCancel={() => setDeleting(null)}
-      />
       {/* Mounted before the bookmark modal so the chained modal (opened by
           the sheet's bookmark row, which closes the sheet first) stacks
           above the sheet during its exit animation. */}

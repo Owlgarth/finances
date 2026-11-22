@@ -149,7 +149,11 @@ export default function FilterSheet<V, L>({
   // mono-currency, no budgets) cannot bind anything on this workspace. A
   // stale param replayed from a bookmark still counts in the badge and
   // still clears - it just has no row while the facet is empty here.
-  const offered = filters.filter((d) => d.available)
+  // The search def gets no hub row either: its editor is the
+  // always-visible search input (both widths), so a row here would be a
+  // dead second surface; the badge count already carries its phone
+  // signal.
+  const offered = filters.filter((d) => d.available && d.editor !== 'search')
   const activeDef =
     editorId !== null && editorId !== SORT_ID
       ? (filters.find((d) => d.id === editorId) ?? null)

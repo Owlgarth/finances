@@ -58,7 +58,9 @@ but inherits these *decisions*. Web implementation details live in `design/respo
   don't shift) and for viewers (read-only role) and workspace-less users. Planned and
   recurring-rule creation is not part of `/new`: the Planned page's own create buttons are
   visible on phones.
-- Each tab remembers its scroll position (native stack behavior).
+- Back and forward return a list to its scroll position once its content has loaded (record
+  back arrows POP when history can serve them); new navigations - tab switches, filter
+  changes, fresh visits - start at the top.
 - **Global search**: jump to any page or budget by name, and once the query reaches
   two characters also surface matching data - accounts (filtered client-side from the
   shared list cache) and transactions/planned items (server search, top 5 each) -
@@ -99,5 +101,3 @@ but inherits these *decisions*. Web implementation details live in `design/respo
 - Sheet drag-to-dismiss gesture (handle is currently visual only on web).
 - Swipe actions on rows (action sheet is the v1 pattern).
 - Offline/service worker - the PWA shell is install-only.
-- Tab scroll restoration restores before data loads, so on a slow fetch the browser clamps
-  to the skeleton height and deep positions in long lists are lost.

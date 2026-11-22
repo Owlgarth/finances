@@ -23,13 +23,10 @@
     "delete": "Delete",
     "deleteAria": "Delete transfer"
   },
-  "confirmDelete": {
-    "title": "Delete transfer",
-    "message": "Delete this transfer from \"{{from}}\" to \"{{to}}\"? Both sides will be removed."
-  },
   "toast": {
     "deleted": "Transfer deleted",
-    "deleteFailed": "Failed to delete transfer",
+    "undo": "Undo",
+    "deleteRejected": "Could not delete - the transfer is back in the list",
     "updated": "Transfer updated",
     "recorded": "Transfer recorded",
     "updateFailed": "Failed to update transfer",

@@ -20,6 +20,13 @@ export interface AppliedFilterChip {
   /** Removes this one filter (the def's clear() patch through the page's
    *  updateParams - a replace write). */
   onRemove: () => void
+  /** Present when this chip's body activates something OTHER than the
+   *  host's editor popover (the search chip focuses the page's search
+   *  input). Suppresses this chip's haspopup/expanded semantics -
+   *  focusing an input is not opening a dialog, and the un-suppressed
+   *  aria would lie to assistive tech - and routes the body click here
+   *  instead of onOpenEditor. Additive: absent = today's behavior. */
+  onBodyClick?: () => void
 }
 
 interface Props {
@@ -99,9 +106,9 @@ export default function AppliedFilters({ chips, onClearAll, inline, onOpenEditor
             ref={(el) => {
               bodyRefs.current[chip.id] = el
             }}
-            onClick={onOpenEditor ? () => onOpenEditor(chip.id) : undefined}
-            aria-haspopup={onOpenEditor ? 'dialog' : undefined}
-            aria-expanded={onOpenEditor ? openId === chip.id : undefined}
+            onClick={chip.onBodyClick ?? (onOpenEditor ? () => onOpenEditor(chip.id) : undefined)}
+            aria-haspopup={!chip.onBodyClick && onOpenEditor ? 'dialog' : undefined}
+            aria-expanded={!chip.onBodyClick && onOpenEditor ? openId === chip.id : undefined}
             className={`text-xs px-2 py-1 text-text ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
           >
             <span className="text-text-muted">{chip.label}:</span> {chip.summary}

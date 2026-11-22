@@ -48,6 +48,7 @@
     "budget": "Budget",
     "category": "Category",
     "amount": "Amount",
+    "search": "Search",
     "allBudgets": "All budgets",
     "allCategories": "All categories",
     "min": "Min",
@@ -89,14 +90,12 @@
   "rowActions": {
     "edit": "Edit",
     "copy": "Copy",
+    "duplicate": "Duplicate",
     "delete": "Delete"
   },
   "deleted": "Transaction deleted",
-  "deleteFailed": "Failed to delete",
-  "deleteDialog": {
-    "title": "Delete transaction",
-    "message": "Delete \"{{description}}\"?"
-  },
+  "undo": "Undo",
+  "deleteRejected": "Could not delete - the transaction is back in the list",
   "form": {
     "newTitle": "New transaction",
     "editTitle": "Edit transaction",

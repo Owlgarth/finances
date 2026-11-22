@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigationType } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Sidebar from './Sidebar'
@@ -37,26 +37,125 @@ function NoWorkspaceMessage() {
 }
 
 /**
- * Native-tab scroll memory: each route keeps its scroll position, so
- * switching bottom-nav tabs returns you where you left off instead of
- * carrying the previous page's offset. Mobile only — desktop scrolls <main>,
- * whose position React keeps across route swaps anyway.
+ * Phone scroll memory, POP-only: Back/Forward returns a view to its saved
+ * offset once the document is tall enough to hold it; every new navigation
+ * (tab switch, filter change, fresh visit) starts at the top. Keyed by
+ * pathname + search so each filtered view keeps its own place. While the
+ * document is still too short (skeleton height), the apply waits for it to
+ * grow (ResizeObserver on document.documentElement + window resize), giving
+ * up after 3s, on the first user scroll input (wheel/touchmove/keydown -
+ * the programmatic restore fires none of these), or on the next navigation.
+ * Mobile only - the 640-1023 band scrolls <main>
+ * (hooks/useMainScrollRestoration.ts) and the desktop window does not
+ * scroll.
  */
 function useMobileScrollRestoration(enabled: boolean) {
   const location = useLocation()
+  const navType = useNavigationType()
   const positions = useRef(new Map<string, number>())
+  // A deferred restore waiting for the document to grow. The save listener
+  // must not overwrite this key while the apply is pending (the interim
+  // top position and the apply's own scroll event would clobber it).
+  const pending = useRef<{ key: string; top: number } | null>(null)
 
+  const key = location.pathname + location.search
+
+  // Save continuously; passive so it never delays scrolling.
   useEffect(() => {
     if (!enabled) return
-    const save = () => positions.current.set(location.pathname, window.scrollY)
+    const save = () => {
+      if (pending.current?.key === key) return
+      positions.current.set(key, window.scrollY)
+    }
     window.addEventListener('scroll', save, { passive: true })
     return () => window.removeEventListener('scroll', save)
-  }, [enabled, location.pathname])
+  }, [enabled, key])
+
+  // Own browser scroll restoration while enabled: the browser's own async
+  // POP restore clamps to the skeleton height (the bug this hook fixes)
+  // and would race the deferred apply. Reverted on cleanup so the 640px
+  // crossing hands control back.
+  useEffect(() => {
+    if (!enabled) return
+    const previous = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    return () => {
+      window.history.scrollRestoration = previous
+    }
+  }, [enabled])
 
   useLayoutEffect(() => {
     if (!enabled) return
-    window.scrollTo(0, positions.current.get(location.pathname) ?? 0)
-  }, [enabled, location.pathname])
+    // Give-up condition: the next navigation. Any pending restore for
+    // another key is dead (layout effects flush before the passive
+    // effects below, so the arm never arms a stale pending).
+    if (pending.current && pending.current.key !== key) pending.current = null
+    // useNavigationType() reads POP for the initial load too - harmless:
+    // a fresh visit has no saved entry and falls through to the top.
+    const saved = navType === 'POP' ? positions.current.get(key) : undefined
+    if (saved !== undefined) {
+      const fits =
+        document.documentElement.scrollHeight - window.innerHeight >= saved
+      if (fits) {
+        window.scrollTo(0, saved)
+        return
+      }
+      // Document still too short (list not rendered yet): start at the
+      // top; the effect below applies the offset once it fits.
+      pending.current = { key, top: saved }
+      window.scrollTo(0, 0)
+      return
+    }
+    // PUSH, REPLACE, or a POP with no memory of this view: the previous
+    // page's offset must not bleed into the new one.
+    window.scrollTo(0, 0)
+  }, [enabled, key, navType])
+
+  // Deferred apply arm. Runs on the same commit as the layout effect
+  // above (layout effects flush first), so it sees a pending it just set.
+  useEffect(() => {
+    if (!enabled) return
+    const restore = pending.current
+    if (!restore || restore.key !== key) return
+
+    const fits = () =>
+      document.documentElement.scrollHeight - window.innerHeight >= restore.top
+    const cleanup = () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+      window.removeEventListener('resize', check)
+      window.removeEventListener('wheel', cancel)
+      window.removeEventListener('touchmove', cancel)
+      window.removeEventListener('keydown', cancel)
+    }
+    const apply = () => {
+      cleanup()
+      pending.current = null
+      window.scrollTo(0, restore.top)
+    }
+    const check = () => {
+      if (fits()) apply()
+    }
+    const cancel = () => {
+      cleanup()
+      pending.current = null
+    }
+    const timer = window.setTimeout(cancel, 3000)
+    const observer = new ResizeObserver(check)
+    // document.documentElement's box grows with the content: index.css
+    // sets no height on html/body (body: margin 0, min-width 320px,
+    // min-height 100vh) and MainLayout's min-h-screen wrapper only sets
+    // a floor, so html's auto height tracks the growing list. A viewport
+    // resize (rotation) can also unblock the apply, so re-check there
+    // too.
+    observer.observe(document.documentElement)
+    window.addEventListener('resize', check)
+    window.addEventListener('wheel', cancel, { passive: true })
+    window.addEventListener('touchmove', cancel, { passive: true })
+    window.addEventListener('keydown', cancel)
+    check()
+    return cleanup
+  }, [enabled, key])
 }
 
 export default function MainLayout({ children }: MainLayoutProps) {

@@ -14,6 +14,10 @@ interface PageHeaderProps {
   breadcrumb?: string
   /** Route path for the leading back affordance. Omit to hide the button. */
   backTo?: string
+  /** Back-navigation override. When provided the back button calls this
+      (e.g. navigate(-1), a POP) instead of pushing backTo; backTo still
+      gates whether the button renders. */
+  onBack?: () => void
   /** Page-level action buttons, right-aligned on the row. */
   actions?: ReactNode
   /** Phone-only account actions (search + profile icon buttons, hidden
@@ -37,7 +41,7 @@ const BACK_BUTTON_CLASS =
   'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   `${controlHeightClass} pointer-coarse:min-w-[44px]`
 
-export default function PageHeader({ title, breadcrumb, backTo, actions, showAccountActions }: PageHeaderProps) {
+export default function PageHeader({ title, breadcrumb, backTo, onBack, actions, showAccountActions }: PageHeaderProps) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
   const { open: openAccountMenu } = useAccountMenu()
@@ -48,7 +52,7 @@ export default function PageHeader({ title, breadcrumb, backTo, actions, showAcc
         {backTo && (
           <button
             type="button"
-            onClick={() => navigate(backTo)}
+            onClick={onBack ?? (() => navigate(backTo))}
             aria-label={t('pageHeader.back')}
             className={BACK_BUTTON_CLASS}
           >

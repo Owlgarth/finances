@@ -2,6 +2,9 @@
   "modal": {
     "close": "Закрити"
   },
+  "bottomSheet": {
+    "close": "Закрити"
+  },
   "pageHeader": {
     "search": "Пошук",
     "profile": "Профіль",

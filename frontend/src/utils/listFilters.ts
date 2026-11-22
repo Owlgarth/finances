@@ -23,11 +23,13 @@
 // Worked examples (the frontend has no test runner; docblock examples are
 // the contract - execute them against this module before landing):
 //   buildTransactionsFilters(lookups).map((d) => d.id)
-//     === ['date', 'account', 'type', 'currency', 'budget', 'category', 'amount']
+//     === ['date', 'search', 'account', 'type', 'currency', 'budget', 'category', 'amount']
+//   buildPlannedFilters(lookups).map((d) => d.id)
+//     === ['date', 'search', 'account', 'currency', 'budget', 'category', 'amount']
 //   Object.keys(clearAllFilters(buildTransactionsFilters(lookups))).sort()
 //     === ['account', 'amount_max', 'amount_min', 'budget', 'category',
-//           'currency', 'from', 'to', 'type']
-//   Object.keys(clearAllFilters(buildPlannedFilters(lookups))).length === 8
+//           'currency', 'from', 'search', 'to', 'type']
+//   Object.keys(clearAllFilters(buildPlannedFilters(lookups))).length === 9
 //   Object.keys(clearAllFilters(buildTransfersFilters(lookups))).sort()
 //     === ['account', 'from', 'to']
 //   budgetChangePatch([5], { category: [10, 11] }, cats(10 in budget 5, 11 in budget 6))
@@ -39,13 +41,17 @@ import { formatPeriodRange, formatQuickPickDate } from './format'
 import type { ParamPatch } from './params'
 import type { Account, Budget, Category } from '../types'
 
-export type FilterDefId = 'date' | 'account' | 'type' | 'currency' | 'budget' | 'category' | 'amount'
+export type FilterDefId = 'date' | 'search' | 'account' | 'type' | 'currency' | 'budget' | 'category' | 'amount'
 
 /** Editor body kind (the container-agnostic editor bodies shared with the
  *  later filter surfaces). 'single' is the one-active row editor (the
- *  Transfers account filter). Sort is NOT a registry def: the pages'
+ *  Transfers account filter). 'search' marks the free-text facet whose
+ *  editor is the page's ALWAYS-VISIBLE search input - it renders no
+ *  registry editor body, so hosts skip it when offering editor surfaces
+ *  (no sheet hub row, no Add-filter entry; the applied chip's body
+ *  focuses the input instead). Sort is NOT a registry def: the pages'
  *  SORT_OPTIONS feed a later sort row/menu instead. */
-export type FilterEditorKind = 'date' | 'multi' | 'amount' | 'single'
+export type FilterEditorKind = 'date' | 'multi' | 'amount' | 'single' | 'search'
 
 /** One filter facet, generic over the page's values/lookups shapes. */
 export interface FilterDef<V, L> {
@@ -79,8 +85,11 @@ export interface FilterDef<V, L> {
 }
 
 /** EFFECTIVE facet values (Transactions): the page's own derivations, not
- *  raw URLSearchParams - a latched default range/type list must count. */
+ *  raw URLSearchParams - a latched default range/type list must count.
+ *  search is the EFFECTIVE term (URL param ?? restored hint). */
 export interface TransactionsFilterValues {
+  /** Free-text facet: the remembered search (param ?? restored). */
+  search: string
   account: number[]
   type: string[]
   currency: string[]
@@ -92,9 +101,13 @@ export interface TransactionsFilterValues {
   dateTo: string
 }
 
-/** EFFECTIVE facet values (Planned; no type facet - status and search are
- *  not registry filters, they keep their own toolbar controls). */
+/** EFFECTIVE facet values (Planned; no type facet - status keeps its own
+ *  toolbar control. Search IS a registry filter here (the removable
+ *  chip); its editor is the always-visible search input, never a registry
+ *  editor body). */
 export interface PlannedFilterValues {
+  /** Free-text facet: the remembered search (param ?? restored). */
+  search: string
   account: number[]
   currency: string[]
   budget: number[]
@@ -184,6 +197,30 @@ function dateFilterDef<V extends { dateFrom: string; dateTo: string }, L>(labelK
   }
 }
 
+/** Search def shared by both search-bearing list pages (Transactions,
+ *  Planned; Transfers has no search param): the free-text facet whose
+ *  editor is the always-visible search input. The registry entry buys
+ *  the removable chip, the badge count, and Clear-all coverage; the
+ *  'search' editor kind keeps hosts from offering it a second editing
+ *  surface. clear() drops only the URL param - the PAGE must also drop
+ *  the remembered value and the restored hint (`search = param ??
+ *  restoredSearch` would otherwise re-apply the term on the next
+ *  render; that hazard lives in the page, not here). */
+function searchFilterDef<V extends { search: string }, L>(labelKey: string): FilterDef<V, L> {
+  return {
+    id: 'search',
+    paramKeys: ['search'],
+    labelKey,
+    editor: 'search',
+    // Free text never depends on workspace facets - always bindable. The
+    // editor kind (not this flag) is what keeps hosts from offering it.
+    available: true,
+    isActive: (v) => v.search !== '',
+    summarize: (v) => v.search,
+    clear: () => ({ search: null }),
+  }
+}
+
 /** Amount def shared by both list pages; only the label key differs. */
 function amountFilterDef<V extends { amountMin: string; amountMax: string }, L>(labelKey: string): FilterDef<V, L> {
   return {
@@ -221,6 +258,7 @@ export function buildTransactionsFilters(
 ): FilterDef<TransactionsFilterValues, TransactionsFilterLookups>[] {
   return [
     dateFilterDef<TransactionsFilterValues, TransactionsFilterLookups>('listFilters.dateLabel'),
+    searchFilterDef<TransactionsFilterValues, TransactionsFilterLookups>('listFilters.search'),
     {
       id: 'account',
       paramKeys: ['account'],
@@ -283,6 +321,9 @@ export function buildPlannedFilters(
 ): FilterDef<PlannedFilterValues, FilterLookups>[] {
   return [
     dateFilterDef<PlannedFilterValues, FilterLookups>('filters.plannedDate'),
+    // Shared-filter label through the transactions ns (the established
+    // cross-page home), ns-qualified for host resolution outside it.
+    searchFilterDef<PlannedFilterValues, FilterLookups>('transactions:listFilters.search'),
     {
       id: 'account',
       paramKeys: ['account'],
@@ -362,7 +403,7 @@ export function activeFilterCount<V, L>(filters: FilterDef<V, L>[], values: V, l
 }
 
 /** Union of every def's clear patch - key-for-key today's hand-written
- *  per-page clear patches (Transactions 9 keys, Planned 8, Transfers 3).
+ *  per-page clear patches (Transactions 10 keys, Planned 9, Transfers 3).
  *  All-null values mean createUpdateParams only deletes keys, so union
  *  order cannot affect the resulting URL. */
 export function clearAllFilters<V, L>(filters: FilterDef<V, L>[]): ParamPatch {

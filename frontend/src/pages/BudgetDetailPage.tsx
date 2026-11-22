@@ -8,7 +8,9 @@ import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
 import type { Bookmark as BookmarkModel } from '../types'
 import { useBookmarks } from '../hooks/useBookmarks'
+import { useIsTouch } from '../hooks/useBreakpoint'
 import { useEnabledCurrencies } from '../hooks/useDomain'
+import { useHorizontalStepDrag } from '../hooks/useHorizontalStepDrag'
 import { usePermissions } from '../hooks/usePermissions'
 import { formatAmount, subtractAmounts, sumAmounts } from '../utils/format'
 import { activeCurrencyCodes } from '../utils/currencies'
@@ -658,7 +660,11 @@ export default function BudgetDetailPage() {
   // BOTH branches: the direct jump to a listed period and the
   // materialize-next-period API call.
   const goToPeriod = async (dir: 1 | -1) => {
-    if (selectedIdx < 0 || isSavingPlan) return
+    // isPlanningNext is guarded here, not just on the next-chevron's
+    // disabled prop: a second step (a swipe or the PREV chevron) while the
+    // next period is materializing would race the in-flight currentPeriod
+    // call and land on the wrong period.
+    if (selectedIdx < 0 || isSavingPlan || isPlanningNext) return
     const apply = async () => {
       const target = ascPeriods[selectedIdx + dir]
       if (target) {
@@ -684,6 +690,31 @@ export default function BudgetDetailPage() {
     if (changedCount === 0) { exitEditMode(); return apply() }
     requestDiscard(t('detail.confirmCancelEdit.message', { count: changedCount }), () => { exitEditMode(); void apply() })
   }
+
+  // A horizontal drag on the phone content block (the sm:hidden
+  // summary-card + category-cards block below) steps the period through
+  // the SAME goToPeriod the header chevrons call, so the URL contract is
+  // untouched (writePeriodParam stays the only writer; the auto-pick and
+  // reconcile effects never write). Attached ONLY to that named
+  // non-scrollable region - never to the currency chip strip or the
+  // desktop ledger wrapper, which both scroll horizontally; every
+  // horizontally scrollable region on this page is a sibling OUTSIDE the
+  // attachment, so a drag on it never reaches this handler and it scrolls
+  // natively. The desktop ledger is the max-sm:hidden sibling at >=640,
+  // so a coarse-pointer tablet gets no page-swipe target by construction
+  // (its content IS the scrollable table; the chevrons remain its
+  // controls). pointerCapture is OFF: capture would retarget the cards'
+  // and Activity links' taps to the wrapper and break them. A swipe under
+  // dirty edit-plan drafts inherits goToPeriod's requestDiscard confirm -
+  // the same handler as the chevrons, intended. This page has no row
+  // swipes (those live on the Activity lists), so row and page swipes
+  // never share a screen.
+  const isCoarse = useIsTouch()
+  const periodStepDrag = useHorizontalStepDrag({
+    onStep: (dir) => { void goToPeriod(dir) },
+    enabled: isCoarse,
+    pointerCapture: false,
+  })
 
   // Save plan: validate before any request, then sequentially PUT only the
   // changed rows of the viewed currency - exact strings end to end (''
@@ -1214,8 +1245,10 @@ export default function BudgetDetailPage() {
 
         {/* Mobile: summary card, then grouped category cards. The old
             3-column cards and the totals card are superseded - the summary
-            card shows the same exact figures with ledger swatches. */}
-        <div className="sm:hidden space-y-2">
+            card shows the same exact figures with ledger swatches. Also
+            the period-swipe target: the only non-scrollable content region
+            on this page (see periodStepDrag above). */}
+        <div className="sm:hidden space-y-2 touch-pan-y" {...periodStepDrag}>
           {showCurrencyBand && !multiCurrency && (
             <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted py-0.5">
               {currencySwitcher}
