@@ -6,8 +6,8 @@ from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction as db_transaction
-from django.db.models import Count, F, Max, Q, Sum, Value
-from django.db.models.functions import Coalesce, Lower
+from django.db.models import Count, F, Max, Q, Sum, Value, Window
+from django.db.models.functions import Coalesce, Lower, RowNumber
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -526,6 +526,40 @@ class TransactionService:
         )
 
     @staticmethod
+    def _last_transactions_by_group(queryset) -> dict[tuple[str, str], dict]:
+        """Most recent transaction per (lowercase description, currency) group.
+
+        One window-function query: row_number() over partition by
+        Lower(description) + currency code, ordered date desc then id desc
+        (tiebreak: max id). Django disallows filtering on window
+        annotations, so rn=1 rows are kept in Python during evaluation -
+        the query count stays constant in the number of groups and in
+        `limit`. The scan covers the same workspace-scoped rows the
+        sibling queries in this endpoint already scan
+        (`_resolve_display_descriptions` pulls every description).
+        """
+        rows = queryset.annotate(
+            lower_desc=Lower('description'),
+            currency_code=F('currency__code'),
+            rn=Window(
+                expression=RowNumber(),
+                partition_by=[Lower('description'), F('currency__code')],
+                order_by=[F('date').desc(), F('id').desc()],
+            ),
+        ).values(
+            'lower_desc',
+            'currency_code',
+            'amount',
+            'category_id',
+            'category__budget_id',
+            'category__is_archived',
+            'account_id',
+            'account__is_archived',
+            'rn',
+        )
+        return {(r['lower_desc'], r['currency_code']): r for r in rows if r['rn'] == 1}
+
+    @staticmethod
     def frequent_descriptions(
         workspace_id: int,
         transaction_type: list | None = None,
@@ -533,7 +567,12 @@ class TransactionService:
     ) -> dict:
         """Return the most frequent transaction descriptions grouped by lowercase + currency.
 
-        The `description` field uses the most common original casing for each group.
+        The `description` field uses the most common original casing for each
+        group. Each item also carries last_category_id / last_budget_id /
+        last_account_id / last_amount from the group's most recent
+        transaction (max date, tiebreak max id): an archived category nulls
+        the category AND budget ids, an archived account nulls the account
+        id; budget state is never consulted.
         """
         queryset = TransactionService._build_filtered_queryset(
             workspace_id=workspace_id,
@@ -549,15 +588,27 @@ class TransactionService:
             .order_by('-count')[:limit]
         )
 
-        items = [
-            {
-                'description': display_map.get(r['lower_desc'], r['lower_desc']),
-                'count': r['count'],
-                'total': r['total'],
-                'currency': r['currency_code'],
-            }
-            for r in rows
-        ]
+        last_by_group = TransactionService._last_transactions_by_group(queryset)
+
+        items = []
+        for r in rows:
+            last = last_by_group.get((r['lower_desc'], r['currency_code']))
+            keep_category = last is not None and last['category_id'] is not None and not last['category__is_archived']
+            keep_account = last is not None and last['account_id'] is not None and not last['account__is_archived']
+            items.append(
+                {
+                    'description': display_map.get(r['lower_desc'], r['lower_desc']),
+                    'count': r['count'],
+                    'total': r['total'],
+                    'currency': r['currency_code'],
+                    # Archived category nulls BOTH ids; an archived account
+                    # nulls only its own. Budget state is never read here.
+                    'last_category_id': last['category_id'] if keep_category else None,
+                    'last_budget_id': last['category__budget_id'] if keep_category else None,
+                    'last_account_id': last['account_id'] if keep_account else None,
+                    'last_amount': last['amount'] if last is not None else None,
+                }
+            )
         return {'items': items}
 
     @staticmethod
