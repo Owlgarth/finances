@@ -22,6 +22,8 @@ import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
+import BudgetCategoryList from '../components/budgets/BudgetCategoryList'
+import BudgetSummaryCard from '../components/budgets/BudgetSummaryCard'
 import PeriodPicker from '../components/budgets/PeriodPicker'
 import PageHeader from '../components/layout/PageHeader'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
@@ -62,6 +64,11 @@ function loadStoredCurrencyView(budgetId: number): string | null {
  *  UI text). */
 const stripNumberClass = (isActive: boolean, summaryLoading: boolean): string =>
   `font-mono text-xs font-medium tabular-nums${isActive ? ' text-text' : ''}${summaryLoading ? ' animate-pulse' : ''}`
+
+/** Status of a budget category row: over = spent more than planned, near =
+ *  75% or more of plan without going over, else on track. Structural twin
+ *  of BudgetCategoryCardRow['status'] - no cross-file type import. */
+type CategoryStatus = 'over' | 'near' | 'onTrack'
 
 export default function BudgetDetailPage() {
   const { t } = useTranslation('budgets')
@@ -599,6 +606,43 @@ export default function BudgetDetailPage() {
   const totalRemainingNegative = totalRemaining.startsWith('-')
   const totalLabel = t('detail.total')
 
+  // Phone category cards: the table rows enriched with display-only status,
+  // spend ratio (bar width + attention ordering) and the Activity deep link
+  // for the viewed period. Persisted amounts stay exact strings;
+  // parseAmountNumber math is display-only and never sent back.
+  const phoneCards = rows.map((row) => {
+    const plannedNum = parseAmountNumber(row.planned) ?? 0
+    const actualNum = parseAmountNumber(row.actual) ?? 0
+    const status: CategoryStatus =
+      actualNum > plannedNum ? 'over' : plannedNum > 0 && actualNum / plannedNum >= 0.75 ? 'near' : 'onTrack'
+    return {
+      ...row,
+      status,
+      pct: plannedNum > 0 ? (actualNum / plannedNum) * 100 : 0,
+      // Frozen Activity filter params for the viewed period (the category
+      // param parses as a CSV list on the Activity side); a null
+      // selectedPeriod (transient auto-pick render) degrades to the
+      // category-only link rather than emitting from=undefined.
+      activityUrl: selectedPeriod
+        ? `/transactions?category=${row.category.id}&from=${selectedPeriod.start_date}&to=${selectedPeriod.end_date}`
+        : `/transactions?category=${row.category.id}`,
+    }
+  })
+  // Needs attention first: over-budget rows, then near-limit, percent
+  // descending inside each; On track keeps natural category order - the
+  // worst rows surface without scrolling.
+  const byPctDesc = (a: (typeof phoneCards)[number], b: (typeof phoneCards)[number]) => b.pct - a.pct
+  const phoneGroups = [
+    {
+      key: 'attention' as const,
+      rows: [
+        ...phoneCards.filter((r) => r.status === 'over').sort(byPctDesc),
+        ...phoneCards.filter((r) => r.status === 'near').sort(byPctDesc),
+      ],
+    },
+    { key: 'onTrack' as const, rows: phoneCards.filter((r) => r.status === 'onTrack') },
+  ]
+
   // Resolved in the body, not inside the JSX: the literal-string lint only
   // recognizes the unaliased t() callee, in attributes and children alike.
   const addLabel = tBookmarks('addLabel')
@@ -863,110 +907,30 @@ export default function BudgetDetailPage() {
           </table>
         </div>
 
-        {/* Mobile: card per category — full-width numbers so thousands stay legible. */}
+        {/* Mobile: summary card, then grouped category cards. The old
+            3-column cards and the totals card are superseded - the summary
+            card shows the same exact figures with ledger swatches. */}
         <div className="sm:hidden space-y-2">
           {showCurrencyBand && !multiCurrency && (
             <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted py-0.5">
               {currencySwitcher}
             </div>
           )}
-          {rows.map(({ category, planned, actual, remaining }) => {
-            const cellKey = `${category.id}:${activeCurrency}`
-            const isSelected = selectedCategory === category.id
-            return (
-              <div
-                key={category.id}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isSelected}
-                onClick={() => toggleSelected(category.id)}
-                onKeyDown={(e) => {
-                  // Only when the card itself is focused — Enter/Space inside the
-                  // planned editor must keep their native behavior.
-                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                    e.preventDefault()
-                    toggleSelected(category.id)
-                  }
-                }}
-                className={`border rounded-sm bg-surface cursor-pointer transition-colors ${isSelected ? 'border-border-focus' : 'border-border'}`}
-              >
-                <div className={`px-4 py-2 border-b text-sm font-medium text-text text-center truncate ${isSelected ? 'border-border-focus' : 'border-border'}`}>
-                  {category.name}
-                </div>
-                <div className="grid grid-cols-3 divide-x divide-border text-center">
-                  <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colPlanned')}</div>
-                    {editingCell === cellKey ? (
-                      <div className="flex flex-col items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        {/* Same as the desktop cell: text so comma-decimal
-                            entry reaches saveCell's parser intact. */}
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={cellValue}
-                          onChange={(e) => setCellValue(e.target.value)}
-                          className="w-full bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-base text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden"
-                          autoFocus
-                        />
-                        <div className="flex items-center gap-5">
-                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={16} /></button>
-                          <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={16} /></button>
-                        </div>
-                      </div>
-                    ) : canEditPlan ? (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey); setCellValue(planned) }}
-                        className="w-full min-h-[36px] font-mono text-sm text-planned hover:text-primary truncate touch-hit"
-                      >
-                        {formatAmount(planned)}
-                      </button>
-                    ) : (
-                      <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-planned truncate">
-                        {formatAmount(planned)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colActual')}</div>
-                    <div className="min-h-[36px] flex items-center justify-center font-mono text-sm text-actual truncate">
-                      {formatAmount(actual)}
-                    </div>
-                  </div>
-                  <div className="px-2 py-2 min-w-0">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colRemaining')}</div>
-                    <div className={`min-h-[36px] flex items-center justify-center font-mono text-sm truncate ${(parseAmountNumber(remaining) ?? 0) < 0 ? 'text-negative' : 'text-remaining'}`}>
-                      {formatAmount(remaining)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
           {rows.length > 0 && (
-            /* Totals card: header strip + the same 3-column grid the row
-               cards use. space-y-2 on the parent supplies the 8px gap. */
-            <div className="border border-border rounded-sm bg-background">
-              <div className="px-4 py-1.5 border-b border-border text-center text-[9px] font-mono uppercase tracking-widest text-text-muted">
-                {totalLabel}
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-border text-center">
-                <div className="px-2 py-2 min-w-0">
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colPlanned')}</div>
-                  <div className="font-mono text-sm font-medium text-planned truncate">{formatAmount(totalPlanned)}</div>
-                </div>
-                <div className="px-2 py-2 min-w-0">
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colActual')}</div>
-                  <div className="font-mono text-sm font-medium text-actual truncate">{formatAmount(totalActual)}</div>
-                </div>
-                <div className="px-2 py-2 min-w-0">
-                  <div className="text-[9px] font-mono uppercase tracking-widest text-text-muted mb-1">{t('detail.colRemaining')}</div>
-                  <div className={`font-mono text-sm font-medium truncate ${totalRemainingNegative ? 'text-negative' : 'text-remaining'}`}>
-                    {formatAmount(totalRemaining)}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <BudgetSummaryCard planned={totalPlanned} actual={totalActual} remaining={totalRemaining} />
           )}
+          <BudgetCategoryList
+            groups={phoneGroups}
+            selectedCategory={selectedCategory}
+            toggleSelected={toggleSelected}
+            canEditPlan={canEditPlan}
+            activeCurrency={activeCurrency}
+            editingCell={editingCell}
+            setEditingCell={setEditingCell}
+            cellValue={cellValue}
+            setCellValue={setCellValue}
+            saveCell={saveCell}
+          />
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">
               {t('detail.noCategories')}
