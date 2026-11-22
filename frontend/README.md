@@ -52,13 +52,13 @@ frontend/
 │   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/account-menu-sheet rows)
 │   │   ├── useWorkspaceSettings.ts  # Per-workspace page defaults - useWorkspaceSettings + useUpdateWorkspaceSettings (the member-settings blob query + delta PATCH)
 │   │   ├── usePermissions.ts        # Role-based permission checks
-│   │   ├── useTransactionForm.ts    # Transaction form state machine (create/copy/receipt prefill): field state, session seeding, derived options, validation, save mutation - host-agnostic (the /new page and the transactions create panel both drive it)
+│   │   ├── useTransactionForm.ts    # Transaction form state machine (create/copy/receipt prefill): field state, session seeding, derived options, validation, save mutation - host-agnostic (the /new page and the transactions create panel both drive it); a suggestion pick prefills the untouched category/budget/account fields from the suggestion's last-used values and arms a tap-to-fill "Last: X" amount hint; an optional draft controller + restored values thread /new draft persistence through the same seams as the initial seeds (reseedNonce forces a fresh create-mode seed for the draft notice's Discard)
 │   │   ├── useTransactionFieldSave.ts # One-field saves on a loaded transaction row: full-replace PUT assembled from the row (`Omit<Partial<TransactionInput>, 'items'>` patch), rejects without toasting (the editor owns error display), invalidates the form's three keys
 │   │   ├── useTransferFieldSave.ts  # One-field saves on a loaded transfer row: full-replace PUT assembled from the row (`Partial<TransferInput>` patch), rejects without toasting (the editor owns error display), invalidates the form's three keys
-│   │   ├── useTransferForm.ts       # Transfer form state machine (create/repeat): last-used pair, cross-currency implied rate, validation, save - driven by the /new page and the transfers list's create panel
+│   │   ├── useTransferForm.ts       # Transfer form state machine (create/repeat): last-used pair, cross-currency implied rate, validation, save - driven by the /new page and the transfers list's create panel; /new draft persistence via the same optional draft controller + reseedNonce seams
 │   │   ├── useActivityScope.ts      # Shared Activity scope chrome for the three list routes - the "Activity" title plus the scope breadcrumb (exact-calendar-month label + sole filtered account name, joined " / "), derived from the URL like the pages' export handlers
 │   │   ├── useListboxPanel.ts       # Shared Select/MultiSelect/PeriodPicker panel state + keyboard nav
-│   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (workspace selector dropdown + account menu sheet)
+│   │   ├── useWorkspaceSwitch.ts    # Shared workspace-switch handler (workspace selector dropdown + account menu sheet); a successful switch clears the old workspace's /new draft (a failed one leaves it in place)
 │   │   ├── useMediaQuery.ts         # Responsive breakpoint detection
 │   │   ├── useBreakpoint.ts         # Device-tier truth (isMobile/isTablet/isDesktop/isWide, Tailwind-snapped; isWide overlaps isDesktop from 1280px - responsive.md's tier table predates it, the hook's comment is the interim contract) + useIsTouch (pointer: coarse)
 │   │   ├── useKeyboardInset.ts      # On-screen keyboard overlap via visualViewport (iOS never resizes the layout viewport) - lifts BottomSheet and FormPage's sticky footer
@@ -73,7 +73,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), listFilters (the Activity lists' filter registry - one ordered def list per page over the unchanged URL param names; drives badge counts, Clear, chips, the sheet hub and the Add-filter menu), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), listFilters (the Activity lists' filter registry - one ordered def list per page over the unchanged URL param names; drives badge counts, Clear, chips, the sheet hub and the Add-filter menu), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference), formDraft (/new draft persistence: `owlgarth_formdraft_<user>_<workspace>` localStorage keys, 24h expiry, debounced writes flushed on unmount, a generation counter that aborts writes racing a logout/workspace-switch clear)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── i18next.config.ts        # i18next-cli config (i18n:extract; locales list)
 ├── package.json
@@ -98,7 +98,7 @@ routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 
 | Path | Component | Description |
 |------|-----------|-------------|
-| `/login`, `/register` | Login, Register | Auth; registration picks a currency set (`CurrencySetField` on the pre-auth curated list; first = workspace primary) + optional sample data |
+| `/login`, `/register` | Login, Register | Auth; registration picks a currency set (`CurrencySetField` on the pre-auth curated list; first = workspace primary) + optional sample data; a `/login` visit bounced from a protected route carries the destination in router state (validated to an in-app path, never a URL param) and returns the user there after sign-in - direct visits land on `/` |
 | `/verify-email` | VerifyEmailPage | Public; consumes the email-verification `?token=` link (verifying/success/error states, plus a resend form); refreshes the logged-in user only when a session already exists |
 | `/confirm-email-change` | ConfirmEmailChangePage | Consumes the email-change `?token=` link; requires auth - the token is validated against the logged-in user's ID, so a fresh session lands on login and must re-click the link |
 | `/reconsent` | ReConsentPage | Requires auth; consent gate shown when terms/privacy were updated - states which document is outdated and requires accepting both before proceeding |
@@ -115,7 +115,7 @@ routes, auth/legal routes and a 404 catch-all. Every page opens with the shared
 | `/planned` | Planned | Planned transactions with a "Planned \| Recurring" view switch (`?view=` URL param, default planned; below 640px the segmented row hides and a phone-only recurring-rules icon button in the page header toggles the same param, labeled with the active-rule count); the recurring view lists active and paused rules (schedule + next-occurrence meta line, pause/resume, delete dialog offering "Also delete its N pending planned transactions"); planned rows carry a Recurring badge when a rule materialized them, and pending rows without a rule offer "Make recurring" (prefills the rule form and adopts the row as its first occurrence - no duplicate row); the planned view opens on the member's saved view defaults (personal, per workspace; explicit or deep-linked date params always win) or, with none saved, focused on the current calendar month - the default is materialized into the URL as `from`/`to` (replace, no history entry, so the focused view is shareable), partial ranges pass through, and clearing both params is an explicit All time that never re-defaults within the session (a fresh mount re-initializes); a month stepper (‹ October 2026 ›; chevrons only while the range is an exact calendar month) above the status control is always present (planned view only), and an empty month with no other filters gets a month-aware empty state with a "Show all dates" action; list features mirror Transactions (the same phone filter sheet and 640+ chips toolbar, totals strip, remembered search, "Save as default", "Export view" - planned view only; the recurring view has no filter UI) |
 | `/transfers` | TransfersPage | Transfer history with account (either side, single-select) + date filters in the URL (opens on the saved date-range default, personal per workspace; the "Save as default" action lives in the 640+ "Save view" menu - the page header keeps only New - and in the phone filter sheet's save row, whose hub offers date + account rows only); rows open the transfer record (full page below 1024px, the list's side panel at 1024px+ - the selected row carries the reserved-border highlight and `aria-current`; fine-pointer hover rows keep Repeat/Delete shortcuts for writers); creation below 1024px navigates to `/new?type=transfer` (carrying a single account filter), 1024px+ sets `?new=transfer`, opening the in-flow create panel in SplitView's panel slot (create wins the panel slot over a selected record); part of the Activity scope - the Activity tab and tab row light on it, and it is also reached via the Accounts "View all transfers" link or the command palette |
 | `/transfers/:id` | TransferRecordPage / TransfersPage | A single transfer's record: a full page below 1024px, the side panel beside the list at 1024px+ (one route; the element branches on tier). Summary (description, From → To, amounts - a second line when cross-currency) + one-field edit-in-place rows (date, description, sent amount, received amount when cross-currency, From/To accounts - the account rows are also LinkedRows to the account pages), footer Repeat (to `/new?type=transfer&copy_transfer=<id>`) and Delete-with-confirm (the full-page host returns to the list with replace); foreign/deleted/garbage ids render a not-found state, and rows stay disabled for viewers and while a save is in flight |
-| `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=`, `?copy=` (transaction copy) and `?copy_transfer=` (transfer repeat - pair + description prefilled, amounts and date cleared), read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox, account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
+| `/new` | NewTransactionPage | Full-page create flow for transactions and transfers (FormPage shell; the URL seeds `?type=`, `?account=`, `?copy=` (transaction copy) and `?copy_transfer=` (transfer repeat - pair + description prefilled, amounts and date cleared), read once at mount): a three-segment type control (Expense / Income / Transfer) with the amount and date rows shared across types - switching type keeps both - then description combobox (a suggestion pick prefills the untouched category/budget/account fields from its last-used values and offers the last amount as a tap-to-fill "Last: X" hint), account + category, Budget row (multi-budget workspaces) and one "More details" disclosure (note, items, receipt scan, other-currency, balance-adjustment switch) in the G5.1 field order; scan-receipt header action (`?scan=1` app-shortcut deep link focuses it once usable, silently degrading when it never becomes usable); unsaved scalar values draft to localStorage per user + workspace (24-hour expiry; the key waits for the workspace so the first seeding pass consumes the restore) and reappear with a notice + Discard - dormant under `?copy=`/`?copy_transfer=`, the receipt file/parse state/line items never drafted, and logout or a workspace switch clears them; sticky footer with "Save and add another" + "Save transaction" ("Save transfer" in transfer mode); closing with unsaved changes asks to confirm; viewers are redirected to `/` |
 | `/members` | WorkspaceMembersPage | Member management |
 | `/bookmarks` | BookmarksPage | Manage personal bookmarks: chevron reorder, sidebar-visibility switch, archive (with restore), edit, delete; the header's cap select sets how many entries render in the sidebar/account menu sheet (3/5/8/All); no sidebar slot - entry via the Manage row of the sidebar bookmarks section or the account menu sheet's; creation happens on the source pages (budget detail header, Transactions/Planned filter surfaces - the phone sheet or the 640+ toolbar); the budget detail header's button edits the matching non-archived bookmark (viewed budget+currency) when one exists, offering create otherwise |
 | `/settings` | ProfilePage | Profile, preferences, data export/import; muted app-version line below the card (shown on every tab, from `VITE_APP_VERSION`) |
@@ -337,14 +337,22 @@ value - the `/new` page and the transactions create panel both host it; optional
 account - "No account" is first-class, adjustments excepted - plus an
 own-currency select that locks to the account's when one is set; description
 autocomplete over frequent descriptions of the picked type, applied only on
-explicit Enter/click; the disclosure opens pre-expanded when the seeded
+explicit Enter/click - the pick also prefills the category/budget and account
+fields the user has not touched this session (suggestion last-used values; an
+explicit Select pick guards the field against later overwrites, and ids missing
+from the loaded options - archived, other-budget - are skipped) and shows the
+group's last amount as a "Last: X" hint under the amount field, filled only on
+tap; the disclosure
+opens pre-expanded when the seeded
 transaction carries values; a receipt scan (the `/new` header action) seeds
 the form through the hook: own currency from the parsed code when it is
 enabled, the matching account auto-selected - preferring the per-currency
 default), `AmountField` (amount input with a decorative
 type-sign prefix and a trailing currency-code button/picker that locks to the
 account's currency when one is set; the transfer flavor omits the whole
-currency group - the currency comes from the From account), `TransferFormFields`
+currency group - the currency comes from the From account; an optional `hint`
+prop renders a caller-owned row under the error line - the suggestion
+Last-amount button), `TransferFormFields`
 (the transfer form body: From/To selects plus a More-details disclosure with
 the description, the cross-currency received amount and the implied-rate
 line - the shared amount/date rows live in the host), `TransactionsTable`
@@ -401,6 +409,15 @@ interface AuthContextType {
   logout: () => void;
 }
 ```
+
+`login`/`verify2FA` never navigate: post-sign-in routing is owned by the Login page,
+whose already-authenticated guard returns the user to the protected route that
+bounced them (carried in router state; direct visits land on `/`). The consent
+check still runs inside both - reconsent redirects from `checkConsentStatus`
+itself, since it is mandatory before any page. `logout` clears every `/new` form
+draft belonging to the user (`removeDraftsForUser` in `utils/formDraft`, whose
+generation bump also aborts any pending draft write) before wiping tokens and the
+query cache.
 
 ### WorkspaceContext
 
