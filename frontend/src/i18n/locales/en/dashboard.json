@@ -1,10 +1,29 @@
 {
   "title": "Dashboard",
   "viewAll": "View all →",
-  "budgetsLink": "Manage budgets and category plans →",
   "balances": {
     "title": "Accounts",
-    "empty": "No accounts."
+    "empty": "No accounts.",
+    "emptyAction": "Add an account →",
+    "total": "Total"
+  },
+  "budget": {
+    "title": "Budget",
+    "empty": "No budget yet.",
+    "emptyAction": "Create a budget →",
+    "historyLink": "Budget history →",
+    "spentOf": "{{spent}} of {{planned}}",
+    "of": "of",
+    "attention": "Needs attention",
+    "allOnTrack": "All categories are on track.",
+    "customCadence": "Custom-cadence budget - open Budget history for its periods.",
+    "statusOver": "Over",
+    "statusNearLimit": "Near limit"
+  },
+  "upcoming": {
+    "title": "Upcoming",
+    "empty": "Nothing due in the next 14 days.",
+    "emptyAction": "Add a planned item →"
   },
   "recent": {
     "title": "Recent activity",

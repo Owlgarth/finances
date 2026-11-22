@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import PeriodCard from '../components/budgets/PeriodCard'
+import BudgetInsights from '../components/dashboard/BudgetInsights'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import PageHeader from '../components/layout/PageHeader'
 import { primaryButtonClass } from '../components/common/formStyles'
@@ -40,8 +41,11 @@ function groupPeriodsByYear(periods: Period[]): PeriodGroup[] {
  * Cards deep-link into the budget detail page via ?period=<id>. Add/edit/delete
  * management exists only for custom-cadence budgets (add button) and custom
  * periods (card icons); PeriodFormModal owns add/edit invalidation, this page
- * owns delete invalidation. Zero effects by construction - modal/dialog
- * state is event-handler-only, so the set-state-in-effect baseline is safe.
+ * owns delete invalidation. Below the grid sits the budget's history data
+ * view (BudgetInsights: planned-versus-spent charts scoped to this budget);
+ * it renders through the list's loading/empty states too, owning its own
+ * skeletons. Zero effects by construction - modal/dialog state is
+ * event-handler-only, so the set-state-in-effect baseline is safe.
  */
 export default function BudgetPeriodsPage() {
   const { t } = useTranslation('budgets')
@@ -160,6 +164,10 @@ export default function BudgetPeriodsPage() {
           ))}
         </div>
       )}
+
+      {/* Budget history data view (moved off Home): the planned-versus-spent
+          charts live below the period list, scoped to this budget. */}
+      <BudgetInsights budgetId={budgetId} />
 
       {/* Mount-per-use: the conditional render IS the open/close mechanism;
           the key (mode + period id + nonce) forces a fresh remount every

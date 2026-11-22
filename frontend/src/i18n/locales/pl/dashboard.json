@@ -1,10 +1,29 @@
 {
   "title": "Pulpit",
   "viewAll": "Zobacz wszystkie →",
-  "budgetsLink": "Zarządzaj budżetami i planami kategorii →",
   "balances": {
     "title": "Konta",
-    "empty": "Brak kont."
+    "empty": "Brak kont.",
+    "emptyAction": "Dodaj konto →",
+    "total": "Łącznie"
+  },
+  "budget": {
+    "title": "Budżet",
+    "empty": "Brak budżetu.",
+    "emptyAction": "Utwórz budżet →",
+    "historyLink": "Historia budżetu →",
+    "spentOf": "{{spent}} z {{planned}}",
+    "of": "z",
+    "attention": "Wymaga uwagi",
+    "allOnTrack": "Wszystkie kategorie w planie.",
+    "customCadence": "Budżet z własnymi okresami - otwórz historię budżetu.",
+    "statusOver": "Ponad plan",
+    "statusNearLimit": "Blisko limitu"
+  },
+  "upcoming": {
+    "title": "Nadchodzące",
+    "empty": "Brak pozycji na najbliższe 14 dni.",
+    "emptyAction": "Dodaj zaplanowaną pozycję →"
   },
   "recent": {
     "title": "Ostatnia aktywność",
