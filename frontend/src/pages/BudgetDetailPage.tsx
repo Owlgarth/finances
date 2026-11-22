@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Check, Tags, Trash2, X } from 'lucide-react'
+import { Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Tags, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../api/client'
 import type { Period } from '../types'
@@ -33,6 +33,20 @@ function nextDayIso(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)
   const next = new Date(y, m - 1, d + 1)
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+}
+
+/** Draft key: one planned figure per category and currency. */
+const planKey = (categoryId: number, currencyCode: string) => `${categoryId}:${currencyCode}`
+
+/** Canonical compare form for changed-row detection: the wire shape with
+ *  trailing fraction zeros stripped, so a retyped whole number ('150')
+ *  equals its loaded form ('150.00') and cosmetic retypes fire no PUT.
+ *  '' is the clear gesture - it compares as '0', the API's no-plan value.
+ *  null = unparseable draft (counts as changed; Save blocks on it). */
+const canonicalAmount = (raw: string): string | null => {
+  const normalized = raw === '' ? '0' : normalizeAmountInput(raw)
+  if (normalized === null) return null
+  return normalized.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
 }
 
 /** The period nearest today from a newest-first sorted list: the newest
@@ -227,10 +241,9 @@ export default function BudgetDetailPage() {
       { replace: true },
     )
   }
-  const selectPeriod = (id: number) => {
-    setPeriodId(id)
-    writePeriodParam(id)
-  }
+  // selectPeriod lives with the other switch handlers below the edit-plan
+  // derivation: its unsaved-changes guard reads that state, and this file
+  // keeps every callee declared before its callers.
 
   // Zero enabled currencies (shouldn't happen) - the fallback placeholder
   // can't pose as a real code; the switcher band stays hidden while the
@@ -247,16 +260,22 @@ export default function BudgetDetailPage() {
     onError: (error) => toast.error(getApiErrorMessage(error, t('detail.addCategoryFailed'))),
   })
 
-  const setAmount = useMutation({
-    mutationFn: ({ categoryId, amount, currencyCode }: { categoryId: number; amount: string; currencyCode: string }) =>
-      budgetsApi.setCategoryBudget(budgetId, periodId!, { category_id: categoryId, currency_code: currencyCode, amount }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId, periodId] }),
-    onError: (error) => toast.error(getApiErrorMessage(error, t('detail.setAmountFailed'))),
-  })
-
-  // Editing key: `${categoryId}:${currencyCode}` — one editable planned cell per currency.
-  const [editingCell, setEditingCell] = useState<string | null>(null)
-  const [cellValue, setCellValue] = useState('')
+  // Edit-plan mode: the page owns every piece of edit state; the category
+  // list and the desktop table only render what they are given. Sits above
+  // the [budgetId] reset effect because that effect clears it.
+  const [editOpen, setEditOpen] = useState(false)
+  // Raw draft strings keyed by `${categoryId}:${currencyCode}`. Seeded once
+  // at edit-mode entry from the loaded planned values of the viewed
+  // currency; a key present = that row renders an input. The value type
+  // admits undefined so lookups can be compared against it (a missing key
+  // IS "no input"); nothing ever stores undefined.
+  const [planDrafts, setPlanDrafts] = useState<Record<string, string | undefined>>({})
+  // Server error per row key, shown inline under a failed row's input.
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
+  const [isSavingPlan, setIsSavingPlan] = useState(false)
+  // The deferred action behind the discard-changes confirm: either a plain
+  // exit (Cancel clicked) or exit-then-switch (period/currency change).
+  const [discardConfirm, setDiscardConfirm] = useState<{ message: string; proceed: () => void } | null>(null)
 
   // Row/card highlight — click toggles it. Besides the visual "where was I
   // looking" marker, the selected category is the target of the merge flow.
@@ -348,28 +367,9 @@ export default function BudgetDetailPage() {
   const hasNext = selectedIdx >= 0 && (selectedIdx < ascPeriods.length - 1 || canPlanAhead)
   const [isPlanningNext, setIsPlanningNext] = useState(false)
 
-  const goToPeriod = async (dir: 1 | -1) => {
-    if (selectedIdx < 0) return
-    const target = ascPeriods[selectedIdx + dir]
-    if (target) {
-      setPeriodId(target.id)
-      writePeriodParam(target.id)
-      return
-    }
-    if (dir === 1 && canPlanAhead && selectedPeriod) {
-      setIsPlanningNext(true)
-      try {
-        const next = await budgetsApi.currentPeriod(budgetId, nextDayIso(selectedPeriod.end_date))
-        await queryClient.invalidateQueries({ queryKey: ['periods', budgetId] })
-        setPeriodId(next.id)
-        writePeriodParam(next.id)
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, t('detail.openNextFailed')))
-      } finally {
-        setIsPlanningNext(false)
-      }
-    }
-  }
+  // goToPeriod lives with the other switch handlers below the edit-plan
+  // derivation (same unsaved-changes guard); isPlanningNext state stays
+  // here - the chevrons' disabled logic below reads it.
 
   const items = useMemo(() => summary?.items ?? [], [summary])
 
@@ -427,6 +427,12 @@ export default function BudgetDetailPage() {
       return prev != null && allPeriodsRef.current.some((p) => p.id === prev) ? prev : null
     })
     setSelectedCategory(null)
+    // Edit mode is per-budget-session state; a draft map from the previous
+    // budget must never survive the navigation. Same effect, zero new
+    // set-state-in-effect cost (the rule flags once per effect).
+    setEditOpen(false)
+    setPlanDrafts({})
+    setRowErrors({})
   }, [budgetId])
 
   // Currency column groups: the budget's configured currencies in stored
@@ -451,29 +457,190 @@ export default function BudgetDetailPage() {
   const currencyIdx = viewCurrency ? Math.max(0, activeCurrencies.indexOf(viewCurrency)) : 0
   const activeCurrency = activeCurrencies[currencyIdx]
 
-  // Same editor-close rule from both switch paths (strip chips and keyboard
-  // cycling): never leave a planned-amount editor open across a currency
-  // change. Focus stays on the invoking control - no restoration logic.
+  // Rows: one per active category, with planned/actual/remaining for the
+  // currency currently shown. Sits above the switch handlers and the
+  // edit-plan derivation, both of which read it.
+  const rows = categories
+    .filter((c) => !c.is_archived)
+    .map((c) => {
+      const item = items.find((i) => i.category_id === c.id && i.currency_code === activeCurrency)
+      return {
+        category: c,
+        planned: item?.planned ?? '0',
+        actual: item?.actual ?? '0',
+        remaining: item?.remaining ?? '0',
+      }
+    })
+
+  // Rows whose draft differs from the loaded planned value (normalized
+  // compare; an invalid draft counts as changed). Order follows rows, so
+  // the sequential save and its per-row outcomes are deterministic.
+  const changedRows = rows.filter(({ category, planned }) => {
+    const draft = planDrafts[planKey(category.id, activeCurrency)]
+    if (draft === undefined) return false
+    const a = canonicalAmount(draft)
+    const b = canonicalAmount(planned)
+    return a === null || b === null ? draft !== planned : a !== b
+  })
+  const changedCount = changedRows.length
+  // A non-empty draft that cannot normalize blocks Save (shared validation
+  // toast, same behavior the old single-cell editor had).
+  const hasInvalidDraft = rows.some(({ category }) => {
+    const draft = planDrafts[planKey(category.id, activeCurrency)]
+    return draft !== undefined && draft !== '' && normalizeAmountInput(draft) === null
+  })
+
+  const exitEditMode = () => {
+    setEditOpen(false)
+    setPlanDrafts({})
+    setRowErrors({})
+  }
+
+  // Entry is an event handler (the header button), never an effect: the
+  // drafts snapshot the planned values as loaded at click time. Rows added
+  // mid-session (Manage categories) have no draft and stay read-only until
+  // the next entry - the inputs render only for keys present in the map.
+  const enterEditMode = () => {
+    setPlanDrafts(Object.fromEntries(rows.map(({ category, planned }) => [planKey(category.id, activeCurrency), planned])))
+    setRowErrors({})
+    setEditOpen(true)
+  }
+
+  // One confirm dialog, two uses: Cancel-with-changes (discards and exits)
+  // and a period/currency switch while dirty (discards, exits, proceeds).
+  const requestDiscard = (message: string, proceed: () => void) => setDiscardConfirm({ message, proceed })
+
+  // Setting a draft clears any stale server error on that row.
+  const onDraftChange = (key: string, value: string) => {
+    setPlanDrafts((prev) => ({ ...prev, [key]: value }))
+    setRowErrors((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  // Currency switch with an unsaved-changes guard: a dirty switch that
+  // exited silently would destroy typed drafts with no trace, while a clean
+  // switch has nothing to lose - so clean switches exit edit mode without
+  // interruption and dirty ones ask via the discard dialog. Covers every
+  // entry point (strip chips, keyboard cycling) because they all route
+  // through here. Focus stays on the invoking control - no restoration.
   const selectCurrency = (code: string) => {
-    setViewCurrency(code)
-    // Remember the switch so the budget re-opens on this currency next visit.
-    localStorage.setItem(currencyViewKey(budgetId), code)
-    setEditingCell(null)
+    if (isSavingPlan) return
+    const apply = () => {
+      setViewCurrency(code)
+      // Remember the switch so the budget re-opens on this currency next visit.
+      localStorage.setItem(currencyViewKey(budgetId), code)
+    }
+    if (!editOpen) return apply()
+    if (changedCount === 0) { exitEditMode(); return apply() }
+    requestDiscard(t('detail.confirmCancelEdit.message', { count: changedCount }), () => { exitEditMode(); apply() })
   }
   const goToCurrency = (dir: 1 | -1) => {
     const len = activeCurrencies.length
     selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
   }
 
-  // Save the planned-amount cell editor: an empty draft clears the budget
-  // (the '0' the API stores for "no plan"), a typed one must normalize to
-  // the wire's dot-decimal shape - on failure the editor stays open with
-  // the draft intact so the user can fix it instead of losing it.
-  const saveCell = (categoryId: number, raw: string) => {
-    const amount = raw === '' ? '0' : normalizeAmountInput(raw)
-    if (amount === null) return toast.error(tCommon('validation.amountInvalid'))
-    setAmount.mutate({ categoryId, amount, currencyCode: activeCurrency })
-    setEditingCell(null)
+  // Period switch (picker selection) with the same unsaved-changes guard.
+  // The URL write still happens only from this handler (after any confirm),
+  // never from an effect.
+  const selectPeriod = (id: number) => {
+    if (isSavingPlan) return
+    const apply = () => {
+      setPeriodId(id)
+      writePeriodParam(id)
+    }
+    if (!editOpen) return apply()
+    if (changedCount === 0) { exitEditMode(); return apply() }
+    requestDiscard(t('detail.confirmCancelEdit.message', { count: changedCount }), () => { exitEditMode(); apply() })
+  }
+
+  // Chronological stepper (header chevrons), same guard wrapped around
+  // BOTH branches: the direct jump to a listed period and the
+  // materialize-next-period API call.
+  const goToPeriod = async (dir: 1 | -1) => {
+    if (selectedIdx < 0 || isSavingPlan) return
+    const apply = async () => {
+      const target = ascPeriods[selectedIdx + dir]
+      if (target) {
+        setPeriodId(target.id)
+        writePeriodParam(target.id)
+        return
+      }
+      if (dir === 1 && canPlanAhead && selectedPeriod) {
+        setIsPlanningNext(true)
+        try {
+          const next = await budgetsApi.currentPeriod(budgetId, nextDayIso(selectedPeriod.end_date))
+          await queryClient.invalidateQueries({ queryKey: ['periods', budgetId] })
+          setPeriodId(next.id)
+          writePeriodParam(next.id)
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, t('detail.openNextFailed')))
+        } finally {
+          setIsPlanningNext(false)
+        }
+      }
+    }
+    if (!editOpen) return apply()
+    if (changedCount === 0) { exitEditMode(); return apply() }
+    requestDiscard(t('detail.confirmCancelEdit.message', { count: changedCount }), () => { exitEditMode(); void apply() })
+  }
+
+  // Save plan: validate before any request, then sequentially PUT only the
+  // changed rows of the viewed currency - exact strings end to end (''
+  // sends '0', the API's no-plan value; a typed draft sends its normalized
+  // string, never a float). Partial failure keeps going: succeeded rows
+  // close their inputs, failed rows keep their draft and gain the server
+  // error inline, and exactly one toast carries the failed count.
+  const savePlan = async () => {
+    if (hasInvalidDraft) return toast.error(tCommon('validation.amountInvalid'))
+    setIsSavingPlan(true)
+    const failed: { key: string; message: string }[] = []
+    const savedKeys: string[] = []
+    for (const { category } of changedRows) {
+      const key = planKey(category.id, activeCurrency)
+      const draft = planDrafts[key] ?? ''
+      const amount = draft === '' ? '0' : normalizeAmountInput(draft)!
+      try {
+        await budgetsApi.setCategoryBudget(budgetId, periodId!, {
+          category_id: category.id,
+          currency_code: activeCurrency,
+          amount,
+        })
+        savedKeys.push(key)
+      } catch (error) {
+        // One inline error per failed row; the toast below fires once.
+        failed.push({ key, message: getApiErrorMessage(error, t('detail.setAmountFailed')) })
+      }
+    }
+    // Succeeded rows exit edit mode (their key leaves the drafts map, so
+    // the input closes and the refreshed planned value renders); failed
+    // rows keep their draft and gain the server error under the input.
+    if (savedKeys.length > 0) {
+      setPlanDrafts((prev) => {
+        const next = { ...prev }
+        savedKeys.forEach((key) => delete next[key])
+        return next
+      })
+      queryClient.invalidateQueries({ queryKey: ['budget-summary', budgetId, periodId] })
+    }
+    setIsSavingPlan(false)
+    if (failed.length > 0) {
+      setRowErrors(Object.fromEntries(failed.map((f) => [f.key, f.message])))
+      toast.error(t('detail.saveFailedCount', { count: failed.length }))
+    } else {
+      exitEditMode()
+    }
+  }
+
+  // Footer Cancel: dirty edits ask before being discarded; a clean exit
+  // needs no interruption. Never fires while a save is in flight.
+  const cancelEdit = () => {
+    if (isSavingPlan) return
+    if (changedCount === 0) return exitEditMode()
+    requestDiscard(t('detail.confirmCancelEdit.message', { count: changedCount }), exitEditMode)
   }
 
   // Focus targets of the strip chips, keyed by code (roving tabindex).
@@ -580,20 +747,6 @@ export default function BudgetDetailPage() {
       })}
     </div>
   )
-
-  // Rows: one per active category, with planned/actual/remaining for the
-  // currency currently shown.
-  const rows = categories
-    .filter((c) => !c.is_archived)
-    .map((c) => {
-      const item = items.find((i) => i.category_id === c.id && i.currency_code === activeCurrency)
-      return {
-        category: c,
-        planned: item?.planned ?? '0',
-        actual: item?.actual ?? '0',
-        remaining: item?.remaining ?? '0',
-      }
-    })
 
   // Exact column totals for the currency shown, summed straight off the
   // rows the table renders - NOT summary.totals, whose API values include
@@ -747,6 +900,16 @@ export default function BudgetDetailPage() {
                 and a wrapping row carries them together. The group itself wraps
                 only when the two buttons cannot share a line at all. */}
             <div className="flex flex-wrap items-center gap-3">
+              {canEditPlan && !editOpen && !summaryLoading && (
+                /* Edit plan: page-wide draft mode for the viewed currency.
+                   Absent while open - the sticky footer owns exiting - and
+                   while the summary is still loading: entering then would
+                   snapshot the not-yet-loaded rows (planned '0') and read
+                   every row as changed. */
+                <button type="button" onClick={enterEditMode} className={secondaryButtonClass}>
+                  <Pencil size={13} className="inline mr-1" /> {t('detail.editPlan')}
+                </button>
+              )}
               {canWrite && (
                 <button type="button" onClick={() => setManageCategoriesOpen(true)} className={secondaryButtonClass}>
                   <Tags size={13} className="inline mr-1" /> {t('detail.manageCategories')}
@@ -826,6 +989,7 @@ export default function BudgetDetailPage() {
             <tbody className="divide-y divide-border">
               {rows.map(({ category, planned, actual, remaining }) => {
                 const cellKey = `${category.id}:${activeCurrency}`
+                const draft = planDrafts[cellKey]
                 const isSelected = selectedCategory === category.id
                 return (
                   <tr
@@ -834,8 +998,8 @@ export default function BudgetDetailPage() {
                     onClick={() => toggleSelected(category.id)}
                     onKeyDown={(e) => {
                       // Same guard as the mobile cards: only when the row itself
-                      // is focused — Enter/Space inside the planned editor and its
-                      // buttons must keep their native behavior.
+                      // is focused - Enter/Space inside the batch planned inputs
+                      // must keep their native behavior.
                       if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                         e.preventDefault()
                         toggleSelected(category.id)
@@ -849,26 +1013,19 @@ export default function BudgetDetailPage() {
                       {category.name}
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-planned">
-                      {editingCell === cellKey ? (
-                        <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          {/* text (not number): comma-decimal typing must reach
-                              JS as text; saveCell normalizes at the save seam. */}
+                      {draft !== undefined ? (
+                        <span className="inline-flex flex-col items-end" onClick={(e) => e.stopPropagation()}>
+                          {/* text (not number): comma-decimal typing must reach JS as text;
+                              savePlan normalizes at the commit boundary. */}
                           <input
                             type="text"
                             inputMode="decimal"
-                            value={cellValue}
-                            onChange={(e) => setCellValue(e.target.value)}
-                            className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden"
-                            autoFocus
+                            value={draft}
+                            onChange={(e) => onDraftChange(cellKey, e.target.value)}
+                            className="w-24 bg-surface-hover border border-border rounded-none px-2 py-1 font-mono text-xs tabular-nums text-text focus:ring-2 focus:ring-border-focus focus:outline-hidden"
                           />
-                          <button onClick={() => saveCell(category.id, cellValue)} aria-label={t('detail.savePlannedAmount')} className="text-positive touch-hit"><Check size={14} /></button>
-                          <button onClick={() => setEditingCell(null)} aria-label={t('detail.cancel')} className="text-text-muted touch-hit"><X size={14} /></button>
+                          {rowErrors[cellKey] && <span className="text-negative text-xs mt-0.5">{rowErrors[cellKey]}</span>}
                         </span>
-                      ) : canEditPlan ? (
-                        /* Whole cell is the tap target, not just the digits. */
-                        <button onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey); setCellValue(planned) }} className="hover:text-primary w-full text-right">
-                          {formatAmount(planned)}
-                        </button>
                       ) : (
                         formatAmount(planned)
                       )}
@@ -923,13 +1080,10 @@ export default function BudgetDetailPage() {
             groups={phoneGroups}
             selectedCategory={selectedCategory}
             toggleSelected={toggleSelected}
-            canEditPlan={canEditPlan}
             activeCurrency={activeCurrency}
-            editingCell={editingCell}
-            setEditingCell={setEditingCell}
-            cellValue={cellValue}
-            setCellValue={setCellValue}
-            saveCell={saveCell}
+            editDrafts={planDrafts}
+            onDraftChange={onDraftChange}
+            rowErrors={rowErrors}
           />
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">
@@ -938,6 +1092,29 @@ export default function BudgetDetailPage() {
           )}
         </div>
         </section>
+      )}
+
+      {editOpen && (
+        /* Edit-plan footer: sticky over the scrolling page (class string
+            from the FormPage exemplar - opaque bg so rows scroll beneath
+            are masked, z-local stacking, phone bottom-nav clearance). Its
+            keyboard-inset inline style is deliberately NOT copied: it
+            belongs to FormPage's inner-scroll layout; this footer sits in
+            the normally-scrolling page. Labels wrap, no fixed widths -
+            Slavic strings run longer than English. */
+        <div className="sticky bottom-0 max-sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 bg-surface border-t border-border pt-3 mt-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap pb-3">
+            <span className="text-xs text-text-muted tabular-nums">{t('detail.changedCount', { count: changedCount })}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={cancelEdit} disabled={isSavingPlan} className={secondaryButtonClass}>
+                {t('detail.cancel')}
+              </button>
+              <button type="button" onClick={savePlan} disabled={isSavingPlan || changedCount === 0} className={primaryButtonClass}>
+                {t('detail.savePlan')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {canWrite && (
@@ -1033,6 +1210,22 @@ export default function BudgetDetailPage() {
         onConfirm={() => deletingPeriod && deletePeriod.mutate(deletingPeriod.id)}
         onCancel={() => setDeletingPeriod(null)}
         isPending={deletePeriod.isPending}
+      />
+
+      {/* Discard-changes confirm behind Cancel-with-changes and dirty
+          period/currency switches (the unsavedChanges precedent in
+          Transactions). Confirm runs the deferred proceed action. */}
+      <ConfirmDialog
+        isOpen={!!discardConfirm}
+        title={t('detail.confirmCancelEdit.title')}
+        message={discardConfirm?.message ?? ''}
+        confirmLabel={t('detail.confirmCancelEdit.confirm')}
+        destructive
+        onConfirm={() => {
+          setDiscardConfirm(null)
+          discardConfirm?.proceed()
+        }}
+        onCancel={() => setDiscardConfirm(null)}
       />
     </div>
   )
