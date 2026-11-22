@@ -38,10 +38,20 @@ export default function TransactionRecordPage() {
   const txId = Number(idParam)
   const validId = Number.isInteger(txId) && txId > 0
   // Header back target: the list search the row tap carried in router
-  // state (filters + page), or the bare list for deep links. PageHeader
-  // navigates backTo with a PUSH.
+  // state (filters + page), or the bare list for deep links. A row tap
+  // PUSHed here, so the arrow can POP back - the navigation the phone
+  // scroll restoration now gates on - whenever both markers agree: the
+  // router state only a row tap writes (a deep link's state is null, and
+  // state does not survive a reload), and a non-initial history entry
+  // (deep links sit at location.key 'default'; see NewTransactionPage's
+  // idx twin). Deep links keep the PUSH backTo. Single navigation owner
+  // either way: PageHeader calls onBack when provided, else its own
+  // navigate(backTo).
   const stateSearch = typeof location.state?.search === 'string' ? location.state.search : ''
   const backTo = `/transactions${stateSearch ? `?${stateSearch}` : ''}`
+  const fromRowTap =
+    typeof location.state?.search === 'string' && location.key !== 'default'
+  const handleBack = fromRowTap ? () => navigate(-1) : undefined
 
   // 640-1023: MainLayout's <main> is the scroll container and a content
   // swap clamps it; the hook saves/restores its scrollTop per pathname
@@ -84,7 +94,7 @@ export default function TransactionRecordPage() {
     // no fields, nothing editable.
     return (
       <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
-        <PageHeader title={t('record.title')} backTo={backTo} />
+        <PageHeader title={t('record.title')} backTo={backTo} onBack={handleBack} />
         <p className="text-sm text-text-muted mb-4">{t('record.notFound')}</p>
         <Link to={backTo} className={secondaryButtonClass}>
           {t('record.backToList')}
@@ -98,6 +108,7 @@ export default function TransactionRecordPage() {
       <PageHeader
         title={t('record.title')}
         backTo={backTo}
+        onBack={handleBack}
         actions={canWrite && record.data && (
           <>
             <button type="button" onClick={handleDuplicate} className={secondaryButtonClass}>
