@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection incl. Chrome 157 silently ignoring Emulation.setEmulatedMedia pointer/hover overrides (setTouchEmulationEnabled as the working mechanism, re-armed after every setViewport) and headless hover:none, dispatched el.click() not reaching React handlers (real coordinate clicks, settle-before-click), fullPage-capture media-query perturbation (viewport-only captures for chrome-identity claims), overflow measurement inside inner scroll containers vs the document, in-page cell-hiding table min-content forensics, StrictMode 2x boot-query baselines for request-count gates, viewer-consent + General-budget/Main-account seeding facts incl. API-order-over-seed-order row expectations), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection incl. Chrome 157 silently ignoring Emulation.setEmulatedMedia pointer/hover overrides (setTouchEmulationEnabled as the working mechanism, re-armed after every setViewport) and headless hover:none, dispatched el.click() not reaching React handlers (real coordinate clicks, settle-before-click), fullPage-capture media-query perturbation (viewport-only captures for chrome-identity claims), overflow measurement inside inner scroll containers vs the document, in-page cell-hiding table min-content forensics, StrictMode 2x boot-query baselines for request-count gates, viewer-consent + General-budget/Main-account seeding facts incl. API-order-over-seed-order row expectations), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), touch-drag probing (velocity-sensitive tap synthesis after flings, inverted drag directions, phone-band window scrolling, entrance-animation stale rects with finally-scoped emulation resets, AX-tree role objects unusable for matching, mouse-under-touch-emulation for click-swallow legs), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -207,6 +207,9 @@ same session - in PR #81 it paid for itself twice.
   `<main>`, not the document, so a document-level `document.documentElement.scrollWidth`
   reads clean while a card overflows its inner scroll context - measure the card/element
   (or the real scroll container), never the document, or the check is vacuously green.
+  Scrolling BAND matters too: at phone widths the app scrolls the WINDOW (MainLayout's
+  phone layout owns `window.scrollY`), not `<main>` - scroll-position assertions on phone
+  read `window.scrollY`, and a `<main>`-scroll assumption fails there.
 - puppeteer fullPage screenshots (`captureBeyondViewport`) are not viewport-neutral: the
   expanded capture surface momentarily perturbs the media-query environment, firing REAL
   breakpoint flips that race width-transitioning chrome mid-capture. Chrome-identity and
@@ -451,3 +454,30 @@ same session - in PR #81 it paid for itself twice.
   harness believes otherwise. And headless Chrome reports `(hover: none)` natively
   regardless of emulation - hover-cascade claims (hover vs zebra specificity) are proven
   from served-sheet rule order, never from an emulated hover match.
+- Stale rects while an ENTRANCE animation runs: an element rect captured while a sheet is
+  still animating in reads a mid-flight position and poisons every coordinate derived from
+  it - wait for the entrance to finish (or a settle beat) before reading coordinates (the
+  measurement sibling of settle-before-click above). The same discipline closes the reverse
+  leak: an emulated media feature (reduced motion) set for one scenario leaks into every
+  later scenario after a failure - reset emulation in `finally`, not only on the success path.
+- CDP `Input.dispatchTouchEvent` click synthesis is VELOCITY-sensitive: the tap AFTER a
+  fast fling dies (~3000px/s drags poison the next tap; ~300px/s works; distance and
+  off-viewport endings are not the cause) - drag gestures must be human-slow (~14+ steps x
+  28ms+). The drags DO drive native scroll once the direction is right, and the direction
+  is inverted from intuition: a finger-DOWN drag at scrollY 0 scrolls nothing (rubber-band
+  edge), scrolling down needs finger UP (`dy: -300`), and strip scrollLeft forward needs
+  finger LEFT (`dx: -200`). `Input.synthesizeScrollGesture` is the fallback when a
+  drag-shaped gesture is not required.
+- Click-swallow verification pipeline: under touch emulation, dispatch CDP MOUSE events -
+  `(pointer: coarse)` matches so the gesture code arms, and pointer capture retargets the
+  synthesized click to the drag host, the one pipeline where a stepped drag provably
+  produces a click. Positive control: a 5px captured mouse drag fires the handler; a 300px
+  drag must not.
+- `Accessibility.getFullAXTree` / a raw accessibility snapshot returns roles as
+  `{type:'role', value}` objects, unusable for string matching - keyboard-order claims are
+  proven with a real Tab walk asserting `document.activeElement` inside evaluates, not by
+  parsing the AX tree.
+- Deep-link key normalization: the raw initial history state carries `key: undefined` -
+  react-router normalizes it to `location.key = 'default'`. Probe assertions mirror the
+  normalization (the row-tap-back discriminator is `location.key !== 'default'`); product
+  code reads `location.key`, never the raw history state.
