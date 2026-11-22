@@ -308,7 +308,7 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | GET/POST/PUT/DELETE | `/api/transactions[/{id}]` | - | Get / create / update / delete (optional account; own `currency_code`, derived from the account when omitted with an account set, required when account-less; adjustments always require an account; optional `note` - free text, full-replace: an absent or null note clears) |
 | POST | `/api/transactions/bulk-account` | - | Reassign many transactions to an account |
 | POST | `/api/transactions/import` | - | Import transactions from a JSON file into an account (multipart upload, 5 MB max) |
-| GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions |
+| GET | `/api/transactions/frequent-descriptions` | `transaction_type[]`, `limit` | Frequent description suggestions; each group also carries its most recent transaction's `last_category_id` / `last_budget_id` / `last_account_id` / `last_amount` (max date, tiebreak max id; an archived category nulls the category AND budget ids, an archived account nulls its id; budget state never consulted) |
 | GET/PUT | `/api/transactions/{id}/items` | - | List / replace-all line items (the replace body optionally carries `remainder_category_id` / `remainder_name` for the remainder row; omitted leaves it unchanged, an empty name resets it) |
 | GET/POST/DELETE | `/api/transactions/{id}/attachments[/{aid}]` | - | List (metadata only) / upload / delete receipt attachments |
 | GET | `/api/transactions/{id}/attachments/{aid}/download` | - | Download an attachment's stored file (any member role - bytes streamed via the API; 404 `file_missing` if the stored object is gone, 503 if storage is off) |

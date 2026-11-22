@@ -281,7 +281,10 @@ frontend/src/
 │                           #   amountInput (both decimal separators, normalized
 │                           #   per the active number style at submit), dates
 │                           #   (local-date period math), pageDefaults
-│                           #   (member-settings blob to fresh-visit URL params)
+│                           #   (member-settings blob to fresh-visit URL params),
+│                           #   formDraft (/new draft persistence: localStorage
+│                           #   per user + workspace, 24h expiry, debounced
+│                           #   writes, generation-guarded clears)
 └── types/index.ts          # TypeScript interfaces
 ```
 

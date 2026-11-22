@@ -26,7 +26,11 @@ issued before the user's last password change are rejected. Login and 2FA
 verification are rate-limited per IP and per account/user (`429` when exceeded), and
 each TOTP code is single-use. Every workspace-scoped request carries
 `Authorization: Bearer <token>` and is validated by `WorkspaceJWTAuth`
-(identity → membership → role → workspace-scoped query).
+(identity → membership → role → workspace-scoped query). Opening a protected route
+while signed out redirects to `/login` with the intended destination carried in
+router state (never a URL param, so it cannot be bookmarked or shared); a successful
+sign-in returns the user there - search string included - while direct `/login`
+visits land on the dashboard.
 
 ## Accounts & Balances
 
@@ -119,12 +123,24 @@ transfer. Transfers replace the old currency-exchange records.
 
 ## Transactions
 
-- Create/edit via a modal (member+): type (income/expense/adjustment), amount, date,
+- Create/edit (member+): type (income/expense/adjustment), amount, date,
   description, an optional account ("No account" records money without one - cash
   exchanged while traveling, a closed account's history; adjustments still require
   an account), a currency that locks to the account's when one is set and is freely
   chosen from the enabled set when not, optional budget→category, and an
   optional "paid in another currency" facet (which must differ from the own currency).
+- The description combobox suggests the workspace's frequent descriptions; picking
+  one prefills the category/budget and account fields the user has not touched this
+  session with the suggestion's last-used values, and shows the group's last amount
+  as a "Last: X" hint under the amount field - filled only on tap, never
+  automatically. (The frequent-descriptions endpoint returns those last-used ids per
+  group from its most recent transaction; an archived category nulls its category
+  and budget ids, an archived account nulls its id, so stale picks never surface.)
+- **/new drafts**: unsaved scalar values on the create page persist per user and
+  workspace (localStorage, 24-hour expiry) and restore on the next visit with a
+  notice and a Discard action; a save, a discard, a logout or a workspace switch
+  clears them. Copy/repeat links bypass drafts entirely, and the receipt file, parse
+  state and line items are never drafted.
 - The list supports account/type filters and pagination (plus a currency filter
   matching each transaction's stored own currency, hidden in single-currency
   workspaces); bulk account reassignment is available.
