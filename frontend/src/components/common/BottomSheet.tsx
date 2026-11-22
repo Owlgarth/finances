@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useOverlay } from '../../hooks/useOverlay'
 import { useKeyboardInset } from '../../hooks/useKeyboardInset'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
+import { useDragToDismiss } from '../../hooks/useDragToDismiss'
 
 interface BottomSheetProps {
   /** Whether the sheet is visible. Caller still owns the source of truth. */
   open: boolean
-  /** Called when the user requests close (scrim tap, Escape, drag handle later). */
+  /** Called when the user requests close (scrim tap, Escape, drag handle, close handle under reduced motion). */
   onClose: () => void
   /** Sheet body — caller provides header/form/footer/list markup. */
   children: ReactNode
@@ -52,7 +55,11 @@ function useDelayedUnmount(open: boolean, exitMs: number): boolean {
  * The universal mobile container: modals, selects, action
  * menus and pickers all render inside this on mobile. Slide-up panel pinned to
  * the bottom edge, scrim dismiss, body scroll-lock, safe-area padding.
- * Drag-to-dismiss gesture is deliberately omitted; the handle is a visual affordance.
+ * The sticky top band doubles as a drag-to-dismiss surface: with the panel at
+ * scroll top, dragging it down translates the sheet, and releasing past 25% of
+ * the panel height or with a downward flick slides it off-screen (80ms) and
+ * closes, while a shorter release settles back (120ms). Under reduced motion
+ * the band renders as a close button instead.
  */
 export default function BottomSheet({
   open,
@@ -64,10 +71,24 @@ export default function BottomSheet({
   const mounted = useDelayedUnmount(open, 80) // matches sheet-out duration
   const panelRef = useOverlay(open, onClose)
   const keyboardInset = useKeyboardInset(open)
+  const { t } = useTranslation('common')
+  // JS-side reduced-motion gate: the stylesheet's reduced-motion blocks only
+  // collapse animation/transition durations - they cannot gate the gesture's
+  // imperative transform writes, so the gesture is disabled here instead.
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const { handleProps, panelProps, dragging, dismissed } = useDragToDismiss({
+    panelRef,
+    onClose,
+    enabled: open && !reducedMotion,
+  })
 
   if (!mounted) return null
 
-  const motion = open ? 'animate-sheet-in' : 'animate-sheet-out'
+  // Exit-keyframe suppression: after a drag released past the dismiss
+  // threshold (or a gesture cut short by the sheet closing under the finger),
+  // the panel's position lives in the inline transform - the exit keyframe
+  // would restart from rest and visibly jump.
+  const motion = dismissed || (dragging && !open) ? '' : open ? 'animate-sheet-in' : 'animate-sheet-out'
   const scrimMotion = open ? 'animate-scrim-in' : 'animate-scrim-out'
 
   return (
@@ -92,15 +113,36 @@ export default function BottomSheet({
           aria-modal="true"
           aria-label={ariaLabel}
           tabIndex={-1}
+          {...panelProps}
           className={`relative w-full bg-surface border border-border rounded-t-sm max-h-[92dvh] overflow-y-auto overscroll-contain pb-safe outline-hidden ${motion} ${className}`}
           style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px)` } : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Drag-handle bar */}
+          {/* Drag band - the drag-to-dismiss surface. Sticky so it stays the
+              grab point at any scroll depth; the gesture itself only arms
+              while the panel is scrolled to the top, so content scrolling
+              always wins. Under reduced motion the band is a close button
+              instead (the visible equivalent of the gesture); useOverlay
+              still owns focus capture, so the button is not auto-focused. */}
           <div className="sticky top-0 z-10 bg-surface">
-            <div className="flex justify-center pt-2 pb-1" aria-hidden="true">
-              <div className="h-1 w-9 rounded-sm bg-surface-muted" />
-            </div>
+            {reducedMotion ? (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={t('bottomSheet.close')}
+                className="flex w-full items-center justify-center pt-2 pb-1 pointer-coarse:min-h-[44px]"
+              >
+                <span className="h-1 w-9 rounded-sm bg-surface-muted" aria-hidden="true" />
+              </button>
+            ) : (
+              <div
+                {...handleProps}
+                aria-hidden="true"
+                className="flex w-full items-center justify-center pt-2 pb-1 pointer-coarse:min-h-[44px] touch-none cursor-grab active:cursor-grabbing select-none"
+              >
+                <div className="h-1 w-9 rounded-sm bg-surface-muted" />
+              </div>
+            )}
           </div>
 
           {children}
