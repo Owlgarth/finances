@@ -593,10 +593,3 @@ export interface LegacyImportResult {
   renamed: Record<string, string>;
   skipped_workspaces: string[];
 }
-
-// ============= Enums =============
-
-export const TotalsLabel = {
-  /** Display label for records without a category. Synced with backend common.enums.TotalsLabel. */
-  UNCATEGORIZED: 'Uncategorized',
-} as const;

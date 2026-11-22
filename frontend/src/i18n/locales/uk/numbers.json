@@ -4,8 +4,6 @@
     "today": "Сьогодні"
   },
   "insights": {
-    "selectBudget": "Виберіть бюджет",
-    "budgetAriaLabel": "Бюджет",
     "currencyAriaLabel": "Валюта",
     "viewBudget": "Відкрити бюджет \u2192",
     "plannedPeriodLabel": "Заплановано \u00b7 {{period}}",

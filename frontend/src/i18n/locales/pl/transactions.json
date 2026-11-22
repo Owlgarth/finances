@@ -51,8 +51,6 @@
     "category": "Kategoria",
     "amount": "Kwota",
     "search": "Szukaj",
-    "allBudgets": "Wszystkie budżety",
-    "allCategories": "Wszystkie kategorie",
     "min": "Od",
     "max": "Do",
     "byBudgetAria": "Filtruj według budżetu",
@@ -102,7 +100,6 @@
   "deleteRejected": "Nie udało się usunąć - transakcja wróciła na listę",
   "form": {
     "newTitle": "Nowa transakcja",
-    "editTitle": "Edytuj transakcję",
     "typeLabel": "Typ",
     "typeAria": "Typ transakcji",
     "amountLabel": "Kwota",
@@ -132,16 +129,11 @@
     "adjustmentAccountAria": "Konto korekty",
     "noAdjustment": "Bez korekty (tylko informacja)",
     "balanceAdjustment": "Korekta salda",
-    "copy": "Kopiuj",
     "delete": "Usuń",
     "cancel": "Anuluj",
     "saving": "Zapisywanie…",
     "save": "Zapisz",
     "add": "Dodaj",
-    "tabs": {
-      "items": "pozycje",
-      "receipts": "paragony"
-    },
     "reading": "Czytanie…",
     "uploadReceipt": "Prześlij fakturę/paragon",
     "removeFileAria": "Usuń wybrany plik",

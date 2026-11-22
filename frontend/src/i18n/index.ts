@@ -20,9 +20,8 @@ export const NAMESPACES = [
   'numbers',
 ] as const
 
-export const LANGUAGE_CODES: string[] = registry.languages.map((l) => l.code)
-export const DEFAULT_LANGUAGE: string = registry.defaultLanguage
-export const DEFAULT_NUMBER_FORMAT: string = registry.defaultNumberFormat
+const LANGUAGE_CODES: string[] = registry.languages.map((l) => l.code)
+const DEFAULT_LANGUAGE: string = registry.defaultLanguage
 
 // Eager glob: all catalogs are inlined at build time, so init below is
 // synchronous and no request can render before translations exist.

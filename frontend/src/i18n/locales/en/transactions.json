@@ -49,8 +49,6 @@
     "category": "Category",
     "amount": "Amount",
     "search": "Search",
-    "allBudgets": "All budgets",
-    "allCategories": "All categories",
     "min": "Min",
     "max": "Max",
     "byBudgetAria": "Filter by budget",
@@ -98,7 +96,6 @@
   "deleteRejected": "Could not delete - the transaction is back in the list",
   "form": {
     "newTitle": "New transaction",
-    "editTitle": "Edit transaction",
     "typeLabel": "Type",
     "typeAria": "Transaction type",
     "amountLabel": "Amount",
@@ -128,16 +125,11 @@
     "adjustmentAccountAria": "Adjustment account",
     "noAdjustment": "No adjustment (informational only)",
     "balanceAdjustment": "Balance adjustment",
-    "copy": "Copy",
     "delete": "Delete",
     "cancel": "Cancel",
     "saving": "Saving…",
     "save": "Save",
     "add": "Add",
-    "tabs": {
-      "items": "items",
-      "receipts": "receipts"
-    },
     "reading": "Reading…",
     "uploadReceipt": "Upload invoice/receipt",
     "removeFileAria": "Remove selected file",

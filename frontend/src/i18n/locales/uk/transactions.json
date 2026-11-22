@@ -51,8 +51,6 @@
     "category": "Категорія",
     "amount": "Сума",
     "search": "Пошук",
-    "allBudgets": "Усі бюджети",
-    "allCategories": "Усі категорії",
     "min": "Мін",
     "max": "Макс",
     "byBudgetAria": "Фільтрувати за бюджетом",
@@ -102,7 +100,6 @@
   "deleteRejected": "Не вдалося видалити - транзакцію повернуто в список",
   "form": {
     "newTitle": "Нова транзакція",
-    "editTitle": "Редагувати транзакцію",
     "typeLabel": "Тип",
     "typeAria": "Тип транзакції",
     "amountLabel": "Сума",
@@ -132,16 +129,11 @@
     "adjustmentAccountAria": "Рахунок коригування",
     "noAdjustment": "Без коригування (лише інформація)",
     "balanceAdjustment": "Коригування балансу",
-    "copy": "Копіювати",
     "delete": "Видалити",
     "cancel": "Скасувати",
     "saving": "Збереження…",
     "save": "Зберегти",
     "add": "Додати",
-    "tabs": {
-      "items": "позиції",
-      "receipts": "квитанції"
-    },
     "reading": "Читаємо…",
     "uploadReceipt": "Завантажити рахунок/квитанцію",
     "removeFileAria": "Видалити вибраний файл",
