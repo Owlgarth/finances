@@ -163,6 +163,10 @@
     "message": "Your changes will be lost.",
     "discard": "Leave"
   },
+  "draft": {
+    "restored": "Unsaved changes restored from your last visit.",
+    "discard": "Discard"
+  },
   "items": {
     "untitled": "Untitled item",
     "detailsAria": "Item details",

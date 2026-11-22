@@ -17,6 +17,7 @@ import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput } from '../utils/amountInput'
 import { NO_ACCOUNT } from '../utils/accountSelect'
 import { rowsToItems } from '../utils/transactionItems'
+import { type FormDraftController, type NewFormDraftValues } from '../utils/formDraft'
 import type { Row } from '../components/transactions/TransactionItemsList'
 
 /**
@@ -62,6 +63,20 @@ export interface UseTransactionFormOptions {
    *  downward, internal writes report upward. Omitted (the modal) keeps
    *  the internal state authoritative. */
   shared?: TransactionFormShared
+  /** /new draft persistence. When provided, the user-action setters
+   *  schedule a debounced localStorage write through the controller, and
+   *  `values` (the draft restored at mount; null when none/expired) seeds
+   *  the create-mode defaults ahead of the plain-create derivation -
+   *  threading through the same seams as initialAccountId/initialType so
+   *  the late-list-arrival adjust respects or validates them. Undefined
+   *  (the default) keeps every other host draft-free. */
+  draft?: {
+    controller: FormDraftController
+    values: NewFormDraftValues | null
+  } | null
+  /** Bump to force a fresh create-mode re-seed without a remount (the /new
+   *  draft notice's Discard). Default 0 = never re-seeds. */
+  reseedNonce?: number
 }
 
 /** Controlled-override seam for a host that lifts the amount/date rows
@@ -151,6 +166,8 @@ export function useTransactionForm({
   initialType,
   validationToasts = true,
   shared,
+  draft = null,
+  reseedNonce = 0,
 }: UseTransactionFormOptions) {
   const { t } = useTranslation('transactions')
   const { t: tCommon } = useTranslation('common')
@@ -205,9 +222,12 @@ export function useTransactionForm({
     open: boolean
     mode: 'edit' | 'copy' | 'create' | 'none'
     source: Transaction | null
-  }>({ open: false, mode: 'none', source: null })
+    reseedNonce: number
+  }>({ open: false, mode: 'none', source: null, reseedNonce: 0 })
   // Reference-list lengths the create-mode seeding last saw.
   const [seededLens, setSeededLens] = useState({ a: accounts.length, b: budgets.length, c: currencies.length })
+  // Length of the categories list the draft-category guard last saw.
+  const [seededCategoriesLen, setSeededCategoriesLen] = useState(0)
   // Description autocomplete: keyboard highlight index into `suggestions`
   // (-1 = none) and the panel-open flag (follows focus/typing, closed on
   // Escape/Tab/select/blur). Reset in the open-effect and on type change.
@@ -354,8 +374,12 @@ export function useTransactionForm({
   // values it just queued.
   const mode = transaction ? 'edit' : copyFrom ? 'copy' : 'create'
   const source = transaction ?? copyFrom ?? null
-  const seeding = open !== session.open || session.mode !== mode || session.source !== source
-  if (seeding) setSession({ open, mode, source })
+  const seeding =
+    open !== session.open ||
+    session.mode !== mode ||
+    session.source !== source ||
+    reseedNonce !== session.reseedNonce
+  if (seeding) setSession({ open, mode, source, reseedNonce })
   if (seeding && open) {
     // Clear any receipt-upload state from a previous session.
     setPendingFile(null)
@@ -403,30 +427,40 @@ export function useTransactionForm({
       // Copy mode IS a create, so it gets a fresh key like the else branch.
       setIdempotencyKey(transaction ? null : crypto.randomUUID())
     } else {
-      setDate(new Date().toISOString().slice(0, 10))
-      setDescription('')
-      setNote('')
-      // The caller's type seed wins (the page's ?type= link); the modal
-      // passes nothing and keeps the expense default.
-      setType(initialType ?? 'expense')
-      setAmount('')
-      // Starting account: the caller's initial account (the page's account
-      // filter) when given, else the default account of the form's currency,
-      // else No account (account-less entry stays a first-class path). The
-      // initial account's currency seeds the form; an account-less start
-      // seeds the primary currency.
+      const dv = draft?.values ?? null
+      setDate(dv?.date !== undefined ? dv.date : new Date().toISOString().slice(0, 10))
+      setDescription(dv?.description ?? '')
+      setNote(dv?.note ?? '')
+      // Caller seeds win over the draft (?type=), the draft wins over the
+      // expense default. initialType is only non-undefined when ?type=
+      // explicitly named expense/income (the page pre-resolves it).
+      setType(initialType ?? dv?.txType ?? 'expense')
+      setAmount(dv?.amount ?? '')
+      // Starting account: caller's initial account (?account=) > draft pick
+      // (null = explicit No account) > default account of the form's
+      // currency > No account. The draft's currency (when present) is the
+      // seeded currency; an explicit draft account without a drafted
+      // currency is healed by the arrival adjust below once lists land.
       const seededCurrency =
-        initialAccountId != null
-          ? (accounts.find((a) => a.id === initialAccountId)?.currency_code ?? currencies[0]?.code ?? null)
-          : (currencies[0]?.code ?? null)
+        dv?.currencyCode !== undefined
+          ? dv.currencyCode
+          : initialAccountId != null
+            ? (accounts.find((a) => a.id === initialAccountId)?.currency_code ?? currencies[0]?.code ?? null)
+            : (currencies[0]?.code ?? null)
       setCurrencyCode(seededCurrency)
-      setAccountId(initialAccountId ?? pickAccountForCurrency(accounts, seededCurrency))
-      setBudgetId(defaultBudgetId)
-      setCategoryId(null)
-      setOtherCurrency(false)
-      setOriginalAmount('')
-      setOriginalCurrencyCode(null)
-      setOriginalAccountId(null)
+      setAccountId(
+        initialAccountId != null
+          ? initialAccountId
+          : dv?.accountId !== undefined
+            ? dv.accountId
+            : pickAccountForCurrency(accounts, seededCurrency),
+      )
+      setBudgetId(dv?.budgetId !== undefined ? dv.budgetId : defaultBudgetId)
+      setCategoryId(dv?.categoryId ?? null)
+      setOtherCurrency(dv?.otherCurrency ?? false)
+      setOriginalAmount(dv?.originalAmount ?? '')
+      setOriginalCurrencyCode(dv?.originalCurrencyCode ?? null)
+      setOriginalAccountId(dv?.originalAccountId ?? null)
       // Fresh key per open in create mode. Persists across mutation retries
       // within this open session — that's what makes a double-click or a
       // network-blip replay return the original 201 instead of a duplicate.
@@ -491,11 +525,16 @@ export function useTransactionForm({
   if (accounts.length !== seededLens.a || budgets.length !== seededLens.b || currencies.length !== seededLens.c) {
     setSeededLens({ a: accounts.length, b: budgets.length, c: currencies.length })
     if (open && !source) {
+      const dv = draft?.values ?? null
+      // A draft that carries an account choice made it EXPLICITLY (null =
+      // deliberately No account): the default re-derive must not run, or
+      // every cold mount would re-pick an account over the draft's pick.
+      const explicitAccount = dv !== null && 'accountId' in dv
       // Only a length-CHANGING refetch re-runs this block (the seededLens
       // gate above): an equal-length refetch re-seeds nothing, so a
       // deliberate No-account pick survives it and is re-picked only by that
       // rare event - the pre-existing limitation, unchanged.
-      if (accountId === null) {
+      if (accountId === null && !explicitAccount) {
         const currency = currencyCode ?? currencies[0]?.code ?? null
         const next = initialAccountId ?? pickAccountForCurrency(accounts, currency)
         setAccountId(next)
@@ -509,6 +548,21 @@ export function useTransactionForm({
         // Heal it here, once the list lands.
         const account = accounts.find((a) => a.id === accountId)
         if (account) setCurrencyCode(account.currency_code)
+      }
+      // Draft-restored reference values that no longer exist in the loaded
+      // options restore as absent (dropped, never re-derived). Current-value
+      // guards (not draft-value guards) so a later valid user pick is left
+      // alone; gated on dv so draft-free hosts keep today's behavior.
+      if (dv !== null) {
+        if (explicitAccount && accountId !== null && !accounts.some((a) => a.id === accountId)) {
+          setAccountId(null)
+        }
+        if (currencyCode !== null && !currencies.some((c) => c.code === currencyCode)) {
+          setCurrencyCode(currencies[0]?.code ?? null)
+        }
+        if (budgetId !== null && !budgets.some((b) => b.id === budgetId)) {
+          setBudgetId(defaultBudgetId)
+        }
       }
       if (budgetId === null) setBudgetId(defaultBudgetId)
     }
@@ -583,6 +637,16 @@ export function useTransactionForm({
     queryFn: () => budgetsApi.listCategories(budgetId!),
     enabled: open && !!budgetId && type !== 'adjustment',
   })
+  // Draft-restored categoryId guard: categories arrive after seeding via
+  // their own query, so a restored category that no longer exists restores
+  // as absent once the list lands. Length-keyed like the accounts arrival
+  // adjust; gated on restored draft values only.
+  if (categories.length !== seededCategoriesLen) {
+    setSeededCategoriesLen(categories.length)
+    if (open && draft?.values != null && categoryId !== null && !categories.some((c) => c.id === categoryId)) {
+      setCategoryId(null)
+    }
+  }
 
   // Frequent descriptions for the description autocomplete, cached per type.
   // Keyed inside the ['transactions'] family so every transaction mutation's
@@ -794,17 +858,67 @@ export function useTransactionForm({
       .map((a) => ({ value: a.id, label: a.name })),
   ]
 
+  // ---- Draft writes ----
+  // The returned setters below are the USER-action seams (the fields
+  // components and the /new page call them from change handlers); each
+  // merges its field into the /new draft through the debounced controller.
+  // Internal machinery (seeding, the receipt parse's fills, and
+  // resetForAnother) keeps the raw state setters: a restore must not
+  // re-write itself, parse-derived values are excluded from drafts, and
+  // the reset after save-and-add-another must not resurrect the
+  // just-cleared draft.
+  const draftUpdate = (patch: Partial<NewFormDraftValues>) => {
+    draft?.controller.update(patch)
+  }
+  const changeDescription = (v: string) => {
+    setDescription(v)
+    draftUpdate({ description: v })
+  }
+  const changeType = (v: TransactionType) => {
+    setType(v)
+    draftUpdate({ txType: v })
+  }
+  const changeCurrencyCode = (v: string | null) => {
+    setCurrencyCode(v)
+    draftUpdate({ currencyCode: v })
+  }
+  const changeBudgetId = (v: number | null) => {
+    setBudgetId(v)
+    draftUpdate({ budgetId: v })
+  }
+  const changeCategoryId = (v: number | null) => {
+    setCategoryId(v)
+    draftUpdate({ categoryId: v })
+  }
+  const changeOtherCurrency = (v: boolean) => {
+    setOtherCurrency(v)
+    draftUpdate({ otherCurrency: v })
+  }
+  const changeOriginalAmount = (v: string) => {
+    setOriginalAmount(v)
+    draftUpdate({ originalAmount: v })
+  }
+  const changeNote = (v: string) => {
+    setNote(v)
+    draftUpdate({ note: v })
+  }
+
   /** Picking a real account locks the currency to the account's (changing the
       currency means changing the account). Re-selecting the sentinel clears the
       account but KEEPS the currency - it just becomes editable again. */
   const handleAccountChange = (value: number) => {
     if (value === NO_ACCOUNT) {
       setAccountId(null)
+      draftUpdate({ accountId: null })
       return
     }
     setAccountId(value)
     const next = accounts.find((a) => a.id === value)
     if (next) setCurrencyCode(next.currency_code)
+    // Draft the pick WITH its locked currency - the raw setCurrencyCode
+    // above is not a user seam, so without this a restore would seed the
+    // account with the primary currency instead of the account's.
+    draftUpdate(next ? { accountId: value, currencyCode: next.currency_code } : { accountId: value })
   }
 
   /** Switching the facet currency re-picks its account (per-currency default
@@ -812,12 +926,16 @@ export function useTransactionForm({
       previous pick cannot survive the switch, it holds the old currency. */
   const handleOriginalCurrencyChange = (code: string) => {
     setOriginalCurrencyCode(code)
-    setOriginalAccountId(pickAccountForCurrency(accounts, code))
+    const pick = pickAccountForCurrency(accounts, code)
+    setOriginalAccountId(pick)
+    draftUpdate({ originalCurrencyCode: code, originalAccountId: pick })
   }
 
   /** The sentinel maps back to null - the informational-only facet. */
   const handleAdjustmentAccountChange = (value: number) => {
-    setOriginalAccountId(value === NO_ADJUSTMENT ? null : value)
+    const next = value === NO_ADJUSTMENT ? null : value
+    setOriginalAccountId(next)
+    draftUpdate({ originalAccountId: next })
   }
 
   /** Mark a field user-chosen this session - later suggestion chooses never
@@ -840,6 +958,10 @@ export function useTransactionForm({
    *  filling it is the hint button's tap action, never automatic. */
   const applySuggestion = (s: FrequentDescriptionItem) => {
     setDescriptionState(s.description)
+    // Accepting a suggestion is a user action: the accepted description
+    // drafts like a typed one. The raw setter (not the merged setDescription)
+    // keeps the hint arming below intact.
+    draftUpdate({ description: s.description })
     setSuggestionsOpen(false)
     setHighlighted(-1)
     setLastAmountHint(s.last_amount ?? null)
@@ -904,8 +1026,12 @@ export function useTransactionForm({
   // Stable discriminator for the current seeding session: hosts key their
   // fields component on it so a session change remounts it - the remount is
   // the reset for that component's local state (disclosure latches, focus
-  // one-shots, touched maps) and re-fires its per-open autoFocus.
-  const sessionKey = `${session.open ? 'o' : 'c'}-${session.mode}-${session.source?.id ?? 'new'}`
+  // one-shots, touched maps) and re-fires its per-open autoFocus. The
+  // nonce suffix appears only after an explicit re-seed request (the /new
+  // draft notice's Discard), so every other host's keys stay unchanged.
+  const sessionKey = `${session.open ? 'o' : 'c'}-${session.mode}-${session.source?.id ?? 'new'}${
+    session.reseedNonce > 0 ? `-${session.reseedNonce}` : ''
+  }`
 
   return {
     // Field values (budgets is exposed raw: hosts gate multi-budget UI on
@@ -918,9 +1044,13 @@ export function useTransactionForm({
     // Combobox + detail-tab state (detailTab is modal-only UI state that the
     // session seeding resets; /new-style hosts ignore it)
     highlighted, suggestionsOpen, detailTab,
-    // Setters
-    setDate, setDescription, setType, setAmount, setCurrencyCode, setBudgetId,
-    setCategoryId, setOtherCurrency, setOriginalAmount, setNote,
+    // Setters (draft-writing wrappers where the seam is a user action;
+    // setDate/setAmount stay the merged shared-seam versions - the /new
+    // page owns the draft writes for the lifted amount/date rows)
+    setDate, setDescription: changeDescription, setType: changeType,
+    setAmount, setCurrencyCode: changeCurrencyCode, setBudgetId: changeBudgetId,
+    setCategoryId: changeCategoryId, setOtherCurrency: changeOtherCurrency,
+    setOriginalAmount: changeOriginalAmount, setNote: changeNote,
     setPendingRows, setPendingFile, setHighlighted, setSuggestionsOpen, setDetailTab,
     // Suggestion prefill (choosing a suggestion fills untouched fields;
     // the Last-amount hint value and its never-automatic fill contract)

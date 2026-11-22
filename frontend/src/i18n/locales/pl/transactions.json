@@ -167,6 +167,10 @@
     "message": "Twoje zmiany zostaną utracone.",
     "discard": "Wyjdź"
   },
+  "draft": {
+    "restored": "Przywrócono niezapisane zmiany z ostatniej wizyty.",
+    "discard": "Odrzuć"
+  },
   "items": {
     "untitled": "Pozycja bez nazwy",
     "detailsAria": "Szczegóły pozycji",

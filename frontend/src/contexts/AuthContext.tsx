@@ -6,6 +6,7 @@ import { authApi, setAuthToken, setRefreshToken, clearAuthToken, getAuthToken } 
 import { queryClient } from '../api/queryClient';
 import type { User, LoginRequest, RegisterRequest } from '../types';
 import { getApiErrorMessage } from '../utils/errors';
+import { removeDraftsForUser } from '../utils/formDraft';
 
 interface AuthContextType {
   user: User | null;
@@ -151,12 +152,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkConsentStatus, t]);
 
   const logout = useCallback(() => {
+    // Draft form values are user-local: leaving the account must not leave
+    // them behind in storage. The generation bump inside also aborts any
+    // pending /new controller flush, so the unmount cannot re-create them.
+    if (user) removeDraftsForUser(user.id);
     clearAuthToken();
     setUser(null);
     queryClient.clear();
     toast.success(t('toasts.loggedOut'));
     navigate('/login');
-  }, [navigate, t]);
+  }, [user, navigate, t]);
 
   const updateUser = useCallback((userData: Partial<User>) => {
     // Functional update: no `user` dependency → stable identity forever, so
