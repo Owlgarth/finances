@@ -1,6 +1,6 @@
 ---
 name: frontend-live-stack-probing
-description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection incl. Chrome 157 silently ignoring Emulation.setEmulatedMedia pointer/hover overrides (setTouchEmulationEnabled as the working mechanism, re-armed after every setViewport) and headless hover:none, dispatched el.click() not reaching React handlers (real coordinate clicks, settle-before-click), fullPage-capture media-query perturbation (viewport-only captures for chrome-identity claims), overflow measurement inside inner scroll containers vs the document, in-page cell-hiding table min-content forensics, StrictMode 2x boot-query baselines for request-count gates, viewer-consent + General-budget seeding facts), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
+description: Interactive verification of the Owlgarth Finances frontend and backend stack paths against a live dev stack - browser probe harnesses (Playwright/puppeteer-core + system Chrome), API-driven auth and scenario seeding, port-shifted stacks, probing by bug class (environmental failure injection, interception-stub CORS preflight handling incl. OPTIONS + withCredentials echo, stale dev-container module caches incl. per-FILE served-transform verification after multi-write edits and esbuild-safe transform markers, backend-container migration drift, router startTransition races incl. commit supersession on chained navigations, CSS transition-timing on focus-ring reads, focus carryover on popup re-checks, CSS-hidden inputs in DOM-order field counting, expected dev-noise console errors, backgrounded-page rAF stalls, TanStack v5 focus refetches via synthetic visibilitychange, focus-call instrumentation for double-fire checks, negative-control stashed-pre-fix probe runs, localStorage cross-scenario contamination, shared-h1 sibling-route heading ambiguity, blur-insertion element-move click suppression reproducible headless, UTC-midnight pixel-baseline rollovers, react-day-picker v9 synthetic-keyboard blindness and popup focus order, viewport-emulation flag reloads, CDP return-by-value DOMRect stripping and pointer-emulation rejection incl. Chrome 157 silently ignoring Emulation.setEmulatedMedia pointer/hover overrides (setTouchEmulationEnabled as the working mechanism, re-armed after every setViewport) and headless hover:none, dispatched el.click() not reaching React handlers (real coordinate clicks, settle-before-click), fullPage-capture media-query perturbation (viewport-only captures for chrome-identity claims), overflow measurement inside inner scroll containers vs the document, in-page cell-hiding table min-content forensics, StrictMode 2x boot-query baselines for request-count gates, viewer-consent + General-budget/Main-account seeding facts incl. API-order-over-seed-order row expectations), backend container probes (in-container dependency version checks via uv pip --python /venv, lock-marker-derived expected-version tables, beat shelve-schedule reads, HTTP status capture incl. curl readiness-loop sentinels, Django RedisCache key makeup for redis-cli scans), static-fallback discipline when no stack is available. Use when a task's mandate includes interactive or manual verification of frontend or backend-stack behavior, when reproducing or accepting a UI/state bug live, or when assembling a throwaway probe or browser-automation harness against the dev stack.
 ---
 
 # Frontend Live-Stack Probing
@@ -50,12 +50,17 @@ same session - in PR #81 it paid for itself twice.
   as validation-refusal evidence on no-toast hosts.
 - A directly-added viewer member has no recorded consents and lands on `/reconsent` -
   seed `POST /users/me/consents` (`terms_of_service`/`privacy_policy`) before driving
-  member-role scenarios. Registration auto-creates a "General" budget: a seeded
-  workspace with two test budgets holds THREE, not two - derive budget-count assertions
-  from that.
+  member-role scenarios. Registration auto-creates BOTH a "General" budget and a "Main"
+  account: a seeded workspace with two test budgets holds THREE, not two, and
+  budget/accounts EMPTY STATES are unreachable on a fresh registration until those
+  entities are deleted via API - derive count and empty-state expectations from `GET`
+  truth, never from what the seed script believes it created.
 - Scenario data via endpoints, not clicks: PR #84 materialized 36 periods by looping the lazy
   current-period endpoint instead of clicking chevrons 35 times. UI-driven setup couples the
   probe to the very behavior under test.
+- Expected UI row order derives from the API's returned `items` order, never from the seed
+  sequence - list endpoints return neither creation nor name order (the categories API is the
+  pinned example), and a probe asserting seeding order fails against correct product behavior.
 - API-driven row assertions read `items` - the Django Ninja `PaginatedResponse` field - not
   `results`.
 - Clean up with `DELETE /api/users/me` - removes the seeded user and its workspace data.
@@ -211,6 +216,11 @@ same session - in PR #81 it paid for itself twice.
   one (`el.style.display = 'none'`) and re-read the overflow after each to find which
   element sets the floor, then force explicit widths on the container to binary-search
   each claim's numeric floor. Faster and more decisive than stylesheet trial-and-error.
+- With auto table layout and a truncating first column, a table NEVER overflows
+  horizontally - the truncating column absorbs every spare pixel - so a criterion that
+  must exercise the real `overflow-x-auto` + sticky-column mechanics pins
+  `table.style.minWidth` first; without the pin the scroll machinery legitimately never
+  engages and a "sticky column" probe proves nothing.
 - Environmental defects (error-gate bugs): a clean run on a healthy stack proves nothing -
   "cannot reproduce" means the trigger is environmental (a failed request), not absent.
   Intercept and force-fail the dependency (request interception blocking the endpoint the
