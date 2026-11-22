@@ -21,7 +21,7 @@ There is no global account or period context - data is read through
 (periods are per-budget; the selection is deep-linkable via the `?period=` URL
 param on `/budgets/:id`, the viewed currency likewise via `?currency=`, and a
 per-budget periods overview lives at `/budgets/:id/periods`). Receipt extraction
-UI is gated on `useExtractionEnabled()`
+UI is gated on `useExtractionConfig().enabled`
 and hidden entirely when no parser is configured.
 
 ## Internationalization (i18n)

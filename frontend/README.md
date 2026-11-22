@@ -46,7 +46,7 @@ frontend/
 │   │   ├── UserPreferencesContext.tsx
 │   │   └── ThemeContext.tsx         # Light/dark theme
 │   ├── hooks/
-│   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionEnabled, useTransaction (single-transaction detail query on the shared `['transactions','detail',id]` entry)
+│   │   ├── useDomain.ts             # useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useExtractionConfig, useTransaction (single-transaction detail query on the shared `['transactions','detail',id]` entry)
 │   │   ├── useAttachments.ts        # Attachment list/upload/delete + cached-blob view/download (per transaction)
 │   │   ├── useExtractionPolling.ts  # Receipt-extraction polling for one transaction's attachments: pending id, poll query, done/failed side effects, review payload
 │   │   ├── useBookmarks.ts          # Bookmark list + mutations + useVisibleBookmarks (shared sidebar/account-menu-sheet rows)
