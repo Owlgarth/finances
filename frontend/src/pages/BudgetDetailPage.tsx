@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Bookmark, BookmarkPlus, CalendarRange, ChevronLeft, ChevronRight, Merge, Pencil, Plus, Tags, Trash2 } from 'lucide-react'
@@ -10,7 +10,7 @@ import type { Bookmark as BookmarkModel } from '../types'
 import { useBookmarks } from '../hooks/useBookmarks'
 import { useEnabledCurrencies } from '../hooks/useDomain'
 import { usePermissions } from '../hooks/usePermissions'
-import { formatAmount, sumAmounts } from '../utils/format'
+import { formatAmount, subtractAmounts, sumAmounts } from '../utils/format'
 import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
@@ -72,12 +72,63 @@ function loadStoredCurrencyView(budgetId: number): string | null {
   }
 }
 
+// Desktop ledger row order per budget: applied on mount / budget switch,
+// never mid-session. Same stored-preference shape as the currency view
+// above - distinct key from any other stored preference. Unknown, missing
+// or garbage values clamp to the default (attention-first), so a stale or
+// hand-edited value can never blank the order control. localStorage only -
+// never the URL: the page's URL contract is frozen to ?period= /
+// ?currency=, and the order choice is a per-budget convenience, not a
+// shareable view.
+type RowOrder = 'attention' | 'natural'
+const budgetOrderKey = (budgetId: number) => `owlgarth_budget_order:${budgetId}`
+function loadStoredBudgetOrder(budgetId: number): RowOrder {
+  try {
+    return localStorage.getItem(budgetOrderKey(budgetId)) === 'natural' ? 'natural' : 'attention'
+  } catch {
+    return 'attention'
+  }
+}
+
 /** Currency-strip chip number classes: mono figure, active-currency
  *  emphasis, summary-refetch shimmer. A module-level helper so the class
  *  fragments are built outside JSX expression containers (styling, never
  *  UI text). */
 const stripNumberClass = (isActive: boolean, summaryLoading: boolean): string =>
   `font-mono text-xs font-medium tabular-nums${isActive ? ' text-text' : ''}${summaryLoading ? ' animate-pulse' : ''}`
+
+/** Attention status for one ledger row, shared by the desktop chips and
+ *  the attention-first order: over = spent more than planned (exact cents
+ *  via subtractAmounts - the group boundary is a status claim, not a
+ *  display rounding), near limit = 75% and up but not over, else ok. pct
+ *  is display-only float math, same register as the currency strip's meter
+ *  fill, and deliberately NOT the strip's 95% split - this is the row
+ *  status the phone cards (BudgetCategoryList) already use. */
+type RowStatus = 'over' | 'near' | 'ok'
+function attentionOf(planned: string, actual: string): { status: RowStatus; pct: number } {
+  const plannedNum = parseAmountNumber(planned) ?? 0
+  const actualNum = parseAmountNumber(actual) ?? 0
+  // Exact sign check: subtractAmounts never returns '-0.00', so a leading
+  // minus is exactly "actual below planned" and '0.00' is "equal".
+  const diff = subtractAmounts(actual, planned)
+  const pct = plannedNum > 0 ? (actualNum / plannedNum) * 100 : actualNum > 0 ? Number.POSITIVE_INFINITY : 0
+  if (!diff.startsWith('-') && diff !== '0.00') return { status: 'over', pct }
+  if (pct >= 75) return { status: 'near', pct }
+  return { status: 'ok', pct }
+}
+
+const ATTENTION_RANK: Record<RowStatus, number> = { over: 0, near: 1, ok: 2 }
+
+/** Status chips in the sticky category cell: status never relies on color
+ *  alone - the word carries it. Bordered rectangular shape per the page's
+ *  own currency chip, never a pill. Colors are the interim ruling:
+ *  Over = text-negative; Near limit = text-text-muted because the palette
+ *  has no warning TEXT color legible at this size yet - switch to a
+ *  warning text token when one lands. */
+const statusChipBase =
+  'inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none shrink-0'
+const statusOverChipClass = `${statusChipBase} text-negative border-negative/20 bg-negative-bg`
+const statusNearChipClass = `${statusChipBase} text-text-muted bg-surface border-border`
 
 /** Status of a budget category row: over = spent more than planned, near =
  *  75% or more of plan without going over, else on track. Structural twin
@@ -390,6 +441,18 @@ export default function BudgetDetailPage() {
     storedViewRef.current = loadStoredCurrencyView(budgetId)
   }, [budgetId])
 
+  // Desktop row order: "Needs attention first" (default) or the natural
+  // category order. The phone list grouping is its own order and never
+  // reads this. Same latest-ref shape as storedViewRef directly above: the
+  // sync effect must run BEFORE the [budgetId] reset effect below, so on
+  // mount and budget-to-budget navigation the ref already holds THIS
+  // budget's stored order when the reset seeds from it.
+  const [rowOrder, setRowOrder] = useState<RowOrder>('attention')
+  const storedOrderRef = useRef<RowOrder>(loadStoredBudgetOrder(budgetId))
+  useEffect(() => {
+    storedOrderRef.current = loadStoredBudgetOrder(budgetId)
+  }, [budgetId])
+
   // Budget→budget navigation (CommandPalette) re-renders this page with a new
   // budgetId. Reset the other per-budget state too, or the summary query runs
   // budgetSummary(B, A_period) → 404 → every row silently renders 0s. Kept in
@@ -433,6 +496,10 @@ export default function BudgetDetailPage() {
     setEditOpen(false)
     setPlanDrafts({})
     setRowErrors({})
+    // Re-open on this budget's stored desktop row order (attention-first
+    // when nothing is stored). A single ref read as the setState argument
+    // stays lint-quiet - the same bailout storedViewRef's seed relies on.
+    setRowOrder(storedOrderRef.current)
   }, [budgetId])
 
   // Currency column groups: the budget's configured currencies in stored
@@ -471,6 +538,28 @@ export default function BudgetDetailPage() {
         remaining: item?.remaining ?? '0',
       }
     })
+
+  // Desktop tbody order: attention-first reorders the DESKTOP tbody only -
+  // the phone list groups on its own, and the tfoot totals are
+  // order-independent exact sums. Over rows first, then near limit,
+  // percent descending inside each; ok rows after in natural order
+  // (Array#sort is stable, so returning 0 for same-rank rows preserves
+  // it). Reordering is safe mid-edit-plan: drafts are keyed by category
+  // id, not by row position. Plain derivation, not a memo - rows is a
+  // fresh array every render, so a memo dep on it would trip the
+  // dependencies-change-every-render lint for nothing.
+  const orderedRows =
+    rowOrder === 'attention'
+      ? rows
+          .map((row) => ({ row, attention: attentionOf(row.planned, row.actual) }))
+          .sort((a, b) => {
+            const ra = ATTENTION_RANK[a.attention.status]
+            const rb = ATTENTION_RANK[b.attention.status]
+            if (ra !== rb) return ra - rb
+            return ra === ATTENTION_RANK.ok ? 0 : b.attention.pct - a.attention.pct
+          })
+          .map((entry) => entry.row)
+      : rows
 
   // Rows whose draft differs from the loaded planned value (normalized
   // compare; an invalid draft counts as changed). Order follows rows, so
@@ -541,6 +630,14 @@ export default function BudgetDetailPage() {
   const goToCurrency = (dir: 1 | -1) => {
     const len = activeCurrencies.length
     selectCurrency(activeCurrencies[(currencyIdx + dir + len) % len])
+  }
+
+  // Remember the desktop row order so this budget re-opens in it. The
+  // stored-preference write is handler-only, mirroring selectCurrency
+  // above; the URL is never touched.
+  const selectRowOrder = (order: RowOrder) => {
+    setRowOrder(order)
+    localStorage.setItem(budgetOrderKey(budgetId), order)
   }
 
   // Period switch (picker selection) with the same unsaved-changes guard.
@@ -759,6 +856,15 @@ export default function BudgetDetailPage() {
   const totalRemainingNegative = totalRemaining.startsWith('-')
   const totalLabel = t('detail.total')
 
+  // Activity link params, frozen: the viewed period's bounds travel
+  // verbatim in Activity's own filter vocabulary (the category param
+  // parses as a CSV list on the Activity side, from/to are ISO dates). A
+  // degenerate no-period render (transient auto-pick pass) links without
+  // bounds rather than linking nowhere.
+  const activityPeriodSearch = selectedPeriod
+    ? `&from=${selectedPeriod.start_date}&to=${selectedPeriod.end_date}`
+    : ''
+
   // Phone category cards: the table rows enriched with display-only status,
   // spend ratio (bar width + attention ordering) and the Activity deep link
   // for the viewed period. Persisted amounts stay exact strings;
@@ -966,6 +1072,23 @@ export default function BudgetDetailPage() {
           onKeyDown={onPanelKeyDown}
         >
         {currencyStrip}
+        {/* Desktop only: row-order control - needs-attention-first is the
+            default; the natural category order is one click away and
+            remembered per budget. Phones do without it: their card list
+            groups by attention on its own. w-56 matches the PeriodPicker
+            width idiom. */}
+        <div className="flex items-center justify-end mb-2 max-sm:hidden">
+          <Select
+            value={rowOrder}
+            onChange={selectRowOrder}
+            options={[
+              { value: 'attention', label: t('detail.sortOptionAttention') },
+              { value: 'natural', label: t('detail.sortOptionNatural') },
+            ]}
+            aria-label={t('detail.sortAriaLabel')}
+            className="w-56"
+          />
+        </div>
         {/* Desktop: ledger table. Hidden on mobile in favor of the card list below. */}
         <div className="border border-border rounded-sm bg-surface overflow-x-auto max-sm:hidden">
           <table className="w-full text-sm">
@@ -987,10 +1110,11 @@ export default function BudgetDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ category, planned, actual, remaining }) => {
+              {orderedRows.map(({ category, planned, actual, remaining }) => {
                 const cellKey = `${category.id}:${activeCurrency}`
                 const draft = planDrafts[cellKey]
                 const isSelected = selectedCategory === category.id
+                const attention = attentionOf(planned, actual)
                 return (
                   <tr
                     key={category.id}
@@ -1007,10 +1131,34 @@ export default function BudgetDetailPage() {
                     }}
                     className={`cursor-pointer ${isSelected ? 'bg-surface-hover' : ''}`}
                   >
-                    {/* Sticky cell needs its own solid bg, so it mirrors the row state;
-                        the inset shadow is the selection accent bar. */}
-                    <td className={`px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 max-sm:max-w-[9rem] overflow-hidden text-ellipsis ${isSelected ? 'bg-surface-hover shadow-[inset_2px_0_0_var(--color-border-focus)]' : 'bg-surface'}`}>
-                      {category.name}
+                    {/* Sticky cell keeps its own solid bg mirroring the row
+                        state and the inset selection-accent bar. Inside:
+                        the Activity link (name + trailing chevron - a bare
+                        label does not read as a link) and the status chip.
+                        The name truncates inside the cell so long names
+                        share the sticky cell with the chip at narrow table
+                        widths; the former max-sm width was dead (the table
+                        is max-sm:hidden) and is dropped on this edited
+                        line. The chevron sits inside the Link but outside
+                        the truncating span so it can never be ellipsized
+                        away. */}
+                    <td className={`px-4 py-2 text-text whitespace-nowrap sticky left-0 z-10 max-w-[16rem] overflow-hidden ${isSelected ? 'bg-surface-hover shadow-[inset_2px_0_0_var(--color-border-focus)]' : 'bg-surface'}`}>
+                      <span className="flex items-center gap-2">
+                        <Link
+                          to={`/transactions?category=${category.id}${activityPeriodSearch}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-0.5 min-w-0 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                        >
+                          <span className="truncate">{category.name}</span>
+                          <ChevronRight size={12} strokeWidth={1.5} aria-hidden="true" className="shrink-0 text-text-muted" />
+                        </Link>
+                        {attention.status === 'over' && (
+                          <span className={statusOverChipClass}>{t('detail.statusOver')}</span>
+                        )}
+                        {attention.status === 'near' && (
+                          <span className={statusNearChipClass}>{t('detail.statusNearLimit')}</span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-4 py-2 text-right font-mono text-planned">
                       {draft !== undefined ? (
