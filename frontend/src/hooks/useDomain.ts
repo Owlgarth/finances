@@ -85,8 +85,3 @@ export function useExtractionConfig(): { enabled: boolean; reachable: boolean } 
   })
   return { enabled: data?.enabled ?? false, reachable: data?.reachable ?? false }
 }
-
-/** Whether receipt extraction is configured. When false, every extraction affordance hides. */
-export function useExtractionEnabled(): boolean {
-  return useExtractionConfig().enabled
-}

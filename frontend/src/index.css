@@ -594,7 +594,7 @@ button {
 }
 
 @media (forced-colors: active) {
-  .card, .input, .nav-item, button, input, select, textarea {
+  button, input, select, textarea {
     border: 1px solid ButtonText;
   }
 }

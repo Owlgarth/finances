@@ -4,8 +4,6 @@
     "today": "Today"
   },
   "insights": {
-    "selectBudget": "Select budget",
-    "budgetAriaLabel": "Budget",
     "currencyAriaLabel": "Currency",
     "viewBudget": "View budget \u2192",
     "plannedPeriodLabel": "Planned \u00b7 {{period}}",

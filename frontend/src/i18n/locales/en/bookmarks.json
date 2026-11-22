@@ -16,7 +16,6 @@
   "noFiltersHint": "The bookmark opens the unfiltered page",
   "activeFilters_one": "active filter",
   "activeFilters_other": "active filters",
-  "addBudgetAria": "Add bookmark for this budget",
   "pageName": {
     "transactions": "Transactions",
     "planned": "Planned"

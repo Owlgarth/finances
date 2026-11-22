@@ -4,8 +4,6 @@
     "today": "Dzisiaj"
   },
   "insights": {
-    "selectBudget": "Wybierz budżet",
-    "budgetAriaLabel": "Budżet",
     "currencyAriaLabel": "Waluta",
     "viewBudget": "Zobacz budżet \u2192",
     "plannedPeriodLabel": "Zaplanowano \u00b7 {{period}}",

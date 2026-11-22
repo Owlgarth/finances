@@ -32,11 +32,6 @@ export const BOOKMARK_ICONS: Record<string, LucideIcon> = {
     key list and the registry can never drift apart. */
 export const BOOKMARK_ICON_KEYS: readonly string[] = Object.keys(BOOKMARK_ICONS)
 
-/** Lucide component for a stored icon key, with Bookmark as the fallback. */
-export function bookmarkIcon(key: string | null): LucideIcon {
-  return (key !== null && BOOKMARK_ICONS[key]) || Bookmark
-}
-
 /** Swatch palette order. Colors are stored as these KEYS, never hex values -
     the palette lives once in index.css as --bookmark-c-<key> variables with
     dark overrides, resolved per theme by the CSS cascade. */
@@ -66,7 +61,7 @@ export function BookmarkGlyph({ bookmark, size, strokeWidth, className }: {
       additions without forking the shape. */
   className?: string
 }) {
-  // Direct map lookup, not the bookmarkIcon() call: react-hooks/static-components
+  // Direct map lookup, not a resolver-helper call: react-hooks/static-components
   // cannot see that the call only RETURNS an existing module-scope component, so
   // it reads as a component created during render (the TYPE_ICON row lookup in
   // AccountsPage is the sanctioned member-expression shape).
