@@ -221,7 +221,7 @@ The backend containers run as root against a bind-mounted, host-owned source tre
 
 - `UV_PROJECT_ENVIRONMENT=/venv` in the backend image, volume mounted at `/venv`
 - Celery beat gets `--schedule=/tmp/celerybeat-schedule`
-- The `ui` service is the nginx production build (no bind mount, no `node_modules` volume); frontend hot reload comes from `start-dev-frontend.sh` on the host
+- The `ui` service is the nginx production build (no bind mount, no `node_modules` volume); frontend hot reload comes from `./dev.sh frontend` (Vite in a one-off `node` container run as the invoking user, or on the host with `DEV_TARGET=host`), so `frontend/node_modules` is always host-owned
 
 Compose otherwise builds **one image per service** from the same Dockerfile, so `docker compose build api` would leave `worker`/`beat` on the old image — which is how a stale worker once recreated a root-owned `/app/.venv`. `api`, `worker` and `beat` therefore share one tag via the anchor:
 

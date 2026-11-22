@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3, retry_backoff=True)
 def execute_planned_transaction(self, planned_id: int) -> None:
-    """Create a Transaction and update PeriodBalance for an executed planned transaction.
+    """Create the Transaction for an executed planned transaction and link it back.
 
     Idempotency: if the planned transaction already has a transaction_id set,
     the task skips execution — this prevents duplicate Transactions if the task

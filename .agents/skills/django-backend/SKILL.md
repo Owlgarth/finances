@@ -227,11 +227,12 @@ Exemplar: `download_transaction_attachment` in `transactions/api.py`.
 
 ## Service Layer
 
-Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation, DB operations, and balance updates. Domain-specific exceptions live in `<app>/exceptions.py`.
+Business logic lives in `<app>/services.py` as class-based services (e.g., `TransactionService`). Services handle validation and DB operations. Account balances and budget periods are derived on read, never stored, so no service write path maintains a balance row (see `docs/architecture.md`). Domain-specific exceptions live in `<app>/exceptions.py`.
 
 Shared helpers:
-- `common/permissions.py` — `require_role(user, workspace_id, allowed_roles)` — raises 403, returns the role
-- `common/services/base.py` — `resolve_currency`, `get_or_create_period_balance`, `update_period_balance`
+- `common/permissions.py` - `require_role(user, workspace_id, allowed_roles)` - raises 403, returns the role
+- `currencies/services.py` - `CurrencyCatalogService.get_enabled(workspace_id, code)` - returns an enabled workspace currency or raises `CurrencyNotEnabledError`
+- `common/services/base.py` - `delete_workspace_financial_records(workspace_id)` - deletes a workspace's domain records in PROTECT-safe dependency order
 
 ```python
 class TransactionService:
@@ -245,12 +246,11 @@ class TransactionService:
     @staticmethod
     @db_transaction.atomic
     def create(user, workspace_id: int, data: TransactionCreate) -> Transaction:
-        currency = resolve_currency(workspace_id, data.currency)
-        if not currency:
-            raise UnknownCurrencyError(data.currency)
-        trans = Transaction.objects.create(..., created_by=user, updated_by=user)
-        TransactionService.update_period_balance(...)
-        return trans
+        account = TransactionService._resolve_account(workspace_id, data.account_id)
+        currency = TransactionService._resolve_currency(workspace_id, account, data.currency_code)
+        return Transaction.objects.create(
+            ..., account=account, currency=currency, created_by=user, updated_by=user
+        )
 ```
 
 **`get_or_create` on a scoped queryset repeats the scoping column as an explicit lookup kwarg.** Django applies queryset filters on the `get()` path but builds the create params from `kwargs + defaults` only - the filters NEVER reach `create()` (Django 6, `django/db/models/query.py`). `Model.objects.for_workspace(ws_id).get_or_create(user=user, ...)` therefore finds existing rows fine but raises `ValueError: workspace_id must be set before save` from `WorkspaceScopedModel.save` on every first GET (a spec that assumed filter propagation here failed 8 tests before the fix). Write `for_workspace(workspace_id).get_or_create(user=user, workspace_id=workspace_id, defaults=...)` so the workspace guard and the create path both hold.

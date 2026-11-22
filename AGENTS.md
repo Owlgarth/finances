@@ -10,7 +10,7 @@ Owlgarth Finances is a personal finance tracking application built with Django 6
 
 ### Backend (Django)
 
-When running Python commands, always use the virtual environment: `backend/.venv/bin/python`
+The commands below are the host workflow (`DEV_TARGET=host`). When running Python directly on the host, always use the virtual environment: `backend/.venv/bin/python`. The default `./dev.sh` route (`./dev.sh test`, `./dev.sh lint`, `./dev.sh manage ...`) runs the same commands in the containers - see Full Stack below.
 
 ```bash
 cd backend
@@ -86,9 +86,10 @@ to the published ports; it can also be set per command
 Money-holding accounts are the centre of gravity; balances and periods are computed/derived, not stored:
 
 ```
-Workspace → { WorkspaceMember, WorkspaceCurrency,
-              Account → [Transaction → (TransactionItem, TransactionAttachment), Transfer, PlannedTransaction],
-              Budget → [Category, Period → CategoryBudget] }
+Workspace → { WorkspaceMember, WorkspaceCurrency, Bookmark, UserWorkspaceSettings,
+              Account → [Transaction → (TransactionItem, TransactionAttachment), Transfer,
+                         PlannedTransaction, RecurringTransaction],
+              Budget → [BudgetCurrency, Category, Period → CategoryBudget] }
 ```
 
 Currencies come from a global ISO 4217 catalog that each workspace enables a subset of. See `docs/architecture.md`.

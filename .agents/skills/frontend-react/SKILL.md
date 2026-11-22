@@ -963,7 +963,7 @@ Deploy-time values (API URL, demo mode) are runtime config, not build args: the 
 
 ## Naming Conventions
 
-- **Components**: PascalCase (`BudgetTable`, `TransactionList`)
+- **Components**: PascalCase (`TransactionsTable`, `SplitView`)
 - **Functions**: camelCase (`handleSubmit`, `fetchData`)
 - **Constants**: camelCase for objects and module-scope DERIVED values, UPPER_SNAKE for authored literal sentinels - `savedToken`/`savedLanguage` (client.ts) and `appVersion` (ProfilePage) are camelCase derivations even though primitive, while `TOKEN_KEY`/`NO_ACCOUNT` are UPPER_SNAKE: the UPPER name is the grep target for an authored literal, and a derived value has no literal to find.
 - **Types/Interfaces**: PascalCase (`User`, `Transaction`, `Props`)

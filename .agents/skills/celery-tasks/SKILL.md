@@ -24,8 +24,13 @@ def execute_planned_transaction(self, planned_id):
         return  # Permanent failure — no point retrying
     if planned.transaction_id:
         return  # Already processed (idempotency fast path)
-    # ... transient checks that raise domain exceptions for retry ...
-    TransactionService.update_period_balance(...)
+    with db_transaction.atomic():
+        planned = PlannedTransaction.objects.select_for_update().get(id=planned_id)
+        if planned.transaction_id:
+            return  # Re-check under the lock
+        trans = TransactionService.create(planned.created_by, planned.workspace_id, TransactionCreate(...))
+        planned.transaction_id = trans.id
+        planned.save(update_fields=['transaction_id'])
 ```
 
 ## Dispatch Pattern
