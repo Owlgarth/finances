@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useIsTouch } from '../../hooks/useBreakpoint'
+import { useHorizontalStepDrag } from '../../hooks/useHorizontalStepDrag'
 import { isCalendarMonth } from '../../utils/dates'
 import { formatMonthYear, formatPeriodRange, formatQuickPickDate } from '../../utils/format'
 import { controlHeightClass } from './formStyles'
@@ -64,10 +66,31 @@ export function stepperRangeLabel(from: string, to: string, allTimeLabel: string
  *  max-sm:flex-1 absorbing the full-width mobile row. The monthNav aria
  *  strings live in the planned namespace (they predate the shared stepper)
  *  and are reused as-is; the date-range aria is a transactions-namespace
- *  shared-filter string. */
+ *  shared-filter string.
+ *
+ *  On coarse pointers the label is also a horizontal drag target: one
+ *  sideways drag past the hook's threshold steps exactly one month
+ *  through the same onShift the chevrons call (re-armed only by a fresh
+ *  gesture), and the trailing click of such a drag is swallowed so it
+ *  never also opens the date editor - a plain tap still does. The
+ *  calendar feature adopts the same hook (useHorizontalStepDrag) for its
+ *  grid and day list, stepping month/week/day through the same handler
+ *  as its arrows. */
 export default function MonthStepper({ label, onShift, onOpenEditor, editorOpen, inline }: Props) {
   const { t: tNav } = useTranslation('planned')
   const { t: tFilters } = useTranslation('transactions')
+  // The drag is coarse-pointer only: fine pointers have the chevrons, and
+  // a mouse drag on a button has no styled affordance without new tokens.
+  // It is armed ONLY while the exact-month gate holds (onShift present) -
+  // the drag duplicates the chevrons, and a custom range or All time has
+  // no month to step to. Taps are untouched: the click swallow installs
+  // only for a threshold-crossing drag, so the date editor still opens
+  // on tap.
+  const isCoarse = useIsTouch()
+  const stepDrag = useHorizontalStepDrag({
+    onStep: (dir) => onShift?.(dir),
+    enabled: isCoarse && onShift !== undefined,
+  })
   // Hoisted: the literal-string lint recognizes only the unaliased t() callee.
   const groupAria = tNav('monthNav.groupAria')
   const prevAria = tNav('monthNav.prevAria')
@@ -92,10 +115,11 @@ export default function MonthStepper({ label, onShift, onOpenEditor, editorOpen,
       <button
         type="button"
         onClick={onOpenEditor}
+        {...stepDrag}
         aria-label={dateRangeAria}
         aria-haspopup={onOpenEditor ? 'dialog' : undefined}
         aria-expanded={onOpenEditor ? (editorOpen ?? false) : undefined}
-        className={`font-mono text-xs font-medium text-text min-w-[128px] text-center max-sm:flex-1 rounded-sm hover:bg-surface-hover transition-colors ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
+        className={`font-mono text-xs font-medium text-text min-w-[128px] text-center max-sm:flex-1 rounded-sm hover:bg-surface-hover transition-colors touch-pan-y ${controlHeightClass} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus`}
       >
         {label}
       </button>
