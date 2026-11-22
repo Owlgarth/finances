@@ -5,8 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { Table2, ChartColumn } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { budgetsApi, reportsApi } from '../../api/client'
-import { useBudgets, useEnabledCurrencies } from '../../hooks/useDomain'
-import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { useEnabledCurrencies } from '../../hooks/useDomain'
 import { formatAmount, getNumberStyle } from '../../utils/format'
 import { activeCurrencyCodes } from '../../utils/currencies'
 import Select from '../common/Select'
@@ -332,26 +331,17 @@ function ChartCard({ title, children, table }: { title: string; children: React.
   )
 }
 
-export default function BudgetInsights() {
+export default function BudgetInsights({ budgetId }: { budgetId: number }) {
   const { t } = useTranslation('numbers')
-  const { workspace } = useWorkspace()
-  const { data: budgets = [] } = useBudgets(false)
+  // The host page owns WHICH budget this view renders (its route param); the
+  // ['budget', budgetId] entry is the same one the periods page queries, so
+  // the shared cache serves both and archived budgets (absent from the
+  // active-budgets list) still resolve here.
+  const { data: budget } = useQuery({
+    queryKey: ['budget', budgetId],
+    queryFn: () => budgetsApi.get(budgetId),
+  })
   const { data: currencies = [] } = useEnabledCurrencies()
-
-  // Derived-until-touched budget selection (same shape as the currency
-  // selection below): the view follows the derived default - the
-  // workspace's default budget, else the first budget - until the user
-  // picks one; a touched pick that leaves the list (budget deleted)
-  // falls back to the derived default deterministically.
-  const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null)
-  const [budgetTouched, setBudgetTouched] = useState(false)
-  const derivedBudgetId = budgets.find((b) => b.id === workspace?.default_budget_id)?.id ?? budgets[0]?.id ?? null
-  const budgetId =
-    budgetTouched && selectedBudgetId !== null && budgets.some((b) => b.id === selectedBudgetId)
-      ? selectedBudgetId
-      : derivedBudgetId
-
-  const budget = budgets.find((b) => b.id === budgetId)
 
   // Materialize + fetch the current period for monthly/N-week budgets.
   const { data: currentPeriod } = useQuery({
@@ -425,16 +415,8 @@ export default function BudgetInsights() {
   const [currencyTouched, setCurrencyTouched] = useState(false)
   const currency = currencyTouched && selectedCurrency !== null && activeCurrencies.includes(selectedCurrency) ? selectedCurrency : activeCurrencies[0]
 
-  // Picking a budget resets to its first configured currency (a surviving
-  // code from the previous budget's list must not stay selected); picking
-  // a currency marks the selection touched so re-derivations stop
+  // Picking a currency marks the selection touched so re-derivations stop
   // overwriting the user's choice.
-  const selectBudget = (id: number) => {
-    setSelectedBudgetId(id)
-    setBudgetTouched(true)
-    setSelectedCurrency(null)
-    setCurrencyTouched(false)
-  }
   const selectCurrency = (code: string) => {
     setSelectedCurrency(code)
     setCurrencyTouched(true)
@@ -445,8 +427,6 @@ export default function BudgetInsights() {
   // code is active, Select otherwise); while the enabled list is empty
   // the codes are unknowable, so keep today's hide behavior.
   const showCurrencyControl = budget != null && currencies.length > 0
-
-  if (budgets.length === 0) return null
 
   const totals = currency ? (summary?.totals[currency] ?? null) : null
   const planned = totals ? parseFloat(totals.planned) : 0
@@ -469,19 +449,9 @@ export default function BudgetInsights() {
     .map((i) => [i.category_name, formatAmount(i.planned), formatAmount(i.actual), formatAmount(i.remaining)])
 
   return (
-    <div className="mb-6">
+    <div className="mt-6">
       {/* Filter row - scopes everything below it */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="w-56">
-          <Select
-            value={budgetId}
-            onChange={selectBudget}
-            options={budgets.map((b) => ({ value: b.id, label: b.name }))}
-            placeholder={t('insights.selectBudget')}
-            aria-label={t('insights.budgetAriaLabel')}
-            className="w-full"
-          />
-        </div>
         {showCurrencyControl &&
           (activeCurrencies.length > 1 ? (
             <div className="w-28">
