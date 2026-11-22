@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services, direct-call data-migration tests). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
+description: Backend testing conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, Celery tasks, on_commit, JWT expiry, subprocess probes for import-time settings, Accept-Language translated-response tests, rolled-back dry-run harnesses for destructive services, direct-call data-migration tests, query-count invariance tests via CaptureQueriesContext). Use when writing or modifying tests in backend/, debugging test failures, or adding test coverage for services, endpoints, or tasks.
 ---
 
 # Backend Testing Conventions
@@ -50,6 +50,8 @@ A transaction's currency **is** its account's currency — there is no separate
 not to a period.
 
 **Round-trip and echo pins need non-default factory values** - a default-value round-trip proves nothing (defaults survive trivially): a GDPR export/import test sets `upfront_count=3` and pairs `materialize_all=True` with an `end_date` (the DB check constraint forbids the flag alone), so each field's survival is individually observable.
+
+**Per-row RANDOM factory defaults break ordering assertions.** `TransactionFactory.date` defaults to `Faker('date_this_year')` (`backend/transactions/factories.py`) - random per row - so any test asserting newest-per-group ordering, or any date-order-dependent result, must pass explicit `date=` on EVERY created row; leaving dates to chance makes the assertion pass or fail per Faker seed.
 
 ## AuthMixin
 
@@ -257,6 +259,10 @@ self.assertEqual(RecurringTransaction.objects.count(), 0)
 
 The nested `atomic()` is load-bearing: the `IntegrityError` poisons the TestCase's outer transaction (every later query would raise `TransactionManagementError`), and the savepoint rollback keeps the test usable. A trailing count pins that the poisoned creates stored nothing.
 
+## Query-Count Invariance (CaptureQueriesContext)
+
+Pin "the query count does not scale with N" with two `CaptureQueriesContext` runs compared to EACH OTHER - never a fixed `assertNumQueries(N)`. The absolute count includes JWT-auth and middleware queries whose internals change independently of the code under test, so a pinned number fails on unrelated refactors while proving nothing about the code it claimed to cover; the INVARIANCE is the contract the endpoint owns. Exemplar: `TestFrequentDescriptionsLastValues` in `transactions/tests.py` captures counts at `limit=1` vs `limit=6` and asserts equality - the endpoint's query count is constant in `limit` and in the number of groups (the window-function pattern in the `django-backend` skill).
+
 ## Testing Data-Migration Functions (Direct Call)
 
 A `RunPython` function is testable by calling it directly against seeded rows - `func(django.apps.apps, schema_editor=None)` - which bypasses the migration recorder BY DESIGN: the test proves the function's effect on rows, not Django's migration-state machinery. The migration module loads via `importlib.import_module` because the file name (`0012_transactionitem_coverage_repair`) starts with a digit and is not a valid identifier.
@@ -317,7 +323,7 @@ The same `extra='ignore'` tolerance makes clean-break sequencing forgiving acros
 
 **Expected values derive from the landed code, never from the plan text.** Row counts come from the landed loop (a today-start recurring rule materializes the catch-up row plus one window row; a future-start rule with `upfront_count=1` exactly one row at `start_date`), and 400 assertions use the landed `default_code` literals byte-for-byte - probe `exceptions.py` first, a spec's guessed literals are always wrong. When a behavior change alters what every run produces, re-derive sibling test counts from the source instead of incrementing blindly; test comments enumerating each fixture's contribution are the cross-check.
 
-**Plan-authored test snippets are unexecuted code - trace each against the pinned service behavior before landing it.** The same distrust that applies to expected values applies to the test body itself: spec test snippets have never run, so they can assert unreachable states and use invalid call shapes. Three flavors from one session: an assertion moving the already-last row "down" (a boundary no-op by pinned design - the swap it asserts can never happen; resetting the collision first also reaches the branch the original never exercised); a duplicate-keyword factory call (`Factory(budget=x, **{'budget': None})` is a `TypeError` before any DB access - merge overrides into ONE kwargs dict; dict-literal `**` merge is legal last-wins, duplicate call kwargs are not); and a cross-workspace test keeping a currency only enabled in the source workspace (the per-workspace enablement check correctly 404s it). Fix the test to exercise the pinned behavior - never bend the landed service to match a broken test.
+**Plan-authored test snippets are unexecuted code - trace each against the pinned service behavior before landing it.** The same distrust that applies to expected values applies to the test body itself: spec test snippets have never run, so they can assert unreachable states and use invalid call shapes. Three flavors from one session: an assertion moving the already-last row "down" (a boundary no-op by pinned design - the swap it asserts can never happen; resetting the collision first also reaches the branch the original never exercised); a duplicate-keyword factory call (`Factory(budget=x, **{'budget': None})` is a `TypeError` before any DB access - merge overrides into ONE kwargs dict; dict-literal `**` merge is legal last-wins, duplicate call kwargs are not); and a cross-workspace test keeping a currency only enabled in the source workspace (the per-workspace enablement check correctly 404s it). Fix the test to exercise the pinned behavior - never bend the landed service to match a broken test. Plan service-code snippets are unexecuted code too - syntax-check them before landing (one spec snippet wrote `order_by=F('date').desc(), F('id').desc(),` - positional after keyword - and failed at import).
 
 ## URL-Pinning Tests Call the Exact Client URL
 
