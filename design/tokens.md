@@ -27,7 +27,8 @@ The declarations mirror the css2 response the previous CDN link served - same fa
 
 | Role | Font | Use |
 |---|---|---|
-| UI text, headings, labels, body, navigation | `Geist` | All prose, navigation labels, headings, button text |
+| UI text, headings, labels, body | `Geist` | All prose, headings, form labels, button text |
+| Navigation labels | `JetBrains Mono` | Sidebar nav items: 12px, uppercase, `tracking-wider` (`font-mono text-xs`; see components.md §1) |
 | **All financial data** | `JetBrains Mono` | Currency, percentages, dates, IDs, transaction amounts, balance displays |
 
 **Rule:** Every currency value, percentage, date, and transaction ID **must** use JetBrains Mono. Never render `$4,280.00` in Geist. This applies to all tabular data, balance cards, budget amounts, and financial summaries.
