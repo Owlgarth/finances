@@ -8,6 +8,19 @@ Owlgarth Finances is a personal finance tracking application built with Django 6
 
 ## Build/Lint/Test Commands
 
+### Agent verification commands
+
+With the default `DEV_TARGET=docker`, run every check through `./dev.sh`: `frontend/node_modules` is installed by the node container, so host `npm` commands fail on its native binaries. The host forms in the sections below apply with `DEV_TARGET=host`; the one exception is read-only backend lint, which works on the host in either mode because `uv run` keeps its own `backend/.venv`.
+
+```bash
+./dev.sh npm run build         # tsc + Vite build
+./dev.sh npm run lint
+./dev.sh npm run i18n:check    # CI runs it
+./dev.sh test [pytest args]    # needs ./dev.sh up (db)
+./dev.sh lint                  # WRITES fixes: ruff check --fix + ruff format + eslint (implementers)
+cd backend && uv run ruff check . && uv run ruff format --check .   # read-only backend lint (gates, reviewers)
+```
+
 ### Backend (Django)
 
 The commands below are the host workflow (`DEV_TARGET=host`). When running Python directly on the host, always use the virtual environment: `backend/.venv/bin/python`. The default `./dev.sh` route (`./dev.sh test`, `./dev.sh lint`, `./dev.sh manage ...`) runs the same commands in the containers - see Full Stack below.
