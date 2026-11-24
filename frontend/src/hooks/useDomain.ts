@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { accountsApi, budgetsApi, currenciesApi, recurringTransactionsApi, transactionsApi } from '../api/client'
+import { accountsApi, budgetsApi, currenciesApi, plannedTransactionsApi, recurringTransactionsApi, transactionsApi } from '../api/client'
 
 // List hooks set refetchOnWindowFocus: 'always': each tab keeps its own
 // query cache, so a mutation in another tab (or device) can't invalidate
@@ -69,6 +69,24 @@ export function useRecurringTransaction(id: number | null) {
     queryKey: ['recurring', 'detail', id],
     queryFn: () => recurringTransactionsApi.get(id!),
     enabled: id != null,
+  })
+}
+
+/** One planned transaction by id. Shares the ['planned', 'detail', id] cache
+ * entry with /planned/new's copy query, so the family-wide ['planned']
+ * invalidations refetch it too via prefix matching. Polls while a paid item
+ * is still waiting for its transaction link: the execute endpoint marks the
+ * item done first and a background task links the transaction, so a short
+ * bounded poll lets an open surface catch the link without a reload. */
+export function usePlannedTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ['planned', 'detail', id],
+    queryFn: () => plannedTransactionsApi.get(id!),
+    enabled: id != null,
+    refetchInterval: (query) => {
+      const item = query.state.data
+      return item && item.status === 'done' && item.transaction_id === null && query.state.dataUpdateCount < 20 ? 1500 : false
+    },
   })
 }
 

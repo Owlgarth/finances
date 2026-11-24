@@ -20,6 +20,7 @@ import RecurringRulePage from './pages/RecurringRulePage'
 import TransfersPage from './pages/TransfersPage'
 import TransferRecordPage from './pages/TransferRecordPage'
 import NewTransactionPage from './pages/NewTransactionPage'
+import NewPlannedPage from './pages/NewPlannedPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -62,6 +63,7 @@ function AppContent() {
         <Route path="/planned" element={<Planned />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
+        <Route path="/planned/new" element={<NewPlannedPage />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/transfers/:id" element={<TransferRecordRoute />} />
         <Route path="/new" element={<NewTransactionPage />} />
