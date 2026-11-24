@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -25,7 +25,6 @@ import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
 import ExecuteAdjustedModal from '../components/modals/transactions/ExecuteAdjustedModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
-import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
@@ -103,6 +102,7 @@ function readStoredSearch(): string {
 export default function Planned() {
   const { t } = useTranslation('planned')
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { canWrite } = usePermissions()
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
@@ -223,15 +223,21 @@ export default function Planned() {
             </button>
             {/* Planned and recurring creation lives on this tab, not behind
                 the FAB - the button is visible on every tier, phones
-                included, because nothing else offers it. Deviation from
-                the modal-size rule (never put a form with more than three
-                fields in a modal): phone creation stays modal here until
-                the planned forms move to pages - hiding it would make the
-                capability unreachable on phones. */}
+                included, because nothing else offers it. The recurring view
+                navigates to the rule page here: a router navigation cannot
+                run inside the content's render-adjust, so it stays in the
+                click handler. Deviation from the modal-size rule (never put
+                a form with more than three fields in a modal): phone
+                creation stays modal here until the planned forms move to
+                pages - hiding it would make the capability unreachable on
+                phones. */}
             {canWrite && (
               <button
                 type="button"
-                onClick={() => setCreateRequest((n) => n + 1)}
+                onClick={() => {
+                  if (view === 'recurring') navigate('/planned/rules/new')
+                  else setCreateRequest((n) => n + 1)
+                }}
                 className={primaryButtonClass}
               >
                 <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
@@ -278,7 +284,7 @@ interface PlannedContentProps {
   settings: UserWorkspaceSettings | undefined
   /** Calendar start day (1 = Monday .. 7 = Sunday) for the week default. */
   calendarStartDay: number
-  /** Bumps on every header New click; consumed by a render-adjust. */
+  /** Bumps on each planned-view header New click; consumed by a render-adjust. */
   createRequest: number
 }
 
@@ -292,6 +298,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // precedent).
   const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { canWrite } = usePermissions()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
@@ -342,28 +349,28 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // target derives from the URL at open time; renders only in view=planned.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
-  // Recurring view state. Mirrors the planned modal-state quartet above.
-  const [recurringFormOpen, setRecurringFormOpen] = useState(false)
-  const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null)
-  const [adoptSource, setAdoptSource] = useState<PlannedTransaction | null>(null)
+  // Recurring view state: the list's delete confirm. The rule form lives on
+  // its own page and keeps its own state.
   const [deletingRule, setDeletingRule] = useState<RecurringTransaction | null>(null)
   // Switch state for the delete dialog's "also delete pending rows" row; reset
   // on every open so a previous session's toggle never leaks into the next.
   const [deleteRulePending, setDeleteRulePending] = useState(false)
-  // Touch replacements for the two hover action groups (TransfersPage pattern).
+  // Touch replacement for the planned rows' hover action group (TransfersPage
+  // pattern). Rule rows have none: the row itself opens the rule page at
+  // every pointer type.
   const [plannedRowAction, setPlannedRowAction] = useState<PlannedTransaction | null>(null)
-  const [recurringRowAction, setRecurringRowAction] = useState<RecurringTransaction | null>(null)
 
   const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
   const openEdit = (p: PlannedTransaction) => { setEditing(p); setCopySource(null); setFormOpen(true) }
   // Copy = new-planned form prefilled from p, date reset to today. Also
   // reachable from inside the edit modal, which then morphs into copy mode.
   const openCopy = (p: PlannedTransaction) => { setEditing(null); setCopySource(p); setFormOpen(true) }
-  const openNewRecurring = () => { setEditingRule(null); setAdoptSource(null); setRecurringFormOpen(true) }
-  const openEditRule = (r: RecurringTransaction) => { setEditingRule(r); setAdoptSource(null); setRecurringFormOpen(true) }
-  // "Make recurring": the modal prefills from the pending row and adopts it as
-  // the rule's first occurrence (adopt_planned_id) - no duplicate row is created.
-  const openMakeRecurring = (p: PlannedTransaction) => { setEditingRule(null); setAdoptSource(p); setRecurringFormOpen(true) }
+  // Rule rows open the rule page; a push, so Back returns to this list.
+  const openRulePage = (r: RecurringTransaction) => navigate(`/planned/rules/${r.id}`)
+  // "Make recurring": the rule page prefills from the pending row and adopts
+  // it as the rule's first occurrence (adopt_planned_id) - no duplicate row
+  // is created.
+  const openMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
   const openDeleteRule = (r: RecurringTransaction) => { setDeleteRulePending(false); setDeletingRule(r) }
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
@@ -878,16 +885,15 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   }
 
   // Header New click, consumed: the counter lives in the gate wrapper (the
-  // button is above the gate, the modal state is here). Routed against the
-  // EFFECTIVE view - a click inside the cold-cache gate window lands after
-  // materialization, so it opens the modal the post-defaults view calls
-  // for. The latch catches up to the counter on the very next pass: the
-  // adjust terminates by construction and is StrictMode-idempotent.
+  // button is above the gate, the modal state is here). Only the planned
+  // view bumps it - the recurring view's button navigates to the rule page
+  // itself - so every consumed click opens the planned form. The latch
+  // catches up to the counter on the very next pass: the adjust terminates
+  // by construction and is StrictMode-idempotent.
   const [consumedCreateRequest, setConsumedCreateRequest] = useState(createRequest)
   if (createRequest !== consumedCreateRequest) {
     setConsumedCreateRequest(createRequest)
-    if (view === 'recurring') openNewRecurring()
-    else openNew()
+    openNew()
   }
 
   return (
@@ -1124,10 +1130,8 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           {recurringRules.map((r) => (
             <div
               key={r.id}
-              {...(isTouch && canWrite ? tappableProps(() => setRecurringRowAction(r)) : {})}
-              className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-              }`}
+              {...(canWrite ? tappableProps(() => openRulePage(r)) : {})}
+              className={`flex items-center justify-between px-4 py-3 text-sm group ${canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''}`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -1142,11 +1146,24 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
               </div>
               <div className="flex items-center gap-3 shrink-0 pl-3">
                 <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
-                {/* Hover reveals are pointer-fine only - on touch the row tap
-                    opens the action sheet instead. */}
+                {/* Hover reveals are pointer-fine only; at every pointer type
+                    the writer's row itself is a button that opens the rule
+                    page (click, tap, Enter or Space). A viewer's row is inert:
+                    the rule page sends a viewer straight back to this list.
+                    The group also shows while the row or one of its buttons
+                    holds focus, so a keyboard user sees the actions they tab
+                    through. The wrapper stops a button's click AND keydown
+                    before they bubble into the row's handlers: without the
+                    keydown twin, Enter or Space on a focused button would
+                    open the page over the button's own action. The action
+                    must run alone, never double-fire. */}
                 {canWrite && !isTouch && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button type="button" onClick={() => openEditRule(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                  <div
+                    className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <button type="button" onClick={() => openRulePage(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                     <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
                       {r.is_active ? <Pause size={13} /> : <Play size={13} />}
                     </button>
@@ -1187,13 +1204,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         onCancel={() => setCancelling(null)}
       />
       <ExecuteAdjustedModal open={!!adjusting} planned={adjusting} onClose={() => setAdjusting(null)} />
-      <RecurringFormModal
-        open={recurringFormOpen}
-        onClose={() => setRecurringFormOpen(false)}
-        recurring={editingRule}
-        fromPlanned={adoptSource}
-        onDelete={(r) => { setRecurringFormOpen(false); openDeleteRule(r) }}
-      />
       <ConfirmDialog
         isOpen={!!deletingRule}
         title={t('recurring.deleteDialog.title')}
@@ -1226,20 +1236,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
               ]
             : []),
           { label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => plannedRowAction && setDeleting(plannedRowAction) },
-        ]}
-      />
-      <ActionSheet
-        open={!!recurringRowAction}
-        onClose={() => setRecurringRowAction(null)}
-        title={recurringRowAction?.name}
-        actions={[
-          { label: t('recurring.rowActions.edit'), icon: Pencil, onSelect: () => recurringRowAction && openEditRule(recurringRowAction) },
-          {
-            label: recurringRowAction?.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume'),
-            icon: recurringRowAction?.is_active ? Pause : Play,
-            onSelect: () => recurringRowAction && toggleActiveMutation.mutate(recurringRowAction),
-          },
-          { label: t('recurring.rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => recurringRowAction && openDeleteRule(recurringRowAction) },
         ]}
       />
       {/* Mounted before the bookmark modal so the chained modal (opened by

@@ -177,8 +177,6 @@
       "added": "Utworzono regułę cykliczną",
       "intervalCountInvalid": "Interwał musi być liczbą całkowitą od 1 do 365",
       "hintAria": "Pomoc: {{field}}",
-      "startDateHint": "Pierwsze wystąpienie reguły. W regułach miesięcznych liczy się dzień miesiąca, a w krótszych miesiącach używany jest ostatni dzień.",
-      "intervalHint": "Reguła powtarza się co N dni, tygodni lub miesięcy, licząc od daty rozpoczęcia.",
       "upfrontCountHint": "Ile nadchodzących planowanych transakcji ta reguła utrzymuje utworzonych naraz. Gdy nadejdzie termin najwcześniejszej z nich, tworzona jest następna.",
       "activeHint": "Wstrzymuje regułę bez jej usuwania: historia jest zachowana, a nowe planowane transakcje nie są generowane, dopóki reguła nie zostanie ponownie włączona.",
       "upfrontCountInvalid": "Planowanie z wyprzedzeniem musi być liczbą całkowitą od 1 do 24",
