@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useKeyboardInset } from '../../hooks/useKeyboardInset'
-import { controlHeightClass } from '../common/formStyles'
+import { iconButtonClass } from '../common/formStyles'
 
 interface FormPageProps {
   /** Form title. UI text - callers pass a t()'d string. */
@@ -21,13 +21,6 @@ interface FormPageProps {
 // Same row-height contract as PageHeader's row (see the comment there).
 const ROW_CLASS =
   'flex items-center gap-3 min-h-8 pointer-coarse:min-h-[44px] max-sm:min-h-12! mb-4'
-
-// Back affordance - keep in sync with the identical copy in PageHeader.tsx
-// (two consumers; extract a shared piece at the third).
-const BACK_BUTTON_CLASS =
-  'shrink-0 flex items-center justify-center rounded-sm text-text-muted hover:text-text hover:bg-surface-hover ' +
-  'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
-  `${controlHeightClass} pointer-coarse:min-w-[44px]`
 
 export default function FormPage({ title, onClose, headerAction, footer, children }: FormPageProps) {
   const { t } = useTranslation('common')
@@ -57,7 +50,7 @@ export default function FormPage({ title, onClose, headerAction, footer, childre
           type="button"
           onClick={onClose}
           aria-label={t('pageHeader.back')}
-          className={BACK_BUTTON_CLASS}
+          className={iconButtonClass}
         >
           <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>

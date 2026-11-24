@@ -63,6 +63,15 @@ export const solidNegativeButtonClass =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
+// Header-row icon button (back arrows, the phone-only account actions, and
+// icon-only card controls): muted glyph, hover surface, focus outline, the
+// shared control height and - because the button carries no text - a
+// coarse-pointer width floor beside it, so the tap target stays square.
+export const iconButtonClass =
+  'shrink-0 flex items-center justify-center rounded-sm text-text-muted hover:text-text hover:bg-surface-hover ' +
+  'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
+  `${controlHeightClass} pointer-coarse:min-w-[44px]`
+
 // Auth pages (Login/Register) input style. These predate the §4 redesign and
 // keep their larger mono inputs (bg-background, text-sm, ring-2 focus) - they
 // are deliberately NOT inputClass above, except for the muted placeholder

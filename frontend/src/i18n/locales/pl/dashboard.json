@@ -29,6 +29,22 @@
     "title": "Ostatnia aktywność",
     "empty": "Brak transakcji."
   },
+  "setup": {
+    "title": "Pierwsze kroki",
+    "hide": "Ukryj listę kontrolną",
+    "account": {
+      "todo": "Dodaj konto",
+      "done": "Konto dodane"
+    },
+    "budget": {
+      "todo": "Skonfiguruj budżet",
+      "done": "Budżet skonfigurowany"
+    },
+    "transaction": {
+      "todo": "Dodaj transakcję",
+      "done": "Transakcja dodana"
+    }
+  },
   "legal": {
     "back": "Wstecz",
     "backToLogin": "Wróć do logowania",
