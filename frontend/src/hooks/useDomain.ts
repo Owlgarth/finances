@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { accountsApi, budgetsApi, currenciesApi, transactionsApi } from '../api/client'
+import { accountsApi, budgetsApi, currenciesApi, recurringTransactionsApi, transactionsApi } from '../api/client'
 
 // List hooks set refetchOnWindowFocus: 'always': each tab keeps its own
 // query cache, so a mutation in another tab (or device) can't invalidate
@@ -56,6 +56,18 @@ export function useTransaction(id: number | null) {
   return useQuery({
     queryKey: ['transactions', 'detail', id],
     queryFn: () => transactionsApi.get(id!),
+    enabled: id != null,
+  })
+}
+
+/** One recurring rule by id. Keyed under the ['recurring'] family prefix,
+ * so the rule create/update invalidations refetch it through prefix
+ * matching (the useTransaction shape). No refetchOnWindowFocus override,
+ * for the same reason as useTransaction. */
+export function useRecurringTransaction(id: number | null) {
+  return useQuery({
+    queryKey: ['recurring', 'detail', id],
+    queryFn: () => recurringTransactionsApi.get(id!),
     enabled: id != null,
   })
 }

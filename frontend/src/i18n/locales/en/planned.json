@@ -114,6 +114,20 @@
       "monthly_one": "Every month on day {{day}}",
       "monthly_other": "Every {{count}} months on day {{day}}"
     },
+    "summary": {
+      "daily_noEnd_one": "Every day, starting {{start}}, with no end date",
+      "daily_noEnd_other": "Every {{count}} days, starting {{start}}, with no end date",
+      "daily_withEnd_one": "Every day, starting {{start}}, until {{end}}",
+      "daily_withEnd_other": "Every {{count}} days, starting {{start}}, until {{end}}",
+      "weekly_noEnd_one": "Every week, starting {{start}}, with no end date",
+      "weekly_noEnd_other": "Every {{count}} weeks, starting {{start}}, with no end date",
+      "weekly_withEnd_one": "Every week, starting {{start}}, until {{end}}",
+      "weekly_withEnd_other": "Every {{count}} weeks, starting {{start}}, until {{end}}",
+      "monthly_noEnd_one": "Every month on day {{day}}, starting {{start}}, with no end date",
+      "monthly_noEnd_other": "Every {{count}} months on day {{day}}, starting {{start}}, with no end date",
+      "monthly_withEnd_one": "Every month on day {{day}}, starting {{start}}, until {{end}}",
+      "monthly_withEnd_other": "Every {{count}} months on day {{day}}, starting {{start}}, until {{end}}"
+    },
     "form": {
       "newTitle": "New recurring rule",
       "editTitle": "Edit recurring rule",

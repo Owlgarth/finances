@@ -24,6 +24,9 @@ export interface AmountFieldCurrency {
 interface Props {
   /** Label above the input (already translated by the caller). */
   label: string
+  /** Marks the field as required: a `*` in the negative color after the
+   *  label text. Display only - the form's own validation stays the gate. */
+  required?: boolean
   value: string
   onChange: (value: string) => void
   /** Sign prefix that follows the record type ('-' expense, '+' income,
@@ -58,6 +61,7 @@ interface Props {
  *  - all state and validation live with the caller. */
 export default function AmountField({
   label,
+  required,
   value,
   onChange,
   signPrefix,
@@ -73,7 +77,7 @@ export default function AmountField({
     <div className="flex items-end gap-2">
       <div className="flex-1 min-w-0">
         <label htmlFor={id} className={labelClass}>
-          {label}
+          {label} {required && <span className="text-negative">*</span>}
         </label>
         <div className="relative">
           {signPrefix && (

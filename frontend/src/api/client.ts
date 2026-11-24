@@ -519,6 +519,8 @@ export interface RecurringInput {
 export const recurringTransactionsApi = {
   getAll: (includeInactive = false): Promise<RecurringTransaction[]> =>
     api.get<RecurringTransaction[]>('/recurring-transactions', { params: { include_inactive: includeInactive } }).then(res => res.data),
+  get: (id: number): Promise<RecurringTransaction> =>
+    api.get<RecurringTransaction>(`/recurring-transactions/${id}`).then(res => res.data),
   create: (data: RecurringInput): Promise<RecurringTransaction> =>
     api.post<RecurringTransaction>('/recurring-transactions', data).then(res => res.data),
   update: (id: number, data: RecurringInput): Promise<RecurringTransaction> =>
