@@ -13,6 +13,8 @@ interface FormPageProps {
   onClose: () => void
   /** Optional action rendered at the right end of the title row. */
   headerAction?: ReactNode
+  /** Hides the header action on phones (below 640 px) so the title gets the whole row; offer the action another way there. */
+  hideHeaderActionOnPhone?: boolean
   /** Sticky footer node (action buttons). Omit for footer-less forms. */
   footer?: ReactNode
   children: ReactNode
@@ -22,7 +24,7 @@ interface FormPageProps {
 const ROW_CLASS =
   'flex items-center gap-3 min-h-8 pointer-coarse:min-h-[44px] max-sm:min-h-12! mb-4'
 
-export default function FormPage({ title, onClose, headerAction, footer, children }: FormPageProps) {
+export default function FormPage({ title, onClose, headerAction, hideHeaderActionOnPhone, footer, children }: FormPageProps) {
   const { t } = useTranslation('common')
   const { isMobile } = useBreakpoint()
   const keyboardInset = useKeyboardInset(true)
@@ -55,7 +57,7 @@ export default function FormPage({ title, onClose, headerAction, footer, childre
           <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
         </button>
         <h1 className="text-base font-semibold text-text truncate">{title}</h1>
-        {headerAction && <div className="ml-auto flex items-center gap-2">{headerAction}</div>}
+        {headerAction && <div className={`ml-auto flex items-center gap-2${hideHeaderActionOnPhone ? ' max-sm:hidden' : ''}`}>{headerAction}</div>}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
       {footer && (
