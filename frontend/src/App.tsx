@@ -75,6 +75,15 @@ function PlannedNewRoute() {
   return isDesktop ? <Planned /> : <NewPlannedPage />
 }
 
+/** The recurring rule form's host follows the tier: at 1024+ the Planned
+ *  list hosts the form in its side panel (it reads the rule routes itself,
+ *  so every route using this wrapper renders <Planned /> there), below
+ *  1024 the form is a full page. */
+function RecurringRuleRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <RecurringRulePage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -91,7 +100,7 @@ function AppContent() {
         <Route path="/planned/:id" element={<PlannedRecordRoute />} />
         <Route path="/planned/:id/pay" element={<PlannedPayRoute />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
-        <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
+        <Route path="/planned/rules/:id" element={<RecurringRuleRoute />} />
         <Route path="/planned/new" element={<PlannedNewRoute />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/transfers/:id" element={<TransferRecordRoute />} />

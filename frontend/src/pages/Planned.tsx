@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Ban, CalendarClock, Copy, Download, Loader2, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useWorkspaceCategories } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useRecurringTransaction, useWorkspaceCategories } from '../hooks/useDomain'
 import { useRecurringRuleDelete } from '../hooks/useRecurringRuleDelete'
 import { usePayPlannedForm, usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
@@ -37,6 +37,7 @@ import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
 import PlannedRecord from '../components/transactions/PlannedRecord'
 import PlannedCreatePanel from '../components/transactions/PlannedCreatePanel'
+import RecurringFormPanel from '../components/transactions/RecurringFormPanel'
 import PayPlannedForm from '../components/transactions/PayPlannedForm'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -169,6 +170,28 @@ function plannedStillMatches(p: PlannedTransaction, f: PlannedRecordFacets): boo
   if (!amountWithin(p.amount, f.amountMax, false)) return false
   return true
 }
+
+/** `path` with the list's current search, minus the params in `drop` and
+ *  with `set` written over it. A panel route and the list it sits on share
+ *  one URL, so every navigation between them carries the list's facets. */
+function withSearch(path: string, searchParams: URLSearchParams, drop: string[], set?: Record<string, string>): string {
+  const next = new URLSearchParams(searchParams)
+  for (const key of drop) next.delete(key)
+  for (const [key, value] of Object.entries(set ?? {})) next.set(key, value)
+  const search = next.toString()
+  return search ? `${path}?${search}` : path
+}
+
+/** The planned list for a view switch made while a panel route is active:
+ *  the bare list with the view written, because a rule route implied one -
+ *  a ?view= write alone could never leave it. The make-recurring seed and
+ *  the page number go: the destination renders neither. */
+function listViewUrl(searchParams: URLSearchParams, view: 'planned' | 'recurring'): string {
+  return view === 'recurring'
+    ? withSearch('/planned', searchParams, ['adopt', 'page'], { view: 'recurring' })
+    : withSearch('/planned', searchParams, ['adopt', 'page', 'view'])
+}
+
 // Arrival gate + page shell. The per-page defaults must resolve before the
 // content mounts: a cold-cache materialization of built-ins would flip every
 // control a moment later. Both gate queries are boot-time fetches with a
@@ -229,7 +252,22 @@ export default function Planned() {
   // resolved during the gate window, so the label may flip once after
   // materialization - accepted, the header stays mounted either way.
   const rawView = searchParams.get('view')
-  const view: 'planned' | 'recurring' = rawView === 'recurring' ? 'recurring' : 'planned'
+  // A rule route that renders this list at 1024+ shows the rule form in
+  // its panel, and a rule belongs to the recurring view only: the path
+  // implies it (derived here for the header, never written to the URL).
+  // Two consts, not one expression: a short-circuited || would skip a hook.
+  const onRuleCreatePath = useMatch('/planned/rules/new') !== null
+  const onRuleRecordPath = useMatch('/planned/rules/:id') !== null
+  const rulePathOpen = onRuleCreatePath || onRuleRecordPath
+  const view: 'planned' | 'recurring' = rulePathOpen || rawView === 'recurring' ? 'recurring' : 'planned'
+  // Any panel that is already open makes a later open a selection change.
+  const panelPathOpen = itemPanelOpen || rulePathOpen
+  // Both view switches land on the bare list while a panel route is active
+  // (the phone one is hidden at the panel tier, so it never meets one).
+  const switchView = (target: 'planned' | 'recurring') => {
+    if (panelPathOpen) navigate(listViewUrl(searchParams, target), { replace: true })
+    else updateParams({ view: target === 'planned' ? null : target })
+  }
 
   // Export reads the URL at click time instead of threading the content's
   // effective derivations across the boundary: the URL is the source of
@@ -308,7 +346,7 @@ export default function Planned() {
                 it - the same param write the segmented control performs. */}
             <button
               type="button"
-              onClick={() => updateParams({ view: view === 'recurring' ? null : 'recurring' })}
+              onClick={() => switchView(view === 'recurring' ? 'planned' : 'recurring')}
               aria-pressed={view === 'recurring'}
               title={rulesButtonLabel}
               aria-label={rulesButtonLabel}
@@ -444,8 +482,19 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // on every open so a previous session's toggle never leaks into the next.
   const [deleteRulePending, setDeleteRulePending] = useState(false)
 
-  // Rule rows open the rule page; a push, so Back returns to this list.
-  const openRulePage = (r: RecurringTransaction) => navigate(`/planned/rules/${r.id}`)
+  // Rule rows open the rule form: the page below 1024 (a push, so Back
+  // returns to this list), the side panel from 1024 up. The tier fork lives
+  // INSIDE the handler so the list stays mounted on every tier. At 1024+ a
+  // panel is "already open" when this render sits on any panel route - read
+  // at click time so the FIRST open pushes (Back returns to the bare list)
+  // and every later selection change replaces.
+  const handleOpenRule = (r: RecurringTransaction) => {
+    if (!isDesktop) {
+      navigate(`/planned/rules/${r.id}`)
+      return
+    }
+    navigate(withSearch(`/planned/rules/${r.id}`, searchParams, ['adopt']), { replace: panelPathOpen })
+  }
   // "Make recurring": the rule page prefills from the pending row and adopts
   // it as the rule's first occurrence (adopt_planned_id) - no duplicate row
   // is created.
@@ -598,8 +647,31 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // only ever 'recurring' - a stored 'planned' equals the built-in and never
   // latches; garbage reads as planned.
   const rawView = searchParams.get('view')
+  // Panel state derives from the matched route patterns, not from the route
+  // params (the rule routes carry an :id too). The create pattern is tested
+  // first: it also matches the edit pattern, with "new" as the id.
+  const ruleCreatePath = useMatch('/planned/rules/new') !== null
+  const ruleMatch = useMatch('/planned/rules/:id')
+  const rulePathOpen = ruleCreatePath || ruleMatch !== null
+  // A rule path implies the recurring view - derived, never written: a deep
+  // link to a rule shows the rules beside its panel.
   const view: 'planned' | 'recurring' =
-    rawView === 'recurring' || (rawView === null && defaultsLatch.view === 'recurring') ? 'recurring' : 'planned'
+    rulePathOpen || rawView === 'recurring' || (rawView === null && defaultsLatch.view === 'recurring') ? 'recurring' : 'planned'
+  const ruleId = !ruleCreatePath && ruleMatch !== null ? Number(ruleMatch.params.id) : NaN
+  const validRuleId = Number.isInteger(ruleId) && ruleId > 0 ? ruleId : null
+  // The form is a writer's: a viewer's deep link shows the list, no panel.
+  const ruleRecordOpen = isDesktop && canWrite && !ruleCreatePath && ruleMatch !== null
+  // The panel's own cache entry: only its error flag is read here.
+  const ruleQuery = useRecurringTransaction(ruleRecordOpen ? validRuleId : null)
+  // A rule that cannot load (a garbage, foreign or deleted id) has no form
+  // to show: the list closes the panel. Below 1024 the page shows its
+  // not-found state for the same cases instead.
+  const ruleUnloadable = ruleRecordOpen && (validRuleId === null || ruleQuery.isError)
+  // Any panel that is already open makes a later open a selection change.
+  const panelPathOpen = itemPanelOpen || rulePathOpen
+  // Row-selected highlight: a rule panel can only be open for a writer at 1024+.
+  const selectedRuleId = ruleRecordOpen && !ruleUnloadable ? validRuleId : null
+  const recurringListUrl = listViewUrl(searchParams, 'recurring')
   // Remembered search: when the URL carries no ?search= param (fresh visit),
   // the last committed term fills the box. Seeded once at mount (the lazy
   // useState initializer reads storage exactly once); after that the URL
@@ -659,6 +731,24 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   const updateParams = createUpdateParams(setSearchParams)
+
+  // A view switch with a panel route active lands on the bare list: no panel
+  // outlives the view it was opened from, and on a rule route a ?view= write
+  // alone could not leave the recurring view the path implies. Replace: an
+  // in-page selection write is not a history step.
+  const switchView = (next: 'planned' | 'recurring') => {
+    if (panelPathOpen) navigate(listViewUrl(searchParams, next), { replace: true })
+    else updateParams({ view: next === 'planned' ? null : next })
+  }
+  // Rule panel close (X, Escape, a saved or deleted rule): replace keeps the
+  // closed route out of Back's path. The view is written because the bare
+  // list path does not imply it, so the rules stay on screen after the close.
+  const handleCloseRulePanel = () => navigate(recurringListUrl, { replace: true })
+  // A saved make-recurring lands on the adopted row's record beside the
+  // planned list it belongs to: the facets travel, the seed goes, and the
+  // view is dropped because the rule route implied the recurring one.
+  const handleAdopted = (plannedId: number) =>
+    navigate(withSearch(`/planned/${plannedId}`, searchParams, ['adopt', 'view']), { replace: true })
 
   // One-shot defaults materialization (useStalePageReset shape: the URL
   // write goes through the closure-wrapped updateParams, never
@@ -1082,7 +1172,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
       <div className="mb-3 hidden sm:block">
         <SegmentedControl
           value={view}
-          onChange={(v) => updateParams({ view: v === 'planned' ? null : v })}
+          onChange={switchView}
           options={[
             { value: 'planned', label: t('recurring.tabPlanned') },
             { value: 'recurring', label: t('recurring.tabRecurring') },
@@ -1203,6 +1293,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         />
       )}
 
+      {ruleUnloadable && <Navigate to={recurringListUrl} replace />}
       {/* The list and its pagination always ride the split's list slot:
           with no panel open the wrapper renders the list unchanged, so one
           stable tree spans the 1024 crossing. The toolbar above keeps the
@@ -1321,8 +1412,11 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
               {recurringRules.map((r) => (
                 <div
                   key={r.id}
-                  {...(canWrite ? tappableProps(() => openRulePage(r)) : {})}
-                  className={`flex items-center justify-between px-4 py-3 text-sm group ${canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''}`}
+                  {...(canWrite ? tappableProps(() => handleOpenRule(r)) : {})}
+                  aria-current={r.id === selectedRuleId ? 'true' : undefined}
+                  className={`flex items-center justify-between px-4 py-3 text-sm group border-l-2 ${
+                    canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                  }${r.id === selectedRuleId ? 'border-l-primary bg-surface-hover' : 'border-l-transparent'}`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -1354,7 +1448,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <button type="button" onClick={() => openRulePage(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                        <button type="button" onClick={() => handleOpenRule(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                         <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
                           {r.is_active ? <Pause size={13} /> : <Play size={13} />}
                         </button>
@@ -1410,6 +1504,14 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                 ) : null}
               </DetailPanel>
             )
+          ) : ruleRecordOpen && !ruleUnloadable ? (
+            <RecurringFormPanel
+              key={`rule-${validRuleId}`}
+              mode="edit"
+              ruleId={validRuleId}
+              onClose={handleCloseRulePanel}
+              onAdopted={handleAdopted}
+            />
           ) : null
         }
       />
