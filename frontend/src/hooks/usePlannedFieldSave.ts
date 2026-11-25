@@ -8,6 +8,9 @@ import { useAccounts } from './useDomain'
  *  own status, so a field edit can never execute, skip or restore the item. */
 export type PlannedFieldPatch = Partial<Omit<PlannedInput, 'status'>>
 
+/** The fields a paid item no longer owns: its transaction is their source. */
+const PAID_LOCKED_FIELDS = ['amount', 'account_id', 'currency_code', 'category_id', 'planned_date'] as const satisfies readonly (keyof PlannedFieldPatch)[]
+
 /**
  * One-field saves for the planned item's record. `update` is a full-replace
  * PUT, so each save re-sends the complete PlannedInput: every field forwarded
@@ -27,6 +30,12 @@ export type PlannedFieldPatch = Partial<Omit<PlannedInput, 'status'>>
  * invalidation dispatch; callers should keep other editors closed while it
  * is true - two overlapping saves built from the same base row make the
  * second full PUT silently revert the first field.
+ *
+ * A paid item (wire status 'done') accepts a name patch only. Its amount,
+ * date, account, currency and category belong to the transaction its
+ * payment created, and the server copies a change to them from the plan
+ * row straight onto that transaction. `save` throws, before any request
+ * leaves, when a patch on a paid item carries one of those fields.
  */
 export function usePlannedFieldSave(planned: PlannedTransaction): {
   save: (patch: PlannedFieldPatch) => Promise<PlannedTransaction>
@@ -65,11 +74,27 @@ export function usePlannedFieldSave(planned: PlannedTransaction): {
       // ['planned', 'detail', id] entry (TanStack prefix match), which is
       // what re-renders the record with the saved row.
       queryClient.invalidateQueries({ queryKey: ['planned'] })
+      // The server copies a paid item's save onto its transaction (the name
+      // at least), so every cached view of that transaction refetches too:
+      // the record's own link leads straight to one.
+      if (planned.transaction_id != null) queryClient.invalidateQueries({ queryKey: ['transactions'] })
     },
   })
 
   return {
-    save: (patch: PlannedFieldPatch) => mutation.mutateAsync(patch),
+    save: (patch: PlannedFieldPatch) => {
+      // A paid item's amount, date, account and category are its
+      // transaction's: the server would copy a plan-row change onto that
+      // transaction, overwriting what was really paid. The record saves
+      // only the name on a paid item, so any other field here is a
+      // programming error - refused before a request leaves.
+      if (planned.status === 'done' && PAID_LOCKED_FIELDS.some((field) => field in patch)) {
+        throw new Error(
+          'A paid planned item saves its name only; amount, date, account, currency and category come from its transaction',
+        )
+      }
+      return mutation.mutateAsync(patch)
+    },
     isSaving: mutation.isPending,
   }
 }

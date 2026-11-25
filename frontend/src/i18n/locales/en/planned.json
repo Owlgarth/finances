@@ -87,6 +87,11 @@
     "notFound": "Not found in this workspace",
     "backToList": "Back to planned items",
     "openRule": "Open recurring rule",
+    "openTransaction": "Open transaction",
+    "plannedValue": "planned {{value}}",
+    "restore": "Restore",
+    "paidNote": "Amount, date, account and category come from the transaction. Only the name can be changed here.",
+    "transactionPending": "The transaction is still being created. It will appear here and in Activity.",
     "status": {
       "upcoming": "Upcoming",
       "overdue": "Overdue",

@@ -91,6 +91,11 @@
     "notFound": "Nie znaleziono w tej przestrzeni roboczej",
     "backToList": "Wróć do planowanych transakcji",
     "openRule": "Otwórz regułę cykliczną",
+    "openTransaction": "Otwórz transakcję",
+    "plannedValue": "zaplanowano {{value}}",
+    "restore": "Przywróć",
+    "paidNote": "Kwota, data, konto i kategoria pochodzą z transakcji. Tutaj można zmienić tylko nazwę.",
+    "transactionPending": "Transakcja jest jeszcze tworzona. Pojawi się tutaj i w sekcji „Aktywność”.",
     "status": {
       "upcoming": "Nadchodząca",
       "overdue": "Zaległa",
