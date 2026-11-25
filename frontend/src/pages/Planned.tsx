@@ -3,13 +3,14 @@ import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, CalendarClock, Copy, Download, Loader2, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useWorkspaceCategories } from '../hooks/useDomain'
-import { usePlannedPayment } from '../hooks/usePlannedPayment'
+import { usePayPlannedForm, usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount, formatMonthYear } from '../utils/format'
@@ -34,6 +35,7 @@ import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
 import PlannedRecord from '../components/transactions/PlannedRecord'
+import PayPlannedForm from '../components/transactions/PayPlannedForm'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
@@ -360,6 +362,9 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { canWrite } = usePermissions()
+  // The role is unknown until the workspace loads: the pay path must not
+  // bounce a member whose role has not resolved yet.
+  const { isLoading: workspaceLoading } = useWorkspace()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
@@ -423,15 +428,19 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
-  // At 1024+ this page hosts an item's record in a side panel. The open
+  // At 1024+ this page hosts an item's panel (its record or the pay form).
+  // The open
   // item is the PATH, so bookmarks and saved defaults, which capture query
   // params only, can never record an open panel. The id comes from the
   // pattern that matched, never from the bare route-params hook (which also
   // reports an id on the rule paths, and on /planned/new). Garbage ids read
   // as null: no panel.
   const recordMatch = useMatch('/planned/:id')
-  const idParam = recordMatch?.params.id ?? ''
+  const payMatch = useMatch('/planned/:id/pay')
+  const idParam = (recordMatch ?? payMatch)?.params.id ?? ''
   const panelId = /^\d+$/.test(idParam) && Number(idParam) > 0 ? Number(idParam) : null
+  // The pay form owns the panel slot on the pay path.
+  const payOpen = payMatch !== null
   // Shares the ['planned', 'detail', id] cache entry with the record page,
   // the pay page and the copy seed: one entry per id, refreshed by every
   // family-wide invalidation.
@@ -450,10 +459,20 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus()
   }, [])
 
-  // "Paid differently" is a page. At every tier the push carries the list's
-  // search in router state, so the form's back arrow returns to this view.
-  const openPay = (p: PlannedTransaction) =>
+  // "Paid differently" opens the pay form. The tier fork lives INSIDE the
+  // handler so the row stays mounted on every tier. At 1024+ the form is a
+  // panel beside the list: the list filters travel in the URL so the list
+  // keeps filtering beside the panel, the first open pushes and a later
+  // selection change replaces (read at click time: this render sits on an
+  // item path). Below 1024 the form is a page and the push carries the
+  // list's search in router state instead.
+  const openPay = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      navigate({ pathname: `/planned/${p.id}/pay`, search: searchParams.toString() }, { replace: panelId != null })
+      return
+    }
     navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
+  }
 
   // A row tap or click opens the record. The tier fork lives INSIDE the
   // handler so the row stays mounted on every tier. At 1024+ the record is
@@ -469,17 +488,16 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     navigate(`/planned/${p.id}`, { state: { search: searchParams.toString() } })
   }
 
-  // Panel close (X, Escape, a delete, or the reconcile below): replace
-  // keeps the closed item's URL out of Back's path; every list param
-  // survives.
+  // Panel close (X, Escape, a finished pay, a delete, or the reconcile
+  // below): replace keeps the closed item's URL out of Back's path; every
+  // list param survives.
   const handleClosePanel = () =>
     navigate({ pathname: '/planned', search: searchParams.toString() }, { replace: true })
   // The record's action callbacks for the panel host: leaving the record
-  // closes the panel. "Paid differently..." is openPay itself; the pay form
-  // is a full page at every tier for now (a push), so its back arrow
-  // returns to this panel. The rule page and the create page are full
-  // pages at every tier for now too, a push each, so their back arrows
-  // return to this panel as well.
+  // closes the panel. "Paid differently..." is openPay itself (a panel is
+  // already open, so it replaces and the pay form takes the same slot). The
+  // rule page and the create page are full pages at every tier for now, a
+  // push each, so their back arrows return to this panel.
   const handleRecordDeleted = () => handleClosePanel()
   const handleRecordMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
   const handleRecordCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
@@ -967,14 +985,20 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // Keep-or-close reconcile for the open panel: a filter change (or an
   // item error - deleted elsewhere, foreign) that proves the item no
   // longer matches the query closes the panel; a still-matching item stays
-  // open even when it falls off the visible page. Response arrival is not
-  // an event, so a guarded effect is the only possible seam, and it
-  // navigates (a router write, never component state).
+  // open even when it falls off the visible page. The pay path also swaps
+  // to the record for anything that cannot be paid there (the pay page
+  // redirects the same cases). Response arrival is not an event, so a
+  // guarded effect is the only possible seam, and it navigates (a router
+  // write, never component state).
   useEffect(() => {
     if (!(isDesktop && panelId != null)) return
     if (recordLoading) return
     if (recordError || !record) {
       handleClosePanel()
+      return
+    }
+    if (payOpen && !workspaceLoading && (!canWrite || record.status !== 'pending')) {
+      navigate({ pathname: `/planned/${record.id}`, search: searchParams.toString() }, { replace: true })
       return
     }
     if (!plannedStillMatches(record, { status: statusFilter, search, account: accountFilter, currency: currencyFilter, budget: budgetFilter, category: categoryFilter, amountMin, amountMax, dateFrom, dateTo })) {
@@ -983,7 +1007,12 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     // The effect reads the CURRENT filter values by design; filterKey is
     // the change signal, so the deps list is deliberately partial.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, panelId, isDesktop, record, recordLoading, recordError])
+  }, [filterKey, panelId, isDesktop, payOpen, record, recordLoading, recordError, canWrite, workspaceLoading])
+
+  // The pay form mounts only for an item it can pay: anything else on the
+  // pay path holds until the reconcile above swaps or closes the panel.
+  const payable =
+    record && record.status === 'pending' && canWrite && !workspaceLoading ? record : null
 
   return (
     <>
@@ -1280,24 +1309,44 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         }
         panel={
           isDesktop && panelId != null ? (
-            // The record renders its own actions in the body, so the
-            // panel shell passes no footer. The title falls back to the
-            // generic record label only for the loading window; once
-            // loaded the item's name is the title.
-            <DetailPanel title={record?.name ?? t('record.title')} onClose={handleClosePanel}>
-              {recordLoading ? (
-                <PanelHold />
-              ) : record ? (
-                <PlannedRecord
-                  planned={record}
-                  canWrite={canWrite}
-                  onDeleted={handleRecordDeleted}
-                  onPayDifferently={openPay}
-                  onMakeRecurring={handleRecordMakeRecurring}
-                  onCopy={handleRecordCopy}
-                />
-              ) : null}
-            </DetailPanel>
+            // The pay form is a writer's: the slot takes it only for a
+            // member who can pay, so a viewer on the pay path sees the
+            // record from the first paint, never the pay form. The
+            // reconcile above then moves the URL to the record path.
+            payOpen && canWrite ? (
+              // Hold, never flash: the form needs an item it can pay, and
+              // anything else swaps to the record or closes through the
+              // reconcile above.
+              <DetailPanel title={t('pay.title')} onClose={handleClosePanel}>
+                {payable ? (
+                  <PlannedPayBody planned={payable} onClose={handleClosePanel} />
+                ) : (
+                  <PanelHold />
+                )}
+              </DetailPanel>
+            ) : (
+              // The record renders its own actions in the body, so the
+              // panel shell passes no footer. The title falls back to the
+              // generic record label only for the loading window; once
+              // loaded the item's name is the title.
+              // On the pay path the record holds until the role is known:
+              // a writer must not see their own record flash read-only
+              // before the pay form.
+              <DetailPanel title={record?.name ?? t('record.title')} onClose={handleClosePanel}>
+                {recordLoading || (payOpen && workspaceLoading) ? (
+                  <PanelHold />
+                ) : record ? (
+                  <PlannedRecord
+                    planned={record}
+                    canWrite={canWrite}
+                    onDeleted={handleRecordDeleted}
+                    onPayDifferently={openPay}
+                    onMakeRecurring={handleRecordMakeRecurring}
+                    onCopy={handleRecordCopy}
+                  />
+                ) : null}
+              </DetailPanel>
+            )
           ) : null
         }
       />
@@ -1388,5 +1437,59 @@ function PanelHold() {
       <div className="h-8 bg-surface-muted rounded-sm animate-pulse" />
       <div className="h-20 bg-surface-muted rounded-sm animate-pulse" />
     </div>
+  )
+}
+
+interface PlannedPayBodyProps {
+  planned: PlannedTransaction
+  onClose: () => void
+}
+
+/** The "Paid differently" form for one loaded pending item, inside the panel
+ *  body: the fields, then the action row at the END OF THE BODY - never the
+ *  panel's footer prop. The panel stretches to the list's height, so a
+ *  pinned footer would sit at the list's bottom, below the fold on a long
+ *  list; the negative margins and the padding below reuse the footer's own
+ *  box. A child component rather than an inline branch of the page, so the
+ *  form hook always mounts with its item. */
+function PlannedPayBody({ planned, onClose }: PlannedPayBodyProps) {
+  const { t } = useTranslation('planned')
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const form = usePayPlannedForm(planned)
+
+  const handleSubmit = async () => {
+    if (!(await form.submit())) return
+    // Replace: the finished form leaves Back's path, and the record takes
+    // the panel slot with the paid state. The list search stays.
+    navigate({ pathname: `/planned/${planned.id}`, search: searchParams.toString() }, { replace: true })
+  }
+
+  return (
+    <>
+      <PayPlannedForm form={form} planned={planned} />
+      <div className="-mx-4 -mb-4 mt-4 border-t border-border p-4">
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+            {t('form.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={form.isSaving}
+            className={`${primaryButtonClass} inline-flex items-center justify-center gap-1.5`}
+          >
+            {form.isSaving ? (
+              <>
+                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                {t('pay.submitting')}
+              </>
+            ) : (
+              t('pay.submit')
+            )}
+          </button>
+        </div>
+      </div>
+    </>
   )
 }

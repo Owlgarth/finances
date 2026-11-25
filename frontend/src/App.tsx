@@ -59,6 +59,13 @@ function PlannedRecordRoute() {
   return isDesktop ? <Planned /> : <PlannedRecordPage />
 }
 
+/** The same tier split for "Paid differently": at 1024+ the list page hosts
+ *  the pay form in its side panel, below 1024 it is a full page. */
+function PlannedPayRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <PayPlannedPage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -73,7 +80,7 @@ function AppContent() {
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
         <Route path="/planned/:id" element={<PlannedRecordRoute />} />
-        <Route path="/planned/:id/pay" element={<PayPlannedPage />} />
+        <Route path="/planned/:id/pay" element={<PlannedPayRoute />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
         <Route path="/planned/new" element={<NewPlannedPage />} />
