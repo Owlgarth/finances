@@ -66,6 +66,15 @@ function PlannedPayRoute() {
   return isDesktop ? <Planned /> : <PayPlannedPage />
 }
 
+/** The same tier split for the planned create form: at 1024+ the list page
+ *  hosts the form in its side panel (the list reads the path itself, so the
+ *  create route renders <Planned /> there too), below 1024 the form is a
+ *  full page. */
+function PlannedNewRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <NewPlannedPage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -83,7 +92,7 @@ function AppContent() {
         <Route path="/planned/:id/pay" element={<PlannedPayRoute />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
-        <Route path="/planned/new" element={<NewPlannedPage />} />
+        <Route path="/planned/new" element={<PlannedNewRoute />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/transfers/:id" element={<TransferRecordRoute />} />
         <Route path="/new" element={<NewTransactionPage />} />

@@ -35,6 +35,7 @@ import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
 import PlannedRecord from '../components/transactions/PlannedRecord'
+import PlannedCreatePanel from '../components/transactions/PlannedCreatePanel'
 import PayPlannedForm from '../components/transactions/PayPlannedForm'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
@@ -180,6 +181,13 @@ export default function Planned() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { canWrite } = usePermissions()
+  const { isDesktop } = useBreakpoint()
+  // True while one of the item panels is open: create, record or pay. The
+  // record pattern's dynamic segment also matches the create path, so the
+  // two patterns cover all three.
+  const recordMatch = useMatch('/planned/:id')
+  const payMatch = useMatch('/planned/:id/pay')
+  const itemPanelOpen = recordMatch !== null || payMatch !== null
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
   const defaultsLoading = settingsLoading || preferencesLoading
@@ -251,6 +259,28 @@ export default function Planned() {
     setIsExporting(false)
   }
 
+  // The tier fork lives INSIDE the handler, so the button stays mounted on
+  // every tier. Below 1024 the create form is a full page, opened with a
+  // push so Back returns to this list. At 1024+ the form opens in the side
+  // panel and this list keeps filtering beside it, so the current search
+  // travels in the URL: the first open is a push, and a click while a panel
+  // is already open is a selection change (replace), so Back never walks a
+  // click trail. A stale copy seed never carries into a plain create.
+  const openCreate = () => {
+    if (view === 'recurring') {
+      navigate('/planned/rules/new')
+      return
+    }
+    if (!isDesktop) {
+      navigate('/planned/new')
+      return
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('copy')
+    const search = next.toString()
+    navigate(search ? `/planned/new?${search}` : '/planned/new', { replace: itemPanelOpen })
+  }
+
   return (
     <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       {/* The title row and the Activity tab row stay mounted through the gate:
@@ -298,10 +328,7 @@ export default function Planned() {
             {canWrite && (
               <button
                 type="button"
-                onClick={() => {
-                  if (view === 'recurring') navigate('/planned/rules/new')
-                  else navigate('/planned/new')
-                }}
+                onClick={openCreate}
                 className={primaryButtonClass}
               >
                 <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
@@ -416,8 +443,6 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // on every open so a previous session's toggle never leaks into the next.
   const [deleteRulePending, setDeleteRulePending] = useState(false)
 
-  // Copy opens the create page prefilled from the row, with today's date.
-  const openCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
   // Rule rows open the rule page; a push, so Back returns to this list.
   const openRulePage = (r: RecurringTransaction) => navigate(`/planned/rules/${r.id}`)
   // "Make recurring": the rule page prefills from the pending row and adopts
@@ -441,6 +466,17 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const panelId = /^\d+$/.test(idParam) && Number(idParam) > 0 ? Number(idParam) : null
   // The pay form owns the panel slot on the pay path.
   const payOpen = payMatch !== null
+  // The create form's open state is its path: at 1024+ /planned/new renders
+  // this list with the create form in the panel beside it, for writers only
+  // (a viewer's deep link to the create path shows the plain list). The
+  // create form wins the panel slot over a record. The copy seed rides on
+  // the same path as ?copy=<id>; garbage reads as a plain create.
+  const newMatch = useMatch('/planned/new')
+  const createOpen = isDesktop && canWrite && newMatch !== null
+  const copyId = createOpen ? intParam(searchParams, 'copy') : null
+  const createMode: 'create' | 'copy' = copyId !== null ? 'copy' : 'create'
+  // Any panel that is already open makes a later open a selection change.
+  const itemPanelOpen = createOpen || panelId != null
   // Shares the ['planned', 'detail', id] cache entry with the record page,
   // the pay page and the copy seed: one entry per id, refreshed by every
   // family-wide invalidation.
@@ -463,12 +499,15 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // handler so the row stays mounted on every tier. At 1024+ the form is a
   // panel beside the list: the list filters travel in the URL so the list
   // keeps filtering beside the panel, the first open pushes and a later
-  // selection change replaces (read at click time: this render sits on an
-  // item path). Below 1024 the form is a page and the push carries the
-  // list's search in router state instead.
+  // selection change replaces (a create panel that is already open counts
+  // too; read at click time: this render sits on an item path). Below 1024
+  // the form is a page and the push carries the list's search in router
+  // state instead.
   const openPay = (p: PlannedTransaction) => {
     if (isDesktop) {
-      navigate({ pathname: `/planned/${p.id}/pay`, search: searchParams.toString() }, { replace: panelId != null })
+      const next = new URLSearchParams(searchParams)
+      next.delete('copy')
+      navigate({ pathname: `/planned/${p.id}/pay`, search: next.toString() }, { replace: itemPanelOpen })
       return
     }
     navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
@@ -478,11 +517,14 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // handler so the row stays mounted on every tier. At 1024+ the record is
   // a panel, the FIRST open pushes (Back returns to the bare list) and
   // every later selection change replaces (Back never walks a click
-  // trail); below 1024 the PUSH carries the click-time search string in
-  // router state, so the record page's back target keeps the filters.
+  // trail; a create panel that is already open counts too); below 1024
+  // the PUSH carries the click-time search string in router state, so the
+  // record page's back target keeps the filters.
   const handleOpenRecord = (p: PlannedTransaction) => {
     if (isDesktop) {
-      navigate({ pathname: `/planned/${p.id}`, search: searchParams.toString() }, { replace: panelId != null })
+      const next = new URLSearchParams(searchParams)
+      next.delete('copy')
+      navigate({ pathname: `/planned/${p.id}`, search: next.toString() }, { replace: itemPanelOpen })
       return
     }
     navigate(`/planned/${p.id}`, { state: { search: searchParams.toString() } })
@@ -493,14 +535,40 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // list param survives.
   const handleClosePanel = () =>
     navigate({ pathname: '/planned', search: searchParams.toString() }, { replace: true })
+  // Copy opens the create form prefilled from the row, with today's date.
+  // The tier fork lives INSIDE the handler so the hover button stays
+  // mounted on every tier: at 1024+ the form is a panel beside this list
+  // (the search travels in the URL so the list keeps filtering), and a
+  // panel that is already open makes this a selection change (replace);
+  // below 1024 the create page opens with a push.
+  const openCopy = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      const next = new URLSearchParams(searchParams)
+      next.set('copy', String(p.id))
+      navigate(`/planned/new?${next.toString()}`, { replace: itemPanelOpen })
+      return
+    }
+    navigate(`/planned/new?copy=${p.id}`)
+  }
+
+  // Create panel close (X, Escape, Cancel, the unsaved-changes confirm, or a
+  // successful Add): the list path with the search kept, minus the copy
+  // seed - a stale ?copy= must not re-seed the next create. Replace, like
+  // every panel close.
+  const closeCreatePanel = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('copy')
+    const search = next.toString()
+    navigate(search ? `/planned?${search}` : '/planned', { replace: true })
+  }
   // The record's action callbacks for the panel host: leaving the record
   // closes the panel. "Paid differently..." is openPay itself (a panel is
   // already open, so it replaces and the pay form takes the same slot). The
-  // rule page and the create page are full pages at every tier for now, a
-  // push each, so their back arrows return to this panel.
+  // rule page is a full page at every tier for now, a push, so its back
+  // arrow returns to this panel. Copy goes through the row's own opener.
   const handleRecordDeleted = () => handleClosePanel()
   const handleRecordMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
-  const handleRecordCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
+  const handleRecordCopy = openCopy
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
   // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
@@ -1308,7 +1376,10 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
           )
         }
         panel={
-          isDesktop && panelId != null ? (
+          createOpen ? (
+            // The create form wins the panel slot over a record.
+            <PlannedCreatePanel mode={createMode} copyId={copyId} onClose={closeCreatePanel} />
+          ) : isDesktop && panelId != null ? (
             // The pay form is a writer's: the slot takes it only for a
             // member who can pay, so a viewer on the pay path sees the
             // record from the first paint, never the pay form. The
