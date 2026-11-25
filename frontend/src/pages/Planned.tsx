@@ -121,11 +121,6 @@ export default function Planned() {
     return () => clearTimeout(timer)
   }, [defaultsLoading])
 
-  // Header New click crosses the component boundary: the button lives here
-  // (above the gate) while the form modals and their seed state live in the
-  // content. A plain counter the content consumes with a render-adjust.
-  const [createRequest, setCreateRequest] = useState(0)
-
   const { activityTitle, breadcrumb } = useActivityScope()
   const updateParams = createUpdateParams(setSearchParams)
 
@@ -223,20 +218,13 @@ export default function Planned() {
             </button>
             {/* Planned and recurring creation lives on this tab, not behind
                 the FAB - the button is visible on every tier, phones
-                included, because nothing else offers it. The recurring view
-                navigates to the rule page here: a router navigation cannot
-                run inside the content's render-adjust, so it stays in the
-                click handler. Deviation from the modal-size rule (never put
-                a form with more than three fields in a modal): phone
-                creation stays modal here until the planned forms move to
-                pages - hiding it would make the capability unreachable on
-                phones. */}
+                included, because nothing else offers it. */}
             {canWrite && (
               <button
                 type="button"
                 onClick={() => {
                   if (view === 'recurring') navigate('/planned/rules/new')
-                  else setCreateRequest((n) => n + 1)
+                  else navigate('/planned/new')
                 }}
                 className={primaryButtonClass}
               >
@@ -272,7 +260,7 @@ export default function Planned() {
           </div>
         ) : null
       ) : (
-        <PlannedContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+        <PlannedContent settings={settings} calendarStartDay={calendarStartDay} />
       )}
     </div>
   )
@@ -284,11 +272,9 @@ interface PlannedContentProps {
   settings: UserWorkspaceSettings | undefined
   /** Calendar start day (1 = Monday .. 7 = Sunday) for the week default. */
   calendarStartDay: number
-  /** Bumps on each planned-view header New click; consumed by a render-adjust. */
-  createRequest: number
 }
 
-function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedContentProps) {
+function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const { t } = useTranslation('planned')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const { t: tCommon } = useTranslation('common')
@@ -338,7 +324,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
-  const [copySource, setCopySource] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
   // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
   // click on the hover-revealed Ban icon must not fire the mutation directly.
@@ -360,11 +345,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // every pointer type.
   const [plannedRowAction, setPlannedRowAction] = useState<PlannedTransaction | null>(null)
 
-  const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
-  const openEdit = (p: PlannedTransaction) => { setEditing(p); setCopySource(null); setFormOpen(true) }
-  // Copy = new-planned form prefilled from p, date reset to today. Also
-  // reachable from inside the edit modal, which then morphs into copy mode.
-  const openCopy = (p: PlannedTransaction) => { setEditing(null); setCopySource(p); setFormOpen(true) }
+  const openEdit = (p: PlannedTransaction) => { setEditing(p); setFormOpen(true) }
+  // Copy opens the create page prefilled from the row, with today's date.
+  // Also reachable from the edit modal's footer, which then leaves the list.
+  const openCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
   // Rule rows open the rule page; a push, so Back returns to this list.
   const openRulePage = (r: RecurringTransaction) => navigate(`/planned/rules/${r.id}`)
   // "Make recurring": the rule page prefills from the pending row and adopts
@@ -884,18 +868,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     )
   }
 
-  // Header New click, consumed: the counter lives in the gate wrapper (the
-  // button is above the gate, the modal state is here). Only the planned
-  // view bumps it - the recurring view's button navigates to the rule page
-  // itself - so every consumed click opens the planned form. The latch
-  // catches up to the counter on the very next pass: the adjust terminates
-  // by construction and is StrictMode-idempotent.
-  const [consumedCreateRequest, setConsumedCreateRequest] = useState(createRequest)
-  if (createRequest !== consumedCreateRequest) {
-    setConsumedCreateRequest(createRequest)
-    openNew()
-  }
-
   return (
     <>
       {/* View switch for 640px and up, above the status control: it swaps
@@ -1180,7 +1152,6 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         open={formOpen}
         onClose={() => setFormOpen(false)}
         planned={editing}
-        copyFrom={copySource}
         onCopy={openCopy}
         onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
         onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
