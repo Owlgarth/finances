@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Navigate, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -190,6 +190,14 @@ function listViewUrl(searchParams: URLSearchParams, view: 'planned' | 'recurring
   return view === 'recurring'
     ? withSearch('/planned', searchParams, ['adopt', 'page'], { view: 'recurring' })
     : withSearch('/planned', searchParams, ['adopt', 'page', 'view'])
+}
+
+// A row's action buttons sit inside the clickable row. Enter and Space must
+// reach the button alone and never also open the row, so only those two keys
+// are kept from bubbling: every other key (Escape, Tab, shortcuts) still
+// travels to the page.
+function stopActivationKeys(e: KeyboardEvent<HTMLDivElement>) {
+  if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
 }
 
 // Arrival gate + page shell. The per-page defaults must resolve before the
@@ -1371,14 +1379,16 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                       <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
                       {/* Hover and keyboard focus reveal the action group on a fine
                           pointer; at every pointer type the row itself opens the
-                          record. The wrapper stops a button's click and key
-                          presses before they reach the row's handlers: the action
-                          must run alone, never double-fire. */}
+                          record. The wrapper stops a button's click, and Enter
+                          and Space pressed on it, before they reach the row's
+                          handlers: the action must run alone, never double-fire.
+                          Every other key still reaches the page, so Escape can
+                          close an open panel. */}
                       {canWrite && !isTouch && (
                         <div
                           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                           onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
+                          onKeyDown={stopActivationKeys}
                         >
                           {p.status === 'pending' && (
                             <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
@@ -1454,16 +1464,16 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                         the rule page sends a viewer straight back to this list.
                         The group also shows while the row or one of its buttons
                         holds focus, so a keyboard user sees the actions they tab
-                        through. The wrapper stops a button's click AND keydown
-                        before they bubble into the row's handlers: without the
-                        keydown twin, Enter or Space on a focused button would
-                        open the page over the button's own action. The action
-                        must run alone, never double-fire. */}
+                        through. The wrapper stops a button's click, and Enter
+                        and Space pressed on it, before they bubble into the
+                        row's handlers: the action must run alone, never
+                        double-fire. Every other key still reaches the page, so
+                        Escape can close an open panel. */}
                     {canWrite && !isTouch && (
                       <div
                         className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        onKeyDown={stopActivationKeys}
                       >
                         <button type="button" onClick={() => handleOpenRule(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                         <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
