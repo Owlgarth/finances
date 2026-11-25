@@ -21,6 +21,7 @@ import TransfersPage from './pages/TransfersPage'
 import TransferRecordPage from './pages/TransferRecordPage'
 import NewTransactionPage from './pages/NewTransactionPage'
 import NewPlannedPage from './pages/NewPlannedPage'
+import PayPlannedPage from './pages/PayPlannedPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -61,6 +62,7 @@ function AppContent() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
+        <Route path="/planned/:id/pay" element={<PayPlannedPage />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
         <Route path="/planned/new" element={<NewPlannedPage />} />

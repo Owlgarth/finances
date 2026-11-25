@@ -82,6 +82,29 @@
     "message": "Oznaczyć „{{name}}” jako anulowaną? Wiersz zostaje na liście, ale nie można go już zrealizować.",
     "confirm": "Anuluj plan"
   },
+  "paidToast": "Opłacono: {{name}}",
+  "markedPaidToast": "Oznaczono jako opłaconą",
+  "payFailed": "Nie udało się oznaczyć jako opłaconej",
+  "skippedToast": "Pominięto",
+  "skipFailed": "Nie udało się pominąć",
+  "restoredToast": "Przywrócono",
+  "restoreFailed": "Nie udało się przywrócić",
+  "pay": {
+    "title": "Zapłać inaczej",
+    "context": "Zaplanowano: {{amount}} {{date}}",
+    "submit": "Oznacz jako opłaconą",
+    "submitting": "Oznaczanie jako opłaconej…",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do planowanych"
+  },
+  "record": {
+    "status": {
+      "upcoming": "Nadchodząca",
+      "overdue": "Zaległa",
+      "paid": "Opłacona",
+      "skipped": "Pominięta"
+    }
+  },
   "recurring": {
     "tabPlanned": "Planowane",
     "tabRecurring": "Cykliczne",

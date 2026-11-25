@@ -78,6 +78,29 @@
     "message": "Mark \"{{name}}\" as cancelled? The row stays in the list but can no longer be executed.",
     "confirm": "Cancel plan"
   },
+  "paidToast": "Paid: {{name}}",
+  "markedPaidToast": "Marked as paid",
+  "payFailed": "Failed to mark as paid",
+  "skippedToast": "Skipped",
+  "skipFailed": "Failed to skip",
+  "restoredToast": "Restored",
+  "restoreFailed": "Failed to restore",
+  "pay": {
+    "title": "Paid differently",
+    "context": "Planned: {{amount}} on {{date}}",
+    "submit": "Mark as paid",
+    "submitting": "Marking as paid...",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to planned items"
+  },
+  "record": {
+    "status": {
+      "upcoming": "Upcoming",
+      "overdue": "Overdue",
+      "paid": "Paid",
+      "skipped": "Skipped"
+    }
+  },
   "recurring": {
     "tabPlanned": "Planned",
     "tabRecurring": "Recurring",
