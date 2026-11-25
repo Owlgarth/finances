@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { Navigate, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
+import { Ban, CalendarClock, Copy, Download, Loader2, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useRecurringTransaction, useWorkspaceCategories } from '../hooks/useDomain'
+import { useRecurringRuleDelete } from '../hooks/useRecurringRuleDelete'
+import { usePayPlannedForm, usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
 import { useActivityScope } from '../hooks/useActivityScope'
 import { formatAmount, formatMonthYear } from '../utils/format'
@@ -23,10 +26,6 @@ import { activeFilterCount, budgetChangePatch, buildPlannedFilters, clearAllFilt
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
-import ExecuteAdjustedModal from '../components/modals/transactions/ExecuteAdjustedModal'
-import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
-import RecurringFormModal from '../components/modals/transactions/RecurringFormModal'
-import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
@@ -35,6 +34,11 @@ import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
 import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
+import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
+import PlannedRecord from '../components/transactions/PlannedRecord'
+import PlannedCreatePanel from '../components/transactions/PlannedCreatePanel'
+import RecurringFormPanel from '../components/transactions/RecurringFormPanel'
+import PayPlannedForm from '../components/transactions/PayPlannedForm'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
@@ -45,13 +49,9 @@ import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
 import AmountRangeEditor from '../components/filters/AmountRangeEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
+import DetailPanel from '../components/layout/DetailPanel'
+import SplitView from '../components/layout/SplitView'
 import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
-
-const STATUS_STYLE: Record<string, string> = {
-  pending: 'text-warning border-warning/40',
-  done: 'text-positive border-positive/40',
-  cancelled: 'text-text-muted border-border',
-}
 
 type StatusFilter = 'all' | 'pending' | 'done' | 'cancelled'
 
@@ -92,6 +92,114 @@ function readStoredSearch(): string {
   }
 }
 
+// Same cents helpers as the transactions list's record mirror (a third copy
+// belongs in a shared module at the next touch of all three).
+/** Exact cents of a backend amount string (BigInt, never parseFloat -
+    backend amounts are exact 2-decimal strings; shorter fractions pad). */
+function amountCents(raw: string): bigint {
+  const negative = raw.startsWith('-')
+  const abs = negative ? raw.slice(1) : raw
+  const [intPart, fracPart = ''] = abs.split('.')
+  return (negative ? -1n : 1n) * BigInt((intPart || '0') + fracPart.padEnd(2, '0').slice(0, 2))
+}
+
+/** Exact cents of an amount-filter bound, rounded toward +infinity (a lower
+    bound) or -infinity (an upper bound) past the 2nd decimal: the server
+    compares the bound it receives, so a 3+-decimal bound must never round
+    in the keep-open direction. Unparseable strings read as null. */
+function amountBoundCents(raw: string, ceil: boolean): bigint | null {
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(raw)) return null
+  const negative = raw.startsWith('-')
+  const abs = raw.replace(/^[+-]/, '')
+  const [intPart, fracPart = ''] = abs.split('.')
+  let result = BigInt((intPart || '0') + fracPart.slice(0, 2).padEnd(2, '0'))
+  // Digits past the 2nd decimal: "up" means +1 cent on a positive bound but
+  // only dropping the tail on a negative one (toward zero is toward
+  // +infinity); floor is the mirror image.
+  const hasTail = fracPart.slice(2).replace(/0+$/, '').length > 0
+  if (hasTail && ceil !== negative) result += 1n
+  return negative ? -result : result
+}
+
+/** True when the item's amount satisfies one amount bound the way the list
+ *  request sends it. The list sends Number(raw): a bound the server never
+ *  receives (empty, or text Number() rejects) filters nothing; a bound this
+ *  module cannot read in exact cents proves nothing, so it reads as a
+ *  mismatch, like every other facet the payload cannot evaluate. */
+function amountWithin(amount: string, raw: string, ceil: boolean): boolean {
+  if (raw === '') return true
+  const sent = amountParam(raw)
+  if (sent === undefined) return true
+  const bound = amountBoundCents(String(sent), ceil)
+  return bound !== null && (ceil ? amountCents(amount) >= bound : amountCents(amount) <= bound)
+}
+
+/** The facets of the list query that decide membership (ordering, page and
+ *  page size never remove an item). */
+interface PlannedRecordFacets {
+  status: StatusFilter
+  search: string
+  account: number[]
+  currency: string[]
+  budget: number[]
+  category: number[]
+  amountMin: string
+  amountMax: string
+  dateFrom: string
+  dateTo: string
+}
+
+/**
+ * Conservative client-side mirror of the list query's server filters:
+ * true only when the item PROVABLY still matches every facet the server
+ * applies, so it is sound for keep-open - the only decision it drives. A
+ * panel showing an item the list no longer contains is the worse failure.
+ */
+function plannedStillMatches(p: PlannedTransaction, f: PlannedRecordFacets): boolean {
+  if (f.status !== 'all' && p.status !== f.status) return false
+  if (f.account.length && (p.account_id == null || !f.account.includes(p.account_id))) return false
+  if (f.currency.length && !f.currency.includes(p.currency_code)) return false
+  if (f.dateFrom && p.planned_date < f.dateFrom) return false
+  if (f.dateTo && p.planned_date > f.dateTo) return false
+  if (f.search && !p.name.toLowerCase().includes(f.search.toLowerCase())) return false
+  // The budget filter runs through the item's category server-side, so an
+  // uncategorized item never matches it.
+  if (f.budget.length && (p.category == null || !f.budget.includes(p.category.budget_id))) return false
+  if (f.category.length && (p.category_id == null || !f.category.includes(p.category_id))) return false
+  if (!amountWithin(p.amount, f.amountMin, true)) return false
+  if (!amountWithin(p.amount, f.amountMax, false)) return false
+  return true
+}
+
+/** `path` with the list's current search, minus the params in `drop` and
+ *  with `set` written over it. A panel route and the list it sits on share
+ *  one URL, so every navigation between them carries the list's facets. */
+function withSearch(path: string, searchParams: URLSearchParams, drop: string[], set?: Record<string, string>): string {
+  const next = new URLSearchParams(searchParams)
+  for (const key of drop) next.delete(key)
+  for (const [key, value] of Object.entries(set ?? {})) next.set(key, value)
+  const search = next.toString()
+  return search ? `${path}?${search}` : path
+}
+
+/** The planned list for a view switch made while a panel route is active:
+ *  the bare list with the view written, because a rule route implied one -
+ *  a ?view= write alone could never leave it. The make-recurring seed and
+ *  the page number go: the destination renders neither. */
+function listViewUrl(searchParams: URLSearchParams, view: 'planned' | 'recurring'): string {
+  return view === 'recurring'
+    ? withSearch('/planned', searchParams, ['adopt', 'page'], { view: 'recurring' })
+    : withSearch('/planned', searchParams, ['adopt', 'page', 'view'])
+}
+
+// A row's action buttons sit inside the clickable row. Enter and Space must
+// reach the button alone and never also open the row, so only those two keys
+// are kept from bubbling: every other key (Escape, Tab, shortcuts) still
+// travels to the page.
+function stopActivationKeys(e: KeyboardEvent<HTMLDivElement>) {
+  if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+}
+
 // Arrival gate + page shell. The per-page defaults must resolve before the
 // content mounts: a cold-cache materialization of built-ins would flip every
 // control a moment later. Both gate queries are boot-time fetches with a
@@ -103,7 +211,15 @@ function readStoredSearch(): string {
 export default function Planned() {
   const { t } = useTranslation('planned')
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { canWrite } = usePermissions()
+  const { isDesktop } = useBreakpoint()
+  // True while one of the item panels is open: create, record or pay. The
+  // record pattern's dynamic segment also matches the create path, so the
+  // two patterns cover all three.
+  const recordMatch = useMatch('/planned/:id')
+  const payMatch = useMatch('/planned/:id/pay')
+  const itemPanelOpen = recordMatch !== null || payMatch !== null
   const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings()
   const { isLoading: preferencesLoading, calendarStartDay } = useUserPreferences()
   const defaultsLoading = settingsLoading || preferencesLoading
@@ -120,11 +236,6 @@ export default function Planned() {
     const timer = setTimeout(() => setSkeletonShown(true), 300)
     return () => clearTimeout(timer)
   }, [defaultsLoading])
-
-  // Header New click crosses the component boundary: the button lives here
-  // (above the gate) while the form modals and their seed state live in the
-  // content. A plain counter the content consumes with a render-adjust.
-  const [createRequest, setCreateRequest] = useState(0)
 
   const { activityTitle, breadcrumb } = useActivityScope()
   const updateParams = createUpdateParams(setSearchParams)
@@ -149,7 +260,22 @@ export default function Planned() {
   // resolved during the gate window, so the label may flip once after
   // materialization - accepted, the header stays mounted either way.
   const rawView = searchParams.get('view')
-  const view: 'planned' | 'recurring' = rawView === 'recurring' ? 'recurring' : 'planned'
+  // A rule route that renders this list at 1024+ shows the rule form in
+  // its panel, and a rule belongs to the recurring view only: the path
+  // implies it (derived here for the header, never written to the URL).
+  // Two consts, not one expression: a short-circuited || would skip a hook.
+  const onRuleCreatePath = useMatch('/planned/rules/new') !== null
+  const onRuleRecordPath = useMatch('/planned/rules/:id') !== null
+  const rulePathOpen = onRuleCreatePath || onRuleRecordPath
+  const view: 'planned' | 'recurring' = rulePathOpen || rawView === 'recurring' ? 'recurring' : 'planned'
+  // Any panel that is already open makes a later open a selection change.
+  const panelPathOpen = itemPanelOpen || rulePathOpen
+  // Both view switches land on the bare list while a panel route is active
+  // (the phone one is hidden at the panel tier, so it never meets one).
+  const switchView = (target: 'planned' | 'recurring') => {
+    if (panelPathOpen) navigate(listViewUrl(searchParams, target), { replace: true })
+    else updateParams({ view: target === 'planned' ? null : target })
+  }
 
   // Export reads the URL at click time instead of threading the content's
   // effective derivations across the boundary: the URL is the source of
@@ -180,8 +306,37 @@ export default function Planned() {
     setIsExporting(false)
   }
 
+  // The tier fork lives INSIDE the handler, so the button stays mounted on
+  // every tier. Below 1024 the create form is a full page, opened with a
+  // push so Back returns to this list. At 1024+ the form opens in the side
+  // panel and this list keeps filtering beside it, so the current search
+  // travels in the URL: the first open is a push, and a click while a panel
+  // is already open is a selection change (replace), so Back never walks a
+  // click trail. A stale copy or make-recurring seed never carries into a
+  // plain create.
+  const openCreate = () => {
+    if (view === 'recurring') {
+      // Same fork as the planned arm below: the rule form is a page below
+      // 1024 and a panel beside this list from 1024 up.
+      if (!isDesktop) {
+        navigate('/planned/rules/new')
+        return
+      }
+      navigate(withSearch('/planned/rules/new', searchParams, ['adopt']), { replace: panelPathOpen })
+      return
+    }
+    if (!isDesktop) {
+      navigate('/planned/new')
+      return
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('copy')
+    const search = next.toString()
+    navigate(search ? `/planned/new?${search}` : '/planned/new', { replace: itemPanelOpen })
+  }
+
   return (
-    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       {/* The title row and the Activity tab row stay mounted through the gate:
           route changes move focus to the page h1, and chrome that pops in
           after the gate is churn. The gated region is everything below the
@@ -206,7 +361,7 @@ export default function Planned() {
                 it - the same param write the segmented control performs. */}
             <button
               type="button"
-              onClick={() => updateParams({ view: view === 'recurring' ? null : 'recurring' })}
+              onClick={() => switchView(view === 'recurring' ? 'planned' : 'recurring')}
               aria-pressed={view === 'recurring'}
               title={rulesButtonLabel}
               aria-label={rulesButtonLabel}
@@ -223,15 +378,11 @@ export default function Planned() {
             </button>
             {/* Planned and recurring creation lives on this tab, not behind
                 the FAB - the button is visible on every tier, phones
-                included, because nothing else offers it. Deviation from
-                the modal-size rule (never put a form with more than three
-                fields in a modal): phone creation stays modal here until
-                the planned forms move to pages - hiding it would make the
-                capability unreachable on phones. */}
+                included, because nothing else offers it. */}
             {canWrite && (
               <button
                 type="button"
-                onClick={() => setCreateRequest((n) => n + 1)}
+                onClick={openCreate}
                 className={primaryButtonClass}
               >
                 <Plus size={13} className="inline mr-1" /> {view === 'recurring' ? t('recurring.newRecurring') : t('newPlanned')}
@@ -266,7 +417,7 @@ export default function Planned() {
           </div>
         ) : null
       ) : (
-        <PlannedContent settings={settings} calendarStartDay={calendarStartDay} createRequest={createRequest} />
+        <PlannedContent settings={settings} calendarStartDay={calendarStartDay} />
       )}
     </div>
   )
@@ -278,11 +429,9 @@ interface PlannedContentProps {
   settings: UserWorkspaceSettings | undefined
   /** Calendar start day (1 = Monday .. 7 = Sunday) for the week default. */
   calendarStartDay: number
-  /** Bumps on every header New click; consumed by a render-adjust. */
-  createRequest: number
 }
 
-function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedContentProps) {
+function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const { t } = useTranslation('planned')
   const { t: tBookmarks } = useTranslation('bookmarks')
   const { t: tCommon } = useTranslation('common')
@@ -292,7 +441,11 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // precedent).
   const { t: tTx } = useTranslation('transactions')
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { canWrite } = usePermissions()
+  // The role is unknown until the workspace loads: the pay path must not
+  // bounce a member whose role has not resolved yet.
+  const { isLoading: workspaceLoading } = useWorkspace()
   const multiCurrency = useMultiCurrency()
   const { data: accounts = [] } = useAccounts(false)
   const { data: currencies = [] } = useEnabledCurrencies()
@@ -303,7 +456,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const { data: categories = [] } = useWorkspaceCategories(false)
 
   const isTouch = useIsTouch()
-  const { isMobile } = useBreakpoint()
+  const { isMobile, isDesktop } = useBreakpoint()
 
   const statusOptions = STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
@@ -329,45 +482,163 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
       : t('recurring.schedule.daily', { count: r.interval_count })
   }
 
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<PlannedTransaction | null>(null)
-  const [copySource, setCopySource] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
-  // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
-  // click on the hover-revealed Ban icon must not fire the mutation directly.
-  const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
-  // "Execute with adjustments" source (pending rows): the date+amount modal.
-  const [adjusting, setAdjusting] = useState<PlannedTransaction | null>(null)
+  // Skip asks first, like delete: the icon sits beside one-tap actions, and
+  // a stray tap must not change an item's status.
+  const [skipping, setSkipping] = useState<PlannedTransaction | null>(null)
   // Bookmark capture of the planned view's filters (mount-per-use modal):
   // target derives from the URL at open time; renders only in view=planned.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
 
-  // Recurring view state. Mirrors the planned modal-state quartet above.
-  const [recurringFormOpen, setRecurringFormOpen] = useState(false)
-  const [editingRule, setEditingRule] = useState<RecurringTransaction | null>(null)
-  const [adoptSource, setAdoptSource] = useState<PlannedTransaction | null>(null)
+  // Recurring view state: the list's delete confirm. The rule form lives on
+  // its own page and keeps its own state.
   const [deletingRule, setDeletingRule] = useState<RecurringTransaction | null>(null)
   // Switch state for the delete dialog's "also delete pending rows" row; reset
   // on every open so a previous session's toggle never leaks into the next.
   const [deleteRulePending, setDeleteRulePending] = useState(false)
-  // Touch replacements for the two hover action groups (TransfersPage pattern).
-  const [plannedRowAction, setPlannedRowAction] = useState<PlannedTransaction | null>(null)
-  const [recurringRowAction, setRecurringRowAction] = useState<RecurringTransaction | null>(null)
 
-  const openNew = () => { setEditing(null); setCopySource(null); setFormOpen(true) }
-  const openEdit = (p: PlannedTransaction) => { setEditing(p); setCopySource(null); setFormOpen(true) }
-  // Copy = new-planned form prefilled from p, date reset to today. Also
-  // reachable from inside the edit modal, which then morphs into copy mode.
-  const openCopy = (p: PlannedTransaction) => { setEditing(null); setCopySource(p); setFormOpen(true) }
-  const openNewRecurring = () => { setEditingRule(null); setAdoptSource(null); setRecurringFormOpen(true) }
-  const openEditRule = (r: RecurringTransaction) => { setEditingRule(r); setAdoptSource(null); setRecurringFormOpen(true) }
-  // "Make recurring": the modal prefills from the pending row and adopts it as
-  // the rule's first occurrence (adopt_planned_id) - no duplicate row is created.
-  const openMakeRecurring = (p: PlannedTransaction) => { setEditingRule(null); setAdoptSource(p); setRecurringFormOpen(true) }
+  // Rule rows open the rule form: the page below 1024 (a push, so Back
+  // returns to this list), the side panel from 1024 up. The tier fork lives
+  // INSIDE the handler so the list stays mounted on every tier. At 1024+ a
+  // panel is "already open" when this render sits on any panel route - read
+  // at click time so the FIRST open pushes (Back returns to the bare list)
+  // and every later selection change replaces.
+  const handleOpenRule = (r: RecurringTransaction) => {
+    if (!isDesktop) {
+      navigate(`/planned/rules/${r.id}`)
+      return
+    }
+    navigate(withSearch(`/planned/rules/${r.id}`, searchParams, ['adopt']), { replace: panelPathOpen })
+  }
+  // "Make recurring": the rule form prefills from the pending row and adopts
+  // it as the rule's first occurrence (adopt_planned_id) - no duplicate row
+  // is created. Tier fork and push/replace rule as for the rule rows; the
+  // seed rides in the URL so one address serves both tiers.
+  const openMakeRecurring = (p: PlannedTransaction) => {
+    if (!isDesktop) {
+      navigate(`/planned/rules/new?adopt=${p.id}`)
+      return
+    }
+    navigate(withSearch('/planned/rules/new', searchParams, [], { adopt: String(p.id) }), { replace: panelPathOpen })
+  }
   const openDeleteRule = (r: RecurringTransaction) => { setDeleteRulePending(false); setDeletingRule(r) }
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
+  // At 1024+ this page hosts an item's panel (its record or the pay form).
+  // The open
+  // item is the PATH, so bookmarks and saved defaults, which capture query
+  // params only, can never record an open panel. The id comes from the
+  // pattern that matched, never from the bare route-params hook (which also
+  // reports an id on the rule paths, and on /planned/new). Garbage ids read
+  // as null: no panel.
+  const recordMatch = useMatch('/planned/:id')
+  const payMatch = useMatch('/planned/:id/pay')
+  const idParam = (recordMatch ?? payMatch)?.params.id ?? ''
+  const panelId = /^\d+$/.test(idParam) && Number(idParam) > 0 ? Number(idParam) : null
+  // The pay form owns the panel slot on the pay path.
+  const payOpen = payMatch !== null
+  // The create form's open state is its path: at 1024+ /planned/new renders
+  // this list with the create form in the panel beside it, for writers only
+  // (a viewer's deep link to the create path shows the plain list). The
+  // create form wins the panel slot over a record. The copy seed rides on
+  // the same path as ?copy=<id>; garbage reads as a plain create.
+  const newMatch = useMatch('/planned/new')
+  const createOpen = isDesktop && canWrite && newMatch !== null
+  const copyId = createOpen ? intParam(searchParams, 'copy') : null
+  const createMode: 'create' | 'copy' = copyId !== null ? 'copy' : 'create'
+  // Any panel that is already open makes a later open a selection change.
+  const itemPanelOpen = createOpen || panelId != null
+  // Shares the ['planned', 'detail', id] cache entry with the record page,
+  // the pay page and the copy seed: one entry per id, refreshed by every
+  // family-wide invalidation.
+  const { data: record, isLoading: recordLoading, isError: recordError } = usePlannedTransaction(panelId)
+  // Row-selected highlight: below 1024 this component never mounts on an
+  // item path (the route element renders the page there instead).
+  const selectedId = isDesktop ? panelId : null
+
+  // Opening a record swaps the matched route element, which remounts this
+  // page and drops focus to <body>: a keyboard user would have to Tab back
+  // in before the walk continues. Refocus the SELECTED row once per mount.
+  // A bare list mount finds no selected row, so nothing is focused. DOM-only,
+  // and programmatic focus after a mouse interaction shows no focus ring.
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus()
+  }, [])
+
+  // "Paid differently" opens the pay form. The tier fork lives INSIDE the
+  // handler so the row stays mounted on every tier. At 1024+ the form is a
+  // panel beside the list: the list filters travel in the URL so the list
+  // keeps filtering beside the panel, the first open pushes and a later
+  // selection change replaces (a create panel that is already open counts
+  // too; read at click time: this render sits on an item path). Below 1024
+  // the form is a page and the push carries the list's search in router
+  // state instead.
+  const openPay = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('copy')
+      navigate({ pathname: `/planned/${p.id}/pay`, search: next.toString() }, { replace: itemPanelOpen })
+      return
+    }
+    navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
+  }
+
+  // A row tap or click opens the record. The tier fork lives INSIDE the
+  // handler so the row stays mounted on every tier. At 1024+ the record is
+  // a panel, the FIRST open pushes (Back returns to the bare list) and
+  // every later selection change replaces (Back never walks a click
+  // trail; a create panel that is already open counts too); below 1024
+  // the PUSH carries the click-time search string in router state, so the
+  // record page's back target keeps the filters.
+  const handleOpenRecord = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('copy')
+      navigate({ pathname: `/planned/${p.id}`, search: next.toString() }, { replace: itemPanelOpen })
+      return
+    }
+    navigate(`/planned/${p.id}`, { state: { search: searchParams.toString() } })
+  }
+
+  // Panel close (X, Escape, a finished pay, a delete, or the reconcile
+  // below): replace keeps the closed item's URL out of Back's path; every
+  // list param survives.
+  const handleClosePanel = () =>
+    navigate({ pathname: '/planned', search: searchParams.toString() }, { replace: true })
+  // Copy opens the create form prefilled from the row, with today's date.
+  // The tier fork lives INSIDE the handler so the hover button stays
+  // mounted on every tier: at 1024+ the form is a panel beside this list
+  // (the search travels in the URL so the list keeps filtering), and a
+  // panel that is already open makes this a selection change (replace);
+  // below 1024 the create page opens with a push.
+  const openCopy = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      const next = new URLSearchParams(searchParams)
+      next.set('copy', String(p.id))
+      navigate(`/planned/new?${next.toString()}`, { replace: itemPanelOpen })
+      return
+    }
+    navigate(`/planned/new?copy=${p.id}`)
+  }
+
+  // Create panel close (X, Escape, Cancel, the unsaved-changes confirm, or a
+  // successful Add): the list path with the search kept, minus the copy
+  // seed - a stale ?copy= must not re-seed the next create. Replace, like
+  // every panel close.
+  const closeCreatePanel = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('copy')
+    const search = next.toString()
+    navigate(search ? `/planned?${search}` : '/planned', { replace: true })
+  }
+  // The record's action callbacks for the panel host: leaving the record
+  // closes the panel. "Paid differently..." is openPay itself (a panel is
+  // already open, so it replaces and the pay form takes the same slot). Make
+  // recurring and Copy go through the row's own openers.
+  const handleRecordDeleted = () => handleClosePanel()
+  const handleRecordCopy = openCopy
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
   // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
@@ -396,8 +667,36 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   // only ever 'recurring' - a stored 'planned' equals the built-in and never
   // latches; garbage reads as planned.
   const rawView = searchParams.get('view')
+  // Panel state derives from the matched route patterns, not from the route
+  // params (the rule routes carry an :id too). The create pattern is tested
+  // first: it also matches the edit pattern, with "new" as the id.
+  const ruleCreatePath = useMatch('/planned/rules/new') !== null
+  const ruleMatch = useMatch('/planned/rules/:id')
+  const rulePathOpen = ruleCreatePath || ruleMatch !== null
+  // A rule path implies the recurring view - derived, never written: a deep
+  // link to a rule shows the rules beside its panel.
   const view: 'planned' | 'recurring' =
-    rawView === 'recurring' || (rawView === null && defaultsLatch.view === 'recurring') ? 'recurring' : 'planned'
+    rulePathOpen || rawView === 'recurring' || (rawView === null && defaultsLatch.view === 'recurring') ? 'recurring' : 'planned'
+  const ruleId = !ruleCreatePath && ruleMatch !== null ? Number(ruleMatch.params.id) : NaN
+  const validRuleId = Number.isInteger(ruleId) && ruleId > 0 ? ruleId : null
+  // The form is a writer's: a viewer's deep link shows the list, no panel.
+  const ruleCreateOpen = isDesktop && canWrite && ruleCreatePath
+  const ruleRecordOpen = isDesktop && canWrite && !ruleCreatePath && ruleMatch !== null
+  // The panel's own cache entry: only its error flag is read here.
+  const ruleQuery = useRecurringTransaction(ruleRecordOpen ? validRuleId : null)
+  // A rule that cannot load (a garbage, foreign or deleted id) has no form
+  // to show: the list closes the panel. Below 1024 the page shows its
+  // not-found state for the same cases instead.
+  const ruleUnloadable = ruleRecordOpen && (validRuleId === null || ruleQuery.isError)
+  // Any panel that is already open makes a later open a selection change.
+  const panelPathOpen = itemPanelOpen || rulePathOpen
+  // Row-selected highlight: a rule panel can only be open for a writer at 1024+.
+  const selectedRuleId = ruleRecordOpen && !ruleUnloadable ? validRuleId : null
+  const recurringListUrl = listViewUrl(searchParams, 'recurring')
+  // The create panel is keyed by its seed too: the header button navigates
+  // from a make-recurring panel to a plain create on the same route, where
+  // the list and the panel slot stay mounted.
+  const ruleAdoptId = ruleCreatePath ? intParam(searchParams, 'adopt') : null
   // Remembered search: when the URL carries no ?search= param (fresh visit),
   // the last committed term fills the box. Seeded once at mount (the lazy
   // useState initializer reads storage exactly once); after that the URL
@@ -457,6 +756,24 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const [pageSize, setPageSize] = useState(getStoredPageSize)
 
   const updateParams = createUpdateParams(setSearchParams)
+
+  // A view switch with a panel route active lands on the bare list: no panel
+  // outlives the view it was opened from, and on a rule route a ?view= write
+  // alone could not leave the recurring view the path implies. Replace: an
+  // in-page selection write is not a history step.
+  const switchView = (next: 'planned' | 'recurring') => {
+    if (panelPathOpen) navigate(listViewUrl(searchParams, next), { replace: true })
+    else updateParams({ view: next === 'planned' ? null : next })
+  }
+  // Rule panel close (X, Escape, a saved or deleted rule): replace keeps the
+  // closed route out of Back's path. The view is written because the bare
+  // list path does not imply it, so the rules stay on screen after the close.
+  const handleCloseRulePanel = () => navigate(recurringListUrl, { replace: true })
+  // A saved make-recurring lands on the adopted row's record beside the
+  // planned list it belongs to: the facets travel, the seed goes, and the
+  // view is dropped because the rule route implied the recurring one.
+  const handleAdopted = (plannedId: number) =>
+    navigate(withSearch(`/planned/${plannedId}`, searchParams, ['adopt', 'view']), { replace: true })
 
   // One-shot defaults materialization (useStalePageReset shape: the URL
   // write goes through the closure-wrapped updateParams, never
@@ -667,7 +984,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   const items = data?.items ?? []
 
   // Keyed INSIDE the ['planned'] family so every existing invalidation of that
-  // prefix (form modal, execute, cancel, delete) refetches the strip too.
+  // prefix refetches the strip too.
   // Same dependency values as the list query minus page/pageSize/ordering -
   // currency_code included: the totals route accepts the same currency
   // params the list route does.
@@ -781,40 +1098,10 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     }
   }
 
-  const executeMutation = useMutation({
-    // No overrides: "as planned" (payment_date = planned_date, plan amount)
-    // is the server-side default, so no client-side date computation can
-    // ever regress this path.
-    mutationFn: (p: PlannedTransaction) => plannedTransactionsApi.execute(p.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success(t('executed'))
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, t('executeFailed'))),
-  })
-
-  // Cancel keeps the row (status → cancelled) — softer than delete. PUT wants
-  // the full payload, so echo the row's fields with only the status changed.
-  const cancelMutation = useMutation({
-    mutationFn: (p: PlannedTransaction) =>
-      plannedTransactionsApi.update(p.id, {
-        name: p.name,
-        amount: p.amount,
-        account_id: p.account_id,
-        currency_code: p.currency_code,
-        category_id: p.category_id,
-        planned_date: p.planned_date,
-        status: 'cancelled',
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(t('cancelledToast'))
-      setCancelling(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('cancelFailed'))); setCancelling(null) },
-  })
+  // Paying, skipping and restoring an item share one hook: the cache refresh
+  // and the toasts live there, and every caller here (the row buttons and the
+  // skip dialog) reaches for the same functions.
+  const { markPaid, skip, isPending: paymentPending } = usePlannedPayment()
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
@@ -823,7 +1110,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
   })
 
   // Pause/resume: full-replace PUT, so echo the row's fields with only
-  // is_active flipped (the cancelMutation echo pattern). Planned rows never
+  // is_active flipped (the full-replace echo pattern). Planned rows never
   // change here, so only ['recurring'] refetches.
   const toggleActiveMutation = useMutation({
     mutationFn: (r: RecurringTransaction) =>
@@ -848,18 +1135,9 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     onError: (error) => toast.error(getApiErrorMessage(error, t('recurring.updateFailed'))),
   })
 
-  const deleteRuleMutation = useMutation({
-    mutationFn: (input: { id: number; deletePending: boolean }) =>
-      recurringTransactionsApi.delete(input.id, input.deletePending),
-    onSuccess: () => {
-      // delete_pending can remove planned rows, so both lists refetch.
-      queryClient.invalidateQueries({ queryKey: ['recurring'] })
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(t('recurring.deleted'))
-      setDeletingRule(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('recurring.deleteFailed'))); setDeletingRule(null) },
-  })
+  // The request, the refetches and the toasts are the shared hook's; the
+  // per-call callbacks only close the confirm.
+  const deleteRuleMutation = useRecurringRuleDelete()
 
   // Save the current view facets as this page's defaults. capturePageDefaults
   // reads the URL (the source of truth) into the full planned sub-object - a
@@ -877,18 +1155,39 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
     )
   }
 
-  // Header New click, consumed: the counter lives in the gate wrapper (the
-  // button is above the gate, the modal state is here). Routed against the
-  // EFFECTIVE view - a click inside the cold-cache gate window lands after
-  // materialization, so it opens the modal the post-defaults view calls
-  // for. The latch catches up to the counter on the very next pass: the
-  // adjust terminates by construction and is StrictMode-idempotent.
-  const [consumedCreateRequest, setConsumedCreateRequest] = useState(createRequest)
-  if (createRequest !== consumedCreateRequest) {
-    setConsumedCreateRequest(createRequest)
-    if (view === 'recurring') openNewRecurring()
-    else openNew()
-  }
+  // Filter facets only - ordering, page and page size do not change membership.
+  const filterKey = [statusFilter, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo].join('|')
+  // Keep-or-close reconcile for the open panel: a filter change (or an
+  // item error - deleted elsewhere, foreign) that proves the item no
+  // longer matches the query closes the panel; a still-matching item stays
+  // open even when it falls off the visible page. The pay path also swaps
+  // to the record for anything that cannot be paid there (the pay page
+  // redirects the same cases). Response arrival is not an event, so a
+  // guarded effect is the only possible seam, and it navigates (a router
+  // write, never component state).
+  useEffect(() => {
+    if (!(isDesktop && panelId != null)) return
+    if (recordLoading) return
+    if (recordError || !record) {
+      handleClosePanel()
+      return
+    }
+    if (payOpen && !workspaceLoading && (!canWrite || record.status !== 'pending')) {
+      navigate({ pathname: `/planned/${record.id}`, search: searchParams.toString() }, { replace: true })
+      return
+    }
+    if (!plannedStillMatches(record, { status: statusFilter, search, account: accountFilter, currency: currencyFilter, budget: budgetFilter, category: categoryFilter, amountMin, amountMax, dateFrom, dateTo })) {
+      handleClosePanel()
+    }
+    // The effect reads the CURRENT filter values by design; filterKey is
+    // the change signal, so the deps list is deliberately partial.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey, panelId, isDesktop, payOpen, record, recordLoading, recordError, canWrite, workspaceLoading])
+
+  // The pay form mounts only for an item it can pay: anything else on the
+  // pay path holds until the reconcile above swaps or closes the panel.
+  const payable =
+    record && record.status === 'pending' && canWrite && !workspaceLoading ? record : null
 
   return (
     <>
@@ -898,7 +1197,7 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
       <div className="mb-3 hidden sm:block">
         <SegmentedControl
           value={view}
-          onChange={(v) => updateParams({ view: v === 'planned' ? null : v })}
+          onChange={switchView}
           options={[
             { value: 'planned', label: t('recurring.tabPlanned') },
             { value: 'recurring', label: t('recurring.tabRecurring') },
@@ -1019,156 +1318,239 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         />
       )}
 
-      {view === 'planned' ? (
-        isLoading ? (
-          <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
-        ) : items.length === 0 ? (
-          search || (activeCount > 0 && !onlyMonthRange) ? (
-            <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
-          ) : statusFilter !== 'all' ? (
-            <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
-          ) : exactMonth ? (
-            <EmptyState
-              icon={<CalendarClock size={48} strokeWidth={1.5} className="text-text-muted/30" />}
-              heading={<span className="font-mono">{monthLabel}</span>}
-              message={t('emptyMonth.message')}
-              action={{ label: t('emptyMonth.showAll'), onClick: () => updateParams({ from: null, to: null }) }}
-            />
-          ) : (
-            <p className="text-sm text-text-muted">{t('empty')}</p>
-          )
-        ) : (
-          <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-            {items.map((p) => (
-              <SwipeRow
-                key={p.id}
-                enabled={isTouch && canWrite && p.status === 'pending'}
-                actions={[
-                  { key: 'paidDifferently', label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => setAdjusting(p) },
-                  { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
-                ]}
-              >
-                <div
-                  {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
-                  className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                    isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                  }`}
-                >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-text truncate">{p.name}</span>
-                    <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{statusLabel(p.status)}</span>
-                    {p.recurring_id != null && (
-                      <span className="text-text-muted" title={t('recurring.badge')}>
-                        <Repeat size={12} className="inline" aria-hidden="true" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] font-mono text-text-muted">
-                    {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 pl-3">
-                  <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
-                  {/* Hover reveals are pointer-fine only - on touch the row tap
-                      opens the action sheet instead. */}
-                  {canWrite && !isTouch && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {p.status === 'pending' && (
-                        <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title={t('rowActions.execute')}><CheckCircle size={13} /></button>
-                      )}
-                      {p.status === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => setAdjusting(p)}
-                          title={t('rowActions.executeAdjusted')}
-                          aria-label={t('rowActions.executeAdjusted')}
-                          className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-                        >
-                          <SlidersHorizontal size={13} />
-                        </button>
-                      )}
-                      {p.status === 'pending' && (
-                        <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title={t('rowActions.cancelPlan')}><Ban size={13} /></button>
-                      )}
-                      {p.status === 'pending' && p.recurring_id == null && (
-                        <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
-                      )}
-                      <button onClick={() => openEdit(p)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                      <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                      <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+      {ruleUnloadable && <Navigate to={recurringListUrl} replace />}
+      {/* The list and its pagination always ride the split's list slot:
+          with no panel open the wrapper renders the list unchanged, so one
+          stable tree spans the 1024 crossing. The toolbar above keeps the
+          page's full width. */}
+      <SplitView
+        list={
+          view === 'planned' ? (
+            isLoading ? (
+              <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+            ) : items.length === 0 ? (
+              search || (activeCount > 0 && !onlyMonthRange) ? (
+                <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
+              ) : statusFilter !== 'all' ? (
+                <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
+              ) : exactMonth ? (
+                <EmptyState
+                  icon={<CalendarClock size={48} strokeWidth={1.5} className="text-text-muted/30" />}
+                  heading={<span className="font-mono">{monthLabel}</span>}
+                  message={t('emptyMonth.message')}
+                  action={{ label: t('emptyMonth.showAll'), onClick: () => updateParams({ from: null, to: null }) }}
+                />
+              ) : (
+                <p className="text-sm text-text-muted">{t('empty')}</p>
+              )
+            ) : (
+              <div ref={listRef} className="border border-border rounded-sm bg-surface divide-y divide-border">
+                {items.map((p) => (
+                  <SwipeRow
+                    key={p.id}
+                    enabled={isTouch && canWrite && p.status === 'pending'}
+                    actions={[
+                      { key: 'paidDifferently', label: t('rowActions.paidDifferentlyShort'), icon: SlidersHorizontal, onSelect: () => openPay(p) },
+                      { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
+                    ]}
+                  >
+                    <div
+                      {...tappableProps(() => handleOpenRecord(p))}
+                      aria-current={p.id === selectedId ? 'true' : undefined}
+                      className={`flex items-center justify-between px-4 py-3 text-sm group border-l-2 active:bg-surface-hover transition-colors cursor-pointer ${
+                        p.id === selectedId ? 'border-l-primary bg-surface-hover' : 'border-l-transparent'
+                      }`}
+                    >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-text truncate">{p.name}</span>
+                        <PlannedStatusChip planned={p} />
+                        {p.recurring_id != null && (
+                          <span className="text-text-muted" title={t('recurring.badge')}>
+                            <Repeat size={12} className="inline" aria-hidden="true" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-text-muted">
+                        {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
+                      </div>
                     </div>
-                  )}
-                </div>
-                </div>
-              </SwipeRow>
-            ))}
-            {data && data.total > 0 && (
-              <Pagination
-                page={data.page}
-                total_pages={data.total_pages}
-                total={data.total}
-                page_size={data.page_size}
-                onPageChange={(p) => updateParams({ page: p })}
-                onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
-              />
-            )}
-          </div>
-        )
-      ) : recurringIsLoading ? (
-        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
-      ) : recurringRules.length === 0 ? (
-        <p className="text-sm text-text-muted">{t('recurring.empty')}</p>
-      ) : (
-        <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-          {recurringRules.map((r) => (
-            <div
-              key={r.id}
-              {...(isTouch && canWrite ? tappableProps(() => setRecurringRowAction(r)) : {})}
-              className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-text truncate">{r.name}</span>
-                  <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive border-positive/40' : 'text-text-muted border-border'}`}>
-                    {r.is_active ? t('recurring.activeChip') : t('recurring.pausedChip')}
-                  </span>
-                </div>
-                <div className="text-[10px] font-mono text-text-muted truncate">
-                  {scheduleSummary(r)}{r.next_occurrence_date ? ` · ${r.next_occurrence_date}` : ''}{r.category?.name ? ` · ${r.category.name}` : ''} · {r.account_name ?? t('noAccount')}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0 pl-3">
-                <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
-                {/* Hover reveals are pointer-fine only - on touch the row tap
-                    opens the action sheet instead. */}
-                {canWrite && !isTouch && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button type="button" onClick={() => openEditRule(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
-                      {r.is_active ? <Pause size={13} /> : <Play size={13} />}
-                    </button>
-                    <button type="button" onClick={() => openDeleteRule(r)} title={t('recurring.rowActions.delete')} aria-label={t('recurring.rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
-                  </div>
+                    <div className="flex items-center gap-3 shrink-0 pl-3">
+                      <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
+                      {/* Hover and keyboard focus reveal the action group on a fine
+                          pointer; at every pointer type the row itself opens the
+                          record. The wrapper stops a button's click, and Enter
+                          and Space pressed on it, before they reach the row's
+                          handlers: the action must run alone, never double-fire.
+                          Every other key still reaches the page, so Escape can
+                          close an open panel. */}
+                      {canWrite && !isTouch && (
+                        <div
+                          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={stopActivationKeys}
+                        >
+                          {p.status === 'pending' && (
+                            <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
+                          )}
+                          {p.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => openPay(p)}
+                              title={t('rowActions.paidDifferently')}
+                              aria-label={t('rowActions.paidDifferently')}
+                              className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                            >
+                              <SlidersHorizontal size={13} />
+                            </button>
+                          )}
+                          {p.status === 'pending' && (
+                            <button type="button" onClick={() => setSkipping(p)} disabled={paymentPending} title={t('rowActions.skip')} aria-label={t('rowActions.skip')} className="text-text-muted hover:text-text p-1"><Ban size={13} /></button>
+                          )}
+                          {p.status === 'pending' && p.recurring_id == null && (
+                            <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
+                          )}
+                          <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                          <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                        </div>
+                      )}
+                    </div>
+                    </div>
+                  </SwipeRow>
+                ))}
+                {data && data.total > 0 && (
+                  <Pagination
+                    page={data.page}
+                    total_pages={data.total_pages}
+                    total={data.total}
+                    page_size={data.page_size}
+                    onPageChange={(p) => updateParams({ page: p })}
+                    onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
+                  />
                 )}
               </div>
+            )
+          ) : recurringIsLoading ? (
+            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+          ) : recurringRules.length === 0 ? (
+            <p className="text-sm text-text-muted">{t('recurring.empty')}</p>
+          ) : (
+            <div className="border border-border rounded-sm bg-surface divide-y divide-border">
+              {recurringRules.map((r) => (
+                <div
+                  key={r.id}
+                  {...(canWrite ? tappableProps(() => handleOpenRule(r)) : {})}
+                  aria-current={r.id === selectedRuleId ? 'true' : undefined}
+                  className={`flex items-center justify-between px-4 py-3 text-sm group border-l-2 ${
+                    canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
+                  }${r.id === selectedRuleId ? 'border-l-primary bg-surface-hover' : 'border-l-transparent'}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-text truncate">{r.name}</span>
+                      <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive border-positive/40' : 'text-text-muted border-border'}`}>
+                        {r.is_active ? t('recurring.activeChip') : t('recurring.pausedChip')}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-text-muted truncate">
+                      {scheduleSummary(r)}{r.next_occurrence_date ? ` · ${r.next_occurrence_date}` : ''}{r.category?.name ? ` · ${r.category.name}` : ''} · {r.account_name ?? t('noAccount')}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 pl-3">
+                    <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
+                    {/* Hover reveals are pointer-fine only; at every pointer type
+                        the writer's row itself is a button that opens the rule
+                        page (click, tap, Enter or Space). A viewer's row is inert:
+                        the rule page sends a viewer straight back to this list.
+                        The group also shows while the row or one of its buttons
+                        holds focus, so a keyboard user sees the actions they tab
+                        through. The wrapper stops a button's click, and Enter
+                        and Space pressed on it, before they bubble into the
+                        row's handlers: the action must run alone, never
+                        double-fire. Every other key still reaches the page, so
+                        Escape can close an open panel. */}
+                    {canWrite && !isTouch && (
+                      <div
+                        className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={stopActivationKeys}
+                      >
+                        <button type="button" onClick={() => handleOpenRule(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                        <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
+                          {r.is_active ? <Pause size={13} /> : <Play size={13} />}
+                        </button>
+                        <button type="button" onClick={() => openDeleteRule(r)} title={t('recurring.rowActions.delete')} aria-label={t('recurring.rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-
-      <PlannedFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        planned={editing}
-        copyFrom={copySource}
-        onCopy={openCopy}
-        onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
-        onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
-        onCancelPlan={(p) => { setFormOpen(false); setCancelling(p) }}
+          )
+        }
+        panel={
+          createOpen ? (
+            // The create form wins the panel slot over a record.
+            <PlannedCreatePanel mode={createMode} copyId={copyId} onClose={closeCreatePanel} />
+          ) : ruleCreateOpen ? (
+            <RecurringFormPanel
+              key={ruleAdoptId === null ? 'rule-new' : `rule-new-${ruleAdoptId}`}
+              mode="create"
+              ruleId={null}
+              onClose={handleCloseRulePanel}
+              onAdopted={handleAdopted}
+            />
+          ) : isDesktop && panelId != null ? (
+            // The pay form is a writer's: the slot takes it only for a
+            // member who can pay, so a viewer on the pay path sees the
+            // record from the first paint, never the pay form. The
+            // reconcile above then moves the URL to the record path.
+            payOpen && canWrite ? (
+              // Hold, never flash: the form needs an item it can pay, and
+              // anything else swaps to the record or closes through the
+              // reconcile above.
+              <DetailPanel title={t('pay.title')} onClose={handleClosePanel}>
+                {payable ? (
+                  <PlannedPayBody planned={payable} onClose={handleClosePanel} />
+                ) : (
+                  <PanelHold />
+                )}
+              </DetailPanel>
+            ) : (
+              // The record renders its own actions in the body, so the
+              // panel shell passes no footer. The title falls back to the
+              // generic record label only for the loading window; once
+              // loaded the item's name is the title.
+              // On the pay path the record holds until the role is known:
+              // a writer must not see their own record flash read-only
+              // before the pay form.
+              <DetailPanel title={record?.name ?? t('record.title')} onClose={handleClosePanel}>
+                {recordLoading || (payOpen && workspaceLoading) ? (
+                  <PanelHold />
+                ) : record ? (
+                  <PlannedRecord
+                    planned={record}
+                    canWrite={canWrite}
+                    onDeleted={handleRecordDeleted}
+                    onPayDifferently={openPay}
+                    onMakeRecurring={openMakeRecurring}
+                    onCopy={handleRecordCopy}
+                  />
+                ) : null}
+              </DetailPanel>
+            )
+          ) : ruleRecordOpen && !ruleUnloadable ? (
+            <RecurringFormPanel
+              key={`rule-${validRuleId}`}
+              mode="edit"
+              ruleId={validRuleId}
+              onClose={handleCloseRulePanel}
+              onAdopted={handleAdopted}
+            />
+          ) : null
+        }
       />
+
       <ConfirmDialog
         isOpen={!!deleting}
         title={t('deleteDialog.title')}
@@ -1178,21 +1560,14 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
         onCancel={() => setDeleting(null)}
       />
       <ConfirmDialog
-        isOpen={!!cancelling}
-        title={t('cancelDialog.title')}
-        message={t('cancelDialog.message', { name: cancelling?.name })}
-        confirmLabel={t('cancelDialog.confirm')}
-        isPending={cancelMutation.isPending}
-        onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
-        onCancel={() => setCancelling(null)}
-      />
-      <ExecuteAdjustedModal open={!!adjusting} planned={adjusting} onClose={() => setAdjusting(null)} />
-      <RecurringFormModal
-        open={recurringFormOpen}
-        onClose={() => setRecurringFormOpen(false)}
-        recurring={editingRule}
-        fromPlanned={adoptSource}
-        onDelete={(r) => { setRecurringFormOpen(false); openDeleteRule(r) }}
+        isOpen={!!skipping}
+        destructive={false}
+        title={t('skipDialog.title')}
+        message={t('skipDialog.message', { name: skipping?.name })}
+        confirmLabel={t('skipDialog.confirm')}
+        isPending={paymentPending}
+        onConfirm={async () => { if (skipping) { await skip(skipping); setSkipping(null) } }}
+        onCancel={() => setSkipping(null)}
       />
       <ConfirmDialog
         isOpen={!!deletingRule}
@@ -1204,43 +1579,11 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           onChange: setDeleteRulePending,
         } : undefined}
         isPending={deleteRuleMutation.isPending}
-        onConfirm={() => deletingRule && deleteRuleMutation.mutate({ id: deletingRule.id, deletePending: deleteRulePending })}
+        onConfirm={() => deletingRule && deleteRuleMutation.mutate(
+          { id: deletingRule.id, deletePending: deleteRulePending },
+          { onSuccess: () => setDeletingRule(null), onError: () => setDeletingRule(null) },
+        )}
         onCancel={() => setDeletingRule(null)}
-      />
-      {/* Touch replacement for the planned rows' hover actions (previously
-          the row tapped straight into edit). */}
-      <ActionSheet
-        open={!!plannedRowAction}
-        onClose={() => setPlannedRowAction(null)}
-        title={plannedRowAction?.name}
-        actions={[
-          { label: t('rowActions.edit'), icon: Pencil, onSelect: () => plannedRowAction && openEdit(plannedRowAction) },
-          ...(plannedRowAction && plannedRowAction.status === 'pending' && plannedRowAction.recurring_id == null
-            ? [{ label: t('recurring.makeRecurring'), icon: Repeat, onSelect: () => openMakeRecurring(plannedRowAction) }]
-            : []),
-          ...(plannedRowAction?.status === 'pending'
-            ? [
-                { label: t('rowActions.execute'), icon: CheckCircle, onSelect: () => plannedRowAction && executeMutation.mutate(plannedRowAction) },
-                { label: t('rowActions.executeAdjusted'), icon: SlidersHorizontal, onSelect: () => plannedRowAction && setAdjusting(plannedRowAction) },
-                { label: t('rowActions.cancelPlan'), icon: Ban, onSelect: () => plannedRowAction && setCancelling(plannedRowAction) },
-              ]
-            : []),
-          { label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => plannedRowAction && setDeleting(plannedRowAction) },
-        ]}
-      />
-      <ActionSheet
-        open={!!recurringRowAction}
-        onClose={() => setRecurringRowAction(null)}
-        title={recurringRowAction?.name}
-        actions={[
-          { label: t('recurring.rowActions.edit'), icon: Pencil, onSelect: () => recurringRowAction && openEditRule(recurringRowAction) },
-          {
-            label: recurringRowAction?.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume'),
-            icon: recurringRowAction?.is_active ? Pause : Play,
-            onSelect: () => recurringRowAction && toggleActiveMutation.mutate(recurringRowAction),
-          },
-          { label: t('recurring.rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => recurringRowAction && openDeleteRule(recurringRowAction) },
-        ]}
       />
       {/* Mounted before the bookmark modal so the chained modal (opened by
           the sheet's bookmark row, which closes the sheet first) stacks
@@ -1285,6 +1628,71 @@ function PlannedContent({ settings, calendarStartDay, createRequest }: PlannedCo
           onClose={() => setPageBookmarkOpen(false)}
         />
       )}
+    </>
+  )
+}
+
+/** Hold-while-loading pulse for a panel whose item is still loading: hold,
+ *  never flash an empty panel. */
+function PanelHold() {
+  return (
+    <div className="space-y-3 pt-2" aria-hidden="true">
+      <div className="h-8 bg-surface-muted rounded-sm animate-pulse" />
+      <div className="h-20 bg-surface-muted rounded-sm animate-pulse" />
+    </div>
+  )
+}
+
+interface PlannedPayBodyProps {
+  planned: PlannedTransaction
+  onClose: () => void
+}
+
+/** The "Paid differently" form for one loaded pending item, inside the panel
+ *  body: the fields, then the action row at the END OF THE BODY - never the
+ *  panel's footer prop. The panel stretches to the list's height, so a
+ *  pinned footer would sit at the list's bottom, below the fold on a long
+ *  list; the negative margins and the padding below reuse the footer's own
+ *  box. A child component rather than an inline branch of the page, so the
+ *  form hook always mounts with its item. */
+function PlannedPayBody({ planned, onClose }: PlannedPayBodyProps) {
+  const { t } = useTranslation('planned')
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const form = usePayPlannedForm(planned)
+
+  const handleSubmit = async () => {
+    if (!(await form.submit())) return
+    // Replace: the finished form leaves Back's path, and the record takes
+    // the panel slot with the paid state. The list search stays.
+    navigate({ pathname: `/planned/${planned.id}`, search: searchParams.toString() }, { replace: true })
+  }
+
+  return (
+    <>
+      <PayPlannedForm form={form} planned={planned} />
+      <div className="-mx-4 -mb-4 mt-4 border-t border-border p-4">
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+            {t('form.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={form.isSaving}
+            className={`${primaryButtonClass} inline-flex items-center justify-center gap-1.5`}
+          >
+            {form.isSaving ? (
+              <>
+                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                {t('pay.submitting')}
+              </>
+            ) : (
+              t('pay.submit')
+            )}
+          </button>
+        </div>
+      </div>
     </>
   )
 }

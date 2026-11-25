@@ -284,3 +284,26 @@ export function formatQuickPickDate(isoDate: string, variant: 'weekday' | 'date'
     : (withYear ? 'MMM d y' : 'MMM d')
   return format(date, pattern, { locale: dateLocale })
 }
+
+/**
+ * One date in words, with its year: "Nov 17 2026" (en style) or
+ * "17.11.2026" (eu style), month names from the configured date-fns
+ * locale. The shape is formatQuickPickDate's 'date' variant with the year
+ * always on, for places that restate a single stored date inside a
+ * sentence (the recurring rule form's schedule summary).
+ *
+ * Worked examples (docblock examples are the contract - the frontend has no
+ * test runner, so they are the review reference; keep them in sync if the
+ * format ever changes):
+ *   en style, enUS locale (default): formatFullDate('2026-11-17') === 'Nov 17 2026'
+ *   eu style:                      formatFullDate('2026-11-17') === '17.11.2026'
+ *   pl locale, en style:           formatFullDate('2026-11-17') === 'lis 17 2026'
+ *   uk locale, en style:           formatFullDate('2026-11-17') === 'листоп. 17 2026'
+ *
+ * parseISO reads date-only strings as local time - no UTC-midnight day
+ * shift in negative-offset zones (see formatPeriodName's note).
+ */
+export function formatFullDate(isoDate: string): string {
+  const pattern = formattingConfig.numberStyle === 'eu' ? 'dd.MM.yyyy' : 'MMM d y'
+  return format(parseISO(isoDate), pattern, { locale: formattingConfig.dateLocale })
+}

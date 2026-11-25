@@ -52,35 +52,55 @@
   },
   "noAccount": "Bez konta",
   "rowActions": {
-    "execute": "Zrealizuj",
-    "executeAdjusted": "Zrealizuj z modyfikacjami",
-    "cancelPlan": "Anuluj plan",
-    "paidDifferently": "Zapłać inaczej",
-    "edit": "Edytuj",
+    "markPaid": "Oznacz jako opłaconą",
+    "paidDifferently": "Zapłać inaczej…",
+    "paidDifferentlyShort": "Zapłać inaczej",
+    "skip": "Pomiń",
     "copy": "Kopiuj",
     "delete": "Usuń"
   },
-  "executed": "Zrealizowano - utworzono transakcję",
-  "executeFailed": "Nie udało się zrealizować",
-  "executeAdjusted": {
-    "title": "Zrealizuj z modyfikacjami",
-    "context": "Zaplanowano: {{values}}",
-    "helper": "Tworzy transakcję z tymi wartościami zamiast zaplanowanych.",
-    "submit": "Zrealizuj",
-    "submitting": "Realizowanie…"
-  },
-  "cancelledToast": "Plan anulowany",
-  "cancelFailed": "Nie udało się anulować",
   "deleted": "Usunięto",
   "deleteFailed": "Nie udało się usunąć",
   "deleteDialog": {
     "title": "Usuń planowaną transakcję",
     "message": "Usunąć „{{name}}”?"
   },
-  "cancelDialog": {
-    "title": "Anuluj plan",
-    "message": "Oznaczyć „{{name}}” jako anulowaną? Wiersz zostaje na liście, ale nie można go już zrealizować.",
-    "confirm": "Anuluj plan"
+  "skipDialog": {
+    "title": "Pominąć tę planowaną transakcję?",
+    "message": "„{{name}}” trafia do pominiętych. Możesz to później przywrócić.",
+    "confirm": "Pomiń"
+  },
+  "paidToast": "Opłacono: {{name}}",
+  "markedPaidToast": "Oznaczono jako opłaconą",
+  "payFailed": "Nie udało się oznaczyć jako opłaconej",
+  "skippedToast": "Pominięto",
+  "skipFailed": "Nie udało się pominąć",
+  "restoredToast": "Przywrócono",
+  "restoreFailed": "Nie udało się przywrócić",
+  "pay": {
+    "title": "Zapłać inaczej",
+    "context": "Zaplanowano: {{amount}} {{date}}",
+    "submit": "Oznacz jako opłaconą",
+    "submitting": "Oznaczanie jako opłaconej…",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do planowanych"
+  },
+  "record": {
+    "title": "Planowana transakcja",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do planowanych transakcji",
+    "openRule": "Otwórz regułę cykliczną",
+    "openTransaction": "Otwórz transakcję",
+    "plannedValue": "zaplanowano {{value}}",
+    "restore": "Przywróć",
+    "paidNote": "Kwota, data, konto i kategoria pochodzą z transakcji. Tutaj można zmienić tylko nazwę.",
+    "transactionPending": "Transakcja jest jeszcze tworzona. Pojawi się tutaj i w sekcji „Aktywność”.",
+    "status": {
+      "upcoming": "Nadchodząca",
+      "overdue": "Zaległa",
+      "paid": "Opłacona",
+      "skipped": "Pominięta"
+    }
   },
   "recurring": {
     "tabPlanned": "Planowane",
@@ -90,6 +110,9 @@
     "rulesButton_few": "Reguły cykliczne ({{count}} aktywne reguły)",
     "rulesButton_many": "Reguły cyklicznych ({{count}} aktywnych reguł)",
     "rulesButton_other": "Reguły cyklicznych ({{count}} aktywnych reguł)",
+    "ruleTitle": "Reguła cykliczna",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToRules": "Wróć do reguł cyklicznych",
     "newRecurring": "Nowa cykliczna",
     "empty": "Brak reguł cyklicznych.",
     "activeChip": "Aktywna",
@@ -126,6 +149,32 @@
       "monthly_many": "Co {{count}} miesięcy, {{day}} dnia",
       "monthly_other": "Co {{count}} miesiąca, {{day}} dnia"
     },
+    "summary": {
+      "daily_noEnd_one": "Codziennie, od {{start}}, bez daty końcowej",
+      "daily_noEnd_few": "Co {{count}} dni, od {{start}}, bez daty końcowej",
+      "daily_noEnd_many": "Co {{count}} dni, od {{start}}, bez daty końcowej",
+      "daily_noEnd_other": "Co {{count}} dnia, od {{start}}, bez daty końcowej",
+      "daily_withEnd_one": "Codziennie, od {{start}}, do {{end}}",
+      "daily_withEnd_few": "Co {{count}} dni, od {{start}}, do {{end}}",
+      "daily_withEnd_many": "Co {{count}} dni, od {{start}}, do {{end}}",
+      "daily_withEnd_other": "Co {{count}} dnia, od {{start}}, do {{end}}",
+      "weekly_noEnd_one": "Co tydzień, od {{start}}, bez daty końcowej",
+      "weekly_noEnd_few": "Co {{count}} tygodnie, od {{start}}, bez daty końcowej",
+      "weekly_noEnd_many": "Co {{count}} tygodni, od {{start}}, bez daty końcowej",
+      "weekly_noEnd_other": "Co {{count}} tygodnia, od {{start}}, bez daty końcowej",
+      "weekly_withEnd_one": "Co tydzień, od {{start}}, do {{end}}",
+      "weekly_withEnd_few": "Co {{count}} tygodnie, od {{start}}, do {{end}}",
+      "weekly_withEnd_many": "Co {{count}} tygodni, od {{start}}, do {{end}}",
+      "weekly_withEnd_other": "Co {{count}} tygodnia, od {{start}}, do {{end}}",
+      "monthly_noEnd_one": "Co miesiąc, {{day}} dnia, od {{start}}, bez daty końcowej",
+      "monthly_noEnd_few": "Co {{count}} miesiące, {{day}} dnia, od {{start}}, bez daty końcowej",
+      "monthly_noEnd_many": "Co {{count}} miesięcy, {{day}} dnia, od {{start}}, bez daty końcowej",
+      "monthly_noEnd_other": "Co {{count}} miesiąca, {{day}} dnia, od {{start}}, bez daty końcowej",
+      "monthly_withEnd_one": "Co miesiąc, {{day}} dnia, od {{start}}, do {{end}}",
+      "monthly_withEnd_few": "Co {{count}} miesiące, {{day}} dnia, od {{start}}, do {{end}}",
+      "monthly_withEnd_many": "Co {{count}} miesięcy, {{day}} dnia, od {{start}}, do {{end}}",
+      "monthly_withEnd_other": "Co {{count}} miesiąca, {{day}} dnia, od {{start}}, do {{end}}"
+    },
     "form": {
       "newTitle": "Nowa reguła cykliczna",
       "editTitle": "Edytuj regułę cykliczną",
@@ -148,8 +197,6 @@
       "added": "Utworzono regułę cykliczną",
       "intervalCountInvalid": "Interwał musi być liczbą całkowitą od 1 do 365",
       "hintAria": "Pomoc: {{field}}",
-      "startDateHint": "Pierwsze wystąpienie reguły. W regułach miesięcznych liczy się dzień miesiąca, a w krótszych miesiącach używany jest ostatni dzień.",
-      "intervalHint": "Reguła powtarza się co N dni, tygodni lub miesięcy, licząc od daty rozpoczęcia.",
       "upfrontCountHint": "Ile nadchodzących planowanych transakcji ta reguła utrzymuje utworzonych naraz. Gdy nadejdzie termin najwcześniejszej z nich, tworzona jest następna.",
       "activeHint": "Wstrzymuje regułę bez jej usuwania: historia jest zachowana, a nowe planowane transakcje nie są generowane, dopóki reguła nie zostanie ponownie włączona.",
       "upfrontCountInvalid": "Planowanie z wyprzedzeniem musi być liczbą całkowitą od 1 do 24",
@@ -162,7 +209,6 @@
     "nextAria": "Następny miesiąc"
   },
   "form": {
-    "editTitle": "Edytuj planowaną",
     "newTitle": "Nowa planowana transakcja",
     "nameLabel": "Nazwa",
     "amountLabel": "Kwota",
@@ -179,9 +225,6 @@
     "categoryLabel": "Kategoria (opcjonalnie)",
     "uncategorized": "Bez kategorii",
     "categoryAria": "Kategoria",
-    "execute": "Zrealizuj",
-    "copy": "Kopiuj",
-    "cancelPlan": "Anuluj plan",
     "delete": "Usuń",
     "cancel": "Anuluj",
     "saving": "Zapisywanie…",

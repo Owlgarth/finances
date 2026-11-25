@@ -48,35 +48,55 @@
   },
   "noAccount": "No account",
   "rowActions": {
-    "execute": "Execute",
-    "executeAdjusted": "Execute with adjustments",
-    "cancelPlan": "Cancel plan",
-    "paidDifferently": "Paid differently",
-    "edit": "Edit",
+    "markPaid": "Mark as paid",
+    "paidDifferently": "Paid differently...",
+    "paidDifferentlyShort": "Paid differently",
+    "skip": "Skip",
     "copy": "Copy",
     "delete": "Delete"
   },
-  "executed": "Executed \u2014 transaction created",
-  "executeFailed": "Failed to execute",
-  "executeAdjusted": {
-    "title": "Execute with adjustments",
-    "context": "Planned: {{values}}",
-    "helper": "Creates the transaction with these values instead of the planned ones.",
-    "submit": "Execute",
-    "submitting": "Executing…"
-  },
-  "cancelledToast": "Plan cancelled",
-  "cancelFailed": "Failed to cancel",
   "deleted": "Deleted",
   "deleteFailed": "Failed to delete",
   "deleteDialog": {
     "title": "Delete planned transaction",
     "message": "Delete \"{{name}}\"?"
   },
-  "cancelDialog": {
-    "title": "Cancel plan",
-    "message": "Mark \"{{name}}\" as cancelled? The row stays in the list but can no longer be executed.",
-    "confirm": "Cancel plan"
+  "skipDialog": {
+    "title": "Skip this planned item?",
+    "message": "\"{{name}}\" moves to Skipped. You can restore it later.",
+    "confirm": "Skip"
+  },
+  "paidToast": "Paid: {{name}}",
+  "markedPaidToast": "Marked as paid",
+  "payFailed": "Failed to mark as paid",
+  "skippedToast": "Skipped",
+  "skipFailed": "Failed to skip",
+  "restoredToast": "Restored",
+  "restoreFailed": "Failed to restore",
+  "pay": {
+    "title": "Paid differently",
+    "context": "Planned: {{amount}} on {{date}}",
+    "submit": "Mark as paid",
+    "submitting": "Marking as paid...",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to planned items"
+  },
+  "record": {
+    "title": "Planned item",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to planned items",
+    "openRule": "Open recurring rule",
+    "openTransaction": "Open transaction",
+    "plannedValue": "planned {{value}}",
+    "restore": "Restore",
+    "paidNote": "Amount, date, account and category come from the transaction. Only the name can be changed here.",
+    "transactionPending": "The transaction is still being created. It will appear here and in Activity.",
+    "status": {
+      "upcoming": "Upcoming",
+      "overdue": "Overdue",
+      "paid": "Paid",
+      "skipped": "Skipped"
+    }
   },
   "recurring": {
     "tabPlanned": "Planned",
@@ -84,6 +104,9 @@
     "viewAria": "Switch between planned and recurring",
     "rulesButton_one": "Recurring rules ({{count}} active)",
     "rulesButton_other": "Recurring rules ({{count}} active)",
+    "ruleTitle": "Recurring rule",
+    "notFound": "Not found in this workspace",
+    "backToRules": "Back to recurring rules",
     "newRecurring": "New recurring",
     "empty": "No recurring rules yet.",
     "activeChip": "Active",
@@ -114,6 +137,20 @@
       "monthly_one": "Every month on day {{day}}",
       "monthly_other": "Every {{count}} months on day {{day}}"
     },
+    "summary": {
+      "daily_noEnd_one": "Every day, starting {{start}}, with no end date",
+      "daily_noEnd_other": "Every {{count}} days, starting {{start}}, with no end date",
+      "daily_withEnd_one": "Every day, starting {{start}}, until {{end}}",
+      "daily_withEnd_other": "Every {{count}} days, starting {{start}}, until {{end}}",
+      "weekly_noEnd_one": "Every week, starting {{start}}, with no end date",
+      "weekly_noEnd_other": "Every {{count}} weeks, starting {{start}}, with no end date",
+      "weekly_withEnd_one": "Every week, starting {{start}}, until {{end}}",
+      "weekly_withEnd_other": "Every {{count}} weeks, starting {{start}}, until {{end}}",
+      "monthly_noEnd_one": "Every month on day {{day}}, starting {{start}}, with no end date",
+      "monthly_noEnd_other": "Every {{count}} months on day {{day}}, starting {{start}}, with no end date",
+      "monthly_withEnd_one": "Every month on day {{day}}, starting {{start}}, until {{end}}",
+      "monthly_withEnd_other": "Every {{count}} months on day {{day}}, starting {{start}}, until {{end}}"
+    },
     "form": {
       "newTitle": "New recurring rule",
       "editTitle": "Edit recurring rule",
@@ -136,8 +173,6 @@
       "added": "Recurring rule created",
       "intervalCountInvalid": "Interval must be a whole number between 1 and 365",
       "hintAria": "About {{field}}",
-      "startDateHint": "First occurrence of the rule. For monthly rules the day of the month is the anchor - shorter months clamp to their last day.",
-      "intervalHint": "The rule repeats every N days, weeks or months, counting from the start date.",
       "upfrontCountHint": "How many upcoming planned transactions this rule keeps created at once. When the earliest one comes due, the next one is created.",
       "activeHint": "Pause the rule without deleting it: history is kept and no new planned transactions are generated until it is switched back on.",
       "upfrontCountInvalid": "Plan ahead must be a whole number between 1 and 24",
@@ -150,7 +185,6 @@
     "nextAria": "Next month"
   },
   "form": {
-    "editTitle": "Edit planned",
     "newTitle": "New planned transaction",
     "nameLabel": "Name",
     "amountLabel": "Amount",
@@ -167,9 +201,6 @@
     "categoryLabel": "Category (optional)",
     "uncategorized": "Uncategorized",
     "categoryAria": "Category",
-    "execute": "Execute",
-    "copy": "Copy",
-    "cancelPlan": "Cancel plan",
     "delete": "Delete",
     "cancel": "Cancel",
     "saving": "Saving…",

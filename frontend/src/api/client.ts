@@ -476,6 +476,8 @@ export const plannedTransactionsApi = {
     api.get<PaginatedResponse<PlannedTransaction>>('/planned-transactions', { params }).then(res => res.data),
   getTotals: (params?: { status?: string; account_id?: number[]; currency_code?: string[]; start_date?: string; end_date?: string; category_id?: number[]; budget_id?: number[]; search?: string; amount_gte?: number; amount_lte?: number; group_by?: 'currency' | 'category' }): Promise<PlannedTransactionTotalsResponse> =>
     api.get<PlannedTransactionTotalsResponse>('/planned-transactions/totals', { params }).then(res => res.data),
+  get: (id: number): Promise<PlannedTransaction> =>
+    api.get<PlannedTransaction>(`/planned-transactions/${id}`).then(res => res.data),
   /** Filtered JSON export (blob). Honors only status/start_date/end_date -
       the backend route accepts no other filter params. */
   exportView: (params?: { status?: string; start_date?: string; end_date?: string }): Promise<Blob> =>
@@ -519,6 +521,8 @@ export interface RecurringInput {
 export const recurringTransactionsApi = {
   getAll: (includeInactive = false): Promise<RecurringTransaction[]> =>
     api.get<RecurringTransaction[]>('/recurring-transactions', { params: { include_inactive: includeInactive } }).then(res => res.data),
+  get: (id: number): Promise<RecurringTransaction> =>
+    api.get<RecurringTransaction>(`/recurring-transactions/${id}`).then(res => res.data),
   create: (data: RecurringInput): Promise<RecurringTransaction> =>
     api.post<RecurringTransaction>('/recurring-transactions', data).then(res => res.data),
   update: (id: number, data: RecurringInput): Promise<RecurringTransaction> =>

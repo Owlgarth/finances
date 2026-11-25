@@ -1,13 +1,12 @@
-import { useRef, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Repeat, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import AmountField from './AmountField'
 import DateQuickPick from '../common/DateQuickPick'
 import EditableField from '../common/EditableField'
-import type { EditorBag } from '../common/EditableField'
 import LinkedRow from '../common/LinkedRow'
 import Select from '../common/Select'
+import { FieldEditorShell, Section } from './recordParts'
 import { reportsApi } from '../../api/client'
 import { useAccounts } from '../../hooks/useDomain'
 import { useTransferFieldSave } from '../../hooks/useTransferFieldSave'
@@ -284,60 +283,5 @@ export default function TransferRecord({ transfer, canWrite, onRepeat, onDelete 
         </div>
       )}
     </div>
-  )
-}
-
-/**
- * Blur/keyboard shell for non-input editors (DateQuickPick, Select,
- * AmountField). React's onBlur is the bubbling focusout, so a bare
- * wrapper would commit when focus moves BETWEEN the editor's own
- * children - guard on relatedTarget containment. The bag's own blur
- * handler still carries the mobile-sheet guard (inside the sheet, the
- * Save button owns commit) and the detached-DOM guard, so this shell
- * only widens where the blur is observed from, never re-implements its
- * semantics. Copy of FieldEditorShell in transactions/TransactionRecord.tsx
- * (second consumer; keep in sync, extract at the third).
- */
-function FieldEditorShell<T>({ bag, children, escapeOnly = false }: {
-  bag: EditorBag<T>
-  children: ReactNode
-  /** Select/DateQuickPick editors pass true: Enter belongs to the control
-   *  (Select opens its panel, segments activate), only Escape cancels. The
-   *  amount editor passes false and gets the bag's full Enter/Escape. */
-  escapeOnly?: boolean
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  return (
-    <div
-      ref={ref}
-      className="w-full max-w-[320px]"
-      onBlur={(e) => {
-        if (ref.current?.contains(e.relatedTarget)) return // stayed inside the editor
-        bag.inputProps.onBlur(e)
-      }}
-      onKeyDown={(e) => {
-        if (escapeOnly) {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            bag.cancel()
-          }
-          return
-        }
-        bag.inputProps.onKeyDown(e)
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
-/** One titled block of divide-y rows - copy of Section in
- *  transactions/TransactionRecord.tsx (second consumer; keep in sync). */
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-1">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{title}</div>
-      <div className="divide-y divide-border">{children}</div>
-    </section>
   )
 }

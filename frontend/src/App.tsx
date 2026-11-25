@@ -16,9 +16,13 @@ import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
 import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
+import PlannedRecordPage from './pages/PlannedRecordPage'
+import RecurringRulePage from './pages/RecurringRulePage'
 import TransfersPage from './pages/TransfersPage'
 import TransferRecordPage from './pages/TransferRecordPage'
 import NewTransactionPage from './pages/NewTransactionPage'
+import NewPlannedPage from './pages/NewPlannedPage'
+import PayPlannedPage from './pages/PayPlannedPage'
 import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -46,6 +50,40 @@ function TransferRecordRoute() {
   return isDesktop ? <TransfersPage /> : <TransferRecordPage />
 }
 
+/** The planned item's record follows the tier like the transaction record:
+ *  at 1024+ the list page hosts the record in its side panel (it reads the
+ *  path itself, so the list route and the record route both render
+ *  <Planned />), below 1024 the record is a full page. */
+function PlannedRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <PlannedRecordPage />
+}
+
+/** The same tier split for "Paid differently": at 1024+ the list page hosts
+ *  the pay form in its side panel, below 1024 it is a full page. */
+function PlannedPayRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <PayPlannedPage />
+}
+
+/** The same tier split for the planned create form: at 1024+ the list page
+ *  hosts the form in its side panel (the list reads the path itself, so the
+ *  create route renders <Planned /> there too), below 1024 the form is a
+ *  full page. */
+function PlannedNewRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <NewPlannedPage />
+}
+
+/** The recurring rule form's host follows the tier: at 1024+ the Planned
+ *  list hosts the form in its side panel (it reads the rule routes itself,
+ *  so every route using this wrapper renders <Planned /> there), below
+ *  1024 the form is a full page. */
+function RecurringRuleRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <RecurringRulePage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -59,6 +97,11 @@ function AppContent() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
+        <Route path="/planned/:id" element={<PlannedRecordRoute />} />
+        <Route path="/planned/:id/pay" element={<PlannedPayRoute />} />
+        <Route path="/planned/rules/new" element={<RecurringRuleRoute />} />
+        <Route path="/planned/rules/:id" element={<RecurringRuleRoute />} />
+        <Route path="/planned/new" element={<PlannedNewRoute />} />
         <Route path="/transfers" element={<TransfersPage />} />
         <Route path="/transfers/:id" element={<TransferRecordRoute />} />
         <Route path="/new" element={<NewTransactionPage />} />

@@ -29,6 +29,22 @@
     "title": "Recent activity",
     "empty": "No transactions yet."
   },
+  "setup": {
+    "title": "Getting started",
+    "hide": "Hide checklist",
+    "account": {
+      "todo": "Add an account",
+      "done": "Account added"
+    },
+    "budget": {
+      "todo": "Set up a budget",
+      "done": "Budget set up"
+    },
+    "transaction": {
+      "todo": "Record a transaction",
+      "done": "Transaction recorded"
+    }
+  },
   "legal": {
     "back": "Back",
     "backToLogin": "Back to login",

@@ -1,5 +1,4 @@
-import { useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Copy, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -13,6 +12,7 @@ import Modal from '../common/Modal'
 import Select from '../common/Select'
 import TransactionAttachments from './TransactionAttachments'
 import TransactionItemsEditor from './TransactionItemsEditor'
+import { FieldEditorShell, Section } from './recordParts'
 import { budgetsApi, reportsApi } from '../../api/client'
 import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency } from '../../hooks/useDomain'
 import { NO_ADJUSTMENT } from '../../hooks/useTransactionForm'
@@ -487,49 +487,6 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
 }
 
 /**
- * Blur/keyboard shell for non-input editors (DateQuickPick, Select pairs,
- * AmountField). React's onBlur is the bubbling focusout, so a bare wrapper
- * would commit when focus moves BETWEEN the editor's own children (budget
- * Select -> category Select) - guard on relatedTarget containment. The
- * bag's own blur handler still carries the mobile-sheet guard (inside the
- * sheet, the Save button owns commit) and the detached-DOM guard, so this
- * shell only widens where the blur is observed from, never re-implements
- * its semantics.
- */
-function FieldEditorShell<T>({ bag, children, escapeOnly = false }: {
-  bag: EditorBag<T>
-  children: ReactNode
-  /** Select/DateQuickPick editors pass true: Enter belongs to the control
-   *  (Select opens its panel, segments activate), only Escape cancels. The
-   *  amount editor passes false and gets the bag's full Enter/Escape. */
-  escapeOnly?: boolean
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  return (
-    <div
-      ref={ref}
-      className="w-full max-w-[320px]"
-      onBlur={(e) => {
-        if (ref.current?.contains(e.relatedTarget)) return // stayed inside the editor
-        bag.inputProps.onBlur(e)
-      }}
-      onKeyDown={(e) => {
-        if (escapeOnly) {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            bag.cancel()
-          }
-          return
-        }
-        bag.inputProps.onKeyDown(e)
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
-/**
  * The two-select budget + category editor used by BOTH the Budget row and
  * the Category row. The wire has no budget field: a budget change is only
  * expressible as a category_id change, so switching the budget inside the
@@ -724,16 +681,6 @@ function FacetModal({ transaction, otherCurrencyOptions, accounts, onClose, save
         </div>
       </div>
     </Modal>
-  )
-}
-
-/** One titled block of divide-y rows. */
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-1">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{title}</div>
-      <div className="divide-y divide-border">{children}</div>
-    </section>
   )
 }
 

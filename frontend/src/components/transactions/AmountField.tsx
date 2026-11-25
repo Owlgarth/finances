@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react'
+import type { FocusEvent, ReactNode, RefObject } from 'react'
 import { AlertCircle } from 'lucide-react'
 import Select from '../common/Select'
 import { inputClass, labelClass } from '../common/formStyles'
@@ -24,6 +24,9 @@ export interface AmountFieldCurrency {
 interface Props {
   /** Label above the input (already translated by the caller). */
   label: string
+  /** Marks the field as required: a `*` in the negative color after the
+   *  label text. Display only - the form's own validation stays the gate. */
+  required?: boolean
   value: string
   onChange: (value: string) => void
   /** Sign prefix that follows the record type ('-' expense, '+' income,
@@ -41,8 +44,9 @@ interface Props {
   inputRef?: RefObject<HTMLInputElement | null>
   autoFocus?: boolean
   /** Blur signal for the caller's error-display gate (an error shows
-   *  after the field's first invalid blur, then tracks keystrokes). */
-  onBlur?: () => void
+   *  after the field's first invalid blur, then tracks keystrokes). The
+   *  event is forwarded so the caller can consult the button-blur guard. */
+  onBlur?: (e: FocusEvent<HTMLInputElement>) => void
   /** Optional hint row under the error line, inside the amount column
    *  (e.g. the suggestion Last-amount button). Rendered as-is - the
    *  caller owns content, translation, and any styling. */
@@ -58,6 +62,7 @@ interface Props {
  *  - all state and validation live with the caller. */
 export default function AmountField({
   label,
+  required,
   value,
   onChange,
   signPrefix,
@@ -73,7 +78,7 @@ export default function AmountField({
     <div className="flex items-end gap-2">
       <div className="flex-1 min-w-0">
         <label htmlFor={id} className={labelClass}>
-          {label}
+          {label} {required && <span className="text-negative">*</span>}
         </label>
         <div className="relative">
           {signPrefix && (
