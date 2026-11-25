@@ -233,14 +233,17 @@ frontend/src/
 │   ├── budgets/            # PeriodPicker (period listbox), PeriodCard (periods page),
 │   │                       #   BudgetSummaryCard + BudgetCategoryList (phone budget detail)
 │   ├── dashboard/          # Home widgets (Accounts, Budget, Upcoming, RecentActivity),
+│   │                       #   SetupChecklist (first-run checklist card),
 │   │                       #   BudgetInsights (planned-vs-spent charts on the periods page)
 │   ├── transactions/       # Form fields (TransactionFormFields, TransferFormFields,
-│                           #   AmountField), record content (TransactionRecord,
-│                           #   TransferRecord), items editor, attachments, extraction review
+│   │                       #   PlannedFormFields, RecurringFormFields, PayPlannedForm,
+│   │                       #   AmountField), record content (TransactionRecord,
+│   │                       #   TransferRecord, PlannedRecord, PlannedStatusChip,
+│   │                       #   recordParts: FieldEditorShell + Section), items editor,
+│   │                       #   attachments, extraction review, the 1024px+ panels
+│   │                       #   (PlannedCreatePanel, RecurringFormPanel)
 │   ├── modals/budgets/     # PeriodFormModal (custom-period add/edit), ManageCategoriesModal
-│   ├── modals/bookmarks/   # BookmarkFormModal (create/edit bookmarks)
-│   └── modals/transactions/# Transaction (edit/copy; creation moved to the /new page in
-│                           #   redesign phase 3) / Planned modals
+│   └── modals/bookmarks/   # BookmarkFormModal (create/edit bookmarks)
 ├── contexts/
 │   ├── AuthContext.tsx         # Auth state + consent status
 │   ├── WorkspaceContext.tsx    # Current workspace + role
@@ -248,14 +251,21 @@ frontend/src/
 │   └── ThemeContext.tsx        # Light/dark
 ├── hooks/
 │   ├── useDomain.ts            # useAccounts, useBudgets, useEnabledCurrencies,
-│   │                          #   useMultiCurrency, useExtractionConfig
+│   │                          #   useMultiCurrency, useExtractionConfig,
+│   │                          #   useTransaction, useRecurringTransaction,
+│   │                          #   usePlannedTransaction (detail queries)
 │   ├── usePermissions.ts       # canManageAccounts, canWrite, …
 │   └── (other hooks)           # useAttachments, useBookmarks, useWorkspaceSettings,
 │                              #   useActivityScope (Activity title + scope
 │                              #   breadcrumb for the three list routes),
-│                              #   useTransactionForm / useTransferForm (the
-│                              #   transaction/transfer form state machines,
-│                              #   driven by /new and the list create panels),
+│                              #   useTransactionForm / useTransferForm /
+│                              #   usePlannedForm / useRecurringForm (the
+│                              #   form state machines, driven by /new,
+│                              #   /planned/new, /planned/rules/* and the
+│                              #   list create panels), the field-save hooks
+│                              #   (useTransactionFieldSave, useTransferFieldSave,
+│                              #   usePlannedFieldSave) and usePlannedPayment,
+│                              #   useRecurringRuleDelete, useButtonBlurGuard,
 │                              #   useListboxPanel, useWorkspaceSwitch,
 │                              #   useMediaQuery, useBreakpoint, useDebouncedField,
 │                              #   useOverlay, useKeyboardInset, useExtractionPolling
@@ -268,8 +278,12 @@ frontend/src/
 │                           #   Transfers (part of the Activity scope - reached
 │                           #   from the Activity tab, Accounts, and the
 │                           #   command palette), the Transaction/Transfer
-│                           #   record pages (full page below 1024px, side
-│                           #   panel beside the list at 1024px+),
+│                           #   record pages and the Planned record, pay,
+│                           #   create and recurring-rule pages (each a full
+│                           #   page below 1024px, a side panel beside the
+│                           #   list at 1024px+; PlannedRecordPage,
+│                           #   PayPlannedPage, NewPlannedPage,
+│                           #   RecurringRulePage),
 │                           #   NewTransaction (the /new
 │                           #   create page for transactions and transfers),
 │                           #   Bookmarks,
@@ -277,7 +291,8 @@ frontend/src/
 │                           #   VerifyEmail, ConfirmEmailChange, ReConsent,
 │                           #   PrivacyPolicy, Terms, NotFound)
 ├── utils/                  # format, errors, pageSize, params, transactionItems,
-│                           #   attachments, currencies, tappable, zoomLock,
+│                           #   attachments, currencies, recurrenceSummary (the
+│                           #   rule schedule sentence), tappable, zoomLock,
 │                           #   amountInput (both decimal separators, normalized
 │                           #   per the active number style at submit), dates
 │                           #   (local-date period math), pageDefaults

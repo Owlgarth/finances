@@ -34,7 +34,9 @@ visits land on the dashboard.
 
 ## Accounts & Balances
 
-- **Dashboard** (Home) renders four widgets: Accounts (each account's **computed**
+- **Dashboard** (Home) renders a first-run **Setup checklist** card for writers (an
+  account, a budget and a transaction to tick off; hidden once all three are done or
+  dismissed, per workspace) above four widgets: Accounts (each account's **computed**
   balance - opening balance + transactions ± transfers - with rows linking to the
   account page and exact per-currency totals beneath), Budget (the default budget's
   current period, spent-of-planned per currency plus attention rows - over or >=75%
@@ -192,13 +194,17 @@ With no parser configured, every extraction affordance is hidden.
 ## Planned Transactions
 
 Create scheduled transactions, optionally on an account and always in their own
-currency (locked to the account's whenever one is set) (member+). **Execute** creates
-a real transaction carrying the plan's account and currency (via a Celery task,
-idempotent), books it on the plan's own `planned_date` (server-side default) at the
-planned amount, and marks the planned item done. **Execute with adjustments** runs
-the same execute with a date + amount form prefilled from the plan: a supplied
+currency (locked to the account's whenever one is set) (member+). Rows open the
+item's record (`/planned/:id`, a full page below 1024px, the list's side panel at
+1024px+), where the fields edit in place through one-field saves and the actions
+live. **Mark as paid** (the execute action) creates a real transaction carrying the
+plan's account and currency (via a Celery task, idempotent), books it on the plan's
+own `planned_date` (server-side default) at the planned amount, and marks the
+planned item done. **Paid differently** runs the same execute with a date + amount
+form prefilled from the plan (`/planned/:id/pay`, the same tier split): a supplied
 amount is stored on the plan's `payment_amount` (NULL = as planned) and booked
-instead of the planned one, without rewriting the plan's own `amount`. The list
+instead of the planned one, without rewriting the plan's own `amount`. A pending
+item can also be skipped (restorable from the record). The list
 shares the Transactions search/filters pattern, including the own-currency filter
 (URL-synced).
 
