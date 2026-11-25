@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, SlidersHorizontal, Trash2, CheckCircle } from 'lucide-react'
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
-import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
+import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useWorkspaceCategories } from '../hooks/useDomain'
 import { usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
@@ -33,6 +33,7 @@ import Select from '../components/common/Select'
 import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
 import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
+import PlannedRecord from '../components/transactions/PlannedRecord'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
@@ -43,6 +44,8 @@ import MultiChoiceEditor from '../components/filters/MultiChoiceEditor'
 import AmountRangeEditor from '../components/filters/AmountRangeEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
+import DetailPanel from '../components/layout/DetailPanel'
+import SplitView from '../components/layout/SplitView'
 import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
 
 type StatusFilter = 'all' | 'pending' | 'done' | 'cancelled'
@@ -84,6 +87,84 @@ function readStoredSearch(): string {
   }
 }
 
+// Same cents helpers as the transactions list's record mirror (a third copy
+// belongs in a shared module at the next touch of all three).
+/** Exact cents of a backend amount string (BigInt, never parseFloat -
+    backend amounts are exact 2-decimal strings; shorter fractions pad). */
+function amountCents(raw: string): bigint {
+  const negative = raw.startsWith('-')
+  const abs = negative ? raw.slice(1) : raw
+  const [intPart, fracPart = ''] = abs.split('.')
+  return (negative ? -1n : 1n) * BigInt((intPart || '0') + fracPart.padEnd(2, '0').slice(0, 2))
+}
+
+/** Exact cents of an amount-filter bound, rounded toward +infinity (a lower
+    bound) or -infinity (an upper bound) past the 2nd decimal: the server
+    compares the bound it receives, so a 3+-decimal bound must never round
+    in the keep-open direction. Unparseable strings read as null. */
+function amountBoundCents(raw: string, ceil: boolean): bigint | null {
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(raw)) return null
+  const negative = raw.startsWith('-')
+  const abs = raw.replace(/^[+-]/, '')
+  const [intPart, fracPart = ''] = abs.split('.')
+  let result = BigInt((intPart || '0') + fracPart.slice(0, 2).padEnd(2, '0'))
+  // Digits past the 2nd decimal: "up" means +1 cent on a positive bound but
+  // only dropping the tail on a negative one (toward zero is toward
+  // +infinity); floor is the mirror image.
+  const hasTail = fracPart.slice(2).replace(/0+$/, '').length > 0
+  if (hasTail && ceil !== negative) result += 1n
+  return negative ? -result : result
+}
+
+/** True when the item's amount satisfies one amount bound the way the list
+ *  request sends it. The list sends Number(raw): a bound the server never
+ *  receives (empty, or text Number() rejects) filters nothing; a bound this
+ *  module cannot read in exact cents proves nothing, so it reads as a
+ *  mismatch, like every other facet the payload cannot evaluate. */
+function amountWithin(amount: string, raw: string, ceil: boolean): boolean {
+  if (raw === '') return true
+  const sent = amountParam(raw)
+  if (sent === undefined) return true
+  const bound = amountBoundCents(String(sent), ceil)
+  return bound !== null && (ceil ? amountCents(amount) >= bound : amountCents(amount) <= bound)
+}
+
+/** The facets of the list query that decide membership (ordering, page and
+ *  page size never remove an item). */
+interface PlannedRecordFacets {
+  status: StatusFilter
+  search: string
+  account: number[]
+  currency: string[]
+  budget: number[]
+  category: number[]
+  amountMin: string
+  amountMax: string
+  dateFrom: string
+  dateTo: string
+}
+
+/**
+ * Conservative client-side mirror of the list query's server filters:
+ * true only when the item PROVABLY still matches every facet the server
+ * applies, so it is sound for keep-open - the only decision it drives. A
+ * panel showing an item the list no longer contains is the worse failure.
+ */
+function plannedStillMatches(p: PlannedTransaction, f: PlannedRecordFacets): boolean {
+  if (f.status !== 'all' && p.status !== f.status) return false
+  if (f.account.length && (p.account_id == null || !f.account.includes(p.account_id))) return false
+  if (f.currency.length && !f.currency.includes(p.currency_code)) return false
+  if (f.dateFrom && p.planned_date < f.dateFrom) return false
+  if (f.dateTo && p.planned_date > f.dateTo) return false
+  if (f.search && !p.name.toLowerCase().includes(f.search.toLowerCase())) return false
+  // The budget filter runs through the item's category server-side, so an
+  // uncategorized item never matches it.
+  if (f.budget.length && (p.category == null || !f.budget.includes(p.category.budget_id))) return false
+  if (f.category.length && (p.category_id == null || !f.category.includes(p.category_id))) return false
+  if (!amountWithin(p.amount, f.amountMin, true)) return false
+  if (!amountWithin(p.amount, f.amountMax, false)) return false
+  return true
+}
 // Arrival gate + page shell. The per-page defaults must resolve before the
 // content mounts: a cold-cache materialization of built-ins would flip every
 // control a moment later. Both gate queries are boot-time fetches with a
@@ -169,7 +250,7 @@ export default function Planned() {
   }
 
   return (
-    <div className="p-6 max-sm:p-0 max-w-4xl mx-auto">
+    <div className="p-6 max-sm:p-0 max-w-5xl mx-auto">
       {/* The title row and the Activity tab row stay mounted through the gate:
           route changes move focus to the page h1, and chrome that pops in
           after the gate is churn. The gated region is everything below the
@@ -289,7 +370,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const { data: categories = [] } = useWorkspaceCategories(false)
 
   const isTouch = useIsTouch()
-  const { isMobile } = useBreakpoint()
+  const { isMobile, isDesktop } = useBreakpoint()
 
   const statusOptions = STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
   const sortOptions = SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
@@ -342,15 +423,66 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
+  // At 1024+ this page hosts an item's record in a side panel. The open
+  // item is the PATH, so bookmarks and saved defaults, which capture query
+  // params only, can never record an open panel. The id comes from the
+  // pattern that matched, never from the bare route-params hook (which also
+  // reports an id on the rule paths, and on /planned/new). Garbage ids read
+  // as null: no panel.
+  const recordMatch = useMatch('/planned/:id')
+  const idParam = recordMatch?.params.id ?? ''
+  const panelId = /^\d+$/.test(idParam) && Number(idParam) > 0 ? Number(idParam) : null
+  // Shares the ['planned', 'detail', id] cache entry with the record page,
+  // the pay page and the copy seed: one entry per id, refreshed by every
+  // family-wide invalidation.
+  const { data: record, isLoading: recordLoading, isError: recordError } = usePlannedTransaction(panelId)
+  // Row-selected highlight: below 1024 this component never mounts on an
+  // item path (the route element renders the page there instead).
+  const selectedId = isDesktop ? panelId : null
+
+  // Opening a record swaps the matched route element, which remounts this
+  // page and drops focus to <body>: a keyboard user would have to Tab back
+  // in before the walk continues. Refocus the SELECTED row once per mount.
+  // A bare list mount finds no selected row, so nothing is focused. DOM-only,
+  // and programmatic focus after a mouse interaction shows no focus ring.
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus()
+  }, [])
+
   // "Paid differently" is a page. At every tier the push carries the list's
   // search in router state, so the form's back arrow returns to this view.
   const openPay = (p: PlannedTransaction) =>
     navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
-  // A row's tap, click, Enter or Space opens the record page. A push, so
-  // Back returns to this list; the push carries the list's search in router
-  // state, so the page's back arrow returns to this exact view.
-  const handleOpenRecord = (p: PlannedTransaction) =>
+
+  // A row tap or click opens the record. The tier fork lives INSIDE the
+  // handler so the row stays mounted on every tier. At 1024+ the record is
+  // a panel, the FIRST open pushes (Back returns to the bare list) and
+  // every later selection change replaces (Back never walks a click
+  // trail); below 1024 the PUSH carries the click-time search string in
+  // router state, so the record page's back target keeps the filters.
+  const handleOpenRecord = (p: PlannedTransaction) => {
+    if (isDesktop) {
+      navigate({ pathname: `/planned/${p.id}`, search: searchParams.toString() }, { replace: panelId != null })
+      return
+    }
     navigate(`/planned/${p.id}`, { state: { search: searchParams.toString() } })
+  }
+
+  // Panel close (X, Escape, a delete, or the reconcile below): replace
+  // keeps the closed item's URL out of Back's path; every list param
+  // survives.
+  const handleClosePanel = () =>
+    navigate({ pathname: '/planned', search: searchParams.toString() }, { replace: true })
+  // The record's action callbacks for the panel host: leaving the record
+  // closes the panel. "Paid differently..." is openPay itself; the pay form
+  // is a full page at every tier for now (a push), so its back arrow
+  // returns to this panel. The rule page and the create page are full
+  // pages at every tier for now too, a push each, so their back arrows
+  // return to this panel as well.
+  const handleRecordDeleted = () => handleClosePanel()
+  const handleRecordMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
+  const handleRecordCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
   // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
@@ -830,6 +962,29 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     )
   }
 
+  // Filter facets only - ordering, page and page size do not change membership.
+  const filterKey = [statusFilter, search, accountFilter.join(','), currencyFilter.join(','), budgetFilter.join(','), categoryFilter.join(','), amountMin, amountMax, dateFrom, dateTo].join('|')
+  // Keep-or-close reconcile for the open panel: a filter change (or an
+  // item error - deleted elsewhere, foreign) that proves the item no
+  // longer matches the query closes the panel; a still-matching item stays
+  // open even when it falls off the visible page. Response arrival is not
+  // an event, so a guarded effect is the only possible seam, and it
+  // navigates (a router write, never component state).
+  useEffect(() => {
+    if (!(isDesktop && panelId != null)) return
+    if (recordLoading) return
+    if (recordError || !record) {
+      handleClosePanel()
+      return
+    }
+    if (!plannedStillMatches(record, { status: statusFilter, search, account: accountFilter, currency: currencyFilter, budget: budgetFilter, category: categoryFilter, amountMin, amountMax, dateFrom, dateTo })) {
+      handleClosePanel()
+    }
+    // The effect reads the CURRENT filter values by design; filterKey is
+    // the change signal, so the deps list is deliberately partial.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey, panelId, isDesktop, record, recordLoading, recordError])
+
   return (
     <>
       {/* View switch for 640px and up, above the status control: it swaps
@@ -959,160 +1114,193 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         />
       )}
 
-      {view === 'planned' ? (
-        isLoading ? (
-          <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
-        ) : items.length === 0 ? (
-          search || (activeCount > 0 && !onlyMonthRange) ? (
-            <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
-          ) : statusFilter !== 'all' ? (
-            <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
-          ) : exactMonth ? (
-            <EmptyState
-              icon={<CalendarClock size={48} strokeWidth={1.5} className="text-text-muted/30" />}
-              heading={<span className="font-mono">{monthLabel}</span>}
-              message={t('emptyMonth.message')}
-              action={{ label: t('emptyMonth.showAll'), onClick: () => updateParams({ from: null, to: null }) }}
-            />
-          ) : (
-            <p className="text-sm text-text-muted">{t('empty')}</p>
-          )
-        ) : (
-          <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-            {items.map((p) => (
-              <SwipeRow
-                key={p.id}
-                enabled={isTouch && canWrite && p.status === 'pending'}
-                actions={[
-                  { key: 'paidDifferently', label: t('rowActions.paidDifferentlyShort'), icon: SlidersHorizontal, onSelect: () => openPay(p) },
-                  { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
-                ]}
-              >
-                <div
-                  {...tappableProps(() => handleOpenRecord(p))}
-                  className="flex items-center justify-between px-4 py-3 text-sm group active:bg-surface-hover transition-colors cursor-pointer"
-                >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-text truncate">{p.name}</span>
-                    <PlannedStatusChip planned={p} />
-                    {p.recurring_id != null && (
-                      <span className="text-text-muted" title={t('recurring.badge')}>
-                        <Repeat size={12} className="inline" aria-hidden="true" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] font-mono text-text-muted">
-                    {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 pl-3">
-                  <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
-                  {/* Hover and keyboard focus reveal the action group on a fine
-                      pointer; at every pointer type the row itself opens the
-                      record. The wrapper stops a button's click and key
-                      presses before they reach the row's handlers: the action
-                      must run alone, never double-fire. */}
-                  {canWrite && !isTouch && (
-                    <div
-                      className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      {p.status === 'pending' && (
-                        <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
-                      )}
-                      {p.status === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => openPay(p)}
-                          title={t('rowActions.paidDifferently')}
-                          aria-label={t('rowActions.paidDifferently')}
-                          className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-                        >
-                          <SlidersHorizontal size={13} />
-                        </button>
-                      )}
-                      {p.status === 'pending' && (
-                        <button type="button" onClick={() => setSkipping(p)} disabled={paymentPending} title={t('rowActions.skip')} aria-label={t('rowActions.skip')} className="text-text-muted hover:text-text p-1"><Ban size={13} /></button>
-                      )}
-                      {p.status === 'pending' && p.recurring_id == null && (
-                        <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
-                      )}
-                      <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
-                      <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
-                    </div>
-                  )}
-                </div>
-                </div>
-              </SwipeRow>
-            ))}
-            {data && data.total > 0 && (
-              <Pagination
-                page={data.page}
-                total_pages={data.total_pages}
-                total={data.total}
-                page_size={data.page_size}
-                onPageChange={(p) => updateParams({ page: p })}
-                onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
-              />
-            )}
-          </div>
-        )
-      ) : recurringIsLoading ? (
-        <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
-      ) : recurringRules.length === 0 ? (
-        <p className="text-sm text-text-muted">{t('recurring.empty')}</p>
-      ) : (
-        <div className="border border-border rounded-sm bg-surface divide-y divide-border">
-          {recurringRules.map((r) => (
-            <div
-              key={r.id}
-              {...(canWrite ? tappableProps(() => openRulePage(r)) : {})}
-              className={`flex items-center justify-between px-4 py-3 text-sm group ${canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''}`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-text truncate">{r.name}</span>
-                  <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive border-positive/40' : 'text-text-muted border-border'}`}>
-                    {r.is_active ? t('recurring.activeChip') : t('recurring.pausedChip')}
-                  </span>
-                </div>
-                <div className="text-[10px] font-mono text-text-muted truncate">
-                  {scheduleSummary(r)}{r.next_occurrence_date ? ` · ${r.next_occurrence_date}` : ''}{r.category?.name ? ` · ${r.category.name}` : ''} · {r.account_name ?? t('noAccount')}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0 pl-3">
-                <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
-                {/* Hover reveals are pointer-fine only; at every pointer type
-                    the writer's row itself is a button that opens the rule
-                    page (click, tap, Enter or Space). A viewer's row is inert:
-                    the rule page sends a viewer straight back to this list.
-                    The group also shows while the row or one of its buttons
-                    holds focus, so a keyboard user sees the actions they tab
-                    through. The wrapper stops a button's click AND keydown
-                    before they bubble into the row's handlers: without the
-                    keydown twin, Enter or Space on a focused button would
-                    open the page over the button's own action. The action
-                    must run alone, never double-fire. */}
-                {canWrite && !isTouch && (
-                  <div
-                    className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
+      {/* The list and its pagination always ride the split's list slot:
+          with no panel open the wrapper renders the list unchanged, so one
+          stable tree spans the 1024 crossing. The toolbar above keeps the
+          page's full width. */}
+      <SplitView
+        list={
+          view === 'planned' ? (
+            isLoading ? (
+              <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+            ) : items.length === 0 ? (
+              search || (activeCount > 0 && !onlyMonthRange) ? (
+                <p className="text-sm text-text-muted">{t('emptyFiltered')}</p>
+              ) : statusFilter !== 'all' ? (
+                <p className="text-sm text-text-muted">{t('emptyWithStatus', { status: statusLabel(statusFilter) })}</p>
+              ) : exactMonth ? (
+                <EmptyState
+                  icon={<CalendarClock size={48} strokeWidth={1.5} className="text-text-muted/30" />}
+                  heading={<span className="font-mono">{monthLabel}</span>}
+                  message={t('emptyMonth.message')}
+                  action={{ label: t('emptyMonth.showAll'), onClick: () => updateParams({ from: null, to: null }) }}
+                />
+              ) : (
+                <p className="text-sm text-text-muted">{t('empty')}</p>
+              )
+            ) : (
+              <div ref={listRef} className="border border-border rounded-sm bg-surface divide-y divide-border">
+                {items.map((p) => (
+                  <SwipeRow
+                    key={p.id}
+                    enabled={isTouch && canWrite && p.status === 'pending'}
+                    actions={[
+                      { key: 'paidDifferently', label: t('rowActions.paidDifferentlyShort'), icon: SlidersHorizontal, onSelect: () => openPay(p) },
+                      { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
+                    ]}
                   >
-                    <button type="button" onClick={() => openRulePage(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
-                    <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
-                      {r.is_active ? <Pause size={13} /> : <Play size={13} />}
-                    </button>
-                    <button type="button" onClick={() => openDeleteRule(r)} title={t('recurring.rowActions.delete')} aria-label={t('recurring.rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
-                  </div>
+                    <div
+                      {...tappableProps(() => handleOpenRecord(p))}
+                      aria-current={p.id === selectedId ? 'true' : undefined}
+                      className={`flex items-center justify-between px-4 py-3 text-sm group border-l-2 active:bg-surface-hover transition-colors cursor-pointer ${
+                        p.id === selectedId ? 'border-l-primary bg-surface-hover' : 'border-l-transparent'
+                      }`}
+                    >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-text truncate">{p.name}</span>
+                        <PlannedStatusChip planned={p} />
+                        {p.recurring_id != null && (
+                          <span className="text-text-muted" title={t('recurring.badge')}>
+                            <Repeat size={12} className="inline" aria-hidden="true" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-text-muted">
+                        {p.planned_date}{p.category?.name ? ` · ${p.category.name}` : ''} · {p.account_name ?? t('noAccount')}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 pl-3">
+                      <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
+                      {/* Hover and keyboard focus reveal the action group on a fine
+                          pointer; at every pointer type the row itself opens the
+                          record. The wrapper stops a button's click and key
+                          presses before they reach the row's handlers: the action
+                          must run alone, never double-fire. */}
+                      {canWrite && !isTouch && (
+                        <div
+                          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {p.status === 'pending' && (
+                            <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
+                          )}
+                          {p.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => openPay(p)}
+                              title={t('rowActions.paidDifferently')}
+                              aria-label={t('rowActions.paidDifferently')}
+                              className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                            >
+                              <SlidersHorizontal size={13} />
+                            </button>
+                          )}
+                          {p.status === 'pending' && (
+                            <button type="button" onClick={() => setSkipping(p)} disabled={paymentPending} title={t('rowActions.skip')} aria-label={t('rowActions.skip')} className="text-text-muted hover:text-text p-1"><Ban size={13} /></button>
+                          )}
+                          {p.status === 'pending' && p.recurring_id == null && (
+                            <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
+                          )}
+                          <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
+                          <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                        </div>
+                      )}
+                    </div>
+                    </div>
+                  </SwipeRow>
+                ))}
+                {data && data.total > 0 && (
+                  <Pagination
+                    page={data.page}
+                    total_pages={data.total_pages}
+                    total={data.total}
+                    page_size={data.page_size}
+                    onPageChange={(p) => updateParams({ page: p })}
+                    onPageSizeChange={(s) => { setPageSize(s); setStoredPageSize(s); updateParams({ page: null }) }}
+                  />
                 )}
               </div>
+            )
+          ) : recurringIsLoading ? (
+            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 bg-surface-muted rounded-sm animate-pulse" />)}</div>
+          ) : recurringRules.length === 0 ? (
+            <p className="text-sm text-text-muted">{t('recurring.empty')}</p>
+          ) : (
+            <div className="border border-border rounded-sm bg-surface divide-y divide-border">
+              {recurringRules.map((r) => (
+                <div
+                  key={r.id}
+                  {...(canWrite ? tappableProps(() => openRulePage(r)) : {})}
+                  className={`flex items-center justify-between px-4 py-3 text-sm group ${canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-text truncate">{r.name}</span>
+                      <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive border-positive/40' : 'text-text-muted border-border'}`}>
+                        {r.is_active ? t('recurring.activeChip') : t('recurring.pausedChip')}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-text-muted truncate">
+                      {scheduleSummary(r)}{r.next_occurrence_date ? ` · ${r.next_occurrence_date}` : ''}{r.category?.name ? ` · ${r.category.name}` : ''} · {r.account_name ?? t('noAccount')}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 pl-3">
+                    <span className="font-mono text-text whitespace-nowrap">{formatAmount(r.amount)} {multiCurrency ? r.currency_code : ''}</span>
+                    {/* Hover reveals are pointer-fine only; at every pointer type
+                        the writer's row itself is a button that opens the rule
+                        page (click, tap, Enter or Space). A viewer's row is inert:
+                        the rule page sends a viewer straight back to this list.
+                        The group also shows while the row or one of its buttons
+                        holds focus, so a keyboard user sees the actions they tab
+                        through. The wrapper stops a button's click AND keydown
+                        before they bubble into the row's handlers: without the
+                        keydown twin, Enter or Space on a focused button would
+                        open the page over the button's own action. The action
+                        must run alone, never double-fire. */}
+                    {canWrite && !isTouch && (
+                      <div
+                        className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <button type="button" onClick={() => openRulePage(r)} title={t('recurring.rowActions.edit')} aria-label={t('recurring.rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
+                        <button type="button" onClick={() => toggleActiveMutation.mutate(r)} title={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} aria-label={r.is_active ? t('recurring.rowActions.pause') : t('recurring.rowActions.resume')} className="text-text-muted hover:text-text p-1">
+                          {r.is_active ? <Pause size={13} /> : <Play size={13} />}
+                        </button>
+                        <button type="button" onClick={() => openDeleteRule(r)} title={t('recurring.rowActions.delete')} aria-label={t('recurring.rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )
+        }
+        panel={
+          isDesktop && panelId != null ? (
+            // The record renders its own actions in the body, so the
+            // panel shell passes no footer. The title falls back to the
+            // generic record label only for the loading window; once
+            // loaded the item's name is the title.
+            <DetailPanel title={record?.name ?? t('record.title')} onClose={handleClosePanel}>
+              {recordLoading ? (
+                <PanelHold />
+              ) : record ? (
+                <PlannedRecord
+                  planned={record}
+                  canWrite={canWrite}
+                  onDeleted={handleRecordDeleted}
+                  onPayDifferently={openPay}
+                  onMakeRecurring={handleRecordMakeRecurring}
+                  onCopy={handleRecordCopy}
+                />
+              ) : null}
+            </DetailPanel>
+          ) : null
+        }
+      />
 
       <ConfirmDialog
         isOpen={!!deleting}
@@ -1189,5 +1377,16 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         />
       )}
     </>
+  )
+}
+
+/** Hold-while-loading pulse for a panel whose item is still loading: hold,
+ *  never flash an empty panel. */
+function PanelHold() {
+  return (
+    <div className="space-y-3 pt-2" aria-hidden="true">
+      <div className="h-8 bg-surface-muted rounded-sm animate-pulse" />
+      <div className="h-20 bg-surface-muted rounded-sm animate-pulse" />
+    </div>
   )
 }

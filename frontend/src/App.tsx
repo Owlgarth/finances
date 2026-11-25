@@ -50,6 +50,15 @@ function TransferRecordRoute() {
   return isDesktop ? <TransfersPage /> : <TransferRecordPage />
 }
 
+/** The planned item's record follows the tier like the transaction record:
+ *  at 1024+ the list page hosts the record in its side panel (it reads the
+ *  path itself, so the list route and the record route both render
+ *  <Planned />), below 1024 the record is a full page. */
+function PlannedRecordRoute() {
+  const { isDesktop } = useBreakpoint()
+  return isDesktop ? <Planned /> : <PlannedRecordPage />
+}
+
 function AppContent() {
   return (
     <MainLayout>
@@ -63,7 +72,7 @@ function AppContent() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
-        <Route path="/planned/:id" element={<PlannedRecordPage />} />
+        <Route path="/planned/:id" element={<PlannedRecordRoute />} />
         <Route path="/planned/:id/pay" element={<PayPlannedPage />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />
