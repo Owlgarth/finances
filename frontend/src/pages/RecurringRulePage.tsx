@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { Link, Navigate, useMatch, useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
 import { Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { plannedTransactionsApi, recurringTransactionsApi } from '../api/client'
+import { plannedTransactionsApi } from '../api/client'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useRecurringTransaction } from '../hooks/useDomain'
 import { useRecurringForm } from '../hooks/useRecurringForm'
+import { useRecurringRuleDelete } from '../hooks/useRecurringRuleDelete'
 import { intParam } from '../utils/params'
-import { getApiErrorMessage } from '../utils/errors'
 import FormPage from '../components/layout/FormPage'
 import RecurringFormFields from '../components/transactions/RecurringFormFields'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -31,7 +30,6 @@ export default function RecurringRulePage() {
   const { t: tTx } = useTranslation('transactions')
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { workspace, isLoading: workspaceLoading } = useWorkspace()
   const { canWrite } = usePermissions()
 
@@ -82,19 +80,9 @@ export default function RecurringRulePage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteRulePending, setDeleteRulePending] = useState(false)
 
-  const deleteMutation = useMutation({
-    mutationFn: (input: { id: number; deletePending: boolean }) =>
-      recurringTransactionsApi.delete(input.id, input.deletePending),
-    onSuccess: () => {
-      // delete_pending can remove planned rows, so both lists refetch.
-      queryClient.invalidateQueries({ queryKey: ['recurring'] })
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(t('recurring.deleted'))
-      // replace keeps the deleted rule's URL out of Back's path.
-      navigate('/planned?view=recurring', { replace: true })
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('recurring.deleteFailed'))); setDeleteDialogOpen(false) },
-  })
+  // The request, the refetches and the toasts are the shared hook's; the
+  // per-call callbacks say where this page goes next.
+  const deleteMutation = useRecurringRuleDelete()
 
   // Viewers (and, defense-in-depth, workspace-less mounts - MainLayout already
   // swaps children for its no-workspace message) never see this form. Held
@@ -260,7 +248,14 @@ export default function RecurringRulePage() {
             onChange: setDeleteRulePending,
           }}
           isPending={deleteMutation.isPending}
-          onConfirm={() => deleteMutation.mutate({ id: validRuleId, deletePending: deleteRulePending })}
+          onConfirm={() => deleteMutation.mutate(
+            { id: validRuleId, deletePending: deleteRulePending },
+            {
+              // replace keeps the deleted rule's URL out of Back's path.
+              onSuccess: () => navigate('/planned?view=recurring', { replace: true }),
+              onError: () => setDeleteDialogOpen(false),
+            },
+          )}
           onCancel={() => setDeleteDialogOpen(false)}
         />
       )}

@@ -7,6 +7,7 @@ import { Ban, CalendarClock, Copy, Download, Loader2, Pause, Play, Plus, Pencil,
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, usePlannedTransaction, useWorkspaceCategories } from '../hooks/useDomain'
+import { useRecurringRuleDelete } from '../hooks/useRecurringRuleDelete'
 import { usePayPlannedForm, usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
@@ -1019,18 +1020,9 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     onError: (error) => toast.error(getApiErrorMessage(error, t('recurring.updateFailed'))),
   })
 
-  const deleteRuleMutation = useMutation({
-    mutationFn: (input: { id: number; deletePending: boolean }) =>
-      recurringTransactionsApi.delete(input.id, input.deletePending),
-    onSuccess: () => {
-      // delete_pending can remove planned rows, so both lists refetch.
-      queryClient.invalidateQueries({ queryKey: ['recurring'] })
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(t('recurring.deleted'))
-      setDeletingRule(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('recurring.deleteFailed'))); setDeletingRule(null) },
-  })
+  // The request, the refetches and the toasts are the shared hook's; the
+  // per-call callbacks only close the confirm.
+  const deleteRuleMutation = useRecurringRuleDelete()
 
   // Save the current view facets as this page's defaults. capturePageDefaults
   // reads the URL (the source of truth) into the full planned sub-object - a
@@ -1450,7 +1442,10 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
           onChange: setDeleteRulePending,
         } : undefined}
         isPending={deleteRuleMutation.isPending}
-        onConfirm={() => deletingRule && deleteRuleMutation.mutate({ id: deletingRule.id, deletePending: deleteRulePending })}
+        onConfirm={() => deletingRule && deleteRuleMutation.mutate(
+          { id: deletingRule.id, deletePending: deleteRulePending },
+          { onSuccess: () => setDeletingRule(null), onError: () => setDeletingRule(null) },
+        )}
         onCancel={() => setDeletingRule(null)}
       />
       {/* Mounted before the bookmark modal so the chained modal (opened by
