@@ -83,6 +83,10 @@
     "backToList": "Back to planned items"
   },
   "record": {
+    "title": "Planned item",
+    "notFound": "Not found in this workspace",
+    "backToList": "Back to planned items",
+    "openRule": "Open recurring rule",
     "status": {
       "upcoming": "Upcoming",
       "overdue": "Overdue",

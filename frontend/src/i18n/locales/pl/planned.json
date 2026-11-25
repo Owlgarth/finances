@@ -87,6 +87,10 @@
     "backToList": "Wróć do planowanych"
   },
   "record": {
+    "title": "Planowana transakcja",
+    "notFound": "Nie znaleziono w tej przestrzeni roboczej",
+    "backToList": "Wróć do planowanych transakcji",
+    "openRule": "Otwórz regułę cykliczną",
     "status": {
       "upcoming": "Nadchodząca",
       "overdue": "Zaległa",

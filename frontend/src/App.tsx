@@ -16,6 +16,7 @@ import BudgetPeriodsPage from './pages/BudgetPeriodsPage'
 import Transactions from './pages/Transactions'
 import TransactionRecordPage from './pages/TransactionRecordPage'
 import Planned from './pages/Planned'
+import PlannedRecordPage from './pages/PlannedRecordPage'
 import RecurringRulePage from './pages/RecurringRulePage'
 import TransfersPage from './pages/TransfersPage'
 import TransferRecordPage from './pages/TransferRecordPage'
@@ -62,6 +63,7 @@ function AppContent() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/transactions/:id" element={<TransactionRecordRoute />} />
         <Route path="/planned" element={<Planned />} />
+        <Route path="/planned/:id" element={<PlannedRecordPage />} />
         <Route path="/planned/:id/pay" element={<PayPlannedPage />} />
         <Route path="/planned/rules/new" element={<RecurringRulePage />} />
         <Route path="/planned/rules/:id" element={<RecurringRulePage />} />

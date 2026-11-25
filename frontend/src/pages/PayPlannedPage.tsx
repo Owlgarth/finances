@@ -16,11 +16,12 @@ import type { PlannedTransaction } from '../types'
 const PAGE_CLASS = 'p-6 max-sm:p-0 max-w-5xl mx-auto'
 
 /** Where the pay page sends an item the form is not for: one paid here, one
- *  that can no longer be paid here, or a viewer's. One place decides it. No
- *  page shows an item on its own yet, so the list stands in, with the search
- *  this page was opened with kept. */
-function itemHandoverTarget(stateSearch: string): string {
-  return `/planned${stateSearch ? `?${stateSearch}` : ''}`
+ *  that can no longer be paid here, or a viewer's. One place decides it: the
+ *  item's own record page. The search this page was opened with travels on
+ *  in the URL and in router state, so the record's back arrow returns to
+ *  the same filtered list. */
+function itemHandoverTarget(plannedId: number, stateSearch: string): string {
+  return `/planned/${plannedId}${stateSearch ? `?${stateSearch}` : ''}`
 }
 
 interface PayPlannedBodyProps {
@@ -43,7 +44,7 @@ function PayPlannedBody({ planned, stateSearch, onLeave }: PayPlannedBodyProps) 
     if (!(await form.submit())) return
     // Replace: the finished form leaves Back's path. Where the item then
     // shows is decided in one place.
-    navigate(itemHandoverTarget(stateSearch), { replace: true, state: { search: stateSearch } })
+    navigate(itemHandoverTarget(planned.id, stateSearch), { replace: true, state: { search: stateSearch } })
   }
 
   return (
@@ -136,13 +137,13 @@ export default function PayPlannedPage() {
   // workspace-loading window so a member is not bounced by an unresolved
   // role.
   if (!workspaceLoading && !canWrite) {
-    return <Navigate to={itemHandoverTarget(stateSearch)} replace state={carry} />
+    return <Navigate to={itemHandoverTarget(plannedId, stateSearch)} replace state={carry} />
   }
 
   // Only a pending item can be paid. A paid or skipped item is handed on
   // the same way.
   if (record.data && record.data.status !== 'pending') {
-    return <Navigate to={itemHandoverTarget(stateSearch)} replace state={carry} />
+    return <Navigate to={itemHandoverTarget(plannedId, stateSearch)} replace state={carry} />
   }
 
   if (!record.data) {
