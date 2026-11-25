@@ -304,10 +304,17 @@ export default function Planned() {
   // panel and this list keeps filtering beside it, so the current search
   // travels in the URL: the first open is a push, and a click while a panel
   // is already open is a selection change (replace), so Back never walks a
-  // click trail. A stale copy seed never carries into a plain create.
+  // click trail. A stale copy or make-recurring seed never carries into a
+  // plain create.
   const openCreate = () => {
     if (view === 'recurring') {
-      navigate('/planned/rules/new')
+      // Same fork as the planned arm below: the rule form is a page below
+      // 1024 and a panel beside this list from 1024 up.
+      if (!isDesktop) {
+        navigate('/planned/rules/new')
+        return
+      }
+      navigate(withSearch('/planned/rules/new', searchParams, ['adopt']), { replace: panelPathOpen })
       return
     }
     if (!isDesktop) {
@@ -495,10 +502,17 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     }
     navigate(withSearch(`/planned/rules/${r.id}`, searchParams, ['adopt']), { replace: panelPathOpen })
   }
-  // "Make recurring": the rule page prefills from the pending row and adopts
+  // "Make recurring": the rule form prefills from the pending row and adopts
   // it as the rule's first occurrence (adopt_planned_id) - no duplicate row
-  // is created.
-  const openMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
+  // is created. Tier fork and push/replace rule as for the rule rows; the
+  // seed rides in the URL so one address serves both tiers.
+  const openMakeRecurring = (p: PlannedTransaction) => {
+    if (!isDesktop) {
+      navigate(`/planned/rules/new?adopt=${p.id}`)
+      return
+    }
+    navigate(withSearch('/planned/rules/new', searchParams, [], { adopt: String(p.id) }), { replace: panelPathOpen })
+  }
   const openDeleteRule = (r: RecurringTransaction) => { setDeleteRulePending(false); setDeletingRule(r) }
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
@@ -613,11 +627,9 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   }
   // The record's action callbacks for the panel host: leaving the record
   // closes the panel. "Paid differently..." is openPay itself (a panel is
-  // already open, so it replaces and the pay form takes the same slot). The
-  // rule page is a full page at every tier for now, a push, so its back
-  // arrow returns to this panel. Copy goes through the row's own opener.
+  // already open, so it replaces and the pay form takes the same slot). Make
+  // recurring and Copy go through the row's own openers.
   const handleRecordDeleted = () => handleClosePanel()
-  const handleRecordMakeRecurring = (p: PlannedTransaction) => navigate(`/planned/rules/new?adopt=${p.id}`)
   const handleRecordCopy = openCopy
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
@@ -660,6 +672,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const ruleId = !ruleCreatePath && ruleMatch !== null ? Number(ruleMatch.params.id) : NaN
   const validRuleId = Number.isInteger(ruleId) && ruleId > 0 ? ruleId : null
   // The form is a writer's: a viewer's deep link shows the list, no panel.
+  const ruleCreateOpen = isDesktop && canWrite && ruleCreatePath
   const ruleRecordOpen = isDesktop && canWrite && !ruleCreatePath && ruleMatch !== null
   // The panel's own cache entry: only its error flag is read here.
   const ruleQuery = useRecurringTransaction(ruleRecordOpen ? validRuleId : null)
@@ -672,6 +685,10 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // Row-selected highlight: a rule panel can only be open for a writer at 1024+.
   const selectedRuleId = ruleRecordOpen && !ruleUnloadable ? validRuleId : null
   const recurringListUrl = listViewUrl(searchParams, 'recurring')
+  // The create panel is keyed by its seed too: the header button navigates
+  // from a make-recurring panel to a plain create on the same route, where
+  // the list and the panel slot stay mounted.
+  const ruleAdoptId = ruleCreatePath ? intParam(searchParams, 'adopt') : null
   // Remembered search: when the URL carries no ?search= param (fresh visit),
   // the last committed term fills the box. Seeded once at mount (the lazy
   // useState initializer reads storage exactly once); after that the URL
@@ -1465,6 +1482,14 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
           createOpen ? (
             // The create form wins the panel slot over a record.
             <PlannedCreatePanel mode={createMode} copyId={copyId} onClose={closeCreatePanel} />
+          ) : ruleCreateOpen ? (
+            <RecurringFormPanel
+              key={ruleAdoptId === null ? 'rule-new' : `rule-new-${ruleAdoptId}`}
+              mode="create"
+              ruleId={null}
+              onClose={handleCloseRulePanel}
+              onAdopted={handleAdopted}
+            />
           ) : isDesktop && panelId != null ? (
             // The pay form is a writer's: the slot takes it only for a
             // member who can pay, so a viewer on the pay path sees the
@@ -1498,7 +1523,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                     canWrite={canWrite}
                     onDeleted={handleRecordDeleted}
                     onPayDifferently={openPay}
-                    onMakeRecurring={handleRecordMakeRecurring}
+                    onMakeRecurring={openMakeRecurring}
                     onCopy={handleRecordCopy}
                   />
                 ) : null}

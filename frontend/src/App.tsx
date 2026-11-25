@@ -99,7 +99,7 @@ function AppContent() {
         <Route path="/planned" element={<Planned />} />
         <Route path="/planned/:id" element={<PlannedRecordRoute />} />
         <Route path="/planned/:id/pay" element={<PlannedPayRoute />} />
-        <Route path="/planned/rules/new" element={<RecurringRulePage />} />
+        <Route path="/planned/rules/new" element={<RecurringRuleRoute />} />
         <Route path="/planned/rules/:id" element={<RecurringRuleRoute />} />
         <Route path="/planned/new" element={<PlannedNewRoute />} />
         <Route path="/transfers" element={<TransfersPage />} />
