@@ -6,6 +6,7 @@ import DatePicker from '../DatePicker'
 import AmountField from './AmountField'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { usePlannedFieldOptions, usePlannedForm } from '../../hooks/usePlannedForm'
+import { useButtonBlurGuard } from '../../hooks/useButtonBlurGuard'
 import { NO_ACCOUNT } from '../../utils/accountSelect'
 import { inputClass, labelClass } from '../common/formStyles'
 
@@ -46,7 +47,10 @@ export default function PlannedFormFields({ form }: Props) {
   // then tracks every keystroke because form.errors re-derives every
   // render; any submit attempt shows every error. The currency is a
   // Select-only field - it has no blur, so only a submit attempt shows it.
-  // No host steals focus at open, so every blur here is a user blur.
+  // A blur that a form button caused is not that first blur: pressing Add
+  // or Cancel is the button's own action, and an error row raised by it
+  // would move the button between the press and the release.
+  const isButtonBlur = useButtonBlurGuard()
   const [touched, setTouched] = useState({ name: false, amount: false })
   const showAll = form.submitCount > 0
   const nameError = touched.name || showAll ? form.errors.name : undefined
@@ -73,7 +77,9 @@ export default function PlannedFormFields({ form }: Props) {
           id="planned-name"
           value={form.name}
           onChange={(e) => form.setName(e.target.value)}
-          onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
+          onBlur={(e) => {
+            if (!isButtonBlur(e)) setTouched((prev) => ({ ...prev, name: true }))
+          }}
           autoFocus={!isTouch}
           className={nameInput}
         />
@@ -104,7 +110,9 @@ export default function PlannedFormFields({ form }: Props) {
           error: currencyError,
         }}
         error={amountError}
-        onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
+        onBlur={(e) => {
+          if (!isButtonBlur(e)) setTouched((prev) => ({ ...prev, amount: true }))
+        }}
       />
 
       <div>

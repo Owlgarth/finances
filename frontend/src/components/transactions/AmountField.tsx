@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react'
+import type { FocusEvent, ReactNode, RefObject } from 'react'
 import { AlertCircle } from 'lucide-react'
 import Select from '../common/Select'
 import { inputClass, labelClass } from '../common/formStyles'
@@ -44,8 +44,9 @@ interface Props {
   inputRef?: RefObject<HTMLInputElement | null>
   autoFocus?: boolean
   /** Blur signal for the caller's error-display gate (an error shows
-   *  after the field's first invalid blur, then tracks keystrokes). */
-  onBlur?: () => void
+   *  after the field's first invalid blur, then tracks keystrokes). The
+   *  event is forwarded so the caller can consult the button-blur guard. */
+  onBlur?: (e: FocusEvent<HTMLInputElement>) => void
   /** Optional hint row under the error line, inside the amount column
    *  (e.g. the suggestion Last-amount button). Rendered as-is - the
    *  caller owns content, translation, and any styling. */

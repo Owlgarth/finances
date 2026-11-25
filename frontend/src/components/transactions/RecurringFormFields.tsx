@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FocusEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, X } from 'lucide-react'
 import Select from '../common/Select'
@@ -9,6 +9,7 @@ import DatePicker from '../DatePicker'
 import AmountField from './AmountField'
 import { useIsTouch } from '../../hooks/useBreakpoint'
 import { useRecurringForm } from '../../hooks/useRecurringForm'
+import { useButtonBlurGuard } from '../../hooks/useButtonBlurGuard'
 import { NO_ACCOUNT } from '../../utils/accountSelect'
 import { controlHeightClass, inputClass, labelClass } from '../common/formStyles'
 
@@ -67,9 +68,12 @@ export default function RecurringFormFields({ form }: Props) {
   // Error-display gate: an error shows after its field's first blur
   // (touched) or after any submit attempt; once shown it tracks every
   // keystroke because form.errors re-derives every render. The latch is a
-  // plain per-field blur flag - these hosts issue no focus steal, so a
-  // blur is always a user blur. The currency button is a Select: it has no
+  // plain per-field blur flag, and a blur that a form button caused (Add,
+  // Cancel, a panel's Close) is not that first blur - an error row raised
+  // by the button's own blur would move the button between the press and
+  // the release. The currency button is a Select: it has no
   // blur latch and shows its error only after a failed submit.
+  const isButtonBlur = useButtonBlurGuard()
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({})
   // More-details open state, derived-until-touched: the user's open/close
   // latches (hasInsideValues below is the derived half).
@@ -116,7 +120,10 @@ export default function RecurringFormFields({ form }: Props) {
     setUserClosed(false)
   }
 
-  const markTouched = (key: FieldKey) => setTouched((prev) => ({ ...prev, [key]: true }))
+  const markTouched = (key: FieldKey, e: FocusEvent<HTMLElement>) => {
+    if (isButtonBlur(e)) return
+    setTouched((prev) => ({ ...prev, [key]: true }))
+  }
   const showError = (key: FieldKey): string | undefined =>
     (touched[key] || showAll) && form.errors[key] ? form.errors[key] : undefined
   const errorInput = (key: FieldKey): string =>
@@ -182,7 +189,7 @@ export default function RecurringFormFields({ form }: Props) {
           id="recurring-name"
           value={form.name}
           onChange={(e) => form.setName(e.target.value)}
-          onBlur={() => markTouched('name')}
+          onBlur={(e) => markTouched('name', e)}
           autoFocus={!isTouch}
           className={`${inputClass} ${errorInput('name')}`}
         />
@@ -207,7 +214,7 @@ export default function RecurringFormFields({ form }: Props) {
           error: currencyError,
         }}
         error={amountError}
-        onBlur={() => markTouched('amount')}
+        onBlur={(e) => markTouched('amount', e)}
       />
 
       {/* 4. Every N | Interval unit. */}
@@ -220,7 +227,7 @@ export default function RecurringFormFields({ form }: Props) {
             inputMode="numeric"
             value={form.intervalCount}
             onChange={(e) => form.setIntervalCount(e.target.value)}
-            onBlur={() => markTouched('intervalCount')}
+            onBlur={(e) => markTouched('intervalCount', e)}
             className={`${inputClass} ${errorInput('intervalCount')}`}
           />
           {intervalCountError}
@@ -342,7 +349,7 @@ export default function RecurringFormFields({ form }: Props) {
               inputMode="numeric"
               value={form.upfrontCount}
               onChange={(e) => form.setUpfrontCount(e.target.value)}
-              onBlur={() => markTouched('upfrontCount')}
+              onBlur={(e) => markTouched('upfrontCount', e)}
               disabled={form.materializeAll}
               className={`${inputClass} ${errorInput('upfrontCount')}`}
             />

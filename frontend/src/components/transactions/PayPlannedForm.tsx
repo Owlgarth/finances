@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { PlannedTransaction } from '../../types'
 import type { usePayPlannedForm } from '../../hooks/usePlannedPayment'
+import { useButtonBlurGuard } from '../../hooks/useButtonBlurGuard'
 import AmountField from './AmountField'
 import DatePicker from '../DatePicker'
 import { labelClass } from '../common/formStyles'
@@ -17,6 +18,11 @@ interface Props {
  *  host (a page footer or a panel's action row). */
 export default function PayPlannedForm({ form, planned }: Props) {
   const { t } = useTranslation('planned')
+  // The Amount error stays hidden until the field's first invalid blur -
+  // but a blur that the Mark as paid or Cancel button caused is the
+  // button's own action, not that blur: an error row raised by it would
+  // move the button under the pointer between the press and the release.
+  const isButtonBlur = useButtonBlurGuard()
   // The currency is the plan's: a payment cannot change it, so the code
   // button shows it locked. The single option is what the button displays.
   const currencyOptions = [{ value: planned.currency_code, label: planned.currency_code }]
@@ -48,7 +54,9 @@ export default function PayPlannedForm({ form, planned }: Props) {
         }}
         error={form.errors.amount}
         inputRef={form.amountRef}
-        onBlur={form.onAmountBlur}
+        onBlur={(e) => {
+          if (!isButtonBlur(e)) form.onAmountBlur()
+        }}
       />
       <div>
         <label htmlFor="pay-planned-date" className={labelClass}>{t('form.dateLabel')}</label>
