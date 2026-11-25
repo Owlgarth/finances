@@ -18,6 +18,14 @@ Part of the `frontend-live-stack-probing` skill. Read when a probe result looks 
   locators must match the real DOM shape (an InfoHint-wrapped label nests the text in a
   span; a flex-row label separates it from its control) - inspect the served DOM before
   writing `getByText`/`getByLabel`.
+- Scope every editor-state query, focus and click to the located component's SUBTREE,
+  never the document: a page can carry a hidden twin with the same aria-label (a list
+  page's filter Select behind an open record panel), and a document-wide `querySelector`
+  resolves to that dead node - `focus()` silently lands nowhere (`activeElement` stays
+  BODY), the keypress falls to the host's document listener, and the fault reads as a
+  product bug (an editor Escape that "closes the whole panel"). Verify focus with an
+  `activeElement` assertion carrying a marker, never an unverified `el.focus()`, and scope
+  reads and clicks to the same subtree.
 - `innerText` reflects applied `text-transform`: a section title styled `uppercase` reads
   "DETAILS" - assert case-insensitively against uppercase-styled chrome.
 - DOM-order field counting must exclude CSS-hidden inputs: a receipt-scan block's
@@ -64,6 +72,16 @@ Part of the `frontend-live-stack-probing` skill. Read when a probe result looks 
   pointerdown and mouseup and reads exactly like a product bug. Below-fold targets (a
   panel footer riding a tall list) get scrollIntoView + a settle beat before the
   coordinate click.
+- Opening an IN-FLOW panel scrolls main with it: the panel and the page chrome live in
+  main's scroll flow, so opening a low row's record can park the panel's own action row
+  and page-level controls ABOVE the viewport, where `elementFromPoint` returns null - a
+  failed hit-test at a negative-y point is the signature of this fault (the inverse of
+  the below-fold case above: here the OPEN moved the targets, not the initial scroll).
+  A probe click helper scrolls a failed hit-test target into view (block: center, settle)
+  before retrying. Assert HISTORY by `history.state.idx`, never `history.length`: length
+  never shrinks on Back, and the next push truncates the forward entry first, so literal
+  length assertions fail on the second pass in one tab - idx advancing by exactly one
+  (or returning to the list's own entry) is the push/back truth.
 - `page.click` on a pre-filled input drops the caret mid-text (the click lands at a
   default offset and a following type splices into the middle) - replace-type instead:
   click, Ctrl+A, then type the full replacement value.
@@ -93,6 +111,14 @@ Part of the `frontend-live-stack-probing` skill. Read when a probe result looks 
   measurement sibling of settle-before-click above). The same discipline closes the reverse
   leak: an emulated media feature (reduced motion) set for one scenario leaks into every
   later scenario after a failure - reset emulation in `finally`, not only on the success path.
+- A CLOSING sibling overlay can cover the dialog the same tap opened: an action row that
+  runs `onClose()` before `onSelect()` re-renders the exiting sheet's full-viewport wrapper
+  (its content already swapped or nulled) and it keeps hit-testing above the just-opened
+  dialog for ~200ms at the same z-tier - a coordinate press on the new dialog dies
+  invisibly and reads as a product bug (or blames the wrong component). Retry the
+  `elementFromPoint` hit until the exiting overlay unmounts (a bounded retry, e.g. 8 x
+  400ms), and dump the covering dialogs on final failure; a settle beat before every
+  `history.back()` closes the same gap.
 - CDP `Input.dispatchTouchEvent` click synthesis is VELOCITY-sensitive: the tap AFTER a
   fast fling dies (~3000px/s drags poison the next tap; ~300px/s works; distance and
   off-viewport endings are not the cause) - drag gestures must be human-slow (~14+ steps x

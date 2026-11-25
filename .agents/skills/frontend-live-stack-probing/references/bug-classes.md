@@ -13,6 +13,13 @@ Part of the `frontend-live-stack-probing` skill. Read when choosing how to repro
   reported viewport or classification as a hypothesis - "mobile-only" was a workflow artifact
   (bottom-nav flows warm-re-enter while desktop sessions cold-load). (Rule detail under State
   Refresh After Mutations in `frontend-react`.)
+- Mid-cell RAW-API mutations leave the page's TanStack cache stale: the list queries'
+  5-minute staleTime keeps serving the pre-mutation rows, so after an API-side delete or
+  edit made between in-page steps, a row assertion either hangs waiting for a row the
+  server no longer returns or passes against rows the server no longer has - reload the
+  page before the next in-page row assertion instead of polling for the new truth.
+  Normalize world state at the START of a cell (the seed discipline above); mid-cell, the
+  reload IS the normalization.
 - React StrictMode double-mounts every boot query on the dev stack: request-count gates
   read 2x per deduped query set, and the duplicate discriminator is "no 4x" plus the
   expected 0->2 delta - re-derive a spec's "exactly 1 request" gate against that baseline
@@ -90,6 +97,14 @@ Part of the `frontend-live-stack-probing` skill. Read when choosing how to repro
   trees, never absolute overflow - synthetic probe content can overflow a narrow viewport
   identically in both trees (SplitView's identity gate: both trees overflowed 10px at 375px
   while all ten rect deltas read 0.000px).
+- Server-response timing from `performance.getEntriesByType('resource')` needs the buffer
+  RAISED first: the dev server serves hundreds of unbundled per-module requests and the
+  default resource-timing buffer (250 entries) overflows before the late API calls fire,
+  so their entries are silently dropped - a timing assertion then compares against an
+  empty list and passes vacuously (a `maxResponseEnd=-Infinity` read as a pass). Call
+  `performance.setResourceTimingBufferSize(20000)` in an init script, or take timestamps
+  at a point you control (the interception `continue()` call converted to the page clock
+  via `performance.timeOrigin`) instead of trusting the buffer's completeness.
 - Overflow must be measured on the element that actually scrolls: this app scrolls inside
   `<main>`, not the document, so a document-level `document.documentElement.scrollWidth`
   reads clean while a card overflows its inner scroll context - measure the card/element
@@ -196,6 +211,13 @@ Part of the `frontend-live-stack-probing` skill. Read when choosing how to repro
   live diagnosis refutes its pre-registered hypotheses, record each refutation with its log
   signatures (which handlers ran, what committed), never silently claim a reproduction the
   logs do not show, and route acceptance to an explicit on-device manual gate riding the PR.
+- A toast that fires under the resting pointer swallows the NEXT coordinate click: a
+  bottom-center toast can appear exactly where the previous action left the mouse,
+  pause-on-hover freezes its dismiss timer, and the still-visible overlay eats the click -
+  the probe then misreads a swallowed click as a product failure (no submit, no navigation,
+  no console error), and an in-place drain times out invisibly, leaving the overlay armed
+  for the next step. After any toast-firing action, park the mouse off the toast's
+  footprint (e.g. (1,1)), wait for it to dismiss, then capture and click the next target.
 - Backgrounded pages stall rAF polling: a page in a background tab stops advancing
   `requestAnimationFrame`, so a probe step that waits on a rAF-driven condition hangs while
   the same step passes with the page in front - the fault follows the harness's own tab

@@ -73,7 +73,7 @@ Rules cited elsewhere as "§Section Name" keep their original headings inside th
 ## File Structure
 
 Components live in lowercase-plural feature directories (`components/accounts/`,
-`components/transactions/`, `components/modals/transactions/`, `components/common/`,
+`components/transactions/`, `components/common/`,
 `components/dashboard/`, `components/layout/`, `components/profile/`; a few cross-cutting
 components like `DatePicker.tsx` sit at `components/` top level) - never a PascalCase
 feature directory like `components/Budget/`:
