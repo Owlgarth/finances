@@ -52,7 +52,6 @@
     "paidDifferently": "Paid differently...",
     "paidDifferentlyShort": "Paid differently",
     "skip": "Skip",
-    "edit": "Edit",
     "copy": "Copy",
     "delete": "Delete"
   },
@@ -186,7 +185,6 @@
     "nextAria": "Next month"
   },
   "form": {
-    "editTitle": "Edit planned",
     "newTitle": "New planned transaction",
     "nameLabel": "Name",
     "amountLabel": "Amount",
@@ -203,9 +201,6 @@
     "categoryLabel": "Category (optional)",
     "uncategorized": "Uncategorized",
     "categoryAria": "Category",
-    "execute": "Mark as paid",
-    "copy": "Copy",
-    "cancelPlan": "Skip",
     "delete": "Delete",
     "cancel": "Cancel",
     "saving": "Saving…",

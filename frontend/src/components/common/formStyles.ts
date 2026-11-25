@@ -33,20 +33,6 @@ export const destructiveButtonClass =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
   'disabled:opacity-50 disabled:cursor-not-allowed'
 
-// Positive counterpart of destructiveButtonClass — footer Execute actions.
-export const positiveButtonClass =
-  'bg-surface border border-border text-positive px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-positive-bg transition-colors ' +
-  `${controlHeightClass} ` +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed'
-
-// Warning counterpart of destructiveButtonClass — footer Cancel-plan actions.
-export const warningButtonClass =
-  'bg-surface border border-border text-warning px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-warning-bg transition-colors ' +
-  `${controlHeightClass} ` +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed'
-
 // §3 Secondary Button.
 export const secondaryButtonClass =
   'bg-surface border border-border text-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-surface-hover transition-colors ' +

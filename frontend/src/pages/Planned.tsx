@@ -24,8 +24,6 @@ import { activeFilterCount, budgetChangePatch, buildPlannedFilters, clearAllFilt
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
-import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
-import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
@@ -317,8 +315,6 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
       : t('recurring.schedule.daily', { count: r.interval_count })
   }
 
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
   // Skip asks first, like delete: the icon sits beside one-tap actions, and
   // a stray tap must not change an item's status.
@@ -333,14 +329,8 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // Switch state for the delete dialog's "also delete pending rows" row; reset
   // on every open so a previous session's toggle never leaks into the next.
   const [deleteRulePending, setDeleteRulePending] = useState(false)
-  // Touch replacement for the planned rows' hover action group (TransfersPage
-  // pattern). Rule rows have none: the row itself opens the rule page at
-  // every pointer type.
-  const [plannedRowAction, setPlannedRowAction] = useState<PlannedTransaction | null>(null)
 
-  const openEdit = (p: PlannedTransaction) => { setEditing(p); setFormOpen(true) }
   // Copy opens the create page prefilled from the row, with today's date.
-  // Also reachable from the edit modal's footer, which then leaves the list.
   const openCopy = (p: PlannedTransaction) => navigate(`/planned/new?copy=${p.id}`)
   // Rule rows open the rule page; a push, so Back returns to this list.
   const openRulePage = (r: RecurringTransaction) => navigate(`/planned/rules/${r.id}`)
@@ -356,6 +346,11 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   // search in router state, so the form's back arrow returns to this view.
   const openPay = (p: PlannedTransaction) =>
     navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
+  // A row's tap, click, Enter or Space opens the record page. A push, so
+  // Back returns to this list; the push carries the list's search in router
+  // state, so the page's back arrow returns to this exact view.
+  const handleOpenRecord = (p: PlannedTransaction) =>
+    navigate(`/planned/${p.id}`, { state: { search: searchParams.toString() } })
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
   // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
@@ -655,7 +650,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const items = data?.items ?? []
 
   // Keyed INSIDE the ['planned'] family so every existing invalidation of that
-  // prefix (form modal, execute, cancel, delete) refetches the strip too.
+  // prefix refetches the strip too.
   // Same dependency values as the list query minus page/pageSize/ordering -
   // currency_code included: the totals route accepts the same currency
   // params the list route does.
@@ -770,8 +765,8 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   }
 
   // Paying, skipping and restoring an item share one hook: the cache refresh
-  // and the toasts live there, and every caller here (row buttons, the sheet,
-  // the dialog, the form modal's buttons) reaches for the same functions.
+  // and the toasts live there, and every caller here (the row buttons and the
+  // skip dialog) reaches for the same functions.
   const { markPaid, skip, isPending: paymentPending } = usePlannedPayment()
 
   const deleteMutation = useMutation({
@@ -994,10 +989,8 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                 ]}
               >
                 <div
-                  {...(isTouch && canWrite ? tappableProps(() => setPlannedRowAction(p)) : {})}
-                  className={`flex items-center justify-between px-4 py-3 text-sm group ${
-                    isTouch && canWrite ? 'active:bg-surface-hover transition-colors cursor-pointer' : ''
-                  }`}
+                  {...tappableProps(() => handleOpenRecord(p))}
+                  className="flex items-center justify-between px-4 py-3 text-sm group active:bg-surface-hover transition-colors cursor-pointer"
                 >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -1015,10 +1008,17 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                 </div>
                 <div className="flex items-center gap-3 shrink-0 pl-3">
                   <span className="font-mono text-text whitespace-nowrap">{formatAmount(p.amount)} {multiCurrency ? p.currency_code : ''}</span>
-                  {/* Hover reveals are pointer-fine only - on touch the row tap
-                      opens the action sheet instead. */}
+                  {/* Hover and keyboard focus reveal the action group on a fine
+                      pointer; at every pointer type the row itself opens the
+                      record. The wrapper stops a button's click and key
+                      presses before they reach the row's handlers: the action
+                      must run alone, never double-fire. */}
                   {canWrite && !isTouch && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div
+                      className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       {p.status === 'pending' && (
                         <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
                       )}
@@ -1039,7 +1039,6 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                       {p.status === 'pending' && p.recurring_id == null && (
                         <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
                       )}
-                      <button onClick={() => openEdit(p)} title={t('rowActions.edit')} className="text-text-muted hover:text-text p-1"><Pencil size={13} /></button>
                       <button onClick={() => openCopy(p)} title={t('rowActions.copy')} className="text-text-muted hover:text-text p-1"><Copy size={13} /></button>
                       <button onClick={() => setDeleting(p)} title={t('rowActions.delete')} className="text-text-muted hover:text-negative p-1"><Trash2 size={13} /></button>
                     </div>
@@ -1115,15 +1114,6 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         </div>
       )}
 
-      <PlannedFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        planned={editing}
-        onCopy={openCopy}
-        onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
-        onExecute={(p) => { setFormOpen(false); markPaid(p) }}
-        onCancelPlan={(p) => { setFormOpen(false); setSkipping(p) }}
-      />
       <ConfirmDialog
         isOpen={!!deleting}
         title={t('deleteDialog.title')}
@@ -1154,27 +1144,6 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         isPending={deleteRuleMutation.isPending}
         onConfirm={() => deletingRule && deleteRuleMutation.mutate({ id: deletingRule.id, deletePending: deleteRulePending })}
         onCancel={() => setDeletingRule(null)}
-      />
-      {/* Touch replacement for the planned rows' hover actions (previously
-          the row tapped straight into edit). */}
-      <ActionSheet
-        open={!!plannedRowAction}
-        onClose={() => setPlannedRowAction(null)}
-        title={plannedRowAction?.name}
-        actions={[
-          { label: t('rowActions.edit'), icon: Pencil, onSelect: () => plannedRowAction && openEdit(plannedRowAction) },
-          ...(plannedRowAction && plannedRowAction.status === 'pending' && plannedRowAction.recurring_id == null
-            ? [{ label: t('recurring.makeRecurring'), icon: Repeat, onSelect: () => openMakeRecurring(plannedRowAction) }]
-            : []),
-          ...(plannedRowAction?.status === 'pending'
-            ? [
-                { label: t('rowActions.markPaid'), icon: CheckCircle, onSelect: () => plannedRowAction && markPaid(plannedRowAction) },
-                { label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => plannedRowAction && openPay(plannedRowAction) },
-                { label: t('rowActions.skip'), icon: Ban, onSelect: () => plannedRowAction && setSkipping(plannedRowAction) },
-              ]
-            : []),
-          { label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => plannedRowAction && setDeleting(plannedRowAction) },
-        ]}
       />
       {/* Mounted before the bookmark modal so the chained modal (opened by
           the sheet's bookmark row, which closes the sheet first) stacks
