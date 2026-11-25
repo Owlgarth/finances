@@ -52,35 +52,24 @@
   },
   "noAccount": "Bez konta",
   "rowActions": {
-    "execute": "Zrealizuj",
-    "executeAdjusted": "Zrealizuj z modyfikacjami",
-    "cancelPlan": "Anuluj plan",
-    "paidDifferently": "Zapłać inaczej",
+    "markPaid": "Oznacz jako opłaconą",
+    "paidDifferently": "Zapłać inaczej…",
+    "paidDifferentlyShort": "Zapłać inaczej",
+    "skip": "Pomiń",
     "edit": "Edytuj",
     "copy": "Kopiuj",
     "delete": "Usuń"
   },
-  "executed": "Zrealizowano - utworzono transakcję",
-  "executeFailed": "Nie udało się zrealizować",
-  "executeAdjusted": {
-    "title": "Zrealizuj z modyfikacjami",
-    "context": "Zaplanowano: {{values}}",
-    "helper": "Tworzy transakcję z tymi wartościami zamiast zaplanowanych.",
-    "submit": "Zrealizuj",
-    "submitting": "Realizowanie…"
-  },
-  "cancelledToast": "Plan anulowany",
-  "cancelFailed": "Nie udało się anulować",
   "deleted": "Usunięto",
   "deleteFailed": "Nie udało się usunąć",
   "deleteDialog": {
     "title": "Usuń planowaną transakcję",
     "message": "Usunąć „{{name}}”?"
   },
-  "cancelDialog": {
-    "title": "Anuluj plan",
-    "message": "Oznaczyć „{{name}}” jako anulowaną? Wiersz zostaje na liście, ale nie można go już zrealizować.",
-    "confirm": "Anuluj plan"
+  "skipDialog": {
+    "title": "Pominąć tę planowaną transakcję?",
+    "message": "„{{name}}” trafia do pominiętych. Możesz to później przywrócić.",
+    "confirm": "Pomiń"
   },
   "paidToast": "Opłacono: {{name}}",
   "markedPaidToast": "Oznaczono jako opłaconą",
@@ -229,9 +218,9 @@
     "categoryLabel": "Kategoria (opcjonalnie)",
     "uncategorized": "Bez kategorii",
     "categoryAria": "Kategoria",
-    "execute": "Zrealizuj",
+    "execute": "Oznacz jako opłaconą",
     "copy": "Kopiuj",
-    "cancelPlan": "Anuluj plan",
+    "cancelPlan": "Pomiń",
     "delete": "Usuń",
     "cancel": "Anuluj",
     "saving": "Zapisywanie…",

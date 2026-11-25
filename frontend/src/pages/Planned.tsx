@@ -7,6 +7,7 @@ import { Ban, CalendarClock, Copy, Download, Pause, Play, Plus, Pencil, Repeat, 
 import { plannedTransactionsApi, recurringTransactionsApi, type PlannedTransactionOrdering } from '../api/client'
 import type { PlannedTransaction, RecurringTransaction, UserWorkspaceSettings } from '../types'
 import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency, useWorkspaceCategories } from '../hooks/useDomain'
+import { usePlannedPayment } from '../hooks/usePlannedPayment'
 import { usePermissions } from '../hooks/usePermissions'
 import { useUserPreferences } from '../contexts/UserPreferencesContext'
 import { useUpdateWorkspaceSettings, useWorkspaceSettings } from '../hooks/useWorkspaceSettings'
@@ -23,7 +24,6 @@ import { activeFilterCount, budgetChangePatch, buildPlannedFilters, clearAllFilt
 import { useBreakpoint, useIsTouch } from '../hooks/useBreakpoint'
 import { tappableProps } from '../utils/tappable'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
-import ExecuteAdjustedModal from '../components/modals/transactions/ExecuteAdjustedModal'
 import PlannedFormModal from '../components/modals/transactions/PlannedFormModal'
 import ActionSheet from '../components/common/ActionSheet'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -34,6 +34,7 @@ import SearchInput from '../components/common/SearchInput'
 import Select from '../components/common/Select'
 import SwipeRow from '../components/common/SwipeRow'
 import ListTotalsStrip from '../components/common/ListTotalsStrip'
+import PlannedStatusChip from '../components/transactions/PlannedStatusChip'
 import { type AppliedFilterChip } from '../components/common/AppliedFilters'
 import MonthStepper, { stepperRangeLabel } from '../components/common/MonthStepper'
 import { FiltersTrigger } from '../components/filters/FiltersTrigger'
@@ -45,12 +46,6 @@ import AmountRangeEditor from '../components/filters/AmountRangeEditor'
 import ActivityTabs from '../components/layout/ActivityTabs'
 import PageHeader from '../components/layout/PageHeader'
 import { controlHeightClass, primaryButtonClass, secondaryButtonClass } from '../components/common/formStyles'
-
-const STATUS_STYLE: Record<string, string> = {
-  pending: 'text-warning border-warning/40',
-  done: 'text-positive border-positive/40',
-  cancelled: 'text-text-muted border-border',
-}
 
 type StatusFilter = 'all' | 'pending' | 'done' | 'cancelled'
 
@@ -325,11 +320,9 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlannedTransaction | null>(null)
   const [deleting, setDeleting] = useState<PlannedTransaction | null>(null)
-  // Cancel confirms like delete: there is no un-cancel in the UI, so a stray
-  // click on the hover-revealed Ban icon must not fire the mutation directly.
-  const [cancelling, setCancelling] = useState<PlannedTransaction | null>(null)
-  // "Execute with adjustments" source (pending rows): the date+amount modal.
-  const [adjusting, setAdjusting] = useState<PlannedTransaction | null>(null)
+  // Skip asks first, like delete: the icon sits beside one-tap actions, and
+  // a stray tap must not change an item's status.
+  const [skipping, setSkipping] = useState<PlannedTransaction | null>(null)
   // Bookmark capture of the planned view's filters (mount-per-use modal):
   // target derives from the URL at open time; renders only in view=planned.
   const [pageBookmarkOpen, setPageBookmarkOpen] = useState(false)
@@ -359,6 +352,10 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
 
   // Filter state lives in the URL: shareable, bookmarkable, back-button friendly.
   const [searchParams, setSearchParams] = useSearchParams()
+  // "Paid differently" is a page. At every tier the push carries the list's
+  // search in router state, so the form's back arrow returns to this view.
+  const openPay = (p: PlannedTransaction) =>
+    navigate(`/planned/${p.id}/pay`, { state: { search: searchParams.toString() } })
   // Session defaults, restoredSearch pattern generalized to every facet:
   // the lazy initializer computes the latch ONCE from the resolved settings
   // and the mount-time URL (buildDefaultsLatch is pure) - a mount WITH any
@@ -772,40 +769,10 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
     }
   }
 
-  const executeMutation = useMutation({
-    // No overrides: "as planned" (payment_date = planned_date, plan amount)
-    // is the server-side default, so no client-side date computation can
-    // ever regress this path.
-    mutationFn: (p: PlannedTransaction) => plannedTransactionsApi.execute(p.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.invalidateQueries({ queryKey: ['current-balances'] })
-      toast.success(t('executed'))
-    },
-    onError: (error) => toast.error(getApiErrorMessage(error, t('executeFailed'))),
-  })
-
-  // Cancel keeps the row (status → cancelled) — softer than delete. PUT wants
-  // the full payload, so echo the row's fields with only the status changed.
-  const cancelMutation = useMutation({
-    mutationFn: (p: PlannedTransaction) =>
-      plannedTransactionsApi.update(p.id, {
-        name: p.name,
-        amount: p.amount,
-        account_id: p.account_id,
-        currency_code: p.currency_code,
-        category_id: p.category_id,
-        planned_date: p.planned_date,
-        status: 'cancelled',
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planned'] })
-      toast.success(t('cancelledToast'))
-      setCancelling(null)
-    },
-    onError: (error) => { toast.error(getApiErrorMessage(error, t('cancelFailed'))); setCancelling(null) },
-  })
+  // Paying, skipping and restoring an item share one hook: the cache refresh
+  // and the toasts live there, and every caller here (row buttons, the sheet,
+  // the dialog, the form modal's buttons) reaches for the same functions.
+  const { markPaid, skip, isPending: paymentPending } = usePlannedPayment()
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => plannedTransactionsApi.delete(id),
@@ -814,7 +781,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
   })
 
   // Pause/resume: full-replace PUT, so echo the row's fields with only
-  // is_active flipped (the cancelMutation echo pattern). Planned rows never
+  // is_active flipped (the full-replace echo pattern). Planned rows never
   // change here, so only ['recurring'] refetches.
   const toggleActiveMutation = useMutation({
     mutationFn: (r: RecurringTransaction) =>
@@ -1022,7 +989,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                 key={p.id}
                 enabled={isTouch && canWrite && p.status === 'pending'}
                 actions={[
-                  { key: 'paidDifferently', label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => setAdjusting(p) },
+                  { key: 'paidDifferently', label: t('rowActions.paidDifferentlyShort'), icon: SlidersHorizontal, onSelect: () => openPay(p) },
                   { key: 'delete', label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => setDeleting(p) },
                 ]}
               >
@@ -1035,7 +1002,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-text truncate">{p.name}</span>
-                    <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${STATUS_STYLE[p.status]}`}>{statusLabel(p.status)}</span>
+                    <PlannedStatusChip planned={p} />
                     {p.recurring_id != null && (
                       <span className="text-text-muted" title={t('recurring.badge')}>
                         <Repeat size={12} className="inline" aria-hidden="true" />
@@ -1053,21 +1020,21 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                   {canWrite && !isTouch && (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {p.status === 'pending' && (
-                        <button onClick={() => executeMutation.mutate(p)} className="text-text-muted hover:text-positive p-1" title={t('rowActions.execute')}><CheckCircle size={13} /></button>
+                        <button type="button" onClick={() => markPaid(p)} disabled={paymentPending} title={t('rowActions.markPaid')} aria-label={t('rowActions.markPaid')} className="text-text-muted hover:text-positive p-1"><CheckCircle size={13} /></button>
                       )}
                       {p.status === 'pending' && (
                         <button
                           type="button"
-                          onClick={() => setAdjusting(p)}
-                          title={t('rowActions.executeAdjusted')}
-                          aria-label={t('rowActions.executeAdjusted')}
+                          onClick={() => openPay(p)}
+                          title={t('rowActions.paidDifferently')}
+                          aria-label={t('rowActions.paidDifferently')}
                           className="text-text-muted hover:text-positive p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
                         >
                           <SlidersHorizontal size={13} />
                         </button>
                       )}
                       {p.status === 'pending' && (
-                        <button onClick={() => setCancelling(p)} className="text-text-muted hover:text-warning p-1" title={t('rowActions.cancelPlan')}><Ban size={13} /></button>
+                        <button type="button" onClick={() => setSkipping(p)} disabled={paymentPending} title={t('rowActions.skip')} aria-label={t('rowActions.skip')} className="text-text-muted hover:text-text p-1"><Ban size={13} /></button>
                       )}
                       {p.status === 'pending' && p.recurring_id == null && (
                         <button type="button" onClick={() => openMakeRecurring(p)} title={t('recurring.makeRecurring')} aria-label={t('recurring.makeRecurring')} className="text-text-muted hover:text-text p-1"><Repeat size={13} /></button>
@@ -1154,8 +1121,8 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         planned={editing}
         onCopy={openCopy}
         onDelete={(p) => { setFormOpen(false); setDeleting(p) }}
-        onExecute={(p) => { setFormOpen(false); executeMutation.mutate(p) }}
-        onCancelPlan={(p) => { setFormOpen(false); setCancelling(p) }}
+        onExecute={(p) => { setFormOpen(false); markPaid(p) }}
+        onCancelPlan={(p) => { setFormOpen(false); setSkipping(p) }}
       />
       <ConfirmDialog
         isOpen={!!deleting}
@@ -1166,15 +1133,15 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
         onCancel={() => setDeleting(null)}
       />
       <ConfirmDialog
-        isOpen={!!cancelling}
-        title={t('cancelDialog.title')}
-        message={t('cancelDialog.message', { name: cancelling?.name })}
-        confirmLabel={t('cancelDialog.confirm')}
-        isPending={cancelMutation.isPending}
-        onConfirm={() => cancelling && cancelMutation.mutate(cancelling)}
-        onCancel={() => setCancelling(null)}
+        isOpen={!!skipping}
+        destructive={false}
+        title={t('skipDialog.title')}
+        message={t('skipDialog.message', { name: skipping?.name })}
+        confirmLabel={t('skipDialog.confirm')}
+        isPending={paymentPending}
+        onConfirm={async () => { if (skipping) { await skip(skipping); setSkipping(null) } }}
+        onCancel={() => setSkipping(null)}
       />
-      <ExecuteAdjustedModal open={!!adjusting} planned={adjusting} onClose={() => setAdjusting(null)} />
       <ConfirmDialog
         isOpen={!!deletingRule}
         title={t('recurring.deleteDialog.title')}
@@ -1201,9 +1168,9 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
             : []),
           ...(plannedRowAction?.status === 'pending'
             ? [
-                { label: t('rowActions.execute'), icon: CheckCircle, onSelect: () => plannedRowAction && executeMutation.mutate(plannedRowAction) },
-                { label: t('rowActions.executeAdjusted'), icon: SlidersHorizontal, onSelect: () => plannedRowAction && setAdjusting(plannedRowAction) },
-                { label: t('rowActions.cancelPlan'), icon: Ban, onSelect: () => plannedRowAction && setCancelling(plannedRowAction) },
+                { label: t('rowActions.markPaid'), icon: CheckCircle, onSelect: () => plannedRowAction && markPaid(plannedRowAction) },
+                { label: t('rowActions.paidDifferently'), icon: SlidersHorizontal, onSelect: () => plannedRowAction && openPay(plannedRowAction) },
+                { label: t('rowActions.skip'), icon: Ban, onSelect: () => plannedRowAction && setSkipping(plannedRowAction) },
               ]
             : []),
           { label: t('rowActions.delete'), icon: Trash2, destructive: true, onSelect: () => plannedRowAction && setDeleting(plannedRowAction) },

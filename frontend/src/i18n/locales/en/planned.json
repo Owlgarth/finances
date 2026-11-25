@@ -48,35 +48,24 @@
   },
   "noAccount": "No account",
   "rowActions": {
-    "execute": "Execute",
-    "executeAdjusted": "Execute with adjustments",
-    "cancelPlan": "Cancel plan",
-    "paidDifferently": "Paid differently",
+    "markPaid": "Mark as paid",
+    "paidDifferently": "Paid differently...",
+    "paidDifferentlyShort": "Paid differently",
+    "skip": "Skip",
     "edit": "Edit",
     "copy": "Copy",
     "delete": "Delete"
   },
-  "executed": "Executed \u2014 transaction created",
-  "executeFailed": "Failed to execute",
-  "executeAdjusted": {
-    "title": "Execute with adjustments",
-    "context": "Planned: {{values}}",
-    "helper": "Creates the transaction with these values instead of the planned ones.",
-    "submit": "Execute",
-    "submitting": "Executing…"
-  },
-  "cancelledToast": "Plan cancelled",
-  "cancelFailed": "Failed to cancel",
   "deleted": "Deleted",
   "deleteFailed": "Failed to delete",
   "deleteDialog": {
     "title": "Delete planned transaction",
     "message": "Delete \"{{name}}\"?"
   },
-  "cancelDialog": {
-    "title": "Cancel plan",
-    "message": "Mark \"{{name}}\" as cancelled? The row stays in the list but can no longer be executed.",
-    "confirm": "Cancel plan"
+  "skipDialog": {
+    "title": "Skip this planned item?",
+    "message": "\"{{name}}\" moves to Skipped. You can restore it later.",
+    "confirm": "Skip"
   },
   "paidToast": "Paid: {{name}}",
   "markedPaidToast": "Marked as paid",
@@ -205,9 +194,9 @@
     "categoryLabel": "Category (optional)",
     "uncategorized": "Uncategorized",
     "categoryAria": "Category",
-    "execute": "Execute",
+    "execute": "Mark as paid",
     "copy": "Copy",
-    "cancelPlan": "Cancel plan",
+    "cancelPlan": "Skip",
     "delete": "Delete",
     "cancel": "Cancel",
     "saving": "Saving…",
