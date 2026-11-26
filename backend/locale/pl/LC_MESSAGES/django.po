@@ -429,6 +429,10 @@ msgstr "Magazyn plików nie jest skonfigurowany"
 msgid "The stored file is no longer available"
 msgstr "Zapisany plik nie jest już dostępny"
 
+#: transactions/exceptions.py:134
+msgid "Receipt not found"
+msgstr "Nie znaleziono paragonu"
+
 #: transactions/schemas.py:50 transactions/schemas.py:74
 msgid "Description cannot be empty"
 msgstr "Opis nie może być pusty"

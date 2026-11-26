@@ -130,7 +130,7 @@ Two URLs, two audiences (see [Deployment](architecture.md#deployment)):
 `S3_ENDPOINT_URL` (`http://storage:9000`) is what the backend uses
 server-side inside the compose network - never change it; `S3_EXTERNAL_URL`
 is what gets rendered into browser-facing URLs (Django admin static files,
-receipt-attachment links).
+receipt-attachment and receipt-photo links).
 
 The prod compose publishes no host port for storage. Until you front storage
 with your reverse proxy - or publish a port yourself in an override file -
@@ -143,6 +143,10 @@ by the browser as mixed content. Changing `S3_EXTERNAL_URL` needs only a
 restart of the backend services - no re-collectstatic
 ([Deployment](architecture.md#deployment) has the details).
 
+The `storage-data` volume behind these URLs also holds the photos of
+unsaved receipts, which are kept until someone saves or deletes them (see
+[Optional receipt parser](#optional-receipt-parser)).
+
 ## Optional receipt parser
 
 Extraction is pluggable: any service implementing the
@@ -150,16 +154,30 @@ Extraction is pluggable: any service implementing the
 `PARSER_URL` in `prod/.env`; leave it empty and the backend reports extraction
 as disabled and the UI hides every extraction affordance.
 
-The remaining client knobs (`PARSER_API_TOKEN`, timeouts, retries) are
-dev-template variables: their defaults live in `backend/config/settings.py`,
-and the full list is documented in the root `example.env`.
+Receipt photos are stored before they are read, so uploading one and saving
+it as a transaction by hand work whether or not a parser is configured: with
+`PARSER_URL` empty, or while your parser is off, an uploaded receipt waits
+(`waiting`) instead of failing. When the parser is reachable again, the `beat`
+service's `resume-waiting-receipts` job - every 15 minutes - re-queues
+waiting receipts for reading, oldest first, at most
+`RECEIPT_RESUME_BATCH_SIZE` per run.
+
+Unsaved receipt photos are kept until someone saves them as a transaction
+(the photo then belongs to that transaction) or deletes them; nothing is
+removed automatically, so the storage volume grows with the receipts queue.
+Each upload is capped at 15 MB.
+
+The remaining client knobs (`PARSER_API_TOKEN`, timeouts, retries) and
+`RECEIPT_RESUME_BATCH_SIZE` (default `50`) are dev-template variables: their
+defaults live in `backend/config/settings.py`, and the full list is
+documented in the root `example.env`.
 
 ## Backups
 
 The durable state lives in two named volumes: `db-data` (PostgreSQL - all
-business data) and `storage-data` (receipt attachments and collected static
-files). `redis-data` holds Celery broker/result state only - losing it loses
-no business data.
+business data) and `storage-data` (receipt attachments, unsaved receipt
+photos and collected static files). `redis-data` holds Celery broker/result
+state only - losing it loses no business data.
 
 Run the examples from `prod/`; the compose project name is the directory, so
 the volumes are `prod_db-data` / `prod_storage-data` (check with

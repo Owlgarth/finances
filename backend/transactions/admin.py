@@ -5,7 +5,7 @@ from django.utils.html import format_html
 
 from common.storage import StorageService
 from transactions.attachments import DOWNLOAD_URL_EXPIRY_SECONDS, AttachmentService
-from transactions.models import Transaction, TransactionAttachment
+from transactions.models import ReceiptCapture, Transaction, TransactionAttachment
 
 
 @admin.register(Transaction)
@@ -35,6 +35,31 @@ class TransactionAttachmentAdmin(admin.ModelAdmin):
 
     @admin.display(description='Download link')
     def presigned_download_link(self, obj: TransactionAttachment) -> str:
+        url = StorageService.get_presigned_url(
+            AttachmentService._media_bucket(), obj.file_key, expiry=DOWNLOAD_URL_EXPIRY_SECONDS
+        )
+        if url is None:
+            return 'storage disabled'
+        return format_html('<a href="{}" target="_blank" rel="noreferrer">Presigned URL</a>', url)
+
+
+@admin.register(ReceiptCapture)
+class ReceiptCaptureAdmin(admin.ModelAdmin):
+    """Stored receipt admin; bytes stay in the private media bucket.
+
+    The presigned link is offered only while the row still owns a file: once
+    the receipt became a transaction, the attachment owns the object.
+    """
+
+    list_display = ('id', 'filename', 'state', 'content_type', 'size', 'created_by', 'transaction', 'created_at')
+    list_filter = ('state', 'content_type')
+    search_fields = ('filename', 'merchant_key')
+    readonly_fields = ('file_key', 'created_at', 'updated_at', 'presigned_download_link')
+
+    @admin.display(description='Download link')
+    def presigned_download_link(self, obj: ReceiptCapture) -> str:
+        if not obj.file_key:
+            return 'file handed over to a transaction attachment'
         url = StorageService.get_presigned_url(
             AttachmentService._media_bucket(), obj.file_key, expiry=DOWNLOAD_URL_EXPIRY_SECONDS
         )

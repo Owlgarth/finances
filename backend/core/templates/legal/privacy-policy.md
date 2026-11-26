@@ -1,6 +1,6 @@
 ---
-version: "2.4"
-effective_date: "2026-10-27"
+version: "2.5"
+effective_date: "2026-11-26"
 ---
 
 ## 1. Introduction
@@ -28,6 +28,7 @@ By registering for Owlgarth Finances, you agree to the collection and use of inf
 
 - Images or PDFs of receipts you choose to upload and attach to transactions
 - Line items and totals extracted from those receipts (see Section 7)
+- A receipt photo is stored as soon as it is uploaded and stays in the Receipts list until it is saved as a transaction, deleted, or the account is deleted
 
 **Technical data:**
 
@@ -61,6 +62,7 @@ By registering for Owlgarth Finances, you agree to the collection and use of inf
 ## 5. Data Retention
 
 - Account and financial data: retained until you delete your account
+- Receipt photos not saved yet: kept until you delete them, save them to a transaction (the photo then belongs to that transaction), delete that transaction, or delete your account. Nothing is removed automatically.
 - Consent records: retained for legal compliance even after account deletion
 - Rate limiting data: automatically expires (Redis TTL, typically 60 seconds)
 
@@ -81,7 +83,7 @@ Receipt attachments are personal data and are handled as follows:
 - **Storage:** Uploaded receipt files are stored in private object storage. They are never publicly accessible; the app retrieves them only through short-lived, signed links generated for your authenticated session.
 - **Optional extraction:** If you choose "Extract items" (or create a transaction from a receipt), the receipt image is sent to a receipt-extraction service to read its text, so we can pre-fill the total, date, and line items for your review. Extraction is entirely optional — if the operator has not configured an extraction service, the feature is unavailable and no receipt ever leaves our storage.
 - **Where extraction runs:** The extraction service may be self-hosted by the operator or provided by a third-party model provider, depending on this deployment's configuration. When a third-party provider is used, the receipt image is transmitted to that provider solely to perform the extraction. The service is stateless and is not instructed to retain your image; however, a third-party provider's own retention and processing are governed by that provider's terms. Operators who require that no data leaves their infrastructure should configure a self-hosted model.
-- **Deletion:** Deleting a receipt, its transaction, or your account removes the stored file from object storage along with the database records.
+- **Deletion:** Deleting a receipt from Receipts, deleting the transaction it belongs to, or deleting your account removes the stored file from object storage along with the database records. An unsaved receipt is never removed automatically.
 
 ## 8. Data Sharing
 

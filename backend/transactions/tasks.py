@@ -5,9 +5,11 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+from transactions import parser_client
 from transactions.attachments import AttachmentService
 from transactions.models import TransactionAttachment
 from transactions.parser_client import ParserServiceError, ParserUnavailableError, parse_receipt
+from transactions.receipts import ReceiptService
 from transactions.services import TransactionService
 
 logger = logging.getLogger(__name__)
@@ -75,3 +77,64 @@ def extract_attachment(self, attachment_id: int) -> None:
             'Extraction did not auto-fill items for transaction %s (already populated or nothing to fill).',
             attachment.transaction_id,
         )
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(ParserUnavailableError,),
+    max_retries=settings.PARSER_EXTRACT_MAX_RETRIES,
+    retry_backoff=settings.PARSER_EXTRACT_RETRY_BACKOFF,
+    retry_backoff_max=settings.PARSER_EXTRACT_RETRY_BACKOFF_MAX,
+    retry_jitter=True,
+)
+def read_receipt(self, receipt_id: int) -> None:
+    """Read one stored receipt and keep the parser's result on it.
+
+    Like extract_attachment, except that an unavailable parser is never a failure: the
+    receipt goes to `waiting` and the task retries with backoff; when the retries run out
+    it stays `waiting` for the beat job. Only a rejected file or unreadable bytes record
+    `failed`, which stays retryable so manual work is never blocked. A read that ends
+    after the receipt was saved or deleted changes nothing.
+    """
+    receipt = ReceiptService.begin_reading(receipt_id)
+    if receipt is None:
+        return
+
+    if not parser_client.is_enabled():
+        ReceiptService.mark_waiting(receipt)
+        return
+
+    content = ReceiptService.read_bytes(receipt)
+    if content is None:
+        ReceiptService.mark_failed(receipt, 'The stored file could not be read.')
+        return
+
+    try:
+        result = parse_receipt(content, receipt.filename, receipt.content_type)
+    except ParserUnavailableError as exc:
+        ReceiptService.mark_waiting(receipt)
+        if self.request.retries >= self.max_retries:
+            logger.warning('Reading receipt %s gave up after %s retries: %s', receipt_id, self.max_retries, exc)
+            return
+        # autoretry_for reschedules this with backoff.
+        logger.info('Reading receipt %s deferred (attempt %s): %s', receipt_id, self.request.retries + 1, exc)
+        raise
+    except ParserServiceError as exc:
+        logger.warning('Reading failed for receipt %s: %s', receipt_id, exc)
+        ReceiptService.mark_failed(receipt, str(exc))
+        return
+
+    if not ReceiptService.store_result(receipt.id, result):
+        logger.info('Receipt %s was saved or deleted while it was read; result discarded.', receipt_id)
+
+
+@shared_task
+def resume_waiting_receipts() -> int:
+    """Queue reads again for receipts that waited for the scanner, or lost their read.
+
+    Beat runs this every 15 minutes. It only queues: nothing here deletes a receipt or its
+    file, and a `failed` receipt is never resumed (the same bytes would be rejected again).
+    """
+    if not parser_client.is_reachable():
+        return 0
+    return ReceiptService.resume_waiting()

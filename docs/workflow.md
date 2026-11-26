@@ -257,7 +257,8 @@ row as the rule's first occurrence instead of duplicating it.
 ## Workspaces & Members
 
 Create/switch workspaces; the owner can rename or delete a workspace (deletion removes
-all financial records in PROTECT-safe order, including stored receipt files).
+all financial records in PROTECT-safe order, including stored receipt files and the
+photos of unsaved receipts).
 Owners/admins add members and manage lower-role members' roles and passwords.
 When adding a brand-new member the password is optional: with one it becomes their
 initial password (shared out-of-band); without one the invitee receives an invitation
@@ -274,9 +275,9 @@ whether the invitee already had an account (anti-enumeration).
 ## Data Export / Import
 
 - **Export** (`GET /users/me/export`): a v3.0 JSON of all workspaces, including line
-  items and base64 receipt attachments.
-- **Import** (`POST /users/me/import`): restores a v3.0 export (same-system);
-  `rename`/`skip` conflict strategies.
+  items, base64 receipt attachments and unsaved receipts with their photos.
+- **Import** (`POST /users/me/import`): restores a v3.0 export (same-system),
+  unsaved receipts included; `rename`/`skip` conflict strategies.
 - **Legacy import** (`POST /users/import-legacy`): converts a pre-redesign export to
   the account-based model and returns a per-account balance verification report.
 

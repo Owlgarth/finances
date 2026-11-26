@@ -50,6 +50,42 @@ class AttachmentService:
         return f'attachments/{workspace_id}/{transaction_id}/{uuid.uuid4().hex}{ext}'
 
     @staticmethod
+    def validate_content_type(file) -> str:
+        """The lowercased content type of an upload; AttachmentTypeError when it is not allowed."""
+        content_type = (file.content_type or '').lower()
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            raise AttachmentTypeError()
+        return content_type
+
+    @staticmethod
+    def store_file(key: str, content, content_type: str) -> str:
+        """Write bytes to the media bucket and return the stored key.
+
+        Raises AttachmentStorageUnavailableError when nothing was written: storage
+        is disabled or the upload failed (StorageService.save_file returns None
+        for both).
+        """
+        stored_key = StorageService.save_file(
+            AttachmentService._media_bucket(),
+            key,
+            content,
+            content_type=content_type,
+        )
+        if stored_key is None:
+            raise AttachmentStorageUnavailableError()
+        return stored_key
+
+    @staticmethod
+    def fetch_file(key: str) -> bytes | None:
+        """Read an object from the media bucket (None when storage is off or the object is missing)."""
+        return StorageService.get_file(AttachmentService._media_bucket(), key)
+
+    @staticmethod
+    def storage_enabled() -> bool:
+        """Whether S3 storage is configured."""
+        return StorageService._is_enabled()
+
+    @staticmethod
     def get_attachment(trans: Transaction, attachment_id: int) -> TransactionAttachment:
         """Fetch an attachment scoped to the transaction, or raise AttachmentNotFoundError."""
         attachment = trans.attachments.filter(id=attachment_id).first()
@@ -60,23 +96,14 @@ class AttachmentService:
     @staticmethod
     def upload(user, trans: Transaction, file) -> TransactionAttachment:
         """Store the file in the media bucket and record its metadata."""
-        if not StorageService._is_enabled():
+        if not AttachmentService.storage_enabled():
             raise AttachmentStorageUnavailableError()
-        content_type = (file.content_type or '').lower()
-        if content_type not in ALLOWED_CONTENT_TYPES:
-            raise AttachmentTypeError()
+        content_type = AttachmentService.validate_content_type(file)
         if trans.attachments.count() >= MAX_ATTACHMENTS_PER_TRANSACTION:
             raise AttachmentTypeError(f'A transaction can have at most {MAX_ATTACHMENTS_PER_TRANSACTION} attachments')
 
         key = AttachmentService._build_key(trans.workspace_id, trans.id, content_type)
-        stored_key = StorageService.save_file(
-            AttachmentService._media_bucket(),
-            key,
-            file.read(),
-            content_type=content_type,
-        )
-        if stored_key is None:
-            raise AttachmentStorageUnavailableError()
+        stored_key = AttachmentService.store_file(key, file.read(), content_type)
 
         return TransactionAttachment.objects.create(
             transaction=trans,
@@ -136,7 +163,7 @@ class AttachmentService:
         attachment = AttachmentService.get_attachment(trans, attachment_id)
         file_key = attachment.file_key
         attachment.delete()
-        AttachmentService._delete_storage_objects([file_key])
+        AttachmentService.delete_storage_objects([file_key])
 
     @staticmethod
     def delete_storage_for_transactions(transaction_queryset) -> None:
@@ -150,10 +177,11 @@ class AttachmentService:
                 'file_key', flat=True
             )
         )
-        AttachmentService._delete_storage_objects(keys)
+        AttachmentService.delete_storage_objects(keys)
 
     @staticmethod
-    def _delete_storage_objects(keys: list[str]) -> None:
+    def delete_storage_objects(keys: list[str]) -> None:
+        """Delete each key from the media bucket; no-op without keys or without storage."""
         if not keys or not StorageService._is_enabled():
             return
         bucket = AttachmentService._media_bucket()
@@ -165,7 +193,7 @@ class AttachmentService:
     @staticmethod
     def read_bytes(attachment: TransactionAttachment) -> bytes | None:
         """Fetch the stored file bytes (None if storage is off or the object is missing)."""
-        return StorageService.get_file(AttachmentService._media_bucket(), attachment.file_key)
+        return AttachmentService.fetch_file(attachment.file_key)
 
     @staticmethod
     def dispatch_extraction(attachment: TransactionAttachment) -> None:

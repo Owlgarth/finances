@@ -128,3 +128,8 @@ class AttachmentStorageUnavailableError(ServiceError):
 class AttachmentFileMissingError(NotFoundError):
     default_message = gettext_lazy('The stored file is no longer available')
     default_code = 'file_missing'
+
+
+class ReceiptNotFoundError(NotFoundError):
+    default_message = gettext_lazy('Receipt not found')
+    default_code = 'not_found'

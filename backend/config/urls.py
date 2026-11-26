@@ -20,6 +20,7 @@ from planned_transactions.api import recurring_router
 from planned_transactions.api import router as planned_transactions_router
 from reports.api import router as reports_router
 from transactions.api import router as transactions_router
+from transactions.receipts_api import router as receipts_router
 from transfers.api import router as transfers_router
 from users.api import router as users_router
 from workspaces.api import router as workspaces_router
@@ -47,6 +48,7 @@ api.add_router('/currencies', currencies_router)
 api.add_router('/planned-transactions', planned_transactions_router)
 api.add_router('/recurring-transactions', recurring_router)
 api.add_router('/reports', reports_router)
+api.add_router('/receipts', receipts_router)
 api.add_router('/transactions', transactions_router)
 api.add_router('/transfers', transfers_router)
 api.add_router('/workspaces', workspaces_router)

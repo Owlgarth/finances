@@ -60,6 +60,7 @@ Standard access for daily budget operations.
 **Capabilities:**
 - Create and manage categories and set category budget amounts
 - Record and manage transactions (incl. line items and receipt attachments)
+- Use the receipts queue: upload a receipt photo, retry or delete it, and save it as a transaction
 - Record transfers between accounts
 - Manage and execute planned transactions and recurring rules
 - View all workspace data
@@ -78,7 +79,7 @@ Read-only access for monitoring and oversight.
 **Capabilities:**
 - View all accounts and balances
 - View all transactions, transfers, budgets, and periods
-- View reports and receipts
+- View reports and receipt attachments (not the receipts queue: it needs a write role)
 - View workspace member list
 
 **Restrictions:**

@@ -11,9 +11,10 @@ Full-stack web application with:
 - **Database**: PostgreSQL 17
 - **Authentication**: JWT (JSON Web Tokens)
 - **Task Queue**: Celery with Redis broker (planned-transaction execution, recurring-rule
-  materialization, receipt extraction) + a daily beat schedule (nightly recurring
-  materialization at 00:05 UTC)
-- **Object storage**: S3-compatible (private media bucket for receipt attachments)
+  materialization, receipt extraction, receipt reading) + a beat schedule (nightly recurring
+  materialization at 00:05 UTC; the receipt resume job every 15 minutes)
+- **Object storage**: S3-compatible (private media bucket for receipt attachments and
+  stored receipts - photos kept before they become transactions)
 - **Receipt parser** (optional): an external, pluggable service implementing `docs/parser-contract.md`
 
 ```
@@ -69,6 +70,10 @@ Workspace (top-level container)
 │                               transactions ahead of their due date; optionally
 │                               on this account)
 │
+├── ReceiptCapture           (a receipt photo stored and read in the background
+│                             before it becomes a transaction; nullable FK to
+│                             that transaction)
+│
 └── Budget                   (a plan with a cadence)
       ├── BudgetCurrency     (the budget's ordered currency set; first = default view)
       ├── Category           (persistent, budget-scoped)
@@ -89,6 +94,7 @@ Workspace (top-level container)
 | **Original-amount facet** | A transaction may record what was actually paid in another currency (converted card payments); it must differ from the transaction's own currency, and the facet amount itself is informational and excluded from aggregates. When an original-currency account is selected, an auto-created linked adjustment records the movement on that account; the managed adjustment row is editable only via its source transaction. |
 | **Adjustments** | A transaction type that reconciles a balance to a target ("Set balance"); excluded from income/expense totals. A faceted payment auto-creates one (nullable `source_transaction` self-FK on Transaction); these rows are managed by their source and cannot be edited or deleted directly. |
 | **Attachments** | Receipt bytes live in a private S3 bucket; rows hold metadata; downloads stream through the authenticated API (short-lived signed URLs remain for the Django admin only). |
+| **Stored receipts** | A receipt photo is stored first, as a `ReceiptCapture` row, and read in the background: `queued` (a read is due), `reading`, `ready` (the parse result is present), `waiting` (the parser is unconfigured or unreachable - never `failed` for that), `failed` (the parser rejected the file, or the stored bytes are gone) and `saved` (it became a transaction; the file is that transaction's attachment and the receipt no longer owns a key). Files are never removed automatically. |
 
 **Bookmarks** are personal, per-workspace quick links: each row belongs to one
 user (members see only their own; any role can create them). Three kinds: a
@@ -146,9 +152,12 @@ backend/
 ├── accounts/               # Money-holding accounts + computed balances
 ├── budgeting/              # Budget, BudgetCurrency, Period, CategoryBudget (+ services)
 ├── categories/             # Budget-scoped categories
-├── transactions/           # Transactions, items, attachments, extraction
-│   ├── tasks.py            # Celery task: extract_attachment
+├── transactions/           # Transactions, items, attachments, extraction, receipts
+│   ├── tasks.py            # Celery tasks: extract_attachment, read_receipt,
+│                           #   resume_waiting_receipts (15-minute beat)
 │   ├── attachments.py      # AttachmentService (storage + extraction state)
+│   ├── receipts.py         # ReceiptService (stored receipts: states, storage)
+│   ├── receipts_api.py     # /api/receipts router
 │   └── parser_client.py    # HTTP client for the optional receipt parser
 ├── transfers/              # Transfers between accounts
 ├── planned_transactions/   # Scheduled + recurring transactions
@@ -198,6 +207,24 @@ window fills without waiting for the nightly run.
 file, calls the parser's `/parse`, and records `done` + the contract result or a
 retryable `failed` + error. It never raises, so manual work is never blocked. The UI
 polls `GET .../extraction`.
+
+**Receipt reading** - `POST /api/receipts` stores the photo first (a
+`ReceiptCapture` row, `queued` when the parser is configured and `waiting`
+when it is not - an upload never fails because the parser is off) and
+registers `read_receipt.delay(id)` on commit. The worker marks the row
+`reading`, calls the parser's `/parse` and stores the contract result
+(`ready`); an unconfigured or unreachable parser leaves the receipt
+`waiting` (never `failed`), a rejected file or missing bytes mark it
+`failed`, and the task never raises for a parser problem. The beat entry
+`resume-waiting-receipts` (crontab `minute='*/15'`) runs
+`resume_waiting_receipts` every 15 minutes: when the parser is reachable,
+it re-queues `waiting` receipts - and in-flight rows (`queued`, `reading`)
+stuck longer than batch size times the parse timeout plus one beat interval
+- oldest first, at most `RECEIPT_RESUME_BATCH_SIZE` per run, and deletes
+nothing. `POST /api/receipts/{id}/confirm` then creates the transaction and
+hands the stored object over: the transaction's new attachment takes the
+receipt's `file_key`, the receipt's own key is blanked and its state becomes
+`saved`.
 
 ### Authentication Layers
 
@@ -334,6 +361,7 @@ const { data } = useQuery({
 | `transactions_transaction` | Income / expense / adjustment records |
 | `transaction_items` | Line items: per-item category attribution (nullable category + system-managed remainder rows) |
 | `transaction_attachments` | Receipt file metadata + extraction state |
+| `receipt_captures` | Stored receipts: a receipt photo read in the background before it becomes a transaction (state, parse result, nullable link to that transaction) |
 | `transfers_transfer` | Money moved between accounts |
 | `planned_transactions` | Scheduled transactions |
 | `recurring_transactions` | Recurrence rules that materialize planned transactions |
@@ -368,8 +396,9 @@ do not change to 404.
 | `TWO_FACTOR_ENCRYPTION_KEY` | 2FA secret encryption (Fernet; empty = derive from `SECRET_KEY`) |
 | `TRUSTED_PROXY_COUNT` | Trusted reverse proxies for client-IP parsing (0 = ignore `X-Forwarded-For`) |
 | `RATE_LIMIT_*` | Rate-limit thresholds/windows (per-IP and per-account) |
-| `USE_S3_STORAGE`, `S3_*` | Object storage for attachments and static files; browser-facing URLs follow `S3_EXTERNAL_URL` |
+| `USE_S3_STORAGE`, `S3_*` | Object storage for attachments, stored receipts and static files; browser-facing URLs follow `S3_EXTERNAL_URL` |
 | `PARSER_URL`, `PARSER_API_TOKEN` | Receipt parser (empty `PARSER_URL` disables extraction everywhere) |
+| `RECEIPT_RESUME_BATCH_SIZE` | Receipts re-queued per run of the `resume-waiting-receipts` beat job (default 50) |
 | `EMAIL_MODE`, `EMAIL_FILE_PATH` | Email backend: `console`, `file`, or `smtp` - empty = legacy auto (`EMAIL_HOST` set -> smtp, else console); `file` writes one .log file per email under `EMAIL_FILE_PATH` (default `backend/sent-emails/`, gitignored) |
 | `DEMO_MODE` | Disable registration when true |
 | `DEFAULT_LANGUAGE`, `DEFAULT_NUMBER_FORMAT` | Default UI language / number-format style for new users (registry-validated; see [i18n.md](i18n.md)) |

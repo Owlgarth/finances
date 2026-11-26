@@ -264,3 +264,82 @@ class ExtractionConfigOut(BaseModel):
 
     enabled: bool
     reachable: bool
+
+
+class ReceiptOut(BaseModel):
+    """One stored receipt, open or saved (receipts are listed and their files downloaded through the API)."""
+
+    id: int
+    state: str  # queued | reading | ready | waiting | failed | saved
+    error: str  # '' when none; a raw parser message for failed rows
+    filename: str
+    content_type: str
+    size: int
+    uploader_name: Optional[str] = None  # full_name or email of created_by; None when that user is gone
+    transaction_id: Optional[int] = None  # set once saved
+    possible_duplicate: bool = False  # a transaction matching D18 exists; the list and detail fill it
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    result: Optional[dict] = None  # the parser contract document, when state == ready
+
+
+class ReceiptCountsOut(BaseModel):
+    """Per-state counts of the workspace's open receipts (saved rows are not counted)."""
+
+    queued: int = 0
+    reading: int = 0
+    ready: int = 0
+    waiting: int = 0
+    failed: int = 0
+
+
+class ReceiptListOut(BaseModel):
+    """Open receipts, newest first, with their counts."""
+
+    items: list[ReceiptOut]
+    counts: ReceiptCountsOut
+
+
+class ReceiptConfirmIn(TransactionCreate):
+    """Body of POST /receipts/{receipt_id}/confirm.
+
+    Every TransactionCreate field describes the transaction the receipt becomes.
+    remainder_category_id optionally recategorizes the server-owned remainder row
+    (None or omitted leaves it inheriting the transaction category). It follows
+    the TransactionItemsReplace rules: same budget as the transaction category,
+    and silently ignored when the items exactly cover the amount.
+    """
+
+    remainder_category_id: Optional[int] = None
+
+
+class ReceiptSuggestionsOut(BaseModel):
+    """What the workspace's history suggests for a read receipt; computed at read time, never stored.
+
+    description and category_id come from the latest save with the same merchant
+    key, account_id from the active default account for the receipt's currency
+    (else its only active account), and item_category_ids lines up with
+    result.items by position. A null is "no suggestion": nothing in the history,
+    or the match's category or account is archived.
+    """
+
+    description: Optional[str] = None
+    category_id: Optional[int] = None
+    account_id: Optional[int] = None
+    item_category_ids: list[Optional[int]] = Field(default_factory=list)
+
+
+class ReceiptDuplicateOut(BaseModel):
+    """An existing transaction that may already be this purchase (D18)."""
+
+    id: int
+    date: date
+    description: str
+    amount: Decimal
+
+
+class ReceiptDetailOut(ReceiptOut):
+    """The receipt of GET /api/receipts/{id}, plus what its result suggests and may duplicate."""
+
+    suggestions: Optional[ReceiptSuggestionsOut] = None
+    duplicates: list[ReceiptDuplicateOut] = Field(default_factory=list)

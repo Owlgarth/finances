@@ -31,6 +31,7 @@ from core.schemas import UserPreferencesUpdate, UserUpdate
 from planned_transactions.models import PlannedTransaction, RecurringTransaction
 from transactions.attachments import AttachmentService
 from transactions.models import Transaction, TransactionItem
+from transactions.receipts import ReceiptService
 from transfers.models import Transfer
 from users.exceptions import (
     UserAlreadyVerifiedError,
@@ -818,6 +819,12 @@ class UserService:
                 .select_related('account', 'currency', 'category__budget', 'original_currency')
                 .prefetch_related('items__category', 'attachments', 'generated_adjustments__account')
             ],
+            # v3 additive section (no export_version bump): open receipts,
+            # metadata plus base64 file. Saved receipts are left out - their
+            # file is the transaction's attachment, which travels above.
+            # Older readers ignore the key; the importer .get()s it with []
+            # for pre-receipt exports. A list section: [] when there are none.
+            'receipts': ReceiptService.export_open(ws.id),
             'transfers': [
                 {
                     'date': tr.date.isoformat(),
@@ -980,6 +987,7 @@ class UserService:
             'imported_planned_transactions': 0,
             'imported_recurring_transactions': 0,
             'imported_bookmarks': 0,
+            'imported_receipts': 0,
         }
         skipped: dict[str, list[str]] = {'workspaces': [], 'errors': []}
         renamed: dict[str, str] = {}
@@ -1230,6 +1238,13 @@ class UserService:
                             _('%(name)s: transaction facet references unknown account') % {'name': original_name}
                         )
                 counts['imported_transactions'] += 1
+
+            # v3 additive section: open receipts (metadata plus base64 file).
+            # Older v3 files lack the key - .get() imports nothing and adds
+            # no errors. Rows restore through ReceiptService.import_open
+            # (plain objects.create, nothing dispatched); the beat job reads
+            # the waiting rows once the parser is reachable.
+            counts['imported_receipts'] += ReceiptService.import_open(user, workspace, ws_data.get('receipts'))
 
             for tr_data in ws_data.get('transfers', []):
                 from_account = account_map.get(tr_data.get('from_account_name'))
