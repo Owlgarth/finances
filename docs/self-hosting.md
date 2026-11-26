@@ -135,8 +135,8 @@ receipt-attachment and receipt-photo links).
 The prod compose publishes no host port for storage. Until you front storage
 with your reverse proxy - or publish a port yourself in an override file -
 browser-facing storage URLs point at a host the browser cannot reach: the SPA
-itself works, but the Django admin loads unstyled and receipt attachments do
-not open.
+itself works (attachment and receipt downloads stream through the authenticated
+API), but the Django admin loads unstyled and its storage links do not open.
 
 The scheme matters: an `http://` `S3_EXTERNAL_URL` on an HTTPS page is blocked
 by the browser as mixed content. Changing `S3_EXTERNAL_URL` needs only a

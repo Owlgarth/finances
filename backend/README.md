@@ -61,7 +61,7 @@ Shared utilities used across the project:
 - **`models.py`**: `WorkspaceScopedModel` - abstract base with a workspace FK, audit fields, and `for_workspace()` on the default manager
 - **`permissions.py`**: `require_role(user, workspace_id, allowed_roles)` - raises 403 unless the user is a workspace member with an allowed role; returns the role
 - **`querysets.py`**: `WorkspaceScopedQuerySet` - `.for_workspace(workspace_id)` filtering used by every workspace-scoped model
-- **`services/base.py`**: `delete_workspace_financial_records(workspace_id)` - deletes a workspace's domain records in dependency order (used by workspace deletion, account deletion, and account reset)
+- **`services/base.py`**: `delete_workspace_financial_records(workspace_id)` - deletes a workspace's domain records in dependency order, sweeping stored attachment and receipt files from object storage first (used by workspace deletion, account deletion, and account reset)
 - **`storage.py`**: `StorageService` - S3-compatible object storage operations; methods no-op when `USE_S3_STORAGE` is off
 - **`tasks.py`**: Celery tasks
   - `send_email_task` - Async email sending with retry (3 retries, exponential backoff)
@@ -406,8 +406,9 @@ attachments and open (unsaved) receipts - photos as base64, with their read
 result - are recreated when object storage is configured; a restored receipt is
 `ready` when the export carries a result for it and `waiting` otherwise.
 - **Conflict strategy**: `rename` (default) renames duplicate workspaces; `skip` skips them.
-- **Response**: counts of imported records (`imported_receipts` among them) plus any
-  renamed workspaces and per-row `skipped.errors` entries.
+- **Response**: counts of imported records plus any renamed workspaces and per-row
+  `skipped.errors` entries. Restored receipts are counted only service-side:
+  the API response's count schema omits `imported_receipts`.
 - **Malformed currency rows**: an enabled currency, account, budget currency, or
   category budget row whose `code`/`currency_code` is missing or empty is skipped with
   a per-row error in the response (the rest of the import proceeds) instead of failing

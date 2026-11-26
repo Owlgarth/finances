@@ -87,7 +87,7 @@ Workspace (top-level container)
 |---------|------|
 | **Account balance** | Computed: `opening_balance + Σ(transactions) ± Σ(transfers)`. Never stored. |
 | **Currency** | A global ISO 4217 catalog; each workspace enables a subset, ordered by a user-reorderable position (first = primary). A transaction stores its own currency - it equals the account's currency whenever an account is set, and account-less rows carry their own (cash exchanged while traveling; a closed account's history). A budget picks an ordered currency set from the enabled subset (`BudgetCurrency`, first = default view). |
-| **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives account auto-selection when a parsed receipt's currency is known. |
+| **Default account** | An account may be flagged the default for its currency - at most one per `(workspace, currency)`, enforced by a partial-unique constraint (`one_default_account_per_currency`). It drives the account a ready receipt suggests for its parsed currency: the flagged active account, else the workspace's only active one; with several accounts and no flag, no suggestion (`ReceiptService._suggest_account`). |
 | **Periods** | Derived from a budget's cadence (monthly / every-N-weeks) and materialized on demand - not a table of pre-created rows. Custom-cadence budgets skip derivation: their periods are explicit, non-overlapping, user-defined ranges (admin-managed). |
 | **Transfers** | Replace the old currency-exchange records. Cross-currency transfers carry both amounts + an implied rate. |
 | **Category attribution** | Items carry category spending: each `TransactionItem` may carry a category, and a NULL item category inherits the transaction's (the effective category, resolved at read time), so category aggregates read items, not the transaction row. Explicit item categories must belong to the transaction category's budget. A system-managed `is_remainder` row absorbs `amount` minus the sum of user items, so every non-adjustment transaction's items sum to its amount (the coverage invariant); adjustments never carry coverage (no remainder row). The transaction's `amount` stays the stored truth for balances, which never read items; budget actuals and totals-by-category aggregate items by effective category, and the transaction list's category/budget filters match the transaction's own category or any item's explicit category. |
@@ -205,7 +205,8 @@ window fills without waiting for the nightly run.
 **Receipt extraction** - `POST .../attachments/{id}/extract` marks the attachment
 `pending` and dispatches `extract_attachment.delay(id)`. The worker reads the stored
 file, calls the parser's `/parse`, and records `done` + the contract result or a
-retryable `failed` + error. It never raises, so manual work is never blocked. The UI
+retryable `failed` + error. The task re-raises only to drive its own retry
+backoff, so manual work is never blocked. The UI
 polls `GET .../extraction`.
 
 **Receipt reading** - `POST /api/receipts` stores the photo first (a
@@ -215,7 +216,7 @@ registers `read_receipt.delay(id)` on commit. The worker marks the row
 `reading`, calls the parser's `/parse` and stores the contract result
 (`ready`); an unconfigured or unreachable parser leaves the receipt
 `waiting` (never `failed`), a rejected file or missing bytes mark it
-`failed`, and the task never raises for a parser problem. The beat entry
+`failed`, and the task re-raises only to drive its own retry backoff. The beat entry
 `resume-waiting-receipts` (crontab `minute='*/15'`) runs
 `resume_waiting_receipts` every 15 minutes: when the parser is reachable,
 it re-queues `waiting` receipts - and in-flight rows (`queued`, `reading`)

@@ -1,11 +1,11 @@
 ---
 name: backend-testing
-description: Backend test conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, on_commit, Celery tasks, email), plus a reference file for specialized techniques: time control, token expiry, rate limits, translated errors, subprocess settings probes, race-loss branches, constraints, query counts, data migrations, dry runs. Use when writing or modifying backend tests.
+description: Backend test conventions for Owlgarth Finances (pytest, Factory Boy, AuthMixin, on_commit, Celery tasks, email), plus a reference file for specialized techniques: time control, token expiry, rate limits, translated errors, subprocess settings probes, race-loss branches, TransactionTestCase flush, constraints, query counts, data migrations, dry runs. Use when writing or modifying backend tests.
 ---
 
 # Backend Testing Conventions
 
-Core rules below. When a test needs time control, token expiry, rate limits, Accept-Language, import-time settings branches, race-loss branches, DB check constraints, query-count invariance, data-migration functions, or a dry run against real dev data, read `.agents/skills/backend-testing/references/specialized-tests.md`.
+Core rules below. When a test needs time control, token expiry, rate limits, Accept-Language, import-time settings branches, race-loss branches, TransactionTestCase flush semantics, DB check constraints, query-count invariance, data-migration functions, or a dry run against real dev data, read `.agents/skills/backend-testing/references/specialized-tests.md`.
 
 ## Commands
 
