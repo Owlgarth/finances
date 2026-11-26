@@ -15,7 +15,7 @@ backend/
 ├── accounts/               # Money-holding accounts + computed balances
 ├── budgeting/              # Budget, Period, CategoryBudget
 ├── categories/             # Budget-scoped categories
-├── transactions/           # Transactions, line items, attachments, extraction
+├── transactions/           # Transactions, line items, attachments, extraction, receipts
 ├── transfers/              # Transfers between accounts
 ├── planned_transactions/   # Scheduled + recurring transactions
 └── reports/                # Budget summaries and current balances
@@ -32,7 +32,7 @@ backend/
 | `accounts` | Money-holding accounts (cash/bank/other); balances computed from transactions ± transfers |
 | `budgeting` | `Budget` (plan + cadence), `BudgetCurrency` (ordered per-budget currency set), derived `Period`, `CategoryBudget` (planned amount per period) |
 | `categories` | Persistent, budget-scoped categories |
-| `transactions` | Income/expense/adjustment records; `TransactionItem` (line items carrying category spending); `TransactionAttachment` (+ receipt extraction) |
+| `transactions` | Income/expense/adjustment records; `TransactionItem` (line items carrying category spending); `TransactionAttachment` (+ receipt extraction); `ReceiptCapture` (a receipt photo stored and read in the background before it becomes a transaction) |
 | `transfers` | Money moved between accounts, incl. cross-currency with implied rate |
 | `planned_transactions` | Scheduled transactions with status tracking (pending/done/cancelled); `RecurringTransaction` rules that materialize planned rows ahead of their due date |
 | `reports` | Budget summary (planned vs actual) and current balances (per account + per currency) |
@@ -87,7 +87,7 @@ Endpoints should not contain database operations beyond workspace validation. Al
 
 Apps with service files: `accounts`, `budgeting`, `categories`, `transactions`, `transfers`, `planned_transactions`, `currencies`, `reports`, `workspaces`.
 
-Apps with Celery tasks: `common` (`send_email_task`), `transactions` (`extract_attachment`), `planned_transactions` (`execute_planned_transaction`, `generate_recurring_transactions`) - consistent with `docs/architecture.md`. `generate_recurring_transactions` is the codebase's first periodic task: `CELERY_BEAT_SCHEDULE` runs it nightly (crontab `minute=5, hour=0`, `CELERY_TIMEZONE='UTC'`) to materialize due recurring rules; creating a rule also generates its first due row inline. Services dispatch tasks via `task.delay()` directly - no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
+Apps with Celery tasks: `common` (`send_email_task`), `transactions` (`extract_attachment`, `read_receipt`, `resume_waiting_receipts`), `planned_transactions` (`execute_planned_transaction`, `generate_recurring_transactions`) - consistent with `docs/architecture.md`. `generate_recurring_transactions` is the codebase's first periodic task: `CELERY_BEAT_SCHEDULE` runs it nightly (crontab `minute=5, hour=0`, `CELERY_TIMEZONE='UTC'`) to materialize due recurring rules; creating a rule also generates its first due row inline. The same schedule runs `resume_waiting_receipts` every 15 minutes (entry `resume-waiting-receipts`): when the parser is reachable it re-queues `waiting` receipts - and in-flight rows (`queued`, `reading`) stuck longer than batch size times the parse timeout plus one beat interval - for reading, oldest first, at most `RECEIPT_RESUME_BATCH_SIZE` (default 50) per run, and deletes nothing. Services dispatch tasks via `task.delay()` directly - no wrapper methods. Tasks delegate DB operations to service classes (e.g., `TransactionService.create()`).
 
 ## JWT Authentication
 
@@ -317,6 +317,25 @@ Budget + period CRUD is admin+; categories and category-budget amounts are write
 | POST | `/api/transactions/{id}/attachments/{aid}/extract` | - | Queue extraction for an attachment |
 | GET | `/api/transactions/{id}/attachments/{aid}/extraction` | - | Poll extraction state / result |
 
+### Receipts (write / member+)
+
+A stored receipt is a photo uploaded before any transaction exists: a Celery
+task (`read_receipt`) reads it in the background and `POST .../confirm` turns
+it into a transaction, moving the photo to that transaction's attachments.
+Every endpoint needs a write role - a viewer gets `403` - and none of them
+needs the parser: without `PARSER_URL` an upload is stored as `waiting` and
+can still be saved by hand.
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|--------------|-------------|
+| POST | `/api/receipts` | - | Upload a receipt photo (multipart `file`, 15 MB max; 201 with the stored receipt - `queued` when the parser is configured, else `waiting`; 400 for a wrong type or an oversized file, 503 when storage is off) |
+| GET | `/api/receipts` | - | List open receipts (every state but `saved`), newest first, with `counts` per state; each row carries `possible_duplicate` |
+| GET | `/api/receipts/{id}` | - | Get one receipt, saved ones included (`transaction_id` points at the transaction); an open receipt with a read result also carries `suggestions` (description, category, account and per-item categories from the workspace's history) and `duplicates` (up to three transactions with the same currency and absolute amount, dated within one day) |
+| GET | `/api/receipts/{id}/file` | - | Download the stored photo (bytes streamed via the API; 404 `file_missing` once the receipt is saved or the stored object is gone, 503 if storage is off) |
+| POST | `/api/receipts/{id}/retry` | - | Queue a new read (200 with the receipt as it stands; a saved receipt is returned unchanged) |
+| POST | `/api/receipts/{id}/confirm` | - | Save as a transaction: the transaction create payload (so `items` ride along) plus an optional `remainder_category_id`; the photo becomes the transaction's attachment (`Idempotency-Key` honored; 201 with the transaction, also for a repeat) |
+| DELETE | `/api/receipts/{id}` | - | Delete a receipt and its stored file (204) |
+
 ### Transfers (write / member+)
 
 | Method | Endpoint | Query Params | Description |
@@ -378,14 +397,17 @@ deterministic id tiebreaker is always appended so pagination stays stable.
 `GET /api/users/me/export` produces a **v3.0** JSON export of all the user's
 workspaces (accounts, budgets with their ordered currency sets, periods,
 categories, category budgets, transactions with line items + attachments,
-transfers, planned transactions, recurring transaction rules, plus the
-member's personal rows: bookmarks and per-workspace view settings).
+open (unsaved) receipts with their photos, transfers, planned transactions,
+recurring transaction rules, plus the member's personal rows: bookmarks and
+per-workspace view settings).
 
 `POST /api/users/me/import` restores a v3.0 export (same-system restore). Receipt
-attachments travel as base64 and are recreated when object storage is configured.
+attachments and open (unsaved) receipts - photos as base64, with their read
+result - are recreated when object storage is configured; a restored receipt is
+`ready` when the export carries a result for it and `waiting` otherwise.
 - **Conflict strategy**: `rename` (default) renames duplicate workspaces; `skip` skips them.
-- **Response**: counts of imported records plus any renamed workspaces and per-row
-  `skipped.errors` entries.
+- **Response**: counts of imported records (`imported_receipts` among them) plus any
+  renamed workspaces and per-row `skipped.errors` entries.
 - **Malformed currency rows**: an enabled currency, account, budget currency, or
   category budget row whose `code`/`currency_code` is missing or empty is skipped with
   a per-row error in the response (the rest of the import proceeds) instead of failing

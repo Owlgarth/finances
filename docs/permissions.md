@@ -89,8 +89,28 @@ Two role groups drive enforcement:
 | Upload / delete attachment | ✓ | ✓ | ✓ | ✗ |
 | Trigger extraction / parse receipt | ✓ | ✓ | ✓ | ✗ |
 
-> Extraction actions additionally require the parser to be configured
-> (`PARSER_URL`); otherwise the endpoints return `503` and the UI hides them.
+> The attachment extraction endpoints (`POST /api/transactions/extraction/parse`
+> and `POST .../attachments/{aid}/extract`) additionally require the parser to
+> be configured (`PARSER_URL`); otherwise they return `503` and the UI hides
+> them. This applies to those two endpoints only, not to the receipts queue
+> below.
+
+### Receipts (`WRITE_ROLES`)
+
+| Action | Owner | Admin | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| Upload a receipt photo | ✓ | ✓ | ✓ | ✗ |
+| View the receipts list / one receipt | ✓ | ✓ | ✓ | ✗ |
+| Download the photo | ✓ | ✓ | ✓ | ✗ |
+| Retry a receipt | ✓ | ✓ | ✓ | ✗ |
+| Delete a receipt | ✓ | ✓ | ✓ | ✗ |
+| Save a receipt as a transaction | ✓ | ✓ | ✓ | ✗ |
+
+> Receipts are one queue per workspace: every owner, admin and member sees and
+> handles every member's uploads (the uploader is recorded), like transactions.
+> Uploading a receipt and saving it by hand work whether or not the parser is
+> configured - a parser that is off only leaves receipts `waiting`, and a viewer
+> gets `403` on every receipts endpoint.
 
 ### Transfer Management (`WRITE_ROLES`)
 
