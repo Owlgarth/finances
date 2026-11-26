@@ -261,6 +261,88 @@ class TransactionItem(models.Model):
         return f'{self.name} x{self.quantity}'
 
 
+class ReceiptCapture(WorkspaceScopedModel):
+    """A receipt photo kept before any transaction exists.
+
+    Bytes live in the private media bucket under `file_key`; the row holds
+    metadata and the reading `state`. `saved` means the photo became a
+    transaction: `transaction` is set and `file_key` is '' because the
+    attachment that took the bytes over owns the object from then on (D14).
+    `error` is stored data, not UI text. Deleting the storage object is the
+    caller's job (ReceiptService): Django cascades do not reach S3.
+    """
+
+    QUEUED = 'queued'  # stored; a read is due
+    READING = 'reading'  # a worker is reading it
+    READY = 'ready'  # result holds the parser contract document
+    WAITING = 'waiting'  # parser unconfigured or unreachable; never failed for that (D13)
+    FAILED = 'failed'  # parser rejected the file, or the stored bytes are gone
+    SAVED = 'saved'  # became a transaction: file_key is '' and transaction is set (D14)
+    STATE_CHOICES = [
+        (QUEUED, 'Queued'),
+        (READING, 'Reading'),
+        (READY, 'Ready'),
+        (WAITING, 'Waiting'),
+        (FAILED, 'Failed'),
+        (SAVED, 'Saved'),
+    ]
+    OPEN_STATES = (QUEUED, READING, READY, WAITING, FAILED)
+
+    # Redeclared from WorkspaceScopedModel for explicit related names.
+    workspace = models.ForeignKey(
+        'workspaces.Workspace',
+        on_delete=models.CASCADE,
+        related_name='receipt_captures',
+    )
+    # The uploader; a receipt has no second uploader column.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipt_captures',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    # '' once a transaction attachment took the bytes over (saved); see the constraints.
+    file_key = models.CharField(max_length=500, blank=True, default='')
+    filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField()
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, default=QUEUED)
+    # Parser or storage error text; data, not UI text.
+    error = models.TextField(blank=True, default='')
+    # The parser contract document once the photo has been read.
+    result = models.JSONField(null=True, blank=True)
+    # Normalized merchant from the result; the index with workspace serves lookups.
+    merchant_key = models.CharField(max_length=255, null=True, blank=True)
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='receipt_captures',
+    )
+
+    class Meta:
+        db_table = 'receipt_captures'
+        ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['workspace', 'merchant_key'])]
+        constraints = [
+            models.UniqueConstraint(condition=~Q(file_key=''), fields=['file_key'], name='unique_receipt_file_key'),
+            models.CheckConstraint(condition=~Q(state='saved') | Q(file_key=''), name='receipt_saved_has_no_file'),
+            models.CheckConstraint(condition=Q(state='saved') | ~Q(file_key=''), name='receipt_open_has_file'),
+        ]
+
+    def __str__(self):
+        return self.filename
+
+
 class TransactionIdempotencyKey(models.Model):
     """Transient dedup record mapping (key, user, workspace) → transaction for POST /transactions.
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 import factory
 from factory.django import DjangoModelFactory
 
-from transactions.models import Transaction, TransactionItem
+from transactions.models import ReceiptCapture, Transaction, TransactionItem
 
 
 class TransactionFactory(DjangoModelFactory):
@@ -42,3 +42,22 @@ class TransactionItemFactory(DjangoModelFactory):
     # tasks) creates remainder rows via coverage normalization. Tests that
     # need one pass is_remainder=True explicitly.
     is_remainder = False
+
+
+class ReceiptCaptureFactory(DjangoModelFactory):
+    """A queued receipt that still owns its file.
+
+    state, error, result, merchant_key and transaction take the model defaults
+    (queued, '', None, None, None). A handed-over row is file_key='' together
+    with state=ReceiptCapture.SAVED; the DB constraints bind the two.
+    """
+
+    class Meta:
+        model = ReceiptCapture
+
+    workspace = factory.SubFactory('workspaces.factories.WorkspaceFactory')
+    created_by = factory.SubFactory('common.tests.factories.UserFactory')
+    file_key = factory.Sequence(lambda n: f'receipts/1/{n:032x}.jpg')
+    filename = 'receipt.jpg'
+    content_type = 'image/jpeg'
+    size = 1024

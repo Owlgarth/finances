@@ -429,6 +429,10 @@ msgstr "Файлове сховище не налаштовано"
 msgid "The stored file is no longer available"
 msgstr "Збережений файл більше недоступний"
 
+#: transactions/exceptions.py:134
+msgid "Receipt not found"
+msgstr "Чек не знайдено"
+
 #: transactions/schemas.py:50 transactions/schemas.py:74
 msgid "Description cannot be empty"
 msgstr "Опис не може бути порожнім"
