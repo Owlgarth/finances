@@ -766,7 +766,7 @@ Compact design for per-currency balance displays. All financial data in JetBrain
   </div>
 
   <!-- Closing balance — always positive/negative color -->
-  <div class="font-mono text-sm font-medium tabular-nums text-positive leading-none mb-3">
+  <div class="font-mono text-sm font-medium tabular-nums text-positive-text leading-none mb-3">
     1,786.20
   </div>
 
@@ -774,7 +774,7 @@ Compact design for per-currency balance displays. All financial data in JetBrain
   <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
     <div>
       <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Income</div>
-      <div class="font-mono text-xs font-medium tabular-nums text-positive">+6,500.00</div>
+      <div class="font-mono text-xs font-medium tabular-nums text-positive-text">+6,500.00</div>
     </div>
     <div>
       <div class="text-[10px] uppercase tracking-wider text-text-muted mb-0.5">Expenses</div>
@@ -797,7 +797,7 @@ Compact design for per-currency balance displays. All financial data in JetBrain
 |---|---|
 | Container | `bg-surface border border-border rounded-sm p-4` |
 | Grid layout | `repeat(auto-fill, minmax(180px, 1fr))`, gap `12px` (`gap-3`) |
-| Closing balance | JetBrains Mono 14px, weight 500 — `text-positive` if > 0, `text-negative` if < 0 |
+| Closing balance | JetBrains Mono 14px, weight 500 — `text-positive-text` if > 0, `text-negative` if < 0 |
 | Currency label | Geist 12px, weight 500, `text-text` |
 | Meta labels | Geist 10px, uppercase, `tracking-wider`, `text-text-muted` |
 | Meta values | JetBrains Mono 12px, weight 500, `tabular-nums` — semantic color only if sign matters |
@@ -806,58 +806,98 @@ Compact design for per-currency balance displays. All financial data in JetBrain
 
 ### Budget Category Card
 
-Compact card for individual budget category display with progress bar.
+Compact card for one budget category in the Budget page's phone layout
+(`components/budgets/BudgetCategoryList.tsx`). The card body is a toggle that
+selects the category for plan editing. Its bar and status row are the shared
+`BudgetBar` (§9, "Budget Bars"); the fence below is the landed markup with the
+plan-editing input branch and the event handlers left out.
 
-```html
-<div class="bg-surface border border-border rounded-sm p-3">
-  <!-- Row 1: name + amounts -->
-  <div class="flex justify-between items-start mb-2">
-    <div class="flex items-center gap-2">
-      <div class="h-6 w-6 bg-surface-hover border border-border rounded-none
-                  flex items-center justify-center">
-        <Home size={12} class="text-text-muted" />
-      </div>
-      <div>
-        <span class="text-xs font-medium text-text">Housing & Utilities</span>
-      </div>
-    </div>
-    <div class="text-right">
-      <span class="font-mono text-xs font-medium tabular-nums text-text">2,450.00</span>
-      <span class="font-mono text-[10px] text-text-muted ml-1">of 2,500.00</span>
-    </div>
+```tsx
+<div
+  role="button"
+  tabIndex={0}
+  aria-pressed={isSelected}
+  className={`bg-surface border rounded-sm p-3 cursor-pointer transition-colors ${isSelected ? 'border-border-focus' : 'border-border'}`}
+>
+  {/* Row 1 per the card spec: name left, spent-of-planned
+      right, trailing chevron to the Activity list. Card body
+      is the highlight toggle - inner controls stop
+      propagation. */}
+  <div className="flex items-start justify-between gap-2 mb-2">
+    <span className="text-xs font-medium text-text min-w-0 truncate">{category.name}</span>
+    <span className="flex items-center gap-1 shrink-0">
+      <span className="font-mono text-xs font-medium tabular-nums text-text whitespace-nowrap">
+        {formatAmount(actual)}{' '}
+        <span className="text-[10px] text-text-muted">
+          {t('detail.ofAmount', { amount: formatAmount(planned) })}
+        </span>
+      </span>
+      <Link
+        to={activityUrl}
+        aria-label={t('detail.viewCategoryActivity', { name: category.name })}
+        onClick={(e) => e.stopPropagation()}
+        className={chevronLinkClass}
+      >
+        <ChevronRight size={14} strokeWidth={1.5} aria-hidden="true" />
+      </Link>
+    </span>
   </div>
-
-  <!-- Progress bar: sharp corners, not rounded-full -->
-  <div class="w-full h-1 bg-surface-muted rounded-none overflow-hidden mb-1.5">
-    <div class="h-full bg-negative rounded-none transition-all" style="width: 98%"></div>
-  </div>
-
-  <!-- Status row -->
-  <div class="flex justify-between text-[10px] font-mono font-medium uppercase tracking-wider">
-    <span class="text-negative">High Burn</span>
-    <span class="text-negative">50.00 Left</span>
-  </div>
+  {/* Bar and status row: the shared bar owns the tick and
+      the pace word; the status word and the figure are
+      the card's, both in the status color. */}
+  <BudgetBar
+    spent={actual}
+    planned={planned}
+    fillClass={fillClassOf(status)}
+    elapsed={paceElapsed}
+    statusWord={statusWord}
+    statusWordClass={statusColor}
+    trailing={t('detail.amountLeft', { amount: formatAmount(remaining) })}
+    trailingClass={statusColor}
+    className="mb-1.5"
+  />
 </div>
 ```
 
-**Progress bar status colors:**
+**Bar status rules.** The card's own rule; the other three sites are listed in
+§9. Near-limit text takes the warning text token: `color-warning` is never used
+for text smaller than 24px on a light surface.
 
-| Status | Bar color | Text color | Threshold |
-|---|---|---|---|
-| On Track | `bg-primary` | `text-text-muted` | < 75% |
-| Near Limit | `bg-warning` | `text-warning` | 75–94% |
-| High Burn | `bg-negative` | `text-negative` | ≥ 95% |
+| Status | Word on the card | Bar color | Text color | Rule |
+|---|---|---|---|---|
+| On track | none; the group heading carries it | `bg-primary` | `text-text-muted` | under 75% of the plan |
+| Near limit | Near limit | `bg-warning` | `text-warning-text` | 75% of the plan and up, without going over |
+| Over | Over | `bg-negative` | `text-negative` | spent more than planned |
+
+**Tick.** A 1px tick on the bar marks how much of the period has gone: the
+elapsed share in whole days, today included (day 16 of a 30-day period is
+53%). It shows on the current period only; a past or future period shows the
+same bar with no tick. While the tick shows, the track is `role="img"` named
+"53% of the period gone" (an integer percent). Without a tick it is
+`aria-hidden="true"` and has no role. The name never says "ahead of pace":
+the pace word is real text in the row.
+
+**Pace word.** Spending is ahead of pace when the spent share is more than
+five percentage points above the elapsed share. The row then says "Ahead of
+pace"; the tick is never the only signal. The word never shows without the
+tick: a past or future period never shows it, and neither does a category
+with no plan. A tick can show on its own, when spending is not ahead.
+
+**Status row.** One row under the bar, mono 10px uppercase, in two cells. Left:
+the status word, a middle dot, the pace word ("Near limit · Ahead of pace").
+Right: the site's figure, "50.00 left" on these cards. The status word and the
+pace word share one color: the status color when a status word is present,
+`text-text-muted` when the pace word stands alone. The row wraps by whole
+phrase and never truncates: the figure drops to a second line, right-aligned,
+when both cells do not fit.
 
 | Property | Value |
 |---|---|
-| Container | `bg-surface border border-border rounded-sm p-3` |
-| Icon container | `h-6 w-6 bg-surface-hover border border-border rounded-none` |
-| Icon | Lucide 12px, `text-text-muted` |
-| Category name | Geist 12px, weight 500, `text-text` |
-| Amount | JetBrains Mono 12px, weight 500, `tabular-nums` |
-| Progress track | `h-1 bg-surface-muted rounded-none` — sharp corners |
-| Progress fill | `rounded-none` — sharp corners, not `rounded-full` |
-| Status text | JetBrains Mono 10px, uppercase, `tracking-wider`, semantic color |
+| Container | `bg-surface border rounded-sm p-3 cursor-pointer transition-colors`; `border-border`, or `border-border-focus` while selected |
+| Control | `role="button"`, `tabIndex={0}`, `aria-pressed`. The card body toggles the category's selection; inner controls stop propagation |
+| Category name | Geist 12px, weight 500, `text-text`, `min-w-0 truncate` |
+| Amount | JetBrains Mono 12px, weight 500, `tabular-nums`, `text-text`: spent, then "of planned" in 10px `text-text-muted` |
+| Bar and status row | The shared `BudgetBar` (§9): `className="mb-1.5"`, the fill by the status table above, the status word and the figure both in the status color |
 | Shadow | **None** |
 
 ### Card Specs Summary
@@ -958,7 +998,7 @@ The chevron icon rotates `180deg` when sort direction is ascending. Uses Lucide 
   <!-- Odd rows (zebra stripe) -->
   <tr class="bg-background border-b border-border h-8 hover:bg-surface-hover transition-colors">
     <td class="text-[13px] text-text px-3 py-1">Salary</td>
-    <td class="font-mono text-xs font-medium text-positive px-3 py-1 text-right tabular-nums">+6,500.00</td>
+    <td class="font-mono text-xs font-medium text-positive-text px-3 py-1 text-right tabular-nums">+6,500.00</td>
     <td class="px-3 py-1"><!-- chip component --></td>
   </tr>
 </tbody>
@@ -974,7 +1014,7 @@ The chevron icon rotates `180deg` when sort direction is ascending. Uses Lucide 
 | Transition | `transition-colors` |
 | Text cells | Geist 13px, `text-text`, left-aligned |
 | Amount cells | JetBrains Mono 12px, `text-right`, `tabular-nums`, semantic color |
-| Positive amount | `text-positive` with `+` prefix |
+| Positive amount | `text-positive-text` with `+` prefix |
 | Negative amount | `text-negative` with `-` prefix |
 | Neutral amount | `text-text` (no prefix) |
 | Date cells | JetBrains Mono 12px, `text-text-muted` |
@@ -1037,29 +1077,65 @@ Sticky date banners that separate transaction groups by date.
 | Text color | `text-muted` |
 | Colspan | `colspan="99"` to span full width |
 
-### Progress Bars (Within Tables)
+### Status Chips (Budget Ledger)
+
+The Budget page's desktop ledger has no bar. A row's status is a chip in the
+sticky category cell, beside the category link, on two statuses only; an
+on-track row has no chip. Status never relies on color: the word carries it.
 
 ```html
-<!-- Budget progress bar within a table row -->
-<div class="h-1 w-full bg-surface-muted rounded-none overflow-hidden">
-  <div class="h-full bg-negative rounded-none transition-all" style="width: 95%"></div>
-</div>
+<!-- Over: spent more than planned -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none shrink-0 text-negative border-negative/20 bg-negative-bg">
+  Over
+</span>
+
+<!-- Near limit: 75% of the plan and up, without going over -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none shrink-0 text-warning-text bg-surface border-border">
+  Near limit
+</span>
 ```
 
-| Property | Value |
-|---|---|
-| Track | `h-1 bg-surface-muted rounded-none` |
-| Fill | `h-full rounded-none` — never `rounded-full` |
-| Fill color | Semantic: `bg-positive`, `bg-warning`, or `bg-negative` based on threshold |
-| Radius | `rounded-none` (0px) — flat bar, not pill-shaped |
-
-**Progress bar status colors:**
-
-| Status | Fill Color | Text Color | Threshold |
+| Chip | Rule | Text color | Fill and border |
 |---|---|---|---|
-| On Track | `bg-positive` | `text-positive` | < 75% |
-| Near Limit | `bg-warning` | `text-warning` | 75–94% |
-| Over Budget | `bg-negative` | `text-negative` | ≥ 95% |
+| Over | spent more than planned, compared in exact cents | `text-negative` | `bg-negative-bg`, `border-negative/20` |
+| Near limit | 75% of the plan and up, without going over | `text-warning-text` | `bg-surface`, `border-border` |
+
+### Budget Bars (the Shared `BudgetBar`)
+
+The four 4px budget bars (the Budget page's phone cards and currency chips,
+the Home widget, the transaction record) are one component,
+`components/budgets/BudgetBar.tsx`. It renders the track and, when there is
+something to show, one status row under it; both are `span`s, so the bar is
+valid inside a `button`. The tick and the status-row grammar are in §8,
+"Budget Category Card". The tables here are the markup and the per-site rules.
+
+| Part | Spec |
+|---|---|
+| Track | `relative block w-full h-1 bg-surface-muted rounded-none`: 4px, sharp corners, and it never clips (no `overflow-hidden`). The site's own spacing arrives through `className` |
+| Fill | `block h-full rounded-none transition-[width] duration-150` plus the site's `fillClass`. Its width is the spent share of the plan, clamped to 0 and 100, so an over-plan fill ends at the track's edge |
+| Tick | `absolute -top-0.5 h-2 w-px bg-text`: 1px by 8px, in the text color, centered on the track (2px overhang above and below), drawn above the fill, at the elapsed share and on the track's last pixel at 100% |
+| Why it overhangs | In light mode the primary fill equals the text color, and in dark mode the two are close, so a tick inside the track would vanish once the fill had passed it. For the same reason the track does not clip: the fill is clamped instead |
+| Status row | `flex flex-wrap gap-x-2 text-[10px] font-mono font-medium uppercase tracking-wider`; each cell `whitespace-nowrap`, the figure `ml-auto` |
+| Accessible name | With a tick: `role="img"`, `aria-label` "53% of the period gone". Without: `aria-hidden="true"` and no role. Never both |
+| No plan | A plan of 0 gives an empty bar and no pace word. The tick is unaffected |
+
+**The four sites.** Each site keeps its own fill rule and passes it as
+`fillClass`; the bar never derives it. `spent` and `planned` are the API's exact
+amount strings: the bar computes its own width, and the pace claim is exact.
+
+| Site | Fill rule | Status word and text color | Right-hand figure | `className` |
+|---|---|---|---|---|
+| Budget page, phone cards (`components/budgets/BudgetCategoryList.tsx`) | `bg-primary` under 75%, `bg-warning` at 75% and up without going over, `bg-negative` over | Over in `text-negative`, Near limit in `text-warning-text`, none on track | "50.00 left" in the same status color | `mb-1.5` |
+| Home widget (`components/dashboard/BudgetWidget.tsx`) | `bg-negative` when over, else `bg-warning`: every row shown is over or at 75% and up | Over in `text-negative`, Near limit in `text-warning-text` | the percent, `text-text-muted` in every state | `mb-1` |
+| Budget page, currency chips (`pages/BudgetDetailPage.tsx`) | `bg-negative` at 95% and up, `bg-warning` at 75% and up, else `bg-primary` | none | none: the pace word alone, a caption in `text-text-muted` | none |
+| Transaction record (`SpentOfPlanned` in `components/transactions/TransactionRecord.tsx`) | `bg-negative` at 95% and up, `bg-warning` at 75% and up, else `bg-primary` | none | none: the pace word alone, a caption in `text-text-muted` | `mt-1` |
+
+Two site facts. A currency with no plan shows no bar in its chip. The phone
+cards and the transaction record render the bar with or without a plan, so a
+no-plan row shows the empty bar of the "No plan" row; the Home widget's
+attention list filters no-plan rows out. In the record the tick follows the
+transaction's own period, so a transaction dated in a past or future period
+shows a plain bar.
 
 ### Table Footer (Totals Row)
 
@@ -1115,7 +1191,7 @@ Chips are rectangular with 1px borders and 4px border-radius. **Never** use `rou
 
 ```html
 <!-- Income -->
-<span class="inline-flex items-center px-2 py-0.5 border border-positive/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-positive-bg text-positive select-none">
+<span class="inline-flex items-center px-2 py-0.5 border border-positive/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-positive-bg text-positive-text select-none">
   Income
 </span>
 
@@ -1127,28 +1203,45 @@ Chips are rectangular with 1px borders and 4px border-radius. **Never** use `rou
 
 ### Status Chips (Planned Transactions)
 
+One chip for a planned item's status (`components/transactions/PlannedStatusChip.tsx`),
+shared by the list row and the record so the two cannot disagree. The word
+keeps the normal text color on every tint: color alone never carries the
+meaning. Overdue is derived at render from the local date, never stored.
+
 ```html
-<!-- Done -->
-<span class="inline-flex items-center px-2 py-0.5 border border-positive/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-positive-bg text-positive select-none">
-  Done
+<!-- Upcoming -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none bg-surface border-border text-text">
+  Upcoming
 </span>
 
-<!-- Pending -->
-<span class="inline-flex items-center px-2 py-0.5 border border-warning/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-warning-bg text-warning select-none">
-  Pending
+<!-- Overdue -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none bg-warning-bg border-warning/20 text-text">
+  Overdue
 </span>
 
-<!-- Cancelled -->
-<span class="inline-flex items-center px-2 py-0.5 border border-negative/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-negative-bg text-negative select-none">
-  Cancelled
+<!-- Paid -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none bg-positive-bg border-positive/20 text-text">
+  Paid
+</span>
+
+<!-- Skipped -->
+<span class="inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none bg-surface border-border text-text-muted">
+  Skipped
 </span>
 ```
+
+| Status | When | Fill and border | Text color |
+|---|---|---|---|
+| Upcoming | pending and dated today or later | `bg-surface`, `border-border` | `text-text` |
+| Overdue | pending and dated before today | `bg-warning-bg`, `border-warning/20` | `text-text` |
+| Paid | status `done` | `bg-positive-bg`, `border-positive/20` | `text-text` |
+| Skipped | status `cancelled` | `bg-surface`, `border-border` | `text-text-muted` |
 
 ### Role Badges
 
 ```html
 <!-- Owner -->
-<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-warning/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-warning-bg text-warning select-none">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 border border-warning/20 rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider bg-warning-bg text-warning-text select-none">
   <Star class="h-3 w-3" />
   Owner
 </span>
@@ -2239,6 +2332,5 @@ primitives are the reference implementation; screen-level conformance is swept i
    inverts to a light surface with dark text. These two docs conflict. Current code
    follows §3 (`text-white`). Resolve the spec conflict, then align the token/class.
 2. **Dropdown clipping inside scrollable modals.** `Select`'s panel is absolutely
-   positioned, so an ancestor with `overflow-y-auto` (the tall `ExtractionReviewModal`
-   / `PlannedFormModal` / `RecurringFormModal`) can clip it when scrolled. Low
+   positioned, so an ancestor with `overflow-y-auto` can clip it when scrolled. Low
    impact today. Proper fix: render the panel in a portal positioned from the trigger.
