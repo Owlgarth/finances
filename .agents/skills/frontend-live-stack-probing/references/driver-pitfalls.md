@@ -140,3 +140,27 @@ Part of the `frontend-live-stack-probing` skill. Read when a probe result looks 
   react-router normalizes it to `location.key = 'default'`. Probe assertions mirror the
   normalization (the row-tap-back discriminator is `location.key !== 'default'`); product
   code reads `location.key`, never the raw history state.
+- A quoted STRING predicate passed to `page.waitForFunction` resolves before the page
+  renders: the string is evaluated as an expression, a quoted `() => ...` arrow evaluates
+  to a function object, and a function object is truthy - every wait passes ~50ms after
+  domcontentloaded with React unmounted, the asserts then read a splash or empty DOM, and
+  a whole probe matrix fails uniformly with skeleton screenshots that look like a product
+  regression. Pass real function objects (arguments through the call's args tail), and
+  rule this fault out first when every cell fails pre-render.
+- The browse tool's viewport change can report `applied` while the width never changed:
+  cells then silently capture the wrong breakpoint and wrong-width evidence reads as
+  approvals. Assert the width landed - read `window.innerWidth` in the page after every
+  change - re-apply on mismatch (bounded retries), and reject and re-run any cell whose
+  width never applied. Chrome also clamps emulated widths at 320 CSS px: a narrower
+  request reads 320 and reports the difference as document overflow, an artefact, not the
+  product.
+- A trusted focus on a password field can pop the user's own password-manager extension
+  over the page, blocking the tool mid-cell. Do not hand off or force it: close the
+  probe's tab, open a fresh one on the same session, and arm the control with a synthetic
+  input event that never focuses the field - one dummy character, never a real secret,
+  never submitted, cleared after every read.
+- Background agent tabs produce animation frames on demand, so a layout read taken right
+  after a class or style change can return the PRE-transition value (a fill's old width)
+  while a painted capture at the same moment shows the settled state - budget a settle
+  beat (or a forced frame) before layout reads in a background tab, and blame a
+  mid-transition mismatch on the page's own width transition, not the product.
