@@ -34,6 +34,8 @@
   --color-negative-bg:     #450A0A;
   --color-warning:         #FBBF24;
   --color-warning-bg:      #451A03;
+  --color-positive-text:   var(--color-positive);
+  --color-warning-text:    var(--color-warning);
 }
 ```
 
@@ -84,6 +86,8 @@ In dark mode, the layering direction inverts: backgrounds become near-black and 
 
 Text and surface tokens cross-swap between modes — light text on dark surfaces, dark text on light surfaces.
 
+The status text tokens `--color-positive-text` and `--color-warning-text` are semantic colors: their light and dark values are listed in §7.
+
 ---
 
 ## 5. Brand / Primary — Light → Dark Mapping
@@ -125,6 +129,8 @@ Border and focus tokens cross-swap in dark mode, mirroring the text color invers
 | `--color-negative-bg` | `#FEF2F2` | `#450A0A` | Expense chip backgrounds, error fills |
 | `--color-warning` | `#D97706` | `#FBBF24` | Non-critical warnings, budget limits |
 | `--color-warning-bg` | `#FFFBEB` | `#451A03` | Warning chip backgrounds |
+| `--color-positive-text` | `#047857` | `#34D399` | Status text for income, inflow and under-budget states. The dark value is the `positive` token itself (`var(--color-positive)`), so the two cannot drift apart |
+| `--color-warning-text` | `#b45309` | `#FBBF24` | Status text for non-critical warnings, caution states and nearing budget limits. The dark value is the `warning` token itself (`var(--color-warning)`), so the two cannot drift apart |
 
 Semantic text colors shift to lighter, more vivid values in dark mode to maintain legibility against dark surfaces. Background tokens become deeply saturated darks rather than pale tints.
 
@@ -290,6 +296,8 @@ All dark mode color pairings meet WCAG AA (4.5:1 for normal text, 3:1 for large 
 | `--color-positive` (#34D399) | `--color-surface` (#171717) | ~8.5:1 | AAA ✓ |
 | `--color-negative` (#F87171) | `--color-surface` (#171717) | ~5.0:1 | AA ✓ |
 | `--color-warning` (#FBBF24) | `--color-surface` (#171717) | ~10.0:1 | AAA ✓ |
+| `--color-positive-text` (#34D399) | `--color-surface` (#171717) | ~9.3:1 | AAA ✓ |
+| `--color-warning-text` (#FBBF24) | `--color-surface` (#171717) | ~10.7:1 | AAA ✓ |
 
 ### Semantic Colors on Their Backgrounds
 
@@ -298,6 +306,8 @@ All dark mode color pairings meet WCAG AA (4.5:1 for normal text, 3:1 for large 
 | `--color-positive` (#34D399) | `--color-positive-bg` (#064E3B) | ~7.4:1 | AAA ✓ |
 | `--color-negative` (#F87171) | `--color-negative-bg` (#450A0A) | ~5.3:1 | AA ✓ |
 | `--color-warning` (#FBBF24) | `--color-warning-bg` (#451A03) | ~9.7:1 | AAA ✓ |
+| `--color-positive-text` (#34D399) | `--color-positive-bg` (#064E3B) | ~5.1:1 | AA ✓ |
+| `--color-warning-text` (#FBBF24) | `--color-warning-bg` (#451A03) | ~9.0:1 | AAA ✓ |
 
 ---
 

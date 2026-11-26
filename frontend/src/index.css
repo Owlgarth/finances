@@ -50,6 +50,8 @@
   --color-negative-bg: var(--color-negative-bg);
   --color-warning: var(--color-warning);
   --color-warning-bg: var(--color-warning-bg);
+  --color-positive-text: var(--color-positive-text);
+  --color-warning-text: var(--color-warning-text);
   /* Budget ledger columns (muted pastels) */
   --color-planned: var(--color-planned);
   --color-actual: var(--color-actual);
@@ -524,6 +526,8 @@
   --color-negative-bg: #FEF2F2;
   --color-warning: #D97706;
   --color-warning-bg: #FFFBEB;
+  --color-positive-text: #047857;
+  --color-warning-text: #b45309;
 
   /* Budget ledger columns — deliberately muted ("pastel") so the three value
      columns are tellable apart without competing with semantic red/green. */
@@ -625,6 +629,8 @@ button {
   --color-negative-bg:     #450A0A;
   --color-warning:         #FBBF24;
   --color-warning-bg:      #451A03;
+  --color-positive-text:   var(--color-positive);
+  --color-warning-text:    var(--color-warning);
 
   /* Budget ledger columns — lighter pastel steps of the same hues for dark surfaces */
   --color-planned:         #A3BEDF;

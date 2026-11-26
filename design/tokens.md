@@ -82,6 +82,8 @@ These are the **only** hex values in the system. Every component references the 
   --color-negative-bg: #FEF2F2;
   --color-warning: #D97706;
   --color-warning-bg: #FFFBEB;
+  --color-positive-text: #047857;
+  --color-warning-text: #b45309;
 }
 ```
 
@@ -127,8 +129,25 @@ These are the **only** hex values in the system. Every component references the 
 | `negative-bg` | `--color-negative-bg` | `#FEF2F2` | Expense chip backgrounds, destructive action hover, error fills |
 | `warning` | `--color-warning` | `#D97706` | Non-critical warnings, caution states, nearing budget limits |
 | `warning-bg` | `--color-warning-bg` | `#FFFBEB` | Warning chip backgrounds, caution fills |
+| `positive-text` | `--color-positive-text` | `#047857` | Status text for income, inflow and under-budget states: a darker step of the `positive` hue, 4.5:1 or better on `surface`, `background`, `surface-hover` and `positive-bg` (contrast table below). Borders and fills stay on `positive` |
+| `warning-text` | `--color-warning-text` | `#b45309` | Status text for non-critical warnings, caution states and nearing budget limits: a darker step of the `warning` hue, 4.5:1 or better on `surface`, `background`, `surface-hover` and `warning-bg` (contrast table below). Borders and fills stay on `warning` |
 
 > **Rule:** Only use `positive` / `negative` colors for financial movement. `warning` is for non-blocking caution states (e.g., nearing budget limit). Neutral data stays in `text` / `text-muted`.
+
+#### Status Text Tokens - Measured Contrast on Light Surfaces
+
+Measured with the WCAG relative-luminance formula on the token values. Status text is 9 to 14px, so it needs 4.5:1 or better (WCAG AA for normal text) on every surface it sits on. The table covers the four light surfaces the status text is used on; `surface-hover` is the background of a hovered or selected row.
+
+| Foreground | Background | Ratio | Standard |
+|---|---|---|---|
+| `--color-positive-text` (`#047857`) | `--color-surface` (`#FFFFFF`) | 5.48:1 | AA ✓ |
+| `--color-positive-text` (`#047857`) | `--color-background` (`#FAFAFA`) | 5.25:1 | AA ✓ |
+| `--color-positive-text` (`#047857`) | `--color-surface-hover` (`#F5F5F5`) | 5.03:1 | AA ✓ |
+| `--color-positive-text` (`#047857`) | `--color-positive-bg` (`#ECFDF5`) | 5.21:1 | AA ✓ |
+| `--color-warning-text` (`#b45309`) | `--color-surface` (`#FFFFFF`) | 5.02:1 | AA ✓ |
+| `--color-warning-text` (`#b45309`) | `--color-background` (`#FAFAFA`) | 4.81:1 | AA ✓ |
+| `--color-warning-text` (`#b45309`) | `--color-surface-hover` (`#F5F5F5`) | 4.61:1 | AA ✓ |
+| `--color-warning-text` (`#b45309`) | `--color-warning-bg` (`#FFFBEB`) | 4.84:1 | AA ✓ |
 
 #### Budget Ledger Columns
 
@@ -187,6 +206,8 @@ Since Tailwind CSS 4 the theme lives in CSS at the top of `frontend/src/index.cs
   --color-negative-bg: var(--color-negative-bg);
   --color-warning: var(--color-warning);
   --color-warning-bg: var(--color-warning-bg);
+  --color-positive-text: var(--color-positive-text);
+  --color-warning-text: var(--color-warning-text);
   /* Budget ledger columns (muted pastels) */
   --color-planned: var(--color-planned);
   --color-actual: var(--color-actual);
