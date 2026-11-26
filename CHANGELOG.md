@@ -2,6 +2,69 @@
 
 All notable changes to Owlgarth Finances will be documented in this file.
 
+## [0.6.0] - 2026-11-26
+
+### Features
+
+- Budget page bookmark exists-affordance
+- UX redesign phase 1 - foundations (shared primitives, isWide tier, rail default to 1279) (#8)
+- UX redesign - navigation and the activity shell (#10)
+- Seed_qa_user management command (#12)
+- New transaction flow (UX redesign phase 3) (#13)
+- Transaction record (UX redesign Phase 4) (#15)
+- UX redesign Phase 5 - filters (#17)
+- Accounts and transfers record destinations (UX redesign Phase 6) (#19)
+- Redesign Home and Budget pages (UX redesign Phase 7) (#21)
+- Entry accelerators (UX redesign Phase 9) (#23)
+- Undo, visible state and gestures (UX redesign Phase 10) (#25)
+- Improve skills, remove outdated information.
+- Remaining forms as pages and side panels, planned record and first-run checklist (#32)
+- Redesign phase 12 - budget pace tick and readable status colors (#34)
+
+
+### Bug Fixes
+
+- Count recurring-rule references in currency-disable guard
+- Corrected icon-button idiom on budget chevrons, pagination, stepper docblock
+- Derive i18n namespace list from index.ts + parity gate
+- ListFilterFields date pair wraps below sm
+- Lengthen test JWT secret to 36 bytes + pin 32-byte invariant
+- Move the date to the top of the transaction form (#6)
+- Fix stale facts
+
+
+### Documentation
+
+- Skills sync for python 3.15 coordinated migration (librarian)
+- Skills sync for upgrade wave phase 6 redis8 kombu57 (librarian)
+- Sync coding summaries to skills
+- Sync coding summaries to skills
+- Sync coding summaries to skills
+- Sync coding summaries to skills
+- Sync coding summaries to skills
+- Sync coding summaries to skills (#7)
+- Post-merge follow-up for redesign-foundations (#9)
+- Post-merge follow-up for redesign-navigation (#11)
+- Redesign-new-transaction follow-up (docs + skills) (#14)
+- Redesign-transaction-record follow-up (docs + skills) (#16)
+- Redesign-filters follow-up (docs + skills) (#18)
+- Post-merge follow-up for redesign-accounts (#20)
+- Post-merge follow-up for redesign-home-budget (#22)
+- Post-merge follow-up for redesign-entry-speed (#24)
+- Post-merge follow-up for redesign-feedback-gestures (#26)
+- Post-merge follow-up for redesign-wrapup (#28)
+- Post-merge follow-up for redesign-secondary-screens (#33)
+- Post-merge follow-up for redesign-legibility (#35)
+
+
+### Miscellaneous
+
+- *(deps)* Bump astral-sh/setup-uv
+- *(deps)* Bump the minor-and-patch group in /frontend with 4 updates
+- Python 3.15 base + pydantic/cffi lock refresh (supersedes)
+- *(deps)* Kombu 5.7 + redis 8.1 backend bump and redis:8-alpine compose pin
+- Task 1 - dead code and catalog sweep (#27)
+
 ## [0.5.0] - 2026-11-01
 
 ### Features
