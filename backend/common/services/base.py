@@ -18,10 +18,14 @@ def delete_workspace_financial_records(workspace_id: int) -> None:
     from planned_transactions.models import PlannedTransaction, RecurringTransaction
     from transactions.attachments import AttachmentService
     from transactions.models import Transaction
+    from transactions.receipts import ReceiptService
     from transfers.models import Transfer
 
     # Stored attachment files first — the row cascade below can't reach S3.
     AttachmentService.delete_storage_for_transactions(Transaction.objects.for_workspace(workspace_id))
+    # Open receipts own stored objects too; saved ones handed their file to
+    # the transaction's attachment. Sweep before any row deletion.
+    ReceiptService.delete_storage_for_workspace(workspace_id)
 
     Transfer.objects.for_workspace(workspace_id).delete()
     Transaction.objects.for_workspace(workspace_id).delete()

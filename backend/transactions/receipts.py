@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from accounts.models import Account
 from transactions import parser_client
-from transactions.attachments import ALLOWED_CONTENT_TYPES, AttachmentService
+from transactions.attachments import ALLOWED_CONTENT_TYPES, MAX_ATTACHMENT_SIZE_MB, AttachmentService
 from transactions.exceptions import (
     AttachmentFileMissingError,
     AttachmentStorageUnavailableError,
@@ -630,3 +630,97 @@ class ReceiptService:
                 if same_money and abs((row['date'] - day).days) <= 1:
                     flagged.add(receipt_id)
         return flagged
+
+    # --- GDPR export/import ---
+
+    @staticmethod
+    def export_open(workspace_id: int) -> list[dict]:
+        """Open receipts for the GDPR export: metadata plus base64 content.
+
+        Saved receipts are left out - their file is the transaction's
+        attachment, which already travels with the transaction. With storage
+        disabled (or an object missing) `content_b64` is None: the metadata
+        still documents the receipt. Same shape as
+        AttachmentService.export_for_transaction.
+        """
+        import base64
+
+        storage_enabled = AttachmentService.storage_enabled()
+        exported = []
+        for receipt in (
+            ReceiptCapture.objects.for_workspace(workspace_id)
+            .filter(state__in=ReceiptCapture.OPEN_STATES)
+            .order_by('created_at', 'id')
+        ):
+            content = AttachmentService.fetch_file(receipt.file_key) if storage_enabled else None
+            exported.append(
+                {
+                    'filename': receipt.filename,
+                    'content_type': receipt.content_type,
+                    'size': receipt.size,
+                    'result': receipt.result,
+                    'content_b64': base64.b64encode(content).decode('ascii') if content is not None else None,
+                }
+            )
+        return exported
+
+    @staticmethod
+    def import_open(user, workspace, receipts_data: list[dict] | None) -> int:
+        """Restore open receipts from a GDPR export; returns the number created.
+
+        Mirrors AttachmentService.import_for_transaction: entries without
+        content, with a disallowed content type, with malformed or oversized
+        base64, whose storage write is refused, or when storage is off are
+        skipped, not errors. A non-empty dict `result` restores the row as
+        ready (merchant key derived from it), anything else as waiting.
+        Nothing is dispatched - the beat job reads waiting rows once the
+        parser is reachable. Runs inside the caller's atomic block, so it
+        carries no decorator of its own.
+        """
+        import base64
+        import binascii
+
+        if not isinstance(receipts_data, list) or not AttachmentService.storage_enabled():
+            return 0
+        max_bytes = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024
+        created = 0
+        for entry in receipts_data:
+            if not isinstance(entry, dict):
+                continue
+            content_b64 = entry.get('content_b64')
+            content_type = (entry.get('content_type') or '').lower()
+            if not content_b64 or content_type not in ALLOWED_CONTENT_TYPES:
+                continue
+            # 4/3 base64 expansion: a compliant payload can't exceed this.
+            if len(content_b64) > max_bytes * 4 // 3 + 4:
+                continue
+            try:
+                content = base64.b64decode(content_b64, validate=True)
+            except (binascii.Error, ValueError):
+                continue
+            if len(content) > max_bytes:
+                continue
+            key = ReceiptService._build_key(workspace.id, content_type)
+            # A refused write skips the entry, as for attachments: one bad entry cannot roll back the atomic import.
+            try:
+                stored_key = AttachmentService.store_file(key, content, content_type)
+            except AttachmentStorageUnavailableError:
+                continue
+            fields = {
+                'workspace': workspace,
+                'created_by': user,
+                'updated_by': user,
+                'file_key': stored_key,
+                'filename': entry.get('filename') or 'receipt',
+                'content_type': content_type,
+                'size': len(content),
+                'state': ReceiptCapture.WAITING,
+            }
+            result = entry.get('result')
+            if isinstance(result, dict) and result:
+                fields['state'] = ReceiptCapture.READY
+                fields['result'] = result
+                fields['merchant_key'] = normalize_merchant(result.get('merchant'))
+            ReceiptCapture.objects.create(**fields)
+            created += 1
+        return created
