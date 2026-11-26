@@ -4,6 +4,7 @@ StorageService is mocked as an enabled bucket (the TestTransactionAttachments
 pattern in transactions/tests.py, which this file neither imports nor modifies).
 """
 
+import threading
 from unittest import mock
 
 from django.contrib import admin as django_admin
@@ -15,7 +16,9 @@ from django.db.migrations.recorder import MigrationRecorder
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
+from accounts.factories import AccountFactory
 from common.tests.mixins import APIClientMixin, AuthMixin
+from currencies.services import CurrencyCatalogService
 from transactions.admin import ReceiptCaptureAdmin
 from transactions.attachments import DOWNLOAD_URL_EXPIRY_SECONDS
 from transactions.exceptions import (
@@ -24,8 +27,10 @@ from transactions.exceptions import (
     ReceiptNotFoundError,
 )
 from transactions.factories import ReceiptCaptureFactory
-from transactions.models import ReceiptCapture
+from transactions.models import ReceiptCapture, Transaction, TransactionAttachment
 from transactions.receipts import ReceiptService
+from transactions.schemas import ReceiptConfirmIn
+from transactions.services import TransactionService
 from workspaces.factories import WorkspaceFactory
 
 
@@ -322,3 +327,106 @@ class TestReceiptCaptureMigrationRoundTrip(TransactionTestCase):
         self.assertIn('receipt_captures', tables())
         ReceiptCaptureFactory()  # the table and its constraints are back
         self.assertEqual(ReceiptCapture.objects.count(), 1)
+
+
+class TestDeleteWaitsForConfirm(AuthMixin, TransactionTestCase):
+    """A delete that starts while a confirm holds the receipt waits, and keeps the handed-over file.
+
+    A real race needs two database connections, so this class commits instead of wrapping each
+    test in a transaction. Like the migration round trip above, its per-test flush empties the
+    tables the session seeds once: setUp re-seeds the currency catalog, and tearDownClass
+    re-seeds both for the classes that follow. Keep it at one test, and never rely in it on rows
+    another test created.
+    """
+
+    RESULT = {'merchant': 'Biedronka 4381', 'date': '2026-07-14', 'currency': 'PLN', 'total': '50.00'}
+
+    @classmethod
+    def tearDownClass(cls):
+        call_command('seed_currencies', verbosity=0)
+        call_command('seed_legal_documents', verbosity=0)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        call_command('seed_currencies', verbosity=0)
+        patcher = mock.patch('transactions.attachments.StorageService')
+        self.storage = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.storage._is_enabled.return_value = True
+        self.storage.delete_file.return_value = True
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.account = AccountFactory(workspace=self.workspace, name='Main')
+        self.receipt = ReceiptCaptureFactory(
+            workspace=self.workspace,
+            created_by=self.user,
+            state=ReceiptCapture.READY,
+            result=self.RESULT,
+        )
+
+    def test_delete_that_starts_during_a_confirm_never_removes_the_handed_over_file(self):
+        lock_held, delete_has_read, release = threading.Event(), threading.Event(), threading.Event()
+        real_create, real_get = TransactionService.create, ReceiptService.get
+        outcome = {}
+
+        def run_confirm():
+            def paused_create(*args, **kwargs):
+                # Inside confirm's atomic block: the receipt row is locked and still unchanged.
+                lock_held.set()
+                release.wait(timeout=10)
+                return real_create(*args, **kwargs)
+
+            try:
+                with mock.patch.object(TransactionService, 'create', side_effect=paused_create):
+                    outcome['confirm'] = ReceiptService.confirm(
+                        self.user, self.workspace.id, self.receipt.id, ReceiptConfirmIn(**self._payload())
+                    )
+            except Exception as exc:
+                outcome['confirm'] = exc
+            finally:
+                connection.close()
+
+        def run_delete():
+            def read_then_signal(*args, **kwargs):
+                receipt = real_get(*args, **kwargs)
+                delete_has_read.set()
+                return receipt
+
+            try:
+                # Before the fix, delete read the row here through get, with no lock.
+                with mock.patch.object(ReceiptService, 'get', side_effect=read_then_signal):
+                    outcome['delete'] = ReceiptService.delete(self.workspace.id, self.receipt.id)
+            except Exception as exc:
+                outcome['delete'] = exc
+            finally:
+                connection.close()
+
+        confirmer = threading.Thread(target=run_confirm, daemon=True)
+        deleter = threading.Thread(target=run_delete, daemon=True)
+        confirmer.start()
+        self.assertTrue(lock_held.wait(timeout=10), 'confirm never locked the receipt')
+        deleter.start()
+        # Before the fix the delete has read the open row by now; with the fix it waits on the lock.
+        delete_has_read.wait(timeout=1)
+        release.set()
+        confirmer.join(timeout=10)
+        deleter.join(timeout=10)
+        self.assertFalse(confirmer.is_alive(), 'confirm did not finish')
+        self.assertFalse(deleter.is_alive(), 'delete did not finish')
+
+        transaction = outcome['confirm']
+        self.assertIsInstance(transaction, Transaction)
+        self.assertIsNone(outcome['delete'])
+        self.assertFalse(ReceiptCapture.objects.filter(id=self.receipt.id).exists())
+        attachment = TransactionAttachment.objects.get(transaction_id=transaction.id)
+        self.assertEqual(attachment.file_key, self.receipt.file_key)
+        self.storage.delete_file.assert_not_called()
+
+    def _payload(self):
+        return {
+            'date': '2026-07-15',
+            'description': 'Test expense',
+            'type': 'expense',
+            'amount': '50.00',
+            'account_id': self.account.id,
+        }

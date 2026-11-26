@@ -369,8 +369,16 @@ class ReceiptService:
     @staticmethod
     @db_transaction.atomic
     def delete(workspace_id: int, receipt_id: int) -> None:
-        """Delete the row and, only while it still owned one, its storage object."""
-        receipt = ReceiptService.get(receipt_id, workspace_id)
+        """Delete the row and, only while it still owned one, its storage object.
+
+        The row is locked first, as in retry and confirm: a delete that starts while
+        a confirm holds the receipt waits for it, then reads the `saved` row with its
+        empty key, removes that row and leaves the file the attachment now owns alone.
+        """
+        try:
+            receipt = ReceiptCapture.objects.select_for_update().for_workspace(workspace_id).get(id=receipt_id)
+        except ReceiptCapture.DoesNotExist:
+            raise ReceiptNotFoundError()
         file_key = receipt.file_key
         receipt.delete()
         if file_key:
