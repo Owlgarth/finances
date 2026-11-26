@@ -1,6 +1,6 @@
 # Specialized Test Techniques
 
-Part of the `backend-testing` skill. Read when a test needs time control, token expiry, rate limits, translated errors, import-time settings branches, race-loss branches, DB check constraints, query-count invariance, data-migration functions, or a dry run against real dev data.
+Part of the `backend-testing` skill. Read when a test needs time control, token expiry, rate limits, translated errors, import-time settings branches, race-loss branches, TransactionTestCase flush semantics, DB check constraints, query-count invariance, data-migration functions, or a dry run against real dev data.
 
 ## Testing Token Expiry
 
@@ -114,6 +114,10 @@ with mock.patch.object(
 ```
 
 When a private helper's signature changes, grep its test doubles in the same task - `side_effect=fake` stubs must widen with the real method's parameters.
+
+## TransactionTestCase Truncates the Session-Seed Tables
+
+A `TransactionTestCase` commits instead of wrapping each test in a transaction - that is why it exists (DDL like a migration round-trip, or a true two-connection race) - and the price is its per-test flush: unlike `TestCase` it truncates EVERY table after each test, including the rows `backend/conftest.py` seeds once per pytest session (`seed_currencies`, `seed_legal_documents`). The first such class in a suite run therefore breaks every LATER test that reads a currency or a legal document, with failures pointing nowhere near the new class. Re-seed in the class itself: `tearDownClass` calls `call_command('seed_currencies', verbosity=0)` and `call_command('seed_legal_documents', verbosity=0)` for the classes that follow, and a class whose own body needs currencies re-seeds them in `setUp`. Keep the class at one test, and never rely in it on rows another test created. Exemplars: `TestReceiptCaptureMigrationRoundTrip` and `TestDeleteWaitsForConfirm` in `transactions/test_receipts.py`.
 
 ## Testing DB Check Constraints Directly
 

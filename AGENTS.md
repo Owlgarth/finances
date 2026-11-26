@@ -100,6 +100,7 @@ Money-holding accounts are the centre of gravity; balances and periods are compu
 
 ```
 Workspace → { WorkspaceMember, WorkspaceCurrency, Bookmark, UserWorkspaceSettings,
+              ReceiptCapture (receipt photo stored and read before it becomes a transaction),
               Account → [Transaction → (TransactionItem, TransactionAttachment), Transfer,
                          PlannedTransaction, RecurringTransaction],
               Budget → [BudgetCurrency, Category, Period → CategoryBudget] }
