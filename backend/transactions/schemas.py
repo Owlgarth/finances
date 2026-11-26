@@ -264,3 +264,36 @@ class ExtractionConfigOut(BaseModel):
 
     enabled: bool
     reachable: bool
+
+
+class ReceiptOut(BaseModel):
+    """One stored receipt, open or saved (receipts are listed and their files downloaded through the API)."""
+
+    id: int
+    state: str  # queued | reading | ready | waiting | failed | saved
+    error: str  # '' when none; a raw parser message for failed rows
+    filename: str
+    content_type: str
+    size: int
+    uploader_name: Optional[str] = None  # full_name or email of created_by; None when that user is gone
+    transaction_id: Optional[int] = None  # set once saved
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    result: Optional[dict] = None  # the parser contract document, when state == ready
+
+
+class ReceiptCountsOut(BaseModel):
+    """Per-state counts of the workspace's open receipts (saved rows are not counted)."""
+
+    queued: int = 0
+    reading: int = 0
+    ready: int = 0
+    waiting: int = 0
+    failed: int = 0
+
+
+class ReceiptListOut(BaseModel):
+    """Open receipts, newest first, with their counts."""
+
+    items: list[ReceiptOut]
+    counts: ReceiptCountsOut

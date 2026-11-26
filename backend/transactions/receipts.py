@@ -16,12 +16,16 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction as db_transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from transactions import parser_client
 from transactions.attachments import ALLOWED_CONTENT_TYPES, AttachmentService
-from transactions.exceptions import ReceiptNotFoundError
+from transactions.exceptions import (
+    AttachmentFileMissingError,
+    AttachmentStorageUnavailableError,
+    ReceiptNotFoundError,
+)
 from transactions.models import ReceiptCapture
 
 RESUME_INTERVAL_SECONDS = 15 * 60  # equals the beat interval of resume-waiting-receipts
@@ -117,6 +121,59 @@ class ReceiptService:
             .exclude(state=ReceiptCapture.SAVED)
             .select_related('created_by')
         )
+
+    @staticmethod
+    def serialize(receipt: ReceiptCapture) -> dict:
+        """The `ReceiptOut` wire shape, in field order.
+
+        `result` travels only for a ready receipt: the column keeps its value
+        after a retry from ready and after a save, and the client renders by state.
+        """
+        uploader = receipt.created_by
+        return {
+            'id': receipt.id,
+            'state': receipt.state,
+            'error': receipt.error,
+            'filename': receipt.filename,
+            'content_type': receipt.content_type,
+            'size': receipt.size,
+            'uploader_name': (uploader.full_name or uploader.email) if uploader else None,
+            'transaction_id': receipt.transaction_id,
+            'created_at': receipt.created_at,
+            'updated_at': receipt.updated_at,
+            'result': receipt.result if receipt.state == ReceiptCapture.READY else None,
+        }
+
+    @staticmethod
+    def counts(workspace_id: int) -> dict:
+        """Per-state counts of the workspace's open receipts: one query, every open state present."""
+        # .order_by() clears Meta.ordering: left in, its columns join the GROUP BY and
+        # every receipt becomes its own group (a count of 1 per receipt, never per state).
+        by_state = dict(
+            ReceiptCapture.objects.for_workspace(workspace_id)
+            .exclude(state=ReceiptCapture.SAVED)
+            .values_list('state')
+            .annotate(total=Count('id'))
+            .order_by()
+        )
+        return {state: by_state.get(state, 0) for state in ReceiptCapture.OPEN_STATES}
+
+    @staticmethod
+    def download(workspace_id: int, receipt_id: int) -> tuple[ReceiptCapture, bytes]:
+        """A receipt's row and stored bytes for API download.
+
+        Raises ReceiptNotFoundError when the id is missing or foreign,
+        AttachmentStorageUnavailableError when storage is off, and
+        AttachmentFileMissingError when the row owns no file any more (a saved
+        receipt handed it to its transaction's attachment) or the object is gone.
+        """
+        receipt = ReceiptService.get(receipt_id, workspace_id)
+        if not AttachmentService.storage_enabled():
+            raise AttachmentStorageUnavailableError()
+        content = ReceiptService.read_bytes(receipt)
+        if content is None:
+            raise AttachmentFileMissingError()
+        return receipt, content
 
     @staticmethod
     def read_bytes(receipt: ReceiptCapture) -> bytes | None:

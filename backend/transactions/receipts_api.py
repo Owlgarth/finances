@@ -1,0 +1,94 @@
+"""Receipts API endpoints: the stored receipts of a workspace (upload, list, detail, file, retry, delete)."""
+
+from django.http import HttpRequest, HttpResponse
+from ninja import File, Router, Status
+from ninja.files import UploadedFile
+
+from common.auth import WorkspaceJWTAuth
+from common.permissions import require_role
+from common.throttle import validate_file_size
+from core.schemas.common import DetailOut
+from transactions.attachments import MAX_ATTACHMENT_SIZE_MB, AttachmentService
+from transactions.receipts import ReceiptService
+from transactions.schemas import ReceiptListOut, ReceiptOut
+from workspaces.models import WRITE_ROLES
+
+router = Router(tags=['Receipts'])
+
+
+@router.post('', response={201: ReceiptOut, 400: DetailOut, 403: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())
+def upload_receipt(request: HttpRequest, file: UploadedFile = File(...)):
+    """Store an uploaded receipt photo or PDF (requires write access).
+
+    Never 503 for a parser that is unconfigured or offline: the file is stored
+    first and read in the background. 503 means file storage is not configured.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    validate_file_size(file, max_size_mb=MAX_ATTACHMENT_SIZE_MB)
+    receipt = ReceiptService.create_from_upload(user, workspace_id, file)
+    return Status(201, ReceiptService.serialize(receipt))
+
+
+@router.get('', response={200: ReceiptListOut, 403: DetailOut}, auth=WorkspaceJWTAuth())
+def list_receipts(request: HttpRequest):
+    """List the workspace's open receipts, newest first, with per-state counts (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return {
+        'items': [ReceiptService.serialize(receipt) for receipt in ReceiptService.list_open(workspace_id)],
+        'counts': ReceiptService.counts(workspace_id),
+    }
+
+
+@router.get('/{receipt_id}', response={200: ReceiptOut, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def get_receipt(request: HttpRequest, receipt_id: int):
+    """Get one receipt, saved ones included: `transaction_id` says where it went (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return ReceiptService.serialize(ReceiptService.get(receipt_id, workspace_id))
+
+
+@router.get('/{receipt_id}/file', response={403: DetailOut, 404: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())
+def download_receipt_file(request: HttpRequest, receipt_id: int):
+    """Download a receipt's stored file (requires write access).
+
+    Returns a plain HttpResponse (no Ninja response schema) with the stored
+    content type and Content-Disposition - mirrors download_transaction_attachment.
+    Status codes: 200 file bytes, 404 receipt not found (code 'not_found'), file
+    handed over to a transaction's attachment or object gone (code 'file_missing'),
+    503 storage not configured.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    receipt, content = ReceiptService.download(workspace_id, receipt_id)
+    response = HttpResponse(content, content_type=receipt.content_type)
+    response['Content-Disposition'] = AttachmentService.content_disposition(receipt.filename)
+    return response
+
+
+@router.post('/{receipt_id}/retry', response={200: ReceiptOut, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def retry_receipt(request: HttpRequest, receipt_id: int):
+    """Queue a receipt for another read and return it as it stands (requires write access).
+
+    A saved receipt comes back unchanged. A parser that is not configured moves
+    the receipt to `waiting` instead of queueing a read.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    return ReceiptService.serialize(ReceiptService.retry(user, workspace_id, receipt_id))
+
+
+@router.delete('/{receipt_id}', response={204: None, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+def delete_receipt(request: HttpRequest, receipt_id: int):
+    """Delete a receipt and the file it still owns (requires write access)."""
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+    ReceiptService.delete(workspace_id, receipt_id)
+    return Status(204, None)
