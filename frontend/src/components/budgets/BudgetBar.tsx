@@ -33,9 +33,11 @@ export interface BudgetBarProps {
 /**
  * The budget bars' one track: a 4px muted track, a fill as wide as the
  * spent share, a 1px tick where the period's elapsed share sits, and one
- * status row under it. The tick and the pace word are drawn together or
- * not at all, so the tick is never the only signal that spending runs
- * ahead of the period.
+ * status row under it. The pace word never shows without the tick, and
+ * spending more than five points ahead of the tick always brings the
+ * word, so the tick alone never has to say that spending runs ahead of
+ * the period. The tick can stand alone, while spending runs no more
+ * than five points ahead of it.
  *
  * The tick is the text color and stands 2px above and below the track, so
  * it stays readable on either side of the fill, including once the fill
