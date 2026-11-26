@@ -337,6 +337,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'planned_transactions.tasks.generate_recurring_transactions',
         'schedule': crontab(minute=5, hour=0),
     },
+    # Every 15 minutes, while the parser answers: queue reads for receipts that waited for
+    # it and for reads lost in flight. RESUME_INTERVAL_SECONDS (transactions/receipts.py)
+    # equals this interval.
+    'resume-waiting-receipts': {
+        'task': 'transactions.tasks.resume_waiting_receipts',
+        'schedule': crontab(minute='*/15'),
+    },
 }
 
 # Receipt parser service (optional). When PARSER_URL is empty, extraction is
@@ -359,6 +366,9 @@ PARSER_HEALTH_CACHE_SECONDS = int(os.getenv('PARSER_HEALTH_CACHE_SECONDS', '30')
 PARSER_EXTRACT_MAX_RETRIES = int(os.getenv('PARSER_EXTRACT_MAX_RETRIES', '12'))
 PARSER_EXTRACT_RETRY_BACKOFF = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF', '60'))
 PARSER_EXTRACT_RETRY_BACKOFF_MAX = int(os.getenv('PARSER_EXTRACT_RETRY_BACKOFF_MAX', '7200'))
+# Beat queues reads again for receipts left waiting: at most this many per run, oldest
+# first. It also widens the in-flight threshold (ReceiptService._inflight_stuck_before).
+RECEIPT_RESUME_BATCH_SIZE = int(os.getenv('RECEIPT_RESUME_BATCH_SIZE', '50'))  # oldest first
 
 # Email configuration
 # EMAIL_MODE selects the email backend:
