@@ -296,7 +296,7 @@ export default function TwoFactorSection() {
       <div className="space-y-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-positive-bg text-positive border border-positive/20">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium bg-positive-bg text-positive-text border border-positive/20">
               {t('twoFactor.enabledBadge')}
             </span>
             <h3 className="text-sm font-medium text-text">

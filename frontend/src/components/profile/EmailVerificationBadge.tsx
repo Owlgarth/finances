@@ -27,7 +27,7 @@ export default function EmailVerificationBadge({ verified, email }: Props) {
 
   if (verified) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-positive">
+      <span className="inline-flex items-center gap-1.5 text-sm text-positive-text">
         <CircleCheck size={14} className="text-positive" />
         {t('emailBadge.verified')}
       </span>
@@ -36,7 +36,7 @@ export default function EmailVerificationBadge({ verified, email }: Props) {
 
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
-      <span className="inline-flex items-center gap-1.5 text-warning">
+      <span className="inline-flex items-center gap-1.5 text-warning-text">
         <AlertTriangle size={14} className="text-warning" />
         {t('emailBadge.notVerified')}
       </span>

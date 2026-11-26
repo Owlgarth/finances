@@ -42,7 +42,7 @@ export default function RecentActivityWidget() {
               className="flex items-center justify-between gap-2 text-sm rounded-sm hover:bg-surface-hover transition-colors px-1.5 -mx-1.5"
             >
               <span className="text-text truncate">{tx.description}</span>
-              <span className={`font-mono whitespace-nowrap ${tx.type === 'income' ? 'text-positive' : tx.type === 'expense' ? 'text-negative' : 'text-text'}`}>
+              <span className={`font-mono whitespace-nowrap ${tx.type === 'income' ? 'text-positive-text' : tx.type === 'expense' ? 'text-negative' : 'text-text'}`}>
                 {tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}{formatAmount(tx.amount)} {multiCurrency ? tx.currency_code : ''}
               </span>
             </Link>

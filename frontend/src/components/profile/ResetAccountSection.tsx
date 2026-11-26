@@ -50,7 +50,7 @@ export default function ResetAccountSection() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-sans font-semibold text-warning text-sm mb-1">{t('resetAccount.title')}</h3>
+        <h3 className="font-sans font-semibold text-warning-text text-sm mb-1">{t('resetAccount.title')}</h3>
         <p className="text-sm text-text-muted">
           {t('resetAccount.body')}
         </p>
@@ -107,7 +107,7 @@ export default function ResetAccountSection() {
         <button
           type="submit"
           disabled={isResetting || !password}
-          className="bg-surface border border-warning/40 text-warning px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-warning-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-surface border border-warning/40 text-warning-text px-3 py-1.5 rounded-sm text-xs font-medium hover:bg-warning-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isResetting ? t('resetAccount.submitting') : t('resetAccount.submit')}
         </button>
