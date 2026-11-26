@@ -168,7 +168,7 @@ export default function ExtractionReviewModal({ onClose, transaction, parsed }: 
       </div>
 
       {parsed.warnings.length > 0 && (
-        <div className="mb-4 p-3 bg-warning/10 border border-warning/40 rounded-sm text-xs text-warning">
+        <div className="mb-4 p-3 bg-warning-bg border border-warning/40 rounded-sm text-xs text-warning-text">
           <p className="font-medium inline-flex items-center gap-1 mb-1"><AlertTriangle size={12} /> {t('extraction.parserFlagged')}</p>
           <ul className="list-disc pl-4">
             {parsed.warnings.map((w) => <li key={w}>{w.replace(/_/g, ' ')}</li>)}

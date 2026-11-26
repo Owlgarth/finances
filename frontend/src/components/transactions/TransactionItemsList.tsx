@@ -426,7 +426,7 @@ export default function TransactionItemsList({
       </div>
 
       {mismatch && (
-        <p className="text-xs text-warning inline-flex items-center gap-1">
+        <p className="text-xs text-warning-text inline-flex items-center gap-1">
           <AlertTriangle size={12} /> {t('items.mismatch', { items: formatAmount(itemsTotal), amount: formatAmount(absAmount) })}
         </p>
       )}

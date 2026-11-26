@@ -123,14 +123,12 @@ const ATTENTION_RANK: Record<RowStatus, number> = { over: 0, near: 1, ok: 2 }
 
 /** Status chips in the sticky category cell: status never relies on color
  *  alone - the word carries it. Bordered rectangular shape per the page's
- *  own currency chip, never a pill. Colors are the interim ruling:
- *  Over = text-negative; Near limit = text-text-muted because the palette
- *  has no warning TEXT color legible at this size yet - switch to a
- *  warning text token when one lands. */
+ *  own currency chip, never a pill. Over = text-negative; Near limit wears
+ *  the warning text token. */
 const statusChipBase =
   'inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none shrink-0'
 const statusOverChipClass = `${statusChipBase} text-negative border-negative/20 bg-negative-bg`
-const statusNearChipClass = `${statusChipBase} text-text-muted bg-surface border-border`
+const statusNearChipClass = `${statusChipBase} text-warning-text bg-surface border-border`
 
 /** Status of a budget category row: over = spent more than planned, near =
  *  75% or more of plan without going over, else on track. Structural twin
@@ -1077,7 +1075,7 @@ export default function BudgetDetailPage() {
       />
 
       {isPast && (
-        <p className="text-xs text-warning mb-3">{t('detail.pastPeriodNote')}</p>
+        <p className="text-xs text-warning-text mb-3">{t('detail.pastPeriodNote')}</p>
       )}
       {isFuture && (
         <p className="text-xs text-text-muted mb-3">{t('detail.futurePeriodNote')}</p>

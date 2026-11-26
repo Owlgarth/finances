@@ -54,9 +54,9 @@ import { primaryButtonClass, secondaryButtonClass } from '../components/common/f
 // and transactions/TransactionsTable.tsx (keep in sync; with a third consumer
 // the copy belongs in a shared module at the next touch of all three).
 const TYPE_STYLE: Record<string, string> = {
-  income: 'text-positive',
+  income: 'text-positive-text',
   expense: 'text-negative',
-  adjustment: 'text-warning',
+  adjustment: 'text-warning-text',
 }
 
 const TYPE_OPTIONS = [
@@ -1029,7 +1029,7 @@ function TransactionsContent({ settings, calendarStartDay }: TransactionsContent
                     <div className="flex items-center gap-2">
                       <span className="text-text truncate">{tx.description}</span>
                       {tx.type === 'adjustment' && (
-                        <span className="text-[9px] font-mono uppercase tracking-wider text-warning border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
+                        <span className="text-[9px] font-mono uppercase tracking-wider text-warning-text border border-warning/40 rounded-sm px-1">{t('adjBadge')}</span>
                       )}
                       {auto && (
                         <span title={t('autoBadgeTitle')} className="text-[9px] font-mono uppercase tracking-wider text-text-muted border border-border rounded-sm px-1">{t('autoBadge')}</span>

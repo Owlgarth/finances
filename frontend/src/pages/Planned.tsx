@@ -1448,7 +1448,7 @@ function PlannedContent({ settings, calendarStartDay }: PlannedContentProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-text truncate">{r.name}</span>
-                      <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive border-positive/40' : 'text-text-muted border-border'}`}>
+                      <span className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${r.is_active ? 'text-positive-text border-positive/40' : 'text-text-muted border-border'}`}>
                         {r.is_active ? t('recurring.activeChip') : t('recurring.pausedChip')}
                       </span>
                     </div>

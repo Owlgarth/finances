@@ -29,9 +29,9 @@ import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, pri
 // consumer; extract at the third). Small-size semantic text color follows the
 // shipped ledger idiom here.
 const TYPE_STYLE: Record<TransactionType, string> = {
-  income: 'text-positive',
+  income: 'text-positive-text',
   expense: 'text-negative',
-  adjustment: 'text-warning',
+  adjustment: 'text-warning-text',
 }
 
 // Sign prefix idiom - copy of SIGN_PREFIX in transactions/TransactionFormFields
@@ -179,7 +179,7 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={`text-[9px] font-mono uppercase tracking-wider border rounded-sm px-1 ${
-              isAdjustment ? 'text-warning border-warning/40' : 'text-text-muted border-border'
+              isAdjustment ? 'text-warning-text border-warning/40' : 'text-text-muted border-border'
             }`}
           >
             {t(TYPE_LABEL[transaction.type])}

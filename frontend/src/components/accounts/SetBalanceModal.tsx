@@ -93,7 +93,7 @@ export default function SetBalanceModal({ open, onClose, account }: Props) {
         {delta !== null && delta !== '0.00' && (
           <p className="text-sm text-text-muted">
             {t('setBalance.adjustmentLabel')} {' '}
-            <span className={`font-mono ${delta.startsWith('-') ? 'text-negative' : 'text-positive'}`}>
+            <span className={`font-mono ${delta.startsWith('-') ? 'text-negative' : 'text-positive-text'}`}>
               {delta.startsWith('-') ? '' : '+'}{formatAmount(delta)} {account.currency_code}
             </span>
           </p>

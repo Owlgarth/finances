@@ -45,11 +45,10 @@ interface BudgetCategoryListProps {
 const fillClassOf = (status: BudgetCategoryCardRow['status']): string =>
   status === 'over' ? 'bg-negative' : status === 'near' ? 'bg-warning' : 'bg-primary'
 
-/** Status-word and amount-left text color: negative on over rows, muted
- *  otherwise (see the status-row note below on the missing warning text
- *  color). */
+/** Status-word and amount-left text color: negative on over rows, the
+ *  warning text token on near-limit rows, muted otherwise. */
 const statusTextClass = (status: BudgetCategoryCardRow['status']): string =>
-  status === 'over' ? 'text-negative' : 'text-text-muted'
+  status === 'over' ? 'text-negative' : status === 'near' ? 'text-warning-text' : 'text-text-muted'
 
 /** Trailing-chevron Activity link: >=44x44 on coarse pointers via padding +
  *  pointer-coarse floors, modeled on the page's custom-cadence header
@@ -159,10 +158,8 @@ export default function BudgetCategoryList({
                     </div>
                     {/* Status row: the plain mono uppercase label is the phone
                         chip. Words only on attention rows - the On-track group
-                        heading carries that status. Near limit stays
-                        text-text-muted: the palette has no warning TEXT color
-                        legible at this size yet - switch to a warning text
-                        token when one lands. */}
+                        heading carries that status. Near limit wears the
+                        warning text token. */}
                     <div className="flex justify-between text-[10px] font-mono font-medium uppercase tracking-wider">
                       {statusWord === null ? <span /> : <span className={statusColor}>{statusWord}</span>}
                       <span className={statusColor}>{t('detail.amountLeft', { amount: formatAmount(remaining) })}</span>

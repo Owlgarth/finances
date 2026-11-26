@@ -117,7 +117,7 @@ export default function BudgetWidget() {
                   />
                 </div>
                 <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider">
-                  <span className={over ? 'text-negative' : 'text-text-muted'}>
+                  <span className={over ? 'text-negative' : 'text-warning-text'}>
                     {over ? t('budget.statusOver') : t('budget.statusNearLimit')}
                   </span>
                   <span className="text-text-muted">{Math.round(pct)}%</span>
