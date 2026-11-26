@@ -11,7 +11,7 @@ from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
 from transactions.attachments import MAX_ATTACHMENT_SIZE_MB, AttachmentService
 from transactions.receipts import ReceiptService
-from transactions.schemas import ReceiptConfirmIn, ReceiptListOut, ReceiptOut, TransactionOut
+from transactions.schemas import ReceiptConfirmIn, ReceiptDetailOut, ReceiptListOut, ReceiptOut, TransactionOut
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Receipts'])
@@ -34,23 +34,43 @@ def upload_receipt(request: HttpRequest, file: UploadedFile = File(...)):
 
 @router.get('', response={200: ReceiptListOut, 403: DetailOut}, auth=WorkspaceJWTAuth())
 def list_receipts(request: HttpRequest):
-    """List the workspace's open receipts, newest first, with per-state counts (requires write access)."""
+    """List the workspace's open receipts, newest first, with per-state counts (requires write access).
+
+    Every row carries `possible_duplicate`, computed for all listed receipts in
+    one extra query.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return {
-        'items': [ReceiptService.serialize(receipt) for receipt in ReceiptService.list_open(workspace_id)],
-        'counts': ReceiptService.counts(workspace_id),
-    }
+    receipts = list(ReceiptService.list_open(workspace_id))
+    flagged = ReceiptService.possible_duplicate_ids(workspace_id, receipts)
+    items = []
+    for receipt in receipts:
+        row = ReceiptService.serialize(receipt)
+        row['possible_duplicate'] = receipt.id in flagged
+        items.append(row)
+    return {'items': items, 'counts': ReceiptService.counts(workspace_id)}
 
 
-@router.get('/{receipt_id}', response={200: ReceiptOut, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
+@router.get('/{receipt_id}', response={200: ReceiptDetailOut, 403: DetailOut, 404: DetailOut}, auth=WorkspaceJWTAuth())
 def get_receipt(request: HttpRequest, receipt_id: int):
-    """Get one receipt, saved ones included: `transaction_id` says where it went (requires write access)."""
+    """Get one receipt, saved ones included: `transaction_id` says where it went (requires write access).
+
+    A ready receipt that holds a result also carries `suggestions` (what the
+    workspace's history suggests) and `duplicates` (the transactions it may
+    already be, D18); every other receipt answers null suggestions and an
+    empty duplicates list.
+    """
     user = request.auth
     workspace_id = request.auth.current_workspace_id
     require_role(user, workspace_id, WRITE_ROLES)
-    return ReceiptService.serialize(ReceiptService.get(receipt_id, workspace_id))
+    receipt = ReceiptService.get(receipt_id, workspace_id)
+    data = ReceiptService.serialize(receipt)
+    duplicates = ReceiptService.duplicates(workspace_id, receipt)
+    data['suggestions'] = ReceiptService.suggestions(workspace_id, receipt)
+    data['duplicates'] = duplicates
+    data['possible_duplicate'] = bool(duplicates)
+    return data
 
 
 @router.get('/{receipt_id}/file', response={403: DetailOut, 404: DetailOut, 503: DetailOut}, auth=WorkspaceJWTAuth())

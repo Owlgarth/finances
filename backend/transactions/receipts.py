@@ -12,13 +12,16 @@ from __future__ import annotations
 import re
 import unicodedata
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.db import transaction as db_transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Func, Q, TextField, Value, Window
+from django.db.models.functions import Coalesce, Lower, RowNumber, Trim
 from django.utils import timezone
 
+from accounts.models import Account
 from transactions import parser_client
 from transactions.attachments import ALLOWED_CONTENT_TYPES, AttachmentService
 from transactions.exceptions import (
@@ -26,9 +29,9 @@ from transactions.exceptions import (
     AttachmentStorageUnavailableError,
     ReceiptNotFoundError,
 )
-from transactions.models import ReceiptCapture, Transaction, TransactionAttachment
+from transactions.models import ReceiptCapture, Transaction, TransactionAttachment, TransactionItem
 from transactions.schemas import ReceiptConfirmIn, TransactionCreate
-from transactions.services import TransactionService
+from transactions.services import EFFECTIVE_CATEGORY_ID, TransactionService
 
 RESUME_INTERVAL_SECONDS = 15 * 60  # equals the beat interval of resume-waiting-receipts
 
@@ -47,6 +50,34 @@ def normalize_merchant(merchant: str | None) -> str | None:
     text = unicodedata.normalize('NFKC', merchant).casefold()
     text = _STORE_NUMBER_SUFFIX.sub('', ' '.join(text.split())).strip()
     return text[:255] or None
+
+
+DUPLICATE_LIMIT = 3  # the newest transactions the duplicates list carries (D18)
+
+# SQL twin of normalize_item_name(): lower-cased, every whitespace run collapsed
+# to one space, then trimmed. Collapsing comes first on purpose: trim alone
+# strips spaces only, so a leading or trailing tab or newline would survive it.
+# One expression object serves both the filter and the window partition of the
+# item lookup. PostgreSQL only; Django ships no RegexpReplace, hence the raw Func.
+NORMALIZED_ITEM_NAME = Trim(
+    Func(Lower('name'), Value(r'\s+'), Value(' '), Value('g'), function='regexp_replace', output_field=TextField())
+)
+
+# Whether an item row's effective category (its own, else its transaction's) is
+# archived; None when the row has no effective category.
+EFFECTIVE_CATEGORY_ARCHIVED = Coalesce(F('category__is_archived'), F('transaction__category__is_archived'))
+
+
+def normalize_item_name(value: str | None) -> str:
+    """Key that pairs a receipt line item with stored ones: case and whitespace do not matter.
+
+    Lower-case, collapse every whitespace run to one space, trim: '  Mleko\tUHT\n '
+    and 'mleko uht' are the same item. A blank or missing name gives '' so it
+    never matches a stored row (remainder rows are stored with name '').
+    NORMALIZED_ITEM_NAME computes the same key in SQL for the stored side, in
+    the same order: collapse first, then trim.
+    """
+    return ' '.join(value.split()).lower() if isinstance(value, str) else ''
 
 
 class ReceiptService:
@@ -74,6 +105,156 @@ class ReceiptService:
         """
         return timezone.now() - timedelta(
             seconds=settings.RECEIPT_RESUME_BATCH_SIZE * settings.PARSER_TIMEOUT_SECONDS + RESUME_INTERVAL_SECONDS
+        )
+
+    @staticmethod
+    def _holds_result(receipt: ReceiptCapture) -> bool:
+        """True for a ready receipt whose result is the parser document.
+
+        Ready is also the state in which `serialize` puts `result` on the wire,
+        so nothing is computed from a result the client cannot see: not for a
+        saved row, and not for one queued again by a retry (the column keeps the
+        old result until the new read lands).
+        """
+        return receipt.state == ReceiptCapture.READY and isinstance(receipt.result, dict) and bool(receipt.result)
+
+    @staticmethod
+    def _parse_decimal(value) -> Decimal | None:
+        """A parser money string as a Decimal; anything missing or malformed is None."""
+        if value is None:
+            return None
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+        return amount if amount.is_finite() else None
+
+    @staticmethod
+    def _parse_date(value) -> date | None:
+        """A parser ISO date string as a date; anything else is None.
+
+        The two range-end dates go too: they have no one-day window on both sides.
+        """
+        if not isinstance(value, str):
+            return None
+        try:
+            day = date.fromisoformat(value)
+        except ValueError:
+            return None
+        return None if day in (date.min, date.max) else day
+
+    @staticmethod
+    def _result_currency(result: dict) -> str | None:
+        """The result's currency code as read (the contract sends uppercase), or None when it is missing."""
+        code = result.get('currency')
+        return code if isinstance(code, str) and code else None
+
+    @staticmethod
+    def _merchant_history(workspace_id: int, merchant_key: str | None) -> tuple[str | None, int | None]:
+        """(description, category id) of the latest save with this merchant key.
+
+        Latest = max updated_at, tiebreak max id (decision A13). A transaction
+        without a category, or with an archived one, gives None for the id.
+        """
+        if not merchant_key:
+            return None, None
+        latest = (
+            ReceiptCapture.objects.for_workspace(workspace_id)
+            .filter(state=ReceiptCapture.SAVED, merchant_key=merchant_key)
+            .select_related('transaction__category')
+            .order_by('-updated_at', '-id')
+            .first()
+        )
+        if latest is None or latest.transaction is None:
+            return None, None
+        category = latest.transaction.category
+        keep = category is not None and not category.is_archived
+        return latest.transaction.description, category.id if keep else None
+
+    @staticmethod
+    def _suggest_account(workspace_id: int, code: str | None) -> int | None:
+        """The active account flagged default for the currency code, else the only active one (D109).
+
+        One query serves both rules: the flagged row sorts first, so it is the
+        answer when it exists; without one, a single active account is.
+        """
+        if code is None:
+            return None
+        accounts = list(
+            Account.objects.for_workspace(workspace_id)
+            .filter(currency__code=code, is_archived=False)
+            .order_by('-is_default_for_currency', 'id')
+            .values_list('id', 'is_default_for_currency')
+        )
+        if not accounts:
+            return None
+        account_id, is_default = accounts[0]
+        return account_id if is_default or len(accounts) == 1 else None
+
+    @staticmethod
+    def _item_category_ids(workspace_id: int, result: dict) -> list[int | None]:
+        """Per receipt line item, the category of the newest stored item with the same normalized name.
+
+        One window-function query however many items there are (the shape of
+        TransactionService._last_transactions_by_group): row_number() per
+        normalized name, newest first, rn == 1 rows kept in Python because
+        Django disallows filtering on a window. None for an item nothing
+        matches, and when the match's effective category is archived.
+        """
+        items = result.get('items')
+        if not isinstance(items, list):
+            items = []
+        names = [normalize_item_name(item.get('name') if isinstance(item, dict) else None) for item in items]
+        lookup = {name for name in names if name}
+        by_name: dict[str, int | None] = {}
+        if lookup:
+            rows = (
+                TransactionItem.objects.filter(transaction__workspace_id=workspace_id)
+                .annotate(
+                    normalized_name=NORMALIZED_ITEM_NAME,
+                    effective_category_id=EFFECTIVE_CATEGORY_ID,
+                    effective_category_archived=EFFECTIVE_CATEGORY_ARCHIVED,
+                    rn=Window(
+                        expression=RowNumber(),
+                        partition_by=[NORMALIZED_ITEM_NAME],
+                        order_by=[F('transaction__date').desc(), F('transaction_id').desc(), F('id').desc()],
+                    ),
+                )
+                # order_by() clears TransactionItem.Meta.ordering ('position', 'id').
+                .filter(normalized_name__in=lookup)
+                .order_by()
+                .values('normalized_name', 'effective_category_id', 'effective_category_archived', 'rn')
+            )
+            for row in rows:
+                if row['rn'] == 1:
+                    keep = row['effective_category_id'] is not None and not row['effective_category_archived']
+                    by_name[row['normalized_name']] = row['effective_category_id'] if keep else None
+        return [by_name.get(name) if name else None for name in names]
+
+    @staticmethod
+    def _duplicate_key(receipt: ReceiptCapture) -> tuple[Decimal, str, date] | None:
+        """What a duplicate must match: (total, currency code, purchase date).
+
+        None when the receipt has no usable result.
+        """
+        if not ReceiptService._holds_result(receipt):
+            return None
+        total = ReceiptService._parse_decimal(receipt.result.get('total'))
+        code = ReceiptService._result_currency(receipt.result)
+        day = ReceiptService._parse_date(receipt.result.get('date'))
+        if total is None or code is None or day is None:
+            return None
+        return total, code, day
+
+    @staticmethod
+    def _duplicate_condition(key: tuple[Decimal, str, date]) -> Q:
+        """D18 as a filter: same currency code, same absolute amount, dated within one day on both sides."""
+        total, code, day = key
+        return Q(
+            currency__code=code,
+            amount__in=[total, -total],
+            date__gte=day - timedelta(days=1),
+            date__lte=day + timedelta(days=1),
         )
 
     @staticmethod
@@ -141,6 +322,7 @@ class ReceiptService:
             'size': receipt.size,
             'uploader_name': (uploader.full_name or uploader.email) if uploader else None,
             'transaction_id': receipt.transaction_id,
+            'possible_duplicate': False,  # the list and detail overwrite it
             'created_at': receipt.created_at,
             'updated_at': receipt.updated_at,
             'result': receipt.result if receipt.state == ReceiptCapture.READY else None,
@@ -380,3 +562,71 @@ class ReceiptService:
         receipt.updated_by = user
         receipt.save(update_fields=['state', 'transaction', 'file_key', 'error', 'updated_by', 'updated_at'])
         return trans
+
+    @staticmethod
+    def suggestions(workspace_id: int, receipt: ReceiptCapture) -> dict | None:
+        """What the workspace's history suggests for a ready receipt; None in any other state or without a result.
+
+        Computed on every call and never stored. description and category_id
+        come from the latest save with the same merchant key, account_id from
+        the account rule (D109), item_category_ids lines up with
+        result['items'] by position. A None inside the dict is "no suggestion".
+        """
+        if not ReceiptService._holds_result(receipt):
+            return None
+        description, category_id = ReceiptService._merchant_history(workspace_id, receipt.merchant_key)
+        code = ReceiptService._result_currency(receipt.result)
+        return {
+            'description': description,
+            'category_id': category_id,
+            'account_id': ReceiptService._suggest_account(workspace_id, code),
+            'item_category_ids': ReceiptService._item_category_ids(workspace_id, receipt.result),
+        }
+
+    @staticmethod
+    def duplicates(workspace_id: int, receipt: ReceiptCapture) -> list[dict]:
+        """Up to DUPLICATE_LIMIT transactions that may already be this purchase (D18), newest first.
+
+        Each row is {id, date, description, amount}. Empty unless the receipt is
+        ready and holds a result with a total, a currency and a parseable date.
+        No type filter: the decision says "a transaction".
+        """
+        key = ReceiptService._duplicate_key(receipt)
+        if key is None:
+            return []
+        rows = (
+            Transaction.objects.for_workspace(workspace_id)
+            .filter(ReceiptService._duplicate_condition(key))
+            .order_by('-date', '-id')
+            .values('id', 'date', 'description', 'amount')[:DUPLICATE_LIMIT]
+        )
+        return list(rows)
+
+    @staticmethod
+    def possible_duplicate_ids(workspace_id: int, receipts) -> set[int]:
+        """Ids of the receipts that have at least one duplicate, from one query over all of them.
+
+        Every ready receipt with a usable result adds one OR group; the matching
+        transactions are then paired back to their receipts in Python, because
+        one transaction can satisfy several groups.
+        """
+        keys = []
+        for receipt in receipts:
+            key = ReceiptService._duplicate_key(receipt)
+            if key is not None:
+                keys.append((receipt.id, key))
+        if not keys:
+            return set()
+        condition = Q()
+        for _, key in keys:
+            condition = condition | ReceiptService._duplicate_condition(key)
+        rows = (
+            Transaction.objects.for_workspace(workspace_id).filter(condition).values('date', 'amount', 'currency__code')
+        )
+        flagged = set()
+        for row in rows:
+            for receipt_id, (total, code, day) in keys:
+                same_money = row['currency__code'] == code and row['amount'] in (total, -total)
+                if same_money and abs((row['date'] - day).days) <= 1:
+                    flagged.add(receipt_id)
+        return flagged

@@ -42,6 +42,7 @@ RECEIPT_OUT_FIELDS = [
     'size',
     'uploader_name',
     'transaction_id',
+    'possible_duplicate',
     'created_at',
     'updated_at',
     'result',
@@ -216,7 +217,7 @@ class TestReceiptDetail(ReceiptAPITestCase):
         )
         data = self.get(_url(receipt.id), **self.auth_headers())
         self.assertStatus(200)
-        self.assertEqual(list(data), RECEIPT_OUT_FIELDS)
+        self.assertEqual(list(data), RECEIPT_OUT_FIELDS + ['suggestions', 'duplicates'])
         self.assertEqual(list(ReceiptService.serialize(receipt)), RECEIPT_OUT_FIELDS)
         self.assertEqual(data['state'], ReceiptCapture.READY)
         self.assertEqual(data['result'], PARSER_RESULT)
