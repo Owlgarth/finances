@@ -31,7 +31,7 @@ frontend/
 │   │   ├── accounts/         # AccountFormModal, SetBalanceModal
 │   │   ├── bookmarks/        # bookmarkMeta (bookmark icon + swatch-key registry, BookmarkGlyph)
 │   │   ├── currencies/       # CurrencySetField (ordered set picker), CurrenciesSettingsSection
-│   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card), BudgetSummaryCard (phone ledger summary with swatches), BudgetCategoryList (phone grouped category cards)
+│   │   ├── budgets/          # PeriodPicker (budget period listbox), PeriodCard (periods-page card), BudgetSummaryCard (phone ledger summary with swatches), BudgetCategoryList (phone grouped category cards), BudgetBar (the shared budget bar: caller's severity fill, elapsed-period tick, joined status/pace row)
 │   │   ├── dashboard/        # Home widgets (AccountsWidget, BudgetWidget, UpcomingWidget, RecentActivityWidget), SetupChecklist (first-run checklist card, writers, dismissible per workspace), BudgetInsights (planned-vs-spent charts, mounted on the periods page)
 │   │   ├── filters/          # FiltersTrigger (phone Filters entry), FilterSheet (two-level phone bottom sheet), FilterChipsBar (640+ toolbar), DateRangeEditor, MultiChoiceEditor, AmountRangeEditor, SingleChoiceEditor (container-agnostic editor bodies)
 │   │   ├── transactions/     # TransactionsTable, TransactionAddRow, TransactionRecord, TransferRecord, TransactionFormFields, TransferFormFields, PlannedFormFields, RecurringFormFields, PayPlannedForm, PlannedRecord, PlannedStatusChip, PlannedCreatePanel, RecurringFormPanel, recordParts (FieldEditorShell + Section shared by the three records), AmountField, TransactionItemsEditor, TransactionItemsList, TransactionAttachments, ExtractionReviewModal
@@ -81,7 +81,7 @@ frontend/
 │   │   └── locales/<lang>/      # One JSON file per domain namespace (13), per language
 │   ├── pages/                # Route page components
 │   ├── types/index.ts        # TypeScript interfaces
-│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), recurrenceSummary (the plain-language sentence restating a rule's schedule - six catalog keys over interval kind/count, start/end dates and plan-ahead; feeds the rule form's live summary), listFilters (the Activity lists' filter registry - one ordered def list per page over the unchanged URL param names; drives badge counts, Clear, chips, the sheet hub and the Add-filter menu; Transactions and Planned carry a `search` def so the remembered term shows as a removable chip and counts toward the badge - its editor is the page's always-visible search input, so the sheet hub and the Add-filter menu skip it), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference), formDraft (/new draft persistence: `owlgarth_formdraft_<user>_<workspace>` localStorage keys, 24h expiry, debounced writes flushed on unmount, a generation counter that aborts writes racing a logout/workspace-switch clear)
+│   └── utils/                # format, errors (string + 422 detail-array extraction), pageSize, params (list filters), dates (local-date period math for the from/to list-filter params: whole-month, whole-week, and whole-year ranges, calendar-month detection, adjacent-month shift), budgetPace (budget-period pace math: `elapsedShare` - the period's elapsed share 0-1, null when the period does not contain today - and `isAheadOfPace`, spent more than five percentage points past that share, compared in exact BigInt cents via `exceedsShare` in format), recurrenceSummary (the plain-language sentence restating a rule's schedule - six catalog keys over interval kind/count, start/end dates and plan-ahead; feeds the rule form's live summary), listFilters (the Activity lists' filter registry - one ordered def list per page over the unchanged URL param names; drives badge counts, Clear, chips, the sheet hub and the Add-filter menu; Transactions and Planned carry a `search` def so the remembered term shows as a removable chip and counts toward the badge - its editor is the page's always-visible search input, so the sheet hub and the Add-filter menu skip it), pageDefaults (resolve the member-settings blob into fresh-visit URL params and capture the current URL back into the blob), transactionItems, attachments (view/download helpers), bookmarks (bookmark target path, active-state matching, filter-params capture), currencies (budget-view active-code derivation + `PRE_AUTH_CURRENCIES`, the curated pre-auth list behind the register/reset pickers), amountInput (normalizeAmountInput/parseAmountNumber - accepts both decimal separators, disambiguated by the active number style, normalized at submit), tappable (button semantics for plain-div rows that open an ActionSheet on touch), zoomLock (the account menu sheet's device-local "disable zoom" preference), formDraft (/new draft persistence: `owlgarth_formdraft_<user>_<workspace>` localStorage keys, 24h expiry, debounced writes flushed on unmount, a generation counter that aborts writes racing a logout/workspace-switch clear)
 ├── scripts/                 # i18n tooling: i18n-check (parity gate), lang-add/list/rm, key-find/rm, i18n-lib
 ├── i18next.config.ts        # i18next-cli config (i18n:extract; locales list)
 ├── package.json
@@ -329,7 +329,16 @@ color; receives the page's exact string totals), `BudgetCategoryList` (the phone
 category cards, grouped "Needs attention" then "On track"; one card per category
 with spent-of-planned, a status-colored spend bar, status word on attention rows,
 amount-left line and a trailing-chevron Activity link - all state lives in the page,
-which also threads the Edit-plan draft inputs through the cards).
+which also threads the Edit-plan draft inputs through the cards), and
+`BudgetBar` (the one bar the four budget-bar sites mount - the budget page's
+phone cards, the per-currency chips, the Home widget's attention rows and the
+transaction record's category bar: a 4px muted track, a fill as wide as the
+spent share in the caller's `fillClass` (each surface keeps its own severity
+rule), and while the period contains today a 1px tick at the period's elapsed
+share (`utils/budgetPace`), the track then carrying the share of the period
+gone as its accessible name; the row under the track adds "Ahead of pace" when
+spending sits more than five percentage points past the tick - joined to the
+surface's status word where the surface has one, muted alone where it does not).
 
 **Dashboard** (`components/dashboard/`): a first-run `SetupChecklist` card (writers whose
 workspace lacks an account, a budget or a transaction; the three lines are judged from the
@@ -842,11 +851,13 @@ Visual separation uses flat surfaces with borders (`border border-border`) - no 
 | Focus rings | `--color-border-focus` | `ring-border-focus` |
 | Primary text | `--color-text` | `text-text` |
 | Secondary text | `--color-text-muted` | `text-text-muted` |
-| Success / income | `--color-positive` | `text-positive`, `bg-positive` |
+| Success / income | `--color-positive` | `text-positive`, `bg-positive` (icons, fills, borders) |
+| Success / income text | `--color-positive-text` | `text-positive-text` |
 | Error / expense | `--color-negative` | `text-negative`, `bg-negative` |
-| Warnings | `--color-warning` | `text-warning`, `bg-warning` |
+| Warnings | `--color-warning` | `text-warning`, `bg-warning` (icons, fills, borders) |
+| Warning text | `--color-warning-text` | `text-warning-text` |
 
-> **Dark mode:** a `.dark` block in `src/index.css` overrides all 20 tokens above - see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
+> **Dark mode:** a `.dark` block in `src/index.css` overrides all 22 tokens above - see [`design/dark-mode.md`](../design/dark-mode.md) §1. Because `--color-primary` inverts to a light value, a centralized `.dark .bg-primary.text-white { color: var(--color-background); }` rule keeps primary buttons legible.
 
 ### Icons
 
