@@ -5,12 +5,13 @@ from ninja import File, Router, Status
 from ninja.files import UploadedFile
 
 from common.auth import WorkspaceJWTAuth
+from common.idempotency import parse_idempotency_key
 from common.permissions import require_role
 from common.throttle import validate_file_size
 from core.schemas.common import DetailOut
 from transactions.attachments import MAX_ATTACHMENT_SIZE_MB, AttachmentService
 from transactions.receipts import ReceiptService
-from transactions.schemas import ReceiptListOut, ReceiptOut
+from transactions.schemas import ReceiptConfirmIn, ReceiptListOut, ReceiptOut, TransactionOut
 from workspaces.models import WRITE_ROLES
 
 router = Router(tags=['Receipts'])
@@ -92,3 +93,28 @@ def delete_receipt(request: HttpRequest, receipt_id: int):
     require_role(user, workspace_id, WRITE_ROLES)
     ReceiptService.delete(workspace_id, receipt_id)
     return Status(204, None)
+
+
+@router.post(
+    '/{receipt_id}/confirm',
+    response={201: TransactionOut, 400: DetailOut, 403: DetailOut, 404: DetailOut},
+    auth=WorkspaceJWTAuth(),
+)
+def confirm_receipt(request: HttpRequest, receipt_id: int, data: ReceiptConfirmIn):
+    """Save a receipt as a transaction (requires write access).
+
+    Works from every open state (hand entry when no read succeeded) and answers
+    201 with the receipt's transaction again when it is already saved. An optional
+    `Idempotency-Key` header dedups the create as on POST /transactions: a key that
+    already belongs to an earlier request returns that request's transaction and
+    leaves this receipt untouched.
+    """
+    user = request.auth
+    workspace_id = request.auth.current_workspace_id
+    require_role(user, workspace_id, WRITE_ROLES)
+
+    idempotency_key, error = parse_idempotency_key(request)
+    if error:
+        return Status(400, error)
+
+    return Status(201, ReceiptService.confirm(user, workspace_id, receipt_id, data, idempotency_key=idempotency_key))

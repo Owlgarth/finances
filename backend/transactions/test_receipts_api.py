@@ -1,5 +1,6 @@
-"""Tests for the receipts API: upload, list, detail, file, retry and delete."""
+"""Tests for the receipts API: upload, list, detail, file, retry, delete and confirm."""
 
+from decimal import Decimal
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -8,14 +9,25 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from accounts.factories import AccountFactory
+from budgeting.factories import BudgetFactory
+from categories.factories import CategoryFactory
 from common.auth import create_access_token
 from common.tests.factories import UserFactory
 from common.tests.helpers import create_other_workspace
 from common.tests.mixins import APIClientMixin, AuthMixin
+from currencies.services import CurrencyCatalogService
 from transactions.attachments import MAX_ATTACHMENT_SIZE_MB
 from transactions.factories import ReceiptCaptureFactory, TransactionFactory
-from transactions.models import ReceiptCapture
+from transactions.models import (
+    ReceiptCapture,
+    Transaction,
+    TransactionAttachment,
+    TransactionIdempotencyKey,
+    TransactionItem,
+)
 from transactions.receipts import ReceiptService
+from transactions.services import TransactionService
+from workspaces.models import WorkspaceMember
 
 RECEIPTS_URL = '/api/receipts'
 
@@ -438,3 +450,272 @@ class TestReceiptsRouterMounted(ReceiptAPITestCase):
         response = self.client.get(RECEIPTS_URL)
         self.assertEqual(response.status_code, 401)
         self.assertFalse(response.has_header('Allow'))
+
+
+class TestReceiptConfirm(ReceiptAPITestCase):
+    """POST /api/receipts/{receipt_id}/confirm: one atomic save of a receipt as a transaction."""
+
+    RESULT = {
+        'merchant': 'Biedronka 4381',
+        'date': '2026-07-14',
+        'currency': 'PLN',
+        'total': '50.00',
+        'items': [{'name': 'Bread', 'quantity': '1', 'unit_price': '4.99', 'line_total': '4.99'}],
+    }
+
+    def setUp(self):
+        super().setUp()
+        CurrencyCatalogService.enable(self.user, self.workspace.id, 'PLN')
+        self.account = AccountFactory(workspace=self.workspace, name='Main', opening_balance=Decimal('100.00'))
+        self.budget = BudgetFactory(workspace=self.workspace)
+        self.groceries = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Groceries')
+        self.household = CategoryFactory(budget=self.budget, workspace=self.workspace, name='Household')
+
+    def _receipt(self, **overrides):
+        """A ready receipt uploaded by self.user; any factory field can be overridden."""
+        kwargs = {
+            'workspace': self.workspace,
+            'created_by': self.user,
+            'state': ReceiptCapture.READY,
+            'result': self.RESULT,
+        }
+        return ReceiptCaptureFactory(**{**kwargs, **overrides})
+
+    def _failed_receipt(self):
+        """A hand-entry row: failed, with a stored message that a rejected confirm must preserve."""
+        return self._receipt(state=ReceiptCapture.FAILED, result=None, error='scanner said no')
+
+    def _payload(self, **overrides):
+        payload = {
+            'date': '2026-07-15',
+            'description': 'Test expense',
+            'type': 'expense',
+            'amount': '50.00',
+            'account_id': self.account.id,
+        }
+        payload.update(overrides)
+        return payload
+
+    def _confirm(self, receipt, payload=None, **headers):
+        return self.post(
+            f'/api/receipts/{receipt.id}/confirm',
+            payload or self._payload(),
+            **{**self.auth_headers(), **headers},
+        )
+
+    def _attachment(self, transaction_id):
+        return TransactionAttachment.objects.get(transaction_id=transaction_id)
+
+    def _assert_rejected(self, receipt, data, code):
+        """A rejected confirm leaves nothing behind: no transaction, no attachment, the row as it was."""
+        before = (receipt.state, receipt.file_key, receipt.error)
+        self.assertStatus(400)
+        self.assertEqual(data['code'], code)
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(TransactionAttachment.objects.count(), 0)
+        receipt.refresh_from_db()
+        self.assertEqual((receipt.state, receipt.file_key, receipt.error), before)
+
+    def test_confirm_from_ready_creates_transaction_and_attachment(self):
+        receipt = self._receipt()
+        key = receipt.file_key
+        metadata = (receipt.filename, receipt.content_type, receipt.size)
+        data = self._confirm(receipt)
+        self.assertStatus(201)
+        self.assertEqual(Transaction.objects.count(), 1)
+        trans = Transaction.objects.get(id=data['id'])
+        self.assertEqual(TransactionAttachment.objects.count(), 1)
+        attachment = self._attachment(trans.id)
+        self.assertEqual(attachment.file_key, key)
+        self.assertEqual((attachment.filename, attachment.content_type, attachment.size), metadata)
+        self.assertEqual(attachment.extraction_status, 'done')
+        self.assertEqual(attachment.extraction_result, self.RESULT)
+        self.assertEqual(attachment.extraction_error, '')
+        receipt.refresh_from_db()
+        self.assertEqual(
+            (receipt.state, receipt.file_key, receipt.transaction_id, receipt.error), ('saved', '', trans.id, '')
+        )
+        self.assertEqual(receipt.updated_by_id, self.user.id)
+
+    def test_confirm_attachment_uploader_is_the_receipt_uploader(self):
+        uploader = UserFactory(email='uploader@example.com', current_workspace=self.workspace)
+        receipt = self._receipt(created_by=uploader)
+        data = self._confirm(receipt)
+        self.assertStatus(201)
+        self.assertEqual(self._attachment(data['id']).uploaded_by_id, uploader.id)
+        self.assertEqual(Transaction.objects.get(id=data['id']).created_by_id, self.user.id)
+        receipt.refresh_from_db()
+        # The confirmer saved the receipt; the uploader only took the photo.
+        self.assertEqual(receipt.updated_by_id, self.user.id)
+
+    def test_confirm_from_unread_states_marks_extraction_none(self):
+        """queued, reading and waiting rows carry no result; hand entry still saves them."""
+        for state in (ReceiptCapture.QUEUED, ReceiptCapture.READING, ReceiptCapture.WAITING):
+            with self.subTest(state=state):
+                data = self._confirm(self._receipt(state=state, result=None))
+                self.assertStatus(201)
+                attachment = self._attachment(data['id'])
+                self.assertEqual(
+                    (attachment.extraction_status, attachment.extraction_result, attachment.extraction_error),
+                    ('none', None, ''),
+                )
+
+    def test_confirm_from_failed_hand_entry_keeps_the_error_on_the_attachment(self):
+        receipt = self._failed_receipt()
+        data = self._confirm(receipt, self._payload(description='Hand entered'))
+        self.assertStatus(201)
+        attachment = self._attachment(data['id'])
+        self.assertEqual(
+            (attachment.extraction_status, attachment.extraction_result, attachment.extraction_error),
+            ('failed', None, 'scanner said no'),
+        )
+        receipt.refresh_from_db()
+        self.assertEqual((receipt.state, receipt.file_key, receipt.error), ('saved', '', ''))
+
+    def test_confirm_persists_items_with_an_inheriting_remainder(self):
+        receipt = self._receipt()
+        items = [
+            {'name': 'Bread', 'line_total': '4.99'},
+            {'name': 'Milk', 'quantity': '2', 'unit_price': '3.99', 'line_total': '7.98'},
+        ]
+        data = self._confirm(receipt, self._payload(items=items))
+        self.assertStatus(201)
+        rows = TransactionItem.objects.filter(transaction_id=data['id']).order_by('position')
+        self.assertEqual(
+            list(rows.values_list('name', 'line_total', 'is_remainder', 'category_id')),
+            [
+                ('Bread', Decimal('4.99'), False, None),
+                ('Milk', Decimal('7.98'), False, None),
+                ('', Decimal('37.03'), True, None),
+            ],
+        )
+
+    def test_confirm_applies_remainder_category(self):
+        receipt = self._receipt()
+        payload = self._payload(
+            category_id=self.groceries.id,
+            items=[{'name': 'Bread', 'line_total': '4.99'}],
+            remainder_category_id=self.household.id,
+        )
+        data = self._confirm(receipt, payload)
+        self.assertStatus(201)
+        rows = list(TransactionItem.objects.filter(transaction_id=data['id']).order_by('position'))
+        self.assertEqual(
+            [(r.name, r.is_remainder, r.category_id) for r in rows],
+            [('Bread', False, None), ('', True, self.household.id)],
+        )
+        self.assertEqual(rows[1].line_total, Decimal('45.01'))
+
+    def test_confirm_over_sum_items_is_rejected_and_rolls_back(self):
+        receipt = self._failed_receipt()
+        data = self._confirm(receipt, self._payload(items=[{'name': 'X', 'line_total': '999.99'}]))
+        self._assert_rejected(receipt, data, 'items_over_sum')
+
+    def test_confirm_unknown_category_is_rejected_and_rolls_back(self):
+        receipt = self._failed_receipt()
+        data = self._confirm(receipt, self._payload(category_id=999999))
+        self._assert_rejected(receipt, data, 'category_not_found')
+
+    def test_confirm_unknown_remainder_category_is_rejected_and_rolls_back(self):
+        # Fails inside replace_items, after the transaction row was written: the
+        # clearest proof that the whole confirm rolls back.
+        receipt = self._failed_receipt()
+        data = self._confirm(receipt, self._payload(category_id=self.groceries.id, remainder_category_id=999999))
+        self._assert_rejected(receipt, data, 'category_not_found')
+
+    def test_confirm_twice_returns_the_one_transaction(self):
+        receipt = self._receipt()
+        first = self._confirm(receipt)
+        self.assertStatus(201)
+        second = self._confirm(receipt)
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(TransactionAttachment.objects.count(), 1)
+
+    def test_confirm_twice_with_the_same_key_returns_the_one_transaction(self):
+        receipt = self._receipt()
+        headers = {'HTTP_IDEMPOTENCY_KEY': 'confirm-once'}
+        first = self._confirm(receipt, **headers)
+        self.assertStatus(201)
+        second = self._confirm(receipt, **headers)
+        self.assertStatus(201)
+        self.assertEqual(second['id'], first['id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(TransactionAttachment.objects.count(), 1)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+
+    def test_confirm_with_a_key_owned_by_another_receipt_leaves_this_one_open(self):
+        first, second = self._receipt(), self._receipt()
+        key = second.file_key
+        headers = {'HTTP_IDEMPOTENCY_KEY': 'reused-key'}
+        first_data = self._confirm(first, **headers)
+        self.assertStatus(201)
+        second_data = self._confirm(second, **headers)
+        self.assertStatus(201)
+        self.assertEqual(second_data['id'], first_data['id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+        self.assertEqual(TransactionAttachment.objects.count(), 1)
+        self.assertEqual(TransactionAttachment.objects.get().file_key, first.file_key)
+        second.refresh_from_db()
+        self.assertEqual((second.state, second.file_key, second.transaction_id), (ReceiptCapture.READY, key, None))
+
+    def test_confirm_losing_a_key_race_leaves_this_receipt_open(self):
+        """The helper's race-loss branch returns the winner's transaction; this
+        receipt must not be attached to it (forced through the lookup seam)."""
+        first, second = self._receipt(), self._receipt()
+        key = second.file_key
+        headers = {'HTTP_IDEMPOTENCY_KEY': 'raced-key'}
+        winner = self._confirm(first, **headers)
+        self.assertStatus(201)
+        record = TransactionIdempotencyKey.objects.get(key='raced-key')
+        # Three lookups, in order: confirm's replay guard, the helper's lookup before
+        # its insert, and the helper's re-read after the unique constraint rejects it.
+        # A list side effect returns its items as they are: the third is the record.
+        with mock.patch.object(TransactionService, '_lookup_idempotency_key', side_effect=[None, None, record]):
+            data = self._confirm(second, **headers)
+        self.assertStatus(201)
+        self.assertEqual(data['id'], winner['id'])
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(TransactionIdempotencyKey.objects.count(), 1)
+        self.assertEqual(TransactionAttachment.objects.filter(transaction_id=winner['id']).count(), 1)
+        self.assertEqual(
+            list(ReceiptCapture.objects.filter(transaction_id=winner['id']).values_list('id', flat=True)),
+            [first.id],
+        )
+        second.refresh_from_db()
+        self.assertEqual((second.state, second.file_key, second.transaction_id), (ReceiptCapture.READY, key, None))
+
+    def test_confirm_with_too_long_key_returns_400(self):
+        receipt = self._receipt()
+        data = self._confirm(receipt, **{'HTTP_IDEMPOTENCY_KEY': 'x' * 101})
+        self.assertStatus(400)
+        self.assertIn('detail', data)
+        self.assertEqual(Transaction.objects.count(), 0)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.state, ReceiptCapture.READY)
+
+    def test_confirm_never_touches_storage(self):
+        """The object keeps its key: no copy and no delete on a save, a replay or a rejected payload."""
+        self.storage.reset_mock()
+        saved = self._receipt()
+        self._confirm(saved)
+        self.assertStatus(201)
+        self._confirm(saved)
+        self.assertStatus(201)
+        self._confirm(self._receipt(), self._payload(category_id=999999))
+        self.assertStatus(400)
+        self.storage.save_file.assert_not_called()
+        self.storage.delete_file.assert_not_called()
+
+    def test_confirm_other_workspace_receipt_returns_404(self):
+        self._confirm(ReceiptCaptureFactory())
+        self.assertStatus(404)
+        self.assertEqual(Transaction.objects.count(), 0)
+
+    def test_confirm_as_viewer_returns_403(self):
+        WorkspaceMember.objects.filter(user=self.user).update(role='viewer')
+        self._confirm(self._receipt())
+        self.assertStatus(403)
+        self.assertEqual(Transaction.objects.count(), 0)

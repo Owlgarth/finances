@@ -297,3 +297,16 @@ class ReceiptListOut(BaseModel):
 
     items: list[ReceiptOut]
     counts: ReceiptCountsOut
+
+
+class ReceiptConfirmIn(TransactionCreate):
+    """Body of POST /receipts/{receipt_id}/confirm.
+
+    Every TransactionCreate field describes the transaction the receipt becomes.
+    remainder_category_id optionally recategorizes the server-owned remainder row
+    (None or omitted leaves it inheriting the transaction category). It follows
+    the TransactionItemsReplace rules: same budget as the transaction category,
+    and silently ignored when the items exactly cover the amount.
+    """
+
+    remainder_category_id: Optional[int] = None

@@ -26,7 +26,9 @@ from transactions.exceptions import (
     AttachmentStorageUnavailableError,
     ReceiptNotFoundError,
 )
-from transactions.models import ReceiptCapture
+from transactions.models import ReceiptCapture, Transaction, TransactionAttachment
+from transactions.schemas import ReceiptConfirmIn, TransactionCreate
+from transactions.services import TransactionService
 
 RESUME_INTERVAL_SECONDS = 15 * 60  # equals the beat interval of resume-waiting-receipts
 
@@ -311,3 +313,70 @@ class ReceiptService:
             ReceiptService._dispatch_read(receipt_id)
             dispatched += 1
         return dispatched
+
+    @staticmethod
+    @db_transaction.atomic
+    def confirm(
+        user, workspace_id: int, receipt_id: int, data: ReceiptConfirmIn, idempotency_key: str | None = None
+    ) -> Transaction:
+        """Save an open receipt as a transaction, or return the one it already is (D14).
+
+        One database transaction. The receipt row is locked first, so two confirms
+        of one receipt serialize and the second finds it `saved`. The stored object
+        is not copied: the new attachment row takes over the receipt's key and the
+        receipt's key is blanked. Any failure rolls back everything, including the
+        transaction, and leaves the receipt as it was.
+        """
+        try:
+            receipt = ReceiptCapture.objects.select_for_update().for_workspace(workspace_id).get(id=receipt_id)
+        except ReceiptCapture.DoesNotExist:
+            raise ReceiptNotFoundError()
+
+        if receipt.state == ReceiptCapture.SAVED:
+            return TransactionService.get_transaction(receipt.transaction_id, workspace_id)
+
+        if idempotency_key:
+            record = TransactionService._lookup_idempotency_key(user, workspace_id, idempotency_key)
+            if record is not None and record.transaction_id is not None:
+                # The key belongs to an earlier request: same key, same result. This
+                # receipt is not handed over to that request's transaction.
+                return TransactionService.get_transaction(record.transaction_id, workspace_id)
+
+        transaction_data = TransactionCreate(**data.model_dump(exclude={'remainder_category_id'}))
+        trans = TransactionService.create(user, workspace_id, transaction_data, idempotency_key=idempotency_key)
+        if (
+            idempotency_key
+            and ReceiptCapture.objects.filter(transaction_id=trans.id, state=ReceiptCapture.SAVED).exists()
+        ):
+            # Lost race on this key: the helper returned the winner's transaction, which this receipt must not join.
+            return trans
+        if data.remainder_category_id is not None:
+            TransactionService.replace_items(
+                workspace_id, trans.id, transaction_data.items, remainder_category_id=data.remainder_category_id
+            )
+
+        if receipt.result is not None:
+            extraction_status, extraction_error = TransactionAttachment.EXTRACTION_DONE, ''
+        elif receipt.state == ReceiptCapture.FAILED:
+            extraction_status, extraction_error = TransactionAttachment.EXTRACTION_FAILED, receipt.error
+        else:
+            extraction_status, extraction_error = TransactionAttachment.EXTRACTION_NONE, ''
+        TransactionAttachment.objects.create(
+            transaction=trans,
+            file_key=receipt.file_key,
+            filename=receipt.filename,
+            content_type=receipt.content_type,
+            size=receipt.size,
+            uploaded_by_id=receipt.created_by_id,
+            extraction_status=extraction_status,
+            extraction_result=receipt.result,
+            extraction_error=extraction_error,
+        )
+
+        receipt.state = ReceiptCapture.SAVED
+        receipt.transaction = trans
+        receipt.file_key = ''
+        receipt.error = ''
+        receipt.updated_by = user
+        receipt.save(update_fields=['state', 'transaction', 'file_key', 'error', 'updated_by', 'updated_at'])
+        return trans
