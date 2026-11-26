@@ -87,6 +87,10 @@
     "saving": "Zapisywanie...",
     "updateFailed": "Nie udało się zapisać zmiany"
   },
+  "budgetBar": {
+    "aheadOfPace": "Powyżej tempa",
+    "periodGone": "{{share}}% okresu minęło"
+  },
   "validation": {
     "amountInvalid": "Wpisz prawidłową kwotę"
   }

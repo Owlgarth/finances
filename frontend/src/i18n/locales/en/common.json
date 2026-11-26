@@ -85,6 +85,10 @@
     "saving": "Saving...",
     "updateFailed": "Couldn't save the change"
   },
+  "budgetBar": {
+    "aheadOfPace": "Ahead of pace",
+    "periodGone": "{{share}}% of the period gone"
+  },
   "validation": {
     "amountInvalid": "Enter a valid amount"
   }

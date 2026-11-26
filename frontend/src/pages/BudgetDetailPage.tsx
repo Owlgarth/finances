@@ -17,6 +17,7 @@ import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
 import { intParam } from '../utils/params'
+import { elapsedShare } from '../utils/budgetPace'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -24,6 +25,7 @@ import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
+import BudgetBar from '../components/budgets/BudgetBar'
 import BudgetCategoryList from '../components/budgets/BudgetCategoryList'
 import BudgetSummaryCard from '../components/budgets/BudgetSummaryCard'
 import PeriodPicker from '../components/budgets/PeriodPicker'
@@ -404,6 +406,9 @@ export default function BudgetDetailPage() {
   const todayIso = new Date().toISOString().slice(0, 10)
   const isPast = !!selectedPeriod && selectedPeriod.end_date < todayIso
   const isFuture = !!selectedPeriod && selectedPeriod.start_date > todayIso
+  // The tick and the pace words read the same "today" as the two flags above,
+  // so a period this page calls past or future never carries a tick.
+  const paceElapsed = selectedPeriod ? elapsedShare(selectedPeriod, todayIso) : null
   // Current and future periods are editable; past periods are immutable history.
   const canEditPlan = canWrite && !!periodId && !isPast
 
@@ -836,7 +841,7 @@ export default function BudgetDetailPage() {
         const planned = codeTotals ? (parseAmountNumber(codeTotals.planned) ?? 0) : 0
         const actual = codeTotals ? (parseAmountNumber(codeTotals.actual) ?? 0) : 0
         const isActive = code === activeCurrency
-        // Display-only ratio math (the meter fill); never persisted.
+        // Display-only ratio for the severity rule only; the bar derives its fill width.
         const spendPct = planned > 0 ? (actual / planned) * 100 : 0
         const numberClass = stripNumberClass(isActive, summaryLoading)
         return (
@@ -861,12 +866,12 @@ export default function BudgetDetailPage() {
               <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-text-muted">{code}</span>
             </span>
             {codeTotals && planned > 0 && (
-              <span aria-hidden="true" className="block w-full h-1 bg-surface-muted rounded-none overflow-hidden">
-                <span
-                  className={`block h-full rounded-none transition-all ${severityFill(spendPct)}`}
-                  style={{ width: `${Math.min(spendPct, 100)}%` }}
-                />
-              </span>
+              <BudgetBar
+                spent={codeTotals.actual}
+                planned={codeTotals.planned}
+                fillClass={severityFill(spendPct)}
+                elapsed={paceElapsed}
+              />
             )}
           </button>
         )
@@ -1263,6 +1268,7 @@ export default function BudgetDetailPage() {
             editDrafts={planDrafts}
             onDraftChange={onDraftChange}
             rowErrors={rowErrors}
+            paceElapsed={paceElapsed}
           />
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">

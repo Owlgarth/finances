@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Category } from '../../types'
 import { formatAmount } from '../../utils/format'
+import BudgetBar from './BudgetBar'
 
 /** One phone card's data, derived page-side (derivations and surface gates
  *  stay in the page): the ledger row plus display-only status, spend ratio
@@ -14,7 +15,8 @@ export interface BudgetCategoryCardRow {
   actual: string
   remaining: string
   status: 'over' | 'near' | 'onTrack'
-  /** Display-only spend ratio in percent: bar width and attention ordering. */
+  /** Display-only spend ratio in percent: attention ordering only. The bar
+   *  derives its own fill width from the exact strings. */
   pct: number
   /** /transactions deep link for this category and the viewed period. */
   activityUrl: string
@@ -37,6 +39,10 @@ interface BudgetCategoryListProps {
   editDrafts: Record<string, string | undefined>
   onDraftChange: (key: string, value: string) => void
   rowErrors: Record<string, string>
+  /** Elapsed share of the viewed period (elapsedShare in utils/budgetPace),
+   *  or null when the period does not contain today: the cards' bars then
+   *  carry no tick and no pace word. */
+  paceElapsed: number | null
 }
 
 /** Bar fill per the card spec's status table (NOT the page currency strip's
@@ -66,6 +72,7 @@ export default function BudgetCategoryList({
   editDrafts,
   onDraftChange,
   rowErrors,
+  paceElapsed,
 }: BudgetCategoryListProps) {
   const { t } = useTranslation('budgets')
 
@@ -79,7 +86,7 @@ export default function BudgetCategoryList({
             </div>
             <div className="space-y-2">
               {group.rows.map((row) => {
-                const { category, planned, actual, remaining, status, pct, activityUrl } = row
+                const { category, planned, actual, remaining, status, activityUrl } = row
                 const cellKey = `${category.id}:${activeCurrency}`
                 const isSelected = selectedCategory === category.id
                 const draft = editDrafts[cellKey]
@@ -148,22 +155,20 @@ export default function BudgetCategoryList({
                         </Link>
                       </span>
                     </div>
-                    {/* Progress bar: h-1 track, sharp corners, fill by status;
-                        over rows clamp to a full bar. */}
-                    <div aria-hidden="true" className="w-full h-1 bg-surface-muted rounded-none overflow-hidden mb-1.5">
-                      <div
-                        className={`block h-full rounded-none transition-all ${fillClassOf(status)}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                    {/* Status row: the plain mono uppercase label is the phone
-                        chip. Words only on attention rows - the On-track group
-                        heading carries that status. Near limit wears the
-                        warning text token. */}
-                    <div className="flex justify-between text-[10px] font-mono font-medium uppercase tracking-wider">
-                      {statusWord === null ? <span /> : <span className={statusColor}>{statusWord}</span>}
-                      <span className={statusColor}>{t('detail.amountLeft', { amount: formatAmount(remaining) })}</span>
-                    </div>
+                    {/* Bar and status row: the shared bar owns the tick and
+                        the pace word; the status word and the figure are
+                        the card's, both in the status color. */}
+                    <BudgetBar
+                      spent={actual}
+                      planned={planned}
+                      fillClass={fillClassOf(status)}
+                      elapsed={paceElapsed}
+                      statusWord={statusWord}
+                      statusWordClass={statusColor}
+                      trailing={t('detail.amountLeft', { amount: formatAmount(remaining) })}
+                      trailingClass={statusColor}
+                      className="mb-1.5"
+                    />
                   </div>
                 )
               })}
