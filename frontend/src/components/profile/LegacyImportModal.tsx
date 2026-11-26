@@ -134,7 +134,7 @@ export default function LegacyImportModal({ open, onClose }: Props) {
                 <p className="text-text-muted mb-1">{t('legacyModal.balanceVerification')}</p>
                 <ul className="space-y-0.5">
                   {ws.balances.map((b) => (
-                    <li key={b.account_name} className={`font-mono text-xs ${b.matches ? 'text-positive' : 'text-warning'}`}>
+                    <li key={b.account_name} className={`font-mono text-xs ${b.matches ? 'text-positive-text' : 'text-warning-text'}`}>
                       {b.account_name}: {b.computed_balance} {b.currency_code}
                       {!b.matches && b.expected_closing_balance !== null && (
                         <> {t('legacyModal.expectedReconcile', { amount: b.expected_closing_balance })}</>
@@ -144,7 +144,7 @@ export default function LegacyImportModal({ open, onClose }: Props) {
                 </ul>
               </div>
               {ws.warnings.length > 0 && (
-                <ul className="text-warning text-xs list-disc pl-4">
+                <ul className="text-warning-text text-xs list-disc pl-4">
                   {ws.warnings.map((w, i) => <li key={i}>{w}</li>)}
                 </ul>
               )}

@@ -379,7 +379,7 @@ function getRoleIcon(role: string) {
 function getRoleBadgeColor(role: string) {
   switch (role) {
     case 'owner':
-      return 'bg-warning-bg text-warning'
+      return 'bg-warning-bg text-warning-text'
     case 'admin':
       return 'bg-surface-hover text-text'
     case 'member':
@@ -431,7 +431,7 @@ function MemberCard({ member, isCurrentUser, tappable, onTap }: MemberCardProps)
           <span
             className={`inline-flex px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider rounded-sm border ${
               member.is_active
-                ? 'bg-positive-bg text-positive border-positive/30'
+                ? 'bg-positive-bg text-positive-text border-positive/30'
                 : 'bg-negative-bg text-negative border-negative/30'
             }`}
           >
@@ -494,7 +494,7 @@ function MemberRow({ member, isCurrentUser, canResetPassword, onEditRole, onRemo
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <span className={`inline-flex px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider rounded-sm border ${
-          member.is_active ? 'bg-positive-bg text-positive border-positive/30' : 'bg-negative-bg text-negative border-negative/30'
+          member.is_active ? 'bg-positive-bg text-positive-text border-positive/30' : 'bg-negative-bg text-negative border-negative/30'
         }`}>
           {member.is_active ? t('badges.active') : t('badges.inactive')}
         </span>
@@ -794,7 +794,7 @@ function ResetPasswordModal({ member, onClose, onSubmit, isSubmitting }: ResetPa
             <p className="text-sm text-negative">{error}</p>
           )}
 
-          <div className="bg-warning-bg text-warning rounded-sm p-3">
+          <div className="bg-warning-bg text-warning-text rounded-sm p-3">
             <p className="text-sm">
               {t('resetPasswordModal.warning')}
             </p>

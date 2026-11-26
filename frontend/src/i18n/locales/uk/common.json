@@ -87,6 +87,10 @@
     "saving": "Збереження...",
     "updateFailed": "Не вдалося зберегти зміну"
   },
+  "budgetBar": {
+    "aheadOfPace": "Вище темпу",
+    "periodGone": "{{share}}% періоду минуло"
+  },
   "validation": {
     "amountInvalid": "Введіть коректну суму"
   }

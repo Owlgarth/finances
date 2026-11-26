@@ -138,6 +138,32 @@ export function sumAmounts(values: string[]): string {
 }
 
 /**
+ * Exact share test: is `part` MORE than `shareBps` basis points (a
+ * 10,000th) of `whole`? Cross-multiplied in BigInt cents, so there is no
+ * division and no rounding, and an exact tie reads "not more". A whole of
+ * zero or less has no share to exceed and returns false; `shareBps` is an
+ * integer. Inputs with more than 2 decimals round half-up via toCents.
+ *
+ * Worked examples (docblock examples are the contract - the frontend
+ * has no test runner, so they are the review reference; keep them in
+ * sync if the behavior ever changes):
+ *   exceedsShare('60.00', '100.00', 5833) === true    // 60% is more than 58.33%
+ *   exceedsShare('58.33', '100.00', 5833) === false   // exactly at the share is not more
+ *   exceedsShare('58.34', '100.00', 5833) === true    // one cent past it
+ *   exceedsShare('24.00', '40.00', 5833) === true     // the share decides, not the amount
+ *   exceedsShare('0.10', '0.30', 3333) === true       // a third is 3333.33 basis points
+ *   exceedsShare('10.00', '0.00', 500) === false      // no plan: no share to exceed
+ *   exceedsShare('-5.00', '100.00', 0) === false      // a refund is above no share
+ *   exceedsShare('123456789012345.67', '246913578024691.34', 5000) === false
+ *     (an exact half is not more, at a size floats cannot hold)
+ */
+export function exceedsShare(part: string, whole: string, shareBps: number): boolean {
+  const wholeCents = toCents(whole)
+  if (wholeCents <= 0n) return false
+  return toCents(part) * 10000n > BigInt(shareBps) * wholeCents
+}
+
+/**
  * Name a custom budget period from its ISO date range (yyyy-MM-dd):
  * "04 Sep – 03 Oct 2026" — zero-padded days, abbreviated months, en dash.
  * Mirrors the backend's derived-period naming (budgeting/services.py,

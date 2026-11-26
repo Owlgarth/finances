@@ -80,7 +80,7 @@ function Legend() {
 }
 
 function StatTile({ label, value, sub, subTone }: { label: string; value: string; sub?: string; subTone?: 'good' | 'bad' | 'muted' }) {
-  const subClass = subTone === 'good' ? 'text-positive' : subTone === 'bad' ? 'text-negative' : 'text-text-muted'
+  const subClass = subTone === 'good' ? 'text-positive-text' : subTone === 'bad' ? 'text-negative' : 'text-text-muted'
   return (
     <div className="border border-border rounded-sm bg-surface p-4">
       <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-1">{label}</p>

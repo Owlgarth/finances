@@ -17,6 +17,7 @@ import { activeCurrencyCodes } from '../utils/currencies'
 import { getApiErrorMessage } from '../utils/errors'
 import { normalizeAmountInput, parseAmountNumber } from '../utils/amountInput'
 import { intParam } from '../utils/params'
+import { elapsedShare } from '../utils/budgetPace'
 import Modal from '../components/common/Modal'
 import Select from '../components/common/Select'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -24,6 +25,7 @@ import EmptyState from '../components/common/EmptyState'
 import PeriodFormModal from '../components/modals/budgets/PeriodFormModal'
 import ManageCategoriesModal from '../components/modals/budgets/ManageCategoriesModal'
 import BookmarkFormModal from '../components/modals/bookmarks/BookmarkFormModal'
+import BudgetBar from '../components/budgets/BudgetBar'
 import BudgetCategoryList from '../components/budgets/BudgetCategoryList'
 import BudgetSummaryCard from '../components/budgets/BudgetSummaryCard'
 import PeriodPicker from '../components/budgets/PeriodPicker'
@@ -123,14 +125,12 @@ const ATTENTION_RANK: Record<RowStatus, number> = { over: 0, near: 1, ok: 2 }
 
 /** Status chips in the sticky category cell: status never relies on color
  *  alone - the word carries it. Bordered rectangular shape per the page's
- *  own currency chip, never a pill. Colors are the interim ruling:
- *  Over = text-negative; Near limit = text-text-muted because the palette
- *  has no warning TEXT color legible at this size yet - switch to a
- *  warning text token when one lands. */
+ *  own currency chip, never a pill. Over = text-negative; Near limit wears
+ *  the warning text token. */
 const statusChipBase =
   'inline-flex items-center px-2 py-0.5 border rounded-sm font-mono text-[10px] font-medium uppercase tracking-wider select-none shrink-0'
 const statusOverChipClass = `${statusChipBase} text-negative border-negative/20 bg-negative-bg`
-const statusNearChipClass = `${statusChipBase} text-text-muted bg-surface border-border`
+const statusNearChipClass = `${statusChipBase} text-warning-text bg-surface border-border`
 
 /** Status of a budget category row: over = spent more than planned, near =
  *  75% or more of plan without going over, else on track. Structural twin
@@ -406,6 +406,9 @@ export default function BudgetDetailPage() {
   const todayIso = new Date().toISOString().slice(0, 10)
   const isPast = !!selectedPeriod && selectedPeriod.end_date < todayIso
   const isFuture = !!selectedPeriod && selectedPeriod.start_date > todayIso
+  // The tick and the pace words read the same "today" as the two flags above,
+  // so a period this page calls past or future never carries a tick.
+  const paceElapsed = selectedPeriod ? elapsedShare(selectedPeriod, todayIso) : null
   // Current and future periods are editable; past periods are immutable history.
   const canEditPlan = canWrite && !!periodId && !isPast
 
@@ -838,7 +841,7 @@ export default function BudgetDetailPage() {
         const planned = codeTotals ? (parseAmountNumber(codeTotals.planned) ?? 0) : 0
         const actual = codeTotals ? (parseAmountNumber(codeTotals.actual) ?? 0) : 0
         const isActive = code === activeCurrency
-        // Display-only ratio math (the meter fill); never persisted.
+        // Display-only ratio for the severity rule only; the bar derives its fill width.
         const spendPct = planned > 0 ? (actual / planned) * 100 : 0
         const numberClass = stripNumberClass(isActive, summaryLoading)
         return (
@@ -863,12 +866,12 @@ export default function BudgetDetailPage() {
               <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-text-muted">{code}</span>
             </span>
             {codeTotals && planned > 0 && (
-              <span aria-hidden="true" className="block w-full h-1 bg-surface-muted rounded-none overflow-hidden">
-                <span
-                  className={`block h-full rounded-none transition-all ${severityFill(spendPct)}`}
-                  style={{ width: `${Math.min(spendPct, 100)}%` }}
-                />
-              </span>
+              <BudgetBar
+                spent={codeTotals.actual}
+                planned={codeTotals.planned}
+                fillClass={severityFill(spendPct)}
+                elapsed={paceElapsed}
+              />
             )}
           </button>
         )
@@ -1077,7 +1080,7 @@ export default function BudgetDetailPage() {
       />
 
       {isPast && (
-        <p className="text-xs text-warning mb-3">{t('detail.pastPeriodNote')}</p>
+        <p className="text-xs text-warning-text mb-3">{t('detail.pastPeriodNote')}</p>
       )}
       {isFuture && (
         <p className="text-xs text-text-muted mb-3">{t('detail.futurePeriodNote')}</p>
@@ -1265,6 +1268,7 @@ export default function BudgetDetailPage() {
             editDrafts={planDrafts}
             onDraftChange={onDraftChange}
             rowErrors={rowErrors}
+            paceElapsed={paceElapsed}
           />
           {rows.length === 0 && (
             <div className="border border-border rounded-sm bg-surface px-4 py-6 text-center text-sm text-text-muted">

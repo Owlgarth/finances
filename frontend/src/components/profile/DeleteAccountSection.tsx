@@ -56,14 +56,14 @@ export default function DeleteAccountSection() {
 
       {check && !check.can_delete && (
         <div className="bg-warning-bg rounded-sm p-4">
-          <p className="text-sm font-medium text-warning mb-2">
+          <p className="text-sm font-medium text-warning-text mb-2">
             {t('deleteAccount.blockedTitle')}
           </p>
-          <p className="text-sm text-warning mb-2">
+          <p className="text-sm text-warning-text mb-2">
             {t('deleteAccount.blockedBody')}
           </p>
           {check.blocking_workspaces && (
-            <ul className="text-sm text-warning list-disc list-inside">
+            <ul className="text-sm text-warning-text list-disc list-inside">
               {check.blocking_workspaces.map(ws => (
                 <li key={ws.id}>{ws.name} ({t('deleteAccount.memberCount', { count: ws.member_count })})</li>
               ))}

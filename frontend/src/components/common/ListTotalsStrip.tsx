@@ -16,7 +16,7 @@ interface ListTotalsStripProps {
 }
 
 const TONE_CLASS: Record<TotalsTone, string> = {
-  positive: 'text-positive',
+  positive: 'text-positive-text',
   negative: 'text-negative',
   neutral: 'text-text',
 }
