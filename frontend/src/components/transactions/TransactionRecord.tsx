@@ -10,6 +10,7 @@ import type { EditorBag } from '../common/EditableField'
 import LinkedRow from '../common/LinkedRow'
 import Modal from '../common/Modal'
 import Select from '../common/Select'
+import BudgetBar from '../budgets/BudgetBar'
 import TransactionAttachments from './TransactionAttachments'
 import TransactionItemsEditor from './TransactionItemsEditor'
 import { FieldEditorShell, Section } from './recordParts'
@@ -18,9 +19,10 @@ import { useAccounts, useBudgets, useEnabledCurrencies, useMultiCurrency } from 
 import { NO_ADJUSTMENT } from '../../hooks/useTransactionForm'
 import { useTransactionFieldSave, type TransactionFieldPatch } from '../../hooks/useTransactionFieldSave'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import type { Account, Budget, BudgetSummaryItem, Transaction, TransactionType } from '../../types'
+import type { Account, Budget, BudgetSummaryItem, Period, Transaction, TransactionType } from '../../types'
 import { NO_ACCOUNT, resolveAccountId } from '../../utils/accountSelect'
 import { normalizeAmountInput, parseAmountNumber } from '../../utils/amountInput'
+import { elapsedShare } from '../../utils/budgetPace'
 import { getApiErrorMessage } from '../../utils/errors'
 import { formatAmount } from '../../utils/format'
 import { controlHeightClass, destructiveButtonClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../common/formStyles'
@@ -401,7 +403,9 @@ export default function TransactionRecord({ transaction, canWrite, onDuplicate, 
                 onSave={(category_id) => save({ category_id })}
               />
             )}
-            {summaryItem != null && transaction.category_id != null && <SpentOfPlanned item={summaryItem} />}
+            {period != null && summaryItem != null && transaction.category_id != null && (
+              <SpentOfPlanned item={summaryItem} period={period} />
+            )}
           </div>
         )}
         {/* Other-currency facet row: present when set; writers get an
@@ -687,11 +691,12 @@ function FacetModal({ transaction, otherCurrencyOptions, accounts, onClose, save
 /**
  * Spent-of-planned line for the Category row, rendered in the SUMMARY
  * item's currency (never converted - a sum across currencies is
- * meaningless). Display-only ratio math; the bar mirrors the budget page's
- * meter (4px track, semantic fill, aria-hidden - the text carries the
- * status without color).
+ * meaningless). Display-only ratio math. The bar is the shared budget bar
+ * with this record's own 95/75 fill split; its pace tick and caption show
+ * only while the transaction's period contains today, so a past or future
+ * period shows a plain bar.
  */
-function SpentOfPlanned({ item }: { item: BudgetSummaryItem }) {
+function SpentOfPlanned({ item, period }: { item: BudgetSummaryItem; period: Period }) {
   const { t } = useTranslation('transactions')
   const planned = parseAmountNumber(item.planned) ?? 0
   const actual = parseAmountNumber(item.actual) ?? 0
@@ -704,9 +709,13 @@ function SpentOfPlanned({ item }: { item: BudgetSummaryItem }) {
           planned: formatAmount(item.planned, item.currency_code),
         })}
       </div>
-      <div aria-hidden="true" className="mt-1 block w-full h-1 bg-surface-muted rounded-none overflow-hidden">
-        <div className={`block h-full rounded-none transition-all ${severityFill(pct)}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-      </div>
+      <BudgetBar
+        className="mt-1"
+        spent={item.actual}
+        planned={item.planned}
+        fillClass={severityFill(pct)}
+        elapsed={elapsedShare(period)}
+      />
     </div>
   )
 }

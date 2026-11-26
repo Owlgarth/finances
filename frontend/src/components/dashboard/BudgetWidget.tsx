@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { PieChart } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import BudgetBar from '../budgets/BudgetBar'
 import { budgetsApi, reportsApi } from '../../api/client'
 import { useBudgets, useMultiCurrency } from '../../hooks/useDomain'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { formatAmount } from '../../utils/format'
 import { parseAmountNumber } from '../../utils/amountInput'
+import { elapsedShare } from '../../utils/budgetPace'
 
 /** Display-only ratio rows: parseAmountNumber, never a raw float coercion
  *  of a persisted Decimal string (money rule). */
@@ -57,6 +59,9 @@ export default function BudgetWidget() {
 
   const attention = useMemo(() => attentionRows(summary?.items ?? []), [summary])
   const totals = Object.entries(summary?.totals ?? {})
+
+  // Pace tick for the current period; "today" is the local calendar date.
+  const paceElapsed = currentPeriod != null ? elapsedShare(currentPeriod) : null
 
   return (
     <div className="border border-border rounded-sm bg-surface p-4">
@@ -108,20 +113,21 @@ export default function BudgetWidget() {
                     {formatAmount(item.actual)} <span className="text-[10px] text-text-muted">{t('budget.of')} {formatAmount(item.planned)}</span>
                   </span>
                 </div>
-                {/* Budget category bars: sharp corners; severity lives on the
-                    fill - over = bg-negative, 75%+ = bg-warning. */}
-                <div className="w-full h-1 bg-surface-muted rounded-none overflow-hidden mb-1">
-                  <div
-                    className={`h-full rounded-none ${over ? 'bg-negative' : 'bg-warning'}`}
-                    style={{ width: `${Math.min(pct, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider">
-                  <span className={over ? 'text-negative' : 'text-warning-text'}>
-                    {over ? t('budget.statusOver') : t('budget.statusNearLimit')}
-                  </span>
-                  <span className="text-text-muted">{Math.round(pct)}%</span>
-                </div>
+                {/* Budget category bar: the shared bar owns the period tick,
+                    the pace word and the status row. Severity still lives on
+                    the fill this widget passes - over = bg-negative,
+                    75%+ = bg-warning. */}
+                <BudgetBar
+                  spent={item.actual}
+                  planned={item.planned}
+                  fillClass={over ? 'bg-negative' : 'bg-warning'}
+                  elapsed={paceElapsed}
+                  className="mb-1"
+                  statusWord={over ? t('budget.statusOver') : t('budget.statusNearLimit')}
+                  statusWordClass={over ? 'text-negative' : 'text-warning-text'}
+                  trailing={`${Math.round(pct)}%`}
+                  trailingClass="text-text-muted"
+                />
               </Link>
             ))
           )}
